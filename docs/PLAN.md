@@ -457,7 +457,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Typed config, Hono server, CSRF gate, CSP, limits, trusted proxy.
 - Postgres with migrations and roles; sealed storage; audit.
 - i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls); `net-guard`; error pages.
-- Token pipeline and UI kit; server-applied theme.
+- Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Each shared component owns its CSS; screens compose components and add no global CSS. Stylelint bans raw colours, radii, spacing and font sizes outside tokens.
 - `compose.dev.yaml` with a real PDS, Tap and seeded accounts, so signed-in flows are testable locally.
 - Stand up the **production PDS** with no users: recovery key set, invite-only, admin XRPC denied. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon`.
 - **Exit:** Playwright smoke passes on the shell in both themes and both languages, and the permission set resolves from outside.
