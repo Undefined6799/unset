@@ -38,7 +38,9 @@ Taken as defaults (reversible, can be changed by a later ADR):
   person. Anthropic is named as a processor for public posts only. Start on Sonnet and measure.
   Apply for PhotoDNA and a hash list before launch.
   Fingerprint check on every photo and video the app processes, private ones included
-  (Alex, 2026-10-02); local only. Chat media (end-to-end encrypted) is open, review item 9.
+  (Alex, 2026-10-02); local only. Chat media (end-to-end encrypted):
+  no device scanning; reports with optional uploaded evidence (fingerprint-checked), and no
+  photos or videos from people you don't follow, enforced in our client (Alex).
 - **Feeds (Alex, 2026-10-02):** atproto feeds as user-chosen, reorderable tabs in the core
   (plan §5.8).
 - **Q10 Hosting (confirmed by Alex, 2026-10-02):** VPS for production, homelab for development.
