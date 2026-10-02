@@ -35,7 +35,7 @@ Taken as defaults (reversible, can be changed by a later ADR):
   the publish step states where it appears and that it is hard to take back. Posts and follows
   use the same opt-in; separate switches for profile and posts are proposed (plan §11 Q2b).
 - **Account management (Alex, 2026-10-02):** a small separate account app on
-  `account.<pds domain>`, an OAuth client using public PDS APIs only (no patches, no PDS DB
+  `account.unset.sh` (PDS stays on `0x40.space`), an OAuth client using public PDS APIs only (no patches, no PDS DB
   access). It owns email, handle, password reset, deactivate and delete; sign-in, consent and
   likely 2FA/devices/apps stay on the branded PDS. Mirrors Bluesky's split of sign-in host
   vs settings, without an entryway. Plan §5.3.

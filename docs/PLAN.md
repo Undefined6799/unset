@@ -211,9 +211,9 @@ History check: the abandoned "Hono SPA" was client-rendered with browser-side OA
 
 | Domain | Hosts | Cookies |
 |---|---|---|
-| **App**, e.g. `unset.sh` | `unset.sh` (app); `chat.unset.sh` (chat module, later) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
+| **App**, e.g. `unset.sh` | `unset.sh` (app); `account.unset.sh` (account app, §5.3); `chat.unset.sh` (chat module, later) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
 | **Handles**, separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle` | none |
-| **PDS** | the PDS (sign-in, consent, its `/account` UI); `account.<pds domain>` (our account app, §5.3); `media.<pds domain>` (media proxy) | the PDS's own; the account app's own `__Host-` cookies; no app cookies |
+| **PDS**, `0x40.space` (Alex, 2026-10-02) | the PDS (sign-in, consent, its `/account` UI); `media.<pds domain>` (media proxy) | the PDS's own only; no app cookies |
 
 Why a separate handle domain:
 - No same-site relationship between user-named hosts and the app's cookies.
@@ -301,7 +301,8 @@ Rules for the handle domain:
 - The TXT record and the schema CID are monitored.
 
 **Account app (Alex, 2026-10-02).** Account management looks like ours and sits beside the PDS, not inside the main app, mirroring how Bluesky keeps sign-in on its own PDS host:
-- A small separate app on `account.<pds domain>`, its own origin (not the PDS host, where passwords are typed), so a bug in it cannot reach PDS sign-in sessions.
+- A small separate app on `account.unset.sh` (Alex, 2026-10-02): its own origin, separate from both the PDS host (where passwords are typed) and the main app. Like Bluesky (sign-in on `bsky.social`, settings under `bsky.app`), users type passwords on `0x40.space` and manage settings under the `unset.sh` brand.
+- Same-site with the main app, so: host-only `__Host-` cookies on both (already enforced), and the CSRF gate accepts `Sec-Fetch-Site: same-origin` or an exact Origin only, never `same-site`, so a bug in one app cannot post to the other with its cookies. A test covers a cross-subdomain POST being refused. The account app shares no code path, session table or secret with `web` beyond the shared packages.
 - It is an ordinary OAuth client of our PDS with the matching `account:`/`identity:` scopes, and uses public XRPC only: no PDS patch, no PDS database access, no response rewriting, no routes injected into the PDS host. That is the difference from the prototype's `account-manager`.
 - It owns: email change and confirmation, handle change, password reset by email, deactivate and delete.
 - The PDS keeps: OAuth sign-in and consent, always. Email 2FA, devices and connected apps stay on the PDS's `/account` unless a Phase 2 spike finds public APIs for them.
