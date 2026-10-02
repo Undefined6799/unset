@@ -543,9 +543,12 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Migrate CRM data only when the CRM plugin exists, and only if its row counts justify it.
 - Rotate every 0x40 secret either way: one leaked into an agent transcript.
 
-**Q2b. Federation.** Should the PDS ask the Bluesky relay to crawl it, making profiles visible across the atmosphere?
-- **Recommended: yes**, with the publish notice from §5.4.
-- No: profiles stay on our index only.
+**Q2b. Federation. Answered by Alex (2026-10-02): yes, per user and opt-in.** The PDS federates, but each user is private to the network by default and chooses whether to be listed in other atproto apps.
+- On atproto, everything in a repo on a federating PDS is public and copied by relays; crawling is per server, not per account. So a user's published content is kept in the app database and served by `/@handle` from there, and records are written to their repo only when they opt in ("Show my profile in other apps").
+- Opting out later deletes the records from the repo. The deletion propagates and well-behaved apps drop the data, but copies already taken by third parties can't be recalled. The opt-in screen says so.
+- An account's DID and handle are public either way (PLC directory, identity events); only its content can be held back.
+- Showing up in Bluesky's own app also needs an `app.bsky.actor.profile` record, written on opt-in. Bluesky ignores `sh.unset.*` records.
+- Still open: is `/@handle` public by default (recommended: yes, once the user publishes), and do posts and follows follow the same opt-in (recommended: yes)?
 
 **Q3. Web stack.**
 - **Hono + server-rendered React + islands (recommended).**

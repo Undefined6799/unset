@@ -28,13 +28,17 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Indexer source (provisional, Alex to review, 2026-10-02):** the indexer's upstream is a
   setting. Start with our own PDS only; reach network data later by pointing Tap at a public
   relay with collection filters. No own relay or full-network index for now.
+- **Q2b Federation (Alex, 2026-10-02):** yes, but per user and opt-in. Private to the network
+  by default; each user can choose to be listed in other atproto apps. Because a federating PDS
+  exposes every record in every repo, a user's content stays out of their repo (app database)
+  until they opt in. Still open: whether the `/@handle` page is public by default, and whether
+  posts and follows follow the same rule.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 Not taken; permanent, waiting for Alex:
 - **Q1 Domains** (app, handle and PDS domains; lexicon namespace `sh.unset.*` follows the
   app domain).
 - **Q2a** start fresh vs migrate 0x40 accounts and data.
-- **Q2b** whether the PDS federates to the Bluesky relay.
 
 ## Consequences
 Nothing in Phase 0 depends on Q1, Q2a or Q2b. Phase 1 needs Q1 before the production PDS
