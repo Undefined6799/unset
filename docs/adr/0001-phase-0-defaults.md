@@ -40,13 +40,13 @@ Taken as defaults (reversible, can be changed by a later ADR):
   access). It owns email, handle, password reset, deactivate and delete; sign-in, consent and
   likely 2FA/devices/apps stay on the branded PDS. Mirrors Bluesky's split of sign-in host
   vs settings, without an entryway. Plan §5.3.
+- **Q1 Domains (Alex, 2026-10-02):** app `unset.sh`, account app `account.unset.sh`, PDS
+  `0x40.space`, handles `<user>.0x40.me`. Lexicons `sh.unset.*`.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 Not taken; permanent, waiting for Alex:
-- **Q1 Domains** (app, handle and PDS domains; lexicon namespace `sh.unset.*` follows the
-  app domain).
 - **Q2a** start fresh vs migrate 0x40 accounts and data.
 
 ## Consequences
-Nothing in Phase 0 depends on Q1, Q2a or Q2b. Phase 1 needs Q1 before the production PDS
-and lexicon authority are created.
+Nothing in Phase 0 depends on Q2a. Q2a must be settled before the first production account,
+since old `*.0x40.me` handles would collide with new ones.

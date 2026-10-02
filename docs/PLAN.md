@@ -211,8 +211,8 @@ History check: the abandoned "Hono SPA" was client-rendered with browser-side OA
 
 | Domain | Hosts | Cookies |
 |---|---|---|
-| **App**, e.g. `unset.sh` | `unset.sh` (app); `account.unset.sh` (account app, §5.3); `chat.unset.sh` (chat module, later) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
-| **Handles**, separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle` | none |
+| **App**, `unset.sh` | `unset.sh` (app); `account.unset.sh` (account app, §5.3); `chat.unset.sh` (chat module, later) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
+| **Handles**, `0x40.me` (Alex, 2026-10-02), separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle` | none |
 | **PDS**, `0x40.space` (Alex, 2026-10-02) | the PDS (sign-in, consent, its `/account` UI); `media.<pds domain>` (media proxy) | the PDS's own only; no app cookies |
 
 Why a separate handle domain:
@@ -545,7 +545,9 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Handles on a **separate** registrable domain, the way Bluesky uses bsky.social for handles and bsky.app for the app.
 - The PDS and media on a third domain. Reusing `0x40.space` for the PDS works if you're keeping it.
 - Lexicons become `sh.unset.*`.
-- Which handle domain do you want?
+- **Decided by Alex (2026-10-02):** app `unset.sh` (account app `account.unset.sh`), PDS `0x40.space`, handles `<user>.0x40.me`.
+- Setup this needs: `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`; wildcard DNS `*.0x40.me` to the edge; `/.well-known/atproto-did` on `*.0x40.me` routed to the PDS, everything else a 301 to `unset.sh/@<user>`; wildcard TLS via a delegated `_acme-challenge` zone; the reserved-label list on `0x40.me`; CAA, DNSSEC and HSTS on all three domains.
+- `0x40.me` was the prototype's handle domain, so existing `*.0x40.me` handles collide with new accounts unless Q2a retires or migrates them first.
 
 **Q2a. Existing accounts and data.** Recommended: start fresh; the prototype's own plan called its accounts disposable.
 - Archive the encrypted backups.
