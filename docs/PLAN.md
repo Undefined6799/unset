@@ -567,9 +567,11 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - **Exit:**
   - a restore drill on a fresh host passes;
   - the edge rate-limit and spoofed-header tests pass;
-  - invite-only launch.
+  - production stack ready; no launch yet (see the launch gate after Phase 6).
 
 **Phase 6 — Chat** (core feature, Alex 2026-10-02; MVP from §5.6).
+
+**Launch gate (Alex, 2026-10-02):** no launch, invite-only included, until the whole core is done and has no known bugs: Phases 1–6, chat included. Concretely: every core feature from §4 shipped; zero open bugs in the core; CI green with every test executed; the restore drill and the security tests from Phase 5 passing; a final security review. Then invite-only launch.
 
 **Phase 7+ — Later modules:**
 - chat Spaces;
