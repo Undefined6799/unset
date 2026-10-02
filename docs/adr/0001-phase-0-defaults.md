@@ -37,6 +37,8 @@ Taken as defaults (reversible, can be changed by a later ADR):
   reviews ~10 downscaled frames, the caption and a locally made transcript; unsure goes to a
   person. Anthropic is named as a processor for public posts only. Start on Sonnet and measure.
   Apply for PhotoDNA and a hash list before launch.
+  Fingerprint check on every photo and video the app processes, private ones included
+  (Alex, 2026-10-02); local only. Chat media (end-to-end encrypted) is open, review item 9.
 - **Feeds (Alex, 2026-10-02):** atproto feeds as user-chosen, reorderable tabs in the core
   (plan §5.8).
 - **Q10 Hosting (confirmed by Alex, 2026-10-02):** VPS for production, homelab for development.
