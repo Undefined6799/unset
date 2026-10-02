@@ -31,8 +31,9 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Q2b Federation (Alex, 2026-10-02):** yes, but per user and opt-in. Private to the network
   by default; each user can choose to be listed in other atproto apps. Because a federating PDS
   exposes every record in every repo, a user's content stays out of their repo (app database)
-  until they opt in. Still open: whether the `/@handle` page is public by default, and whether
-  posts and follows follow the same rule.
+  until they opt in. Anything in the repo is also public on `/@handle` (no false privacy), and
+  the publish step states where it appears and that it is hard to take back. Posts and follows
+  use the same opt-in; separate switches for profile and posts are proposed (plan §11 Q2b).
 - **Account management (Alex, 2026-10-02):** a small separate account app on
   `account.<pds domain>`, an OAuth client using public PDS APIs only (no patches, no PDS DB
   access). It owns email, handle, password reset, deactivate and delete; sign-in, consent and
