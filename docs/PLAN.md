@@ -144,7 +144,9 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 | Identity | `verifyHandle`, PDS trust pinning, well-known policy, invites via `pds-admin`, **module identity seam** (signed single-use assertion, `did↔module account` table) | ~500 |
 | Profile | lexicons, records, sections, privacy, publish/unpublish, draft store, image pipeline, editor UI, `ProfileView`, public routes (`/@handle`, `/@handle/p/{rkey}`), OG meta, receipt, state pages | ~2,800 |
 | Indexer + read | Tap consumer, versioned upserts, account-state machine, `eraseDid`, views, directory/search, media proxy | ~1,300 |
-| Social | posts (image and video privacy), follows, home timeline, likes, comments, people directory UI | ~1,700 |
+| Social | short-video posts (§5.8), optional Bluesky posts, follows, home timeline, likes, comments, people directory UI | ~1,700 |
+| Feeds (Alex, 2026-10-02) | feed tabs: saved atproto feeds the user picks and reorders, skeletons fetched through `net-guard`, posts hydrated; our own feed generators for unset.sh videos (§5.8) | ~800 |
+| Video pipeline (Alex, 2026-10-02) | upload checks, transcoding worker (ffmpeg) to HLS renditions and a poster frame, storage, playback through the media proxy (§5.8) | ~1,200 |
 | Moderation | delist, report queue and the public notice form in `web`; the actions themselves live in `admin` (§5.7) | ~300 |
 | Shell + UI kit | tokens → CSS, ~20 shared components, app shell, home and onboarding, `/me`, `/join`, `/login-failed`, legal pages, theme/locale (no-JS) | ~2,000 |
 | Plugin seam | `plugin-api` contract, registry, route mounting, tenants (minimal), boundary lint, fixture plugin | ~500 |
@@ -427,6 +429,21 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 - **Plugins:** an optional `admin.views` manifest field; plugin code never runs inside `admin`.
 - **Roles in Postgres:** add `admin` and `retention`.
 
+### 5.8 Feeds and video posts (Alex, 2026-10-02)
+
+**Feeds as tabs.** Atproto feeds (https://atproto.com/guides/feeds) are run by feed generators: a service that returns a list of post links, which an app then fills in with the posts.
+- The top of the home screen shows tabs: Following, plus feeds the user picks, such as a news or tech feed. Users add, remove and reorder them. The list is stored privately in the app database.
+- The app asks each feed's generator for its post list through `net-guard`, then fills in the posts. Bluesky posts are read from Bluesky's public read service, and ours from our index, so this needs no full-network index (fits the provisional indexer decision).
+- We run our own feed generators for unset.sh videos (for example latest and following), so other atproto apps can show them too.
+- Feeds show only public content. A private user's posts never enter any feed.
+
+**Video posts.**
+- Our own record type in `sh.unset.*` for a short video: 60 seconds max, with caption, poster frame and aspect ratio. The original file is a blob in the user's repo; everything else is derived.
+- A transcoding worker (ffmpeg in its own container, no network except storage) makes HLS renditions and a poster frame. Playback goes through the media proxy, never raw `getBlob`.
+- Upload checks: length, size, format and codec allow-list, re-encode everything (no original served to browsers), strip metadata such as location.
+- Video raises cost and duty: storage, bandwidth and CPU grow fast, and abuse-material detection and reporting apply (admin design §8.1). Phase 4 sizes the hosting before launch.
+- Other post kinds: users can also write standard Bluesky posts (`app.bsky.feed.post`, text and images), which then appear in Bluesky. All posts follow the "Posts and follows" privacy switch.
+
 ## 6. Privacy and compliance deliverables
 
 These are deliverables, not intentions:
@@ -522,7 +539,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
   - Deletion leaves no rows.
 
 **Phase 4 — Social**
-- Posts with image and video privacy, follows, home timeline, likes and comments: counts survive edits, the reply root is correct, foreign likes are ignored.
+- Short-video posts and the video pipeline, optional Bluesky posts, feed tabs, follows, home timeline, likes and comments: counts survive edits, the reply root is correct, foreign likes are ignored.
 - Export page.
 - **Exit:** parity with the prototype's non-chat, non-RSS social features, plus a regression test for each defect in §2.
 
@@ -622,9 +639,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 **Q8. Social features in the core:** posts, follows, timeline, likes, comments, directory. **Confirmed by Alex (2026-10-02).**
 - **Yes (recommended)**, with RSS and MCP as later modules.
 
-**Q9. Posts lexicon.**
-- **Our own `sh.unset.post` (recommended)**, with a Phase 4 spike on Standard.site.
-- Adopt Standard.site now.
+**Q9. Posts. Decided by Alex (2026-10-02):** our main post is a short, high-quality video (reels style, 60 seconds max) in our own lexicon. Users can also make other kinds of posts, including standard Bluesky posts. Standard.site is no longer the comparison point. See §5.8.
 
 **Q10. Hosting. Confirmed by Alex (2026-10-02): VPS for production, homelab for development.**
 - **A small VPS for production, homelab for dev (recommended).**

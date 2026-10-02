@@ -21,7 +21,10 @@ Taken as defaults (reversible, can be changed by a later ADR):
   appview merges into the app, and the indexer runs as its own process.
 - **Q7 Drafts:** stored in the app database; only Publish writes to the repo.
 - **Q8 Social in core (confirmed by Alex, 2026-10-02):** posts, follows, timeline, likes, comments, directory.
-- **Q9 Posts lexicon:** our own, with a Standard.site spike in Phase 4.
+- **Q9 Posts (Alex, 2026-10-02):** the main post is a short video (60 s max, high quality) in
+  our own lexicon, with our own transcoding pipeline; users may also write Bluesky posts.
+- **Feeds (Alex, 2026-10-02):** atproto feeds as user-chosen, reorderable tabs in the core
+  (plan §5.8).
 - **Q10 Hosting (confirmed by Alex, 2026-10-02):** VPS for production, homelab for development.
 - **Q11 Design (Alex, 2026-10-02):** all UI follows the unset.sh design sheet (Design System
   artifact "unset.sh"); its tokens feed the CSS Modules. New components only when registered
