@@ -13,7 +13,8 @@ Taken as defaults (reversible, can be changed by a later ADR):
   the end of Phase 1 (switch to React Router v7 if the island helper exceeds ~150 lines).
 - **Q4 Chat:** a module after the core (Phase 6), Matrix DMs first.
 - **Q5 Public profile:** `/@handle` on the app origin.
-- **Q6 Database:** Postgres with per-role separation.
+- **Q6 Database (confirmed by Alex, 2026-10-02):** one Postgres with per-role separation; the
+  appview merges into the app, and the indexer runs as its own process.
 - **Q7 Drafts:** stored in the app database; only Publish writes to the repo.
 - **Q8 Social in core:** posts, follows, timeline, likes, comments, directory.
 - **Q9 Posts lexicon:** our own, with a Standard.site spike in Phase 4.
