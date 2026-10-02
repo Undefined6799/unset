@@ -441,6 +441,12 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 - Our own record type in `sh.unset.*` for a short video: 60 seconds max, with caption, poster frame and aspect ratio. The original file is a blob in the user's repo; everything else is derived.
 - A transcoding worker (ffmpeg in its own container, no network except storage) makes HLS renditions and a poster frame. Playback goes through the media proxy, never raw `getBlob`.
 - Upload checks: length, size, format and codec allow-list, re-encode everything (no original served to browsers), strip metadata such as location.
+- **Compressed for feeds (Alex, 2026-10-02):** adaptive streaming with small renditions first in feeds; the full-quality rendition only when a video is opened full screen on a fast connection.
+- **Reviewed before going public (Alex, 2026-10-02):** a public post (video or Bluesky post) is uploaded to our private draft storage, processed and checked there, and written to the user's repo only after it passes. It must not reach the repo first, because anything in the repo is public at once and copied by relays.
+  - Checks: known abuse-material hash matching (the legal duty) plus an automated content classifier for the categories in our rules. A pass publishes; a clear fail is blocked with the reason and an appeal; anything uncertain goes to the admin panel's queue for a person to decide.
+  - Where the classifier runs is open (self-hosted recommended, so user videos never leave our servers).
+  - The publish screen and the terms say plainly that public posts are reviewed automatically before they go live. Private posts are not reviewed.
+  - A report button stays on every post, for anything the review misses.
 - Video raises cost and duty: storage, bandwidth and CPU grow fast, and abuse-material detection and reporting apply (admin design §8.1). Phase 4 sizes the hosting before launch.
 - Other post kinds: users can also write standard Bluesky posts (`app.bsky.feed.post`, text and images), which then appear in Bluesky. All posts follow the "Posts and follows" privacy switch.
 

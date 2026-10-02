@@ -23,6 +23,9 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Q8 Social in core (confirmed by Alex, 2026-10-02):** posts, follows, timeline, likes, comments, directory.
 - **Q9 Posts (Alex, 2026-10-02):** the main post is a short video (60 s max, high quality) in
   our own lexicon, with our own transcoding pipeline; users may also write Bluesky posts.
+  Feeds get compressed renditions. Public posts are reviewed automatically (hash matching plus
+  a classifier, uncertain cases to a person) before they are written to the repo; users are told
+  so; every post keeps a report button.
 - **Feeds (Alex, 2026-10-02):** atproto feeds as user-chosen, reorderable tabs in the core
   (plan §5.8).
 - **Q10 Hosting (confirmed by Alex, 2026-10-02):** VPS for production, homelab for development.
