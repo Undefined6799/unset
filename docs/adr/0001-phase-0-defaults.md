@@ -46,9 +46,10 @@ Taken as defaults (reversible, can be changed by a later ADR):
   `unset.sh` was considered and rejected (plan §11 Q1).
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
-Not taken; permanent, waiting for Alex:
-- **Q2a** start fresh vs migrate 0x40 accounts and data.
+- **Q2a Old accounts (provisional, Alex to revisit, 2026-10-02):** start fresh. Old accounts are
+  retired on the old PDS before the new one takes `0x40.space`. Permanent once the first
+  production account exists, so it must be revisited before then.
 
 ## Consequences
-Nothing in Phase 0 depends on Q2a. Q2a must be settled before the first production account,
+Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones.

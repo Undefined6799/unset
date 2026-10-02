@@ -550,7 +550,8 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - **PDS on an unset.sh subdomain was considered and rejected (2026-10-02).** The atproto going-to-production guidance says to use separate domains for the PDS and the app, because OAuth pages and blobs on the app's site are a credential-theft risk. A subdomain like `login.unset.sh` is same-site with the app: the PDS serves raw `getBlob` user bytes on its own host whatever our proxy does, and same-site requests weaken the SameSite protection on its sign-in session. An entryway on `login.unset.sh` would avoid that but means building our own authorization server, since the PDS disables its own when behind one (`@atproto/pds` 0.5.36 `config.js`). So sign-in shows `0x40.space`, branded as unset.sh.
 - `0x40.me` was the prototype's handle domain, so existing `*.0x40.me` handles collide with new accounts unless Q2a retires or migrates them first.
 
-**Q2a. Existing accounts and data.** Recommended: start fresh; the prototype's own plan called its accounts disposable.
+**Q2a. Existing accounts and data. Provisional, Alex (2026-10-02): start fresh; Alex will revisit before the first production account.** The prototype's own plan called its accounts disposable.
+- Old accounts are retired on the old PDS (deactivated, then deleted) before the new PDS takes `0x40.space`, so their DIDs no longer point at a live server and their `*.0x40.me` handles are free. Old handles re-registered by new accounts get new DIDs; bidirectional handle verification keeps other apps from linking them to the old ones.
 - Archive the encrypted backups.
 - Migrate CRM data only when the CRM plugin exists, and only if its row counts justify it.
 - Rotate every 0x40 secret either way: one leaked into an agent transcript.
