@@ -390,7 +390,8 @@ Rules for the handle domain:
 Chat is part of the core product, not a module or plugin. It runs **beside the core but connected** (Alex, 2026-10-02): its own service and origin, so its encryption keys and sessions are isolated from the main app, joined to it only by the identity seam and the profile's "Message" button. **Matrix confirmed** (Alex, 2026-10-02) after comparing Signal, SimpleX, XMPP, P2P messengers, Keybase, PGP and Threema: Matrix is the only one that is browser-first, self-hostable, tied to our identity and has mature group encryption.
 
 **Every unset.sh user can message every other one (Alex, 2026-10-02).** This needs, designed in Phase 6 from how Element and the spec do it, not invented:
-- a way to reach someone who has never opened chat: their Matrix account and `did↔mxid` mapping exist from signup, or the message waits as a pending request they see on first visit. No forged membership and no acting as the user;
+- **the chat account is seeded at signup (Alex, 2026-10-02):** when an unset.sh account is created, its Matrix account and `did↔mxid` mapping are created too, through MAS's provisioning API with the DID as subject. Seeding creates the account only: no access token, device or encryption key is made for the user, and no membership is forged; invites to them are normal invites they accept on first visit;
+- encryption keys can't be seeded (they are made on the user's first device), so messages sent before then must still be readable once they sign in. Phase 6 designs this from Element's handling of key sharing to new devices, before code;
 - message requests from people you don't follow, plus block and report, before launch, since open messaging invites spam (the prototype never built request gating);
 - the user's privacy switches respected: a private account can still be messaged by handle, but nothing about it is exposed beyond that.
 
