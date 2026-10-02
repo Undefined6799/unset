@@ -305,6 +305,7 @@ Rules for the handle domain:
 - [ ] OAuth sign-in actually challenges for it on the pinned PDS. (The prototype hit `email-2fa-not-enforced-by-oauth-provider` on 0.5.9.)
 - [ ] Password reset is reachable from the OAuth sign-in page.
 - [ ] Captcha is unnecessary while invite-only, or the PDS's own hCaptcha env is used.
+- [ ] **Branding (Alex, 2026-10-02):** the PDS sign-in, sign-up and `/account` pages, plus its emails, are set up with our name, logo, primary and status colours, light/dark backgrounds and ToS/privacy/support links, and Alex accepts screenshots of each in both themes. The PDS has no setting for fonts, custom CSS or layout, so these pages will look like ours but not identical to the app. If that isn't enough: build thin account pages in the app for what the PDS APIs allow over OAuth (email, handle, deactivate and delete), linking out for password and 2FA. The sign-in page itself always stays the PDS's. Patching the PDS is not the fallback.
 - [ ] The confirm-email link points at the PDS's own `/account` page and not at bsky.app. The deploy preflight fails if it doesn't, and the fallback is an upstream fix, not a patch.
 
 ### 5.4 Profile in the app (the binding decision)
