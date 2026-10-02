@@ -391,7 +391,8 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 
 **Every unset.sh user can message every other one (Alex, 2026-10-02).** This needs, designed in Phase 6 from how Element and the spec do it, not invented:
 - **the chat account is seeded at signup (Alex, 2026-10-02):** when an unset.sh account is created, its Matrix account and `did↔mxid` mapping are created too, through MAS's provisioning API with the DID as subject. Seeding creates the account only: no access token, device or encryption key is made for the user, and no membership is forged; invites to them are normal invites they accept on first visit;
-- encryption keys can't be seeded (they are made on the user's first device), so messages sent before then must still be readable once they sign in. Phase 6 designs this from Element's handling of key sharing to new devices, before code;
+- **chat sign-in is a step of signup (Alex, 2026-10-02):** onboarding takes the new user to `chat.unset.sh`, where they sign in themselves. That creates their first device and keys and sets up the recovery key, confirmed stored before it is shown (pitfall note `bootstrap-secret-storage-needs-setupnewsecretstorage`). So nearly everyone has keys before anyone can message them; the step is the user's own login, never done for them;
+- for anyone who skips that step or loses every device, messages sent meanwhile must still become readable later. Phase 6 designs this from Element's handling of key sharing to new devices, before code;
 - message requests from people you don't follow, plus block and report, before launch, since open messaging invites spam (the prototype never built request gating);
 - the user's privacy switches respected: a private account can still be messaged by handle, but nothing about it is exposed beyond that.
 
