@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.worktrees/
+*.sqlite
+*.sqlite-*
+*.db
+.env
+.env.*
+!.env.example
+secrets/*
+!secrets/*.example
+*.pem
+*.key
+.DS_Store
+graphify-out/cache/
