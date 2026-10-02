@@ -547,6 +547,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Lexicons become `sh.unset.*`.
 - **Decided by Alex (2026-10-02):** app `unset.sh` (account app `account.unset.sh`), PDS `0x40.space`, handles `<user>.0x40.me`.
 - Setup this needs: `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`; wildcard DNS `*.0x40.me` to the edge; `/.well-known/atproto-did` on `*.0x40.me` routed to the PDS, everything else a 301 to `unset.sh/@<user>`; wildcard TLS via a delegated `_acme-challenge` zone; the reserved-label list on `0x40.me`; CAA, DNSSEC and HSTS on all three domains.
+- **PDS on an unset.sh subdomain was considered and rejected (2026-10-02).** The atproto going-to-production guidance says to use separate domains for the PDS and the app, because OAuth pages and blobs on the app's site are a credential-theft risk. A subdomain like `login.unset.sh` is same-site with the app: the PDS serves raw `getBlob` user bytes on its own host whatever our proxy does, and same-site requests weaken the SameSite protection on its sign-in session. An entryway on `login.unset.sh` would avoid that but means building our own authorization server, since the PDS disables its own when behind one (`@atproto/pds` 0.5.36 `config.js`). So sign-in shows `0x40.space`, branded as unset.sh.
 - `0x40.me` was the prototype's handle domain, so existing `*.0x40.me` handles collide with new accounts unless Q2a retires or migrates them first.
 
 **Q2a. Existing accounts and data.** Recommended: start fresh; the prototype's own plan called its accounts disposable.

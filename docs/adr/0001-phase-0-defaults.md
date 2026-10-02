@@ -42,6 +42,8 @@ Taken as defaults (reversible, can be changed by a later ADR):
   vs settings, without an entryway. Plan §5.3.
 - **Q1 Domains (Alex, 2026-10-02):** app `unset.sh`, account app `account.unset.sh`, PDS
   `0x40.space`, handles `<user>.0x40.me`. Lexicons `sh.unset.*`.
+  The PDS stays on its own registrable domain, per atproto guidance; a PDS or entryway under
+  `unset.sh` was considered and rejected (plan §11 Q1).
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 Not taken; permanent, waiting for Alex:
