@@ -27,7 +27,7 @@ Everything else is a recommendation, and §11 collects the questions that need y
 ## 1. The short version
 
 - **The prototype is about 90k lines of TypeScript** (about 60k source and 29k tests), plus 7.2k lines of CSS and about 5.7k lines of deploy config, across 10 packages and about 18 containers.
-- **The core in this plan is about 12–13k lines of TS source.** That figure excludes CSS, i18n catalogs, lexicon JSON, generated code, about 1.3k lines of deploy config, and tests.
+- **The core in this plan is about 20–24k lines of TS source, plus 5–7k for chat** (restated after the 2026-10-02 review; the first draft said 12–13k and omitted the review pipeline). That figure excludes CSS, i18n catalogs, lexicon JSON, generated code, about 1.3k lines of deploy config, and tests (expect another 12–18k).
 - Most of the cut is not lost features:
   - CRM, accounting and billing alone are about 29k lines.
   - The renderer, relay, Jetstream, account-manager and the PDS patches are duplicated or obsolete machinery.
@@ -41,7 +41,7 @@ Everything else is a recommendation, and §11 collects the questions that need y
   1. Merge the appview into the app codebase: one database, plus an indexer fed by Tap.
   2. Stop patching the PDS image.
   3. Leave Next.js for a server-rendered app with one CSRF gate and per-route CSP (open question Q3).
-- **Chat (Matrix) leaves the core** and becomes the first module after the core ships, on its own origin. There is still no stable atproto end-to-end-encrypted messaging, so Matrix stays the engine.
+- **Chat (Matrix) is a core feature** (Alex, 2026-10-02), built in Phase 6 beside the core on its own origin (§5.6). There is still no stable atproto end-to-end-encrypted messaging, so Matrix stays the engine.
 - **Some choices are permanent once the first account exists:** domains and reserved handle names, the lexicon namespace and authority, the PDS recovery key, whether the PDS federates to the Bluesky relay, and the Matrix server name. Phase 0 settles them before code.
 
 ## 2. What the prototype taught us (rules, enforced by tests or lint)
@@ -63,7 +63,7 @@ The rebuild keeps the prototype's *lessons* and rewrites most of its *code*.
 **Data and protocol**
 8. Validate every record against its lexicon before writing. The UI limits, the write path and the indexer use one lexicon-derived validator.
 9. Never send raw `getBlob` URLs to browsers. One media proxy with `default-src 'none'; sandbox` and `nosniff`; a takedown stops the bytes. The prototype still breaks this for avatars on `/me`, `/settings` and `/people`.
-10. Re-encode images and strip metadata, with pixel limits and decode in a bounded worker. Neutralise MP4 metadata without shifting offsets. Original bytes are never stored.
+10. Re-encode images and strip metadata, with pixel limits and decode in a bounded worker. Neutralise MP4 metadata without shifting offsets. Original bytes are never stored: the only video that reaches a repo is the re-encoded, stripped 1080p master (§5.8), because `getBlob` is unauthenticated and serves whatever is in the repo to the world (review, 2026-10-02).
 11. Indexer invariants are written as tests first:
     - monotonic upserts;
     - identity events never change account state;
@@ -121,12 +121,12 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 
 | Change | Status | Effect on unset.sh |
 |---|---|---|
-| **PDS account UI** at `https://<pds>/account`: devices, connected apps, password, email verify/change, handle change, deactivate/delete, email 2FA (0.5.36) | shipped | Build none of these screens; deep-link to it. `account-manager` (~2k LOC) and `pds-gatekeeper` are dropped **if** the Phase 2 go/no-go checks in §5.3 pass. |
+| **PDS account UI** at `https://<pds>/account`: devices, connected apps, password, email verify/change, handle change, deactivate/delete, email 2FA (0.5.36) | shipped | Build none of these screens; deep-link to it. The PDS refuses OAuth credentials for email change, delete and reactivate by design (`requestEmailUpdate.ts`, `requestAccountDelete.ts`, `activateAccount.ts`, 0.5.36), so the account app is dropped too (Alex, 2026-10-02; §5.3). `account-manager` (~2k LOC) and `pds-gatekeeper` are dropped **if** the Phase 2 go/no-go checks in §5.3 pass. |
 | **PDS branding env** (`PDS_SERVICE_NAME`, `PDS_LOGO_URL`, `PDS_PRIMARY_COLOR`…; 0.5.26 removed the old colour vars) | shipped | Ship the PDS unpatched. One loss: the prototype's theme patch also auto-filled the invite code and chosen handle on the PDS signup form. Unpatched, invitees paste the code themselves (the `/join` page offers copy-to-clipboard) unless upstream supports a prefill parameter, which is checked in Phase 2. |
-| **Granular permissions + permission sets** (`include:<nsid>`), stable | stable | Publish one set covering our `sh.unset.*` collections. A set can't contain foreign NSIDs, `blob`, `account` or `identity`, so those stay separate scopes. Requested scope: `atproto include:sh.unset.<set> repo:app.bsky.feed.like?action=create&action=delete blob:image/* blob:video/* account:email?action=read`. An unresolvable set fails the login, so the set becomes **login-critical infrastructure** (§5.3). Never request `transition:*`. |
+| **Granular permissions + permission sets** (`include:<nsid>`), stable | stable | Publish one set covering our `sh.unset.*` collections. A set can't contain foreign NSIDs, `blob`, `account` or `identity`, so those stay separate scopes. Requested scope: `atproto include:sh.unset.<set> repo:app.bsky.feed.like?action=create&action=delete repo:app.bsky.feed.post repo:app.bsky.actor.profile blob:image/* blob:video/* account:email?action=read identity:handle account:status rpc:app.bsky.feed.getFeed?aud=did:web:api.bsky.app#bsky_appview` (plus `getTimeline` and `getPosts` with the same `aud`), requested from day one because adding a scope later forces a re-consent for every user (review, 2026-10-02). An unresolvable set fails the login, so the set becomes **login-critical infrastructure** (§5.3); the PDS (≥0.5.35) resolves sets it hosts itself locally. Never request `transition:*`. |
 | **OAuth sign-up `prompt=create`** | shipped | The prototype already used it. Keep it: the app never touches `createAccount`, passwords or reset. |
 | **`@atproto/lex` + `lex-server`** (stable preview) | preview | Types and validators come from `lex build`, with generated code checked in. `lex install` vendors `app.bsky.feed.like`. Versions pinned exactly. |
-| **oauth-client-node 0.5.x** (breaking hook renames), ESM-only, Node ≥22 | shipped | Start on ≥0.5.8 with `onSessionUpdated`/`onSessionDeleted`, Node 24 LTS. |
+| **oauth-client-node 0.5.x** (breaking hook renames), ESM-only, Node ≥22 | shipped | Start on ≥0.5.8 with `onSessionUpdated`/`onSessionDeleted`, Node 26 LTS (Alex, 2026-10-02; Node 24 enters maintenance on 2026-10-20). Its `requestLock` hook takes a Postgres advisory lock (§5.2). |
 | **Tap**, the Sync 1.1 reference consumer (verified backfill + live, resync, acked delivery) | shipped | Replaces our relay, Jetstream v1, consumer and backfill. Configuration and trust rules are in §5.2; a spike opens Phase 3. |
 | **Jetstream v2** | shipped | Not used: it doesn't verify. (The "repeated `wantedCollections`" pitfall was a v1 quirk.) |
 | **PLC read replicas** (lag) | shipped | Never read a DID doc from a replica right after our own PLC operation. |
@@ -143,17 +143,19 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 | Auth | confidential OAuth client, sealed token stores, sessions with lifecycle, verify-email gate, login, signup redirect, logout and revoke, return paths | ~700 |
 | Identity | `verifyHandle`, PDS trust pinning, well-known policy, invites via `pds-admin`, **module identity seam** (signed single-use assertion, `did↔module account` table) | ~500 |
 | Profile | lexicons, records, sections, privacy, publish/unpublish, draft store, image pipeline, editor UI, `ProfileView`, public routes (`/@handle`, `/@handle/p/{rkey}`), OG meta, receipt, state pages | ~2,800 |
-| Indexer + read | Tap consumer, versioned upserts, account-state machine, `eraseDid`, views, directory/search, media proxy | ~1,300 |
-| Social | short-video posts (§5.8), optional Bluesky posts, follows, home timeline, likes, comments, people directory UI | ~1,700 |
-| Feeds (Alex, 2026-10-02) | feed tabs: saved atproto feeds the user picks and reorders, skeletons fetched through `net-guard`, posts hydrated; our own feed generators for unset.sh videos (§5.8) | ~800 |
-| Video pipeline (Alex, 2026-10-02) | upload checks, transcoding worker (ffmpeg) to HLS renditions and a poster frame, storage, playback through the media proxy (§5.8) | ~1,200 |
-| Moderation | delist, report queue and the public notice form in `web`; the actions themselves live in `admin` (§5.7) | ~300 |
+| Indexer + read | Tap consumer on the public relay, versioned upserts, account-state machine, `eraseDid`, views, directory/search, media proxy, the separate `api` entrypoint, service-auth JWT verification | ~1,900–2,300 |
+| Social | short-video posts (§5.8), opt-in and standalone Bluesky posts, follows, home timeline, likes, comments, people directory UI | ~2,200–2,600 |
+| Feeds (Alex, 2026-10-02) | feed tabs: saved atproto feeds the user picks and reorders, fetched through the user's own PDS session (`getFeed` proxying, §5.8); label handling for two labelers; our own feed generators for unset.sh videos | ~1,000–1,300 |
+| Video pipeline (Alex, 2026-10-02) | upload checks, quotas, transcoding worker (ffmpeg) to a 1080p master, progressive MP4 renditions, poster and caption track, storage, playback through the media proxy (§5.8) | ~1,500–2,000 |
+| Review pipeline (review, 2026-10-02) | PDQ/TMK fingerprints and the Arachnid Shield check, local nudity gate, frame extraction, transcript, the Claude call through `net-guard`, pass/fail/unsure routing, legal hold, appeals, draft expiry (§5.8) | ~1,500–2,500 |
+| Moderation | delist, the public notice form and Ozone report routing in `web`; the actions themselves live in `admin` (§5.7) | ~300 |
 | Shell + UI kit | tokens → CSS, ~20 shared components, app shell, home and onboarding, `/me`, `/join`, `/login-failed`, legal pages, theme/locale (no-JS) | ~2,000 |
 | Plugin seam | `plugin-api` contract, registry, route mounting, tenants (minimal), boundary lint, fixture plugin | ~500 |
 | `pds-admin` service | invites, takedown, holds, receipts, reaping, DNS-TXT handle record at mint (optional); see §5.7 | ~450 |
-| Admin panel (`admin`) | internal console: lookup, actions with per-action key signatures, reports, audit, health (§5.7); CI ceiling 2,400 lines incl. `pds-admin` and audit | ~1,500 |
-| Chat (core, Alex 2026-10-02) | Matrix client on `chat.unset.sh`, identity bridge; §5.6 | not yet sized |
-| **Total** | | **≈14–15k before chat** |
+| Admin panel (`admin`) | internal console: lookup, actions with per-action key signatures, WebAuthn enrolment, audit, health, Matrix report intake (§5.7); CI budget 3,000 lines as a warning, incl. `pds-admin` and audit (Alex, 2026-10-02) | ~1,500–2,000 |
+| Draft review queue (`admin`, Alex 2026-10-02) | the "unsure" queue for drafts submitted for publication: blurred thumbnails, transcript, decide, reason code (§5.8) | ~300–400 |
+| Chat (core, Alex 2026-10-02) | Matrix client on `chat.unset.sh`, identity bridge, `chat-admin` seeding service; §5.6 | ~5–7k |
+| **Total** | | **≈20–24k core, plus chat 5–7k; tests (12–18k) outside the number** (review, 2026-10-02) |
 
 **Deferred until the first plugin needs them:** mail transport, the generic notification inbox, cron hooks and per-plugin DB roles. Their *interfaces* are written down in `plugin-api`; they are not built.
 
@@ -165,6 +167,7 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
   - the renderer (its views move in-app)
   - relay, Jetstream and `relay-keeper`
   - `account-manager` and the PDS patches (subject to the §5.3 checks)
+  - the account app (Alex, 2026-10-02): every account action happens on the PDS's own branded `/account` page
   - `reaper`, which moves into `pds-admin`
   - `deploy/matrix-spike`
   - the ledger
@@ -200,7 +203,7 @@ Why this over Next.js:
 
 Honest cost:
 - Markup and CSS port; the data and interaction layer is rewritten. 105 of 169 components are client components, and 81 server actions become POST routes.
-- If the island helper grows past ~150 lines in Phase 1, switch to React Router v7 before Phase 2.
+- Hono has no production island story (HonoX is alpha), so the framework glue is ours: dev-mode SSR, the production manifest, CSS Modules kept identical on server and client, the island bootstrap and the serialiser. Budget 400–900 lines, not 150 (review, 2026-10-02). Phase 1 exit: glue at or under ~600 lines and CSS Modules verified identical on both sides; otherwise switch to **React Router 8** (v7 is no longer current) before Phase 2. The Phase 1 spike gives **Astro** one day as a second fallback (islands-native, zero JS by default; headers still from middleware because its CSP is a `<meta>` tag).
 
 History check: the abandoned "Hono SPA" was client-rendered with browser-side OAuth. This design is the opposite.
 
@@ -210,13 +213,14 @@ History check: the abandoned "Hono SPA" was client-rendered with browser-side OA
 
 ### 5.2 Domains, processes and data
 
-**Domains (Q1).** Three registrable domains:
+**Domains (Q1).** Three registrable domains plus a cookie-less throwaway for media:
 
 | Domain | Hosts | Cookies |
 |---|---|---|
-| **App**, `unset.sh` | `unset.sh` (app); `chat.unset.sh` (chat) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
-| **Handles**, `0x40.me` (Alex, 2026-10-02), separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle` | none |
-| **PDS**, `unset.ac` in production, `0x40.space` in development (Alex, 2026-10-02) | the PDS (sign-in, consent, its `/account` UI); `account.<pds domain>` (account app, §5.3); `media.<pds domain>` (media proxy) | the PDS's own, and the account app's `__Host-` cookies; no main-app cookies |
+| **App**, `unset.sh` | `unset.sh` (app); `chat.unset.sh` (chat); `admin.int.unset.sh` (Tailscale only) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
+| **Handles**, `0x40.me` (Alex, 2026-10-02), separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle`. Production only: the development PDS mints its own suffix (`PDS_SERVICE_HANDLE_DOMAINS=.0x40.space`), because two PDSes cannot both answer for `*.0x40.me` (review, 2026-10-02) | none |
+| **PDS**, `unset.ac` in production, `0x40.space` in development (Alex, 2026-10-02) | the PDS alone: sign-in, consent and its `/account` UI, branded, where every account action happens. No account app and no `account.<pds domain>` host (Alex, 2026-10-02; §5.3) | the PDS's own only; no main-app cookies |
+| **Media**, a throwaway domain (for example `unsetcdn.net`; review, 2026-10-02) | the media proxy. Not same-site with the PDS, whose device cookie is `SameSite=Lax` and not under our control, and not same-site with the app | none, ever |
 
 Why a separate handle domain:
 - No same-site relationship between user-named hosts and the app's cookies.
@@ -226,48 +230,56 @@ Why a separate handle domain:
 Rules for the handle domain:
 - A reserved-label list (`www`, `api`, `admin`, `account`, `mail`, `mta-sts`, `autoconfig`, `status`, `_*`) is enforced by `pds-admin`, with a test. The unpatched PDS does not reserve `mta-sts` or `autoconfig` (pds:handle/reserved.ts), so those are held by placeholder accounts.
 - TLS via DNS-01 through a delegated `_acme-challenge` zone, or on-demand TLS with an `ask` endpoint.
-- CAA, DNSSEC and HSTS `includeSubDomains` on all three domains.
+- CAA, DNSSEC and HSTS `includeSubDomains` on every domain. `.ac` and `.sh` share one registry backend; pick a registrar with DNSSEC DS submission and hardware-key 2FA (`.ac` is not on Cloudflare Registrar).
+- The development PDS never sets `PDS_CRAWLERS` (a reinstalled PDS on the same hostname breaks relay sync).
+- **PDS rate limit:** the PDS limits 3,000 requests per 5 minutes **per IP**, and the app is one IP for every user. `PDS_RATE_LIMIT_BYPASS_IPS` lists only the app's internal address (bypass IPs are also treated as trusted proxies, so never the edge); the deploy preflight checks it. Needed before ~1,000 users (review, 2026-10-02).
 
 ```
                  edge (Caddy, or cloudflared+traefik) — denies all admin-auth XRPC
       ┌────────────────────────────────────────────────────────────────────┐
       │ web (app origin) ──► Postgres ◄── indexer ◄─ack WS── tap ◄── PDS     │
       │                          ▲  (roles: web, indexer, tap, plugin_*)     │
-      │ media proxy (pds domain)─┘                                           │
+      │ api (public read, own role) ─┘  media proxy (media domain)           │
       │ pds-admin (internal net only) ──► PDS admin API                      │
+      │ chat-admin (internal net only, phase 6) ──► MAS admin API            │
       └────────────────────────────────────────────────────────────────────┘
 ```
 
-**Processes:** one codebase with entrypoints `web`, `account`, `admin`, `indexer` and `media`, plus the tiny dependency-free `pds-admin` and the Tap binary. `web` runs as a single replica in v1, because the OAuth client's lock is process-local; a Postgres advisory lock comes later if scaling needs it.
+**Processes:** one codebase with entrypoints `web`, `api` (the public read API), `admin`, `indexer`, `media` and the `review` worker (transcode, fingerprint, classify; §5.8), plus the tiny dependency-free `pds-admin`, `chat-admin` (Phase 6, §5.6) and the Tap binary. The OAuth client's `requestLock` hook is a Postgres advisory lock (`pg_advisory_xact_lock(hashtext(did))`, ~40 lines) from Phase 1, so `web` can run two replicas and a deploy (`docker-rollout`: scale up, wait for health, retire the old) is not an outage; Compose has no rolling update of its own (review, 2026-10-02). Migrations run as a one-shot `migrate` service before the others, expand-then-contract so old and new code overlap.
 
 **Database: Postgres (Q6).**
-- App and index live in separate schemas with **separate roles**:
+- App and index live in separate schemas with **separate roles**, and a role buys isolation only when it maps to a process (review, 2026-10-02):
   - `web`: read/write on app tables, read-only on the index, INSERT-only on audit;
-  - `indexer`: read/write on the index, plus the `eraseDid` function;
-  - `tap`: its own schema;
+  - `api`: read-only on the index and nothing else, so the public read API cannot select drafts;
+  - `indexer`: read/write on the index, plus the `eraseDid` function (`SECURITY DEFINER`, owned by `migrator`, since `indexer` has no rights on app or plugin schemas);
+  - `migrator`: owns the schemas and runs migrations, with `ALTER DEFAULT PRIVILEGES` so a new table never lands without grants; `web`, `api` and `indexer` have no DDL rights;
+  - `tap`: its own database (Tap runs its own migrations);
   - later, one role per plugin.
+- A **grant-matrix test** diffs `information_schema.role_table_grants` against a checked-in matrix; the "every table with a DID column" test reads `pg_catalog`, not a hand list.
 - Audit rows are append-only.
 - One database makes moderation and erasure single transactions.
 
 **Public read API (XRPC):** `actor.getProfile`, `identity.resolveHandle`, `feed.getAuthorFeed` and `feed.getPost` are public with no key; signed-in `feed.getTimeline` and `actor.searchProfiles` need atproto service auth (a short-lived token signed by the caller's PDS, audience our service DID) or the app session.
-- It reads only the index, which holds only records that are in a public repo. Drafts and private content live in app-DB tables the read API's database role cannot select, so a bug cannot leak them.
-- No API keys for now: the data is already public on the network, so a key would not protect it. Abuse is handled by per-client rate limits kept in memory (no IP logging), response caching and size caps. Optional keys for higher limits can come later if a third party needs them.
+- It runs in its own `api` process with its own database role, which has no grant on the app schema, so drafts and private content cannot be selected by it; the grant-matrix test proves it (review, 2026-10-02: the first draft ran it inside `web` with `web`'s role, which made this claim false).
+- No API keys for now: the data is already public on the network, so a key would not protect it. Abuse is handled by rate limits keyed on a salted hash of the client IP in memory with a 60-second TTL, never written anywhere (one sentence in the privacy notice), a global ceiling, response caching and size caps. Optional keys for higher limits can come later if a third party needs them.
 
 **Indexer and Tap trust rules:**
-- Tap's upstream is a **setting** (provisional, Alex to review). v1: **our PDS's `subscribeRepos` only**. Later, network data comes from pointing Tap at a public relay with collection filters; the indexer does not change. No own relay or full-network index. Repos are added explicitly at first login or signup, or through our PDS's `listRepos`, never by network-wide discovery. The spike confirms which mode works against a single PDS.
-- The indexer opens an **acked WebSocket to Tap on an internal network**, so nothing listens for inbound webhooks. Tap's admin API is never exposed, and its builds come from a pinned commit in CI.
-- The indexer drops any DID whose PDS (confirmed through `getRepoStatus` on our PDS) isn't ours.
+- **Any atproto account may sign in from day one, so Tap follows the public relay from Phase 3** (Alex, 2026-10-02; this resolves review-list item 1, which had left the upstream as a setting). Tap runs in dynamic mode against `relay1.us-east.bsky.network` with `TAP_COLLECTION_FILTERS` for `sh.unset.*` and the `app.bsky.*` collections we read; repos are added at first login or signup, never by network-wide discovery. Own-PDS-only ingest was rejected because it would leave users from other PDSes unindexed, and collection-signal mode needs `listReposByCollection`, which a PDS does not serve. Cost: the whole relay firehose arrives and is filtered locally, **~200–300 GB/day inbound**, so the hosting plan must include it (§8 Phase 5). No own relay or full-network index.
+- Tap is **beta** (its README says so): `TAP_ADMIN_PASSWORD` is set even though the admin API is never exposed, the binary is built from a pinned commit in CI, and the `@atproto/tap` client version is matched to it in the spike. The fallback is `@atproto/sync` on `subscribeRepos` (~300 lines).
+- The indexer opens an **acked WebSocket to Tap on an internal network**, so nothing listens for inbound webhooks.
+- The "PDS isn't ours" rule applies to the handle registry only: `*.0x40.me` handles are accepted only when `getRepoStatus` on our PDS confirms the account; records from any PDS are indexed.
 - Handles in events are hints only; display handles come from `verifyHandle`.
 - Ingest does four things: validate against the lexicon, upsert with a monotonic `rev` guard, promote filter columns, and drop likes whose subject isn't our post NSID.
 - `#account active=false` hides records and blobs and ends sessions (§2 rule 7). `#account deleted` runs `eraseDid`.
 
 **Media proxy:**
 - Serves only blobs referenced by an indexed record of an active, non-delisted account.
-- Sends a sandbox CSP and `nosniff`, has a size cap, uses `max-age` (not immutable), and is purged on takedown.
+- Sends a sandbox CSP and `nosniff`, has a size cap, uses `max-age` (not immutable), and is purged on takedown. URLs are CID-addressed and cacheable, so a caching CDN in front is a config change later.
+- Draft previews need a second path, since drafts are not indexed and the media origin has no app cookie: short-lived HMAC-signed URLs minted by `web`, verified by `media`, same sandbox headers (~80 lines; review, 2026-10-02).
 
 **`pds-admin`:**
 - The only holder of the PDS admin password, on the internal network only. It verifies everything itself and trusts nothing from its callers (the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`) §6.2, §6.6, §7.3).
-- Every PDS action needs an envelope from `admin` carrying a moderator's WebAuthn signature over that exact action; `pds-admin` checks it against a **roster signed offline by an owner** and a **revoke file**, which replace `MODERATOR_DIDS`. `web`'s key is accepted for `invite.issue` only.
+- Every PDS action needs an envelope from `admin` carrying a moderator's WebAuthn signature over that exact action; `pds-admin` checks it against a **roster signed offline by an owner** and a **revoke file**, which replace `MODERATOR_DIDS`. `web`'s key is accepted for `invite.issue` only. `pds-admin` verifies **assertions only** (fixed-layout `authenticatorData`, flags, `rpIdHash`, `sha256(clientDataJSON)`, `crypto.verify`: ~80 lines of `node:crypto`, no CBOR); enrolment and attestation live in `admin` with `@simplewebauthn/server`, which writes the credential key into the roster as a JWK (review, 2026-10-02). The `jti` is 128 random bits so the WebAuthn random-challenge rule holds.
 - Deletes and renames of a used handle go through a **7-day hold** on `pds-admin`'s own clock. It emails a receipt naming the real target to every owner, keeps its own hash-linked log and `jti` file, refuses actions on roster accounts, and offers lookups without email, signup open/close and `limits.raise`. It has no password, email or passthrough routes; a break-glass CLI covers emergencies; the reaper skips accounts with open cases.
 - Takedown revokes the user's PDS tokens; deactivation does not; a record takedown does not stop `sync.*`.
 - The reaper deletes only when the PDS definitively reports "unverified and older than the TTL"; any error skips the account.
@@ -309,22 +321,20 @@ Rules for the handle domain:
 - The client's `scope` also declares the explicit fallback scopes. A CI test logs in with the set unresolvable and checks that the fallback is no broader than the set.
 - The TXT record and the schema CID are monitored.
 
-**Account app (Alex, 2026-10-02).** Account management looks like ours and sits beside the PDS, not inside the main app, mirroring how Bluesky keeps sign-in on its own PDS host:
-- A small separate app on `account.<pds domain>`: `account.unset.ac` in production, `account.0x40.space` in development (Alex, 2026-10-02, replacing `account.unset.sh`). It lives with the PDS, as atproto expects account management to, on its own origin separate from the PDS host itself (where passwords are typed). Users sign in on `unset.ac` and manage their account on `account.unset.ac`.
-- Same-site with the PDS, whose host serves raw `getBlob` user bytes. That is safe only with: host-only `__Host-` cookies on both (already enforced), and the CSRF gate accepts `Sec-Fetch-Site: same-origin` or an exact Origin only, never `same-site`, so a page on the PDS host cannot post to the account app with its cookies. A test covers a cross-subdomain POST being refused. The PDS's blob responses keep their sandbox CSP and `nosniff`, checked in the Phase 2 spike. The account app shares no code path, session table or secret with `web` beyond the shared packages.
-- It is an ordinary OAuth client of our PDS with the matching `account:`/`identity:` scopes, and uses public XRPC only: no PDS patch, no PDS database access, no response rewriting, no routes injected into the PDS host. That is the difference from the prototype's `account-manager`.
-- It owns: email change and confirmation, handle change, password reset by email, deactivate and delete.
-- The PDS keeps: OAuth sign-in and consent, always. Email 2FA, devices and connected apps stay on the PDS's `/account` unless a Phase 2 spike finds public APIs for them.
-- The PDS's built-in pages stay on and are branded; there is no setting to switch them off, and blocking them at the proxy would recreate the fragile hacks. Our app and emails link to the account app for what it covers.
-- Difference from Bluesky: Bluesky runs an entryway (`bsky.social`) in front of many PDS hosts and puts account settings in its client; we run one PDS, so the PDS is our sign-in host, and settings live in the account app, not the main app (Alex's choice).
+**Account management (Alex, 2026-10-02): no account app.** The earlier plan put a separate OAuth-client app on `account.<pds domain>`; the review showed that `@atproto/pds` 0.5.36 refuses OAuth credentials for email change (`requestEmailUpdate.ts`), account deletion (`requestAccountDelete.ts`) and reactivation (`activateAccount.ts`) by design, and password reset is a password-handling flow, so of its five jobs only handle change and deactivate were possible. Alex dropped it.
+- **Every account action happens on the PDS's own `/account` page, branded:** email change and confirmation, password, email 2FA, handle change, devices, connected apps, deactivate, reactivate and delete. The OAuth sign-in page already has "forgot password".
+- The app and its emails deep-link to `https://<pds>/account`. Before the redirect the app shows one interstitial sentence ("You are going to **unset.ac**, our sign-in server; it is the only place you type your password"), the same sentence appears on the PDS pages via `PDS_SERVICE_NAME`, and a public "our domains" page is linked from the footer and `security.txt` (review 07).
+- No `account.<pds domain>` host, no second OAuth client, no second session store or CSRF gate: about 700 lines and one origin removed. The PDS's built-in pages cannot be switched off, and blocking them at the proxy would recreate the fragile hacks, so they are the one account surface.
+- Never a PDS patch and never the legacy `createSession` password path. If a public API is missing, the fallback is an upstream issue.
 
 **Phase 2 go/no-go before dropping `account-manager` and `pds-gatekeeper`:**
 - [ ] `/account` lets a user enable email 2FA.
 - [ ] OAuth sign-in actually challenges for it on the pinned PDS. (The prototype hit `email-2fa-not-enforced-by-oauth-provider` on 0.5.9.)
 - [ ] Password reset is reachable from the OAuth sign-in page.
 - [ ] Captcha is unnecessary while invite-only, or the PDS's own hCaptcha env is used.
-- [ ] **Branding (Alex, 2026-10-02):** the PDS sign-in, sign-up and `/account` pages, plus its emails, are set up with our name, logo, primary and status colours, light/dark backgrounds and ToS/privacy/support links, and Alex accepts screenshots of each in both themes. The PDS has no setting for fonts, custom CSS or layout, so these pages will look like ours but not identical to the app. If that isn't enough: build thin account pages in the app for what the PDS APIs allow over OAuth (email, handle, deactivate and delete), linking out for password and 2FA. The sign-in page itself always stays the PDS's. Patching the PDS is not the fallback.
-- [ ] The confirm-email link points at the PDS's own `/account` page and not at bsky.app. The deploy preflight fails if it doesn't, and the fallback is an upstream fix, not a patch.
+- [ ] **Branding (Alex, 2026-10-02):** the PDS sign-in, sign-up and `/account` pages, plus its emails, are set up with our name, logo, primary and status colours, light/dark backgrounds and ToS/privacy/support links, and Alex accepts screenshots of each in both themes. The PDS has no setting for fonts, custom CSS or layout, so these pages will look like ours but not identical to the app. If that isn't enough: thin pages in the app only for what the PDS allows over OAuth (handle change with `identity:handle`, deactivate with `account:status`, a verify-email prompt), linking out for everything else; never email change, password or delete, which the PDS refuses over OAuth. The sign-in page itself always stays the PDS's. Patching the PDS is not the fallback.
+- [ ] `PDS_EMAIL_DISABLE_CONFIRMATION_LINK` is set, so the confirm-email mail shows the code to enter on `https://unset.ac/account` and never links to bsky.app (review, 2026-10-02: the template links to bsky.app only when that flag is off). The deploy preflight fails otherwise.
+- [ ] Recorded: the PDS offers users email 2FA only (no TOTP or WebAuthn), so the mailbox is the root of trust for account recovery; accepted for v1 (review, 2026-10-02).
 
 ### 5.4 Profile in the app (the binding decision)
 
@@ -392,19 +402,25 @@ Rules for the handle domain:
 Chat is part of the core product, not a module or plugin. It runs **beside the core but connected** (Alex, 2026-10-02): its own service and origin, so its encryption keys and sessions are isolated from the main app, joined to it only by the identity seam and the profile's "Message" button. **Matrix confirmed** (Alex, 2026-10-02) after comparing Signal, SimpleX, XMPP, P2P messengers, Keybase, PGP and Threema: Matrix is the only one that is browser-first, self-hostable, tied to our identity and has mature group encryption.
 
 **Every unset.sh user can message every other one (Alex, 2026-10-02).** This needs, designed in Phase 6 from how Element and the spec do it, not invented:
-- **the chat account is seeded at signup (Alex, 2026-10-02):** when an unset.sh account is created, its Matrix account and `did↔mxid` mapping are created too, through MAS's provisioning API with the DID as subject. Seeding creates the account only: no access token, device or encryption key is made for the user, and no membership is forged; invites to them are normal invites they accept on first visit;
-- **chat sign-in is a step of signup (Alex, 2026-10-02):** onboarding takes the new user to `chat.unset.sh`, where they sign in themselves. That creates their first device and keys and sets up the recovery key, confirmed stored before it is shown (pitfall note `bootstrap-secret-storage-needs-setupnewsecretstorage`). So nearly everyone has keys before anyone can message them; the step is the user's own login, never done for them;
-- for anyone who skips that step or loses every device, messages sent meanwhile must still become readable later. Phase 6 designs this from Element's handling of key sharing to new devices, before code;
-- message requests from people you don't follow, plus block and report, before launch, since open messaging invites spam (the prototype never built request gating);
-- **encrypted media (Alex, 2026-10-02):** no scanning on people's devices; chat relies on reports. A report can carry evidence the reporter chooses to upload (screenshots, the photo or video itself); those uploads are fingerprint-checked like every other media, stored privately for the moderation case only, and deleted when it closes. A match follows the abuse path, and no moderator views it;
-- **no photos or videos from people you don't follow (Alex, 2026-10-02):** our chat client does not offer to send them and does not show them, only a notice. The server cannot see inside encrypted messages, so this is enforced in our client, which is what protects the person receiving. Before building, check how Element and cinny hide media from unknown senders and cite it (CLAUDE.md chat rule);
+- **the chat account is seeded at signup (Alex, 2026-10-02):** when an unset.sh account is created, its Matrix account and `did↔mxid` mapping (plus the MAS user ULID) are created too: `POST /api/admin/v1/users`, then `POST /api/admin/v1/upstream-oauth-links` with the DID as subject, in that order, idempotent on 409. Seeding creates the account only: no access token, device or encryption key is made for the user, and no membership is forged;
+- **seeding runs in an isolated `chat-admin` service, never in `web` (Alex, 2026-10-02, decision 13):** the MAS admin scope is all-or-nothing and can mint a device or token for any user, so it follows the `pds-admin` pattern (internal network, one verb `seed(did, localpart)`, in the secret inventory). The client ships **`OnlySignedDevicesIsolationMode`** (MSC4153) from day one, so a device the user did not cross-sign receives no room keys; the "unable to decrypt" cases this creates are accepted;
+- **chat sign-in is a step of signup (Alex, 2026-10-02):** onboarding takes the new user to `chat.unset.sh`, where they sign in themselves. That creates their first device and keys and sets up the recovery key, confirmed stored before it is shown (pitfall note `bootstrap-secret-storage-needs-setupnewsecretstorage`); a user who closes the tab mid-way lands in a consistent state (cross-signing and backup done, recovery pending with a nag). **MAS has no consent skip** (MAS 1.26 config schema), so this step shows MAS's consent screen; budget it in copy and screenshots. `web` forwards `login_hint`, `chat-auth` refuses a subject that does not match the handoff, and on a callback mismatch (rule 19) the client ends the MAS session and retries instead of showing an error (review, 2026-10-02);
+- **a message request is the invite only; no text until accepted (Alex, 2026-10-02, decision 12).** Megolm keys go to the devices that exist when a message is sent, and a seeded account has none, so "messages sent meanwhile become readable later" is impossible in Matrix E2EE and is dropped. This also answers how to invite someone who has never opened chat. Server-side spam control that needs no follow graph: `rc_invites.per_issuer`, MSC4380 `m.invite_permission_config`, and a Synapse `user_may_invite` module that throttles young accounts (~150 lines). Block is `m.ignored_user_list` plus leave;
+- **reports (review, 2026-10-02):** `POST /rooms/{id}/report` and `/users/{id}/report` land in Synapse's `event_reports`, not in Ozone; `admin` polls `/_synapse/admin/v1/event_reports` and surfaces them in its queue (§5.7);
+- **encrypted media (Alex, 2026-10-02):** no scanning on people's devices; chat relies on reports. Evidence is structured, not screenshots: the reporter's client uploads the decrypted bytes plus the event's `file` block (`url`, `key`, `iv`, `hashes.sha256`), so the review worker fetches the ciphertext, decrypts and checks the hash, binding the evidence to a real event from a real sender. Uploads are fingerprint-checked like every other media, stored privately for the case only, and deleted when it closes; a match follows the abuse path and no moderator views it. This is a written carve-out to the admin design's "no private data: chat" rule, with its own RoPA purpose (reporter-supplied chat content);
+- **no photos or videos from people you don't follow (Alex, 2026-10-02):** our chat client does not offer to send them and does not show them, only a notice. Matrix has no follow graph and no client hides media per sender (Element's MSC4278 gate keys on the join rule), so the borrowed pattern is "hidden by default, click to reveal" applied by our rule, covering every attachment kind (`m.file`, stickers, inline `data:` images, URL previews, invite avatars) and failing closed when the follow lookup fails. It protects only users of our client: by default MAS keeps dynamic client registration on, and the terms say the rule applies to the unset.sh client only (review, 2026-10-02; the alternative, MAS allowing only our static client, is noted for Alex);
+- **no IP logs:** Synapse and MAS record client IPs by default and cannot be told not to, so the edge does not forward `X-Forwarded-For` to them (`x_forwarded: false`), both record the edge's internal address, per-IP rate limits move to the edge, `user_ips_max_age: 1d`, and `synapse.access.http` is dropped from the log config. The device list shows no location (review, 2026-10-02);
 - the user's privacy switches respected: a private account can still be messaged by handle, but nothing about it is exposed beyond that.
+
+**Launch fallback (Alex, 2026-10-02, decision 11):** the native client is built; if it is late, a **branded Element Web** on `chat.unset.sh`, configured not forked, ships first: `default_server_config` and `disable_custom_urls`, `sso_redirect_options.immediate: true`, `oidc_static_clients`, `brand`/`branding`/`embedded_pages`, `force_verification`, `setting_defaults` for `mediaPreviewConfig` and `inviteRules`, `UIFeature.*` off for directory, VoIP, 3PIDs and registration, plus one build-time module (`@element-hq/element-web-module-api`) for the follow-gate. It keeps every decision above at ~0 client lines; the honest cost is that it does not follow the unset.sh design sheet (Q11) and inherits Element's CVE cadence.
 
 
 - **Engine:**
-  - Synapse + MAS + a `chat-auth` bridge (atproto identity → OIDC, `sub` = DID).
-  - Federation off until decided.
-  - Served only from `chat.<app domain>`.
+  - Synapse (1.162) + MAS (1.26) + a `chat-auth` bridge (atproto identity → OIDC, `sub` = DID); `matrix-js-sdk` 43 pinned exactly (v43 moved OAuth refresh into the SDK; the prototype's `tokens.ts` is not ported). Still the only spec-stable path: conduwuit is archived, Dendrite in maintenance.
+  - Federation off: `federation_domain_whitelist: []`, no `.well-known/matrix/server`, no 8448.
+  - **`server_name` is fixed in Phase 1** because seeded accounts make it permanent: recommended `unset.sh` with `.well-known/matrix/client` delegation to `chat.unset.sh`, so MXIDs read `@alice:unset.sh` (review, 2026-10-02).
+  - Served only from `chat.<app domain>`. Cold-load budget ≤3.5 MB gzipped (the crypto WASM alone is 2.1 MB): immutable caching, crypto loaded lazily after the MAS callback, store persisted in IndexedDB (§6.1).
+  - Hosting for chat: Synapse, MAS, `chat-auth` and their Postgres need ~4 GB at launch, 8 GB or more by 2,500 users; the Phase 5 hosting decision includes it.
 - **What the core provides:**
   - the identity seam from §4 (signed, single-use, audience-bound assertion; `did↔account` table);
   - handle resolution;
@@ -418,15 +434,15 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
   - attachments with the safety gates;
   - an unread badge inside chat.
 - **Later slices:** Spaces with a redesigned join model (knock, or an invite bot), then voice.
-- **Before GA:** decide the device-trust posture and how to invite someone who has never opened chat.
-- `matrix-js-sdk` is pinned exactly.
+- **Size:** 5–7k lines for the MVP (review, 2026-10-02; the prototype spent 10.7k on DMs, Spaces and voice and never built request gating). The device-trust posture and the invite question are settled above, not "before GA".
 
 ### 5.7 Admin panel (internal; from the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`))
 
-- **What:** a small console for one or two people at `admin.int.unset.sh`: account lookup, delist, takedown and reinstate, end our sessions, invites, held deletes, the audit log and a health board. Reports and the moderation queue live in Ozone (§5.8, Alex 2026-10-02). It cannot browse users, act as a user or read private data.
+- **What:** a small console for one or two people at `admin.int.unset.sh`: account lookup, delist, takedown and reinstate, end our sessions, invites, held deletes, the audit log, a health board, **the draft review queue** for posts the classifier marked unsure (§5.8) and the Matrix report intake (§5.6). Post-publication reports on public records live in Ozone (§5.8, Alex 2026-10-02). It cannot browse users, act as a user or read private data, with one **written carve-out** (Alex, 2026-10-02, decision 6): a draft the user has submitted for publication, after the on-screen notice, is reviewable until published or withdrawn; nothing else is. The web panel ships from the start, phone access included (Alex, 2026-10-02, decision 15; the CLI-only v1 proposed by the review was declined).
 - **Where:** its own `admin` process, container, origin, DB role and key. No moderator routes in `web` (lint-enforced). No public DNS record; reachable only over Tailscale (Tailnet Lock, deny-by-default policy, Funnel and Tailscale SSH off, split DNS, our own DNS-01 certificate). Public inbound is only 443 and an 80 redirect; SSH moves onto Tailscale.
-- **Login:** an allowed Tailscale device, a hardware security key with PIN (no synced passkeys, no OAuth at login), and that key's entry in the signed roster. Sessions `__Host-admin_sid`, 15 minutes idle, 8 hours absolute.
-- **Actions:** every PDS action and PII reveal carries a WebAuthn signature over that exact action, verified by `pds-admin`. Irreversible actions go through a 7-day hold.
+- **Login:** an allowed Tailscale device, a hardware security key with PIN (no synced passkeys, no OAuth at login), and that key's entry in the signed roster. Sessions `__Host-admin_sid`, 15 minutes idle, 8 hours absolute. **Enrolment with attestation happens on desktop Chrome or Firefox only** (Safari returns `fmt: "none"` and a zero AAGUID); phones assert only, and an enrolment from a browser that strips attestation is refused, not degraded (review, 2026-10-02). The RP id `admin.int.unset.sh` is fixed before the first enrolment.
+- **Actions:** every PDS action and PII reveal carries a WebAuthn signature over that exact action (`challenge = sha256(JCS(action))`, random 128-bit `jti`), verified by `pds-admin`, which checks assertions only (§5.2); `@simplewebauthn/server` lives in `admin`. Irreversible actions go through a 7-day hold.
+- **Size:** CI budget 3,000 lines as a **warning**, not a hard fail, incl. `pds-admin` and audit (Alex, 2026-10-02; a hard 2,400 ceiling would be gamed by moving code into shared packages). The real guards stay: no moderator route in `web` (lint) and CODEOWNERS on admin paths.
 - **Audit:** schema `audit`, append-only through `audit.append()`, two hash-chained lanes (`mod`, `sec`), redactable side tables, chain heads copied off-box daily.
 - **Plugins:** an optional `admin.views` manifest field; plugin code never runs inside `admin`.
 - **Roles in Postgres:** add `admin` and `retention`.
@@ -435,38 +451,39 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 
 **Feeds as tabs.** Atproto feeds (https://atproto.com/guides/feeds) are run by feed generators: a service that returns a list of post links, which an app then fills in with the posts.
 - The top of the home screen shows tabs: Following, plus feeds the user picks, such as a news or tech feed. Users add, remove and reorder them. The list is stored privately in the app database.
-- The app asks each feed's generator for its post list through `net-guard`, then fills in the posts. Bluesky posts are read from Bluesky's public read service, and ours from our index, so this needs no full-network index (fits the provisional indexer decision).
-- We run our own feed generators for unset.sh videos (for example latest and following), so other atproto apps can show them too.
+- **Bluesky feeds are fetched through the user's own PDS session** (review, 2026-10-02): the server calls `app.bsky.feed.getFeed` and `getTimeline` on the user's PDS, which proxies to Bluesky's AppView with a service-auth token minted for that user (`aud=did:web:api.bsky.app#bsky_appview`; the `rpc:` scopes are in §3). Labels, viewer state, blocks and mutes come back hydrated, rate limits are per user and per PDS, and the generator sees the real requester. The first draft fetched skeletons anonymously from one server IP and hydrated them through `getPosts` (25 URIs per call, unpublished limits); that is gone, about 400 lines with it. `net-guard` only ever talks to the user's PDS. Our own videos are hydrated from our index.
+- We run our own feed generators for unset.sh videos (latest, following) for our app and third-party unset.sh clients. They cannot be shown by other apps' AppViews, which hydrate only records they index (Bluesky's drops `sh.unset.*` URIs), so the earlier interop claim is withdrawn (review, 2026-10-02).
 - Feeds show only public content. A private user's posts never enter any feed.
-- **Labels on Bluesky posts:** Bluesky posts shown in our feeds carry Bluesky's moderation labels, and the app always applies Bluesky's own labeler plus ours (below): hidden labels are not shown, warning labels sit behind a warning.
+- **Labels:** Bluesky posts carry Bluesky's labels; the app always applies Bluesky's labeler plus ours (`atproto-accept-labelers` with our Ozone DID; our index ingests our Ozone's `subscribeLabels` stream into a `label` table). Hidden labels are not shown, warning labels sit behind a warning.
 
 **Video posts.**
-- Our own record type in `sh.unset.*` for a short video: 60 seconds max, with caption, poster frame and aspect ratio. The original file is a blob in the user's repo; everything else is derived.
-- A transcoding worker (ffmpeg in its own container, no network except storage) makes HLS renditions and a poster frame. Playback goes through the media proxy, never raw `getBlob`.
-- Upload checks: length, size, format and codec allow-list, re-encode everything (no original served to browsers), strip metadata such as location.
-- **Compressed for feeds (Alex, 2026-10-02):** adaptive streaming with small renditions first in feeds; the full-quality rendition only when a video is opened full screen on a fast connection.
+- Our own record type in `sh.unset.*` for a short video: 60 seconds max, with caption, poster frame, aspect ratio and an optional `captions` (WebVTT) field. **The repo blob is a re-encoded, metadata-stripped 1080p H.264 master, never the original** (review, 2026-10-02): `getBlob` is unauthenticated, so whatever is in the repo is served raw by the PDS and copied by relays. The upload is deleted after review. Renditions, posters and caption files live in our `media` storage (written by the worker, read by the media proxy, per-DID prefixes so erasure is a prefix delete), never in the PDS blobstore; drafts in a `drafts` store with a 30-day lifecycle rule.
+- **Renditions (review, 2026-10-02):** H.264 progressive MP4 with `-movflags +faststart` and a keyframe every 2 seconds, served with `Range` by the media proxy: **360p at ≤1.2 Mbps** for feeds, **720p at ≤3 Mbps** full screen, the 1080p master on request. Plays in a bare `<video>` everywhere without hls.js; HLS only if mid-clip adaptation proves necessary. **AV1 rejected** (about a third of iOS Safari decodes it; 3–10× slower to encode). Posters AVIF+WebP ≤30 KB with `aspect-ratio` from the record. The worker runs ffmpeg in its own container with no network except storage, on its own CPU quota so an upload burst cannot starve `web` or the PDS (≈1× real time on two cores per clip).
+- Upload checks: length, size (original cap 250 MB), format and codec allow-list, re-encode everything, strip metadata such as location.
+- **Compressed for feeds (Alex, 2026-10-02):** the 360p rendition in feeds, autoplay muted with `playsinline`, `preload="none"` behind the poster, honouring `prefers-reduced-motion` and `prefers-reduced-data`; 720p when a video is opened full screen on a fast connection.
+- **Captions on every video (Alex, 2026-10-02, decision 19):** the review transcript becomes an author-editable WebVTT caption track before publish, shown by default when muted; without it a video post fails WCAG 1.2.2 (Level A). Every player has a visible pause and keyboard controls.
+- **Caps from day one (Alex, 2026-10-02, decision 18):** a per-account storage quota (2 GB default, raised per account in `admin`) and a daily upload cap (10). Storage, not bandwidth, is the cost line (≈75 MB per video with the master and two renditions; ≈2 TB per month at 1,000 uploads a day). Alex funds hosting at first; paid plans come later.
+- **"Also post to Bluesky" (Alex, 2026-10-02, decision 4):** the publish screen has an opt-in tick, default off, that writes an `app.bsky.feed.post` with an `app.bsky.embed.video` (the reviewed 720p rendition through Bluesky's video service, verified against a self-hosted PDS in the Phase 4 spike; `app.bsky.embed.external` to the permalink as the fallback) in the same `applyWrites` as `sh.unset.video`. Without it a video is visible on unset.sh only, since Bluesky renders `app.bsky.*` alone. A Bluesky post is public and copied; the tick says so.
 - **Reviewed before going public (Alex, 2026-10-02):** a public post (video or Bluesky post) is uploaded to our private draft storage, processed and checked there, and written to the user's repo only after it passes. It must not reach the repo first, because anything in the repo is public at once and copied by relays.
-  - Checks: known abuse-material hash matching (the legal duty) plus an automated content classifier for the categories in our rules. A pass publishes; a clear fail is blocked with the reason and an appeal; anything uncertain goes to the admin panel's queue for a person to decide.
-  - **How the review runs (Alex, 2026-10-02):**
-    - Hash matching runs on our own servers, first. Only fingerprints are compared (PhotoDNA for images and frames, PDQ/TMK+PDQF for video, against a known-abuse hash list from NCMEC or the Canadian Centre for Child Protection). A match is never sent anywhere: it is reported as the law requires and kept 21 days in a locked, encrypted legal hold that no moderator browses, then deleted (admin design §8.1). Before launch: apply for PhotoDNA and a hash list (free, but approval takes time).
-    - The content classifier is the Claude API. Claude cannot take video or audio, so the worker sends about ten frames downscaled to at most 720p, the caption, and an audio transcript made on our servers. Claude answers pass, fail or unsure as structured output; unsure goes to a person. Outbound calls go to one allow-listed fixed host through the guarded egress.
-    - This sends published-post content to Anthropic (US). The privacy notice and the RoPA name Anthropic as a processor; only public posts are sent, never private posts or anything else.
-    - Model: start on Sonnet with downscaled frames and measure on real examples before fixing the choice. Estimated (list prices, not measured) about 1 to 2 cents per video, roughly 1 to 8 cents across models.
-    - A clear fail stays in draft storage until the appeal is decided, then is deleted (drafts expire after 30 days regardless).
+  - Checks: known abuse-material fingerprint matching (the legal duty) plus an automated content classifier for the categories in our rules. A pass publishes; a clear fail is blocked with the reason and an appeal; anything uncertain goes to the draft review queue in `admin` (§5.7) for a person to decide (Alex, 2026-10-02, decision 6; it cannot live in Ozone, whose subjects are published records or DIDs).
+  - **Fingerprints (Alex, 2026-10-02, decision 7):** PDQ for images and sampled frames (1 fps) and TMK+PDQF for video are computed locally in the no-network worker, plus MD5 of the file. The hashes, never the media, are checked against the **Canadian Centre for Child Protection's Arachnid Shield API** (free; `scanPdqHashes`), the same organisation we report to (Cybertip.ca is the designated body under SOR/2011-292). This replaces "PhotoDNA on our servers", which is not a thing: PhotoDNA Cloud uploads the image to Microsoft and is images-only. The terms and privacy notice say that fingerprints of every photo and video, private ones included, leave for this check and that media never does. Exact and `csam`-classified matches are reported to Cybertip.ca; near matches on private content create a hold for an analyst, not a report.
+  - **Local nudity gate before Claude (Alex, 2026-10-02, decision 8):** an open-source model (NudeNet class, Apache-2.0, ~0.5 s per frame on CPU) runs inside the worker first. Adult content is banned at launch, so any nudity is already a fail or a human case and those frames **never leave our servers**; novel abuse material therefore never reaches a US processor. Claude sees only nudity-free frames.
+  - The content classifier is the Claude API for the remaining categories (violence, harassment, scams, spam). Claude cannot take video or audio, so the worker sends about ten nudity-free frames downscaled to at most 720p, the caption, and a transcript made locally (whisper.cpp `base`, 4–5 s per clip, weighted low and never a fail on its own). Claude answers pass, fail or unsure as structured output. Outbound calls go to one allow-listed fixed host through the guarded egress.
+  - This sends submitted-post content to Anthropic (US). The privacy notice and the RoPA name Anthropic as a processor; only posts submitted for publication are sent, never private posts or anything else. Anthropic may keep flagged inputs for up to two years, which the notice says. **First publish shows an explicit consent checkbox** ("frames and a transcript of this post are sent to Anthropic (US) for review"), not a sentence (review, 2026-10-02).
+  - Model and cost: an exact model id is pinned with the prompt version in the repo (a one-page **AI system record**: purpose, inputs, versions, measured false-positive rate on ≥200 labelled own clips, retention, human reviewer; §6.1). Estimated at list prices (review, 2026-10-02): ≈2.8¢ per video at 720p on Sonnet, ≈0.9¢ at 360p; Haiku about half; the Batch API halves again. Measure accuracy at the small size first.
+  - Statements of reasons say the decision used automated means and name the appeal route (DSA Art. 17); **an appeal is decided by a person**, never re-run through the model. A clear fail stays in draft storage until the appeal is decided, then is deleted (drafts expire after 30 days regardless).
+  - **Abuse-material law (Alex, 2026-10-02, decision 9):** Bill C-16 is law (royal assent 2026-06-18, S.C. 2026 c. 19), amending the Mandatory Reporting Act: preservation is **one year after notification**, not 21 days, and a notification of manifest material must carry transmission data. So: a 365-day sealed, encrypted legal hold that no moderator browses, on `pds-admin`'s clock, surviving backup pruning and the draft TTL; **at the moment of a fingerprint match only**, the uploader's client address, time and route from that request are sealed with the hold and destroyed with it; nothing is recorded otherwise. One Canadian lawyer hour on "collect vs provide" before production. The Act does not require proactive scanning (s. 6); ours is voluntary and said so.
   - The publish screen and the terms say plainly that public posts are reviewed automatically before they go live. Private posts are not sent to the AI review.
-  - **Fingerprint check on everything (Alex, 2026-10-02):** every photo and video the app processes is checked against the known-abuse fingerprints before it is stored for use: public and private posts, drafts, profile pictures and banners, any image pipeline. The check runs on our servers only and sends nothing out, so it applies to private content too; the terms say so. A match follows the same path (blocked, reported, 21-day locked hold). Chat media is end-to-end encrypted and cannot be checked on the server; chat relies on reports and blocks media from people you don't follow (§5.6, Alex 2026-10-02).
+  - **Fingerprint check on everything (Alex, 2026-10-02):** every photo and video the app processes is checked as above before it is stored for use: public and private posts, drafts, profile pictures and banners, any image pipeline. A match follows the same path (blocked, reported, 365-day sealed hold). Chat media is end-to-end encrypted and cannot be checked on the server; chat relies on reports and blocks media from people you don't follow (§5.6).
   - A report button stays on every post, for anything the review misses.
-**Our labeler: Ozone (Alex, 2026-10-02).** We run Bluesky's open-source moderation service, Ozone, as the unset.sh labeler, so our moderation decisions reach Bluesky and every other atproto app, not only ours.
-- Role: labels and report intake. Its public side (serving labels and receiving reports from any app) is on the internet; its moderator screens are reachable only over Tailscale, like the admin panel.
-- Ozone never gets PDS admin power. Takedowns, deletes and account actions stay in the admin panel through `pds-admin`, with a hardware-key touch per action (§5.7). This keeps the admin design's guarantees intact.
-- It has its own DID and label-signing key; the key goes in the secret inventory and the backup and recovery runbook.
-- **Ozone is the moderation tool (Alex, 2026-10-02):** reports, the review queue for uncertain posts, moderator notes and labels all live in Ozone, replacing the admin panel's own reports queue (less code of ours). The admin panel shrinks to account and server actions through `pds-admin`: takedown, reinstate, held deletes, invites, sessions, audit and health. A moderator decides in Ozone; any action that touches an account in the PDS is then confirmed in the panel with a hardware-key touch.
-- Condition, checked in a spike before building: Ozone's moderator login must meet our rule (Tailscale only, plus a hardware security key). If it cannot without patching or bypassing anything, we stop and bring the choice back to Alex rather than weaken the rule.
-- Built in Phase 5, before launch.
-- To verify in the spike: license and current version (believed MIT/Apache-2.0, TypeScript and Postgres, from memory).
+**Our labeler: Ozone (Alex, 2026-10-02).** We run Bluesky's open-source moderation service, Ozone (MIT/Apache-2.0, Next.js and Postgres), as the unset.sh labeler, so our labels are available to Bluesky and every other atproto app (shown to users who subscribe to our labeler), not only ours.
+- **Role: labels and post-publication report intake only** (Alex, 2026-10-02, decision 6). The draft review queue and Matrix reports live in `admin`. Ozone hydrates records through Bluesky's AppView and renders `sh.unset.*` as raw JSON, so moderators open our video on `unset.sh` and Ozone holds the case.
+- Its public side (`com.atproto.label.*`, `com.atproto.moderation.createReport`, `/.well-known/*`, `_health`) is on the internet; everything else, the moderator UI and `tools.ozone.*`, is reachable only over Tailscale. **Ozone's moderator login is atproto OAuth against the moderator's PDS** (review, 2026-10-02; our PDS offers email 2FA only), so no hardware key is possible at its login: the Tailscale layer is the gate, and Ozone never gets PDS admin power. Takedowns, deletes and account actions stay in the admin panel through `pds-admin`, with a hardware-key touch per action (§5.7).
+- It has its own DID and label-signing key (secret inventory, backup and recovery runbook); its Postgres is a second PII store (report text, reporter DIDs) and gets a 6-month retention cron. Watchtower auto-update in its reference compose is disabled in favour of pinned digests. The PDS's mod-service setting points at our Ozone, and foreign-PDS users' reports reach it with `atproto-proxy: <ozone did>#atproto_labeler` plus the matching `rpc:` scope.
+- Built in Phase 5, before launch, after a spike that confirms the version and the label stream.
 
-- Video raises cost and duty: storage, bandwidth and CPU grow fast, and abuse-material detection and reporting apply (admin design §8.1). Phase 4 sizes the hosting before launch.
-- Other post kinds: users can also write standard Bluesky posts (`app.bsky.feed.post`, text and images), which then appear in Bluesky. All posts follow the "Posts and follows" privacy switch.
+- Video raises cost and duty: storage, bandwidth and CPU grow fast, and abuse-material detection and reporting apply (admin design §8.1). Phase 5 sizes the hosting before launch (§8).
+- Other post kinds: users can also write standard Bluesky posts (`app.bsky.feed.post`, text and images), which then appear in Bluesky. All posts follow the "Posts and follows" privacy switch (Q2b).
 
 ## 6. Privacy and compliance deliverables
 
@@ -474,18 +491,53 @@ These are deliverables, not intentions:
 
 - **`eraseDid(did)`** covers the index, the app schemas and plugin hooks. It is triggered by `#account deleted` and by a moderator action. A test enumerates every table with a DID column.
 - **Export** at `/settings/export`: the CAR link plus a JSON dump of every app-DB row for the DID.
-- **Logging and retention** per the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`) §8.1: no IPs or user agents in any traffic log or table, no analytics, no user sign-in records; edge logs keep status, route and timing for 3 days.
+- **Logging and retention** per the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`) §8.1: no IPs or user agents in any traffic log or table, no per-user analytics, no user sign-in records; edge logs keep status, route and timing for 3 days (the Caddy log filter deletes `remote_ip` and `X-Forwarded-For`, checked in CI; the PDS log level is set likewise; Synapse and MAS never see a client IP, §5.6). The one exception is the sealed transmission data captured at a fingerprint match (§5.8).
+- **Measurement (Alex, 2026-10-02, decision 17):** a nightly `metrics_daily` table of **rounded aggregate counts, service-wide** (accounts, profiles published, videos published/blocked/unsure, sessions active, reports opened/closed, time to first publish), rounded to buckets of 5 below 50, never joined to a DID, kept **13 months**, described in the privacy notice. No real-user performance beacon; CrUX and Lighthouse CI only.
 - **Retention:**
   - admin action log: 2 years; admin security events: 1 year; moderation decisions: 1 year after the case closes;
-  - reports: 6 months after the case closes;
-  - breach record (PIPEDA): 24 months; abuse-material preservation: 21 days;
-  - abandoned drafts: 30 days;
-  - backups: N days, so erasure reaches the backups within N.
+  - reports: 6 months after the case closes (Ozone's Postgres included);
+  - breach record (PIPEDA): 24 months; **abuse-material preservation: one year after notification** (C-16, S.C. 2026 c. 19; was 21 days before the review), transmission data sealed with the hold and destroyed with it;
+  - abandoned drafts: 30 days; aggregate metrics: 13 months;
+  - backups: N days, so erasure reaches the backups within N; a legal hold is the only thing that outlives N.
 - **Reports** go into the moderation queue, never into logs.
-- **RoPA rewritten** for the reduced scope: drafts, reports, audit, OAuth tokens and the federation decision, with a lawful basis for each purpose.
-- **Moderation and GDPR:** moderation history in exports, `dsar.export` for users who cannot log in, erasure of audit side tables, PLC tombstones, statements of reasons, and a public notice form on `unset.sh` (DSA Art. 16).
+- **RoPA rewritten** for the reduced scope: drafts, reports, audit, OAuth tokens, the Anthropic review (processor, US, two-year retention of flagged inputs), Arachnid Shield (fingerprints only), reporter-supplied chat content, aggregate metrics and the federation decision, with a lawful basis for each purpose.
+- **Moderation and GDPR:** moderation history in exports, `dsar.export` for users who cannot log in, erasure of audit side tables, PLC tombstones, statements of reasons that say when automated means were used (DSA Art. 17(3)(c)) with an appeal decided by a person, and a public notice form on `unset.sh` (DSA Art. 16; Canada's notice-and-notice wants the same form).
+- **Invite-country rule (Alex, 2026-10-02, decision 10):** no EU, UK or Australian invitees until a representative exists (GDPR Art. 27 and DSA Art. 13 attach on the first EU user; the "occasional" exemption never covers persistent accounts) and age assurance exists for Australia (its under-16 law has applied since 2025-12-10 with no size threshold and self-declaration is not enough). One config flag and one sentence in the terms.
+- **Canadian law:** **Quebec Law 25 applies** regardless of Ontario (any enterprise with Quebec users): a named privacy officer on the privacy page, the incident register, and a privacy impact assessment before backups leave the province. **PIPEDA** applies in full the day the service is commercial (charges money or incorporates); the design meets it voluntarily before then. The Mandatory Reporting Act and the Criminal Code apply regardless. Bills as of 2026-10-02: **C-16 is law**; C-22 (Lawful Access) passed the House and Senate second reading, not law; C-63 died at prorogation; C-34 (Safe Social Media Act, under-16 rule) at first reading. A quarterly bills watch is in the compliance cadence. Age 16 stays self-declared on a neutral screen (free-form date, no hint of the threshold); a credible under-13 report deletes the account (COPPA actual-knowledge runbook).
+- **Legal paperwork moves to Phase 1–2** (review, 2026-10-02): one-page terms and privacy notice with the Phase 2 signup, the Cybertip report-and-preserve runbook before any non-Alex upload, the notice form, the Arachnid Shield application, a one-page incident-response runbook (PIPEDA real-risk test, OPC form, Law 25 CAI notice, C-16 path), and one Canadian lawyer hour before production (C-16 transmission data, Law 25 PIA, PIPEDA applicability).
 - **Privacy notice** published, and linked from both the app and the PDS (`PDS_PRIVACY_POLICY_URL`).
 - **Federation decision recorded** (Q2b): whether `PDS_CRAWLERS` points at the Bluesky relay.
+
+### 6.1 Standards, accessibility and performance (Alex, 2026-10-02, decision 19)
+
+Hard requirements with CI gates, not intentions. The prototype's `docs/compliance/security-standards.md` cited ASVS 4.0 chapters that no longer exist; it is rewritten.
+
+| Standard | Level | CI check |
+|---|---|---|
+| OWASP ASVS | **5.0 Level 2**, as `docs/compliance/asvs-5-l2.md`: every L1+L2 row names the test or lint that proves it (open chapters: V6 admin login, V9 service-auth JWTs with `alg` allowlist, `aud`, `exp` ≤60 s, `lxm`, `jti` replay; V4 deny unknown methods and content types) | row → test id; test-count check |
+| OWASP Top 10 | 2025, incl. **A10: a test that an exception inside the CSRF or authz middleware denies** | Vitest on middleware |
+| RFC 9700, NIST SSDF, CIS Docker and Postgres | designed to | login tests, hadolint, image scan, role tests |
+| SLSA | **Build L2** now (GitHub attestations), L3 later via a reusable workflow | `cosign verify` and `gh attestation verify` in the deploy preflight |
+| SAST / DAST / deps | Semgrep CE per PR; ZAP baseline weekly against the compose stack (missing headers fail); Renovate `minimumReleaseAge: 7d`, `npm audit --audit-level=high`, `--ignore-scripts` in CI; CodeQL once the repo is public | per PR / weekly |
+| WCAG | **2.2 AA** (chosen; AODA, EAA and ADA do not compel it): captions, visible pause, 24×24 targets, labelled glyph icons (`aria-hidden` plus hidden text), keyboard access to player and chat, reduced-motion autoplay; opaque cards under accent text (the 95 % alpha over the ASCII field is the one contrast risk) | `@axe-core/playwright` (wcag2a..wcag22aa) on every smoke page in **both themes**, zero violations; pa11y-ci on the zero-JS routes; a manual keyboard pass per phase exit |
+| Core Web Vitals | budget table below | Lighthouse CI mobile preset, median of 3, `budget.json`; Playwright timings |
+| SOC 2, ISO 27001/27017/27018, ISO 42001 | **certification track kept on paper** (Alex chose to keep it; the review proposed dropping it). Audits are a later cost, larger than hosting; nothing is bought now | the ASVS doc, the RoPA and the AI system record are the evidence base |
+| AI system record | one page: purpose, inputs, pinned model id and prompt version, measured false-positive rate, retention, human reviewer (§5.8) | versions pinned in the repo |
+| Lexicon versioning | not SemVer: a breaking change is a new NSID, only optional fields are added; SemVer applies to `plugin-api` and read-API shapes only | `lex` diff in CI |
+| Not applicable | App Store, Play, MASVS (no native app); CCPA/CPRA (no revenue, nothing sold); HIPAA, FERPA; PCI DSS becomes SAQ A only with Stripe Checkout on a route with its own CSP snapshot | |
+
+**Performance budget** (p75, mid-range Android, slow 4G; review 08 §7):
+
+| Surface | Budget |
+|---|---|
+| All pages | LCP ≤2.5 s, INP (TBT proxy) ≤200 ms, CLS ≤0.1; origin TTFB ≤200 ms warm, ≤500 ms cold; ≤5 queries and ≤50 ms DB per request, `statement_timeout` 2 s on `web` |
+| All pages | CSS ≤40 KB unminified and ≤12 KB min+gzip per bundle; fonts ≤120 KB, two files, preloaded, `size-adjust` fallbacks |
+| `/@handle` | **0 bytes of JS**; HTML ≤30 KB gzipped |
+| App pages | JS ≤75 KB gzipped total, ≤15 KB per island |
+| Images | AVIF+WebP; avatar ≤20 KB, poster ≤30 KB, explicit `aspect-ratio` |
+| Feed clip | first frame ≤1 s after viewport entry; 360p ≤1.2 Mbps, 720p ≤3 Mbps, keyframe 2 s, faststart (ffprobe in the pipeline test) |
+| Chat origin | cold load ≤3.5 MB gzipped, first room list ≤3 s warm and ≤15 s cold |
+| Edge, transcoder | anonymous profile cache hit ≥90 %; ≤90 s wall time per 60-second clip on two cores, queue-depth alert |
 
 ## 7. Repository layout
 
@@ -493,9 +545,13 @@ These are deliverables, not intentions:
 unset.sh/
   apps/
     web/          # Hono server: routes/, screens/, islands/, profile/ (pure view)
+    api/          # public read API, own DB role
     indexer/      # Tap consumer
     media/        # media proxy
+    review/       # transcode, fingerprint, nudity gate, classify (no-network worker)
+    admin/        # internal console incl. the draft review queue
     pds-admin/    # zero-dep internal service
+    chat-admin/   # phase 6: MAS seeding, zero-dep
   packages/
     core/         # auth, identity, profile, social, moderation, db, audit, csp, csrf, config, i18n, seal
     lexicons/     # sh.unset.* JSON + permission set; @atproto/lex generated code (checked in)
@@ -508,16 +564,16 @@ unset.sh/
   docs/           # short ADRs, runbooks (keys, lexicon publishing, rotation, restore), compliance
 ```
 
-Tooling:
-- One workspace and one lockfile; TypeScript project references.
-- Biome for lint and format, dependency-cruiser for boundaries.
-- Vitest for tests, Playwright smoke tests against a production build.
-- Per-package line budgets as CI warnings.
+Tooling (Alex, 2026-10-02, decision 16):
+- **TypeScript 7** (the Go port, GA 2026-07-08; TS 6 is Microsoft's last JS-based release) and **Node 26** (LTS 2026-10-28) from Phase 1; `engines.node: ">=26"`, `node:26` images by digest. One workspace and one lockfile; TypeScript project references.
+- Biome 2.5 for lint and format, **CSS included**: `noHexColors`, `noMissingVarFunction`, `useLayeredStyles` and one GritQL plugin for token-only spacing, radius and font sizes replace Stylelint (optional second opinion only). Vite's Lightning CSS minifies. dependency-cruiser for boundaries.
+- **Vitest only** (the prototype's `node:test` plus Vitest split is how 20 UI test files stopped running); the "discovered equals executed" guard compares `vitest list --json` with the reporter's file list. Playwright smoke tests with axe-core against a production build, in both themes; Lighthouse CI; Semgrep per PR (§6.1).
+- Per-package line budgets as CI warnings; the direct and transitive dependency counts recorded at each phase exit.
 - graphify graphs regenerated in CI.
 
 ## 8. Phases
 
-Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real users before Phase 5.
+Small PRs to a protected `main`; each phase ends at a demonstrable exit. No public users before the launch gate; a **closed test track** (Alex, 2026-10-02, decision 1) of at most 10 people Alex knows runs on the development PDS with disposable accounts from the end of Phase 2, labelled "not a launch", wiped before production, with a weekly 30-minute call; it grows at Phase 4 (video).
 
 **Phase 0 — Decisions and bootstrap**
 - Answer §11.
@@ -530,7 +586,8 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
   - SBOM, image scan, hadolint, actionlint;
   - images signed with cosign plus SLSA provenance.
 - Slim `CLAUDE.md`/`AGENTS.md`. Carry over the vault notes from review 07 §6 and archive the rest.
-- Register the domains; set DNSSEC, CAA and HSTS; reserve labels.
+- Register the domains (the media throwaway included); set DNSSEC, CAA and HSTS; reserve labels; register the obvious look-alikes.
+- Decide the licence (gates the first public commit, not launch; the repo stays private until decided).
 - Generate the PDS rotation and recovery keys offline.
 - Admin groundwork (§5.7): hardware-key 2FA and offline codes on GitHub, registrar and host; the allowed-signers file; a private repo ruleset with CODEOWNERS requiring security review on admin paths; the report-routing decision.
 - **Exit:** CI passes on an empty repo and blocks a planted secret, a planted bare `fetch` and a planted `Domain=` cookie.
@@ -539,23 +596,26 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Typed config, Hono server, CSRF gate, CSP, limits, trusted proxy.
 - Postgres with migrations and roles; sealed storage; audit.
 - i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls); `net-guard`; error pages.
-- Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Styling is plain CSS: design tokens as custom properties, one CSS Module per shared component (Vite built-in, no extra dependency), and screens compose components and add no global CSS. No CSS framework (Alex, 2026-10-02). CI enforces it: Stylelint bans raw colours, radii, spacing and font sizes outside tokens; a guard rejects global CSS outside the base and token files; a size budget fails the build if the total shipped CSS grows past its limit (start near 40 KB unminified, raised only in a reviewed PR).
+- Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Styling is plain CSS: design tokens as custom properties, one CSS Module per shared component (Vite built-in, no extra dependency), and screens compose components and add no global CSS. No CSS framework (Alex, 2026-10-02). CI enforces it: Biome's CSS rules ban raw colours, radii, spacing and font sizes outside tokens (§7); `@layer tokens, base, components, screens` makes the no-global-CSS guard structural; a size budget fails the build if the total shipped CSS grows past its limit (start near 40 KB unminified, raised only in a reviewed PR). The axe-core and Lighthouse CI gates from §6.1 start here, on the shell.
+- The framework-glue spike (§5.1): Hono SSR plus islands measured against the ~600-line exit, one day on Astro, React Router 8 named as the fallback. The OAuth advisory lock and the `migrator` role (§5.2).
 - `compose.dev.yaml` with a real PDS, Tap and seeded accounts, so signed-in flows are testable locally.
 - Admin platform (§5.7): the audit schema, edge rules and outside probes, Tailscale (Tailnet Lock, deny-by-default policy in the repo, split DNS), firewall rules with public port 22 closed, a source-IP test, and a rehearsed provider-console recovery before Phase 1 ends.
-- Register `unset.ac` (Alex). Stand up the **production PDS** on it with no users: recovery key set, invite-only, admin XRPC denied. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon`.
-- **Exit:** Playwright smoke passes on the shell in both themes and both languages, and the permission set resolves from outside.
+- Register `unset.ac` (Alex). Stand up the **production PDS** on it with no users: recovery key set, invite-only, admin XRPC denied, `PDS_RATE_LIMIT_BYPASS_IPS`, `PDS_EMAIL_DISABLE_CONFIRMATION_LINK`. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon` (with a DNS token scoped to `_acme-challenge` only, so the chat certificate's credential cannot touch login-critical DNS).
+- **Permanent choices fixed here** (review, 2026-10-02): the Matrix `server_name` (§5.6), the Tailnet Lock recovery choice (whether Tailscale support holds a disablement secret; lost secrets are unrecoverable), the admin RP id.
+- Legal paperwork, part 1 (§6): Arachnid Shield application, Cybertip runbook, incident-response page.
+- **Exit:** Playwright smoke passes on the shell in both themes and both languages with zero axe violations, and the permission set resolves from outside.
 
 **Phase 2 — Identity, auth, profile writing**
 - OAuth with the set plus fallback, login, signup, logout and revoke, sessions with lifecycle, verify-email gate, invites, `/join`, `/me`, onboarding, the module identity seam.
 - Profile editor: drafts, sections, privacy, publish/unpublish, image pipeline, preview through `ProfileView`.
-- Run the §5.3 go/no-go list.
-- **Exit:** a new user signs up on the PDS, edits drafts, publishes and unpublishes; the repo contains records only while published.
+- Run the §5.3 go/no-go list. Legal paperwork, part 2: one-page terms (invite-country rule, fingerprint check, automated review) and privacy notice live with signup.
+- **Exit:** a new user signs up on the PDS, edits drafts, publishes and unpublishes; the repo contains records only while published. The closed test track starts.
 
 **Phase 3 — Indexer, public profile, directory, moderation**
-- Tap spike first: mode, ack WebSocket, trust rules.
-- Then the indexer, `eraseDid`, the media proxy, the public `/@handle` routes, the handle-host redirects and well-known, the directory and search, and moderation (delist, suspend via signed assertion, report queue).
+- Tap spike first: dynamic mode on the public relay with collection filters, inbound volume measured, ack WebSocket, trust rules (§5.2).
+- Then the indexer, `eraseDid`, the media proxy on its own domain, the `api` entrypoint and grant-matrix test, the public `/@handle` routes, the handle-host redirects and well-known, the directory and search, and moderation (delist, suspend via signed assertion, report routing).
 - Port the appview tests (ingest 33, db 25, verify 18, xrpc 24, media 7).
-- Admin v1 (§5.7): attested key enrolment, per-action signing and the `pds-admin` verifier, off-box audit copies, runbooks 1 to 6, CI ceiling of 2,400 lines.
+- Admin v1 (§5.7): attested key enrolment on desktop, per-action signing and the `pds-admin` assertion verifier, off-box audit copies, runbooks 1 to 6, the 3,000-line warning budget.
 - **Exit:**
   - `/@handle` renders with zero JS, and its images come only from the media origin.
   - An external resolver confirms handle↔DID.
@@ -563,29 +623,31 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
   - Deletion leaves no rows.
 
 **Phase 4 — Social**
-- Short-video posts and the video pipeline, optional Bluesky posts, feed tabs, follows, home timeline, likes and comments: counts survive edits, the reply root is correct, foreign likes are ignored.
-- Export page.
-- **Exit:** parity with the prototype's non-chat, non-RSS social features, plus a regression test for each defect in §2.
+- Short-video posts and the video pipeline (1080p master, progressive renditions, captions, quotas), the review pipeline and the draft review queue in `admin`, the opt-in Bluesky post (with the `video.bsky.app` spike), standalone Bluesky posts, feed tabs through the PDS proxy, follows, home timeline, likes and comments: counts survive edits, the reply root is correct, foreign likes are ignored.
+- Export page. The test track grows to video.
+- **Exit:** parity with the prototype's non-chat, non-RSS social features, plus a regression test for each defect in §2; the rendition and first-frame budgets pass.
 
 **Phase 5 — Production**
 - One compose file with profiles; per-container egress networks (indexer, Tap and `pds-admin` reach only the PDS and PLC); deploy by verified digest; `/health` reports the commit.
+- **Hosting provider decision (Alex, 2026-10-02, decision 14: decide here, not before).** On the review list with the price comparison: OVH Canada VPS ~CAD 12–17/month (KVM console, daily backup) vs 1984 Iceland ~€35–70/month for the same box, which also does not shield from Canadian orders; sized for the relay firehose (§5.2), chat (§5.6) and video storage (§5.8), on a plan with included traffic, not egress billing. The backup provider waits with it: **R2 has no Object Lock**, so audit segments and backups need Hetzner, B2 or Wasabi compliance mode; R2 can keep the public blob mirror.
 - Backups:
   - in-stack, age-encrypted, off-box, with a freshness alert;
-  - covering Postgres and the PDS SQLite files;
-  - R2 versioning or a blob mirror;
-  - restore drill.
+  - covering Postgres, the PDS SQLite files, Tap's database and the media store;
+  - a blob mirror by nightly `rclone sync` to the second provider;
+  - restore drill (re-run after Phase 6).
 - Secret inventory and rotation runbook.
 - The RoPA and privacy notice from §6.
-- Ozone labeler (§5.8), after its spike.
+- Ozone labeler (§5.8; labels and public-record reports only), after its spike.
+- Capacity: `PDS_RATE_LIMIT_BYPASS_IPS`, the review worker on its own CPU quota, chat sizing.
 - Admin v1.1 (§5.7): statements of reasons, appeals, blob and record takedown, GDPR cases, the export and notice-form work in `web`, the restore drill, the remaining runbooks.
 - **Exit:**
   - a restore drill on a fresh host passes;
   - the edge rate-limit and spoofed-header tests pass;
   - production stack ready; no launch yet (see the launch gate after Phase 6).
 
-**Phase 6 — Chat** (core feature, Alex 2026-10-02; MVP from §5.6).
+**Phase 6 — Chat** (core feature, Alex 2026-10-02; MVP from §5.6): `chat-admin`, Synapse + MAS + `chat-auth`, the native client with `OnlySignedDevicesIsolationMode`, requests, block and report; branded Element Web as the fallback if the client is late. The restore drill is re-run with the Matrix databases, media store and signing keys in the backup set.
 
-**Launch gate (Alex, 2026-10-02):** no launch, invite-only included, until the whole core is done and has no known bugs: Phases 1–6, chat included. Concretely: every core feature from §4 shipped; zero open bugs in the core; CI green with every test executed; the restore drill and the security tests from Phase 5 passing; a final security review. Then invite-only launch.
+**Launch gate (Alex, 2026-10-02, decision 2, restated):** no public launch, invite-only included, until the whole core is done: **all six phases**, chat included, every core feature from §4 shipped; **no severity-1 or severity-2 bug open** (severity-3 triaged; "no known bugs" was dropped as unreachable); CI green with **every test executed and passing**; the restore drill passing after Phase 6; the Phase 5 security tests passing; a final security review. Then invite-only launch. **Estimated duration: roughly 12–18 months from the start of Phase 1** (review, 2026-10-02), derived from 20–24k core lines plus 5–7k chat plus 12–18k tests at the prototype's pace with agents; an estimate, not a commitment, re-measured at each phase exit. The closed test track gives feedback meanwhile.
 
 **Phase 7+ — Later modules:**
 - chat Spaces;
@@ -609,10 +671,14 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 | Risk | Mitigation |
 |---|---|
 | Permission set unresolvable, so nobody can log in | Fallback scopes are declared and tested in CI. Monitoring on the TXT record and schema CID. The PDS (≥0.5.35) resolves sets it hosts itself locally. |
-| Tap doesn't fit a single self-hosted PDS | Phase 3 spike. The fallback is consuming `subscribeRepos` with `@atproto/sync`; the verify tests port either way. |
+| Tap (beta) misbehaves on the public relay | Phase 3 spike. The fallback is consuming `subscribeRepos` with `@atproto/sync`; the verify tests port either way. |
 | `@atproto/lex` changes under us | Exact pin; generated code checked in, so changes show up as diffs. |
-| Leaving Next.js costs more than estimated | Phase 1 measures it; switch to React Router v7 before Phase 2 if the island helper exceeds ~150 lines. |
-| PDS `/account` falls short (2FA, confirm-email link) | The §5.3 go/no-go list. The fallback is an upstream fix or a small app screen with the matching scope, never a patch. |
+| Leaving Next.js costs more than estimated | Phase 1 measures the whole glue against ~600 lines; one Astro day; React Router 8 is the fallback before Phase 2. |
+| PDS `/account` falls short (2FA, confirm-email, branding) | The §5.3 go/no-go list. It is now the only account surface (no account app). The fallback is an upstream fix or a thin app screen for what OAuth allows, never a patch. |
+| Relay firehose volume or Tap beta bugs | ~200–300 GB/day budgeted in the Phase 5 hosting choice; `@atproto/sync` fallback; pinned commit; Phase 3 spike measures. |
+| Chat is the long pole | Branded Element Web, configured not forked, ships first if the native client is late (Alex, 2026-10-02). |
+| Abuse-material or legal duty met late | Terms, notice, Cybertip runbook, Arachnid Shield application and the notice form in Phase 1–2, before any non-Alex upload. |
+| Launch gate slides | Severity-based gate with a month estimate re-measured at each phase exit; the closed test track supplies feedback from Phase 2. |
 | Domain, namespace or federation chosen wrongly | Decided in Phase 0, before any account exists. |
 | One host: host root reaches everything, including the online PLC rotation key | Offline recovery key can undo PLC changes within 72 hours; nightly PLC log check; provider, registrar, GitHub and the tailnet identity provider sit at the top of the trust tree with hardware-key 2FA (§5.7). `admin` takes the client IP from the socket only. |
 | Chat arrives later than wanted | The identity seam ships in Phase 2, so chat plugs in without core changes. |
@@ -624,9 +690,9 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Handles on a **separate** registrable domain, the way Bluesky uses bsky.social for handles and bsky.app for the app.
 - The PDS and media on a third domain. Reusing `0x40.space` for the PDS works if you're keeping it.
 - Lexicons become `sh.unset.*`.
-- **Decided by Alex (2026-10-02):** app `unset.sh`, PDS `unset.ac` in production (Alex buys it before production; `0x40.space` stays for development), account app `account.<pds domain>`, handles `<user>.0x40.me`.
+- **Decided by Alex (2026-10-02):** app `unset.sh`, PDS `unset.ac` in production (Alex buys it before production; `0x40.space` stays for development), handles `<user>.0x40.me`. **Evening amendments (Alex, 2026-10-02):** no account app, so no `account.<pds domain>` host (every account action is on the PDS's `/account`, §5.3); the media proxy moves to a cookie-less throwaway domain (review); the development PDS mints `.0x40.space` handles, never `.0x40.me` (review).
 - **The PDS name is permanent once accounts exist:** every account's DID document points at it. So `unset.ac` is registered before the production PDS is set up (Phase 1), never swapped in later.
-- Setup this needs: `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`; wildcard DNS `*.0x40.me` to the edge; `/.well-known/atproto-did` on `*.0x40.me` routed to the PDS, everything else a 301 to `unset.sh/@<user>`; wildcard TLS via a delegated `_acme-challenge` zone; the reserved-label list on `0x40.me`; CAA, DNSSEC and HSTS on every domain.
+- Setup this needs: `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me` on the production PDS only; wildcard DNS `*.0x40.me` to the edge; `/.well-known/atproto-did` on `*.0x40.me` routed to the PDS, everything else a 301 to `unset.sh/@<user>`; wildcard TLS via a delegated `_acme-challenge` zone; the reserved-label list on `0x40.me`; `PDS_RATE_LIMIT_BYPASS_IPS` for the app's internal address; CAA, DNSSEC and HSTS on every domain.
 - **PDS on an unset.sh subdomain was considered and rejected (2026-10-02).** The atproto going-to-production guidance says to use separate domains for the PDS and the app, because OAuth pages and blobs on the app's site are a credential-theft risk. A subdomain like `login.unset.sh` is same-site with the app: the PDS serves raw `getBlob` user bytes on its own host whatever our proxy does, and same-site requests weaken the SameSite protection on its sign-in session. An entryway on `login.unset.sh` would avoid that but means building our own authorization server, since the PDS disables its own when behind one (`@atproto/pds` 0.5.36 `config.js`). So sign-in shows `unset.ac` in production, branded as unset.sh.
 - `0x40.me` was the prototype's handle domain, so existing `*.0x40.me` handles collide with new accounts unless Q2a retires or migrates them first.
 
@@ -644,13 +710,14 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - **No false sense of privacy (Alex, 2026-10-02):** anything in the repo is public, so anything published to the repo is also public on `/@handle`. There is no "public on unset.sh but hidden from the network" tier; content is either private (app DB, visible only to its owner) or public (in the repo, everywhere).
 - **The publish step must say plainly** where the content will appear (unset.sh, Bluesky and other atproto apps), that it becomes public, and that copies are hard or impossible to take back. Same wording when switching a category on.
 - **Separate categories (provisional, Alex to review, 2026-10-02):** two switches, "Profile" and "Posts and follows", each private or public. They are separate record collections, so this is clean on atproto. Posts public with the profile private shows posts under a bare handle in other apps. Profile public with posts private keeps posts and follows visible only to their owner, since a follow or post is either in the repo or not.
+- **Likes, comments and follows on a private account (proposal from the review, 2026-10-02; not yet an Alex decision):** the switches left these undefined. Proposed: (1) while "Posts and follows" is private, liking or replying to Bluesky posts is disabled with a one-line reason, because `app.bsky.feed.like` and a reply are public records naming the DID; (2) a private like, comment or follow on unset.sh content lives in the app DB and is shown to its target inside unset.sh ("a member liked this", "follows you"), and the user is told the author sees it, so it is not false privacy; (3) follows are `app.bsky.graph.follow` once public, so the Following tab and other apps share one graph; (4) flipping to public is a resumable batch (`applyWrites` ≤200 ops per call), not one request. A table of {post, follow, like-on-ours, like-on-Bluesky, comment-on-ours, comment-on-Bluesky} × {private, public} goes in the lexicon docs when Alex confirms.
 
 **Q3. Web stack. Confirmed by Alex (2026-10-02): Hono.**
-- **Hono + server-rendered React + islands (recommended).**
-- React Router v7.
+- **Hono + server-rendered React + islands (recommended).** Glue budgeted at 400–900 lines; Phase 1 exit at ~600 (§5.1).
+- React Router 8 (the fallback; v7 is superseded), with one Astro spike day beside it (review, 2026-10-02).
 - Next.js limited to route handlers.
 
-**Q4. Chat. Decided by Alex (2026-10-02): a core feature.** Built in phase 6 on `chat.unset.sh`, DMs first, Matrix kept.
+**Q4. Chat. Decided by Alex (2026-10-02): a core feature.** Built in phase 6 on `chat.unset.sh`, DMs first, Matrix kept. **Evening decisions (Alex, 2026-10-02):** native client, branded Element Web (configured, not forked) as the launch fallback (11); message requests are the invite only, no text until accepted (12); seeding in an isolated `chat-admin` service and `OnlySignedDevicesIsolationMode` from day one (13). Review fixes folded into §5.6: MAS consent screen with `login_hint` and end-session retry, no `X-Forwarded-For` to Synapse or MAS, Matrix reports in `admin`, the follow-gate protects our client only (said in the terms), `server_name` fixed in Phase 1, 5–7k lines.
 
 **Q5. Public profile location.**
 - **`unset.sh/@alice`, with handle hosts redirecting (recommended).**
@@ -667,17 +734,20 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 **Q8. Social features in the core:** posts, follows, timeline, likes, comments, directory. **Confirmed by Alex (2026-10-02).**
 - **Yes (recommended)**, with RSS and MCP as later modules.
 
-**Q9. Posts. Decided by Alex (2026-10-02):** our main post is a short, high-quality video (reels style, 60 seconds max) in our own lexicon. Users can also make other kinds of posts, including standard Bluesky posts. Standard.site is no longer the comparison point. See §5.8.
+**Q9. Posts. Decided by Alex (2026-10-02):** our main post is a short, high-quality video (reels style, 60 seconds max) in our own lexicon. Users can also make other kinds of posts, including standard Bluesky posts. Standard.site is no longer the comparison point. See §5.8. **Evening amendments (Alex, 2026-10-02):** "also post to Bluesky" is an opt-in tick per post, default off (4; the review recommended on by default, since Bluesky renders only `app.bsky.*`); the repo blob is the stripped 1080p master, never the original (review); fingerprints via Arachnid Shield, local nudity gate, 365-day sealed hold (7, 8, 9); the unsure queue in `admin` (6); captions on every video, quotas and a daily cap (18, 19).
 
 **Q10. Hosting. Confirmed by Alex (2026-10-02): VPS for production, homelab for development.**
 - **A small VPS for production, homelab for dev (recommended).**
 - Keep the homelab with the Cloudflare Tunnel.
+- **Provider: decide later, by Phase 5 (Alex, 2026-10-02, decision 14).** On the review list with the comparison: OVH Canada ~CAD 12–17/month vs 1984 Iceland ~€35–70/month; backups and audit need an Object Lock provider (Hetzner, B2, Wasabi), since R2 has none (§8 Phase 5).
 
 **Q11. Design. Decided by Alex (2026-10-02):** all UI follows the **unset.sh design sheet** (the Design System artifact "unset.sh", https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt): Onyx/Platinum with Plum, Cyan and Emerald accents, Space Grotesk and JetBrains Mono, the ◉◉◉ mark, 2px corners with the cut button. Its `tokens.json` is the token source for the CSS Modules. New components may be added only if registered on the sheet with Alex's approval. The sheet currently uses Unicode characters in mono instead of an icon set; Iconoir may be integrated, which means registering it on the sheet first.
 
-**Q12. License.** Alex will review it seriously before launch; AGPL-3.0 until then.
+**Q12. License.** Alex will review it seriously before launch; AGPL-3.0 until then (the choice gates the first public commit, so the repo stays private until it is made).
 - **AGPL-3.0 (recommended).**
 - MIT or Apache-2.0.
+
+**Q13. Who may sign in. Decided by Alex (2026-10-02, decision 5): any atproto account from day one**, so Tap follows the public relay with collection filters from Phase 3 (§5.2). This closes the "indexer source as a setting" item that the first draft left provisional. The closed alternative (our PDS only, ~10 lines) was declined.
 
 ---
 
@@ -712,3 +782,11 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - The Tap mode for a single PDS.
 - The OAuth library constraints (orphaned refresh tokens, single replica).
 - A server-applied theme replaces the inline script.
+
+## Appendix B — What the 2026-10-02 adversarial review changed (eight reviewers; synthesis in `reviews/fable-review/`)
+
+Alex's 19 decisions from the evening review are in the ADR; the fixes that needed no decision are in the text above with "(review, 2026-10-02)". In short:
+- **Facts that had moved:** C-16 is law (one-year hold, transmission data); the PDS refuses OAuth for email change, delete and reactivate; Ozone cannot hold a draft or render our lexicon and signs moderators in with atproto OAuth; TypeScript 7 and Node 26 are current; React Router is v8; ASVS is 5.0; PhotoDNA is not a local tool.
+- **Promises the systems could not keep, now rewritten:** the account app's scope (dropped), messages readable after a late first login (invite-only requests), the read-API role isolation (separate `api` process), the original video as a repo blob (1080p master), our feeds shown in other apps (withdrawn), hash matching with nothing leaving (hashes do leave, to C3P).
+- **Size and sequence:** core 20–24k plus chat 5–7k plus tests; the review pipeline and the draft queue have rows; a closed test track from Phase 2; a severity-based launch gate with a month estimate; legal paperwork in Phase 1–2; the hosting choice in Phase 5.
+- **Added requirements:** ASVS 5 L2, OWASP Top 10 2025, SLSA Build L2, WCAG 2.2 AA, a Core Web Vitals budget, Semgrep and ZAP, the invite-country rule, Law 25, aggregate metrics, captions, quotas, the nudity gate, the consent checkbox and the AI system record.
