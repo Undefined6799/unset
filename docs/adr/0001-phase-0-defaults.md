@@ -25,6 +25,9 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Styling (decided by Alex, 2026-10-02):** no CSS framework. Design tokens as CSS custom
   properties plus one CSS Module per shared component. CI enforces it with a token-only
   Stylelint rule, a no-global-CSS guard and a total CSS size budget.
+- **Indexer source (provisional, Alex to review, 2026-10-02):** the indexer's upstream is a
+  setting. Start with our own PDS only; reach network data later by pointing Tap at a public
+  relay with collection filters. No own relay or full-network index for now.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 Not taken; permanent, waiting for Alex:

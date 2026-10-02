@@ -247,7 +247,7 @@ Rules for the handle domain:
 - One database makes moderation and erasure single transactions.
 
 **Indexer and Tap trust rules:**
-- Tap's upstream is **our PDS's `subscribeRepos` only**. Repos are added explicitly at first login or signup, or through our PDS's `listRepos`, never by network-wide discovery. The spike confirms which mode works against a single PDS.
+- Tap's upstream is a **setting** (provisional, Alex to review). v1: **our PDS's `subscribeRepos` only**. Later, network data comes from pointing Tap at a public relay with collection filters; the indexer does not change. No own relay or full-network index. Repos are added explicitly at first login or signup, or through our PDS's `listRepos`, never by network-wide discovery. The spike confirms which mode works against a single PDS.
 - The indexer opens an **acked WebSocket to Tap on an internal network**, so nothing listens for inbound webhooks. Tap's admin API is never exposed, and its builds come from a pinned commit in CI.
 - The indexer drops any DID whose PDS (confirmed through `getRepoStatus` on our PDS) isn't ours.
 - Handles in events are hints only; display handles come from `verifyHandle`.
