@@ -60,12 +60,13 @@ Taken as defaults (reversible, can be changed by a later ADR):
   use the same opt-in, with two switches, "Profile" and "Posts and follows", each private or
   public (provisional, Alex to review; plan §11 Q2b).
 - **Account management (Alex, 2026-10-02):** a small separate account app on
-  `account.unset.sh` (PDS stays on `0x40.space`), an OAuth client using public PDS APIs only (no patches, no PDS DB
+  `account.<pds domain>` (`account.unset.ac` in production; moved from `account.unset.sh`), an OAuth client using public PDS APIs only (no patches, no PDS DB
   access). It owns email, handle, password reset, deactivate and delete; sign-in, consent and
   likely 2FA/devices/apps stay on the branded PDS. Mirrors Bluesky's split of sign-in host
   vs settings, without an entryway. Plan §5.3.
-- **Q1 Domains (Alex, 2026-10-02):** app `unset.sh`, account app `account.unset.sh`, PDS
-  `0x40.space`, handles `<user>.0x40.me`. Lexicons `sh.unset.*`.
+- **Q1 Domains (Alex, 2026-10-02):** app `unset.sh`, PDS `unset.ac` in production (`0x40.space`
+  for development; the name is permanent once accounts exist, so it is registered before the
+  production PDS), account app `account.<pds domain>`, handles `<user>.0x40.me`. Lexicons `sh.unset.*`.
   The PDS stays on its own registrable domain, per atproto guidance; a PDS or entryway under
   `unset.sh` was considered and rejected (plan §11 Q1).
 - **API and MCP (Alex, 2026-10-02):** the core has a small public read API (published data only,
@@ -79,7 +80,7 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 - **Q2a Old accounts (provisional, Alex to revisit, 2026-10-02):** start fresh. Old accounts are
-  retired on the old PDS before the new one takes `0x40.space`. Permanent once the first
+  retired on the old PDS before the new one issues `*.0x40.me` handles. Permanent once the first
   production account exists, so it must be revisited before then.
 
 ## Consequences

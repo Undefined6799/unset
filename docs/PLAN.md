@@ -214,9 +214,9 @@ History check: the abandoned "Hono SPA" was client-rendered with browser-side OA
 
 | Domain | Hosts | Cookies |
 |---|---|---|
-| **App**, `unset.sh` | `unset.sh` (app); `account.unset.sh` (account app, §5.3); `chat.unset.sh` (chat module, later) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
+| **App**, `unset.sh` | `unset.sh` (app); `chat.unset.sh` (chat) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
 | **Handles**, `0x40.me` (Alex, 2026-10-02), separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle` | none |
-| **PDS**, `0x40.space` (Alex, 2026-10-02) | the PDS (sign-in, consent, its `/account` UI); `media.<pds domain>` (media proxy) | the PDS's own only; no app cookies |
+| **PDS**, `unset.ac` in production, `0x40.space` in development (Alex, 2026-10-02) | the PDS (sign-in, consent, its `/account` UI); `account.<pds domain>` (account app, §5.3); `media.<pds domain>` (media proxy) | the PDS's own, and the account app's `__Host-` cookies; no main-app cookies |
 
 Why a separate handle domain:
 - No same-site relationship between user-named hosts and the app's cookies.
@@ -310,8 +310,8 @@ Rules for the handle domain:
 - The TXT record and the schema CID are monitored.
 
 **Account app (Alex, 2026-10-02).** Account management looks like ours and sits beside the PDS, not inside the main app, mirroring how Bluesky keeps sign-in on its own PDS host:
-- A small separate app on `account.unset.sh` (Alex, 2026-10-02): its own origin, separate from both the PDS host (where passwords are typed) and the main app. Like Bluesky (sign-in on `bsky.social`, settings under `bsky.app`), users type passwords on `0x40.space` and manage settings under the `unset.sh` brand.
-- Same-site with the main app, so: host-only `__Host-` cookies on both (already enforced), and the CSRF gate accepts `Sec-Fetch-Site: same-origin` or an exact Origin only, never `same-site`, so a bug in one app cannot post to the other with its cookies. A test covers a cross-subdomain POST being refused. The account app shares no code path, session table or secret with `web` beyond the shared packages.
+- A small separate app on `account.<pds domain>`: `account.unset.ac` in production, `account.0x40.space` in development (Alex, 2026-10-02, replacing `account.unset.sh`). It lives with the PDS, as atproto expects account management to, on its own origin separate from the PDS host itself (where passwords are typed). Users sign in on `unset.ac` and manage their account on `account.unset.ac`.
+- Same-site with the PDS, whose host serves raw `getBlob` user bytes. That is safe only with: host-only `__Host-` cookies on both (already enforced), and the CSRF gate accepts `Sec-Fetch-Site: same-origin` or an exact Origin only, never `same-site`, so a page on the PDS host cannot post to the account app with its cookies. A test covers a cross-subdomain POST being refused. The PDS's blob responses keep their sandbox CSP and `nosniff`, checked in the Phase 2 spike. The account app shares no code path, session table or secret with `web` beyond the shared packages.
 - It is an ordinary OAuth client of our PDS with the matching `account:`/`identity:` scopes, and uses public XRPC only: no PDS patch, no PDS database access, no response rewriting, no routes injected into the PDS host. That is the difference from the prototype's `account-manager`.
 - It owns: email change and confirmation, handle change, password reset by email, deactivate and delete.
 - The PDS keeps: OAuth sign-in and consent, always. Email 2FA, devices and connected apps stay on the PDS's `/account` unless a Phase 2 spike finds public APIs for them.
@@ -540,7 +540,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Styling is plain CSS: design tokens as custom properties, one CSS Module per shared component (Vite built-in, no extra dependency), and screens compose components and add no global CSS. No CSS framework (Alex, 2026-10-02). CI enforces it: Stylelint bans raw colours, radii, spacing and font sizes outside tokens; a guard rejects global CSS outside the base and token files; a size budget fails the build if the total shipped CSS grows past its limit (start near 40 KB unminified, raised only in a reviewed PR).
 - `compose.dev.yaml` with a real PDS, Tap and seeded accounts, so signed-in flows are testable locally.
 - Admin platform (§5.7): the audit schema, edge rules and outside probes, Tailscale (Tailnet Lock, deny-by-default policy in the repo, split DNS), firewall rules with public port 22 closed, a source-IP test, and a rehearsed provider-console recovery before Phase 1 ends.
-- Stand up the **production PDS** with no users: recovery key set, invite-only, admin XRPC denied. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon`.
+- Register `unset.ac` (Alex). Stand up the **production PDS** on it with no users: recovery key set, invite-only, admin XRPC denied. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon`.
 - **Exit:** Playwright smoke passes on the shell in both themes and both languages, and the permission set resolves from outside.
 
 **Phase 2 — Identity, auth, profile writing**
@@ -622,13 +622,14 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Handles on a **separate** registrable domain, the way Bluesky uses bsky.social for handles and bsky.app for the app.
 - The PDS and media on a third domain. Reusing `0x40.space` for the PDS works if you're keeping it.
 - Lexicons become `sh.unset.*`.
-- **Decided by Alex (2026-10-02):** app `unset.sh` (account app `account.unset.sh`), PDS `0x40.space`, handles `<user>.0x40.me`.
-- Setup this needs: `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`; wildcard DNS `*.0x40.me` to the edge; `/.well-known/atproto-did` on `*.0x40.me` routed to the PDS, everything else a 301 to `unset.sh/@<user>`; wildcard TLS via a delegated `_acme-challenge` zone; the reserved-label list on `0x40.me`; CAA, DNSSEC and HSTS on all three domains.
-- **PDS on an unset.sh subdomain was considered and rejected (2026-10-02).** The atproto going-to-production guidance says to use separate domains for the PDS and the app, because OAuth pages and blobs on the app's site are a credential-theft risk. A subdomain like `login.unset.sh` is same-site with the app: the PDS serves raw `getBlob` user bytes on its own host whatever our proxy does, and same-site requests weaken the SameSite protection on its sign-in session. An entryway on `login.unset.sh` would avoid that but means building our own authorization server, since the PDS disables its own when behind one (`@atproto/pds` 0.5.36 `config.js`). So sign-in shows `0x40.space`, branded as unset.sh.
+- **Decided by Alex (2026-10-02):** app `unset.sh`, PDS `unset.ac` in production (Alex buys it before production; `0x40.space` stays for development), account app `account.<pds domain>`, handles `<user>.0x40.me`.
+- **The PDS name is permanent once accounts exist:** every account's DID document points at it. So `unset.ac` is registered before the production PDS is set up (Phase 1), never swapped in later.
+- Setup this needs: `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`; wildcard DNS `*.0x40.me` to the edge; `/.well-known/atproto-did` on `*.0x40.me` routed to the PDS, everything else a 301 to `unset.sh/@<user>`; wildcard TLS via a delegated `_acme-challenge` zone; the reserved-label list on `0x40.me`; CAA, DNSSEC and HSTS on every domain.
+- **PDS on an unset.sh subdomain was considered and rejected (2026-10-02).** The atproto going-to-production guidance says to use separate domains for the PDS and the app, because OAuth pages and blobs on the app's site are a credential-theft risk. A subdomain like `login.unset.sh` is same-site with the app: the PDS serves raw `getBlob` user bytes on its own host whatever our proxy does, and same-site requests weaken the SameSite protection on its sign-in session. An entryway on `login.unset.sh` would avoid that but means building our own authorization server, since the PDS disables its own when behind one (`@atproto/pds` 0.5.36 `config.js`). So sign-in shows `unset.ac` in production, branded as unset.sh.
 - `0x40.me` was the prototype's handle domain, so existing `*.0x40.me` handles collide with new accounts unless Q2a retires or migrates them first.
 
 **Q2a. Existing accounts and data. Provisional, Alex (2026-10-02): start fresh; Alex will revisit before the first production account.** The prototype's own plan called its accounts disposable.
-- Old accounts are retired on the old PDS (deactivated, then deleted) before the new PDS takes `0x40.space`, so their DIDs no longer point at a live server and their `*.0x40.me` handles are free. Old handles re-registered by new accounts get new DIDs; bidirectional handle verification keeps other apps from linking them to the old ones.
+- Old accounts are retired on the old PDS (deactivated, then deleted) before the new production PDS issues `*.0x40.me` handles, so their DIDs no longer point at a live server and their `*.0x40.me` handles are free. Old handles re-registered by new accounts get new DIDs; bidirectional handle verification keeps other apps from linking them to the old ones.
 - Archive the encrypted backups.
 - Migrate CRM data only when the CRM plugin exists, and only if its row counts justify it.
 - Rotate every 0x40 secret either way: one leaked into an agent transcript.
