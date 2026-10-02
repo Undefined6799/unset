@@ -1,0 +1,11 @@
+#!/bin/sh
+# Enable once per clone: git config core.hooksPath .githooks
+# Mirrors CI so secrets never reach a commit. CI still runs gitleaks on every PR,
+# because hooks are opt-in.
+set -eu
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner
+else
+  echo "pre-commit: gitleaks not installed; secret scan skipped locally (CI still runs it)." >&2
+fi
+npm run --silent guards

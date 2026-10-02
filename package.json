@@ -1,0 +1,28 @@
+{
+  "name": "unset.sh",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "modules/*",
+    "plugins/*"
+  ],
+  "scripts": {
+    "check": "npm run typecheck && npm run lint && npm run guards && npm test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome ci .",
+    "format": "biome format --write .",
+    "guards": "node scripts/guards/egress.ts && node scripts/guards/cookie-domain.ts",
+    "test": "node scripts/guards/run-tests.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "24.19.1",
+    "typescript": "6.0.3"
+  }
+}
