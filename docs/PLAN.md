@@ -559,7 +559,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Showing up in Bluesky's own app also needs an `app.bsky.actor.profile` record, written on opt-in. Bluesky ignores `sh.unset.*` records.
 - **No false sense of privacy (Alex, 2026-10-02):** anything in the repo is public, so anything published to the repo is also public on `/@handle`. There is no "public on unset.sh but hidden from the network" tier; content is either private (app DB, visible only to its owner) or public (in the repo, everywhere).
 - **The publish step must say plainly** where the content will appear (unset.sh, Bluesky and other atproto apps), that it becomes public, and that copies are hard or impossible to take back. Same wording when switching a category on.
-- **Separate categories (proposed, awaiting Alex):** two switches, "Profile" and "Posts and follows", each private or public. They are separate record collections, so this is clean on atproto. Posts public with the profile private shows posts under a bare handle in other apps. Profile public with posts private keeps posts and follows visible only to their owner, since a follow or post is either in the repo or not.
+- **Separate categories (provisional, Alex to review, 2026-10-02):** two switches, "Profile" and "Posts and follows", each private or public. They are separate record collections, so this is clean on atproto. Posts public with the profile private shows posts under a bare handle in other apps. Profile public with posts private keeps posts and follows visible only to their owner, since a follow or post is either in the repo or not.
 
 **Q3. Web stack.**
 - **Hono + server-rendered React + islands (recommended).**
