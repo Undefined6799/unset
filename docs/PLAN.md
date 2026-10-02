@@ -421,7 +421,7 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 
 ### 5.7 Admin panel (internal; from the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`))
 
-- **What:** a small console for one or two people at `admin.int.unset.sh`: account lookup, delist, takedown and reinstate, end our sessions, invites, held deletes, the reports queue, the audit log and a health board. It cannot browse users, act as a user or read private data.
+- **What:** a small console for one or two people at `admin.int.unset.sh`: account lookup, delist, takedown and reinstate, end our sessions, invites, held deletes, the audit log and a health board. Reports and the moderation queue live in Ozone (§5.8, Alex 2026-10-02). It cannot browse users, act as a user or read private data.
 - **Where:** its own `admin` process, container, origin, DB role and key. No moderator routes in `web` (lint-enforced). No public DNS record; reachable only over Tailscale (Tailnet Lock, deny-by-default policy, Funnel and Tailscale SSH off, split DNS, our own DNS-01 certificate). Public inbound is only 443 and an 80 redirect; SSH moves onto Tailscale.
 - **Login:** an allowed Tailscale device, a hardware security key with PIN (no synced passkeys, no OAuth at login), and that key's entry in the signed roster. Sessions `__Host-admin_sid`, 15 minutes idle, 8 hours absolute.
 - **Actions:** every PDS action and PII reveal carries a WebAuthn signature over that exact action, verified by `pds-admin`. Irreversible actions go through a 7-day hold.
@@ -457,7 +457,9 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 - Role: labels and report intake. Its public side (serving labels and receiving reports from any app) is on the internet; its moderator screens are reachable only over Tailscale, like the admin panel.
 - Ozone never gets PDS admin power. Takedowns, deletes and account actions stay in the admin panel through `pds-admin`, with a hardware-key touch per action (§5.7). This keeps the admin design's guarantees intact.
 - It has its own DID and label-signing key; the key goes in the secret inventory and the backup and recovery runbook.
-- Built in Phase 5, before launch. Its moderator login and how its report queue sits beside the panel's queue are checked in a spike first (review list item 8).
+- **Ozone is the moderation tool (Alex, 2026-10-02):** reports, the review queue for uncertain posts, moderator notes and labels all live in Ozone, replacing the admin panel's own reports queue (less code of ours). The admin panel shrinks to account and server actions through `pds-admin`: takedown, reinstate, held deletes, invites, sessions, audit and health. A moderator decides in Ozone; any action that touches an account in the PDS is then confirmed in the panel with a hardware-key touch.
+- Condition, checked in a spike before building: Ozone's moderator login must meet our rule (Tailscale only, plus a hardware security key). If it cannot without patching or bypassing anything, we stop and bring the choice back to Alex rather than weaken the rule.
+- Built in Phase 5, before launch.
 - To verify in the spike: license and current version (believed MIT/Apache-2.0, TypeScript and Postgres, from memory).
 
 - Video raises cost and duty: storage, bandwidth and CPU grow fast, and abuse-material detection and reporting apply (admin design §8.1). Phase 4 sizes the hosting before launch.
