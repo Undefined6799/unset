@@ -33,6 +33,11 @@ Taken as defaults (reversible, can be changed by a later ADR):
   exposes every record in every repo, a user's content stays out of their repo (app database)
   until they opt in. Still open: whether the `/@handle` page is public by default, and whether
   posts and follows follow the same rule.
+- **Account management (Alex, 2026-10-02):** a small separate account app on
+  `account.<pds domain>`, an OAuth client using public PDS APIs only (no patches, no PDS DB
+  access). It owns email, handle, password reset, deactivate and delete; sign-in, consent and
+  likely 2FA/devices/apps stay on the branded PDS. Mirrors Bluesky's split of sign-in host
+  vs settings, without an entryway. Plan §5.3.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 Not taken; permanent, waiting for Alex:

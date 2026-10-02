@@ -213,7 +213,7 @@ History check: the abandoned "Hono SPA" was client-rendered with browser-side OA
 |---|---|---|
 | **App**, e.g. `unset.sh` | `unset.sh` (app); `chat.unset.sh` (chat module, later) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
 | **Handles**, separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle` | none |
-| **PDS** | the PDS, its `/account` UI, `media.<pds domain>` (media proxy) | the PDS's own only; no app cookies |
+| **PDS** | the PDS (sign-in, consent, its `/account` UI); `account.<pds domain>` (our account app, §5.3); `media.<pds domain>` (media proxy) | the PDS's own; the account app's own `__Host-` cookies; no app cookies |
 
 Why a separate handle domain:
 - No same-site relationship between user-named hosts and the app's cookies.
@@ -235,7 +235,7 @@ Rules for the handle domain:
       └────────────────────────────────────────────────────────────────────┘
 ```
 
-**Processes:** one codebase with entrypoints `web`, `indexer` and `media`, plus the tiny dependency-free `pds-admin` and the Tap binary. `web` runs as a single replica in v1, because the OAuth client's lock is process-local; a Postgres advisory lock comes later if scaling needs it.
+**Processes:** one codebase with entrypoints `web`, `account`, `indexer` and `media`, plus the tiny dependency-free `pds-admin` and the Tap binary. `web` runs as a single replica in v1, because the OAuth client's lock is process-local; a Postgres advisory lock comes later if scaling needs it.
 
 **Database: Postgres (Q6).**
 - App and index live in separate schemas with **separate roles**:
@@ -299,6 +299,14 @@ Rules for the handle domain:
 - Schemas and the set are published with `goat` from an operator machine through a runbook, never from CI or agents.
 - The client's `scope` also declares the explicit fallback scopes. A CI test logs in with the set unresolvable and checks that the fallback is no broader than the set.
 - The TXT record and the schema CID are monitored.
+
+**Account app (Alex, 2026-10-02).** Account management looks like ours and sits beside the PDS, not inside the main app, mirroring how Bluesky keeps sign-in on its own PDS host:
+- A small separate app on `account.<pds domain>`, its own origin (not the PDS host, where passwords are typed), so a bug in it cannot reach PDS sign-in sessions.
+- It is an ordinary OAuth client of our PDS with the matching `account:`/`identity:` scopes, and uses public XRPC only: no PDS patch, no PDS database access, no response rewriting, no routes injected into the PDS host. That is the difference from the prototype's `account-manager`.
+- It owns: email change and confirmation, handle change, password reset by email, deactivate and delete.
+- The PDS keeps: OAuth sign-in and consent, always. Email 2FA, devices and connected apps stay on the PDS's `/account` unless a Phase 2 spike finds public APIs for them.
+- The PDS's built-in pages stay on and are branded; there is no setting to switch them off, and blocking them at the proxy would recreate the fragile hacks. Our app and emails link to the account app for what it covers.
+- Difference from Bluesky: Bluesky runs an entryway (`bsky.social`) in front of many PDS hosts and puts account settings in its client; we run one PDS, so the PDS is our sign-in host, and settings live in the account app, not the main app (Alex's choice).
 
 **Phase 2 go/no-go before dropping `account-manager` and `pds-gatekeeper`:**
 - [ ] `/account` lets a user enable email 2FA.
