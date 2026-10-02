@@ -457,7 +457,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Typed config, Hono server, CSRF gate, CSP, limits, trusted proxy.
 - Postgres with migrations and roles; sealed storage; audit.
 - i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls); `net-guard`; error pages.
-- Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Each shared component owns its CSS; screens compose components and add no global CSS. Stylelint bans raw colours, radii, spacing and font sizes outside tokens.
+- Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Styling is plain CSS: design tokens as custom properties, one CSS Module per shared component (Vite built-in, no extra dependency), and screens compose components and add no global CSS. No CSS framework (Alex, 2026-10-02). CI enforces it: Stylelint bans raw colours, radii, spacing and font sizes outside tokens; a guard rejects global CSS outside the base and token files; a size budget fails the build if the total shipped CSS grows past its limit (start near 40 KB unminified, raised only in a reviewed PR).
 - `compose.dev.yaml` with a real PDS, Tap and seeded accounts, so signed-in flows are testable locally.
 - Stand up the **production PDS** with no users: recovery key set, invite-only, admin XRPC denied. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon`.
 - **Exit:** Playwright smoke passes on the shell in both themes and both languages, and the permission set resolves from outside.

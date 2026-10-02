@@ -21,6 +21,9 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Q11 Design:** keep the token pipeline, colour roles, Iconoir, mono identifiers; re-decide
   the look in Phase 1.
 - **Q12 License:** AGPL-3.0-only (changeable until the repository is public).
+- **Styling (decided by Alex, 2026-10-02):** no CSS framework. Design tokens as CSS custom
+  properties plus one CSS Module per shared component. CI enforces it with a token-only
+  Stylelint rule, a no-global-CSS guard and a total CSS size budget.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 Not taken; permanent, waiting for Alex:
