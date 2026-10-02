@@ -156,6 +156,21 @@ Taken on cards after the eight-reviewer adversarial review (`reviews/fable-revie
 18. Caps: per-account storage quota (2 GB) and a daily upload cap from day one; Alex funds hosting at first; paid plans later: yes.
 19. Standards: ASVS 5 L2, WCAG 2.2 AA and the Core Web Vitals budget as hard requirements with CI gates; captions on every video (editable track from the review transcript); **keep** the SOC 2 / ISO certification track on paper (the review proposed dropping it).
 
+## Step-book gaps (2026-10-02, 22:25Z)
+
+While turning the plan into build steps, the step-book thread found nine sequencing gaps
+(`unset-plan/breakdown/plan-issues.md`). Seven are adopted as plan defaults, two go to Alex:
+- Adopted: the image fingerprint gate, a signed-draft-URL `media` stub and an `invite.issue`-only
+  `pds-admin` stub move to Phase 2 (gaps 2, 5, 8); the `review` worker is split into a
+  no-network compute container and a `review-egress` step limited to two fixed hosts (gap 3);
+  Phase 3 reports live in an app table listed by `admin` until Ozone arrives in Phase 5 (gap 6);
+  comments are `sh.unset.comment` records and the private-account matrix is decided before Phase 4
+  (gap 7); the bootstrap bundle is moved to TypeScript 7, Node 26, Vitest and the full CI list in
+  the first commits (gap 9).
+- Open to Alex: where the production PDS runs before the Phase 5 hosting decision (gap 1), and
+  whether every upload may hold a short-lived sealed buffer of transmission data so a later
+  fingerprint match can satisfy C-16 (gap 4; touches the no-address-logging rule).
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
