@@ -9,19 +9,21 @@ reversible; choices that become permanent once an account exists wait for Alex.
 
 ## Decision
 Taken as defaults (reversible, can be changed by a later ADR):
-- **Q3 Web stack:** Hono + server-rendered React + islands, built with Vite. Re-evaluated at
+- **Q3 Web stack (confirmed by Alex, 2026-10-02):** Hono + server-rendered React + islands, built with Vite. Re-evaluated at
   the end of Phase 1 (switch to React Router v7 if the island helper exceeds ~150 lines).
-- **Q4 Chat:** a module after the core (Phase 6), Matrix DMs first.
+- **Q4 Chat (Alex, 2026-10-02):** a core feature, not a module; built in Phase 6 on
+  `chat.unset.sh`, Matrix DMs first.
 - **Q5 Public profile:** `/@handle` on the app origin.
 - **Q6 Database (confirmed by Alex, 2026-10-02):** one Postgres with per-role separation; the
   appview merges into the app, and the indexer runs as its own process.
 - **Q7 Drafts:** stored in the app database; only Publish writes to the repo.
-- **Q8 Social in core:** posts, follows, timeline, likes, comments, directory.
+- **Q8 Social in core (confirmed by Alex, 2026-10-02):** posts, follows, timeline, likes, comments, directory.
 - **Q9 Posts lexicon:** our own, with a Standard.site spike in Phase 4.
-- **Q10 Hosting:** VPS for production, homelab for development.
-- **Q11 Design:** keep the token pipeline, colour roles, Iconoir, mono identifiers; re-decide
-  the look in Phase 1.
-- **Q12 License:** AGPL-3.0-only (changeable until the repository is public).
+- **Q10 Hosting (confirmed by Alex, 2026-10-02):** VPS for production, homelab for development.
+- **Q11 Design (Alex, 2026-10-02):** all UI follows the unset.sh design sheet (Design System
+  artifact "unset.sh"); its tokens feed the CSS Modules. New components only when registered
+  on the sheet with Alex's approval; Iconoir may be integrated the same way.
+- **Q12 License:** AGPL-3.0-only for now; Alex reviews it seriously before launch.
 - **Styling (decided by Alex, 2026-10-02):** no CSS framework. Design tokens as CSS custom
   properties plus one CSS Module per shared component. CI enforces it with a token-only
   Stylelint rule, a no-global-CSS guard and a total CSS size budget.
@@ -46,6 +48,12 @@ Taken as defaults (reversible, can be changed by a later ADR):
   `unset.sh` was considered and rejected (plan §11 Q1).
 - **API and MCP (Alex, 2026-10-02):** the core has a small public read API (published data only,
   no key, rate-limited) and service-auth signed-in endpoints; MCP is a later module.
+- **Admin panel (Alex, 2026-10-02):** fold in the admin panel design: separate `admin`
+  process on `admin.int.unset.sh` over Tailscale, hardware keys, per-action signatures verified
+  by `pds-admin`, signed roster, 7-day delete holds, hash-chained audit, minimal logging
+  (plan §5.7, §6).
+- **Spaces (Alex, 2026-10-02):** wanted for followers-only and private posts; nothing built
+  until it matures. Re-check at Phase 4.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 - **Q2a Old accounts (provisional, Alex to revisit, 2026-10-02):** start fresh. Old accounts are

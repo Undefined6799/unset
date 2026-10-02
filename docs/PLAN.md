@@ -145,16 +145,17 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 | Profile | lexicons, records, sections, privacy, publish/unpublish, draft store, image pipeline, editor UI, `ProfileView`, public routes (`/@handle`, `/@handle/p/{rkey}`), OG meta, receipt, state pages | ~2,800 |
 | Indexer + read | Tap consumer, versioned upserts, account-state machine, `eraseDid`, views, directory/search, media proxy | ~1,300 |
 | Social | posts (image and video privacy), follows, home timeline, likes, comments, people directory UI | ~1,700 |
-| Moderation | delist, suspend via `pds-admin` (signed assertions), report queue, moderator allowlist | ~500 |
+| Moderation | delist, report queue and the public notice form in `web`; the actions themselves live in `admin` (§5.7) | ~300 |
 | Shell + UI kit | tokens → CSS, ~20 shared components, app shell, home and onboarding, `/me`, `/join`, `/login-failed`, legal pages, theme/locale (no-JS) | ~2,000 |
 | Plugin seam | `plugin-api` contract, registry, route mounting, tenants (minimal), boundary lint, fixture plugin | ~500 |
-| `pds-admin` service | invites, takedown, reaping, DNS-TXT handle record at mint (optional) | ~300 |
-| **Total** | | **≈12–13k** |
+| `pds-admin` service | invites, takedown, holds, receipts, reaping, DNS-TXT handle record at mint (optional); see §5.7 | ~450 |
+| Admin panel (`admin`) | internal console: lookup, actions with per-action key signatures, reports, audit, health (§5.7); CI ceiling 2,400 lines incl. `pds-admin` and audit | ~1,500 |
+| Chat (core, Alex 2026-10-02) | Matrix client on `chat.unset.sh`, identity bridge; §5.6 | not yet sized |
+| **Total** | | **≈14–15k before chat** |
 
 **Deferred until the first plugin needs them:** mail transport, the generic notification inbox, cron hooks and per-plugin DB roles. Their *interfaces* are written down in `plugin-api`; they are not built.
 
 **Out of core:**
-- **Chat module** (phase 6).
 - **RSS module.** Prefs go to an app-DB table; no PDS patch.
 - **MCP read server** (a later module; confirmed by Alex, 2026-10-02).
 - **Plugins:** CRM, accounting, billing.
@@ -221,7 +222,7 @@ Why a separate handle domain:
 - The wildcard certificate's DNS credential cannot touch the app zone or `_lexicon`.
 
 Rules for the handle domain:
-- A reserved-label list (`www`, `api`, `admin`, `account`, `mail`, `mta-sts`, `autoconfig`, `status`, `_*`) is still enforced by the PDS, with a test.
+- A reserved-label list (`www`, `api`, `admin`, `account`, `mail`, `mta-sts`, `autoconfig`, `status`, `_*`) is enforced by `pds-admin`, with a test. The unpatched PDS does not reserve `mta-sts` or `autoconfig` (pds:handle/reserved.ts), so those are held by placeholder accounts.
 - TLS via DNS-01 through a delegated `_acme-challenge` zone, or on-demand TLS with an `ask` endpoint.
 - CAA, DNSSEC and HSTS `includeSubDomains` on all three domains.
 
@@ -235,7 +236,7 @@ Rules for the handle domain:
       └────────────────────────────────────────────────────────────────────┘
 ```
 
-**Processes:** one codebase with entrypoints `web`, `account`, `indexer` and `media`, plus the tiny dependency-free `pds-admin` and the Tap binary. `web` runs as a single replica in v1, because the OAuth client's lock is process-local; a Postgres advisory lock comes later if scaling needs it.
+**Processes:** one codebase with entrypoints `web`, `account`, `admin`, `indexer` and `media`, plus the tiny dependency-free `pds-admin` and the Tap binary. `web` runs as a single replica in v1, because the OAuth client's lock is process-local; a Postgres advisory lock comes later if scaling needs it.
 
 **Database: Postgres (Q6).**
 - App and index live in separate schemas with **separate roles**:
@@ -263,8 +264,10 @@ Rules for the handle domain:
 - Sends a sandbox CSP and `nosniff`, has a size cap, uses `max-age` (not immutable), and is purged on takedown.
 
 **`pds-admin`:**
-- Holds invites, takedown and reaping, on the internal network only. Its environment carries only the admin password.
-- Destructive calls (takedown, delete) require a short-lived, single-use assertion signed by `web`, carrying moderator DID, target, action and `jti`. `pds-admin` re-checks the moderator against `MODERATOR_DIDS` (empty means deny) and writes its own audit row.
+- The only holder of the PDS admin password, on the internal network only. It verifies everything itself and trusts nothing from its callers (the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`) §6.2, §6.6, §7.3).
+- Every PDS action needs an envelope from `admin` carrying a moderator's WebAuthn signature over that exact action; `pds-admin` checks it against a **roster signed offline by an owner** and a **revoke file**, which replace `MODERATOR_DIDS`. `web`'s key is accepted for `invite.issue` only.
+- Deletes and renames of a used handle go through a **7-day hold** on `pds-admin`'s own clock. It emails a receipt naming the real target to every owner, keeps its own hash-linked log and `jti` file, refuses actions on roster accounts, and offers lookups without email, signup open/close and `limits.raise`. It has no password, email or passthrough routes; a break-glass CLI covers emergencies; the reaper skips accounts with open cases.
+- Takedown revokes the user's PDS tokens; deactivation does not; a record takedown does not stop `sync.*`.
 - The reaper deletes only when the PDS definitively reports "unverified and older than the TTL"; any error skips the account.
 - The edge denies every admin-auth XRPC (`com.atproto.admin.*`, `server.createInviteCode*`, `temp.*`, any Basic-auth XRPC).
 
@@ -281,7 +284,7 @@ Rules for the handle domain:
 
 **Sessions:**
 - `__Host-sid`, httpOnly, Secure, Lax; only `sha256(sid)` is stored.
-- Lifecycle per §2 rule 7: idle 7 days, absolute 30 days. Moderator pages need a session less than 12 hours old.
+- Lifecycle per §2 rule 7: idle 7 days, absolute 30 days. Moderator sessions live in `admin` only (§5.7).
 - `getSession` is memoised per request.
 
 **Login and signup:**
@@ -382,7 +385,10 @@ Rules for the handle domain:
 - **Mail, the notification inbox and cron** have interfaces in `plugin-api` and are built with the first plugin that needs them.
 - A fixture plugin in the test suite proves the seam.
 
-### 5.6 Chat module (phase 6, outside the core)
+### 5.6 Chat (core feature, Alex 2026-10-02; built in phase 6)
+
+Chat is part of the core product, not a module or plugin. It still runs on its own origin so its encryption keys and sessions are isolated from the main app.
+
 
 - **Engine:**
   - Synapse + MAS + a `chat-auth` bridge (atproto identity → OIDC, `sub` = DID).
@@ -404,19 +410,32 @@ Rules for the handle domain:
 - **Before GA:** decide the device-trust posture and how to invite someone who has never opened chat.
 - `matrix-js-sdk` is pinned exactly.
 
+### 5.7 Admin panel (internal; from the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`))
+
+- **What:** a small console for one or two people at `admin.int.unset.sh`: account lookup, delist, takedown and reinstate, end our sessions, invites, held deletes, the reports queue, the audit log and a health board. It cannot browse users, act as a user or read private data.
+- **Where:** its own `admin` process, container, origin, DB role and key. No moderator routes in `web` (lint-enforced). No public DNS record; reachable only over Tailscale (Tailnet Lock, deny-by-default policy, Funnel and Tailscale SSH off, split DNS, our own DNS-01 certificate). Public inbound is only 443 and an 80 redirect; SSH moves onto Tailscale.
+- **Login:** an allowed Tailscale device, a hardware security key with PIN (no synced passkeys, no OAuth at login), and that key's entry in the signed roster. Sessions `__Host-admin_sid`, 15 minutes idle, 8 hours absolute.
+- **Actions:** every PDS action and PII reveal carries a WebAuthn signature over that exact action, verified by `pds-admin`. Irreversible actions go through a 7-day hold.
+- **Audit:** schema `audit`, append-only through `audit.append()`, two hash-chained lanes (`mod`, `sec`), redactable side tables, chain heads copied off-box daily.
+- **Plugins:** an optional `admin.views` manifest field; plugin code never runs inside `admin`.
+- **Roles in Postgres:** add `admin` and `retention`.
+
 ## 6. Privacy and compliance deliverables
 
 These are deliverables, not intentions:
 
 - **`eraseDid(did)`** covers the index, the app schemas and plugin hooks. It is triggered by `#account deleted` and by a moderator action. A test enumerates every table with a DID column.
 - **Export** at `/settings/export`: the CAR link plus a JSON dump of every app-DB row for the DID.
+- **Logging and retention** per the admin panel design (`unset-plan/admin-panel/admin-panel-design.md`) §8.1: no IPs or user agents in any traffic log or table, no analytics, no user sign-in records; edge logs keep status, route and timing for 3 days.
 - **Retention:**
-  - audit logs (DID, IP, UA only): 90 days;
-  - reports: 1 year;
+  - admin action log: 2 years; admin security events: 1 year; moderation decisions: 1 year after the case closes;
+  - reports: 6 months after the case closes;
+  - breach record (PIPEDA): 24 months; abuse-material preservation: 21 days;
   - abandoned drafts: 30 days;
   - backups: N days, so erasure reaches the backups within N.
 - **Reports** go into the moderation queue, never into logs.
 - **RoPA rewritten** for the reduced scope: drafts, reports, audit, OAuth tokens and the federation decision, with a lawful basis for each purpose.
+- **Moderation and GDPR:** moderation history in exports, `dsar.export` for users who cannot log in, erasure of audit side tables, PLC tombstones, statements of reasons, and a public notice form on `unset.sh` (DSA Art. 16).
 - **Privacy notice** published, and linked from both the app and the PDS (`PDS_PRIVACY_POLICY_URL`).
 - **Federation decision recorded** (Q2b): whether `PDS_CRAWLERS` points at the Bluesky relay.
 
@@ -465,6 +484,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Slim `CLAUDE.md`/`AGENTS.md`. Carry over the vault notes from review 07 §6 and archive the rest.
 - Register the domains; set DNSSEC, CAA and HSTS; reserve labels.
 - Generate the PDS rotation and recovery keys offline.
+- Admin groundwork (§5.7): hardware-key 2FA and offline codes on GitHub, registrar and host; the allowed-signers file; a private repo ruleset with CODEOWNERS requiring security review on admin paths; the report-routing decision.
 - **Exit:** CI passes on an empty repo and blocks a planted secret, a planted bare `fetch` and a planted `Domain=` cookie.
 
 **Phase 1 — Platform, local stack, lexicon authority**
@@ -473,6 +493,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls); `net-guard`; error pages.
 - Token pipeline and UI kit; server-applied theme. Base styles for native elements (forms, type) so plain HTML looks right without classes. Styling is plain CSS: design tokens as custom properties, one CSS Module per shared component (Vite built-in, no extra dependency), and screens compose components and add no global CSS. No CSS framework (Alex, 2026-10-02). CI enforces it: Stylelint bans raw colours, radii, spacing and font sizes outside tokens; a guard rejects global CSS outside the base and token files; a size budget fails the build if the total shipped CSS grows past its limit (start near 40 KB unminified, raised only in a reviewed PR).
 - `compose.dev.yaml` with a real PDS, Tap and seeded accounts, so signed-in flows are testable locally.
+- Admin platform (§5.7): the audit schema, edge rules and outside probes, Tailscale (Tailnet Lock, deny-by-default policy in the repo, split DNS), firewall rules with public port 22 closed, a source-IP test, and a rehearsed provider-console recovery before Phase 1 ends.
 - Stand up the **production PDS** with no users: recovery key set, invite-only, admin XRPC denied. Then create the lexicon authority, publish the schemas and permission set, and set `_lexicon`.
 - **Exit:** Playwright smoke passes on the shell in both themes and both languages, and the permission set resolves from outside.
 
@@ -486,6 +507,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - Tap spike first: mode, ack WebSocket, trust rules.
 - Then the indexer, `eraseDid`, the media proxy, the public `/@handle` routes, the handle-host redirects and well-known, the directory and search, and moderation (delist, suspend via signed assertion, report queue).
 - Port the appview tests (ingest 33, db 25, verify 18, xrpc 24, media 7).
+- Admin v1 (§5.7): attested key enrolment, per-action signing and the `pds-admin` verifier, off-box audit copies, runbooks 1 to 6, CI ceiling of 2,400 lines.
 - **Exit:**
   - `/@handle` renders with zero JS, and its images come only from the media origin.
   - An external resolver confirms handle↔DID.
@@ -506,12 +528,13 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
   - restore drill.
 - Secret inventory and rotation runbook.
 - The RoPA and privacy notice from §6.
+- Admin v1.1 (§5.7): statements of reasons, appeals, blob and record takedown, GDPR cases, the export and notice-form work in `web`, the restore drill, the remaining runbooks.
 - **Exit:**
   - a restore drill on a fresh host passes;
   - the edge rate-limit and spoofed-header tests pass;
   - invite-only launch.
 
-**Phase 6 — Chat module** (MVP from §5.6).
+**Phase 6 — Chat** (core feature, Alex 2026-10-02; MVP from §5.6).
 
 **Phase 7+ — Later modules:**
 - chat Spaces;
@@ -540,6 +563,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 | Leaving Next.js costs more than estimated | Phase 1 measures it; switch to React Router v7 before Phase 2 if the island helper exceeds ~150 lines. |
 | PDS `/account` falls short (2FA, confirm-email link) | The §5.3 go/no-go list. The fallback is an upstream fix or a small app screen with the matching scope, never a patch. |
 | Domain, namespace or federation chosen wrongly | Decided in Phase 0, before any account exists. |
+| One host: host root reaches everything, including the online PLC rotation key | Offline recovery key can undo PLC changes within 72 hours; nightly PLC log check; provider, registrar, GitHub and the tailnet identity provider sit at the top of the trust tree with hardware-key 2FA (§5.7). `admin` takes the client IP from the socket only. |
 | Chat arrives later than wanted | The identity seam ships in Phase 2, so chat plugs in without core changes. |
 
 ## 11. Questions for you (recommendation first)
@@ -569,15 +593,12 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - **The publish step must say plainly** where the content will appear (unset.sh, Bluesky and other atproto apps), that it becomes public, and that copies are hard or impossible to take back. Same wording when switching a category on.
 - **Separate categories (provisional, Alex to review, 2026-10-02):** two switches, "Profile" and "Posts and follows", each private or public. They are separate record collections, so this is clean on atproto. Posts public with the profile private shows posts under a bare handle in other apps. Profile public with posts private keeps posts and follows visible only to their owner, since a follow or post is either in the repo or not.
 
-**Q3. Web stack.**
+**Q3. Web stack. Confirmed by Alex (2026-10-02): Hono.**
 - **Hono + server-rendered React + islands (recommended).**
 - React Router v7.
 - Next.js limited to route handlers.
 
-**Q4. Chat timing.**
-- **Phase 6 module, DMs first (recommended).**
-- In the core from day one.
-- Drop Matrix and wait for atproto messaging.
+**Q4. Chat. Decided by Alex (2026-10-02): a core feature.** Built in phase 6 on `chat.unset.sh`, DMs first, Matrix kept.
 
 **Q5. Public profile location.**
 - **`unset.sh/@alice`, with handle hosts redirecting (recommended).**
@@ -591,22 +612,20 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
 - **Drafts in the app DB; only Publish writes to the repo (recommended).**
 - Keep the prototype's behaviour with honest labels.
 
-**Q8. Social features in the core:** posts, follows, timeline, likes, comments, directory.
+**Q8. Social features in the core:** posts, follows, timeline, likes, comments, directory. **Confirmed by Alex (2026-10-02).**
 - **Yes (recommended)**, with RSS and MCP as later modules.
 
 **Q9. Posts lexicon.**
 - **Our own `sh.unset.post` (recommended)**, with a Phase 4 spike on Standard.site.
 - Adopt Standard.site now.
 
-**Q10. Hosting.**
+**Q10. Hosting. Confirmed by Alex (2026-10-02): VPS for production, homelab for development.**
 - **A small VPS for production, homelab for dev (recommended).**
 - Keep the homelab with the Cloudflare Tunnel.
 
-**Q11. Design.**
-- **Keep the token pipeline, colour roles, Iconoir and mono identifiers; re-decide the look in Phase 1 before building screens (recommended).**
-- Keep v2e exactly as locked.
+**Q11. Design. Decided by Alex (2026-10-02):** all UI follows the **unset.sh design sheet** (the Design System artifact "unset.sh", https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt): Onyx/Platinum with Plum, Cyan and Emerald accents, Space Grotesk and JetBrains Mono, the ◉◉◉ mark, 2px corners with the cut button. Its `tokens.json` is the token source for the CSS Modules. New components may be added only if registered on the sheet with Alex's approval. The sheet currently uses Unicode characters in mono instead of an icon set; Iconoir may be integrated, which means registering it on the sheet first.
 
-**Q12. License.**
+**Q12. License.** Alex will review it seriously before launch; AGPL-3.0 until then.
 - **AGPL-3.0 (recommended).**
 - MIT or Apache-2.0.
 
