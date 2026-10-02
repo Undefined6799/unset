@@ -169,8 +169,10 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   the first commits (gap 9).
 - Gap 1 decided by Alex (22:31Z, decision 20): **the production PDS is deferred to Phase 5**; the
   lexicon authority account starts on the development PDS and migrates later.
-- Open to Alex: whether every upload may hold a short-lived sealed buffer of transmission data so a later
-  fingerprint match can satisfy C-16 (gap 4; touches the no-address-logging rule).
+- Gap 4 decided by Alex (22:32Z, decision 21): **every upload holds a short sealed buffer** of
+  address, time and route, encrypted to the legal-hold key, hard expiry at the check deadline,
+  moved into the hold on a match and destroyed otherwise; the one written exception to the
+  no-address-logging rule, named in the privacy notice and confirmed in the lawyer hour.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
