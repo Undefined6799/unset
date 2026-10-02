@@ -173,6 +173,12 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   address, time and route, encrypted to the legal-hold key, hard expiry at the check deadline,
   moved into the hold on a match and destroyed otherwise; the one written exception to the
   no-address-logging rule, named in the privacy notice and confirmed in the lawyer hour.
+- Phase 4 review batch (22:46Z), adopted as plan defaults: scopes for `getFeedGenerators`, `getPostThread`
+  and Bluesky `createReport` requested from day one; draft expiry skips open appeals (alert after 7 days);
+  the `api` `getTimeline` serves third-party clients only; the development PDS is monitored while it hosts
+  the lexicon authority; on a 413 from a foreign PDS the repo blob falls back to the 720p rendition (card to
+  Alex); `review-egress` may also reach internal `pds-admin` for `preserve.create`; TMK+PDQF dropped from v1;
+  captions and the fallback thumbnail are repo blobs; publish after review restores the session server-side.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
