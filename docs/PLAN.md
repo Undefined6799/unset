@@ -387,7 +387,12 @@ Rules for the handle domain:
 
 ### 5.6 Chat (core feature, Alex 2026-10-02; built in phase 6)
 
-Chat is part of the core product, not a module or plugin. It still runs on its own origin so its encryption keys and sessions are isolated from the main app.
+Chat is part of the core product, not a module or plugin. It runs **beside the core but connected** (Alex, 2026-10-02): its own service and origin, so its encryption keys and sessions are isolated from the main app, joined to it only by the identity seam and the profile's "Message" button. **Matrix confirmed** (Alex, 2026-10-02) after comparing Signal, SimpleX, XMPP, P2P messengers, Keybase, PGP and Threema: Matrix is the only one that is browser-first, self-hostable, tied to our identity and has mature group encryption.
+
+**Every unset.sh user can message every other one (Alex, 2026-10-02).** This needs, designed in Phase 6 from how Element and the spec do it, not invented:
+- a way to reach someone who has never opened chat: their Matrix account and `did↔mxid` mapping exist from signup, or the message waits as a pending request they see on first visit. No forged membership and no acting as the user;
+- message requests from people you don't follow, plus block and report, before launch, since open messaging invites spam (the prototype never built request gating);
+- the user's privacy switches respected: a private account can still be messaged by handle, but nothing about it is exposed beyond that.
 
 
 - **Engine:**

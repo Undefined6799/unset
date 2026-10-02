@@ -12,7 +12,8 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Q3 Web stack (confirmed by Alex, 2026-10-02):** Hono + server-rendered React + islands, built with Vite. Re-evaluated at
   the end of Phase 1 (switch to React Router v7 if the island helper exceeds ~150 lines).
 - **Q4 Chat (Alex, 2026-10-02):** a core feature, not a module; built in Phase 6 on
-  `chat.unset.sh`, Matrix DMs first.
+  `chat.unset.sh`, Matrix DMs first. Beside the core but connected; Matrix confirmed; every
+  user can message every other user, with message requests, block and report (plan §5.6).
 - **Q5 Public profile:** `/@handle` on the app origin.
 - **Q6 Database (confirmed by Alex, 2026-10-02):** one Postgres with per-role separation; the
   appview merges into the app, and the indexer runs as its own process.
