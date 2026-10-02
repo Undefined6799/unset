@@ -167,8 +167,9 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   comments are `sh.unset.comment` records and the private-account matrix is decided before Phase 4
   (gap 7); the bootstrap bundle is moved to TypeScript 7, Node 26, Vitest and the full CI list in
   the first commits (gap 9).
-- Open to Alex: where the production PDS runs before the Phase 5 hosting decision (gap 1), and
-  whether every upload may hold a short-lived sealed buffer of transmission data so a later
+- Gap 1 decided by Alex (22:31Z, decision 20): **the production PDS is deferred to Phase 5**; the
+  lexicon authority account starts on the development PDS and migrates later.
+- Open to Alex: whether every upload may hold a short-lived sealed buffer of transmission data so a later
   fingerprint match can satisfy C-16 (gap 4; touches the no-address-logging rule).
 
 ## Consequences
