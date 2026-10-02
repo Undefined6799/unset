@@ -25,7 +25,11 @@ Taken as defaults (reversible, can be changed by a later ADR):
   our own lexicon, with our own transcoding pipeline; users may also write Bluesky posts.
   Feeds get compressed renditions. Public posts are reviewed automatically (hash matching plus
   a classifier, uncertain cases to a person) before they are written to the repo; users are told
-  so; every post keeps a report button.
+  so; every post keeps a report button. The review (Alex, 2026-10-02): hash matching on our own
+  servers first (matches never leave them; report plus 21-day locked hold); then the Claude API
+  reviews ~10 downscaled frames, the caption and a locally made transcript; unsure goes to a
+  person. Anthropic is named as a processor for public posts only. Start on Sonnet and measure.
+  Apply for PhotoDNA and a hash list before launch.
 - **Feeds (Alex, 2026-10-02):** atproto feeds as user-chosen, reorderable tabs in the core
   (plan §5.8).
 - **Q10 Hosting (confirmed by Alex, 2026-10-02):** VPS for production, homelab for development.
