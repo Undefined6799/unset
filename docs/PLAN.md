@@ -436,6 +436,7 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 - The app asks each feed's generator for its post list through `net-guard`, then fills in the posts. Bluesky posts are read from Bluesky's public read service, and ours from our index, so this needs no full-network index (fits the provisional indexer decision).
 - We run our own feed generators for unset.sh videos (for example latest and following), so other atproto apps can show them too.
 - Feeds show only public content. A private user's posts never enter any feed.
+- **Labels on Bluesky posts (added 2026-10-02, proposal):** Bluesky posts shown in our feeds carry Bluesky's moderation labels, and the app always applies Bluesky's own labeler: hidden labels are not shown, warning labels sit behind a warning. Our own moderation decisions can later be published as an atproto labeler (Ozone), so they also apply in other apps.
 
 **Video posts.**
 - Our own record type in `sh.unset.*` for a short video: 60 seconds max, with caption, poster frame and aspect ratio. The original file is a blob in the user's repo; everything else is derived.
