@@ -16,6 +16,9 @@ Taken as defaults (reversible, can be changed by a later ADR):
   user can message every other user, with message requests, block and report; the chat account
   is seeded at signup (account only, no tokens or keys made for the user), and signing in to
   chat with recovery-key setup is a step of signup, done by the user (plan §5.6).
+- **Ozone (Alex, 2026-10-02):** we run Ozone as our labeler and report intake (Phase 5).
+  Its moderator screens are Tailscale-only; it never holds PDS admin power, so takedowns stay in
+  the admin panel via `pds-admin`. Bluesky posts in our feeds get Bluesky's labels and ours.
 - **Launch gate (Alex, 2026-10-02):** no launch, invite-only included, until the whole core
   (Phases 1-6, chat included) is done with no known bugs (plan, after Phase 6).
 - **Q5 Public profile:** `/@handle` on the app origin.

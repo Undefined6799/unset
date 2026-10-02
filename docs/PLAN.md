@@ -436,7 +436,7 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
 - The app asks each feed's generator for its post list through `net-guard`, then fills in the posts. Bluesky posts are read from Bluesky's public read service, and ours from our index, so this needs no full-network index (fits the provisional indexer decision).
 - We run our own feed generators for unset.sh videos (for example latest and following), so other atproto apps can show them too.
 - Feeds show only public content. A private user's posts never enter any feed.
-- **Labels on Bluesky posts (added 2026-10-02, proposal):** Bluesky posts shown in our feeds carry Bluesky's moderation labels, and the app always applies Bluesky's own labeler: hidden labels are not shown, warning labels sit behind a warning. Our own moderation decisions can later be published as an atproto labeler (Ozone), so they also apply in other apps.
+- **Labels on Bluesky posts:** Bluesky posts shown in our feeds carry Bluesky's moderation labels, and the app always applies Bluesky's own labeler plus ours (below): hidden labels are not shown, warning labels sit behind a warning.
 
 **Video posts.**
 - Our own record type in `sh.unset.*` for a short video: 60 seconds max, with caption, poster frame and aspect ratio. The original file is a blob in the user's repo; everything else is derived.
@@ -453,6 +453,13 @@ Chat is part of the core product, not a module or plugin. It runs **beside the c
     - A clear fail stays in draft storage until the appeal is decided, then is deleted (drafts expire after 30 days regardless).
   - The publish screen and the terms say plainly that public posts are reviewed automatically before they go live. Private posts are not reviewed.
   - A report button stays on every post, for anything the review misses.
+**Our labeler: Ozone (Alex, 2026-10-02).** We run Bluesky's open-source moderation service, Ozone, as the unset.sh labeler, so our moderation decisions reach Bluesky and every other atproto app, not only ours.
+- Role: labels and report intake. Its public side (serving labels and receiving reports from any app) is on the internet; its moderator screens are reachable only over Tailscale, like the admin panel.
+- Ozone never gets PDS admin power. Takedowns, deletes and account actions stay in the admin panel through `pds-admin`, with a hardware-key touch per action (§5.7). This keeps the admin design's guarantees intact.
+- It has its own DID and label-signing key; the key goes in the secret inventory and the backup and recovery runbook.
+- Built in Phase 5, before launch. Its moderator login and how its report queue sits beside the panel's queue are checked in a spike first (review list item 8).
+- To verify in the spike: license and current version (believed MIT/Apache-2.0, TypeScript and Postgres, from memory).
+
 - Video raises cost and duty: storage, bandwidth and CPU grow fast, and abuse-material detection and reporting apply (admin design §8.1). Phase 4 sizes the hosting before launch.
 - Other post kinds: users can also write standard Bluesky posts (`app.bsky.feed.post`, text and images), which then appear in Bluesky. All posts follow the "Posts and follows" privacy switch.
 
@@ -564,6 +571,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No real
   - restore drill.
 - Secret inventory and rotation runbook.
 - The RoPA and privacy notice from §6.
+- Ozone labeler (§5.8), after its spike.
 - Admin v1.1 (§5.7): statements of reasons, appeals, blob and record takedown, GDPR cases, the export and notice-form work in `web`, the restore drill, the remaining runbooks.
 - **Exit:**
   - a restore drill on a fresh host passes;
