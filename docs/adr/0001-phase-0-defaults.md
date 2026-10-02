@@ -44,6 +44,8 @@ Taken as defaults (reversible, can be changed by a later ADR):
   `0x40.space`, handles `<user>.0x40.me`. Lexicons `sh.unset.*`.
   The PDS stays on its own registrable domain, per atproto guidance; a PDS or entryway under
   `unset.sh` was considered and rejected (plan §11 Q1).
+- **API and MCP (Alex, 2026-10-02):** the core has a small public read API (published data only,
+  no key, rate-limited) and service-auth signed-in endpoints; MCP is a later module.
 - **Tooling:** Node 24, npm workspaces, TypeScript 6 strict, Biome, node:test.
 
 - **Q2a Old accounts (provisional, Alex to revisit, 2026-10-02):** start fresh. Old accounts are

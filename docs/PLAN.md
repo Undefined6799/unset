@@ -156,7 +156,7 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 **Out of core:**
 - **Chat module** (phase 6).
 - **RSS module.** Prefs go to an app-DB table; no PDS patch.
-- **MCP read server.**
+- **MCP read server** (a later module; confirmed by Alex, 2026-10-02).
 - **Plugins:** CRM, accounting, billing.
 - **Dropped:**
   - the renderer (its views move in-app)
@@ -245,6 +245,10 @@ Rules for the handle domain:
   - later, one role per plugin.
 - Audit rows are append-only.
 - One database makes moderation and erasure single transactions.
+
+**Public read API (XRPC):** `actor.getProfile`, `identity.resolveHandle`, `feed.getAuthorFeed` and `feed.getPost` are public with no key; signed-in `feed.getTimeline` and `actor.searchProfiles` need atproto service auth (a short-lived token signed by the caller's PDS, audience our service DID) or the app session.
+- It reads only the index, which holds only records that are in a public repo. Drafts and private content live in app-DB tables the read API's database role cannot select, so a bug cannot leak them.
+- No API keys for now: the data is already public on the network, so a key would not protect it. Abuse is handled by per-client rate limits kept in memory (no IP logging), response caching and size caps. Optional keys for higher limits can come later if a third party needs them.
 
 **Indexer and Tap trust rules:**
 - Tap's upstream is a **setting** (provisional, Alex to review). v1: **our PDS's `subscribeRepos` only**. Later, network data comes from pointing Tap at a public relay with collection filters; the indexer does not change. No own relay or full-network index. Repos are added explicitly at first login or signup, or through our PDS's `listRepos`, never by network-wide discovery. The spike confirms which mode works against a single PDS.
