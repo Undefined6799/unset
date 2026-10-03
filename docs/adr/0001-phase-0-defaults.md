@@ -238,6 +238,21 @@ While turning the plan into build steps, the step-book thread found nine sequenc
 - Decision 29 (Alex, 2026-10-03 11:51Z, step-book card): admin actions may record the acting admin's
   private tailnet address, staff only, 2-year retention with the admin action log, listed in the RoPA;
   the one narrow exception to the no-IP rule. Sign-in history stays counts only.
+- Decision 30 (Alex, 2026-10-03 16:22Z to 16:38Z, step-book thread and its "Local check, Llama" card):
+  moderation is local-first in v1 and nothing about a post leaves our servers for review. A local text
+  gate (spam and link rules, Detoxify multilingual, Llama Guard 3 1B) checks comments, captions, subtitles,
+  transcripts and Bluesky post text in the no-network compute container; S4 child sexual exploitation is
+  blocked and goes to a person for the Cybertip.ca decision, other unsafe results and self-harm are held,
+  the rest is allowed. A small local gore classifier joins the image gates, hold-only until measured.
+  Unsure results go to a human reviewer. The Claude API review of frames, captions and transcripts is
+  removed from v1 and kept as a documented later option, switched on only after measurement shows the
+  local tools are not enough and Alex approves. Consequences: `review-egress` reaches Arachnid Shield
+  alone and Anthropic leaves the processor list; the first-publish consent checkbox is dropped; RoPA,
+  privacy notice and AI system record list the local models with pinned hashes; gates run in shadow mode
+  first against a labelled EN/FR set kept outside the repo. Lawyer-hour items: the "Built with Llama"
+  notice for a server-side check, NudeNet's YOLOv8-derived weight licence, the reporting duty for
+  written material in comments. Captions: automatic subtitles from local speech-to-text, creator-editable,
+  viewer CC toggle, still mandatory under decision 19.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
