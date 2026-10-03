@@ -179,6 +179,12 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   the lexicon authority; on a 413 from a foreign PDS the repo blob falls back to the 720p rendition (card to
   Alex); `review-egress` may also reach internal `pds-admin` for `preserve.create`; TMK+PDQF dropped from v1;
   captions and the fallback thumbnail are repo blobs; publish after review restores the session server-side.
+- Decision 22 (Alex, 22:55Z): on a foreign PDS 413 the 720p fallback is **offered to the user, never
+  automatic**; the draft waits for their choice and the downgrade is shown on the post.
+- Third batch (22:54Z): Tap and the indexer get general HTTPS egress through `net-guard` (private
+  ranges blocked), `pds-admin` only the PDS; public pages carry no cookie variation (theme and language
+  from client hints, cookies on signed-in pages only). Open to Alex: retiring the old prototype accounts
+  on `0x40.space` before the development PDS takes that hostname in Phase 1.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
