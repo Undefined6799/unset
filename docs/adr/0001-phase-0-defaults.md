@@ -20,8 +20,8 @@ Taken as defaults (reversible, can be changed by a later ADR):
   Amended (Alex, 2026-10-02, evening, decisions 11–13): seeding runs in an isolated `chat-admin`
   service, never in `web`; the client ships `OnlySignedDevicesIsolationMode` from day one; a
   message request is the invite only, with no text until accepted (the earlier "messages sent
-  meanwhile become readable later" is impossible in Matrix E2EE and is withdrawn); branded
-  Element Web, configured not forked, is the launch fallback if the native client is late.
+  meanwhile become readable later" is impossible in Matrix E2EE and is withdrawn); the
+  branded Element Web launch fallback was dropped on 2026-10-03 (decision 11 revised, below).
   Matrix `server_name` is fixed in Phase 1 (review).
 - **Ozone (Alex, 2026-10-02):** we run Ozone as our labeler and report intake (Phase 5).
   Its moderator screens are Tailscale-only; it never holds PDS admin power, so takedowns stay in
@@ -146,7 +146,7 @@ Taken on cards after the eight-reviewer adversarial review (`reviews/fable-revie
 8. Local open-source nudity gate before Claude; nudity is a fail or a human case and never leaves; Claude sees only nudity-free frames: yes.
 9. C-16: 365-day sealed hold; uploader address and time captured only at the moment of a fingerprint match, sealed and destroyed with the hold; one Canadian lawyer hour before production: yes.
 10. EU, UK and Australian invitees: **not yet**; invite-country rule and one sentence in the terms until a representative (EU/UK) and age assurance (AU) exist.
-11. Chat: build the native client; branded Element Web (configured, not forked) is the launch fallback if it is late.
+11. Chat: build the native client; branded Element Web was the launch fallback until Alex dropped it on 2026-10-03 (revision below).
 12. Message requests are the invite only; no text until accepted: yes.
 13. Chat device trust: isolated `chat-admin` seeding service plus `OnlySignedDevicesIsolationMode` from day one: yes.
 14. Hosting: **decide later, by Phase 5** (the review recommended OVH Canada now); on the review list with the price comparison; the backup provider waits with it.
@@ -219,8 +219,8 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   edge strips `User-Agent` for chat and MAS; the Synapse `user_may_invite` module is the one written Python
   exception (stdlib only, black-box tested, pinned image); report intake used a non-human service account
   behind a path-restricted proxy (confirmed by decision 32, 90-day rotation) and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
-  back-channel logout from `chat-auth`; the Element fallback keeps most but not all decisions (DM history
-  visibility, device isolation flag, partial media gate), written into §5.6.
+  back-channel logout from `chat-auth`; the Element fallback kept most but not all decisions (DM history
+  visibility, device isolation flag, partial media gate), which is why it was dropped (decision 11 revised).
 - Decision 25 (Alex, 2026-10-03 11:43Z): the plugin seam is **trimmed** to what cannot be retrofitted
   (erase/export hooks, per-plugin schema-and-role rule, middleware order, explicit composition root);
   manifest, registry, nav slots, cron/mail/notification interfaces, tenancy tables and the fixture plugin
@@ -278,6 +278,10 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   reviewers may play a logged, never-downloadable 360p copy except for suspected or matched abuse
   material (32); Bluesky blocks apply (34); hosting, media storage, mirror and backup provider are
   decided together at the start of Phase 5 with the privacy-provider comparison (37, 39 to 42).
+- Decision 11 revised (Alex, 2026-10-03 16:57Z, step-book question 53, "Drop backup app", chosen over the
+  recommended "keep, known gap"): no branded Element Web fallback; our own chat client is the only one we
+  ship, brand and support. If the native client is late, chat is late. People whose browser cannot run it
+  cannot chat. The server-side rules still apply to any third-party Matrix client.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
