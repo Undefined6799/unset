@@ -212,6 +212,12 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   grants at refresh, so set changes are Alex-gated PRs and a CID change is an incident. Signing is cosign
   with a key pair and no public transparency log, upstream images mirrored and signed. The dev PDS gets
   integrity checks and a best-effort probe instead of an availability percentage.
+- Phase 6 chat review facts (2026-10-03 03:01Z, Synapse 1.162, MAS 1.26, matrix-js-sdk 43, Element): the
+  edge strips `User-Agent` for chat and MAS; the Synapse `user_may_invite` module is the one written Python
+  exception (stdlib only, black-box tested, pinned image); report intake uses a non-human service account
+  behind a path-restricted proxy and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
+  back-channel logout from `chat-auth`; the Element fallback keeps most but not all decisions (DM history
+  visibility, device isolation flag, partial media gate), written into §5.6.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
