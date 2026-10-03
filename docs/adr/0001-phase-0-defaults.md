@@ -218,7 +218,7 @@ While turning the plan into build steps, the step-book thread found nine sequenc
 - Phase 6 chat review facts (2026-10-03 03:01Z, Synapse 1.162, MAS 1.26, matrix-js-sdk 43, Element): the
   edge strips `User-Agent` for chat and MAS; the Synapse `user_may_invite` module is the one written Python
   exception (stdlib only, black-box tested, pinned image); report intake used a non-human service account
-  behind a path-restricted proxy (superseded by decision 32) and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
+  behind a path-restricted proxy (confirmed by decision 32, 90-day rotation) and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
   back-channel logout from `chat-auth`; the Element fallback keeps most but not all decisions (DM history
   visibility, device isolation flag, partial media gate), written into §5.6.
 - Decision 25 (Alex, 2026-10-03 11:43Z): the plugin seam is **trimmed** to what cannot be retrofitted
@@ -266,11 +266,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   the sandbox CSP and `nosniff`. The design's "media makes no outbound connection" rule is amended for
   this alone. Step-book question 32 (reviewer may play a logged 360p copy of an unsure draft) is noted in
   the §4 queue row.
-- Decision 32 (Alex, 2026-10-03 16:52Z, step-book question 50, "Email only", chosen over the recommended
-  service account): no chat-server admin service account and no Synapse report polling in v1. Our own chat
-  client sends reports to `web`'s report route (`app.report` rows, `source = 'chat'`); reports from other
-  Matrix clients are mailed to the moderation inbox with no message content. The service-account design
-  stays recorded as the fallback. Same-day step-book answers recorded in the plan: chat defaults confirmed,
+- Decision 32 (Alex, 2026-10-03, step-book question 50: "Email only" at 16:52Z, revised at 16:55Z to
+  "make our service account, 90 days"): our own chat client sends reports to `web`'s report route
+  (`app.report` rows, `source = 'chat'`); reports from other Matrix clients reach the same `admin` inbox
+  through one limited chat-server service account that can only read reports, its credential rotated every
+  90 days behind a path-restricted proxy. The email-only intake is dropped. Same-day step-book answers recorded in the plan: chat defaults confirmed,
   chat follows the account automatically, the server enforces no text before acceptance, the Python
   carve-out is allowed (questions 46 to 49); all four extra admin tools get built (45); backups kept
   30 days, RPO 24 h, core RTO 4 h (38, 44); picture uploads get the decision 21 sealed buffer (43);
