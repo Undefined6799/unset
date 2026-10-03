@@ -253,6 +253,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   notice for a server-side check, NudeNet's YOLOv8-derived weight licence, the reporting duty for
   written material in comments. Captions: automatic subtitles from local speech-to-text, creator-editable,
   viewer CC toggle, still mandatory under decision 19.
+  Suspected material (Alex, 16:39Z): a suspected-CSAM item with no fingerprint match is blocked and sealed
+  under the legal hold, the owners get an emergency alert, a person files the Cybertip.ca report (Arachnid
+  Shield is a hash lookup, not a channel), police are called directly if a child is in imminent danger, the
+  uploader's uploads are frozen, nothing goes to a third party; duties and deadline for suspected versus
+  matched material join the lawyer hour.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
