@@ -195,6 +195,10 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   provider's test hash precedes the Phase 2 image gate; the exact-vs-near reporting split is a
   lawyer-hour item. Whether operator uploads may bypass the gate before access is approved is being
   asked in the step-book thread.
+- Ozone and PDS facts (2026-10-03 02:57Z, from source): `PDS_MOD_SERVICE_DID` is never set (it would make
+  Ozone a PDS admin); only the report-service pair points at Ozone. PDS rate limits are enabled and our
+  services use the bypass key, not addresses (no CIDR support). Open to Alex, queued: how moderators reach
+  Ozone, since its UI works only through the moderator's PDS to a public endpoint.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
