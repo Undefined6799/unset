@@ -34,4 +34,4 @@ npm run check                         # typecheck, lint, guards, tests
 
 ## License
 
-[AGPL-3.0-only](LICENSE).
+Applications (`apps/`) are [AGPL-3.0-only](LICENSE). The small building blocks (`packages/`) and the lexicon record-type files (`lexicons/`) are [MIT](LICENSE-MIT), so other atproto apps can reuse the record types and helpers freely (Alex, 2026-10-03).

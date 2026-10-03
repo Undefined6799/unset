@@ -77,7 +77,7 @@ Taken as defaults (reversible, can be changed by a later ADR):
 - **Q11 Design (Alex, 2026-10-02):** all UI follows the unset.sh design sheet (Design System
   artifact "unset.sh"); its tokens feed the CSS Modules. New components only when registered
   on the sheet with Alex's approval; Iconoir may be integrated the same way.
-- **Q12 License:** AGPL-3.0-only for now; Alex reviews it seriously before launch.
+- **Q12 License (decision 27, Alex 2026-10-03):** AGPL-3.0-only for the apps, MIT for the building blocks and the lexicon files.
 - **Styling (decided by Alex, 2026-10-02):** no CSS framework. Design tokens as CSS custom
   properties plus one CSS Module per shared component. CI enforces it with token-only CSS lint
   rules (Biome 2.5; Stylelint optional), a no-global-CSS guard and a total CSS size budget.
@@ -225,6 +225,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   (erase/export hooks, per-plugin schema-and-role rule, middleware order, explicit composition root);
   manifest, registry, nav slots, cron/mail/notification interfaces, tenancy tables and the fixture plugin
   wait for the first real plugin, per the engineering principles 3, 7, 12 and 15. §4 row ~500 → ~100.
+- Decision 26 (Alex, 2026-10-03 12:02Z): moderators reach Ozone by **credential login with an app password
+  over Tailscale**; UI and `tools.ozone.*` stay tailnet-only; legacy password path revived for moderator
+  accounts only; the Phase 5 spike confirms the direct path or the question returns to Alex.
+- Decision 27 (Alex, 2026-10-03 11:49Z, step-book thread): licence AGPL-3.0-only for `apps/`, MIT for
+  `packages/` and the lexicon files; the lexicons publish under MIT; off the review list.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
