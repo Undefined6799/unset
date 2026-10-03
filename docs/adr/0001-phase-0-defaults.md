@@ -76,7 +76,7 @@ Taken as defaults (reversible, can be changed by a later ADR):
   backup provider waits with it (R2 has no Object Lock).
 - **Q11 Design (Alex, 2026-10-02):** all UI follows the unset.sh design sheet (Design System
   artifact "unset.sh"); its tokens feed the CSS Modules. New components only when registered
-  on the sheet with Alex's approval; Iconoir may be integrated the same way.
+  on the sheet with Alex's approval; Iconoir became the icon set on 2026-10-03 (decision 33, below).
 - **Q12 License (decision 27, Alex 2026-10-03):** AGPL-3.0-only for the apps, MIT for the building blocks and the lexicon files.
 - **Styling (decided by Alex, 2026-10-02):** no CSS framework. Design tokens as CSS custom
   properties plus one CSS Module per shared component. CI enforces it with token-only CSS lint
@@ -289,6 +289,12 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   heartbeat with no personal data; signed-in members' Bluesky blocks apply to unset.sh feeds; chat is
   bound to the account's login, a mismatched chat session is wiped and re-signed-in with no retry, and
   app sign-out ends that browser's chat device.
+- Decision 33 (Alex, 2026-10-03 18:00Z, design thread, list approved on a card at 18:02Z): Iconoir is the
+  icon set for all icons, replacing the sheet's Unicode glyphs; 36 approved icons copied from Iconoir 7.12.1
+  regular (MIT) onto the design sheet as pinned SVG data, rendered inline by the UI kit with `currentColor`,
+  `aria-hidden` and a text label; no icon npm package, nothing fetched; the build check blocks icon
+  packages. New icons go on the sheet first with Alex's approval. Chat's device-verification emoji panel
+  is the one exception (Matrix fixes the set).
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,

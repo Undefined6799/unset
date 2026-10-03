@@ -32,6 +32,13 @@ Every change:
 - **GDPR.** New personal data needs a purpose, a lawful basis, erasure (`eraseDid`) and export.
 - **Ship it.** Typecheck, lint, guards and tests green. Land via PR; Alex approves every PR.
 
+## UI
+- All UI follows the unset.sh design sheet (plan §11 Q11): its `tokens.json` is the token source
+  for the CSS Modules; new components only when registered on the sheet with Alex's approval.
+- **Icons: Iconoir** (decision 33), scoped to the design sheet's Icon list and rendered by the
+  `packages/ui` `Icon` component from the copied, pinned SVG data. No icon npm package
+  (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.
+
 ## Protocol work: read the source of truth first
 - AT Protocol: the specs at atproto.com/specs and the `@atproto/*` source for the pinned
   version. Pin `@atproto/*` exactly and cite the spec URL in code that depends on it.
