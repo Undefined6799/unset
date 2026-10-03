@@ -183,8 +183,9 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   automatic**; the draft waits for their choice and the downgrade is shown on the post.
 - Third batch (22:54Z): Tap and the indexer get general HTTPS egress through `net-guard` (private
   ranges blocked), `pds-admin` only the PDS; public pages carry no cookie variation (theme and language
-  from client hints, cookies on signed-in pages only). Open to Alex: retiring the old prototype accounts
-  on `0x40.space` before the development PDS takes that hostname in Phase 1.
+  from client hints, cookies on signed-in pages only). Decision 24 (Alex, 2026-10-03 11:43Z): the old prototype accounts on
+  `0x40.space` are exported or notified, deactivated and tombstoned before the development PDS takes that
+  hostname in Phase 1; "start fresh" is final.
 - Phase 2 sign-in review (2026-10-03 02:52Z): the extra Bluesky calls are plain `rpc:` scopes beside the
   `include:`; `createReport` uses `aud=*` so Ozone needs no re-consent in Phase 5; `identity:handle` and
   `account:status` are not requested (handle change and deactivation live on the PDS page per decision 3;
