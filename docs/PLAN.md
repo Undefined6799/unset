@@ -153,7 +153,7 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 | Plugin seam (trimmed, decision 25) | erase/export hooks, per-plugin schema-and-role rule, middleware order, explicit composition root; no registry, manifest, tenancy tables or fixture plugin until the first plugin | ~100 |
 | `pds-admin` service | invites, takedown, holds, receipts, reaping, DNS-TXT handle record at mint (optional); see §5.7 | ~450 |
 | Admin panel (`admin`) | internal console: lookup, actions with per-action key signatures, WebAuthn enrolment, audit, health, Matrix report intake (§5.7); CI budget 3,000 lines as a warning, incl. `pds-admin` and audit (Alex, 2026-10-02) | ~1,500–2,000 |
-| Draft review queue (`admin`, Alex 2026-10-02) | the "unsure" queue for drafts submitted for publication: blurred thumbnails, transcript, decide, reason code (§5.8) | ~300–400 |
+| Draft review queue (`admin`, Alex 2026-10-02) | the "unsure" queue for drafts submitted for publication: blurred thumbnails, transcript, a logged 360p playback (Alex, 2026-10-03, step-book question 32: "play a small version"), decide, reason code (§5.8) | ~300–400 |
 | Chat (core, Alex 2026-10-02) | Matrix client on `chat.unset.sh`, identity bridge, `chat-admin` seeding service; §5.6 | ~5–7k |
 | **Total** | | **≈20–24k core, plus chat 5–7k; tests (12–18k) outside the number** (review, 2026-10-02) |
 
@@ -220,7 +220,7 @@ History check: the abandoned "Hono SPA" was client-rendered with browser-side OA
 | **App**, `unset.sh` | `unset.sh` (app); `chat.unset.sh` (chat); `admin.int.unset.sh` (Tailscale only) | the app's `__Host-` cookies, never `Domain=` (enforced by test) |
 | **Handles**, `0x40.me` (Alex, 2026-10-02), separate, like bsky.social vs bsky.app | `*.<handle domain>`: `.well-known/atproto-did`, plus a 301 to `/@handle`. Production only: the development PDS mints its own suffix (`PDS_SERVICE_HANDLE_DOMAINS=.0x40.space`), because two PDSes cannot both answer for `*.0x40.me` (review, 2026-10-02) | none |
 | **PDS**, `unset.ac` in production, `0x40.space` in development (Alex, 2026-10-02) | the PDS alone: sign-in, consent and its `/account` UI, branded, where every account action happens. No account app and no `account.<pds domain>` host (Alex, 2026-10-02; §5.3) | the PDS's own only; no main-app cookies |
-| **Media**, a throwaway domain (for example `unsetcdn.net`; review, 2026-10-02) | the media proxy. Not same-site with the PDS, whose device cookie is `SameSite=Lax` and not under our control, and not same-site with the app | none, ever |
+| **Media**, a throwaway domain (for example `unsetcdn.net`; review, 2026-10-02) | the media proxy. Not same-site with the PDS, whose device cookie is `SameSite=Lax` and not under our control, and not same-site with the app. **Bluesky pictures through our server (Alex, 2026-10-03, decision 31):** pictures inside Bluesky posts shown in our feeds are fetched by `media` from the fixed Bluesky CDN or `getBlob` hosts through `net-guard` (no redirects, size cap), re-encoded with metadata stripped, PDQ-checked like every picture we process (decision 7), cached briefly by CID and served with the sandbox CSP and `nosniff`, so a viewer's address never reaches Bluesky. This is the one outbound connection `media` has; the earlier "none, ever" rule is amended here and nowhere else | fixed Bluesky media hosts only (decision 31) |
 
 Why a separate handle domain:
 - No same-site relationship between user-named hosts and the app's cookies.
@@ -346,7 +346,7 @@ Rules for the handle domain:
   - the "signed · DID · export" receipt;
   - the latest posts.
 
-  Data comes from the index, so published, delist and suspend states and the media proxy all apply.
+  Data comes from the index, so published, delist and suspend states and the media proxy all apply. Pictures in Bluesky posts come through the media proxy too, never from Bluesky's hosts directly (decision 31), so the images-only-from-the-media-origin CSP below holds for them as well.
 - **This route group:**
   - Zero JavaScript.
   - Its own CSP: `default-src 'none'`, images only from the media origin, `form-action 'self'`, `frame-ancestors 'none'`, `base-uri 'none'`.
@@ -622,7 +622,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
 - **Exit:** parity with the prototype's non-chat, non-RSS social features, plus a regression test for each defect in §2; the rendition and first-frame budgets pass.
 
 **Phase 5 — Production**
-- One compose file with profiles; per-container egress networks: Tap and the indexer get general HTTPS egress through `net-guard` with private ranges blocked, because Tap follows the public relay and backfills from any PDS (decision 5) and `verifyHandle` needs outside DNS and HTTPS; `pds-admin` reaches only the PDS; `review-egress` reaches its two fixed hosts and `pds-admin` (§5.2); deploy by verified digest; `/health` reports the commit.
+- One compose file with profiles; per-container egress networks: Tap and the indexer get general HTTPS egress through `net-guard` with private ranges blocked, because Tap follows the public relay and backfills from any PDS (decision 5) and `verifyHandle` needs outside DNS and HTTPS; `pds-admin` reaches only the PDS; `review-egress` reaches Arachnid Shield and `pds-admin` (§5.2, decision 30); `media` reaches the fixed Bluesky media hosts alone (decision 31); deploy by verified digest; `/health` reports the commit.
 - Stand up the **production PDS** on `unset.ac` with no users (recovery key set, invite-only, admin XRPC denied, no client IP forwarded and request logging off, edge rate limiting (§5.2), `PDS_EMAIL_DISABLE_CONFIRMATION_LINK`) and migrate the lexicon authority account to it (decision 20, moved here from Phase 1).
 - **Hosting provider decision (Alex, 2026-10-02, decision 14: decide here, not before).** On the review list with the price comparison: OVH Canada VPS ~CAD 12–17/month (KVM console, daily backup) vs 1984 Iceland ~€35–70/month for the same box, which also does not shield from Canadian orders; sized for the relay firehose (§5.2), chat (§5.6) and video storage (§5.8), on a plan with included traffic, not egress billing. The backup provider waits with it: **R2 has no Object Lock**, so audit segments and backups need Hetzner, B2 or Wasabi compliance mode; R2 can keep the public blob mirror.
 - Backups:

@@ -258,6 +258,14 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   Shield is a hash lookup, not a channel), police are called directly if a child is in imminent danger, the
   uploader's uploads are frozen, nothing goes to a third party; duties and deadline for suspected versus
   matched material join the lawyer hour.
+- Decision 31 (Alex, 2026-10-03 16:41Z, step-book question 33, "Through our server", chosen over the
+  recommended text-and-link option): pictures inside Bluesky posts are proxied through our own `media`
+  server so viewers' addresses never reach Bluesky. `media` gains one outbound connection, to the fixed
+  Bluesky CDN or `getBlob` hosts through `net-guard` (no redirects, size cap); each image is re-encoded
+  with metadata stripped, PDQ-checked under the every-picture rule, cached briefly by CID and served with
+  the sandbox CSP and `nosniff`. The design's "media makes no outbound connection" rule is amended for
+  this alone. Step-book question 32 (reviewer may play a logged 360p copy of an unsure draft) is noted in
+  the §4 queue row.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
