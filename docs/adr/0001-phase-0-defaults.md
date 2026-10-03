@@ -271,8 +271,8 @@ While turning the plan into build steps, the step-book thread found nine sequenc
 - Decision 32 (Alex, 2026-10-03, step-book question 50: "Email only" at 16:52Z, revised at 16:55Z to
   "make our service account, 90 days"): our own chat client sends reports to `web`'s report route
   (`app.report` rows, `source = 'chat'`); reports from other Matrix clients reach the same `admin` inbox
-  through one limited chat-server service account that can only read reports, its credential rotated every
-  90 days behind a path-restricted proxy. The email-only intake is dropped. Same-day step-book answers recorded in the plan: chat defaults confirmed,
+  through one limited chat-server service account scoped to the report and media admin paths, its
+  credential rotated every 90 days behind a path-restricted proxy. The email-only intake is dropped. Same-day step-book answers recorded in the plan: chat defaults confirmed,
   chat follows the account automatically, the server enforces no text before acceptance, the Python
   carve-out is allowed (questions 46 to 49); all four extra admin tools get built (45); backups kept
   30 days, RPO 24 h, core RTO 4 h (38, 44); picture uploads get the decision 21 sealed buffer (43);
@@ -284,6 +284,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   recommended "keep, known gap"): no branded Element Web fallback; our own chat client is the only one we
   ship, brand and support. If the native client is late, chat is late. People whose browser cannot run it
   cannot chat. The server-side rules still apply to any third-party Matrix client.
+- Step-book answers 21, 25, 34 and 52 (Alex, 2026-10-03), recorded in the plan: a paid email sending
+  service in Canada or the EU (team shortlist, Alex picks) joins the RoPA; an outside dead-man's-switch
+  heartbeat with no personal data; signed-in members' Bluesky blocks apply to unset.sh feeds; chat is
+  bound to the account's login, a mismatched chat session is wiped and re-signed-in with no retry, and
+  app sign-out ends that browser's chat device.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
