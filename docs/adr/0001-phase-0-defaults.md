@@ -235,6 +235,9 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   `app.bsky.graph.follow`; private follows stay in the app; the Following tab merges both. Bluesky's app
   will not show unset.sh-to-unset.sh follows. The new lexicon joins the permission set before Phase 1
   publishes it.
+- Decision 29 (Alex, 2026-10-03 11:51Z, step-book card): admin actions may record the acting admin's
+  private tailnet address, staff only, 2-year retention with the admin action log, listed in the RoPA;
+  the one narrow exception to the no-IP rule. Sign-in history stays counts only.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
