@@ -7,6 +7,11 @@ AT Protocol-native identity and profile app with a small, auditable core. The pl
 [`docs/PLAN.md`](docs/PLAN.md). Decisions live in [`docs/adr/`](docs/adr/). Read the plan section
 for the area you touch before changing it.
 
+## Engineering principles (Alex, 2026-10-03; verbatim, read before designing or changing code)
+@docs/engineering/architecture-instructions.md
+@docs/engineering/engineering-practices-addendum.md
+@docs/engineering/engineering-workflow-and-change-management.md
+
 ## Non-negotiable: no security shortcuts
 Security and correct protocol design beat shipping speed. Never paper over an auth,
 permission or membership gap with an admin bypass, a forged membership, acting as another
