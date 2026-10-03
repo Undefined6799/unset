@@ -199,6 +199,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   Ozone a PDS admin); only the report-service pair points at Ozone. PDS rate limits are enabled and our
   services use the bypass key, not addresses (no CIDR support). Open to Alex, queued: how moderators reach
   Ozone, since its UI works only through the moderator's PDS to a public endpoint.
+- Decision 23 (Alex, 2026-10-03 02:58Z): the live Arachnid Shield check is connected close to deployment,
+  not in Phase 2, since only trusted people use the app until then. Safeguards: apply for access in
+  Phase 1; keep the slot with a fake in tests and a production start-up refusal without the real check;
+  scan every test-period upload once connected, as a launch-gate item. Decision 7 is unchanged for the
+  public product. This closes the "no unchecked uploads" question.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
