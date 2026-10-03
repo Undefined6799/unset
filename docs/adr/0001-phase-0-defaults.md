@@ -231,7 +231,9 @@ While turning the plan into build steps, the step-book thread found nine sequenc
 - Decision 27 (Alex, 2026-10-03 11:49Z, step-book thread): licence AGPL-3.0-only for `apps/`, MIT for
   `packages/` and the lexicon files; the lexicons publish under MIT; off the review list.
 - Decision 28 (Alex, 2026-10-03 16:21Z, step-book thread, "Mixed by target"): a public member's follow of an
-  unset.sh account is our own `sh.unset.graph.follow` record; a follow of a Bluesky account is
+  unset.sh account is our own `sh.unset.follow` record (flat name, aligned with the step book on
+  2026-10-03: every `sh.unset.*` schema then resolves from the one `_lexicon.unset.sh` DNS record,
+  where `sh.unset.graph.follow` would need a second record for the `graph.unset.sh` authority); a follow of a Bluesky account is
   `app.bsky.graph.follow`; private follows stay in the app; the Following tab merges both. Bluesky's app
   will not show unset.sh-to-unset.sh follows. The new lexicon joins the permission set before Phase 1
   publishes it.
