@@ -188,7 +188,8 @@ While turning the plan into build steps, the step-book thread found nine sequenc
 - Phase 2 sign-in review (2026-10-03 02:52Z): the extra Bluesky calls are plain `rpc:` scopes beside the
   `include:`; `createReport` uses `aud=*` so Ozone needs no re-consent in Phase 5; `identity:handle` and
   `account:status` are not requested (handle change and deactivation live on the PDS page per decision 3;
-  operator deactivation via `pds-admin`).
+  operator deactivation via `pds-admin`); `repo:app.bsky.graph.follow` is added, since public follows are
+  written as Bluesky follow records.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
