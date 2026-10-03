@@ -230,6 +230,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   accounts only; the Phase 5 spike confirms the direct path or the question returns to Alex.
 - Decision 27 (Alex, 2026-10-03 11:49Z, step-book thread): licence AGPL-3.0-only for `apps/`, MIT for
   `packages/` and the lexicon files; the lexicons publish under MIT; off the review list.
+- Decision 28 (Alex, 2026-10-03 16:21Z, step-book thread, "Mixed by target"): a public member's follow of an
+  unset.sh account is our own `sh.unset.graph.follow` record; a follow of a Bluesky account is
+  `app.bsky.graph.follow`; private follows stay in the app; the Following tab merges both. Bluesky's app
+  will not show unset.sh-to-unset.sh follows. The new lexicon joins the permission set before Phase 1
+  publishes it.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
