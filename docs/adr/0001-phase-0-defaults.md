@@ -185,6 +185,10 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   ranges blocked), `pds-admin` only the PDS; public pages carry no cookie variation (theme and language
   from client hints, cookies on signed-in pages only). Open to Alex: retiring the old prototype accounts
   on `0x40.space` before the development PDS takes that hostname in Phase 1.
+- Phase 2 sign-in review (2026-10-03 02:52Z): the extra Bluesky calls are plain `rpc:` scopes beside the
+  `include:`; `createReport` uses `aud=*` so Ozone needs no re-consent in Phase 5; `identity:handle` and
+  `account:status` are not requested (handle change and deactivation live on the PDS page per decision 3;
+  operator deactivation via `pds-admin`).
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
