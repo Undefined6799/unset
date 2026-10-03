@@ -190,6 +190,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   `account:status` are not requested (handle change and deactivation live on the PDS page per decision 3;
   operator deactivation via `pds-admin`); `repo:app.bsky.graph.follow` is added, since public follows are
   written as Bluesky follow records.
+- Arachnid Shield facts (2026-10-03 02:55Z, from the official SDK source): PDQ-only lookup, MD5 dropped;
+  own small client instead of the axios SDK so the call goes through `net-guard`; a spike with the
+  provider's test hash precedes the Phase 2 image gate; the exact-vs-near reporting split is a
+  lawyer-hour item. Whether operator uploads may bypass the gate before access is approved is being
+  asked in the step-book thread.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
