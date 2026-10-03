@@ -202,8 +202,16 @@ While turning the plan into build steps, the step-book thread found nine sequenc
 - Decision 23 (Alex, 2026-10-03 02:58Z): the live Arachnid Shield check is connected close to deployment,
   not in Phase 2, since only trusted people use the app until then. Safeguards: apply for access in
   Phase 1; keep the slot with a fake in tests and a production start-up refusal without the real check;
-  scan every test-period upload once connected, as a launch-gate item. Decision 7 is unchanged for the
+  scan every test-period upload once connected, as a launch-gate item. The real client, its spike
+  and the C-16 buffer move to Phase 5, before the production PDS; Phases 2 and 4 run the stage with a fake. Decision 7 is unchanged for the
   public product. This closes the "no unchecked uploads" question.
+- Phase 1 review facts (2026-10-03 03:00Z, `@atproto/pds` 0.5.37): the PDS logs client IPs and stores them
+  in its OAuth device table, so the provisional default (card queued for Alex) is the Synapse treatment:
+  no client IP forwarded, PDS request logging off, per-client limits at the edge in memory, PDS per-IP
+  limits off; this supersedes the bypass-key line above. A changed permission set reaches existing
+  grants at refresh, so set changes are Alex-gated PRs and a CID change is an incident. Signing is cosign
+  with a key pair and no public transparency log, upstream images mirrored and signed. The dev PDS gets
+  integrity checks and a best-effort probe instead of an availability percentage.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
