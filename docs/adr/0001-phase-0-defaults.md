@@ -217,8 +217,8 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   integrity checks and a best-effort probe instead of an availability percentage.
 - Phase 6 chat review facts (2026-10-03 03:01Z, Synapse 1.162, MAS 1.26, matrix-js-sdk 43, Element): the
   edge strips `User-Agent` for chat and MAS; the Synapse `user_may_invite` module is the one written Python
-  exception (stdlib only, black-box tested, pinned image); report intake uses a non-human service account
-  behind a path-restricted proxy and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
+  exception (stdlib only, black-box tested, pinned image); report intake used a non-human service account
+  behind a path-restricted proxy (superseded by decision 32) and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
   back-channel logout from `chat-auth`; the Element fallback keeps most but not all decisions (DM history
   visibility, device isolation flag, partial media gate), written into §5.6.
 - Decision 25 (Alex, 2026-10-03 11:43Z): the plugin seam is **trimmed** to what cannot be retrofitted
@@ -266,6 +266,18 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   the sandbox CSP and `nosniff`. The design's "media makes no outbound connection" rule is amended for
   this alone. Step-book question 32 (reviewer may play a logged 360p copy of an unsure draft) is noted in
   the §4 queue row.
+- Decision 32 (Alex, 2026-10-03 16:52Z, step-book question 50, "Email only", chosen over the recommended
+  service account): no chat-server admin service account and no Synapse report polling in v1. Our own chat
+  client sends reports to `web`'s report route (`app.report` rows, `source = 'chat'`); reports from other
+  Matrix clients are mailed to the moderation inbox with no message content. The service-account design
+  stays recorded as the fallback. Same-day step-book answers recorded in the plan: chat defaults confirmed,
+  chat follows the account automatically, the server enforces no text before acceptance, the Python
+  carve-out is allowed (questions 46 to 49); all four extra admin tools get built (45); backups kept
+  30 days, RPO 24 h, core RTO 4 h (38, 44); picture uploads get the decision 21 sealed buffer (43);
+  reports on Bluesky posts are forwarded from our moderation account, unset.sh reports never (36);
+  reviewers may play a logged, never-downloadable 360p copy except for suspected or matched abuse
+  material (32); Bluesky blocks apply (34); hosting, media storage, mirror and backup provider are
+  decided together at the start of Phase 5 with the privacy-provider comparison (37, 39 to 42).
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
