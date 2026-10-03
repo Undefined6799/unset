@@ -221,6 +221,10 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   behind a path-restricted proxy and `/_synapse/admin` is blocked publicly; sign-out reaches MAS by
   back-channel logout from `chat-auth`; the Element fallback keeps most but not all decisions (DM history
   visibility, device isolation flag, partial media gate), written into §5.6.
+- Decision 25 (Alex, 2026-10-03 11:43Z): the plugin seam is **trimmed** to what cannot be retrofitted
+  (erase/export hooks, per-plugin schema-and-role rule, middleware order, explicit composition root);
+  manifest, registry, nav slots, cron/mail/notification interfaces, tenancy tables and the fixture plugin
+  wait for the first real plugin, per the engineering principles 3, 7, 12 and 15. §4 row ~500 → ~100.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,

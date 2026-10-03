@@ -150,14 +150,14 @@ Source: [`reviews/06-atproto.md`](reviews/06-atproto.md), with a URL and confide
 | Review pipeline (review, 2026-10-02) | PDQ fingerprints and the Arachnid Shield check, local nudity gate, frame extraction, transcript, the Claude call through `net-guard`, pass/fail/unsure routing, legal hold, appeals, draft expiry (§5.8) | ~1,500–2,500 |
 | Moderation | delist, the public notice form and Ozone report routing in `web`; the actions themselves live in `admin` (§5.7) | ~300 |
 | Shell + UI kit | tokens → CSS, ~20 shared components, app shell, home and onboarding, `/me`, `/join`, `/login-failed`, legal pages, theme/locale (no-JS) | ~2,000 |
-| Plugin seam | `plugin-api` contract, registry, route mounting, tenants (minimal), boundary lint, fixture plugin | ~500 |
+| Plugin seam (trimmed, decision 25) | erase/export hooks, per-plugin schema-and-role rule, middleware order, explicit composition root; no registry, manifest, tenancy tables or fixture plugin until the first plugin | ~100 |
 | `pds-admin` service | invites, takedown, holds, receipts, reaping, DNS-TXT handle record at mint (optional); see §5.7 | ~450 |
 | Admin panel (`admin`) | internal console: lookup, actions with per-action key signatures, WebAuthn enrolment, audit, health, Matrix report intake (§5.7); CI budget 3,000 lines as a warning, incl. `pds-admin` and audit (Alex, 2026-10-02) | ~1,500–2,000 |
 | Draft review queue (`admin`, Alex 2026-10-02) | the "unsure" queue for drafts submitted for publication: blurred thumbnails, transcript, decide, reason code (§5.8) | ~300–400 |
 | Chat (core, Alex 2026-10-02) | Matrix client on `chat.unset.sh`, identity bridge, `chat-admin` seeding service; §5.6 | ~5–7k |
 | **Total** | | **≈20–24k core, plus chat 5–7k; tests (12–18k) outside the number** (review, 2026-10-02) |
 
-**Deferred until the first plugin needs them:** mail transport, the generic notification inbox, cron hooks and per-plugin DB roles. Their *interfaces* are written down in `plugin-api`; they are not built.
+**Deferred until the first plugin needs them (decision 25):** the plugin manifest, registry and boundary lint, nav slots, mail transport, the generic notification inbox, cron hooks, the tenancy tables and the fixture plugin. No `plugin-api` package exists until then; the requirements are recorded in §5.5.
 
 **Out of core:**
 - **RSS module.** Prefs go to an app-DB table; no PDS patch.
@@ -376,27 +376,17 @@ Rules for the handle domain:
   - Section deletes and renumbering are atomic.
 - Records: `sh.unset.profile` (`self`) and `sh.unset.section` (tid, position).
 
-### 5.5 Plugin seam (in the core; no plugin shipped)
+### 5.5 Plugin seam (trimmed; Alex, 2026-10-03, decision 25)
 
-- **What a plugin is:** a first-party, in-process package registered at build time.
-- **The boundary is enforced by lint:**
-  - plugins import only `@unset/plugin-api` and `@unset/ui`;
-  - the core imports only the generated registry.
-- **Manifest:**
-  - `id`, version;
-  - declared capabilities: `db`, `mail`, `storage`, `egress:<hosts>`, `notify`, `secrets`, `pds:write:<nsid>`, `public-routes`;
-  - nav slots;
-  - routes at `/p/<id>/…`;
-  - migrations;
-  - account-erase and export hooks;
-  - cron jobs.
-- **The core runs session → CSRF → tenant → plugin-enabled checks before any plugin handler** and passes a context containing only the services the plugin declared. This fixes the prototype's gaps: no CRM/accounting action had an explicit Origin check, no plugin wrote to the audit log, and erasure skipped plugin data.
-- **Data:**
-  - Postgres schema `plugin_<id>` with its own role and a pinned `search_path`.
-  - Cross-plugin access only through declared ports (the `CrmCustomerPort` pattern).
-- **Tenancy in the core, kept minimal:** `tenants`, `tenant_members(role)`, `tenant_plugins`, and a personal tenant per user. Without it, the first plugin would own tenancy, which is how accounting came to depend on CRM.
-- **Mail, the notification inbox and cron** have interfaces in `plugin-api` and are built with the first plugin that needs them.
-- A fixture plugin in the test suite proves the seam.
+The first draft built a complete plugin system into the core before any plugin existed (manifest with declared capabilities, a generated registry, nav slots, cron, mail and notification interfaces, tenancy tables and a fixture plugin). Alex's engineering principles (`docs/engineering/`, principles 3, 7, 12 and 15) say a registry only when something is genuinely dynamic, no abstraction before evidence, and the deepest design effort for a public plugin API only once it has a consumer. So the core keeps only what cannot be retrofitted, and the first real plugin (CRM or accounting, later modules) brings the rest with it:
+
+- **Kept in the core:**
+  - every owner of personal data implements the **account-erase and export hooks** (`eraseDid`, export registry, §6); this is the one contract the core enforces from day one, because erasure that misses a data owner is a GDPR failure;
+  - the rule that any later plugin gets its **own Postgres schema and role** with a pinned `search_path`, written down and tested by the role-matrix test, not by a plugin;
+  - **session, CSRF and tenant checks run before any handler**, plugin or not, as plain middleware order in `web`. This fixes the prototype's gaps (no CRM/accounting action had an explicit Origin check, no plugin wrote to the audit log, erasure skipped plugin data) without a plugin framework;
+  - the **composition root** wires the fixed set of services explicitly (principle 7); there is no registry.
+- **Deferred to the first plugin:** the manifest and capability declarations, the generated registry and boundary lint, nav slots, `/p/<id>/…` routes, cron, mail and the notification inbox interfaces, the `tenants`/`tenant_members`/`tenant_plugins` tables and the fixture plugin. When the first plugin arrives, its PR designs these against a real consumer and carries the tenancy decision (who owns tenancy was the lesson from accounting depending on CRM; it is recorded here so it is not forgotten).
+- Roughly 600–900 lines leave the core; the §4 size table is adjusted.
 
 ### 5.6 Chat (core feature, Alex 2026-10-02; built in phase 6)
 
@@ -525,7 +515,7 @@ Hard requirements with CI gates, not intentions. The prototype's `docs/complianc
 | Core Web Vitals | budget table below | Lighthouse CI mobile preset, median of 3, `budget.json`; Playwright timings |
 | SOC 2, ISO 27001/27017/27018, ISO 42001 | **certification track kept on paper** (Alex chose to keep it; the review proposed dropping it). Audits are a later cost, larger than hosting; nothing is bought now | the ASVS doc, the RoPA and the AI system record are the evidence base |
 | AI system record | one page: purpose, inputs, pinned model id and prompt version, measured false-positive rate, retention, human reviewer (§5.8) | versions pinned in the repo |
-| Lexicon versioning | not SemVer: a breaking change is a new NSID, only optional fields are added; SemVer applies to `plugin-api` and read-API shapes only | `lex` diff in CI |
+| Lexicon versioning | not SemVer: a breaking change is a new NSID, only optional fields are added; SemVer applies to read-API shapes (and a future `plugin-api`) only | `lex` diff in CI |
 | Not applicable | App Store, Play, MASVS (no native app); CCPA/CPRA (no revenue, nothing sold); HIPAA, FERPA; PCI DSS becomes SAQ A only with Stripe Checkout on a route with its own CSP snapshot | |
 
 **Performance budget** (p75, mid-range Android, slow 4G; review 08 §7):
@@ -559,9 +549,8 @@ unset.sh/
     lexicons/     # sh.unset.* JSON + permission set; @atproto/lex generated code (checked in)
     net-guard/    # the single egress classifier (ported with its 23 tests)
     ui/           # tokens.json → tokens.css, shared components, icon wrapper
-    plugin-api/   # the contract
   modules/        # chat/ (phase 6), rss/ (later): same boundary rules as plugins
-  plugins/        # empty in v1, except the test fixture
+  plugins/        # empty in v1 (decision 25); the first plugin brings the seam
   deploy/         # one compose.yaml with profiles, edge config, backup, preflight, tap build
   docs/           # short ADRs, runbooks (keys, lexicon publishing, rotation, restore), compliance
 ```
