@@ -14,3 +14,4 @@ secrets/*
 *.key
 .DS_Store
 graphify-out/cache/
+jscpd-report/

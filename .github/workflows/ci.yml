@@ -1,3 +1,17 @@
+# CI gate for every pull request and every push to main (P0.07).
+#
+# Secrets and OIDC rule (enforced by scripts/guards/workflow-pins.test.ts):
+# - No repository-level secrets, ever. A secret lives in a GitHub Environment whose deployment
+#   branches are limited to main and whose required reviewer is Alex.
+# - `id-token: write` and any `secrets.<NAME>` other than secrets.GITHUB_TOKEN appear only in a job
+#   that declares that `environment:` and has
+#   `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`.
+# - Any OIDC trust policy (cosign keyless, a cloud role) pins ref:refs/heads/main and the environment.
+# - pull_request_target and workflow_run are banned: they run with base-branch privileges on
+#   PR-controlled input.
+# - Every action is GitHub-owned and pinned by commit SHA; every tool image by index digest.
+# - No `${{ }}` expression inside a run: value; values reach scripts through env: only.
+
 name: ci
 
 on:
@@ -5,17 +19,18 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,19 +44,122 @@ jobs:
       - run: npm run lint
       - run: npm run guards
       - run: npm test
-      - run: npm audit --audit-level=high
+      - run: npm run budgets
 
-  secrets:
-    runs-on: ubuntu-latest
+  audit:
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: read # gitleaks-action lists the PR's commits on pull_request events
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm audit signatures
+
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Scan full history
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --redact --no-banner --config .gitleaks.toml .
+      - name: Scan working tree
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" dir --redact --no-banner --config .gitleaks.toml .
+
+  actionlint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      ACTIONLINT_IMAGE: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: docker run --rm -v "$PWD:/repo" -w /repo "$ACTIONLINT_IMAGE" -color
+
+  semgrep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      SEMGREP_IMAGE: semgrep/semgrep:1.178.0@sha256:32e459968daabe7ab86968184a29109b9564aa00392401156f9788452b42786b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Semgrep CE
+        run: >-
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE"
+          semgrep scan --config p/typescript --config p/nodejs --config p/owasp-top-ten
+          --metrics=off --error --sarif-output=semgrep.sarif
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: always()
+        with:
+          node-version-file: .nvmrc
+      - name: Fail if no rules ran
+        if: always()
+        run: node scripts/ci/semgrep-rules-ran.ts semgrep.sarif
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: error
+
+  sbom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm sbom --package-lock-only --sbom-format cyclonedx > "sbom-$SHA.cdx.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom
+          path: sbom-*.cdx.json
+          if-no-files-found: error
+
+  duplicates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Duplicate code (advice for the reviewer, never a gate)
+        run: |
+          npx jscpd --config .jscpd.json . || true
+          cat jscpd-report/jscpd-report.md >> "$GITHUB_STEP_SUMMARY" || true
