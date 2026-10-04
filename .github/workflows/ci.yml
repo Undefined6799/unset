@@ -31,6 +31,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    env:
+      RENOVATE_IMAGE: renovate/renovate:44.115.13@sha256:0c04185c9e7ea5284da22ea0b2a2c88dcd3687badd8feb6c71691659b380df9b
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,6 +47,10 @@ jobs:
       - run: npm run guards
       - run: npm test
       - run: npm run budgets
+      - name: Validate renovate.json
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator "$RENOVATE_IMAGE"
+          --strict
 
   audit:
     runs-on: ubuntu-24.04
