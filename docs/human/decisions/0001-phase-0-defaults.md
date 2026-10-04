@@ -368,6 +368,12 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   posts under a bare handle on post pages, in feeds and in the read API, Follow on the post page, `/@alice` unavailable
   (plan §11 Q2b; step P4.00). Decision 36 stands: chat membership is not visible from the network.
 
+- **Decision 38 (Alex, 2026-10-04 17:29Z, "let's plan on using spaces", typed in the plan thread; own record: [0005](0005-atproto-spaces-destination.md)):**
+  atproto Spaces is the destination for private data (private likes, comments, follows, drafts). Nothing ships on
+  the alpha: the official unpatched PDS cannot run it (plan §9 forbids patched upstreams). From slice 1 private data
+  is shaped as one record each in our lexicon, keyed as a space repo would key it, held in the app DB; the move is
+  a copy, made when Spaces is in the official PDS release and in the spec, checked at Phase 4 (plan §3, §11 Q2b).
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
