@@ -4,13 +4,29 @@ Auto-loaded for every agent in this repo. Keep it short; load only what the next
 
 ## Project
 AT Protocol-native identity and profile app with a small, auditable core. The plan is
-[`docs/PLAN.md`](docs/PLAN.md). Decisions live in [`docs/adr/`](docs/adr/). Read the plan section
-for the area you touch before changing it.
+[`docs/ai/PLAN.md`](docs/ai/PLAN.md). Decisions live in [`docs/human/decisions/`](docs/human/decisions/).
+Read the plan section for the area you touch before changing it.
 
-## Engineering principles (Alex, 2026-10-03; verbatim, read before designing or changing code)
-@docs/engineering/architecture-instructions.md
-@docs/engineering/engineering-practices-addendum.md
-@docs/engineering/engineering-workflow-and-change-management.md
+## Engineering principles (Alex, 2026-10-03/04; read before designing or changing code)
+@docs/human/engineering/architecture-instructions.md
+@docs/human/engineering/engineering-practices-addendum.md
+@docs/human/engineering/engineering-workflow-and-change-management.md
+@docs/human/engineering/architecture-and-development-guideline.md
+
+## Where does this go (decision 34; folders appear with their first code)
+| Kind of code | Folder |
+| --- | --- |
+| Screens, islands, styles | `apps/{web,admin,chat}`: UI only, no product rules, no DB |
+| Entry points, auth, CSRF gate, limits | `interfaces/{http,api,indexer,media,review,pds-admin,chat-admin}`: one process each |
+| Product rules | `domains/{identity,content,social,feed,messaging,moderation,privacy}` |
+| External systems behind contracts | `infrastructure/{postgres,pds,tap,matrix,storage,arachnid,email,net-guard,seal,audit}` |
+| Generic, no product meaning (MIT) | `shared/{lexicons,ui,config,errors,i18n}` |
+| Compose, edge, backup, preflight | `deployment/` |
+| Integration and e2e tests | `tests/`; unit tests sit beside their file |
+
+Boundaries (dependency-cruiser): domains never import infrastructure, interfaces or apps; apps
+never import each other or infrastructure; `pds-admin` and `chat-admin` import only themselves and
+Node built-ins. No `plugins/`, Redis or queue until a real need exists.
 
 ## Non-negotiable: no security shortcuts
 Security and correct protocol design beat shipping speed. Never paper over an auth,
@@ -24,7 +40,7 @@ Every change:
 - **Identity.** Verify handle↔DID in both directions through `verifyHandle`; never trust
   self-asserted DID-doc fields. Validate OAuth state/nonce/PKCE.
 - **SQL.** Parameterised only, with a tenant/DID predicate.
-- **Egress.** Caller-influenced URLs go through `packages/net-guard` (a CI guard enforces it).
+- **Egress.** Caller-influenced URLs go through `infrastructure/net-guard` (a CI guard enforces it).
 - **Cookies.** Host-only `__Host-` cookies, never a `Domain` attribute (a CI guard enforces it).
 - **Secrets and PII.** Never in code, logs or responses. Never print resolved config or env.
 - **Output.** Escape all user data; `safeHref` for links; keep CSP and security headers intact.
@@ -36,7 +52,7 @@ Every change:
 - All UI follows the unset.sh design sheet (plan §11 Q11): its `tokens.json` is the token source
   for the CSS Modules; new components only when registered on the sheet with Alex's approval.
 - **Icons: Iconoir** (decision 33), scoped to the design sheet's Icon list and rendered by the
-  `packages/ui` `Icon` component from the copied, pinned SVG data. No icon npm package
+  `shared/ui` `Icon` component from the copied, pinned SVG data. No icon npm package
   (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.
 
 ## Protocol work: read the source of truth first

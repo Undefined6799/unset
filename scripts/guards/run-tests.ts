@@ -9,7 +9,7 @@ import { join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { sourceFiles } from "./files.ts";
 
-export const TEST_DIRS = ["apps", "packages", "modules", "plugins", "scripts"] as const;
+export const TEST_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared", "scripts"] as const;
 const TEST_FILE = /\.test\.ts$/;
 
 export function discoverTests(root: string): string[] {

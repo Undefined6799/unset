@@ -1,11 +1,11 @@
-// Guard: all caller-influenced outbound HTTP goes through packages/net-guard.
+// Guard: all caller-influenced outbound HTTP goes through infrastructure/net-guard.
 // The prototype grew four copies of private-IP classification and an SSRF via
 // redirects + DNS rebinding before this was centralised (PLAN.md §2 rule 13).
 import { pathToFileURL } from "node:url";
 import { allowed, type Finding, read, report, sourceFiles } from "./files.ts";
 
-export const SCANNED_DIRS = ["apps", "packages", "modules", "plugins"] as const;
-const EXEMPT_PREFIX = "packages/net-guard/";
+export const SCANNED_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;
+const EXEMPT_PREFIX = "infrastructure/net-guard/";
 
 // fetch( whose first argument is not a plain string literal (template literals count as dynamic).
 const DYNAMIC_FETCH = /\bfetch\s*\(\s*(?!["'][^"'`]*["']\s*[,)])/;

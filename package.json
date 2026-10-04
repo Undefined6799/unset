@@ -8,9 +8,10 @@
   },
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "modules/*",
-    "plugins/*"
+    "interfaces/*",
+    "domains/*",
+    "infrastructure/*",
+    "shared/*"
   ],
   "scripts": {
     "check": "npm run typecheck && npm run lint && npm run guards && npm test",

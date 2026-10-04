@@ -18,5 +18,5 @@ components) should go to those projects; tell us too if they affect unset.sh.
 ## How we build
 
 Security rules every change follows are in [`CLAUDE.md`](CLAUDE.md) and
-[`docs/PLAN.md`](docs/PLAN.md) §2. Changes to auth, identity, crypto, egress or personal
+[`docs/ai/PLAN.md`](docs/ai/PLAN.md) §2. Changes to auth, identity, crypto, egress or personal
 data need a security review before merge.

@@ -378,7 +378,7 @@ Rules for the handle domain:
 
 ### 5.5 Plugin seam (trimmed; Alex, 2026-10-03, decision 25)
 
-The first draft built a complete plugin system into the core before any plugin existed (manifest with declared capabilities, a generated registry, nav slots, cron, mail and notification interfaces, tenancy tables and a fixture plugin). Alex's engineering principles (`docs/engineering/`, principles 3, 7, 12 and 15) say a registry only when something is genuinely dynamic, no abstraction before evidence, and the deepest design effort for a public plugin API only once it has a consumer. So the core keeps only what cannot be retrofitted, and the first real plugin (CRM or accounting, later modules) brings the rest with it:
+The first draft built a complete plugin system into the core before any plugin existed (manifest with declared capabilities, a generated registry, nav slots, cron, mail and notification interfaces, tenancy tables and a fixture plugin). Alex's engineering principles (`docs/human/engineering/`, principles 3, 7, 12 and 15) say a registry only when something is genuinely dynamic, no abstraction before evidence, and the deepest design effort for a public plugin API only once it has a consumer. So the core keeps only what cannot be retrofitted, and the first real plugin (CRM or accounting, later modules) brings the rest with it:
 
 - **Kept in the core:**
   - every owner of personal data implements the **account-erase and export hooks** (`eraseDid`, export registry, §6); this is the one contract the core enforces from day one, because erasure that misses a data owner is a GDPR failure;
@@ -534,33 +534,47 @@ Hard requirements with CI gates, not intentions. The prototype's `docs/complianc
 
 ## 7. Repository layout
 
+**Decision 34 (Alex, 2026-10-04 04:39Z, "Apply all" on the architecture handoff card):** the layout follows the fourth engineering guideline, *Architecture and Development Guideline* (`docs/human/engineering/architecture-and-development-guideline.md`, adopted from Alex's handoff with amendments A1 to A6; rationale in `unset-plan/architecture-handoff/conflicts.md`). Where that guideline and this plan disagree, the guideline governs structure and process and the plan governs product and security decisions. **Folders are created only when their first code lands, never ahead of it.** `packages/`, `modules/` and `plugins/` are gone; process, database-role and network isolation are unchanged, since every entrypoint is still its own process and container.
+
 ```
 unset.sh/
-  apps/
-    web/          # Hono server: routes/, screens/, islands/, profile/ (pure view)
-    api/          # public read API, own DB role
-    indexer/      # Tap consumer
-    media/        # media proxy
-    review/       # transcode, fingerprint, nudity and gore gates, text gate (no-network worker)
-    admin/        # internal console incl. the draft review queue
-    pds-admin/    # zero-dep internal service
-    chat-admin/   # phase 6: MAS seeding, zero-dep
-  packages/
-    core/         # auth, identity, profile, social, moderation, db, audit, csp, csrf, config, i18n, seal
-    lexicons/     # sh.unset.* JSON + permission set; @atproto/lex generated code (checked in)
-    net-guard/    # the single egress classifier (ported with its 23 tests)
-    ui/           # tokens.json → tokens.css, shared components, icon wrapper
-  modules/        # chat/ (phase 6), rss/ (later): same boundary rules as plugins
-  plugins/        # empty in v1 (decision 25); the first plugin brings the seam
-  deploy/         # one compose.yaml with profiles, edge config, backup, preflight, tap build
-  docs/           # short ADRs, runbooks (keys, lexicon publishing, rotation, restore), compliance
+  apps/             # user-facing UI only: no product rules, no database access
+    web/            # unset.sh (Hono SSR, islands, CSS Modules)
+    admin/          # privileged console, Tailscale only
+    chat/           # chat client on its own origin (chat.unset.sh), Phase 6
+  interfaces/       # entry points; each its own process and container
+    http/           # web's routes and forms
+    api/            # public read API, own DB role
+    indexer/        # Tap consumer
+    media/          # media proxy on the media domain
+    review/         # upload checks: transcode, fingerprints, nudity, gore and text gates (no network)
+    pds-admin/      # sole holder of the PDS admin password; imports only itself and Node built-ins
+    chat-admin/     # Phase 6: MAS seeding; same zero-dependency rule
+  domains/          # product rules in product words; depend only on contracts they define
+    identity/  content/  social/  feed/  messaging/  moderation/  privacy/
+  infrastructure/   # external systems behind small contracts; nothing outside imports a vendor SDK
+    postgres/  pds/  tap/  matrix/  storage/  arachnid/  email/
+    net-guard/      # the single egress classifier
+    seal/           # sealed-storage encryption
+    audit/          # append-only audit store
+  shared/           # genuinely generic code, kept small; MIT (decision 27 as amended)
+    lexicons/       # sh.unset.* JSON + permission set; generated code checked in
+    ui/             # tokens.json → tokens.css, shared components, Icon
+    config/  errors/  i18n/
+  deployment/       # compose with profiles, edge, backup, preflight; terraform/ and ansible/ only at P5.00
+  tests/            # integration/ and e2e/ (Playwright, both themes); unit tests sit next to their file
+  docs/
+    human/          # README, getting-started, architecture, conventions, glossary, features/, decisions/ (ADRs), engineering/ (the four guidelines)
+    ai/             # PLAN.md, the step book, handoffs, investigations
 ```
 
+Boundary rules, enforced by dependency-cruiser from the first commit: `domains/` never import `infrastructure/`, `interfaces/` or `apps/`; `apps/` never import each other or `infrastructure/`; `pds-admin` and `chat-admin` import only their own folder and Node built-ins; nothing outside `infrastructure/` imports a vendor SDK; no `plugins/` folder until the first real plugin (decision 25; its UI then lives in `apps/web/plugins/` with its own Postgres schema and role, §5.5). Each phase's refine step records the ownership path of its features (for example posting a video: `apps/web → interfaces/http → domains/content (+ moderation) → infrastructure/pds, storage → PDS`), and `docs/human/features/<feature>.md` is written when a feature's first slice lands. No Redis, queue or other service without a concrete need: one Postgres and in-memory limits are the default.
+
 Tooling (Alex, 2026-10-02, decision 16):
-- **TypeScript 7** (the Go port, GA 2026-07-08; TS 6 is Microsoft's last JS-based release) and **Node 26** (LTS 2026-10-28) from Phase 1; `engines.node: ">=26"`, `node:26` images by digest. One workspace and one lockfile; TypeScript project references.
-- Biome 2.5 for lint and format, **CSS included**: `noHexColors`, `noMissingVarFunction`, `useLayeredStyles` and one GritQL plugin for token-only spacing, radius and font sizes replace Stylelint (optional second opinion only). Vite's Lightning CSS minifies. dependency-cruiser for boundaries.
+- **TypeScript 7** (the Go port, GA 2026-07-08; TS 6 is Microsoft's last JS-based release) and **Node 26** (LTS 2026-10-28) from Phase 1; `engines.node: ">=26"`, `node:26` images by digest. One workspace (`apps/*`, `interfaces/*`, `domains/*`, `infrastructure/*`, `shared/*`) and one lockfile; TypeScript project references.
+- Biome 2.5 for lint and format, **CSS included**: `noHexColors`, `noMissingVarFunction`, `useLayeredStyles` and one GritQL plugin for token-only spacing, radius and font sizes replace Stylelint (optional second opinion only). Vite's Lightning CSS minifies. dependency-cruiser for the boundary rules above. **Not ESLint, Prettier or Nx** (decision 34, amendment A2): ESLint does not lint CSS, Nx's boundary rule drags the Nx workspace in, and neither is known to parse TypeScript 7.
 - **Vitest only** (the prototype's `node:test` plus Vitest split is how 20 UI test files stopped running); the "discovered equals executed" guard compares `vitest list --json` with the reporter's file list. Playwright smoke tests with axe-core against a production build, in both themes; Lighthouse CI; Semgrep per PR (§6.1).
-- Per-package line budgets as CI warnings; the direct and transitive dependency counts recorded at each phase exit.
+- Per-top-level-folder line budgets as CI warnings; the direct and transitive dependency counts recorded at each phase exit.
 - graphify graphs regenerated in CI.
 
 ## 8. Phases
@@ -577,15 +591,17 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
   - typecheck, test (discovered = executed), lint, `npm audit`, gitleaks;
   - SBOM, image scan, hadolint, actionlint;
   - images signed with cosign (key pair, no public transparency log) plus provenance attestations kept with the image.
+- **CI shape (decision 34, amendments A2 and A3):** security and supply-chain checks run from the first commit (secret scan, dependency audit, Semgrep, actions pinned by SHA, the egress and cookie guards, dependency-cruiser boundaries); image scanning and cosign signing start with the first container image; axe-core and Lighthouse gates start with the first page. Heavier checks are added only for a concrete reason.
 - The Phase 0 bootstrap bundle predates decisions 16 and 19 (it pins TypeScript 6.0.3 and Node 24, uses `node:test`, and has no Semgrep, SBOM or actionlint); the first commits after the repo exists move it to TypeScript 7, Node 26, Vitest and the full CI list above (step-book gap 9).
 - Slim `CLAUDE.md`/`AGENTS.md`. Carry over the vault notes from review 07 §6 and archive the rest.
 - Register the domains (the media throwaway included); set DNSSEC, CAA and HSTS; reserve labels; register the obvious look-alikes.
-- Licence decided (Alex, 2026-10-03, decision 27): **AGPL-3.0-only for the applications, MIT for the small building blocks (`packages/`) and the lexicon record-type files**, so the record types can be adopted by other atproto apps. `LICENSE` (AGPL) and `LICENSE-MIT` at the root, the split stated in the README and in each `packages/*/package.json` `license` field.
+- Licence decided (Alex, 2026-10-03, decision 27): **AGPL-3.0-only for the applications, MIT for `shared/` (lexicons, UI kit, generic helpers)**; everything else is AGPL (decision 34 amendment A6 moved the MIT line from the former `packages/` to `shared/`), so the record types can be adopted by other atproto apps. `LICENSE` (AGPL) and `LICENSE-MIT` at the root, the split stated in the README and in each `shared/*/package.json` `license` field.
 - Generate the PDS rotation and recovery keys offline.
 - Admin groundwork (§5.7): hardware-key 2FA and offline codes on GitHub, registrar and host; the allowed-signers file; a private repo ruleset with CODEOWNERS requiring security review on admin paths; the report-routing decision.
 - **Exit:** CI passes on an empty repo and blocks a planted secret, a planted bare `fetch` and a planted `Domain=` cookie.
 
 **Phase 1 — Platform, local stack, lexicon authority**
+- **First slice (decision 34, amendment A4): sign in with an atproto account and see your own profile page**, `apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`, carrying only the security pieces that path needs (typed config, CSRF gate, CSP, OAuth session, Postgres with roles, `net-guard` for handle resolution). Test it, review the architecture, write down what was learned, then add the next slice; seal, audit lanes, i18n, admin and Tailscale follow as their own slices. The step book is reordered around this.
 - Typed config, Hono server, CSRF gate, CSP, limits, trusted proxy.
 - Postgres with migrations and roles; sealed storage; audit.
 - i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls); `net-guard`; error pages.
@@ -653,7 +669,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
 
 ## 9. How we keep it small and auditable
 
-- **Measured:** line budgets per package; graphify graphs diffed in PRs, so "who calls this" is a command, not a guess.
+- **Measured:** line budgets per top-level folder; graphify graphs diffed in PRs, so "who calls this" is a command, not a guess.
 - **One way to do each thing:** one config, CSRF gate, CSP builder, egress, validator, serialiser, `createRoom` and `profileHref`. A lint or static test enforces each.
 - **Small files:** a file-size cap as a lint warning; one feature per folder.
 - **No patched upstreams and no postinstall rewrites.** A gap gets an upstream issue, or code built outside the upstream.
@@ -739,7 +755,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
 
 **Q11. Design. Decided by Alex (2026-10-02):** all UI follows the **unset.sh design sheet** (the Design System artifact "unset.sh", https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt): Onyx/Platinum with Plum, Cyan and Emerald accents, Space Grotesk and JetBrains Mono, the ◉◉◉ mark, 2px corners with the cut button. Its `tokens.json` is the token source for the CSS Modules. New components may be added only if registered on the sheet with Alex's approval. **Icons (Alex, 2026-10-03, decision 33, design thread "Design sheet missing pieces"):** **Iconoir is the icon set for all icons** ("I like better iconoir and it will better consistency"), replacing the sheet's mono Unicode glyphs and the step book's earlier plain-character answer. Only the 36 approved icons are used, copied from Iconoir 7.12.1 regular (MIT, fits decision 27) onto the design sheet (v34) as pinned SVG data; the UI kit renders them inline with `currentColor`, `aria-hidden` and a text label; no icon npm package, nothing fetched at runtime, and the build check blocks icon packages while allowing the copied data. Adding an icon means adding it to the sheet's list first, with Alex's approval, like any component. The one written exception is chat's device-verification emoji panel, which Matrix fixes (step-book question 51).
 
-**Q12. License. Decided by Alex (2026-10-03, decision 27):** AGPL-3.0-only for the apps, MIT for the building blocks and the lexicon files. This settles the lexicons too, which were waiting on the code licence: they publish under MIT. Off the review list.
+**Q12. License. Decided by Alex (2026-10-03, decision 27):** AGPL-3.0-only for everything except `shared/` (lexicons, UI kit, generic helpers), which is MIT (the former `packages/` line, moved by decision 34 on 2026-10-04). This settles the lexicons too, which were waiting on the code licence: they publish under MIT. Off the review list.
 - **AGPL-3.0 (recommended).**
 - MIT or Apache-2.0.
 

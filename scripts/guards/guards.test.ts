@@ -35,19 +35,19 @@ describe("egress guard", () => {
   });
 
   test("flags raw HTTP client imports", () => {
-    assert.equal(scanEgress("packages/core/a.ts", 'import { request } from "undici";').length, 1);
-    assert.equal(scanEgress("packages/core/a.ts", 'import https from "node:https";').length, 1);
+    assert.equal(scanEgress("domains/identity/a.ts", 'import { request } from "undici";').length, 1);
+    assert.equal(scanEgress("domains/identity/a.ts", 'import https from "node:https";').length, 1);
   });
 
   test("exempts net-guard itself, tests, and annotated lines", () => {
-    assert.equal(scanEgress("packages/net-guard/index.ts", "await fetch(url)").length, 0);
+    assert.equal(scanEgress("infrastructure/net-guard/index.ts", "await fetch(url)").length, 0);
     assert.equal(scanEgress("apps/web/a.test.ts", "await fetch(url)").length, 0);
     assert.equal(scanEgress("apps/web/a.ts", "await fetch(url) // guard-allow: egress constant PDS URL").length, 0);
   });
 
   test("main fails on a planted bare fetch and passes on a clean tree", () => {
     assert.equal(egressMain(fixture({ "apps/web/ok.ts": "export const x = 1;\n" })), 0);
-    assert.equal(egressMain(fixture({ "plugins/p/bad.ts": "export const go = (u: string) => fetch(u);\n" })), 1);
+    assert.equal(egressMain(fixture({ "domains/p/bad.ts": "export const go = (u: string) => fetch(u);\n" })), 1);
   });
 });
 
@@ -63,7 +63,7 @@ describe("cookie-domain guard", () => {
 
   test("ignores unrelated domain fields", () => {
     assert.equal(
-      scanCookieDomain("packages/core/config.ts", "const handle = { domain: env.HANDLE_DOMAIN };").length,
+      scanCookieDomain("domains/identity/config.ts", "const handle = { domain: env.HANDLE_DOMAIN };").length,
       0,
     );
   });
@@ -85,11 +85,11 @@ describe("test runner accounting", () => {
 
   test("discovers *.test.ts under the scanned dirs only", () => {
     const root = fixture({
-      "packages/core/x.test.ts": "",
+      "domains/identity/x.test.ts": "",
       "apps/web/y.test.ts": "",
       "apps/web/node_modules/z.test.ts": "",
       "docs/w.test.ts": "",
     });
-    assert.deepEqual(discoverTests(root), ["apps/web/y.test.ts", "packages/core/x.test.ts"]);
+    assert.deepEqual(discoverTests(root), ["apps/web/y.test.ts", "domains/identity/x.test.ts"]);
   });
 });

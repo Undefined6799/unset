@@ -4,7 +4,7 @@ An AT Protocol-native identity and profile app: a portable profile that lives in
 repository, edited and rendered in the app, with hosted accounts on our own PDS.
 
 This is a rebuild of the 0x40 prototype with a deliberately small, auditable core. The plan,
-including what is in and out of the core and why, is [`docs/PLAN.md`](docs/PLAN.md).
+including what is in and out of the core and why, is [`docs/ai/PLAN.md`](docs/ai/PLAN.md).
 
 ## Status
 
@@ -14,12 +14,13 @@ Phase 0: repository, CI and guard rails only. No application code yet.
 
 | Path | What |
 | --- | --- |
-| `apps/` | Deployable entrypoints: `web`, `indexer`, `media`, `pds-admin` |
-| `packages/` | Core libraries: `core`, `lexicons`, `net-guard`, `ui`, `plugin-api` |
-| `modules/` | First-party modules outside the core (chat, rss) |
-| `plugins/` | Plugins behind the `plugin-api` seam (none in v1) |
-| `deploy/` | Compose stack, edge config, backups, preflight |
-| `docs/` | Plan, decisions (`docs/adr/`), runbooks, compliance |
+| `apps/` | User-facing UI only: `web`, `admin`, `chat` (Phase 6) |
+| `interfaces/` | Entry points, one process and container each: `http`, `api`, `indexer`, `media`, `review`, `pds-admin`, `chat-admin` |
+| `domains/` | Product rules: `identity`, `content`, `social`, `feed`, `messaging`, `moderation`, `privacy` |
+| `infrastructure/` | External systems behind small contracts, `net-guard`, `seal`, `audit` |
+| `shared/` | Generic code with no product meaning (MIT): `lexicons`, `ui`, `config`, `errors`, `i18n` |
+| `deployment/`, `tests/` | Compose, edge, backup, preflight; integration and e2e tests |
+| `docs/` | `human/` (guides, decisions, the four engineering guidelines) and `ai/` (plan, step book, handoffs) |
 | `scripts/guards/` | Repository guards run in CI |
 
 ## Development
@@ -34,4 +35,4 @@ npm run check                         # typecheck, lint, guards, tests
 
 ## License
 
-Applications (`apps/`) are [AGPL-3.0-only](LICENSE). The small building blocks (`packages/`) and the lexicon record-type files (`lexicons/`) are [MIT](LICENSE-MIT), so other atproto apps can reuse the record types and helpers freely (Alex, 2026-10-03).
+Everything is [AGPL-3.0-only](LICENSE) except `shared/` (the `sh.unset.*` lexicons, the UI kit and the generic helpers), which is [MIT](LICENSE-MIT) so other atproto apps can reuse the record types and helpers freely (Alex, 2026-10-03; folder set by decision 34, 2026-10-04).

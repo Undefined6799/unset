@@ -295,6 +295,24 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   `aria-hidden` and a text label; no icon npm package, nothing fetched; the build check blocks icon
   packages. New icons go on the sheet first with Alex's approval. Chat's device-verification emoji panel
   is the one exception (Matrix fixes the set).
+- Decision 34 (Alex, 2026-10-04 04:39Z, "Apply all" on the architecture-handoff card; "Ok i reviewed
+  conflict.md and it makes sense"): Alex's "Project Architecture & Development Handoff" becomes the fourth
+  engineering guideline, with amendments A1 to A6 (`docs/human/engineering/architecture-and-development-
+  guideline.md`; rationale in `unset-plan/architecture-handoff/conflicts.md`). A1 layout:
+  `apps/{web,admin,chat}`, `interfaces/{http,api,indexer,media,review,pds-admin,chat-admin}`,
+  `domains/{identity,content,social,feed,messaging,moderation,privacy}`, `infrastructure/{postgres,pds,tap,
+  matrix,storage,arachnid,email,net-guard,seal,audit}`, `shared/{lexicons,ui,config,errors,i18n}`,
+  `deployment/`, `tests/{integration,e2e}`, `docs/{human,ai}`; `packages/`, `modules/`, `plugins/` removed;
+  process, DB-role and network isolation unchanged; folders created only with their first code. A2 tooling
+  stays Biome + dependency-cruiser with the boundary rules (domains never import infrastructure, interfaces
+  or apps; apps never import each other or infrastructure; the two admin services import only themselves).
+  A3 CI: security and supply-chain checks from the first commit, image scan and signing with the first
+  image, axe and Lighthouse with the first page. A4: first slice is sign in and see your own profile.
+  A5: unit tests beside their file, integration and e2e under `tests/`. A6: MIT is `shared/`, the rest
+  AGPL-3.0-only. Defaults D1 to D6: Terraform and Ansible under `deployment/` only at P5.00; no Redis or
+  queue; docs split into `docs/human/` (ADRs in `decisions/`, guidelines in `engineering/`) and `docs/ai/`
+  (plan, step book, handoffs); no `plugins/` until the first plugin; CLAUDE.md imports the fourth
+  guideline; feature ownership paths recorded per phase. The ChatGPT original is source only, not binding.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
