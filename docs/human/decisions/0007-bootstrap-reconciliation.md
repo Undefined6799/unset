@@ -37,6 +37,7 @@ Deferred plan items:
 | --- | --- | --- | --- |
 | Image scan, hadolint, cosign, SLSA attestations | from commit 1 (plan §8 Phase 0) | from the first container image (P1.27) | no image exists before then (step book Phase 0, plan issue PI-5) |
 | graphify graphs in CI | plan §7, §9 | no step yet; routed to the plan thread | step book Phase 0, plan issue PI-2 |
+| `CLAUDE.md` budget | 80 lines, one import (P0.09) | 120 lines, five imports: the four guidelines and the Top 15 page | architecture thread ruling, 2026-10-04 |
 
 Bundle facts. The bundle file in the planning folder has `HEAD` on
 `refs/heads/claude/project-thread-t0o2p9`, tip `24470d58e1971b8ddc30dda852e82d720673d4e4`
