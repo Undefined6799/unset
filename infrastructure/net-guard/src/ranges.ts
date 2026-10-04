@@ -32,10 +32,14 @@ export const RANGES: readonly Range[] = [
   { cidr: "::1/128", class: "loopback" },
   { cidr: "64:ff9b:1::/48", class: "reserved" }, // NAT64 local use
   { cidr: "100::/64", class: "reserved" }, // discard-only
+  { cidr: "::ffff:0:0:0/96", class: "reserved" }, // IPv4-translated (SIIT)
+  { cidr: "2001::/23", class: "reserved" }, // IETF protocol assignments, whole block
   { cidr: "2001::/32", class: "reserved" }, // Teredo
   { cidr: "2001:2::/48", class: "reserved" }, // benchmarking
   { cidr: "2001:db8::/32", class: "reserved" }, // documentation
   { cidr: "2001:10::/28", class: "reserved" }, // ORCHID
+  { cidr: "3fff::/20", class: "reserved" }, // documentation (RFC 9637)
+  { cidr: "5f00::/16", class: "reserved" }, // SRv6 SIDs (RFC 9602)
   { cidr: "fc00::/7", class: "private" }, // unique local
   { cidr: "fe80::/10", class: "reserved" }, // link-local
   { cidr: "fec0::/10", class: "reserved" }, // site-local (deprecated)

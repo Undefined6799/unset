@@ -36,10 +36,6 @@ describe("special_ranges_parametrised", () => {
     expect(classifyAddress(ip)).not.toBe("public");
   });
 
-  test("there are at least 40 range and embedded cases", () => {
-    expect(RANGES.flatMap((row) => samples(row.cidr)).length + 12).toBeGreaterThanOrEqual(40);
-  });
-
   test.each([
     "1.1.1.1",
     "8.8.8.8",

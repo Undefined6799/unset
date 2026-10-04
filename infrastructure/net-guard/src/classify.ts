@@ -22,11 +22,12 @@ const LISTS: readonly (readonly [AddressClass, BlockList])[] = (["loopback", "pr
  * `pds.internal`, and a zone id (`fe80::1%eth0`) must not hide a link-local address.
  */
 export function normaliseHost(host: string): string {
-  return host
+  const name = host
     .toLowerCase()
     .replace(/^\[|\]$/g, "")
-    .replace(/\.$/, "")
-    .replace(/%.*$/, "");
+    .replace(/\.+$/, "");
+  const zoneless = name.replace(/%.*$/, "");
+  return isIP(zoneless) === 6 ? zoneless : name; // a zone id belongs to IPv6 literals only
 }
 
 /** The eight 16-bit groups of an IPv6 literal (already checked by `isIP`), embedded dotted IPv4 included. */
@@ -48,6 +49,19 @@ function ipv6Groups(ip: string): number[] {
 
 const ipv4Of = (hi: number, lo: number): string => [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join(".");
 const allZero = (groups: number[]): boolean => groups.every((g) => g === 0);
+
+/**
+ * An IPv6 form that is routed as IPv6, not delivered to its embedded IPv4 address: compatible, NAT64 and 6to4.
+ * It takes the embedded address's class (so it is refused when that is not public), but no internal-only policy may
+ * connect to one: the traffic would leave the host for a relay or gateway.
+ */
+export function isTranslatedIpv6(ip: string): boolean {
+  const address = normaliseHost(ip);
+  if (isIP(address) !== 6) return false;
+  const g = ipv6Groups(address);
+  const mapped = allZero(g.slice(0, 5)) && g[5] === 0xffff;
+  return !mapped && embeddedIpv4(address) !== null;
+}
 
 /**
  * The IPv4 address an IPv6 form carries to: mapped `::ffff:0:0/96`, compatible `::a.b.c.d`, NAT64 `64:ff9b::/96`
@@ -79,8 +93,9 @@ export function classifyAddress(ip: string): Classification {
   return LISTS.find(([, list]) => list.check(address, type))?.[0] ?? "public";
 }
 
-const INTERNAL_SUFFIXES = [".internal", ".local", ".localhost", ".home.arpa"];
-const INTERNAL_NAMES = new Set(["localhost", "metadata.google.internal", "instance-data"]);
+/** Special-use and private-use names (RFC 6761, 6762, 7686, 8375, 9476): none names a public service we call. */
+const INTERNAL_SUFFIXES = [".internal", ".local", ".localhost", ".home.arpa", ".onion", ".alt", ".invalid", ".lan"];
+const INTERNAL_NAMES = new Set(["localhost", "home.arpa", "metadata.google.internal", "instance-data"]);
 
 /** A name that can only mean something inside a private network: single labels, internal suffixes, metadata names. */
 export function isInternalName(host: string): boolean {
