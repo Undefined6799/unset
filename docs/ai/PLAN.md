@@ -548,6 +548,9 @@ unset.sh/
     indexer/        # Tap consumer
     media/          # media proxy on the media domain
     review/         # upload checks: transcode, fingerprints, nudity, gore and text gates (no network)
+    admin/          # the admin server: gate, session, enrolment, actions, jobs; own role and network (apps/admin is its UI)
+    jobs/  retention/  audit-verify/   # scheduled and one-shot processes (retention sweeps, the audit verifier)
+    chat-auth/      # Phase 6: the chat OIDC provider process
     pds-admin/      # sole holder of the PDS admin password; imports only itself and Node built-ins
     chat-admin/     # Phase 6: MAS seeding; same zero-dependency rule
   domains/          # product rules in product words; depend only on contracts they define
@@ -557,11 +560,13 @@ unset.sh/
     net-guard/      # the single egress classifier
     seal/           # sealed-storage encryption
     audit/          # append-only audit store
-  shared/           # genuinely generic code, kept small; MIT (decision 27 as amended)
+  shared/           # genuinely generic code, kept small; the only MIT folder (decision 27 as amended); infrastructure/net-guard is AGPL like the rest
     lexicons/       # sh.unset.* JSON + permission set; generated code checked in
     ui/             # tokens.json → tokens.css, shared components, Icon
+    log/            # logger and scrubber
     config/  errors/  i18n/
   deployment/       # compose with profiles, edge, backup, preflight; terraform/ and ansible/ only at P5.00
+  scripts/          # repo tooling: CI guards, budgets, docs tests, dev seed
   tests/            # integration/ and e2e/ (Playwright, both themes); unit tests sit next to their file
   docs/
     human/          # README, getting-started, architecture, conventions, glossary, features/, decisions/ (ADRs), engineering/ (the four guidelines)
@@ -601,7 +606,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
 - **Exit:** CI passes on an empty repo and blocks a planted secret, a planted bare `fetch` and a planted `Domain=` cookie.
 
 **Phase 1 — Platform, local stack, lexicon authority**
-- **First slice (decision 34, amendment A4): sign in with an atproto account and see your own profile page**, `apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`, carrying only the security pieces that path needs (typed config, CSRF gate, CSP, OAuth session, Postgres with roles, `net-guard` for handle resolution). Test it, review the architecture, write down what was learned, then add the next slice; seal, audit lanes, i18n, admin and Tailscale follow as their own slices. The step book is reordered around this.
+- **First slice (decision 34, amendment A4): sign in with an atproto account and see your own profile page**, `apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`, carrying only the security pieces that path needs. Per the step book's reorder (about 48 steps, against the local throwaway PDS, no homelab or Tailscale) that means: typed config, Hono server and the UI shell, CSRF gate, CSP, login rate limits plus the edge's per-client limiting (the PDS's own limits are off, §5.2), Postgres with roles, `net-guard` for handle resolution, OAuth with the permission set, login, logout, sessions and revoke, sealed storage for the OAuth tokens (only `sealTo` moves later), a minimal audit (the age gate writes one audit row), the onboarding and email gates, and `/me`. i18n is pending Alex in the step-book thread; the admin platform, Tailscale, the rest of audit and seal, invites, `/join` and signup follow as their own slices. Test it, review the architecture, write down what was learned, then add the next slice.
 - Typed config, Hono server, CSRF gate, CSP, limits, trusted proxy.
 - Postgres with migrations and roles; sealed storage; audit.
 - i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls); `net-guard`; error pages.
@@ -615,7 +620,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
 - **Exit:** Playwright smoke passes on the shell in both themes and both languages with zero axe violations, and the permission set resolves from outside.
 
 **Phase 2 — Identity, auth, profile writing**
-- OAuth with the set plus fallback, login, signup, logout and revoke, sessions with lifecycle, verify-email gate, invites, `/join`, `/me`, onboarding, the module identity seam.
+- Builds on the Phase 1 sign-in slice (OAuth, login, logout, revoke, sessions, email gate, onboarding and `/me` already exist): the set-plus-fallback OAuth path, signup, session lifecycle, invites, `/join`, the module identity seam.
 - Profile editor: drafts, sections, privacy, publish/unpublish, image pipeline, preview through `ProfileView`.
 - Brought forward from Phase 3 and 4 (step-book gaps 2, 5, 8): a minimal `pds-admin` with `invite.issue` only; a minimal `media` entrypoint serving only signed draft-preview URLs (published blobs follow in Phase 3); and the slot for the **image fingerprint gate** (PDQ, Arachnid Shield, §5.8) on profile pictures. **Arachnid timing (Alex, 2026-10-03, decision 23):** while only trusted people use the app (the closed test track, at most 10 known people), the real Arachnid Shield client, its spike and the C-16 transmission buffer (decision 21) move to Phase 5, before the production PDS; Phases 2 and 4 keep the check stage with a fake service. Three safeguards hold meanwhile: the application for access is filed in Phase 1, since it needs no code and approval can take a while; the pipeline keeps the check's slot, test runs use a fake service, and the production server refuses to start unless the real check is configured; and everything uploaded during the trusted test period is scanned once the real check is connected, as part of the launch gate. Decision 7 (every photo and video, private included, checked; the terms say so) holds unchanged for the public product.
 - Run the §5.3 go/no-go list. Legal paperwork, part 2: one-page terms (invite-country rule, fingerprint check, automated review) and privacy notice live with signup.

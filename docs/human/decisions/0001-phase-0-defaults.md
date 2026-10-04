@@ -313,6 +313,13 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   queue; docs split into `docs/human/` (ADRs in `decisions/`, guidelines in `engineering/`) and `docs/ai/`
   (plan, step book, handoffs); no `plugins/` until the first plugin; CLAUDE.md imports the fourth
   guideline; feature ownership paths recorded per phase. The ChatGPT original is source only, not binding.
+  Alignment with the step book (2026-10-04 05:04Z): the §7 tree also names `interfaces/admin` (the admin
+  server), `interfaces/{jobs,retention,audit-verify,chat-auth}`, `shared/log` and `scripts/`; the Phase 1
+  sign-in slice carries sealed token storage, a minimal audit row, login and edge rate limits, the UI shell,
+  the onboarding and email gates and `/me` (about 48 steps, local PDS, no Tailscale), and Phase 2 builds on
+  it. The boundary-rule exceptions the book raised (admin-shared signing format, the chat identity verifier,
+  matrix-js-sdk in the browser client, @atproto/lex in shared/lexicons, the SSR edge from interfaces/http
+  to apps/web) are with the architecture thread; the plan holds until they are decided.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
