@@ -2535,6 +2535,9 @@ As built and ruled (architecture thread, 2026-10-04 23:33Z):
   - Loopback, unspecified, multicast and broadcast keep their own non-public classes.
   - Tests: one row per range in the class table, plus mapped and NAT64 forms of `169.254.169.254` and `10.0.0.1`
     classifying the same as the bare IPv4 address.
+  - net-guard keeps its 400-line warning for real code; its `*.fake.ts` test servers no longer count (architecture
+    ruling 2026-10-04 23:53Z). If P1.18b's proxy pushes real code past 400, treat that as a signal to review the
+    module's depth, not as a reason to raise the number.
 
 ---
 
@@ -2699,6 +2702,31 @@ As built and ruled (architecture thread, 2026-10-04 23:33Z):
     `{ event: "egress.request", dep: <policy kind>, status, ms, counts: { bytes } }`.
     It has no `kind` and no bare `bytes`. The callback never receives the host, URL or IP.
     Test: `log_callback_never_sees_target`.
+  - net-guard keeps its 400-line warning for real code; its `*.fake.ts` test servers no longer count (architecture
+    ruling 2026-10-04 23:53Z). If P1.18b's proxy pushes real code past 400, treat that as a signal to review the
+    module's depth, not as a reason to raise the number.
+
+As ruled (architecture thread, 2026-10-04 23:53Z):
+  - TE-6 needs a real fast-check property test, and the deterministic 65 536-address sweep stays alongside it. The
+    sweep is exhaustive for what it covers, but it never feeds the classifier malformed or unusual text, which is
+    where SSRF bypasses live.
+  - Dependency-cruiser exemption, kept narrow: only `infrastructure/net-guard/**/*.test.ts` may import `fast-check`
+    (and `vitest`) despite `net-guard-leaf`. This is a tooling change, not a boundary change, because test files never
+    ship.
+  - Tests:
+    - `classifier_property` (fast-check, fixed `numRuns`, seed printed on failure). Generators produce text forms of
+      addresses in every reserved and private range, plus the public controls:
+      - octal, hex and short IPv4 forms (`0177.0.0.1`, `0x7f.1`, `127.1`, `2130706433`);
+      - zero-compressed and expanded IPv6;
+      - IPv4-mapped (`::ffff:a.b.c.d`, `::ffff:7f00:1`) and NAT64 (`64:ff9b::a.b.c.d`) forms;
+      - zone ids (`fe80::1%eth0`);
+      - leading or trailing whitespace and stray characters.
+      Property: every input either is refused as unparseable or classifies the same as its canonical address. No
+      reserved or private input ever classifies as public.
+    - Every shrunk counterexample is kept as a plain example test (TE-6).
+    - `fast_check_only_in_net_guard_tests`: a fixture `infrastructure/net-guard/x.ts` importing `fast-check` fails
+      dependency-cruiser, and the same import in `x.test.ts` passes.
+  - Built by the Phase 1 thread in P1.18a.
 
 ---
 

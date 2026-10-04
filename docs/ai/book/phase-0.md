@@ -677,7 +677,8 @@ Outputs:
     **3000 combined** (decision 15), `infrastructure/net-guard` 400, `shared/ui` 2500. Numbers are the upper end of §4
     rows mapped onto the decision-34 folders.
   - `scripts/budgets/check.ts`: `countLines(source): int` (non-blank lines that are not only a comment); `check(root,
-    budgets): Warning[]` over `.ts`/`.tsx`, excluding `*.test.*`, `*.generated.*` and `SKIP_DIRS`; `main` prints
+    budgets): Warning[]` over `.ts`/`.tsx`, excluding `*.test.*`, `*.fake.ts`, `*.generated.*` and `SKIP_DIRS` (a fake
+    is a test double, not module code; architecture ruling 2026-10-04 23:53Z); `main` prints
     `::warning title=line-budget::<package> <n>/<max>` per overrun and a table to `$GITHUB_STEP_SUMMARY` when set;
     **always exits 0** (decision 15: budgets warn, never gate).
   - `package.json`: `"lint": "biome ci . && depcruise --config .dependency-cruiser.cjs ."`, `"budgets": "node
@@ -717,6 +718,8 @@ Done when (tests): (`scripts/budgets/check.test.ts`, `scripts/lint/depcruise.tes
   fixtures in temp directories)
   - count_skips_comments_and_blanks: 3 code lines, 2 comment lines, 2 blank → 3.
   - count_excludes_tests_and_generated: `a.test.ts`, `x.generated.ts` → 0.
+  - budgets_skip_fakes: a package with 50 lines of `x.ts` and 500 lines of `x.fake.ts` against a budget of 100 → no
+    warning.
   - budget_overrun_warns_not_fails: fixture package of 12 lines, max 10 → one `::warning` line, exit 0.
   - combined_admin_budget: lines in `apps/admin` + `interfaces/admin` + `interfaces/pds-admin` + `infrastructure/audit`
     summed against 3000.
