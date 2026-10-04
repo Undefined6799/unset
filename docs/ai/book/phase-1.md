@@ -2518,6 +2518,18 @@ add the missing ranges (`192.0.0/24`, `192.0.2/24`, `198.18/15`, `198.51.100/24`
 Not in this step: requests, policies, caps (P1.18a); proxy mode (P1.18b); DID and handle resolution (P2.01).
 Diagram: none.
 
+As built and ruled (architecture thread, 2026-10-04 23:33Z):
+  - Module entry is `infrastructure/net-guard/index.ts`, not `src/index.ts`. net-guard is the single source of truth for
+    the address-class table.
+  - Per-row classes are fixed:
+    - private: `10/8`, `172.16/12`, `192.168/16`, `fc00::/7`.
+    - reserved: `169.254/16` (cloud metadata), `100.64/10`, `fe80::/10`, `fec0::/10`.
+    So even an internal-only policy never reaches the metadata address.
+  - IPv4-mapped and NAT64 forms (`::ffff:0:0/96`, `64:ff9b::/96`) are converted to IPv4 before classification.
+  - Loopback, unspecified, multicast and broadcast keep their own non-public classes.
+  - Tests: one row per range in the class table, plus mapped and NAT64 forms of `169.254.169.254` and `10.0.0.1`
+    classifying the same as the bare IPv4 address.
+
 ---
 
 ### P1.18a — `net-guard` requests: policies, no redirects, size, time and decompression caps
@@ -2669,6 +2681,18 @@ flowchart LR
   S --> B["body: size cap, own decompression cap, total timeout"]
   B --> OK["{status, headers, body}"]
 ```
+
+As built and ruled (architecture thread, 2026-10-04 23:33Z):
+  - net-guard stays a leaf under the MATRIX (`net-guard-leaf`). It imports neither `shared/config` nor `shared/log`.
+  - It takes a plain options type `{ internalHosts, allowLoopback }` and a logging callback.
+  - The field definitions and cross-field rules live in one `shared/config` export, `netGuardFields`. Its tests,
+    `internal_host_required_in_prod` and `loopback_flag_prod_refused`, sit beside it. Each interface merges
+    `netGuardFields` into its composition-root schema (AB-2). This replaces the step's two direct config keys
+    `NETGUARD_INTERNAL_HOSTS` and `NETGUARD_ALLOW_LOOPBACK`; the env names are unchanged.
+  - The per-request log line passes SE-7's field allowlist:
+    `{ event: "egress.request", dep: <policy kind>, status, ms, counts: { bytes } }`.
+    It has no `kind` and no bare `bytes`. The callback never receives the host, URL or IP.
+    Test: `log_callback_never_sees_target`.
 
 ---
 
