@@ -533,7 +533,7 @@ Hard requirements with CI gates, not intentions. The prototype's `docs/complianc
 |---|---|
 | All pages | LCP ≤2.5 s, INP (TBT proxy) ≤200 ms, CLS ≤0.1; origin TTFB ≤200 ms warm, ≤500 ms cold; ≤5 queries and ≤50 ms DB per request, `statement_timeout` 2 s on `web` |
 | Deadlines | every request carries a deadline per route class (the step book sets the numbers: 30 s by default, 120 s for publish) passed as the signal of every outbound call; pool acquire, `statement_timeout`, `lock_timeout` and `idle_in_transaction_session_timeout` nest inside it: PDS or PLC call < request < edge timeout; retries happen at one layer only, through one `retry()` helper, on idempotent calls (review against the engineering rules, 2026-10-04, rule RE-1) |
-| Data access | ≤5 queries and one PDS round trip per request path; a query inside a loop fails review; each index is created with the query it serves in its migration comment; a cache, index or denormalisation added for speed carries before-and-after p50/p95/p99 in its PR (review against the engineering rules, 2026-10-04, rule PF-1) |
+| Data access | ≤5 queries per request path and no PDS round trip the path does not need: one for a read, and for publish exactly the writes the step names (the blob uploads, then one `applyWrites` with `swapCommit` and a CID compare, P2.22), never a call inside a loop; a query inside a loop fails review; each index is created with the query it serves in its migration comment; a cache, index or denormalisation added for speed carries before-and-after p50/p95/p99 in its PR (review against the engineering rules, 2026-10-04, rule PF-1) |
 | All pages | CSS ≤40 KB unminified and ≤12 KB min+gzip per bundle; fonts ≤120 KB, two files, preloaded, `size-adjust` fallbacks |
 | `/@handle` | **0 bytes of JS**; HTML ≤30 KB gzipped |
 | App pages | JS ≤75 KB gzipped total, ≤15 KB per island |
@@ -611,7 +611,7 @@ Small PRs to a protected `main`: one step per PR, under about 400 changed source
   - Renovate, secret scanning and push protection.
 - CI from commit 1, every action pinned by SHA:
   - typecheck (test files included), test (discovered = executed, no skipped case, no retry), lint, `npm audit`, gitleaks;
-  - the commit-message and PR-title check, the PR size guard and the PR template heading check (decision 35, rules DL-1, DL-3, DL-6);
+  - the commit-message and PR-title check, the PR size guard, the PR template heading check and the trusted-base check (a PR that touches a trusted-base path touches only trusted-base files, their tests and docs), together one PR-shape job (step P0.09c; decision 35, rules DL-1, DL-3, DL-6, SE-6);
   - SBOM, image scan, hadolint, actionlint;
   - images signed with cosign (key pair, no public transparency log) plus provenance attestations kept with the image.
 - **CI shape (decision 34, amendments A2 and A3):** security and supply-chain checks run from the first commit (secret scan, dependency audit, Semgrep, actions pinned by SHA, the egress and cookie guards, dependency-cruiser boundaries); image scanning and cosign signing start with the first container image; axe-core and Lighthouse gates start with the first page. Heavier checks are added only for a concrete reason.
