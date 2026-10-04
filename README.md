@@ -25,7 +25,7 @@ Phase 0: repository, CI and guard rails only. No application code yet.
 
 ## Development
 
-Requires Node 24 (see `.nvmrc`).
+Requires Node 26 (see `.nvmrc`).
 
 ```sh
 npm ci

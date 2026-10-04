@@ -4,7 +4,7 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=26.0.0"
   },
   "workspaces": [
     "apps/*",
@@ -15,15 +15,17 @@
   ],
   "scripts": {
     "check": "npm run typecheck && npm run lint && npm run guards && npm test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome ci .",
     "format": "biome format --write .",
     "guards": "node scripts/guards/egress.ts && node scripts/guards/cookie-domain.ts",
-    "test": "node scripts/guards/run-tests.ts"
+    "test": "node scripts/test/run.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@types/node": "26.6.3",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
   }
 }

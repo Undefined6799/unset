@@ -1,0 +1,173 @@
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { afterAll, describe, expect, test, vi } from "vitest";
+import {
+  compare,
+  discoverByGlob,
+  executedFiles,
+  LIST_ARGS,
+  main,
+  skippedCases,
+  skippedOnly,
+  strayTestFiles,
+  type VitestJsonReport,
+} from "./run.ts";
+
+const REPO = join(import.meta.dirname, "..", "..");
+const CONFIG = join(REPO, "vitest.config.ts");
+const PASSING = 'import { expect, test } from "vitest";\ntest("ok", () => expect(1).toBe(1));\n';
+
+const roots: string[] = [];
+function fixture(files: Record<string, string>, withModules = false): string {
+  const root = mkdtempSync(join(tmpdir(), "run-test-"));
+  roots.push(root);
+  for (const [path, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), body);
+  }
+  if (withModules) symlinkSync(join(REPO, "node_modules"), join(root, "node_modules"), "dir");
+  return root;
+}
+afterAll(() => {
+  for (const r of roots) rmSync(r, { recursive: true, force: true });
+});
+
+type Case = { fullName: string; status: "passed" | "failed" | "skipped" | "pending" | "todo" | "disabled" };
+const report = (files: Record<string, Case["status"][]>): VitestJsonReport => ({
+  testResults: Object.entries(files).map(([name, statuses]) => ({
+    name: `/repo/${name}`,
+    assertionResults: statuses.map((status, i) => ({ fullName: `t${i}`, status })),
+  })),
+});
+const none = new Set<string>();
+
+/** Runs main() quietly and returns its exit code and what it printed to stderr. */
+function runMain(root: string): { code: number; err: string } {
+  const lines: string[] = [];
+  const err = vi.spyOn(console, "error").mockImplementation((...a) => void lines.push(a.join(" ")));
+  const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const errw = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  try {
+    return { code: main({ root, config: CONFIG }), err: lines.join("\n") };
+  } finally {
+    err.mockRestore();
+    out.mockRestore();
+    errw.mockRestore();
+  }
+}
+
+describe("compare", () => {
+  test("compare_all_good", () => {
+    const outcome = compare(["a", "b"], ["a", "b"], new Set(["a", "b"]), none, [], []);
+    expect(outcome).toEqual({ notListed: [], notExecuted: [], allSkipped: [], skippedCases: [], stray: [] });
+  });
+
+  test("compare_not_listed", () => {
+    expect(compare(["a", "b"], ["a"], new Set(["a"]), none, [], []).notListed).toEqual(["b"]);
+  });
+
+  test("compare_import_error", () => {
+    const r = report({ a: ["passed"] });
+    expect(compare(["a", "b"], ["a", "b"], executedFiles("/repo", r), none, [], []).notExecuted).toEqual(["b"]);
+  });
+
+  test("compare_empty_file", () => {
+    const r = report({ c: [] });
+    const outcome = compare(["c"], ["c"], executedFiles("/repo", r), skippedOnly("/repo", r), [], []);
+    expect(outcome.notExecuted).toEqual(["c"]);
+  });
+
+  test("compare_all_skipped", () => {
+    const r = report({ c: ["todo", "skipped"] });
+    const outcome = compare(["c"], ["c"], executedFiles("/repo", r), skippedOnly("/repo", r), [], []);
+    expect(outcome.allSkipped).toEqual(["c"]);
+    expect(outcome.notExecuted).toEqual([]);
+  });
+
+  test("compare_skipped_case_in_passing_file", () => {
+    const r = report({ c: ["passed", "passed", "passed", "todo"] });
+    expect(skippedCases("/repo", r)).toEqual(["c > t3"]);
+  });
+});
+
+describe("discovery", () => {
+  test("discover_includes_deploy_and_docs", () => {
+    const root = fixture({
+      "deployment/a.test.ts": "",
+      "docs/b.test.ts": "",
+      "node_modules/c.test.ts": "",
+      "scripts/guards/fixtures/d.test.ts": "",
+    });
+    const glob = discoverByGlob(root);
+    expect(glob).toEqual(["deployment/a.test.ts", "docs/b.test.ts"]);
+    expect(compare(glob, ["docs/b.test.ts"], new Set(["docs/b.test.ts"]), none, [], []).notListed).toEqual([
+      "deployment/a.test.ts",
+    ]);
+  });
+
+  test("stray_test_files", () => {
+    const root = fixture({ "apps/web/a.spec.ts": "", "domains/x/b.test.js": "", "tests/e2e/c.spec.ts": "" });
+    expect(strayTestFiles(root)).toEqual(["apps/web/a.spec.ts", "domains/x/b.test.js"]);
+  });
+
+  test("list_uses_files_only", () => {
+    expect(LIST_ARGS).toEqual(expect.arrayContaining(["list", "--filesOnly", "--json"]));
+  });
+});
+
+describe("end to end with real Vitest", { timeout: 60_000 }, () => {
+  test("end_to_end_planted_empty_file", () => {
+    const { code, err } = runMain(fixture({ "a.test.ts": PASSING, "x.test.ts": "" }, true));
+    expect(code).toBe(1);
+    expect(err).toMatch(/notExecuted:\n\s+x\.test\.ts/);
+  });
+
+  test("only_is_rejected", () => {
+    const only = 'import { expect, test } from "vitest";\ntest.only("o", () => expect(1).toBe(1));\n';
+    expect(runMain(fixture({ "a.test.ts": PASSING, "o.test.ts": only }, true)).code).toBe(1);
+  });
+
+  test("skip_in_passing_file_is_rejected", () => {
+    const body = `${PASSING}test.skip("later", () => {});\n`;
+    const { code, err } = runMain(fixture({ "s.test.ts": body }, true));
+    expect(code).toBe(1);
+    expect(err).toContain("s.test.ts > later");
+  });
+
+  test("clean_tree_passes", () => {
+    expect(runMain(fixture({ "a.test.ts": PASSING }, true)).code).toBe(0);
+  });
+
+  test("typecheck_includes_tests", () => {
+    const tsconfig = readFileSync(join(REPO, "tsconfig.json"), "utf8");
+    const root = fixture({ "tsconfig.json": tsconfig, "a.test.ts": "const n: number = 'not a number';\n" }, true);
+    const tsc = spawnSync(join(REPO, "node_modules", ".bin", "tsc"), ["--noEmit", "-p", "tsconfig.json"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(tsc.status).not.toBe(0);
+    expect(tsc.stdout).toContain("TS2322");
+  });
+});
+
+describe("repository settings", () => {
+  test("retry_zero", async () => {
+    const config = (await import("../../vitest.config.ts")).default as { test?: { retry?: number } };
+    expect(config.test?.retry).toBe(0);
+  });
+
+  test("npmrc_lines", () => {
+    const lines = readFileSync(join(REPO, ".npmrc"), "utf8").split("\n");
+    expect(lines).toContain("ignore-scripts=true");
+    expect(lines).toContain("@unset:registry=https://127.0.0.1:9/");
+  });
+
+  test("typescript_single_major", () => {
+    const ls = spawnSync("npm", ["ls", "typescript", "--all", "--json"], { cwd: REPO, encoding: "utf8" });
+    const versions = [...ls.stdout.matchAll(/"typescript":\s*\{\s*"version":\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(versions.length).toBeGreaterThan(0);
+    for (const v of versions) expect(v).toMatch(/^7\.0\./);
+  });
+});
