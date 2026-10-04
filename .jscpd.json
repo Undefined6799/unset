@@ -1,0 +1,17 @@
+{
+  "minTokens": 40,
+  "format": ["typescript", "tsx"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/.worktrees/**",
+    "**/graphify-out/**",
+    "**/scripts/guards/fixtures/**"
+  ],
+  "reporters": ["markdown"],
+  "output": "jscpd-report",
+  "silent": false,
+  "absolute": false
+}
