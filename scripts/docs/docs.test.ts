@@ -6,12 +6,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
+  AI_NOTES_LINE,
   adrChangeProblem,
   adrImmutableProblems,
   adrProblems,
   architectureRows,
   architectureTableProblems,
   bookSnapshotProblems,
+  claudeMdImportProblems,
   claudeMdProblems,
   glossaryProblems,
   type KnownChecks,
@@ -39,6 +41,11 @@ describe("CLAUDE.md", () => {
   });
 
   test("claude_md_rules_import", () => {
+    expect(claudeMdImportProblems(ROOT, claudeMd)).toEqual([]);
+    expect(claudeMdImportProblems(ROOT, claudeMd.replace(`${TOP15_IMPORT}\n`, ""))).toHaveLength(1);
+    const full = claudeMd.replace(TOP15_IMPORT, "@docs/human/engineering/engineering-rules.md");
+    expect(claudeMdImportProblems(ROOT, full)).toHaveLength(1);
+    expect(claudeMdImportProblems(ROOT, `${claudeMd}@docs/human/missing.md\n`)).toHaveLength(2);
     expect(top15Problems(ROOT)).toEqual([]);
     expect(claudeMdProblems(claudeMd.replace(`${TOP15_IMPORT}\n`, ""))).toContain(
       `CLAUDE.md lacks the import ${TOP15_IMPORT}`,
@@ -51,6 +58,16 @@ describe("CLAUDE.md", () => {
     expect(claudeMdProblems(claudeMd.replace("**D8 Decisions:**", "**Decisions:**"))).toEqual([
       "Delivery does not mention D8",
     ]);
+  });
+
+  test("claude_md_agents_never_merge", () => {
+    expect(claudeMdProblems(claudeMd.replace("never merge them", "merge them"))).toEqual([
+      "Delivery does not say agents never merge",
+    ]);
+    expect(claudeMdProblems(claudeMd.replace("never push to\n  `main`", "push to `main`"))).toEqual([
+      "Delivery does not say agents never push to `main`",
+    ]);
+    expect(claudeMdProblems(claudeMd.replace("ADR 0009", "ADR 0008"))).toEqual(["Delivery does not name ADR 0009"]);
   });
 
   test("v2e_superseded", () => {
@@ -116,6 +133,7 @@ describe("other documents", () => {
     expect(
       prTemplateProblems(template.replace("## Step\n", "").replace("## What\n", "## What\n\n## Step\n")),
     ).toHaveLength(1);
+    expect(prTemplateProblems(template.replace(AI_NOTES_LINE, "AI notes:"))).toHaveLength(1);
     expect(PR_TEMPLATE_HEADINGS).toHaveLength(16);
   });
 

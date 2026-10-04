@@ -37,4 +37,7 @@
 
 ## What I am unsure about
 
+AI notes: updated / none needed / which
+<!-- Keep one choice; name the notes you updated. -->
+
 <!-- Optional: "Large PR: <reason>" when the change is above 800 source lines and carries the large-pr label. -->

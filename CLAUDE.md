@@ -92,14 +92,15 @@ Every change:
   security mechanism) gets its own ADR in `docs/human/decisions/`, in the first PR that depends
   on it. Never edit an accepted ADR except to mark it superseded; ADR 0001 is an append-only
   log. A change that would contradict an accepted ADR: stop and ask.
+- **Merging (decisions 40, 41; ADR 0009):** agents open PRs, **never merge them and never push to
+  `main`**; Alex alone merges. The free private plan cannot enforce it, so this rule is the gate.
 - **D1 Functions:** one job at one level of abstraction, usually fitting on a screen; never split
   to meet a line count. Security code reads as an ordered sequence of checks.
 
 ## Building from the book
 The step book is [`docs/ai/book/`](docs/ai/book/). The next step is the lowest-numbered one whose
 dependencies are merged and that has no open PR. Stop at `[ALEX]`, `[STOP]` and `[SPIKE]` exits as the
-book says. One PR per step, titled as in Delivery. Protocol traps from the prototype are in
-[`docs/ai/notes/`](docs/ai/notes/); read the matching note before touching that area.
+book says. One PR per step, titled as in Delivery.
 
 ## Parallel agents and branches
 Several agents may work here at once.
@@ -108,7 +109,7 @@ Several agents may work here at once.
 - Branch from a freshly fetched `origin/main`, in your own worktree:
   `git fetch origin main && git worktree add .worktrees/<task> -b claude/<task> origin/main`.
 - Never checkout, reset, rebase or force-push a branch you did not create.
-- Land via PR only; **agents open PRs, never merge them and never push to `main`** (decisions 40 and 41: `main` has no GitHub-side protection on the free private repository and the planned ruleset would require no approval because agent PRs carry Alex's identity, so this rule is the whole gate). Deploy only CI-built images of merged commits.
+- Land via PR only (see Delivery). Deploy only CI-built images of merged commits.
 
 ## Commands
 ```sh

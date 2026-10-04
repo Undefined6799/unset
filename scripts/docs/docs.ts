@@ -8,6 +8,15 @@ import { join } from "node:path";
 export const CLAUDE_MD_MAX_LINES = 120;
 export const TOP15_IMPORT = "@docs/human/engineering/engineering-rules-top-15.md";
 const TOP15_MAX_LINES = 25;
+/** The five files CLAUDE.md imports: the four guideline documents and the rules' Top 15 page (architecture ruling). */
+export const CLAUDE_MD_IMPORTS = [
+  "@docs/human/engineering/architecture-instructions.md",
+  "@docs/human/engineering/engineering-practices-addendum.md",
+  "@docs/human/engineering/engineering-workflow-and-change-management.md",
+  "@docs/human/engineering/architecture-and-development-guideline.md",
+  TOP15_IMPORT,
+];
+export const AI_NOTES_LINE = "AI notes: updated / none needed / which";
 const DECISIONS = "docs/human/decisions";
 const ADR_HEADINGS = ["Context", "Decision", "Alternatives", "Consequences", "Compliance"];
 export const ENTRYPOINTS = ["web", "api", "indexer", "media", "review", "admin", "pds-admin", "chat-admin"];
@@ -61,11 +70,33 @@ export function claudeMdProblems(text: string): string[] {
   if (!/the plan wins/.test(flat) || !/architecture guideline wins/.test(flat)) {
     found.push("CLAUDE.md does not state the precedence rule (plan wins; architecture guideline wins on structure)");
   }
+  return [...found, ...deliveryProblems(text), ...uiProblems(text)];
+}
+
+/** Delivery names D1, D2, D3, D4 and D8, and says agents never merge or push to `main` (decisions 40, 41; ADR 0009). */
+function deliveryProblems(text: string): string[] {
   const delivery = section(text, "Delivery");
-  for (const d of ["D1", "D2", "D3", "D4", "D8"]) {
-    if (!new RegExp(`\\b${d}\\b`).test(delivery)) found.push(`Delivery does not mention ${d}`);
+  const flat = delivery.replace(/\s+/g, " ");
+  const found = ["D1", "D2", "D3", "D4", "D8"]
+    .filter((d) => !new RegExp(`\\b${d}\\b`).test(delivery))
+    .map((d) => `Delivery does not mention ${d}`);
+  if (!/never merge/.test(flat)) found.push("Delivery does not say agents never merge");
+  if (!/never push to `main`/.test(flat)) found.push("Delivery does not say agents never push to `main`");
+  if (!/ADR 0009/.test(flat)) found.push("Delivery does not name ADR 0009");
+  return found;
+}
+
+/** CLAUDE.md imports exactly the five files, each of which exists, and never the full rules file. */
+export function claudeMdImportProblems(root: string, text: string): string[] {
+  const imports = text
+    .split("\n")
+    .filter((l) => l.startsWith("@"))
+    .map((l) => l.trim());
+  const found = imports.filter((i) => !existsSync(join(root, i.slice(1)))).map((i) => `import ${i} does not resolve`);
+  if ([...imports].sort().join("|") !== [...CLAUDE_MD_IMPORTS].sort().join("|")) {
+    found.push(`CLAUDE.md imports must be exactly: ${CLAUDE_MD_IMPORTS.join(", ")}`);
   }
-  return [...found, ...uiProblems(text)];
+  return found;
 }
 
 /** No v2e instruction survives, v2e is named superseded, and Iconoir is named the way decision 33 says. */
@@ -172,6 +203,12 @@ export function adrImmutableProblems(root: string, base: string): string[] {
 
 /** The PR template has the required headings, in order. */
 export function prTemplateProblems(text: string): string[] {
+  const afterLast = text.slice(text.indexOf("## What I am unsure about"));
+  const notes = afterLast.split("\n").some((l) => l.trim() === AI_NOTES_LINE);
+  return [...headingProblems(text), ...(notes ? [] : [`PR template lacks "${AI_NOTES_LINE}" after its headings`])];
+}
+
+function headingProblems(text: string): string[] {
   const headings = [...text.matchAll(/^## (.+?)\s*$/gm)].map((m) => m[1]);
   const inOrder = headings.filter((h) => h !== undefined && PR_TEMPLATE_HEADINGS.includes(h));
   return inOrder.join("|") === PR_TEMPLATE_HEADINGS.join("|")
