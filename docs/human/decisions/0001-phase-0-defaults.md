@@ -2,6 +2,8 @@
 
 Status: proposed, awaiting confirmation from Alex; amended the same evening with Alex's 19 review decisions (see the dated block below). Date: 2026-10-02.
 
+**Append-only decisions log since 2026-10-04 (decision 35, D8).** This record collected decisions 1 to 34 by editing. From decision 35 on it is a log: entries are appended at the end of the Decision section and never rewritten, every new decision also gets its own ADR (`0002` onwards), and an accepted ADR changes only to be marked superseded. The docs test allows appends to this file alone.
+
 ## Context
 [`PLAN.md`](../PLAN.md) §11 lists twelve open questions. Alex asked to continue before
 answering them. Phase 0 proceeds on the plan's recommended answers where a choice is
@@ -326,6 +328,25 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   `shared/lexicons` for @atproto/lex); the serving interface may import its app's render entry;
   `infrastructure/matrix/synapse-module` holds the Python exception; `scripts/` is tooling only; docs/human
   is anything a person must read or follow. Plan §7 and the repo guideline carry the refined text.
+
+- **Decision 35 (Alex, 2026-10-04 12:56Z, "Adopt all" on the architecture handoff card; own record: [0002](0002-engineering-rules.md)):** the 48
+  book-derived engineering rules (`docs/human/engineering/engineering-rules.md`) are the fifth engineering
+  guideline, with the recommended option for each of its nine open choices: D1 a function does one job at one
+  level of abstraction, never split to meet a line count; D2 Beams-style commit subjects with the step id in
+  front, no Conventional Commits, squash-only merges, checked by `scripts/guards/commit-msg.ts`; D3 PR size
+  warns above about 400 changed source lines and fails above 800 without a `large-pr` label and reason, tests
+  excluded; D4 at most three agent PRs waiting for Alex, sev-1/2 fixes excepted; D5 the minimal
+  digest-verified deploy (verify, pull by digest, preflight, migrate, smoke, rollback) lands at the end of
+  Phase 2 for the closed-test host; D6 Stryker deferred, reconsidered for the Phase 5 security tests; D7 a
+  private profile answers like a missing one (`ProfilePrivate` folds into `AccountUnavailable` for everyone
+  but the owner; plan §5.4); D8 this record becomes an append-only decisions log and each new decision gets
+  its own ADR; D9 per-service operational health signals are allowed beside `metrics_daily`, never per user,
+  retention in the retention table and the RoPA (decision 17 clarified). CLAUDE.md imports the rules' Top 15
+  page. The plan wins over a rule; the architecture guideline wins on structure.
+- **Translations after the first slice (Alex, 2026-10-04 12:58Z, "English first" on the step-book card, against the
+  recommendation):** slice 1 ships English text kept in one messages module per feature; the i18n slice
+  (P1.19, EN/FR catalogs) follows as its own slice and converts those modules first; no French page ships
+  before it lands.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,

@@ -20,7 +20,7 @@ Phase 0: repository, CI and guard rails only. No application code yet.
 | `infrastructure/` | External systems behind small contracts, `net-guard`, `seal`, `audit` |
 | `shared/` | Generic code with no product meaning (MIT): `lexicons`, `ui`, `config`, `errors`, `i18n` |
 | `deployment/`, `tests/` | Compose, edge, backup, preflight; integration and e2e tests |
-| `docs/` | `human/` (guides, decisions, the four engineering guidelines) and `ai/` (plan, step book, handoffs) |
+| `docs/` | `human/` (guides, decisions, the five engineering guidelines) and `ai/` (plan, step book, handoffs) |
 | `scripts/guards/` | Repository guards run in CI |
 
 ## Development
