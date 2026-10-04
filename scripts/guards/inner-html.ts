@@ -11,6 +11,7 @@ const SINKS = [
   /(\.|\[\s*["'`])(inner|outer)HTML(["'`]\s*\])?\s*([+|&?]{1,2})?=(?!=)/,
   /\binsertAdjacentHTML\s*\(/,
   /\bdocument\.write(ln)?\s*\(/,
+  /\b(setHTMLUnsafe|parseHTMLUnsafe)\s*\(/, // The Sanitizer API's explicitly unsafe variants (Alex, 2026-10-04).
 ];
 
 export function scanInnerHtml(file: string, source: string): Finding[] {

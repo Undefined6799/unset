@@ -1,0 +1,3 @@
+// fixture: apps/web/src/unsafe.ts findings=2
+el.setHTMLUnsafe(s);
+export const doc = Document.parseHTMLUnsafe(s);
