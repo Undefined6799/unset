@@ -5,8 +5,8 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [k: s
 
 export class SerializeError extends Error {
   readonly code: "islands.props_invalid" | "islands.props_too_large";
-  constructor(code: SerializeError["code"]) {
-    super(code);
+  constructor(code: SerializeError["code"], options?: { cause?: unknown }) {
+    super(code, options);
     this.name = "SerializeError";
     this.code = code;
   }
@@ -39,38 +39,77 @@ const invalid = (): never => {
   throw new SerializeError("islands.props_invalid");
 };
 
-/** Throws `props_invalid` unless `value` is plain JSON data: finite numbers, plain arrays and objects, no cycles. */
-function validate(value: unknown, depth: number, ancestors: WeakSet<object>): void {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) invalid();
-    return;
-  }
-  if (typeof value !== "object" || depth >= MAX_DEPTH || ancestors.has(value)) invalid();
-  else validateContainer(value, depth, ancestors);
+/**
+ * A lower bound on the output bytes so far. Checked during the walk, so a value whose shared subtrees would expand
+ * to gigabytes (`v = [v, v]` repeated) stops at the size limit instead of walking every path.
+ */
+type Budget = { bytes: number; readonly max: number };
+
+const spend = (budget: Budget, bytes: number): void => {
+  budget.bytes += bytes;
+  if (budget.bytes > budget.max) throw new SerializeError("islands.props_too_large");
+};
+
+/** An own data property's value; an accessor, a hidden (non-enumerable) or missing property is not plain data. */
+function dataValue(value: object, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) invalid();
+  return (descriptor as PropertyDescriptor).value;
 }
 
-/** A plain array (no holes) or plain object, each child validated one level deeper. */
-function validateContainer(value: object, depth: number, ancestors: WeakSet<object>): void {
-  const isArray = Array.isArray(value);
-  if (isArray ? Object.getPrototypeOf(value) !== Array.prototype : !isPlainObject(value)) invalid();
-  ancestors.add(value);
-  // Index loop for arrays, not for-of: a hole reads as `undefined`, which JSON would quietly turn into `null`.
-  const children = isArray ? Array.from({ length: value.length }, (_, i) => i) : Object.keys(value);
-  for (const key of children) {
-    if (!Object.hasOwn(value, key)) invalid();
-    validate((value as Record<string | number, unknown>)[key], depth + 1, ancestors);
+/**
+ * A fresh plain copy of `value`, or `props_invalid` unless it is plain JSON data: finite numbers, plain arrays without
+ * holes or extra properties, plain or null-prototype objects with only enumerable string-keyed data properties,
+ * depth 32, no cycles. Each property is read once, so a getter or Proxy cannot answer differently when stringified.
+ */
+function copyPlain(value: unknown, depth: number, ancestors: WeakSet<object>, budget: Budget): JsonValue {
+  if (typeof value === "number" && !Number.isFinite(value)) return invalid();
+  if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+    spend(budget, typeof value === "string" ? value.length + 2 : 1);
+    return value;
   }
+  if (typeof value !== "object" || depth >= MAX_DEPTH || ancestors.has(value)) return invalid();
+  spend(budget, 2);
+  ancestors.add(value);
+  const copy = Array.isArray(value)
+    ? copyArray(value, depth, ancestors, budget)
+    : copyObject(value, depth, ancestors, budget);
   ancestors.delete(value); // ancestors only: the same object twice in sibling branches is not a cycle
+  return copy;
+}
+
+function copyArray(value: unknown[], depth: number, ancestors: WeakSet<object>, budget: Budget): JsonValue[] {
+  if (Object.getPrototypeOf(value) !== Array.prototype) invalid();
+  const length = value.length;
+  if (Reflect.ownKeys(value).length !== length + 1) invalid(); // holes or extra properties besides `length`
+  return Array.from({ length }, (_, i) => copyPlain(dataValue(value, String(i)), depth + 1, ancestors, budget));
+}
+
+function copyObject(value: object, depth: number, ancestors: WeakSet<object>, budget: Budget): JsonValue {
+  if (!isPlainObject(value)) invalid();
+  // Null prototype, so a `__proto__` key stays an own property of the copy.
+  const copy: Record<string, JsonValue> = Object.create(null);
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") invalid();
+    spend(budget, (key as string).length + 3);
+    copy[key as string] = copyPlain(dataValue(value, key as string), depth + 1, ancestors, budget);
+  }
+  return copy;
 }
 
 /** JSON for an inline script element. Throws `SerializeError` for non-JSON data or output over `maxBytes`. */
 export function serializeProps(value: JsonValue, opts: { maxBytes?: number } = {}): string {
-  validate(value, 0, new WeakSet());
-  const json = JSON.stringify(value).replace(HTML_BREAKERS, (ch) => ESCAPES[ch] ?? ch);
-  if (Buffer.byteLength(json, "utf8") > (opts.maxBytes ?? DEFAULT_MAX_BYTES)) {
-    throw new SerializeError("islands.props_too_large");
+  const max = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  if (!(Number.isInteger(max) && max > 0)) throw new RangeError("maxBytes must be a positive integer");
+  let copy: JsonValue;
+  try {
+    copy = copyPlain(value, 0, new WeakSet(), { bytes: 0, max });
+  } catch (error) {
+    if (error instanceof SerializeError) throw error;
+    throw new SerializeError("islands.props_invalid", { cause: error }); // a throwing getter or Proxy trap
   }
+  const json = JSON.stringify(copy).replace(HTML_BREAKERS, (ch) => ESCAPES[ch] ?? ch);
+  if (new TextEncoder().encode(json).length > max) throw new SerializeError("islands.props_too_large");
   return json;
 }
 

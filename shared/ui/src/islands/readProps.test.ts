@@ -35,3 +35,22 @@ test("read_props_roundtrip", () => {
   addScript("p", '{"a":"\\u003c/script\\u003e","b":[1,null,true]}');
   expect(readProps("p")).toEqual({ a: "</script>", b: [1, null, true] });
 });
+
+test("read_props_needs_a_json_script", () => {
+  addScript("plain", "{}");
+  (document.getElementById("plain") as HTMLScriptElement).type = "text/plain";
+  expect(() => readProps("plain")).toThrow(PropsMissing);
+  const input = document.createElement("input");
+  input.id = "input";
+  input.setAttribute("type", "application/json");
+  document.body.append(input);
+  expect(() => readProps("input")).toThrow(PropsMissing);
+});
+
+test("read_props_survives_dom_clobbering", () => {
+  addScript("p", '{"a":1}');
+  const img = document.createElement("img");
+  img.setAttribute("name", "getElementById");
+  document.body.append(img);
+  expect(readProps("p")).toEqual({ a: 1 });
+});

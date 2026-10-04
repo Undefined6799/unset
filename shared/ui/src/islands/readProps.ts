@@ -10,7 +10,8 @@ export class PropsMissing extends Error {
 }
 
 export function readProps(id: string): JsonValue {
-  const element = document.getElementById(id);
+  // Called from the prototype: a page element named "getElementById" (DOM clobbering) cannot replace the method.
+  const element = Document.prototype.getElementById.call(document, id);
   // Only the JSON script element counts, so a same-id element elsewhere on the page is never read as props.
   if (!(element instanceof HTMLScriptElement) || element.type !== "application/json") throw new PropsMissing(id);
   try {

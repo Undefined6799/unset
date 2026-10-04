@@ -5,7 +5,19 @@ import { expect, test } from "vitest";
 import { serializeProps } from "./props.ts";
 
 const BREAKERS = new Set([0x3c, 0x3e, 0x26, 0x2028, 0x2029]);
-const value = fc.jsonValue({ stringUnit: "binary", maxDepth: 6 });
+/** Strings built from the pieces that end or confuse a script element, so escaping is tested where it matters. */
+const BREAKER_PIECES = ["</script", "</SCRIPT ", "<script", "<!--", "-->", "<", ">", "&", "/", '"', "\\"].concat([
+  String.fromCharCode(0x2028),
+  String.fromCharCode(0x2029),
+]);
+const breakerString = fc
+  .array(fc.oneof(fc.constantFrom(...BREAKER_PIECES), fc.string({ maxLength: 3 })), { maxLength: 8 })
+  .map((parts) => parts.join(""));
+const value = fc.oneof(
+  fc.jsonValue({ stringUnit: "binary", maxDepth: 6 }),
+  fc.dictionary(breakerString, breakerString, { maxKeys: 4 }),
+  fc.array(breakerString, { maxLength: 4 }),
+);
 /** JSON has no negative zero: it serialises as `0`, so compare with it normalised. */
 const normalise = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 
