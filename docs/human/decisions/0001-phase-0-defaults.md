@@ -356,6 +356,11 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   `audit-verify` checks the audit chain heads with no write grant; `chat-auth` keeps OIDC issuance out of `web`.
   `docs/human/architecture.md` (rule AB-4) records the ranked driving characteristics and the checked rules.
 
+- **Decision 36 (Alex, 2026-10-04 13:46Z, "Close it" on the plan thread's card; own record: [0003](0003-chat-lookup-private-members.md)):**
+  chat's handle lookup answers "no such member" for a private member, the same as for a stranger, so chat leaks no
+  more than the profile page does under D7. Private people are reached only from an existing conversation or a request
+  they sent; the Everyone/Nobody request setting may reopen lookup per person later. Plan §5.6; step P6.06a.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
