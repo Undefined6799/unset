@@ -4,7 +4,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, posix, relative, sep } from "node:path";
 import { sourceFiles } from "../guards/files.ts";
 
 type PathRule = { path?: string; pathNot?: string | string[] };
@@ -22,7 +22,10 @@ const ADMIN_SERVICES = ["interfaces/pds-admin", "interfaces/chat-admin"];
 /** devDependencies a zero-dependency workspace may still list: test tooling, never shipped. */
 const TEST_TOOLING = new Set(["vitest"]);
 const TEST_FILE = /\.test\.(?:ts|tsx|mts|cts)$/;
-const UNSET_IMPORT = /(?:from\s+|import\s*\(\s*)["'](@unset\/[^"'/]+)/g;
+// `from "…"`, `import("…")`, a side-effect `import "…"` and `require("…")`.
+const UNSET_IMPORT = /(?:from\s+|import\s*\(?\s*|require\s*\(\s*)["'](@unset\/[^"'/]+)/g;
+/** Every manifest field that installs a package. */
+const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
 
 /** A workspace as found on disk: its repo-relative folder (`domains/identity`) and parsed manifests. */
 export type Workspace = { dir: string; pkg: Record<string, unknown>; tsconfig: Record<string, unknown> };
@@ -81,14 +84,20 @@ export function mayReference(fromDir: string, toDir: string): boolean {
   return entries.some((file) => matrixAllows(fromDir, file));
 }
 
+/** Every package a manifest names, in any dependency field. */
+const allDependencies = (pkg: Record<string, unknown>): string[] =>
+  DEPENDENCY_FIELDS.flatMap((field) => Object.keys((pkg[field] ?? {}) as Record<string, string>));
+
 const unsetDependencies = (pkg: Record<string, unknown>): string[] =>
-  Object.keys((pkg.dependencies ?? {}) as Record<string, string>).filter((d) => d.startsWith("@unset/"));
+  allDependencies(pkg).filter((d) => d.startsWith("@unset/"));
 
 const referencePaths = (tsconfig: Record<string, unknown>): string[] =>
   ((tsconfig.references ?? []) as { path: string }[]).map((r) => r.path);
 
-/** `../../shared/config` written in domains/identity/tsconfig.json → `shared/config`. */
-const fromWorkspace = (ref: string): string => ref.replace(/^\.\.\/\.\.\//, "").replace(/\/$/, "");
+/** A tsconfig reference resolved from the folder that holds it: `../../shared/config` in `domains/identity` →
+ * `shared/config`. A path that leaves the repository stays visibly wrong (`../x`) and fails the MATRIX check. */
+const resolveReference = (fromDir: string, ref: string): string =>
+  posix.normalize(posix.join(fromDir, ref)).replace(/\/$/, "");
 
 function manifestProblems({ dir, pkg, tsconfig }: Workspace): string[] {
   const [top, name] = dir.split("/");
@@ -112,12 +121,12 @@ function manifestProblems({ dir, pkg, tsconfig }: Workspace): string[] {
 
 function referenceProblems(ws: Workspace, byName: Map<string, string>): string[] {
   const problems: string[] = [];
-  const refs = referencePaths(ws.tsconfig).map(fromWorkspace);
+  const refs = referencePaths(ws.tsconfig).map((ref) => resolveReference(ws.dir, ref));
   const deps = unsetDependencies(ws.pkg).map((d) => byName.get(d) ?? d);
   for (const target of new Set([...refs, ...deps])) {
     if (!mayReference(ws.dir, target)) problems.push(`${ws.dir}: may not reference ${target} (MATRIX)`);
   }
-  const hasDeps = Object.keys((ws.pkg.dependencies ?? {}) as object).length > 0;
+  const hasDeps = allDependencies(ws.pkg).some((d) => !d.startsWith("@unset/"));
   if (ws.dir.startsWith("domains/") && hasDeps) problems.push(`${ws.dir}: a domain has no npm dependencies (AB-1)`);
   return problems;
 }
@@ -130,7 +139,9 @@ function zeroDependencyProblems(ws: Workspace, byName: Map<string, string>): str
   const allowlisted = boundaries.ZERO_DEP_ALLOWLIST.includes(`${ws.dir}/`);
   if (!allowlisted && !ADMIN_SERVICES.includes(ws.dir)) return [];
   const named = (field: string): string[] => Object.keys((ws.pkg[field] ?? {}) as object);
-  const declared = [...named("dependencies"), ...named("devDependencies").filter((d) => !TEST_TOOLING.has(d))];
+  const declared = DEPENDENCY_FIELDS.flatMap((field) =>
+    named(field).filter((d) => field !== "devDependencies" || !TEST_TOOLING.has(d)),
+  );
   const allowed = (dep: string): boolean =>
     !allowlisted && boundaries.ZERO_DEP_ALLOWLIST.includes(`${byName.get(dep) ?? ""}/`);
   const problems = declared
@@ -151,7 +162,7 @@ function installedClosure(root: string, ws: Workspace): string[] | null {
   type Node = { dependencies?: Record<string, Node> };
   let tree: Node;
   try {
-    tree = JSON.parse(run.stdout) as Node;
+    tree = JSON.parse(run.stdout ?? "") as Node;
   } catch {
     return null;
   }
@@ -175,7 +186,7 @@ export function closureProblems(root: string): string[] {
 
 /** Each `@unset/*` package imported by a workspace's code must be in its dependencies and references. */
 function importProblems(root: string, ws: Workspace, byName: Map<string, string>): string[] {
-  const refs = new Set(referencePaths(ws.tsconfig).map(fromWorkspace));
+  const refs = new Set(referencePaths(ws.tsconfig).map((ref) => resolveReference(ws.dir, ref)));
   const deps = new Set(unsetDependencies(ws.pkg));
   const imported = new Set(
     sourceFiles(root, [ws.dir]).flatMap((f) =>
@@ -195,7 +206,7 @@ function importProblems(root: string, ws: Workspace, byName: Map<string, string>
 export function workspaceProblems(root: string): string[] {
   const workspaces = findWorkspaces(root);
   const byName = new Map(workspaces.map((ws) => [String(ws.pkg.name), ws.dir]));
-  const rootRefs = new Set(referencePaths(readJson(root, "tsconfig.json")));
+  const rootRefs = new Set(referencePaths(readJson(root, "tsconfig.json")).map((ref) => resolveReference(".", ref)));
   const problems = FORBIDDEN_TOPS.filter((top) => existsSync(join(root, top))).map(
     (top) => `${top}/: folder not allowed (decisions 25 and 34)`,
   );
@@ -216,4 +227,26 @@ export function workspaceProblems(root: string): string[] {
     );
   }
   return problems.sort();
+}
+
+const TS_SOURCE = /\.(?:ts|tsx|mts|cts)$/;
+const TSC = join(ROOT, "node_modules", ".bin", "tsc");
+
+/**
+ * TypeScript files no project in the root `tsconfig.json` compiles. `tsc -b` checks only the projects it is given,
+ * so a file outside every project (a new `tests/` or `deployment/` folder, a code folder with no `package.json`)
+ * would otherwise go unchecked while Vitest still runs it.
+ */
+export function untypecheckedFiles(root: string): string[] {
+  const projects = referencePaths(readJson(root, "tsconfig.json")).map((ref) => resolveReference(".", ref));
+  const covered = new Set(
+    projects.flatMap((project) => {
+      const run = spawnSync(TSC, ["-p", join(project, "tsconfig.json"), "--listFilesOnly"], {
+        cwd: root,
+        encoding: "utf8",
+      });
+      return (run.stdout ?? "").split("\n").map((file) => relative(root, file.trim()).split(sep).join("/"));
+    }),
+  );
+  return sourceFiles(root, ["."]).filter((f) => TS_SOURCE.test(f) && !f.endsWith(".d.ts") && !covered.has(f));
 }
