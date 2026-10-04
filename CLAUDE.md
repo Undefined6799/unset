@@ -98,7 +98,7 @@ Several agents may work here at once.
 - Branch from a freshly fetched `origin/main`, in your own worktree:
   `git fetch origin main && git worktree add .worktrees/<task> -b claude/<task> origin/main`.
 - Never checkout, reset, rebase or force-push a branch you did not create.
-- Land via PR only. Deploy only CI-built images of merged commits.
+- Land via PR only; **agents open PRs, never merge them and never push to `main`** (decisions 40 and 41: `main` has no GitHub-side protection on the free private repository and the planned ruleset would require no approval because agent PRs carry Alex's identity, so this rule is the whole gate). Deploy only CI-built images of merged commits.
 
 ## Commands
 ```sh
