@@ -239,12 +239,12 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - CSRF gate and session;
 - `verifyHandle`, `net-guard`, serialiser and `safeHref`;
 - seal, the CSP builder, media sandbox headers;
-- roles and grants on what already exists: a new role, a change to a role's attributes, a grant widened or narrowed on an existing table, column, function or schema, default privileges and row-level policies (in `roles.json` or a migration);
-- `audit/` append, `eraseDid`;
-- `shared/http/`, `shared/admin-envelope/`, `pds-admin`, `chat-admin`, `chat-auth`;
+- roles and grants on what already exists: a new role, a change to a role's attributes, a grant widened or narrowed on an existing table, column, function or schema, default privileges and row-level policies (the role roster `roles.json` whole, or a migration or `grant-matrix.json` entry); a grant on a schema always counts;
+- `audit/` append, `eraseDid` and existing rows of `erasure-registry.json`;
+- `shared/http/` (the mechanisms; route rate-limit policies live with their interface, not here), `shared/admin-envelope/`, `pds-admin`, `chat-admin`, `chat-auth`;
 - the lexicons and permission set in `shared/lexicons/`, the legal-hold seal path and its offline export CLI `interfaces/legal-hold-export/`, and `deployment/edge/`.
-- Rides with its feature step instead (still CODEOWNERS security-reviewed, not isolated): a migration that creates new tables, columns or functions (SECURITY DEFINER included) and the `roles.json` entries that grant on those new objects only. A step that needs a change to `shared/http/` or another listed path becomes two steps, the trusted-base change first, so "one step, one PR" still holds.
-- Enforced by: a CI check that a PR touching a trusted-base path touches only trusted-base files, their tests and docs. For migrations and `roles.json` the check parses the diff: any role statement, `GRANT`/`REVOKE`, default-privilege or policy change on an object the same PR does not create counts as trusted base. The CODEOWNERS security-review gate in Plan §9 stays and covers all of `infrastructure/postgres/`, new objects included.
+- Rides with its feature step instead (still CODEOWNERS security-reviewed, not isolated): a migration that creates new tables, columns, views, sequences or functions (SECURITY DEFINER included), the `grant-matrix.json` entries that grant on those new objects only, and new `erasure-registry.json` rows for columns the same PR creates. A step that needs a change to `shared/http/` or another listed path becomes two steps, the trusted-base change first, so "one step, one PR" still holds.
+- Enforced by: a CI check that a PR touching a trusted-base path touches only trusted-base files, their tests and docs. For migrations, `grant-matrix.json` and `erasure-registry.json` the check parses the diff and fails closed: any role statement or role attribute (`passwordFrom` included), schema grant, `GRANT`/`REVOKE`, default-privilege or policy change on an object the same PR does not create, and any changed or removed registry row, counts as trusted base. The CODEOWNERS security-review gate in Plan §9 stays and covers all of `infrastructure/postgres/`, new objects included.
 - Source: Anderson 3rd ed. — ch. 27–28.
 - Status: PARTLY — `02-shared-blocks.md`, Plan §9. NEW: isolated PRs.
 - Priority: P1
