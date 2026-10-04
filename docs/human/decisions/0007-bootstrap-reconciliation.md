@@ -18,7 +18,7 @@ Each row below is changed by its owning step and by no other.
 | Item | Bootstrap value | New value | Why | Owning step |
 | --- | --- | --- | --- | --- |
 | Node | `.nvmrc` `24`, `engines` `>=24.0.0` | exact `26.x.y` | decision 16 | P0.04 |
-| TypeScript | `typescript` `6.0.3` | `7.0.x`, exact pin | decision 16 | P0.04 |
+| TypeScript | `typescript` `7.0.2` (Dependabot PR #3), config written for 6 | 7 config checked with Node 26 and Vitest | decision 16 | P0.04 |
 | Test runner | `node:test` via `scripts/guards/run-tests.ts` | Vitest only, discovered equals executed | decision 16, rule TE-4 | P0.04 |
 | `.npmrc` | `engine-strict`, `save-exact`, `fund=false`, `audit-level=high`, no `ignore-scripts` | `ignore-scripts`, `@unset` scope blocked | plan §6.1 | P0.04 |
 | Module boundaries | none | dependency-cruiser on the swc parser | plan §7, decision 34, rule AB-1 | P0.05 |
@@ -56,11 +56,12 @@ same root, merged by Alex on 2026-10-04 at 18:42Z as `6e9a02b`. `main` has one r
 ## Consequences
 The step book's recorded expectation (root `baa2768`, tip `ed1dd81`, 41 commits) no longer
 matches: the bootstrap history was rebased onto GitHub's initial commit before PR #1, so the
-bundle root differs. The step-book owner updates its header from the facts above. From P0.03
-on, every change lands as a squash merge. Dependabot PRs #2 (gitleaks-action 3.0.0) and #4
-(`@types/node` 26.6.3) were merged on 2026-10-04 before P0.07 and P0.08; their values are the
-bootstrap values above. PR #3 (TypeScript 7) is superseded by P0.04, which pins TypeScript with
-Node and Vitest in one step.
+bundle root differs. The step-book owner updates its header from the facts above. Every later
+change lands through a pull request as a squash merge, by rule: GitHub's free plan offers no
+ruleset or branch protection for a private repository, and Alex chose to go without one
+(2026-10-04 20:45Z). Dependabot PRs #2 (gitleaks-action 3.0.0), #3
+(TypeScript 7.0.2) and #4 (`@types/node` 26.6.3) were merged on 2026-10-04 before P0.04, P0.07
+and P0.08; their values are the bootstrap values above, and `npm run check` passes with them.
 
 ## Compliance
 Documentation only. No code, data, personal data or security control changes.
