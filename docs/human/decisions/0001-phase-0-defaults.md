@@ -380,6 +380,13 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   member is told the target sees it. Plan §11 Q2b proposal 2; fits decision 38, where the target is a reader of the
   record in the member's space.
 
+- **Decision 40 (Alex, 2026-10-04 20:09Z, "No approvals" on the plan thread's card, against the recommendation; own record: [0008](0008-ruleset-without-required-approvals.md)):**
+  the main-branch ruleset requires a PR and green checks, forbids force-push and deletion, and requires zero
+  approvals with no enforced code-owner review. Agent PRs are opened under Alex's own GitHub identity and GitHub
+  never lets an author approve their own PR, so a required approval would block every agent PR. Alex alone merges,
+  by rule (CLAUDE.md: agents never merge); the accepted cost is that nothing technical stops an agent acting as
+  Alex from merging. The machine-account alternative was declined. Plan §8 Phase 0 and §9; step P0.03 step 4b.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
