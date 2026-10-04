@@ -193,9 +193,9 @@ describe("boundary rules", () => {
     await expectPass(edge("tests/integration/a.test.ts", "../../scripts/guards/files.ts"));
   });
 
-  test("depcruise_no_deep_import", async () => {
+  test("depcruise_infra_shared_via_index", async () => {
     await expectFail(
-      "no-deep-import",
+      "infra-shared-via-index",
       edge("interfaces/http/a.ts", "../../shared/http/csrf.ts"),
       edge("interfaces/http/a.ts", "../../infrastructure/postgres/pool.ts"),
       edge("infrastructure/pds/a.ts", "../net-guard/classify.ts"),
@@ -209,6 +209,8 @@ describe("boundary rules", () => {
       edge("tests/integration/a.test.ts", "../../infrastructure/postgres/index.ts"),
       edge("infrastructure/postgres/a.ts", "./pool/b.ts"),
       edge("infrastructure/postgres/pool.test.ts", "./pool.ts"),
+      edge("apps/web/a.ts", "../../shared/ui/button.module.css"),
+      edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
     );
   });
 

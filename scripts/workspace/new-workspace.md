@@ -20,7 +20,7 @@ There is no `packages/`, `modules/` or `plugins/` folder (decisions 25 and 34). 
   outDir: "dist" }`, and `references` to each workspace it imports (`{ "path": "../../shared/errors" }`).
 - At least one `*.test.ts` beside its code.
 - `index.ts`: the only file other folders import from an `infrastructure/` or `shared/` workspace (rule DC-2,
-  dependency-cruiser `no-deep-import`); a domain is reached the same way (`domain-cross-via-index`).
+  dependency-cruiser `infra-shared-via-index`); a domain is reached the same way (`domain-cross-via-index`).
 
 Then add `{ "path": "<top>/<name>" }` to the root `tsconfig.json` `references` and run `npm install` so the
 lockfile records the workspace.
