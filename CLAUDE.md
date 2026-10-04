@@ -59,7 +59,9 @@ Every change:
 ## UI
 - All UI follows the unset.sh design sheet (plan §11 Q11): its `tokens.json` is the token source
   for the CSS Modules; new components only when registered on the sheet with Alex's approval.
-- **Icons: Iconoir** (decision 33), scoped to the design sheet's Icon list and rendered by the
+- The 0x40 "v2e" visual direction (vault note `v2e-visual-direction-locked`) is **superseded** by the
+  design sheet; follow nothing from it.
+- **Icons: Iconoir 7.12.1** (decision 33), scoped to the design sheet's Icon list and rendered by the
   `shared/ui` `Icon` component from the copied, pinned SVG data. No icon npm package
   (`iconoir-react` or any other), nothing fetched at runtime, never emoji or one-off SVG.
 
@@ -71,25 +73,31 @@ Every change:
   client file:line and spec URL in the comment and the commit.
 
 ## Delivery (decision 35: rules DL-1, DL-2, DL-6, DO-1, DO-2, DC-1)
-- **Commits:** subject = step id + capitalised imperative summary, no trailing period, under
+- **D2 Commits:** subject = step id + capitalised imperative summary, no trailing period, under
   about 50 characters after the id, completing "if applied, this commit will ..."
   (`P1.07 Enforce exact Origin match in CSRF gate`); blank line; body wrapped at 72 saying what
   and why. No Conventional Commits prefix; the kind of change is a PR label. Merges are squash
   only (title = PR title, body = the commit messages).
-- **PRs:** one step and one ownership path per PR, under about 400 changed source lines (tests,
+- **D3 PRs:** one step and one ownership path per PR, under about 400 changed source lines (tests,
   lockfile, generated code and lexicon JSON excluded); CI fails above 800 without a `large-pr`
   label and a reason. Refactoring and behaviour change go in separate commits. Fill the one PR
   template and self-review against it before asking Alex.
-- **Queue:** at most three agent PRs may wait for Alex at once (severity-1 and -2 fixes
-  excepted). List the open PRs before starting a new slice; if three are waiting, pick up
+- **D4 Queue:** at most three agent PRs may wait for Alex at once (severity-1 and -2 fixes
+  excepted). Run `gh pr list --state open` before starting a step; if three are waiting, pick up
   review feedback instead.
-- **Decisions:** anything expensive to reverse (data model, external or lexicon contract,
+- **D8 Decisions:** anything expensive to reverse (data model, external or lexicon contract,
   process, role or network boundary, runtime dependency, new pattern or top-level folder,
   security mechanism) gets its own ADR in `docs/human/decisions/`, in the first PR that depends
   on it. Never edit an accepted ADR except to mark it superseded; ADR 0001 is an append-only
   log. A change that would contradict an accepted ADR: stop and ask.
-- **Functions:** one job at one level of abstraction, usually fitting on a screen; never split
+- **D1 Functions:** one job at one level of abstraction, usually fitting on a screen; never split
   to meet a line count. Security code reads as an ordered sequence of checks.
+
+## Building from the book
+The step book is [`docs/ai/book/`](docs/ai/book/). The next step is the lowest-numbered one whose
+dependencies are merged and that has no open PR. Stop at `[ALEX]`, `[STOP]` and `[SPIKE]` exits as the
+book says. One PR per step, titled as in Delivery. Protocol traps from the prototype are in
+[`docs/ai/notes/`](docs/ai/notes/); read the matching note before touching that area.
 
 ## Parallel agents and branches
 Several agents may work here at once.
