@@ -3,24 +3,25 @@
 # One owner today; a second owner is added to these lines when one exists.
 # Nothing enforces code-owner review: agent pull requests carry the owner's
 # own identity (decision 40), and the free plan has no ruleset for a private
-# repository (ADR 0007). These lines route review and record the
+# repository (decision 41). These lines route review and record the
 # security-review paths; the owner reads the diff of any path below before
 # merging.
 #
-# GitHub uses the last matching pattern, so the default line comes first.
+# GitHub uses the last matching pattern, so the default line comes first and
+# a broader folder always comes before the narrower paths inside it.
 # A pattern for a path that does not exist yet is kept on purpose.
 
 * @Undefined6799
 
 # --- Security review ---------------------------------------------------
 
+# Identity
+/domains/identity/ @Undefined6799
+
 # Auth and sessions
 /domains/identity/auth/ @Undefined6799
 /interfaces/http/session-cookie.ts @Undefined6799
 /infrastructure/pds/ @Undefined6799
-
-# Identity
-/domains/identity/ @Undefined6799
 
 # Request security: server kit (CSRF gate, CSP, limits, client IP, return path)
 /shared/http/ @Undefined6799
@@ -77,15 +78,15 @@
 # Lexicons and permission set
 /shared/lexicons/ @Undefined6799
 
-# Edge (also covered by /deployment/ below; listed alone so the SE-6 list maps one to one)
-/deployment/edge/ @Undefined6799
-
 # Supply chain
 /.github/ @Undefined6799
 /deployment/ @Undefined6799
 /package-lock.json @Undefined6799
 /.npmrc @Undefined6799
 /renovate.json @Undefined6799
+
+# Edge (inside /deployment/; listed alone so the SE-6 list maps one to one)
+/deployment/edge/ @Undefined6799
 
 # Repo guards
 /scripts/guards/ @Undefined6799
@@ -97,9 +98,10 @@
 # trusted base (SE-6)
 # Machine-read by the trusted-base check (step P0.09c): a pull request that
 # touches a path below touches only trusted-base files, their tests and docs.
+# The section runs from its heading to the end of the file, has no blank
+# lines, and stays last.
 # parsed: /infrastructure/postgres/migrations/ /infrastructure/postgres/grant-matrix.json /infrastructure/postgres/erasure-registry.json
 # trusted functions: core.erase_* core.is_erased core.allow_retrack core.is_held mod.erase_foreign_did
-
 # CSRF gate, session and CSP builder
 /shared/http/ @Undefined6799
 /domains/identity/auth/session-store.ts @Undefined6799
