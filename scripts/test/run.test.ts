@@ -13,6 +13,7 @@ import {
   skippedOnly,
   strayTestFiles,
   type VitestJsonReport,
+  vitestArgs,
 } from "./run.ts";
 
 const REPO = join(import.meta.dirname, "..", "..");
@@ -38,23 +39,20 @@ type Case = { fullName: string; status: "passed" | "failed" | "skipped" | "pendi
 const report = (files: Record<string, Case["status"][]>): VitestJsonReport => ({
   testResults: Object.entries(files).map(([name, statuses]) => ({
     name: `/repo/${name}`,
+    status: statuses.includes("failed") ? "failed" : "passed",
     assertionResults: statuses.map((status, i) => ({ fullName: `t${i}`, status })),
   })),
 });
 const none = new Set<string>();
 
 /** Runs main() quietly and returns its exit code and what it printed to stderr. */
-function runMain(root: string): { code: number; err: string } {
+async function runMain(root: string): Promise<{ code: number; err: string }> {
   const lines: string[] = [];
   const err = vi.spyOn(console, "error").mockImplementation((...a) => void lines.push(a.join(" ")));
-  const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-  const errw = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   try {
-    return { code: main({ root, config: CONFIG }), err: lines.join("\n") };
+    return { code: await main({ root, config: CONFIG, quiet: true }), err: lines.join("\n") };
   } finally {
     err.mockRestore();
-    out.mockRestore();
-    errw.mockRestore();
   }
 }
 
@@ -113,42 +111,53 @@ describe("discovery", () => {
   });
 
   test("list_uses_files_only", () => {
-    expect(LIST_ARGS).toEqual(expect.arrayContaining(["list", "--filesOnly", "--json"]));
+    const argv = vitestArgs(LIST_ARGS, { root: "/repo", config: CONFIG });
+    expect(argv.slice(1, 4)).toEqual(["list", "--filesOnly", "--json"]);
   });
 });
 
 describe("end to end with real Vitest", { timeout: 60_000 }, () => {
-  test("end_to_end_planted_empty_file", () => {
-    const { code, err } = runMain(fixture({ "a.test.ts": PASSING, "x.test.ts": "" }, true));
+  test("end_to_end_planted_empty_file", async () => {
+    const { code, err } = await runMain(fixture({ "a.test.ts": PASSING, "x.test.ts": "" }, true));
     expect(code).toBe(1);
-    expect(err).toMatch(/notExecuted:\n\s+x\.test\.ts/);
+    expect(err).toMatch(/\(notExecuted\):\n\s+x\.test\.ts/);
   });
 
-  test("only_is_rejected", () => {
+  test("only_is_rejected", async () => {
     const only = 'import { expect, test } from "vitest";\ntest.only("o", () => expect(1).toBe(1));\n';
-    expect(runMain(fixture({ "a.test.ts": PASSING, "o.test.ts": only }, true)).code).toBe(1);
+    expect((await runMain(fixture({ "a.test.ts": PASSING, "o.test.ts": only }, true))).code).toBe(1);
   });
 
-  test("skip_in_passing_file_is_rejected", () => {
+  test("skip_in_passing_file_is_rejected", async () => {
     const body = `${PASSING}test.skip("later", () => {});\n`;
-    const { code, err } = runMain(fixture({ "s.test.ts": body }, true));
+    const { code, err } = await runMain(fixture({ "s.test.ts": body }, true));
     expect(code).toBe(1);
     expect(err).toContain("s.test.ts > later");
   });
 
-  test("clean_tree_passes", () => {
-    expect(runMain(fixture({ "a.test.ts": PASSING }, true)).code).toBe(0);
+  test("failing_before_all_is_not_executed", async () => {
+    const body =
+      'import { beforeAll, expect, test } from "vitest";\nbeforeAll(() => { throw new Error("x"); });\ntest("t", () => expect(1).toBe(1));\n';
+    const { code, err } = await runMain(fixture({ "b.test.ts": body }, true));
+    expect(code).toBe(1);
+    expect(err).toMatch(/\(notExecuted\):\n\s+b\.test\.ts/);
+  });
+
+  test("clean_tree_passes", async () => {
+    expect((await runMain(fixture({ "a.test.ts": PASSING }, true))).code).toBe(0);
   });
 
   test("typecheck_includes_tests", () => {
     const tsconfig = readFileSync(join(REPO, "tsconfig.json"), "utf8");
-    const root = fixture({ "tsconfig.json": tsconfig, "a.test.ts": "const n: number = 'not a number';\n" }, true);
+    const bad = "const n: number = 'not a number';\nexport {};\n";
+    const root = fixture({ "tsconfig.json": tsconfig, "a.test.mts": bad, "b.test.tsx": bad }, true);
     const tsc = spawnSync(join(REPO, "node_modules", ".bin", "tsc"), ["--noEmit", "-p", "tsconfig.json"], {
       cwd: root,
       encoding: "utf8",
     });
     expect(tsc.status).not.toBe(0);
-    expect(tsc.stdout).toContain("TS2322");
+    expect(tsc.stdout).toContain("a.test.mts");
+    expect(tsc.stdout).toContain("b.test.tsx");
   });
 });
 
@@ -166,7 +175,16 @@ describe("repository settings", () => {
 
   test("typescript_single_major", () => {
     const ls = spawnSync("npm", ["ls", "typescript", "--all", "--json"], { cwd: REPO, encoding: "utf8" });
-    const versions = [...ls.stdout.matchAll(/"typescript":\s*\{\s*"version":\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(ls.status).toBe(0);
+    type Node = { version?: string; dependencies?: Record<string, Node> };
+    const versions: (string | undefined)[] = [];
+    const walk = (node: Node): void => {
+      for (const [name, dep] of Object.entries(node.dependencies ?? {})) {
+        if (name === "typescript") versions.push(dep.version);
+        walk(dep);
+      }
+    };
+    walk(JSON.parse(ls.stdout) as Node);
     expect(versions.length).toBeGreaterThan(0);
     for (const v of versions) expect(v).toMatch(/^7\.0\./);
   });
