@@ -39,7 +39,7 @@ word in the code that is not here and not plain English has found a defect: add 
 | **labeler** | A service that publishes moderation labels; ours is Ozone. |
 | **label** | A signed tag on an account or record (for example "hide" or a warning). |
 | **Ozone** | Bluesky's open-source moderation service, run as our labeler and public-record report intake. |
-| **Spaces** | An alpha atproto feature for permissioned data; watched, not used. |
+| **Spaces** | An alpha atproto feature for permissioned data. The destination for private data (decision 38, ADR 0005), but not used until it is in an official PDS release and the spec (checked at P4.00); until then private records stay in our DB, shaped for a copy. |
 
 ## Matrix (chat)
 
