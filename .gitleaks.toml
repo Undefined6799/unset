@@ -1,0 +1,30 @@
+# gitleaks configuration (P0.07). Default rules plus the key formats this project uses that the
+# defaults do not know. No allowlist entries: a test that needs one of these strings builds it at
+# run time and never commits it.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "unset-canary"
+description = "Drill canary; harmless by construction, planted to prove the scan runs"
+regex = '''UNSET_CANARY_[A-Za-z0-9]{32}'''
+keywords = ["unset_canary_"]
+
+[[rules]]
+id = "multibase-private-key"
+description = "K-256 (z3vL) or P-256 (z42t/z42u) private key in base58btc multibase, as goat key generate prints"
+regex = '''\bz(?:3vL|42t|42u)[1-9A-HJ-NP-Za-km-z]{44}\b'''
+keywords = ["z3vl", "z42t", "z42u"]
+
+[[rules]]
+id = "age-secret-key"
+description = "age X25519 identity"
+regex = '''AGE-SECRET-KEY-1[02-9AC-HJ-NP-Z]{58}'''
+keywords = ["age-secret-key-1"]
+
+[[rules]]
+id = "age-plugin-identity"
+description = "age plugin identity (for example a YubiKey identity)"
+regex = '''AGE-PLUGIN-[A-Z0-9-]+-1[02-9AC-HJ-NP-Z]+'''
+keywords = ["age-plugin-"]

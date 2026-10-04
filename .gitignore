@@ -17,3 +17,4 @@ graphify-out/cache/
 # Obsidian vault at docs/ai: only the shared graph colours are committed
 docs/ai/.obsidian/*
 !docs/ai/.obsidian/graph.json
+jscpd-report/

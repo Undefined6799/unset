@@ -1,0 +1,71 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "docker:pinDigests",
+    ":pinAllExceptPeerDependencies"
+  ],
+  "rangeStrategy": "pin",
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "separateMajorMinor": true,
+  "automerge": false,
+  "dependencyDashboard": true,
+  "labels": ["deps"],
+  "branchPrefix": "renovate/",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "minimumReleaseAge": "7 days",
+    "rangeStrategy": "pin"
+  },
+  "customManagers": [
+    {
+      "description": "Digest-pinned images held in *_IMAGE variables in workflows",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "_IMAGE:\\s*(?<depName>[a-z0-9.\\/-]+):(?<currentValue>[\\w.-]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One PR for all atproto packages (plan §9)",
+      "minimumReleaseAge": "7 days",
+      "matchPackageNames": ["@atproto/**"],
+      "groupName": "atproto packages"
+    },
+    {
+      "description": "Matrix SDK packages: one PR each, labelled for the chat module",
+      "minimumReleaseAge": "7 days",
+      "matchPackageNames": ["matrix-js-sdk", "@matrix-org/**"],
+      "addLabels": ["chat"]
+    },
+    {
+      "description": "GitHub Actions pinned by commit digest, one PR per action",
+      "minimumReleaseAge": "7 days",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      "description": "Container images pinned by index digest",
+      "minimumReleaseAge": "7 days",
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    },
+    {
+      "description": "Workspaces are local links, never registry packages (the @unset scope belongs to a third party)",
+      "minimumReleaseAge": "7 days",
+      "matchPackageNames": ["@unset/**"],
+      "enabled": false
+    }
+  ]
+}
