@@ -374,6 +374,12 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   is shaped as one record each in our lexicon, keyed as a space repo would key it, held in the app DB; the move is
   a copy, made when Spaces is in the official PDS release and in the spec, checked at Phase 4 (plan §3, §11 Q2b).
 
+- **Decision 39 (Alex, 2026-10-04 17:40Z, "Show target" on the plan thread's card; own record: [0006](0006-private-likes-shown-to-target.md)):**
+  a private member's like, comment or follow on unset.sh content is shown to its target inside unset.sh with the
+  member's name ("a member liked this", "follows you"), never to third parties and never on the network, and the
+  member is told the target sees it. Plan §11 Q2b proposal 2; fits decision 38, where the target is a reader of the
+  record in the member's space.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
