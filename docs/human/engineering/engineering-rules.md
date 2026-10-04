@@ -18,7 +18,7 @@ Abbreviations: **ADG** architecture-and-development-guideline; **AI** architectu
 
 ## Top 15
 
-The rules that matter most for the first slice (sign in, see your own profile). CLAUDE.md imports this page only.
+The rules that matter most for the first slice (sign in, see your own profile). Of this rules file, CLAUDE.md imports this Top 15 page only (alongside the four guideline documents); the full set is read on demand.
 
 1. **AB-1** Folder dependencies form an allowlist matrix in dependency-cruiser, and any unlisted edge fails. [Clean Architecture ch. 22]
 2. **AB-2** Ports exist only for I/O and non-determinism, and adapters are built only in the composition root. [Clean Architecture ch. 26]

@@ -8,6 +8,8 @@ AT Protocol-native identity and profile app with a small, auditable core. The pl
 what the architecture optimises for, in order, and which rules a machine checks are in
 [`docs/human/architecture.md`](docs/human/architecture.md).
 Read the plan section for the area you touch before changing it.
+Before touching an area, read its `importance: high` notes in `docs/ai` (see
+[`docs/ai/README.md`](docs/ai/README.md)); capture durable learnings there when done.
 
 ## Engineering principles (Alex, 2026-10-03/04; read before designing or changing code)
 @docs/human/engineering/architecture-instructions.md

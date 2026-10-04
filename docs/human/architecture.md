@@ -31,29 +31,43 @@ hold the admin credentials, import nothing but their own folder, Node built-ins 
 
 ## Architecture rules and how each is checked
 
-*Checked* means CI fails when the rule is broken. *Review-only* means a person or the PR template
-checks it, with the reason no tool can.
+*Checked* means CI fails when the rule is broken. *Planned* names the step that builds the check; until it merges,
+review covers the rule. *Review-only* means a person or the PR template checks it, with the reason no tool can.
 
 | Rule | What it says | Checked by |
 |---|---|---|
-| ADG §1, AB-1 | Folder dependencies form an allowlist matrix; any unlisted edge fails | checked: dependency-cruiser, one fixture per row (P0.05) |
-| ADG §1 | Interfaces never import each other | checked: dependency-cruiser `depcruise_no_interface_to_interface` |
-| ADG §1 | Only the serving interface imports its app's render entry | checked: dependency-cruiser `depcruise_app_render_entry` |
-| ADG §1 | A vendor SDK is imported in one adapter folder per runtime | checked: dependency-cruiser `depcruise_sdk_adapter` |
-| ADG §1 | `pds-admin` and `chat-admin` import only themselves, Node built-ins and the zero-dependency allowlist | checked: dependency-cruiser `depcruise_allowlist_exact` |
-| ADG §1, AB-1 | Domains import only their contracts, other domains' `index.ts`, `shared/errors`, `shared/config` types and `shared/lexicons`; no Node I/O | checked: dependency-cruiser |
-| DC-2 | Modules are reached only through their `index.ts` | checked: dependency-cruiser `no-deep-import` |
-| AB-2 | Adapters are built only in a composition root | checked: dependency-cruiser (only `main.ts`/`compose.ts` import `infrastructure/**`) |
+| ADG §1, AB-1 | Folder dependencies form an allowlist matrix; any unlisted edge fails | checked: `MATRIX`, `depcruise_unlisted_edge_fails`, `depcruise_matrix_rows_have_fixtures` |
+| ADG §1 | Apps never import each other | checked: `no-app-to-app` |
+| ADG §1 | Apps import only `shared/` | checked: `app-only-shared` |
+| ADG §1 | Only the serving interface imports its app's render entry | checked: `app-render-entry-only` |
+| ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
+| ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |
+| ADG §2, AB-1 | Domains do not depend on infrastructure, interfaces or apps | checked: `domain-pure` |
+| ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
+| DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | planned: P1.01 |
+| ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
+| ADG §1 | Product code never imports repository tooling (`scripts/`, `tests/`, configs) | checked: `no-product-imports-tooling` |
+| ADG §2 | Infrastructure implements domain contracts and never reaches an entry point | checked: `infrastructure-not-entry` |
+| AB-2 | Adapters are built only in the process's composition root (`main.ts`/`compose.ts`) | review-only: `MATRIX` lets an interface import infrastructure, and no tool tells construction from use; `domain-pure` keeps adapters out of domains |
 | AB-2 | A port exists only for I/O or non-determinism | review-only: no tool can tell why an interface exists |
-| AB-3 | A new process, role or orchestrator needs an ADR naming its driver | review-only, backed by the grant-matrix test for roles |
-| AB-4 | Every guard proves it examined more than zero items and fails on a known-bad fixture | checked: one Vitest per guard |
-| DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | checked: Semgrep |
-| DA-1 | `idx` can be dropped and rebuilt without losing a decision | checked: `idx-rebuild-preserves-decisions` |
-| SE-6 | A PR that touches the trusted base touches nothing else | checked: CI path check, plus the CODEOWNERS security review |
-| TE-1 | Fakes are used only in tests and in non-production composition roots | checked: dependency-cruiser and a startup check |
+| ADG §1 | `shared/` leaf folders import nothing product-specific | checked: `shared-leaf` |
+| ADG §1 | `pds-admin` and `chat-admin` import only themselves, Node built-ins and the zero-dependency allowlist | checked: `admin-services-zero-deps`, `depcruise_allowlist_exact` |
+| ADG §1 | A folder on the zero-dependency allowlist obeys the same rule | checked: `allowlist-zero-deps` |
+| ADG §1 | A vendor SDK is imported in one adapter folder per runtime | checked: `vendor-sdk-one-adapter` |
+| plan §5.4 | `net-guard` imports only Node built-ins, `undici` and its own files | checked: `net-guard-leaf` |
+| TE-1 | Fakes are used only in tests and in non-production composition roots | checked: `fake-only-in-composition-root`, `fake_boot_refused_in_prod` |
+| DC-1 | No dependency cycles | checked: `no-circular` |
+| DC-1 | No orphan modules | checked: `no-orphans` |
 | DC-1 | Modules are deep; functions do one job | review-only: no tool measures depth |
+| AB-3 | A new process, role or orchestrator needs an ADR naming its driver | review-only: the driver is a judgement; backed by the grant-matrix test for roles and ADR 0011 for orchestrators |
+| AB-4 | Every guard proves it examined more than zero items and fails on a known-bad fixture | checked: `scripts/guards/guards.test.ts`, `depcruise_cruised_nonzero` |
+| DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | planned: P1.11 |
+| DA-1 | `idx` can be dropped and rebuilt without losing a decision | planned: P3.03 |
+| SE-6 | A PR that touches the trusted base touches nothing else | planned: P0.09c |
 
-The docs test (P0.09) reads this table and fails if a named check does not exist.
+The docs test (P0.09, `architecture_rule_table_matches_depcruise`) reads this table. It fails if a named check
+does not exist, a `forbidden` rule or `MATRIX` has no row, a planned step has already merged, or a review-only row
+has no reason.
 
 ## Views
 
