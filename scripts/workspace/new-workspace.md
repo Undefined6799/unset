@@ -15,7 +15,7 @@ There is no `packages/`, `modules/` or `plugins/` folder (decisions 25 and 34). 
 - `package.json`: `name` `@unset/<top>-<name>` (for example `@unset/domains-identity`), `private: true`,
   `type: "module"`, `version: "0.0.0"`, `license` `MIT` under `shared/` and `AGPL-3.0-only` elsewhere. Add
   dependencies only in the step that needs them, pinned exactly. Another workspace it imports by package name goes in
-  `dependencies` as `"@unset/<top>-<name>": "0.0.0"`.
+  `dependencies` as `"@unset/<top>-<name>": "*"` (the dependency guard accepts only `*` for a linked workspace).
 - `tsconfig.json`: `extends: "../../tsconfig.base.json"`, `compilerOptions` `{ composite: true, rootDir: ".",
   outDir: "dist" }`, and `references` to each workspace it imports (`{ "path": "../../shared/errors" }`).
 - At least one `*.test.ts` beside its code.

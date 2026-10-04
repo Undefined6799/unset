@@ -76,7 +76,7 @@ describe("workspace references", () => {
   });
 
   test("references_read_package_dependencies_too", () => {
-    const root = tree({ "apps/web": { dependencies: { "@unset/apps-admin": "0.0.0" } }, "apps/admin": {} });
+    const root = tree({ "apps/web": { dependencies: { "@unset/apps-admin": "*" } }, "apps/admin": {} });
     expect(workspaceProblems(root)).toContain("apps/web: may not reference apps/admin (MATRIX)");
   });
 
@@ -94,14 +94,14 @@ describe("workspace references", () => {
 
   test("pds_admin_may_depend_on_the_allowlist", () => {
     const source = 'import { x } from "@unset/shared-admin-envelope";\nexport const y = x;\n';
-    const envelope = { "@unset/shared-admin-envelope": "0.0.0" };
+    const envelope = { "@unset/shared-admin-envelope": "*" };
     const root = tree({
       "interfaces/pds-admin": { source, references: ["shared/admin-envelope"], dependencies: envelope },
       "shared/admin-envelope": {},
     });
     expect(workspaceProblems(root)).toEqual([]);
     const notAllowlisted = tree({
-      "interfaces/pds-admin": { references: ["shared/errors"], dependencies: { "@unset/shared-errors": "0.0.0" } },
+      "interfaces/pds-admin": { references: ["shared/errors"], dependencies: { "@unset/shared-errors": "*" } },
       "shared/errors": {},
     });
     expect(workspaceProblems(notAllowlisted)).toEqual([
@@ -112,7 +112,7 @@ describe("workspace references", () => {
 
   test("pds_admin_installed_closure_has_no_third_party", () => {
     const root = tree({
-      "interfaces/pds-admin": { dependencies: { "@unset/shared-admin-envelope": "0.0.0" } },
+      "interfaces/pds-admin": { dependencies: { "@unset/shared-admin-envelope": "*" } },
       "shared/admin-envelope": { dependencies: { undici: "1.0.0" } },
     });
     // Install the tree by hand, the way npm links workspaces, so npm ls reads it offline.
@@ -182,7 +182,7 @@ describe("workspace references", () => {
       "shared/config: imports @unset/shared-errors without it in tsconfig references",
     ]);
     const declared = tree({
-      "shared/config": { source, references: ["shared/errors"], dependencies: { "@unset/shared-errors": "0.0.0" } },
+      "shared/config": { source, references: ["shared/errors"], dependencies: { "@unset/shared-errors": "*" } },
       "shared/errors": {},
     });
     expect(workspaceProblems(declared)).toEqual([]);
