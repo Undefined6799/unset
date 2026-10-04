@@ -429,6 +429,10 @@ Edge cases and failures:
   - Handle `Alice.0x40.ME` → normalised to `alice.0x40.me`; `@alice.0x40.me` → leading `@` stripped; `alice..0x40.me`,
     `alice.local`, `-a.0x40.me`, a 254-char handle → `parseHandle` null.
   - Cache poisoning: a `fresh` read always replaces the cached entry; `not_found`/`unavailable` are never cached here.
+  - A timed-out `dns.lookup` keeps a libuv threadpool thread busy (4 by default), so a stream of slow names can starve
+    fs, crypto and zlib (Phase 1 thread finding 4, parked here 2026-10-04 23:49Z). This step picks one option and
+    records it in an ADR: raise `UV_THREADPOOL_SIZE`, or resolve through `dns.Resolver` (c-ares, off the threadpool)
+    with a per-query timeout. net-guard's `resolveTxt` (P2.01k) follows the same choice.
 
 Threats: identity data fetched from PLC, `did:web` hosts, DNS and handle domains, all controlled by others.
   - S A DID document served for another DID → `id` must equal the requested DID (`resolveDid.id_mismatch`).
@@ -460,6 +464,8 @@ Done when (tests):
   - `resolveHandle.https_body_rules`: trailing newline accepted; two lines, HTML, empty → `none`.
   - `oauthAdapter.throws_on_unavailable`: adapter throws for `unavailable`, returns null for `not_found`.
   - `alsoKnownAs.guard`: static scan of the repo source passes; a planted fixture file referencing `alsoKnownAs` fails it.
+  - `slow_dns_does_not_starve_threadpool`: with a fake resolver delaying 20 names past the deadline, a concurrent
+    `crypto.pbkdf2` still completes within its normal time.
 
 Reuse (provisional — for reuse review):
   - `appview/src/identity.ts:25-30` (`didWebUrl` hostname rule) → LESSON: the regex and its SSRF rationale are right;
