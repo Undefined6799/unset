@@ -1,0 +1,3 @@
+// fixture: apps/web/src/text.ts findings=0
+export const put = (el: HTMLElement, s: string) => { el.textContent = s; };
+export const same = (a: HTMLElement, b: HTMLElement) => a.innerHTML === b.innerHTML;

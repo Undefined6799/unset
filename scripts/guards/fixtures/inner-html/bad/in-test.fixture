@@ -1,0 +1,2 @@
+// fixture: apps/web/src/x.test.ts findings=1
+document.body.insertAdjacentHTML("beforeend", "<p>x</p>");

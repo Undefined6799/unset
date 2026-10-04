@@ -1,4 +1,4 @@
-// Source discovery shared by the guards. Deliberately dependency-free.
+// File discovery and the shared scan loop for the repository guards. Deliberately dependency-free.
 import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
@@ -14,8 +14,19 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
 ]);
 const SOURCE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
-/** Every source file under `root`, as repo-relative POSIX paths, sorted. */
-export function sourceFiles(root: string, dirs: readonly string[]): string[] {
+/** The decision-34 folders that hold code a guard reads. */
+export const PRODUCT_DIRS = [
+  "apps",
+  "interfaces",
+  "domains",
+  "infrastructure",
+  "shared",
+  "deployment",
+  "tests",
+] as const;
+
+/** Every file under `dirs` whose name matches `ext`, as repo-relative POSIX paths, sorted. */
+export function filesUnder(root: string, dirs: readonly string[], ext: RegExp): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
     let entries: Dirent[];
@@ -29,11 +40,16 @@ export function sourceFiles(root: string, dirs: readonly string[]): string[] {
       const rel = relative(root, path).split(sep).join("/");
       if (SKIP_DIRS.has(entry.name) || SKIP_DIRS.has(rel)) continue;
       if (entry.isDirectory()) walk(path);
-      else if (SOURCE_EXT.test(entry.name)) out.push(rel);
+      else if (ext.test(entry.name)) out.push(rel);
     }
   };
   for (const dir of dirs) walk(join(root, dir));
   return out.sort();
+}
+
+/** Every source file under `root`, as repo-relative POSIX paths, sorted. */
+export function sourceFiles(root: string, dirs: readonly string[]): string[] {
+  return filesUnder(root, dirs, SOURCE_EXT);
 }
 
 export function read(root: string, file: string): string {
@@ -42,13 +58,45 @@ export function read(root: string, file: string): string {
 
 export type Finding = { file: string; line: number; rule: string; text: string };
 
-/** Lines carrying `guard-allow: <rule>` are exempt from that rule, so every exception is visible in review. */
+export const isTestFile = (file: string): boolean => /\.test\.[cm]?[jt]sx?$/.test(file);
+
+/** `guard-allow: <rule> <reason>` exempts a line, and only with a non-empty reason, so every exception is explained. */
 export function allowed(line: string, rule: string): boolean {
-  return line.includes(`guard-allow: ${rule}`);
+  return new RegExp(`guard-allow:\\s*${rule}\\s+\\S`).test(line);
 }
 
-export function report(findings: Finding[], help: string): number {
-  for (const f of findings) console.error(`${f.file}:${f.line}  [${f.rule}]  ${f.text.trim()}`);
-  if (findings.length > 0) console.error(`\n${findings.length} finding(s). ${help}`);
-  return findings.length > 0 ? 1 : 0;
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+/** Reads each file strictly and scans it. A file that cannot be read or decoded is a finding: never skipped. */
+export function scanFiles(
+  root: string,
+  files: readonly string[],
+  rule: string,
+  scan: (file: string, source: string) => Finding[],
+): Finding[] {
+  const findings: Finding[] = [];
+  for (const file of files) {
+    let source: string;
+    try {
+      source = STRICT_UTF8.decode(readFileSync(join(root, file)));
+    } catch {
+      findings.push({ file, line: 1, rule, text: "unreadable" });
+      continue;
+    }
+    findings.push(...scan(file, source));
+  }
+  return findings.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+}
+
+/** Module specifiers named on a line: `from "…"`, `import "…"`, `require("…")`, `import("…")`. */
+export function specifiersOn(line: string): string[] {
+  const out: string[] = [];
+  const pattern = /\bfrom\s*["']([^"']+)["']|\bimport\s*\(?\s*["']([^"']+)["']|\brequire\s*\(\s*["']([^"']+)["']/g;
+  for (const m of line.matchAll(pattern)) out.push(m[1] ?? m[2] ?? m[3] ?? "");
+  return out;
+}
+
+/** One line per finding, `file:line  [rule]  text`; P0.14 reads this format from the CI log. */
+export function report(findings: readonly Finding[]): string {
+  return findings.map((f) => `${f.file}:${f.line}  [${f.rule}]  ${f.text.trim()}`).join("\n");
 }

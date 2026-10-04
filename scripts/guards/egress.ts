@@ -1,35 +1,39 @@
-// Guard: all caller-influenced outbound HTTP goes through infrastructure/net-guard.
+// Guard: all caller-influenced outbound traffic goes through infrastructure/net-guard.
 // The prototype grew four copies of private-IP classification and an SSRF via
 // redirects + DNS rebinding before this was centralised (PLAN.md §2 rule 13).
-import { pathToFileURL } from "node:url";
-import { allowed, type Finding, read, report, sourceFiles } from "./files.ts";
+import { allowed, type Finding, isTestFile, PRODUCT_DIRS, scanFiles, sourceFiles, specifiersOn } from "./files.ts";
 
-export const SCANNED_DIRS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;
+export const SCANNED_DIRS = PRODUCT_DIRS;
+const RULE = "egress";
 const EXEMPT_PREFIX = "infrastructure/net-guard/";
 
-// fetch( whose first argument is not a plain string literal (template literals count as dynamic).
+/** pds-admin calls the one internal origin PDS_INTERNAL_URL from this file only (P2.09, phase-2 E10). */
+export const EGRESS_FILE_EXEMPTIONS: readonly string[] = ["interfaces/pds-admin/pds.mjs"];
+
+// fetch( whose first argument is not a plain string literal on the same line (template literals count as dynamic).
 const DYNAMIC_FETCH = /\bfetch\s*\(\s*(?!["'][^"'`]*["']\s*[,)])/;
-// Raw HTTP clients that bypass the guard entirely.
-const RAW_CLIENT =
-  /\bfrom\s+["'](?:undici|node:https?|https?|axios|got|node-fetch)["']|\brequire\(\s*["'](?:undici|node:https?|https?)["']\s*\)/;
+// Raw network clients that bypass the guard entirely.
+const RAW_CLIENT = /^(node:)?(https?|http2|net|tls|dgram)$|^(undici|axios|got|node-fetch|ws)(\/.*)?$/;
+// WebSocket and EventSource are globals in Node 26.
+const RAW_SOCKET = /\bnew\s+(WebSocket|EventSource)\s*\(/;
+
+function exempt(file: string): boolean {
+  return file.startsWith(EXEMPT_PREFIX) || isTestFile(file) || EGRESS_FILE_EXEMPTIONS.includes(file);
+}
+
+function flagged(text: string): boolean {
+  return DYNAMIC_FETCH.test(text) || RAW_SOCKET.test(text) || specifiersOn(text).some((s) => RAW_CLIENT.test(s));
+}
 
 export function scanEgress(file: string, source: string): Finding[] {
-  if (file.startsWith(EXEMPT_PREFIX) || /\.test\.[cm]?[jt]sx?$/.test(file)) return [];
+  if (exempt(file)) return [];
   const findings: Finding[] = [];
   source.split("\n").forEach((text, i) => {
-    if (allowed(text, "egress")) return;
-    if (DYNAMIC_FETCH.test(text)) findings.push({ file, line: i + 1, rule: "egress", text });
-    else if (RAW_CLIENT.test(text)) findings.push({ file, line: i + 1, rule: "egress", text });
+    if (flagged(text) && !allowed(text, RULE)) findings.push({ file, line: i + 1, rule: RULE, text });
   });
   return findings;
 }
 
-export function main(root = process.cwd()): number {
-  const findings = sourceFiles(root, SCANNED_DIRS).flatMap((f) => scanEgress(f, read(root, f)));
-  return report(
-    findings,
-    "Use the net-guard egress client for outbound HTTP. A constant, allowlisted URL may carry `// guard-allow: egress` with a reason.",
-  );
+export function scanAll(root: string): Finding[] {
+  return scanFiles(root, sourceFiles(root, SCANNED_DIRS), RULE, scanEgress);
 }
-
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exit(main());

@@ -1,0 +1,2 @@
+// fixture: apps/web/src/profile/markdown.tsx findings=1
+export const M = (p: { h: string }) => <div dangerouslySetInnerHTML={{ __html: p.h }} />;

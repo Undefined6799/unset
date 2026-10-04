@@ -1,0 +1,5 @@
+// fixture: domains/identity/resolve.ts findings=4
+export const a = (url: string) => fetch(url);
+export const b = (host: string) => fetch(`https://${host}/x`);
+export const c = (base: string, path: string) => fetch(base + path, {});
+import { request } from "undici";

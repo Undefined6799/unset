@@ -1,0 +1,7 @@
+// fixture: interfaces/http/session.ts findings=3
+res.headers.set("set-cookie", "a=b; Domain=x.y");
+setCookie(c, "__Host-sid", sid, {
+  secure: true,
+  domain: "unset.sh",
+});
+res.headers.set("set-cookie", "a=b; Domain=x.y"); // guard-allow: cookie-domain x

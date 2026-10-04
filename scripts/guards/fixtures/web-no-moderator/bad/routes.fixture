@@ -1,0 +1,4 @@
+// fixture: interfaces/http/routes/a.ts findings=3
+app.get("/admin/users", handler);
+import "@simplewebauthn/server";
+export const verb = "takedown";

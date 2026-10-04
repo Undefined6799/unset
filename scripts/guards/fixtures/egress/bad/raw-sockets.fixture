@@ -1,0 +1,10 @@
+// fixture: infrastructure/pds/client.ts findings=9
+import http2 from "node:http2";
+import net from "net";
+const tls = require("node:tls");
+const axios = require("axios");
+const undici = await import("undici");
+import got = require("got");
+const ws = new WebSocket(u);
+const es = new EventSource(u);
+import { WebSocket } from "ws";

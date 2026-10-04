@@ -1,0 +1,2 @@
+// fixture: apps/admin/src/routes.ts findings=0
+app.get("/admin", handler);
