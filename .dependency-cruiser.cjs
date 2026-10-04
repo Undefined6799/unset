@@ -37,6 +37,9 @@ const TOOLING =
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
 const LEAF_SHARED = "^shared/(ui|lexicons|admin-envelope)/";
+// A module under infrastructure/ or shared/ and the one file others may import from it (rule DC-2).
+const WORKSPACE_WITH_INDEX = "(?:infrastructure|shared)/[^/]+/";
+const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
 
 /** The allowlist matrix. Each row: a name, the importing folder, and what it may reach. */
 const MATRIX = [
@@ -141,6 +144,18 @@ module.exports = {
       "A domain reaches another domain only through its index.ts (README readable-code rule 3).",
       { path: "^domains/([^/]+)/" },
       { path: "^domains/", pathNot: ["^domains/$1/", "^domains/[^/]+/index\\.ts$"] },
+    ),
+    forbidden(
+      "no-deep-import",
+      "From outside, a module under infrastructure/ or shared/ is reached only through its index.ts, tests included (rule DC-2). A *.fake.ts is exempt: fake-only-in-composition-root governs it, and an index.ts never exports one.",
+      { pathNot: `^${WORKSPACE_WITH_INDEX}` },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: [INDEX_FILE, FAKE] },
+    ),
+    forbidden(
+      "no-deep-import",
+      "Another infrastructure/ or shared/ module is reached only through its index.ts (rule DC-2).",
+      { path: `^(${WORKSPACE_WITH_INDEX})` },
+      { path: `^${WORKSPACE_WITH_INDEX}`, pathNot: ["^$1", INDEX_FILE, FAKE] },
     ),
     forbidden(
       "domain-no-io-builtins",

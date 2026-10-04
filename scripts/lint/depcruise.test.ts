@@ -38,48 +38,48 @@ const FAKE = "infrastructure/arachnid/fingerprint-check.fake.ts";
 const ROW_FIXTURES: Record<string, Edge[]> = {
   app: [
     edge("apps/web/a.ts", "./b.ts"),
-    edge("apps/web/a.ts", "../../shared/ui/b.ts"),
+    edge("apps/web/a.ts", "../../shared/ui/index.ts"),
     edge("apps/chat/matrix/a.ts", "matrix-js-sdk"),
   ],
   interface: [
     edge("interfaces/http/a.ts", "./routes/b.ts"),
     edge("interfaces/http/a.ts", "../../domains/identity/b.ts"),
-    edge("interfaces/http/a.ts", "../../infrastructure/pds/b.ts"),
+    edge("interfaces/http/a.ts", "../../infrastructure/pds/index.ts"),
     edge("interfaces/http/a.ts", "node:http"),
-    edge("interfaces/admin/a.ts", "../../shared/http/b.ts"),
+    edge("interfaces/admin/a.ts", "../../shared/http/index.ts"),
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
   "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
   "interface-admin-render": [edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`)],
   "admin-service": [
-    edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/jcs.ts"),
-    edge("interfaces/chat-admin/a.ts", "../../shared/admin-envelope/jcs.ts"),
+    edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/index.ts"),
+    edge("interfaces/chat-admin/a.ts", "../../shared/admin-envelope/index.ts"),
     edge("interfaces/pds-admin/a.ts", "./b.ts"),
     edge("interfaces/pds-admin/a.ts", "node:crypto"),
   ],
   domain: [
     edge("domains/identity/a.ts", "./sessions/b.ts"),
-    edge("domains/identity/a.ts", "../../shared/errors/b.ts"),
-    edge("domains/identity/a.ts", "../../shared/lexicons/b.ts"),
+    edge("domains/identity/a.ts", "../../shared/errors/index.ts"),
+    edge("domains/identity/a.ts", "../../shared/lexicons/index.ts"),
     edge("domains/identity/a.ts", "../content/index.ts"),
     edge("domains/identity/a.ts", "node:crypto"),
-    edge("domains/identity/a.ts", "../../shared/config/b.ts", "type"),
+    edge("domains/identity/a.ts", "../../shared/config/index.ts", "type"),
     edge("domains/content/a.ts", "../identity/index.ts"),
   ],
   infrastructure: [
     edge("infrastructure/pds/a.ts", "../../domains/identity/contract.ts"),
     edge("infrastructure/postgres/a.ts", "pg"),
     edge("infrastructure/postgres/a.ts", "./b.ts"),
-    edge("infrastructure/pds/a.ts", "../net-guard/b.ts"),
-    edge("infrastructure/storage/a.ts", "../seal/b.ts"),
-    edge("infrastructure/pds/a.ts", "../../shared/config/b.ts"),
+    edge("infrastructure/pds/a.ts", "../net-guard/index.ts"),
+    edge("infrastructure/storage/a.ts", "../seal/index.ts"),
+    edge("infrastructure/pds/a.ts", "../../shared/config/index.ts"),
   ],
   "net-guard": [
     edge("infrastructure/net-guard/a.ts", "undici"),
     edge("infrastructure/net-guard/a.ts", "./b.ts"),
     edge("infrastructure/net-guard/a.ts", "node:dns"),
   ],
-  shared: [edge("shared/config/a.ts", "../errors/b.ts"), edge("shared/http/a.ts", "node:http")],
+  shared: [edge("shared/config/a.ts", "../errors/index.ts"), edge("shared/http/a.ts", "node:http")],
   "shared-ui-lexicons": [edge("shared/lexicons/a.ts", "@atproto/lex"), edge("shared/ui/a.ts", "./b.ts")],
   "shared-admin-envelope": [
     edge("shared/admin-envelope/a.ts", "node:crypto"),
@@ -131,15 +131,15 @@ describe("boundary rules", () => {
   test("depcruise_pds_admin_builtins", async () => {
     for (const service of ["pds-admin", "chat-admin"]) {
       const from = `interfaces/${service}/a.ts`;
-      await expectFail("admin-services-zero-deps", edge(from, "undici"), edge(from, "../../shared/config/x.ts"));
-      await expectPass(edge(from, "../../shared/admin-envelope/jcs.ts"));
+      await expectFail("admin-services-zero-deps", edge(from, "undici"), edge(from, "../../shared/config/index.ts"));
+      await expectPass(edge(from, "../../shared/admin-envelope/index.ts"));
     }
   });
 
   test("depcruise_allowlist_zero_deps", async () => {
     await expectFail(
       "allowlist-zero-deps",
-      edge("shared/admin-envelope/a.ts", "../config/x.ts"),
+      edge("shared/admin-envelope/a.ts", "../config/index.ts"),
       edge("shared/admin-envelope/a.ts", "undici"),
     );
   });
@@ -168,12 +168,12 @@ describe("boundary rules", () => {
   test("depcruise_forbidden_edges", async () => {
     await expectFail(
       "app-only-shared",
-      edge("apps/web/a.ts", "../../infrastructure/postgres/b.ts"),
+      edge("apps/web/a.ts", "../../infrastructure/postgres/index.ts"),
       edge("apps/web/a.ts", "../../domains/identity/b.ts"),
     );
     await expectFail(
       "domain-pure",
-      edge("domains/identity/a.ts", "../../infrastructure/pds/b.ts"),
+      edge("domains/identity/a.ts", "../../infrastructure/pds/index.ts"),
       edge("domains/identity/a.ts", "../../interfaces/http/b.ts"),
       edge("domains/identity/a.ts", "../../apps/web/b.ts"),
     );
@@ -193,13 +193,32 @@ describe("boundary rules", () => {
     await expectPass(edge("tests/integration/a.test.ts", "../../scripts/guards/files.ts"));
   });
 
+  test("depcruise_no_deep_import", async () => {
+    await expectFail(
+      "no-deep-import",
+      edge("interfaces/http/a.ts", "../../shared/http/csrf.ts"),
+      edge("interfaces/http/a.ts", "../../infrastructure/postgres/pool.ts"),
+      edge("infrastructure/pds/a.ts", "../net-guard/classify.ts"),
+      edge("shared/config/a.ts", "../errors/codes.ts"),
+      edge("domains/identity/a.ts", "../../shared/errors/codes.ts"),
+      edge("tests/integration/a.test.ts", "../../infrastructure/postgres/pool.ts"),
+      edge("interfaces/http/a.ts", "../../shared/config/schema.ts", "type"),
+    );
+    await expectPass(
+      edge("interfaces/http/a.ts", "../../shared/http/index.ts"),
+      edge("tests/integration/a.test.ts", "../../infrastructure/postgres/index.ts"),
+      edge("infrastructure/postgres/a.ts", "./pool/b.ts"),
+      edge("infrastructure/postgres/pool.test.ts", "./pool.ts"),
+    );
+  });
+
   test("depcruise_domain_imports", async () => {
     await expectPass(...(ROW_FIXTURES.domain ?? []));
     const from = "domains/identity/a.ts";
     await expectFail(
       "not-in-allowed",
-      edge(from, "../../shared/config/b.ts"),
-      edge(from, "../../shared/log/b.ts"),
+      edge(from, "../../shared/config/index.ts"),
+      edge(from, "../../shared/log/index.ts"),
       edge(from, "zod"),
       edge(from, "@atproto/lex"),
     );
@@ -224,7 +243,7 @@ describe("boundary rules", () => {
   test("depcruise_net_guard_leaf", async () => {
     await expectFail(
       "net-guard-leaf",
-      edge("infrastructure/net-guard/a.ts", "../seal/b.ts"),
+      edge("infrastructure/net-guard/a.ts", "../seal/index.ts"),
       edge("infrastructure/net-guard/a.ts", "zod"),
     );
   });
@@ -275,9 +294,9 @@ describe("allowlist matrix", () => {
     expect(Array.isArray(config.allowed) && config.allowed.length > 0).toBe(true);
     await expectFail(
       "not-in-allowed",
-      edge("domains/identity/a.ts", "../../shared/http/b.ts"),
-      edge("infrastructure/storage/a.ts", "../audit/b.ts"),
-      edge("shared/ui/a.ts", "../config/b.ts"),
+      edge("domains/identity/a.ts", "../../shared/http/index.ts"),
+      edge("infrastructure/storage/a.ts", "../audit/index.ts"),
+      edge("shared/ui/a.ts", "../config/index.ts"),
     );
   });
 
