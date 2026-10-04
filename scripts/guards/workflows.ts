@@ -4,9 +4,22 @@
 /** The only shape a secret- or OIDC-using job may have: bound to an environment and run only for pushes to main. */
 export const GATE_IF = "if: github.event_name == 'push' && github.ref == 'refs/heads/main'";
 
-/** Drops `#` comments (not inside quotes), keeping line numbers. */
+/** One line without its `#` comment; a `#` inside a quoted scalar is text, not a comment. */
+function stripComment(line: string): string {
+  let quote = "";
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === "#" && (i === 0 || /\s/.test(line[i - 1] ?? ""))) return line.slice(0, i);
+  }
+  return line;
+}
+
+/** Drops comments, keeping line numbers. */
 export function code(text: string): string[] {
-  return text.split("\n").map((line) => line.replace(/(^|\s)#(?=(?:[^"']*["'][^"']*["'])*[^"']*$).*$/, ""));
+  return text.split("\n").map(stripComment);
 }
 
 const indent = (line: string): number => line.length - line.trimStart().length;
@@ -31,7 +44,7 @@ export function jobs(lines: string[]): Map<string, string[]> {
 function runValues(lines: string[]): string[] {
   const values: string[] = [];
   lines.forEach((line, i) => {
-    const m = /^(\s*)(?:- )?run:\s*(.*)$/.exec(line);
+    const m = /^(\s*)(?:- )?["']?run["']?:\s*(.*)$/.exec(line);
     if (!m) return;
     const keyIndent = (m[1] ?? "").length;
     const value = [m[2] ?? ""];
@@ -47,25 +60,30 @@ function runValues(lines: string[]): string[] {
 /** Pinning, trigger and permission problems visible on one line. */
 function lineProblems(line: string): string[] {
   const found: string[] = [];
-  const uses = /\buses:\s*["']?([^\s"']+)/.exec(line)?.[1];
+  const uses = /\buses["']?:\s*["']?([^\s"']+)/.exec(line)?.[1];
   if (uses && !uses.startsWith("./") && !/^actions\/[\w.-]+@[0-9a-f]{40}$/.test(uses)) {
     found.push(`action not GitHub-owned and SHA-pinned: ${uses}`);
   }
+  // github-script runs its `script:` input as code, out of reach of the no-expression-in-run rule.
+  if (uses?.startsWith("actions/github-script@")) found.push("actions/github-script is not allowed");
   const image = /(?:\b\w*_IMAGE|\bimage|\bcontainer):\s*["']?([^\s"'{]+)/.exec(line)?.[1];
   if (image && !/@sha256:[0-9a-f]{64}$/.test(image)) found.push(`image not pinned by digest: ${image}`);
-  if (/\bdocker\s+run\b/.test(line) && !/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) {
-    found.push("docker run without a digest-pinned image");
+  if (/\b(?:docker|podman)\s+(?:container\s+|image\s+)?(?:run|create|pull)\b/.test(line)) {
+    if (!/"\$\w+_IMAGE"|@sha256:[0-9a-f]{64}/.test(line)) found.push("container started without a digest-pinned image");
   }
+  // An image variable may only come from the workflow text, where the digest check above can see it.
+  if (/_IMAGE=/.test(line) && /\bGITHUB_ENV\b/.test(line)) found.push("image variable written at run time");
   if (/\b(pull_request_target|workflow_run)\b/.test(line)) found.push("banned trigger");
-  if (/:\s*write\b/.test(line) && !/^\s*id-token:\s*write\s*$/.test(line))
-    found.push(`write permission: ${line.trim()}`);
+  for (const m of line.matchAll(/([\w-]+)["']?\s*:\s*["']?write\b/g)) {
+    if (m[1] !== "id-token") found.push(`write permission: ${line.trim()}`);
+  }
   return found;
 }
 
 /** A job that touches a secret or OIDC without the environment + main-only gate. */
 function ungated(body: string[]): boolean {
   const text = body.join("\n");
-  const privileged = /\bid-token:\s*write\b/.test(text) || /\bsecrets\.(?!GITHUB_TOKEN\b)\w+/.test(text);
+  const privileged = /\bid-token:\s*write\b/.test(text) || /\$\{\{[^}]*\bsecrets\b(?!\.GITHUB_TOKEN\b)/.test(text);
   const gated = /^ {4}environment:\s*\S/m.test(text) && body.some((l) => l.trim() === GATE_IF && indent(l) === 4);
   return privileged && !gated;
 }

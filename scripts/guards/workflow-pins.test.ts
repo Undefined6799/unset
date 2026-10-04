@@ -15,6 +15,8 @@ const ci = readFileSync(join(WORKFLOWS, "ci.yml"), "utf8");
 
 /** The real ci.yml with `extra` appended under `jobs:`, for planted violations. */
 const withJob = (extra: string): string => `${ci.trimEnd()}\n${extra}\n`;
+/** A GitHub `${{ }}` expression, built so planted text needs no lint exception. */
+const expr = (inner: string): string => `$${"{{"} ${inner} }}`;
 const job = (body: string): string =>
   `  planted:\n    runs-on: ubuntu-24.04\n    permissions:\n      contents: read\n${body}`;
 
@@ -29,6 +31,16 @@ describe("workflows", () => {
     expect(problems(withJob(job("    container: node:26\n")))).toHaveLength(1);
     expect(problems(withJob(job("    env:\n      X_IMAGE: alpine:3\n")))).toHaveLength(1);
     expect(problems(withJob(job("    steps:\n      - run: docker run --rm alpine:3 true\n")))).toHaveLength(1);
+    expect(problems(withJob(job("    steps:\n      - run: docker create alpine:3\n")))).toHaveLength(1);
+    expect(problems(withJob(job("    steps:\n      - run: podman container run alpine:3\n")))).toHaveLength(1);
+    expect(problems(withJob(job('    steps:\n      - "uses": evil/act@v1\n')))).toHaveLength(1);
+    expect(problems(withJob(job(`    steps:\n      - uses: actions/github-script@${"a".repeat(40)}\n`)))).toHaveLength(
+      1,
+    );
+    const runtimeImage = '    steps:\n      - run: echo "X_IMAGE=alpine:3" >> "$GITHUB_ENV"\n';
+    expect(problems(withJob(job(runtimeImage)))).toEqual([
+      expect.stringMatching(/image variable written at run time$/),
+    ]);
   });
 
   test("least_privilege", () => {
@@ -38,6 +50,11 @@ describe("workflows", () => {
     expect(
       problems(withJob(job("    steps:\n      - run: true\n").replace("contents: read", "contents: write"))),
     ).toHaveLength(1);
+    expect(problems(ci.replace("permissions: {}", "permissions: write-all"))).toHaveLength(2);
+    const flowOidc = "    permissions: { contents: read, id-token: write }\n";
+    expect(problems(withJob(`  planted:\n    runs-on: ubuntu-24.04\n${flowOidc}`))).toEqual([
+      expect.stringMatching(/^job planted: secret or OIDC/),
+    ]);
   });
 
   test("secrets_and_oidc_gated", () => {
@@ -55,6 +72,9 @@ describe("workflows", () => {
     }
     // biome-ignore lint/suspicious/noTemplateCurlyInString: planted workflow text with a GitHub expression.
     expect(problems(withJob(planted("    env:\n      T: ${{ secrets.GITHUB_TOKEN }}\n")))).toEqual([]);
+    for (const other of ["secrets['DEPLOY_TOKEN']", "toJSON(secrets)"]) {
+      expect(problems(withJob(planted(`    env:\n      T: ${expr(other)}\n`)))).toHaveLength(1);
+    }
   });
 
   test("banned_triggers", () => {
@@ -71,6 +91,8 @@ describe("workflows", () => {
     const block = "    steps:\n      - run: |\n          echo hi\n          echo ${{ github.head_ref }}\n";
     expect(problems(withJob(job(single)))).toHaveLength(1);
     expect(problems(withJob(job(block)))).toHaveLength(1);
+    expect(problems(withJob(job(`    steps:\n      - run: "a #' ${expr("github.head_ref")}"\n`)))).toHaveLength(1);
+    expect(problems(withJob(job(`    steps:\n      - "run": echo ${expr("github.head_ref")}\n`)))).toHaveLength(1);
   });
 
   test("main_runs_not_cancelled", () => {
