@@ -1,6 +1,7 @@
 Architecture and Development Guideline (unset.sh)
 
-Status: ADOPTED by Alex 2026-10-04 04:39Z ("Apply all" card). Adapted from the "Project Architecture & Development
+Status: ADOPTED by Alex 2026-10-04 04:39Z ("Apply all" card). Section 1 refined 05:10Z for the
+step book's layout-map open points O-1..O-11 (no change to intent). Adapted from the "Project Architecture & Development
 Handoff" (verbatim in unset-plan/architecture-handoff/chatgpt-handoff-verbatim.md) with six
 amendments that keep decisions Alex already made. Each amendment is marked [A1]..[A6] and explained
 in unset-plan/architecture-handoff/conflicts.md. It is the fourth guideline document
@@ -13,15 +14,17 @@ the plan governs product and security decisions.
 unset.sh/
 ├── apps/                 user-facing applications: UI only, no product rules, no database access
 │   ├── web/              public application (unset.sh)
-│   ├── admin/            privileged administration application (Tailscale only)
+│   ├── admin/            admin screens and islands (Tailscale only)
 │   └── chat/             chat client on its own origin (chat.unset.sh), Phase 6
 │
-├── interfaces/           entry points; each is its own process and container
-│   ├── http/             web server routes and forms
+├── interfaces/           entry points; one folder per running process, each its own container
+│   ├── http/             web server: routes, forms, its jobs
+│   ├── admin/            admin server: gate, session, enrolment, actions
 │   ├── api/              public read API, own database role
 │   ├── indexer/          reads records from the network (Tap consumer)
 │   ├── media/            media proxy on the media domain
-│   ├── review/           upload checks, no network
+│   ├── review/           upload checks (no-network compute + review-egress)
+│   ├── jobs/  retention/  audit-verify/  chat-auth/   other processes, added in their phase
 │   ├── pds-admin/        sole holder of the PDS admin password; zero dependencies
 │   └── chat-admin/       Phase 6; zero dependencies
 │
@@ -43,34 +46,47 @@ unset.sh/
 ├── shared/               genuinely generic code, kept small; MIT licence [A6]
 │   ├── lexicons/         sh.unset.* record types and generated code
 │   ├── ui/               tokens, shared components, Icon
-│   └── config/  errors/  i18n/
+│   ├── http/             server kit: server, CSRF gate, CSP, limits, client IP, return path
+│   ├── admin-envelope/   signed admin action format, canonicalize, roster; zero dependencies
+│   └── config/  errors/  log/  i18n/
 │
 ├── deployment/           compose, edge, backup, preflight
 │                         terraform/ and ansible/ are added at P5.00 when hosting is chosen
+├── scripts/              repository tooling only: CI guards, budgets, dev seed
 ├── tests/                integration/ and e2e/ [A5]
 └── docs/
-    ├── human/            guides, features/, decisions/ (ADRs), engineering/ (the four guidelines)
-    └── ai/               plan, step book, handoffs, investigations
+    ├── human/            guides, features/, decisions/ (ADRs), engineering/ (the guidelines),
+    │                     runbooks/, drills/, compliance/, legal/, phase-exit records
+    └── ai/               plan, step book, handoffs, investigations, working notes
 
 Folders are created when their first code lands, never ahead of it.
 
 Folder responsibilities
 
-* apps/ hold screens, islands and styles. They call interfaces; they never import infrastructure.
+* apps/ hold screens, islands and styles and import only shared/. The server renders them: the
+  interface that serves an app (interfaces/http for web, interfaces/admin for admin) may import that
+  app's render entry and pass it data as props. Islands reach the server over HTTP, never by import.
 * interfaces/ are the doors: they authenticate, apply the CSRF gate and limits, call a domain, and
-  shape the response. Each is a separate entrypoint so process, network and database-role
-  isolation from the plan stays intact.
-* pds-admin/ and chat-admin/ may import only their own folder and Node built-ins. A boundary rule
-  enforces this.
+  shape the response. Every running process has its own folder here, so process, network and
+  database-role isolation from the plan stays intact; a new process adds a folder, never shares one.
+  Interfaces do not import each other; code two of them need goes to shared/ (no product meaning)
+  or a domain.
+* pds-admin/ and chat-admin/ may import only their own folder, Node built-ins, and folders on the
+  zero-dependency allowlist (today: shared/admin-envelope/). An allowlisted folder obeys the same
+  rule, so nothing reaches these services transitively. Adding to the allowlist needs Alex's
+  approval in the PR. dependency-cruiser enforces both.
 * domains/ hold product rules and depend only on contracts they define; infrastructure implements
   those contracts. The composition root in each interface wires them.
-* infrastructure/ translates external concepts at the boundary. Nothing outside it imports a
-  vendor SDK directly.
+* infrastructure/ translates external concepts at the boundary. A vendor SDK is imported in exactly
+  one adapter folder per runtime: infrastructure/<system>/ on the server, apps/chat/matrix/ for
+  matrix-js-sdk in the browser chat client. shared/lexicons/ may use @atproto/lex for its generated
+  code. dependency-cruiser enforces each case by name.
 * shared/ holds only code with no product meaning. If it has product meaning, it belongs to a domain.
-* deployment/ holds what puts the system on machines. No Redis, queue or other service is added
-  without a concrete need; Postgres and in-memory limits are the default.
+* deployment/ holds what puts the system on machines, backup scripts included. No Redis, queue or
+  other service is added without a concrete need; Postgres and in-memory limits are the default.
+* scripts/ holds repository tooling (CI guards, budgets, dev seed). Product code never imports it.
 * tests/ hold integration and end-to-end tests. Unit tests sit next to the code they test.
-* docs/human/ is concise and maintained; docs/ai/ is working material.
+* docs/human/ holds what a person must read or follow and is kept current; docs/ai/ is working material.
 
 2. Architecture Rules
 

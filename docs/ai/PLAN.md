@@ -540,40 +540,42 @@ Hard requirements with CI gates, not intentions. The prototype's `docs/complianc
 unset.sh/
   apps/             # user-facing UI only: no product rules, no database access
     web/            # unset.sh (Hono SSR, islands, CSS Modules)
-    admin/          # privileged console, Tailscale only
+    admin/          # admin screens and islands only, Tailscale only (the server is interfaces/admin)
     chat/           # chat client on its own origin (chat.unset.sh), Phase 6
-  interfaces/       # entry points; each its own process and container
-    http/           # web's routes and forms
+  interfaces/       # entry points; one folder per running process, each its own container; never import each other
+    http/           # web server: routes, forms, its jobs
     api/            # public read API, own DB role
     indexer/        # Tap consumer
     media/          # media proxy on the media domain
-    review/         # upload checks: transcode, fingerprints, nudity, gore and text gates (no network)
-    admin/          # the admin server: gate, session, enrolment, actions, jobs; own role and network (apps/admin is its UI)
-    jobs/  retention/  audit-verify/   # scheduled and one-shot processes (retention sweeps, the audit verifier)
-    chat-auth/      # Phase 6: the chat OIDC provider process
+    review/         # upload checks: transcode, fingerprints, nudity, gore and text gates (no-network compute + review-egress)
+    admin/          # the admin server: gate, session, enrolment, actions, jobs, pds-admin client; own role and network
+    jobs/  retention/  audit-verify/  chat-auth/   # other processes, each added in its phase
     pds-admin/      # sole holder of the PDS admin password; imports only itself and Node built-ins
     chat-admin/     # Phase 6: MAS seeding; same zero-dependency rule
   domains/          # product rules in product words; depend only on contracts they define
     identity/  content/  social/  feed/  messaging/  moderation/  privacy/
   infrastructure/   # external systems behind small contracts; nothing outside imports a vendor SDK
-    postgres/  pds/  tap/  matrix/  storage/  arachnid/  email/
+    postgres/  pds/  tap/  storage/  arachnid/  email/
+    matrix/         # Matrix adapter; synapse-module/ holds the one Python exception (§5.6)
     net-guard/      # the single egress classifier
     seal/           # sealed-storage encryption
     audit/          # append-only audit store
   shared/           # genuinely generic code, kept small; the only MIT folder (decision 27 as amended); infrastructure/net-guard is AGPL like the rest
     lexicons/       # sh.unset.* JSON + permission set; generated code checked in
     ui/             # tokens.json → tokens.css, shared components, Icon
+    http/           # server kit: server, CSRF gate, CSP builder, limits, client IP, return path
+    admin-envelope/ # signed admin action format, canonicalize, roster; zero dependencies (the allowlist)
     log/            # logger and scrubber
     config/  errors/  i18n/
-  deployment/       # compose with profiles, edge, backup, preflight; terraform/ and ansible/ only at P5.00
-  scripts/          # repo tooling: CI guards, budgets, docs tests, dev seed
+  deployment/       # compose with profiles, edge, backup scripts, preflight; terraform/ and ansible/ only at P5.00
+  scripts/          # repo tooling only: CI guards, budgets, docs tests, dev seed; product code never imports it
   tests/            # integration/ and e2e/ (Playwright, both themes); unit tests sit next to their file
   docs/
-    human/          # README, getting-started, architecture, conventions, glossary, features/, decisions/ (ADRs), engineering/ (the four guidelines)
-    ai/             # PLAN.md, the step book, handoffs, investigations
+    human/          # anything a person must read or follow: README, getting-started, architecture, conventions, glossary, features/, decisions/ (ADRs), engineering/ (the guidelines), runbooks/, drills/, compliance/, legal/, db/, phase-exit records
+    ai/             # PLAN.md, the step book, handoffs, investigations, working notes
 ```
 
-Boundary rules, enforced by dependency-cruiser from the first commit: `domains/` never import `infrastructure/`, `interfaces/` or `apps/`; `apps/` never import each other or `infrastructure/`; `pds-admin` and `chat-admin` import only their own folder and Node built-ins; nothing outside `infrastructure/` imports a vendor SDK; no `plugins/` folder until the first real plugin (decision 25; its UI then lives in `apps/web/plugins/` with its own Postgres schema and role, §5.5). Each phase's refine step records the ownership path of its features (for example posting a video: `apps/web → interfaces/http → domains/content (+ moderation) → infrastructure/pds, storage → PDS`), and `docs/human/features/<feature>.md` is written when a feature's first slice lands. No Redis, queue or other service without a concrete need: one Postgres and in-memory limits are the default.
+Boundary rules, enforced by dependency-cruiser from the first commit (refined with the step book's layout map, 2026-10-04 05:10Z, guideline section 1): `domains/` never import `infrastructure/`, `interfaces/` or `apps/`; `apps/` import only `shared/`, and the interface that serves an app (`interfaces/http` for web, `interfaces/admin` for admin) may import that app's render entry and pass data as props, islands reaching the server over HTTP only; interfaces never import each other, so code two of them need goes to `shared/` or a domain; `pds-admin` and `chat-admin` import only their own folder, Node built-ins and the zero-dependency allowlist (today `shared/admin-envelope/` alone; an allowlisted folder obeys the same rule; adding to it needs Alex's approval in the PR; whether `chat-admin`'s identity verifier can be dependency-free and join it is decided at the start of Phase 6, otherwise Alex is asked; no byte-equal copies); a vendor SDK is imported in exactly one adapter folder per runtime (`infrastructure/<system>/` on the server, `apps/chat/matrix/` for `matrix-js-sdk` in the browser client, `shared/lexicons/` for `@atproto/lex`), each named in dependency-cruiser; `scripts/` is never imported by product code; no `plugins/` folder until the first real plugin (decision 25; its UI then lives in `apps/web/plugins/` with its own Postgres schema and role, §5.5). Each phase's refine step records the ownership path of its features (for example posting a video: `apps/web → interfaces/http → domains/content (+ moderation) → infrastructure/pds, storage → PDS`), and `docs/human/features/<feature>.md` is written when a feature's first slice lands. No Redis, queue or other service without a concrete need: one Postgres and in-memory limits are the default.
 
 Tooling (Alex, 2026-10-02, decision 16):
 - **TypeScript 7** (the Go port, GA 2026-07-08; TS 6 is Microsoft's last JS-based release) and **Node 26** (LTS 2026-10-28) from Phase 1; `engines.node: ">=26"`, `node:26` images by digest. One workspace (`apps/*`, `interfaces/*`, `domains/*`, `infrastructure/*`, `shared/*`) and one lockfile; TypeScript project references.

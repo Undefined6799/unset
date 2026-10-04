@@ -319,7 +319,13 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   the onboarding and email gates and `/me` (about 48 steps, local PDS, no Tailscale), and Phase 2 builds on
   it. The boundary-rule exceptions the book raised (admin-shared signing format, the chat identity verifier,
   matrix-js-sdk in the browser client, @atproto/lex in shared/lexicons, the SSR edge from interfaces/http
-  to apps/web) are with the architecture thread; the plan holds until they are decided.
+  to apps/web) were settled by the architecture thread at 05:10Z as refinements of the guideline (no Alex
+  decision changed): interfaces never import each other and the server kit lives in `shared/http`; the two
+  admin services get a zero-dependency allowlist (`shared/admin-envelope` today, additions need Alex's
+  approval); one vendor-SDK adapter folder per runtime (`apps/chat/matrix` for matrix-js-sdk,
+  `shared/lexicons` for @atproto/lex); the serving interface may import its app's render entry;
+  `infrastructure/matrix/synapse-module` holds the Python exception; `scripts/` is tooling only; docs/human
+  is anything a person must read or follow. Plan §7 and the repo guideline carry the refined text.
 
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
