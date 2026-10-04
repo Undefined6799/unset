@@ -387,6 +387,14 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   by rule (CLAUDE.md: agents never merge); the accepted cost is that nothing technical stops an agent acting as
   Alex from merging. The machine-account alternative was declined. Plan §8 Phase 0 and §9; step P0.03 step 4b.
 
+- **Decision 41 (Alex, 2026-10-04 20:45Z, "Go without" on the build thread's card; own record: [0009](0009-no-branch-protection-on-free-private-repo.md)):**
+  GitHub refused the decision 40 ruleset on the private repository ("Upgrade to GitHub Pro or make this repository
+  public to enable this feature"). Alex chose neither Pro nor a public repository, so `main` has no ruleset and no
+  branch protection: CI is advisory, and PR-only, squash-only, agents-never-merge and no-direct-push are written rules.
+  Compensating controls: read-only Actions token, Actions cannot approve PRs, checks on every PR, GitHub's log. The
+  decision 40 ruleset is applied the day protection is available. Revisit before the repository goes public or before
+  the first production account, whichever comes first. Plan §8 Phase 0 and its exit; step P0.03.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
