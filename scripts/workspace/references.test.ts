@@ -1,10 +1,11 @@
 // The workspace convention (P1.01), shown on throwaway fixture trees and on the real repository.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { closureProblems, workspaceProblems } from "./references.ts";
+import { closureProblems, untypecheckedFiles, WORKSPACE_TOPS, workspaceProblems } from "./references.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const temps: string[] = [];
@@ -185,6 +186,79 @@ describe("workspace references", () => {
       "shared/errors": {},
     });
     expect(workspaceProblems(declared)).toEqual([]);
+  });
+
+  test("references_are_resolved_paths", () => {
+    const root = tree({ "domains/identity": {}, "infrastructure/pds": {}, "shared/errors": {} });
+    const sneaky = {
+      extends: "../../tsconfig.base.json",
+      compilerOptions: { composite: true, rootDir: ".", outDir: "dist" },
+    };
+    const write = (references: string[]) =>
+      writeFileSync(
+        join(root, "domains/identity/tsconfig.json"),
+        JSON.stringify({ ...sneaky, references: references.map((path) => ({ path })) }),
+      );
+    write(["../../shared/errors/../../infrastructure/pds"]);
+    expect(workspaceProblems(root)).toEqual(["domains/identity: may not reference infrastructure/pds (MATRIX)"]);
+    write(["../../shared/errors/"]);
+    expect(workspaceProblems(root)).toEqual([]);
+  });
+
+  test("every_dependency_field_is_read", () => {
+    const fields = ["devDependencies", "optionalDependencies", "peerDependencies"];
+    for (const field of fields) {
+      const domain = tree({ "domains/identity": {} });
+      const pkg = { ...manifest("domains/identity"), [field]: { zod: "4.0.0" } };
+      writeFileSync(join(domain, "domains/identity/package.json"), JSON.stringify(pkg));
+      expect(workspaceProblems(domain), field).toEqual(["domains/identity: a domain has no npm dependencies (AB-1)"]);
+      const service = tree({ "interfaces/pds-admin": {} });
+      const servicePkg = { ...manifest("interfaces/pds-admin"), [field]: { pg: "8.0.0" } };
+      writeFileSync(join(service, "interfaces/pds-admin/package.json"), JSON.stringify(servicePkg));
+      expect(workspaceProblems(service), field).toEqual([
+        "interfaces/pds-admin: zero-dependency workspace depends on pg (plan §5.2)",
+      ]);
+    }
+  });
+
+  test("side_effect_and_require_imports_are_seen", () => {
+    for (const source of [
+      'import "@unset/shared-errors";\n',
+      'const e = require("@unset/shared-errors");\nexport { e };\n',
+    ]) {
+      const root = tree({ "shared/config": { source }, "shared/errors": {} });
+      expect(workspaceProblems(root), source).toContain(
+        "shared/config: imports @unset/shared-errors without it in tsconfig references",
+      );
+    }
+  });
+
+  test("workspace_tops_match_package_json", () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { workspaces: string[] };
+    expect(pkg.workspaces).toEqual(WORKSPACE_TOPS.map((top) => `${top}/*`));
+  });
+
+  test("matrix_targets_have_no_path_not", () => {
+    // mayReference reads only `to.path`; a `to.pathNot` would need the same handling there first.
+    const matrix = createRequire(import.meta.url)(join(ROOT, ".dependency-cruiser.cjs")).MATRIX as {
+      to: object[];
+    }[];
+    expect(matrix.flatMap((row) => row.to).filter((to) => "pathNot" in to)).toEqual([]);
+  });
+
+  test("every_ts_file_is_typechecked", () => {
+    expect(untypecheckedFiles(ROOT)).toEqual([]);
+    const root = tree({});
+    symlinkSync(join(ROOT, "node_modules"), join(root, "node_modules"), "dir");
+    for (const file of ["tsconfig.base.json", "scripts/tsconfig.json"]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), readFileSync(join(ROOT, file), "utf8"));
+    }
+    for (const file of ["scripts/a.ts", "vitest.config.ts", "tests/integration/x.test.ts", "domains/stray/d.ts"]) {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), "export {};\n");
+    }
+    expect(untypecheckedFiles(root)).toEqual(["domains/stray/d.ts", "tests/integration/x.test.ts"]);
   });
 
   test("no_workspace_yet_passes", () => {

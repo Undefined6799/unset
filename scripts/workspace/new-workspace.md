@@ -20,7 +20,8 @@ There is no `packages/`, `modules/` or `plugins/` folder (decisions 25 and 34). 
   outDir: "dist" }`, and `references` to each workspace it imports (`{ "path": "../../shared/errors" }`).
 - At least one `*.test.ts` beside its code.
 - `index.ts`: the only file other folders import from an `infrastructure/` or `shared/` workspace (rule DC-2,
-  dependency-cruiser `infra-shared-via-index`); a domain is reached the same way (`domain-cross-via-index`).
+  dependency-cruiser `infra-shared-via-index`); a domain is reached the same way (`domain-cross-via-index`). It is
+  `index.ts`, never `index.tsx`; only CSS files are imported directly.
 
 Then add `{ "path": "<top>/<name>" }` to the root `tsconfig.json` `references` and run `npm install` so the
 lockfile records the workspace.
@@ -50,7 +51,9 @@ A new edge is a MATRIX row (with its fixture in `scripts/lint/depcruise.test.ts`
 
 - `npm run typecheck` (`tsc -b`) builds every referenced project. It does not by itself notice an import of a
   workspace that is missing from `references`, because npm links every workspace into `node_modules`; the
-  references test does.
+  references test does, reading `import`, `import()`, side-effect imports and `require()`.
+- The references test also fails when any TypeScript file is outside every project the root `tsconfig.json` lists, so a
+  new `tests/` or `deployment/` folder, or a code folder without a `package.json`, needs its project in the same PR.
 - `npm run lint` runs the boundary rules on every import.
 - `npm test` fails if a workspace's test file did not run, and the Vitest project for each top-level folder selects
   it without further configuration.

@@ -1,6 +1,6 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "composite": true, "rootDir": "..", "outDir": "dist" },
-  "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "../*.config.ts"],
+  "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "../*.config.ts", "../*.config.mts", "../*.config.cts"],
   "exclude": ["dist", "guards/fixtures"]
 }
