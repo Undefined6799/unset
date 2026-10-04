@@ -44,7 +44,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |
 | ADG §2, AB-1 | Domains do not depend on infrastructure, interfaces or apps | checked: `domain-pure` |
 | ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
-| DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | planned: P1.01 |
+| DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | checked: `infra-shared-via-index` |
 | ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
 | ADG §1 | Product code never imports repository tooling (`scripts/`, `tests/`, configs) | checked: `no-product-imports-tooling` |
 | ADG §2 | Infrastructure implements domain contracts and never reaches an entry point | checked: `infrastructure-not-entry` |

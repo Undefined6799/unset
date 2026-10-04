@@ -118,46 +118,61 @@ describe("discovery", () => {
 
 describe("end to end with real Vitest", { timeout: 60_000 }, () => {
   test("end_to_end_planted_empty_file", async () => {
-    const { code, err } = await runMain(fixture({ "a.test.ts": PASSING, "x.test.ts": "" }, true));
+    const { code, err } = await runMain(fixture({ "domains/x/a.test.ts": PASSING, "domains/x/x.test.ts": "" }, true));
     expect(code).toBe(1);
-    expect(err).toMatch(/\(notExecuted\):\n\s+x\.test\.ts/);
+    expect(err).toMatch(/\(notExecuted\):\n\s+domains\/x\/x\.test\.ts/);
   });
 
   test("only_is_rejected", async () => {
     const only = 'import { expect, test } from "vitest";\ntest.only("o", () => expect(1).toBe(1));\n';
-    expect((await runMain(fixture({ "a.test.ts": PASSING, "o.test.ts": only }, true))).code).toBe(1);
+    expect((await runMain(fixture({ "domains/x/a.test.ts": PASSING, "domains/x/o.test.ts": only }, true))).code).toBe(
+      1,
+    );
   });
 
   test("skip_in_passing_file_is_rejected", async () => {
     const body = `${PASSING}test.skip("later", () => {});\n`;
-    const { code, err } = await runMain(fixture({ "s.test.ts": body }, true));
+    const { code, err } = await runMain(fixture({ "domains/x/s.test.ts": body }, true));
     expect(code).toBe(1);
-    expect(err).toContain("s.test.ts > later");
+    expect(err).toContain("domains/x/s.test.ts > later");
   });
 
   test("failing_before_all_is_not_executed", async () => {
     const body =
       'import { beforeAll, expect, test } from "vitest";\nbeforeAll(() => { throw new Error("x"); });\ntest("t", () => expect(1).toBe(1));\n';
-    const { code, err } = await runMain(fixture({ "b.test.ts": body }, true));
+    const { code, err } = await runMain(fixture({ "domains/x/b.test.ts": body }, true));
     expect(code).toBe(1);
-    expect(err).toMatch(/\(notExecuted\):\n\s+b\.test\.ts/);
+    expect(err).toMatch(/\(notExecuted\):\n\s+domains\/x\/b\.test\.ts/);
   });
 
   test("clean_tree_passes", async () => {
-    expect((await runMain(fixture({ "a.test.ts": PASSING }, true))).code).toBe(0);
+    expect((await runMain(fixture({ "domains/x/a.test.ts": PASSING }, true))).code).toBe(0);
+  });
+
+  test("root_level_test_file_is_not_listed", async () => {
+    // Each Vitest project selects one decision-34 folder (P1.01), so a test file anywhere else is reported.
+    const { code, err } = await runMain(fixture({ "domains/x/a.test.ts": PASSING, "r.test.ts": PASSING }, true));
+    expect(code).toBe(1);
+    expect(err).toMatch(/\(notListed\):\n\s+r\.test\.ts/);
   });
 
   test("typecheck_includes_tests", () => {
-    const tsconfig = readFileSync(join(REPO, "tsconfig.json"), "utf8");
+    const read = (file: string): string => readFileSync(join(REPO, file), "utf8");
     const bad = "const n: number = 'not a number';\nexport {};\n";
-    const root = fixture({ "tsconfig.json": tsconfig, "a.test.mts": bad, "b.test.tsx": bad }, true);
-    const tsc = spawnSync(join(REPO, "node_modules", ".bin", "tsc"), ["--noEmit", "-p", "tsconfig.json"], {
-      cwd: root,
-      encoding: "utf8",
-    });
+    const root = fixture(
+      {
+        "tsconfig.json": read("tsconfig.json"),
+        "tsconfig.base.json": read("tsconfig.base.json"),
+        "scripts/tsconfig.json": read("scripts/tsconfig.json"),
+        "scripts/a.test.mts": bad,
+        "scripts/b.test.tsx": bad,
+      },
+      true,
+    );
+    const tsc = spawnSync(join(REPO, "node_modules", ".bin", "tsc"), ["-b"], { cwd: root, encoding: "utf8" });
     expect(tsc.status).not.toBe(0);
-    expect(tsc.stdout).toContain("a.test.mts");
-    expect(tsc.stdout).toContain("b.test.tsx");
+    expect(tsc.stdout).toContain("scripts/a.test.mts");
+    expect(tsc.stdout).toContain("scripts/b.test.tsx");
   });
 });
 
