@@ -361,6 +361,13 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   more than the profile page does under D7. Private people are reached only from an existing conversation or a request
   they sent; the Everyone/Nobody request setting may reopen lookup per person later. Plan §5.6; step P6.06a.
 
+- **Decision 37 (Alex, 2026-10-04 13:50Z, typed in the plan thread while card 2 was open; own record: [0004](0004-no-false-sense-of-privacy.md)):**
+  "I do not wish to create a false sense of privacy. So if a member could be found from another appview or something
+  like that, we should also display it." Whatever the network can already show about a member, unset.sh shows too; only
+  what the network cannot see is hidden. Applied to the Q2b matrix: profile private with posts public shows the public
+  posts under a bare handle on post pages, in feeds and in the read API, Follow on the post page, `/@alice` unavailable
+  (plan §11 Q2b; step P4.00). Decision 36 stands: chat membership is not visible from the network.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
