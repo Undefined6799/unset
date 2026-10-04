@@ -35,6 +35,8 @@ const candidate = fc.oneof(
   fc.array(fragment, { maxLength: 12 }).map((parts) => parts.join("")),
   fc.array(fragment, { maxLength: 12 }).map((parts) => `/${parts.join("")}`),
   fc.string({ unit: "binary", maxLength: 40 }),
+  // Long paths, so percent-encoding can push a result past the length cap.
+  fc.string({ unit: "grapheme", minLength: 80, maxLength: 600 }).map((s) => `/${s}`),
 );
 
 const sameOrigin = (path: string): boolean => new URL(path, ORIGIN).origin === ORIGIN;
