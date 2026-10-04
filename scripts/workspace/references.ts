@@ -1,6 +1,7 @@
 // The workspace convention (P1.01, scripts/workspace/new-workspace.md), checked on a repository tree.
 // Which workspace may reference which is read from the dependency-cruiser MATRIX, so the import
 // boundaries and the tsconfig/package.json references are one list (rule AB-1).
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -18,6 +19,8 @@ export const WORKSPACE_TOPS = ["apps", "interfaces", "domains", "infrastructure"
 /** Folders decision 34 and decision 25 rule out. */
 const FORBIDDEN_TOPS = ["packages", "modules", "plugins"];
 const ADMIN_SERVICES = ["interfaces/pds-admin", "interfaces/chat-admin"];
+/** devDependencies a zero-dependency workspace may still list: test tooling, never shipped. */
+const TEST_TOOLING = new Set(["vitest"]);
 const TEST_FILE = /\.test\.(?:ts|tsx|mts|cts)$/;
 const UNSET_IMPORT = /(?:from\s+|import\s*\(\s*)["'](@unset\/[^"'/]+)/g;
 
@@ -115,13 +118,59 @@ function referenceProblems(ws: Workspace, byName: Map<string, string>): string[]
     if (!mayReference(ws.dir, target)) problems.push(`${ws.dir}: may not reference ${target} (MATRIX)`);
   }
   const hasDeps = Object.keys((ws.pkg.dependencies ?? {}) as object).length > 0;
-  const zeroDep = ADMIN_SERVICES.includes(ws.dir) || boundaries.ZERO_DEP_ALLOWLIST.includes(`${ws.dir}/`);
-  if (zeroDep && hasDeps) problems.push(`${ws.dir}: zero-dependency workspace has dependencies (plan §5.2)`);
-  if (zeroDep && boundaries.ZERO_DEP_ALLOWLIST.includes(`${ws.dir}/`) && refs.length > 0) {
-    problems.push(`${ws.dir}: zero-dependency allowlist workspace has references`);
-  }
   if (ws.dir.startsWith("domains/") && hasDeps) problems.push(`${ws.dir}: a domain has no npm dependencies (AB-1)`);
   return problems;
+}
+
+/**
+ * "Zero dependencies" means no third-party package (plan §5.2; architecture ruling 2026-10-04): an admin service
+ * depends only on allowlisted `@unset/*` workspaces, and an allowlisted workspace depends on and references nothing.
+ */
+function zeroDependencyProblems(ws: Workspace, byName: Map<string, string>): string[] {
+  const allowlisted = boundaries.ZERO_DEP_ALLOWLIST.includes(`${ws.dir}/`);
+  if (!allowlisted && !ADMIN_SERVICES.includes(ws.dir)) return [];
+  const named = (field: string): string[] => Object.keys((ws.pkg[field] ?? {}) as object);
+  const declared = [...named("dependencies"), ...named("devDependencies").filter((d) => !TEST_TOOLING.has(d))];
+  const allowed = (dep: string): boolean =>
+    !allowlisted && boundaries.ZERO_DEP_ALLOWLIST.includes(`${byName.get(dep) ?? ""}/`);
+  const problems = declared
+    .filter((dep) => !allowed(dep))
+    .map((dep) => `${ws.dir}: zero-dependency workspace depends on ${dep} (plan §5.2)`);
+  if (allowlisted && referencePaths(ws.tsconfig).length > 0) {
+    problems.push(`${ws.dir}: zero-dependency allowlist workspace has references`);
+  }
+  return problems;
+}
+
+/** Every package `npm ls` finds in a workspace's installed production closure, the workspace itself excluded. */
+function installedClosure(root: string, ws: Workspace): string[] | null {
+  const run = spawnSync("npm", ["ls", "--workspace", ws.dir, "--all", "--json", "--omit=dev"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  type Node = { dependencies?: Record<string, Node> };
+  let tree: Node;
+  try {
+    tree = JSON.parse(run.stdout) as Node;
+  } catch {
+    return null;
+  }
+  const names = (node: Node): string[] =>
+    Object.entries(node.dependencies ?? {}).flatMap(([name, child]) => [name, ...names(child)]);
+  return names(tree.dependencies?.[String(ws.pkg.name)] ?? {});
+}
+
+/** The installed closure of each admin service holds no third-party package (defence in depth over the manifests). */
+export function closureProblems(root: string): string[] {
+  return findWorkspaces(root)
+    .filter((ws) => ADMIN_SERVICES.includes(ws.dir))
+    .flatMap((ws) => {
+      const closure = installedClosure(root, ws);
+      if (closure === null) return [`${ws.dir}: npm ls gave no readable tree`];
+      return [...new Set(closure)]
+        .filter((name) => !name.startsWith("@unset/"))
+        .map((name) => `${ws.dir}: third-party package ${name} in the installed closure (plan §5.2)`);
+    });
 }
 
 /** Each `@unset/*` package imported by a workspace's code must be in its dependencies and references. */
@@ -137,9 +186,7 @@ function importProblems(root: string, ws: Workspace, byName: Map<string, string>
     const target = byName.get(name);
     if (target === undefined) return [`${ws.dir}: imports ${name}, which is no workspace`];
     if (target === ws.dir) return [];
-    // A zero-dependency service lists no dependencies at all (plan §5.2); its tsconfig reference is the record.
-    const needsDep = !ADMIN_SERVICES.includes(ws.dir) && !deps.has(name);
-    const missing = [needsDep ? "package.json dependencies" : "", refs.has(target) ? "" : "tsconfig references"];
+    const missing = [deps.has(name) ? "" : "package.json dependencies", refs.has(target) ? "" : "tsconfig references"];
     return missing.filter(Boolean).map((where) => `${ws.dir}: imports ${name} without it in ${where}`);
   });
 }
@@ -161,7 +208,12 @@ export function workspaceProblems(root: string): string[] {
     }
     if (!rootRefs.has(ws.dir)) problems.push(`tsconfig.json: references no ${ws.dir}`);
     if (!sourceFiles(root, [ws.dir]).some((f) => TEST_FILE.test(f))) problems.push(`${ws.dir}: has no *.test.ts`);
-    problems.push(...manifestProblems(ws), ...referenceProblems(ws, byName), ...importProblems(root, ws, byName));
+    problems.push(
+      ...manifestProblems(ws),
+      ...referenceProblems(ws, byName),
+      ...zeroDependencyProblems(ws, byName),
+      ...importProblems(root, ws, byName),
+    );
   }
   return problems.sort();
 }

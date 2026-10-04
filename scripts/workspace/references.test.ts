@@ -1,10 +1,10 @@
 // The workspace convention (P1.01), shown on throwaway fixture trees and on the real repository.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { workspaceProblems } from "./references.ts";
+import { closureProblems, workspaceProblems } from "./references.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const temps: string[] = [];
@@ -87,8 +87,48 @@ describe("workspace references", () => {
   test("pds_admin_no_deps", () => {
     for (const service of ["interfaces/pds-admin", "interfaces/chat-admin"]) {
       const root = tree({ [service]: { dependencies: { undici: "1.0.0" } } });
-      expect(workspaceProblems(root)).toEqual([`${service}: zero-dependency workspace has dependencies (plan §5.2)`]);
+      expect(workspaceProblems(root)).toEqual([`${service}: zero-dependency workspace depends on undici (plan §5.2)`]);
     }
+  });
+
+  test("pds_admin_may_depend_on_the_allowlist", () => {
+    const source = 'import { x } from "@unset/shared-admin-envelope";\nexport const y = x;\n';
+    const envelope = { "@unset/shared-admin-envelope": "0.0.0" };
+    const root = tree({
+      "interfaces/pds-admin": { source, references: ["shared/admin-envelope"], dependencies: envelope },
+      "shared/admin-envelope": {},
+    });
+    expect(workspaceProblems(root)).toEqual([]);
+    const notAllowlisted = tree({
+      "interfaces/pds-admin": { references: ["shared/errors"], dependencies: { "@unset/shared-errors": "0.0.0" } },
+      "shared/errors": {},
+    });
+    expect(workspaceProblems(notAllowlisted)).toEqual([
+      "interfaces/pds-admin: may not reference shared/errors (MATRIX)",
+      "interfaces/pds-admin: zero-dependency workspace depends on @unset/shared-errors (plan §5.2)",
+    ]);
+  });
+
+  test("pds_admin_installed_closure_has_no_third_party", () => {
+    const root = tree({
+      "interfaces/pds-admin": { dependencies: { "@unset/shared-admin-envelope": "0.0.0" } },
+      "shared/admin-envelope": { dependencies: { undici: "1.0.0" } },
+    });
+    // Install the tree by hand, the way npm links workspaces, so npm ls reads it offline.
+    const put = (file: string, body: string): void => {
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), body);
+    };
+    put("package.json", JSON.stringify({ name: "fixture", private: true, workspaces: ["interfaces/*", "shared/*"] }));
+    put("node_modules/undici/package.json", JSON.stringify({ name: "undici", version: "1.0.0" }));
+    for (const dir of ["interfaces/pds-admin", "shared/admin-envelope"]) {
+      const [top, name] = dir.split("/");
+      mkdirSync(join(root, "node_modules/@unset"), { recursive: true });
+      symlinkSync(join(root, dir), join(root, `node_modules/@unset/${top}-${name}`), "dir");
+    }
+    expect(closureProblems(root)).toEqual([
+      "interfaces/pds-admin: third-party package undici in the installed closure (plan §5.2)",
+    ]);
   });
 
   test("allowlisted_workspace_has_no_references", () => {
@@ -153,6 +193,7 @@ describe("workspace references", () => {
 
   test("real_tree_conforms", () => {
     expect(workspaceProblems(ROOT)).toEqual([]);
+    expect(closureProblems(ROOT)).toEqual([]);
   });
 
   test("typecheck_build_mode", () => {

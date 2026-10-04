@@ -33,8 +33,11 @@ the MATRIX lets its code import that workspace's `index.ts` (or, for an app, its
 - `apps/<x>`: `shared/*` only. Islands reach the server over HTTP, never by import.
 - `interfaces/http` and `interfaces/admin`: their own app's render entry, `domains/*`, `infrastructure/*`,
   `shared/*`. Every other interface: `domains/*`, `infrastructure/*`, `shared/*`. No interface references another.
-- `interfaces/pds-admin`, `interfaces/chat-admin`: only the zero-dependency allowlist (today `shared/admin-envelope`)
-  and no `dependencies` at all (plan §5.2). An allowlisted workspace has no references and no dependencies.
+- `interfaces/pds-admin`, `interfaces/chat-admin`: only the zero-dependency allowlist (today `shared/admin-envelope`),
+  listed in `dependencies` and `references` like any workspace. "Zero dependencies" means no third-party package
+  (plan §5.2): their dependencies (and devDependencies apart from test tooling) hold only allowlisted `@unset/*`
+  workspaces, and their installed closure (`npm ls --workspace … --all`) holds no third-party package. An
+  allowlisted workspace has no references and no dependencies.
 - `domains/<x>`: `shared/errors`, `shared/config` (types only), `shared/lexicons`, and another domain's `index.ts`
   where a feature needs it. No npm dependencies (rule AB-1).
 - `infrastructure/<x>`: `domains/*`, `shared/*`, `infrastructure/net-guard`, `infrastructure/seal`.
