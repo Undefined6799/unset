@@ -108,7 +108,7 @@ jobs:
         run: >-
           docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE"
           semgrep scan --config p/typescript --config p/nodejs --config p/owasp-top-ten
-          --metrics=off --error --sarif --output semgrep.sarif
+          --metrics=off --error --sarif-output=semgrep.sarif
       - name: Fail if no rules ran
         if: always()
         run: node scripts/ci/semgrep-rules-ran.ts semgrep.sarif
