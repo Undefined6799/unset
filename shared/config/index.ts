@@ -2,6 +2,7 @@
 // `[secret]` and leave only through `Secret.reveal()`.
 export type { LoadOptions, Problem, Reason } from "./load.ts";
 export { bootOrExit, ConfigError, describeConfig, loadConfig } from "./load.ts";
+export { netGuardFields, netGuardRules } from "./netGuard.ts";
 export type { Config, Field, Fields, Kind, Rule, Schema } from "./schema.ts";
 export {
   bool,
