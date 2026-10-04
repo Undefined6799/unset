@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome ci . && depcruise --config .dependency-cruiser.cjs .",
     "format": "biome format --write .",
-    "guards": "node scripts/guards/egress.ts && node scripts/guards/cookie-domain.ts",
+    "guards": "vitest run scripts/guards",
     "test": "node scripts/test/run.ts",
     "budgets": "node scripts/budgets/check.ts"
   },

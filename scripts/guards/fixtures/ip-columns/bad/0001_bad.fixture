@@ -1,0 +1,8 @@
+-- fixture: infrastructure/postgres/migrations/0001_bad.sql findings=4
+CREATE TABLE app.logins (
+  id bigint PRIMARY KEY,
+  login_ip inet,
+  user_agent text,
+  peer cidr
+);
+ALTER TABLE app.t ADD COLUMN client_ip text;

@@ -1,0 +1,8 @@
+-- fixture: infrastructure/postgres/migrations/0001_good.sql findings=0
+CREATE TABLE app.orders (
+  ship_date date,
+  description text,
+  zip text,
+  sealed types.sealed
+);
+CREATE TABLE app.ip_bans_note (note text); -- a table name is not a column

@@ -1,0 +1,2 @@
+// fixture: interfaces/http/b.ts findings=1
+import { gate } from "../admin/gate.ts";

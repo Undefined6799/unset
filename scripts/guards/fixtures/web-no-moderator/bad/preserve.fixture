@@ -1,0 +1,3 @@
+// fixture: apps/web/src/x.ts findings=2
+export const a = "preserve.create";
+export const b = "account.lookup";

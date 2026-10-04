@@ -1,0 +1,10 @@
+// fixture: interfaces/http/session.ts findings=0
+res.headers.set("set-cookie", "__Host-a=b; Path=/");
+
+
+
+
+
+
+
+export const handle = { domain: env.HANDLE_DOMAIN };

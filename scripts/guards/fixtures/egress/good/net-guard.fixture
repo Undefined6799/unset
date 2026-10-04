@@ -1,0 +1,2 @@
+// fixture: infrastructure/net-guard/index.ts findings=0
+export const a = (url: string) => fetch(url);

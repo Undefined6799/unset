@@ -1,0 +1,9 @@
+// fixture: interfaces/http/routes/a.ts findings=6
+export const a = (url: string) => fetch(
+  url,
+);
+export const b = (u: string) => fetch(u); // guard-allow: egress
+export const c = (u: string) => fetch(u); /* guard-allow: egress */
+export const d = (u: string) => fetch(u, { h: "guard-allow: egress x" });
+const axios = require(`axios`);
+export const e = (u: string) => globalThis.fetch(u);

@@ -1,72 +1,135 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+// Each guard against planted fixtures (fixtures/<rule>/{bad,good}/*.fixture). The first line of a fixture names the
+// path it is copied to and the number of findings expected there; the .fixture suffix keeps it out of the real scan.
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { main as cookieMain, scanCookieDomain } from "./cookie-domain.ts";
-import { main as egressMain, scanEgress } from "./egress.ts";
+import * as cookieDomain from "./cookie-domain.ts";
+import * as egress from "./egress.ts";
+import type { Finding } from "./files.ts";
+import * as innerHtml from "./inner-html.ts";
+import * as ipColumns from "./ip-columns.ts";
+import * as webNoModerator from "./web-no-moderator.ts";
 
-const roots: string[] = [];
-function fixture(files: Record<string, string>): string {
+const FIXTURES = join(import.meta.dirname, "fixtures");
+const HEADER = /^(?:\/\/|--)\s*fixture:\s*(\S+)\s+findings=(\d+)\s*$/;
+const SCANNERS: Record<string, (root: string) => Finding[]> = {
+  egress: egress.scanAll,
+  "cookie-domain": cookieDomain.scanAll,
+  "inner-html": innerHtml.scanAll,
+  "web-no-moderator": webNoModerator.scanAll,
+  "ip-columns": (root) => ipColumns.scanAll(root, []),
+};
+
+const temps: string[] = [];
+afterAll(() => {
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+});
+
+function tempRepo(files: Record<string, string | Uint8Array>): string {
   const root = mkdtempSync(join(tmpdir(), "guards-"));
-  roots.push(root);
+  temps.push(root);
   for (const [path, body] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     writeFileSync(join(root, path), body);
   }
   return root;
 }
-afterAll(() => {
-  for (const r of roots) rmSync(r, { recursive: true, force: true });
+
+/** Copies the named fixtures into one temp repo, scans it, and returns expected and actual findings per path. */
+function runFixtures(rule: string, kind: "bad" | "good", names?: string[]) {
+  const dir = join(FIXTURES, rule, kind);
+  const files: Record<string, string> = {};
+  const expected: Record<string, number> = {};
+  for (const name of names ?? readdirSync(dir)) {
+    const text = readFileSync(join(dir, name), "utf8");
+    const [, path = "", count = "-1"] = HEADER.exec(text.split("\n")[0] ?? "") ?? [];
+    expect(path, `${rule}/${kind}/${name} header`).not.toBe("");
+    files[path] = text;
+    expected[path] = Number(count);
+  }
+  expect(Object.keys(expected).length, `${rule}/${kind} has fixtures with distinct paths`).toBe(
+    (names ?? readdirSync(dir)).length,
+  );
+  expect(Object.keys(expected).length).toBeGreaterThan(0);
+  const actual: Record<string, number> = Object.fromEntries(Object.keys(files).map((p) => [p, 0]));
+  for (const f of SCANNERS[rule]?.(tempRepo(files)) ?? []) actual[f.file] = (actual[f.file] ?? 0) + 1;
+  return { expected, actual };
+}
+
+function expectFixtures(rule: string, kind: "bad" | "good", names?: string[]): void {
+  const { expected, actual } = runFixtures(rule, kind, names);
+  expect(actual).toEqual(expected);
+  if (kind === "bad") expect(Object.values(actual).every((n) => n > 0)).toBe(true);
+}
+
+describe("egress", () => {
+  test("egress_bad_fixture", () => expectFixtures("egress", "bad", ["dynamic-fetch.fixture"]));
+  test("egress_bad_fixture_raw_sockets", () => expectFixtures("egress", "bad", ["raw-sockets.fixture"]));
+  test("egress_good_fixture", () => expectFixtures("egress", "good"));
+  test("egress_fetch_split_over_lines_and_bare_allow", () => expectFixtures("egress", "bad", ["split-fetch.fixture"]));
+
+  test("egress_allow_needs_reason", () => {
+    expect(egress.scanEgress("apps/web/a.ts", "fetch(u) // guard-allow: egress")).toHaveLength(1);
+    expect(egress.scanEgress("apps/web/a.ts", "fetch(u) // guard-allow: egress constant PDS URL")).toHaveLength(0);
+  });
+
+  test("egress_file_exemption_exact", () => {
+    expect(egress.EGRESS_FILE_EXEMPTIONS).toEqual(["interfaces/pds-admin/pds.mjs"]);
+    const line = 'import http from "node:http";';
+    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/pds.mjs": line }))).toEqual([]);
+    expect(egress.scanAll(tempRepo({ "interfaces/pds-admin/other.mjs": line }))).toHaveLength(1);
+  });
 });
 
-describe("egress guard", () => {
-  test("flags fetch with a dynamic URL", () => {
-    expect(scanEgress("apps/web/a.ts", "await fetch(url)").length).toBe(1);
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the fixture is source text containing a template literal.
-    expect(scanEgress("apps/web/a.ts", "await fetch(`https://${host}/x`)").length).toBe(1);
-    expect(scanEgress("apps/web/a.ts", "await fetch(base + path, opts)").length).toBe(1);
-  });
-
-  test("allows a constant string URL", () => {
-    expect(scanEgress("apps/web/a.ts", 'await fetch("https://plc.directory/x")').length).toBe(0);
-    expect(scanEgress("apps/web/a.ts", "await fetch('https://a.example', { method: 'POST' })").length).toBe(0);
-  });
-
-  test("flags raw HTTP client imports", () => {
-    expect(scanEgress("domains/identity/a.ts", 'import { request } from "undici";').length).toBe(1);
-    expect(scanEgress("domains/identity/a.ts", 'import https from "node:https";').length).toBe(1);
-  });
-
-  test("exempts net-guard itself, tests, and annotated lines", () => {
-    expect(scanEgress("infrastructure/net-guard/index.ts", "await fetch(url)").length).toBe(0);
-    expect(scanEgress("apps/web/a.test.ts", "await fetch(url)").length).toBe(0);
-    expect(scanEgress("apps/web/a.ts", "await fetch(url) // guard-allow: egress constant PDS URL").length).toBe(0);
-  });
-
-  test("main fails on a planted bare fetch and passes on a clean tree", () => {
-    expect(egressMain(fixture({ "apps/web/ok.ts": "export const x = 1;\n" }))).toBe(0);
-    expect(egressMain(fixture({ "domains/p/bad.ts": "export const go = (u: string) => fetch(u);\n" }))).toBe(1);
-  });
+describe("cookie-domain", () => {
+  test("cookie_bad_fixture", () => expectFixtures("cookie-domain", "bad"));
+  test("cookie_good_fixture", () => expectFixtures("cookie-domain", "good"));
 });
 
-describe("cookie-domain guard", () => {
-  test("flags a Domain attribute in a Set-Cookie string", () => {
-    expect(scanCookieDomain("apps/web/a.ts", '"sid=1; Path=/; Domain=unset.sh; Secure"').length).toBe(1);
-  });
+describe("inner-html", () => {
+  test("inner_html_bad_fixture", () => expectFixtures("inner-html", "bad"));
+  test("inner_html_good_fixture", () => expectFixtures("inner-html", "good"));
 
-  test("flags a domain option next to cookie code", () => {
-    const src = 'setCookie(c, "__Host-sid", sid, {\n  secure: true,\n  domain: "unset.sh",\n});';
-    expect(scanCookieDomain("apps/web/a.ts", src).length).toBe(1);
-  });
-
-  test("ignores unrelated domain fields", () => {
-    expect(scanCookieDomain("domains/identity/config.ts", "const handle = { domain: env.HANDLE_DOMAIN };").length).toBe(
-      0,
+  test("inner_html_exemption_list_empty", () => {
+    const lists = Object.entries(innerHtml).filter(([name]) => /exempt|allow/i.test(name));
+    for (const [, value] of lists) expect(value).toEqual([]);
+    expect(innerHtml.scanInnerHtml("apps/web/a.ts", "el.innerHTML = s; // guard-allow: inner-html why")).toHaveLength(
+      1,
     );
   });
+});
 
-  test("main fails on a planted Domain cookie", () => {
-    expect(cookieMain(fixture({ "apps/web/s.ts": 'res.headers.set("set-cookie", "a=b; Domain=x.y");\n' }))).toBe(1);
-    expect(cookieMain(fixture({ "apps/web/s.ts": 'res.headers.set("set-cookie", "__Host-a=b; Path=/");\n' }))).toBe(0);
+describe("web-no-moderator", () => {
+  test("web_moderator_bad_fixture", () => expectFixtures("web-no-moderator", "bad", ["routes.fixture"]));
+  test("web_moderator_good_fixture", () => expectFixtures("web-no-moderator", "good"));
+  test("web_moderator_preserve_verb", () => expectFixtures("web-no-moderator", "bad", ["preserve.fixture"]));
+  test("web_moderator_relative_admin_import", () =>
+    expectFixtures("web-no-moderator", "bad", ["relative-admin.fixture"]));
+});
+
+describe("ip-columns", () => {
+  test("ip_columns_bad_fixture", () => expectFixtures("ip-columns", "bad"));
+  test("ip_columns_good_fixture", () => expectFixtures("ip-columns", "good"));
+
+  test("ip_columns_allow_file", () => {
+    const migration = "CREATE TABLE app.t (\n  id bigint,\n  client_ip text\n);\n";
+    const root = tempRepo({ "infrastructure/postgres/migrations/0001.sql": migration });
+    const entry = { table: "app.t", step: "P4.03", reason: "sealed transmission buffer (decision 21)" };
+    expect(ipColumns.scanAll(root, [entry])).toEqual([]);
+    // An unexplained entry is a finding and exempts nothing, so its column is flagged too.
+    expect(ipColumns.scanAll(root, [{ ...entry, reason: " " }])).toHaveLength(2);
+    expect(ipColumns.scanAll(root, [{ ...entry, step: "later" }])).toHaveLength(1);
+    expect(ipColumns.scanAll(root, [entry, { ...entry, table: "app.nowhere" }])).toHaveLength(1);
+  });
+
+  test("ip_columns_allow_file_unparsable_is_finding", () => {
+    const root = tempRepo({ [ipColumns.ALLOW_FILE]: "{ not json" });
+    expect(ipColumns.scanAll(root)).toHaveLength(1);
+  });
+
+  test("ip_columns_allow_starts_empty", () => {
+    const text = readFileSync(join(import.meta.dirname, "ip-columns.allow.json"), "utf8");
+    expect(JSON.parse(text)).toEqual([]);
   });
 });

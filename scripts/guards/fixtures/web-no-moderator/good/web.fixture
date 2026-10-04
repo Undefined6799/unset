@@ -1,0 +1,4 @@
+// fixture: apps/web/src/report.ts findings=0
+app.get("/report", handler);
+export const verb = "invite.issue";
+export const page = "/administrative-fees";
