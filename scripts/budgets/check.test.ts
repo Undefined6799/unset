@@ -36,7 +36,7 @@ test("count_skips_comments_and_blanks", () => {
 });
 
 test("count_ends_block_comment_before_code", () => {
-  expect(countLines("/* a */ const a = 1;\n/** doc */\n/*\n*/ const b = 2;")).toBe(2);
+  expect(countLines("/* a */ const a = 1;\n/** doc */\n/*\n*/ const b = 2;\n/* a */ /* b */ const c = 3;")).toBe(3);
 });
 
 test("count_excludes_tests_and_generated", () => {
@@ -96,6 +96,33 @@ test("core_budget_subtracts_net_guard_and_audit", () => {
   });
   const key = "domains + infrastructure + !infrastructure/net-guard + !infrastructure/audit + shared/http";
   expect(check(root, { [key]: 14 })).toEqual([{ key, lines: 15, max: 14, level: "warning" }]);
+});
+
+test("budgets_match_plan", () => {
+  // Plan section 4 mapped onto the decision-34 folders; a change here shows in review.
+  const budgets = JSON.parse(readFileSync(join(import.meta.dirname, "budgets.json"), "utf8"));
+  expect(budgets).toEqual({
+    "domains + infrastructure + !infrastructure/net-guard + !infrastructure/audit + shared/config + shared/errors + shared/i18n + shared/log + shared/http + shared/admin-envelope": 9000,
+    "apps/web + interfaces/http": 7000,
+    "interfaces/api": 1200,
+    "interfaces/indexer": 1500,
+    "interfaces/media": 600,
+    "interfaces/review": 2500,
+    "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
+    "infrastructure/net-guard": 400,
+    "shared/ui": 2500,
+  });
+});
+
+test("summary_unwritable_still_exits_zero", () => {
+  const root = tree({
+    "interfaces/media/a.ts": lines(12),
+    "scripts/budgets/budgets.json": JSON.stringify({ "interfaces/media": 10 }),
+  });
+  const out: string[] = [];
+  expect(main(root, (line) => out.push(line), join(root, "missing", "dir", "summary.md"))).toBe(0);
+  expect(out[0]).toBe("::warning title=line-budget::interfaces/media 12/10");
+  expect(out[1]).toMatch(/^::warning title=line-budget::step summary not written: /);
 });
 
 test("missing_folder_counts_zero", () => {

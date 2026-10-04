@@ -78,6 +78,9 @@ const BITES: [rule: string, level: "error" | "warning", file: string, text: stri
   ],
 ];
 
+/** 200 code lines with a blank between each: over 300 only if blank lines count. */
+const SPACED = Array.from({ length: 200 }, (_, i) => `export const v${i} = ${i};`).join("\n\n");
+
 describe("biome", () => {
   test("biome_rejects_hex_in_css", () => {
     const out = biome("apps/web/x.module.css", ".a {\n  color: #fff;\n}\n");
@@ -93,6 +96,10 @@ describe("biome", () => {
   test("biome_allows_long_generated_files", () => {
     const text = Array.from({ length: 301 }, (_, i) => `export const v${i} = ${i};`).join("\n");
     expect(biome("shared/lexicons/types.generated.ts", text)).toEqual({ exitCode: 0, diagnostics: [] });
+  });
+
+  test("biome_line_limit_skips_blank_lines", () => {
+    expect(biome("domains/x/a.ts", SPACED)).toEqual({ exitCode: 0, diagnostics: [] });
   });
 
   test("biome_cognitive_complexity_warns", () => {

@@ -26,11 +26,15 @@ const IO_BUILTINS = "fs|net|http|https|http2|dgram|dns|tls|child_process|worker_
 
 const escapeRegex = (path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const anyOf = (paths) => `^(${paths.map(escapeRegex).join("|")})`;
+const oneOfFiles = (paths) => `${anyOf(paths)}$`;
 const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
-const TOOLING = "^(scripts|tests)/|^[^/]+$|\\.test\\.(ts|tsx|mts|cts)$";
+// Root files count as tooling only when they are config files (vitest.config.ts, this file).
+const TOOLING =
+  "^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|^\\.dependency-cruiser\\.cjs$|\\.test\\.(ts|tsx|mts|cts)$";
+const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
 const LEAF_SHARED = "^shared/(ui|lexicons|admin-envelope)/";
 
@@ -42,11 +46,15 @@ const MATRIX = [
     from: { path: "^interfaces/([^/]+)/", pathNot: ADMIN_SERVICES },
     to: [{ path: "^interfaces/$1/" }, { path: "^(domains|infrastructure|shared)/" }, CORE, NPM],
   },
-  { name: "interface-http-render", from: { path: "^interfaces/http/" }, to: [{ path: anyOf([RENDER_ENTRIES.http]) }] },
+  {
+    name: "interface-http-render",
+    from: { path: "^interfaces/http/" },
+    to: [{ path: oneOfFiles([RENDER_ENTRIES.http]) }],
+  },
   {
     name: "interface-admin-render",
     from: { path: "^interfaces/admin/" },
-    to: [{ path: anyOf([RENDER_ENTRIES.admin]) }],
+    to: [{ path: oneOfFiles([RENDER_ENTRIES.admin]) }],
   },
   {
     name: "admin-service",
@@ -108,13 +116,13 @@ module.exports = {
       "app-render-entry-only",
       "interfaces/http imports only the web render entry (guideline §1).",
       { path: "^interfaces/http/" },
-      { path: "^apps/", pathNot: anyOf([RENDER_ENTRIES.http]) },
+      { path: "^apps/", pathNot: oneOfFiles([RENDER_ENTRIES.http]) },
     ),
     forbidden(
       "app-render-entry-only",
       "interfaces/admin imports only the admin render entry (guideline §1).",
       { path: "^interfaces/admin/" },
-      { path: "^apps/", pathNot: anyOf([RENDER_ENTRIES.admin]) },
+      { path: "^apps/", pathNot: oneOfFiles([RENDER_ENTRIES.admin]) },
     ),
     forbidden(
       "no-interface-to-interface",
@@ -194,13 +202,13 @@ module.exports = {
       "fake-only-in-composition-root",
       "A *.fake.ts is imported only by tests and interfaces/*/compose.ts (rule TE-1).",
       { pathNot: ["^tests/", "\\.test\\.(ts|tsx|mts|cts)$", "^interfaces/[^/]+/compose\\.ts$"] },
-      { path: "\\.fake\\.ts$" },
+      { path: FAKE },
     ),
     forbidden(
       "fake-only-in-composition-root",
       "compose.ts reaches a fake only by a dynamic import() after its UNSET_ENV check (rule TE-1).",
       { path: "^interfaces/[^/]+/compose\\.ts$" },
-      { path: "\\.fake\\.ts$", dynamic: false },
+      { path: FAKE, dynamic: false },
     ),
     forbidden("no-circular", "No dependency cycles.", {}, { circular: true }),
     forbidden(

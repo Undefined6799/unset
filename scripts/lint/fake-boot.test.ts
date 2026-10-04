@@ -20,9 +20,10 @@ registerHooks({
 });
 `;
 
-/** A composition root shaped like the real ones: the UNSET_ENV check runs before any import() of a fake. */
+/** A composition root shaped like the real ones: fakes only in dev or test (fail closed), checked before any import(). */
 const FIXTURE_COMPOSE = `const fakes = (process.env.UNSET_FAKES ?? "").split(",").filter(Boolean);
-if (fakes.length > 0 && process.env.UNSET_ENV === "prod") {
+const env = process.env.UNSET_ENV ?? "";
+if (fakes.length > 0 && !["dev", "test"].includes(env)) {
   console.error("config.fake_in_prod");
   process.exit(1);
 }
@@ -51,13 +52,18 @@ function fixtureRoot(): string {
   return root;
 }
 
-function boot(root: string, env: string, fakes: string) {
-  const log = join(root, `resolved-${env}.log`);
+function boot(root: string, env: string | undefined, fakes: string) {
+  const log = join(root, `resolved-${env ?? "unset"}.log`);
   writeFileSync(log, "");
   const run = spawnSync(process.execPath, ["--import", "./hook.mjs", "interfaces/demo/compose.ts"], {
     cwd: root,
     encoding: "utf8",
-    env: { PATH: process.env.PATH, UNSET_ENV: env, UNSET_FAKES: fakes, RESOLVE_LOG: log },
+    env: {
+      PATH: process.env.PATH,
+      ...(env === undefined ? {} : { UNSET_ENV: env }),
+      UNSET_FAKES: fakes,
+      RESOLVE_LOG: log,
+    },
   });
   const resolved = readFileSync(log, "utf8").split("\n").filter(Boolean);
   return { status: run.status, stderr: run.stderr, fakesLoaded: resolved.filter((u) => u.endsWith(".fake.ts")) };
@@ -78,6 +84,13 @@ test("fake_boot_refused_in_prod", () => {
   expect(prod.status).not.toBe(0);
   expect(prod.stderr).toContain("config.fake_in_prod");
   expect(prod.fakesLoaded).toEqual([]);
+
+  // An unset or misspelled UNSET_ENV is treated like prod.
+  for (const env of [undefined, "production"]) {
+    const other = boot(root, env, "fingerprint-check");
+    expect(other.status).not.toBe(0);
+    expect(other.fakesLoaded).toEqual([]);
+  }
 
   // The control: outside prod the same root does load its fake, so the hook really sees fake URLs.
   const dev = boot(root, "dev", "fingerprint-check");

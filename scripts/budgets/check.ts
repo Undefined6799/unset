@@ -11,7 +11,8 @@ const COUNTED = /\.(ts|tsx)$/;
 const NOT_COUNTED = /\.(test|generated)\.[^/]+$/;
 const NOTICE_SHARE = 0.9;
 
-/** Non-blank lines that are not only a comment. */
+/** Non-blank lines that are not only a comment. Approximate: a comment opened after code, or "/*" inside a
+ * template string, is not tracked. Good enough for a warning, which is all a budget is. */
 export function countLines(source: string): number {
   let count = 0;
   let inBlock = false;
@@ -70,6 +71,14 @@ function summaryTable(warnings: Warning[]): string {
   );
 }
 
+function writeSummary(path: string, table: string, print: (line: string) => void): void {
+  try {
+    appendFileSync(path, table);
+  } catch (error) {
+    print(`::warning title=line-budget::step summary not written: ${String(error)}`);
+  }
+}
+
 /** Always returns 0: a budget is a signal for review, not a gate. */
 export function main(root: string, print: (line: string) => void, summary?: string): number {
   try {
@@ -79,7 +88,7 @@ export function main(root: string, print: (line: string) => void, summary?: stri
     const warnings = check(root, budgets);
     for (const w of warnings) print(`::${w.level} title=line-budget::${w.key} ${w.lines}/${w.max}`);
     if (warnings.length === 0) print("All line budgets within 90%.");
-    if (summary && warnings.length > 0) appendFileSync(summary, summaryTable(warnings));
+    if (summary && warnings.length > 0) writeSummary(summary, summaryTable(warnings), print);
   } catch (error) {
     print(`::warning title=line-budget::budget check could not run: ${String(error)}`);
   }

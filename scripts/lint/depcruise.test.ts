@@ -1,95 +1,24 @@
 // The boundary rules in .dependency-cruiser.cjs, checked edge by edge on throwaway fixture trees (P0.05).
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
-import { dirname, join, posix } from "node:path";
-import { fileURLToPath } from "node:url";
-import { cruise, type ICruiseResult } from "dependency-cruiser";
+import type { ICruiseResult } from "dependency-cruiser";
 import { afterAll, describe, expect, test } from "vitest";
 import { sourceFiles } from "../guards/files.ts";
+import {
+  CONFIG_PATH,
+  check,
+  config,
+  cruiseFixture,
+  DEPCRUISE,
+  type Edge,
+  edge,
+  fixture,
+  ROOT,
+  removeFixtures,
+  tempDir,
+  write,
+} from "./depcruise-fixture.ts";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const CONFIG_PATH = join(ROOT, ".dependency-cruiser.cjs");
-const DEPCRUISE = join(ROOT, "node_modules", ".bin", "depcruise");
-
-type Row = { name: string; from: object; to: object[] };
-type Config = {
-  allowed: object[];
-  allowedSeverity: string;
-  forbidden: object[];
-  options: object;
-  MATRIX: Row[];
-  ZERO_DEP_ALLOWLIST: string[];
-  RENDER_ENTRIES: { http: string; admin: string };
-};
-const config: Config = createRequire(import.meta.url)(CONFIG_PATH);
-
-/** One import in a fixture: `from` (repo-relative) imports `spec`, statically unless `kind` says otherwise. */
-type Edge = { from: string; spec: string; kind?: "type" | "dynamic" };
-type Outcome = { exitCode: number; rules: string[] };
-
-const temps: string[] = [];
-afterAll(() => {
-  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
-});
-
-function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "depcruise-"));
-  temps.push(dir);
-  return dir;
-}
-
-function write(root: string, file: string, text: string): void {
-  mkdirSync(dirname(join(root, file)), { recursive: true });
-  writeFileSync(join(root, file), text, { flag: "a" });
-}
-
-function importLine({ spec, kind }: Edge, n: number): string {
-  if (kind === "type") return `import type { T${n} } from "${spec}";\n`;
-  if (kind === "dynamic") return `export const d${n} = await import("${spec}");\n`;
-  return `import * as m${n} from "${spec}";\nexport { m${n} };\n`;
-}
-
-/** Writes the importing files, every relative target, and a stub package for every bare specifier. */
-function fixture(edges: Edge[]): string {
-  const root = tempDir();
-  const packages = new Set<string>();
-  edges.forEach((edge, n) => {
-    write(root, edge.from, importLine(edge, n));
-    if (edge.spec.startsWith(".")) {
-      write(root, posix.join(posix.dirname(edge.from), edge.spec), "export const x = 1;\n");
-    } else if (!edge.spec.startsWith("node:")) {
-      packages.add(edge.spec);
-    }
-  });
-  for (const name of packages) {
-    write(root, `node_modules/${name}/package.json`, JSON.stringify({ name, main: "index.js" }));
-    write(root, `node_modules/${name}/index.js`, "module.exports = {};\n");
-  }
-  const dependencies = Object.fromEntries([...packages].map((name) => [name, "1.0.0"]));
-  write(root, "package.json", JSON.stringify({ name: "fixture", private: true, dependencies }));
-  return root;
-}
-
-async function cruiseFixture(edges: Edge[], ruleSet: object): Promise<Outcome> {
-  const root = fixture(edges);
-  const { output } = await cruise(["."], {
-    ...config.options,
-    baseDir: root,
-    validate: true,
-    ruleSet,
-    outputType: "json",
-  });
-  const result: ICruiseResult = JSON.parse(String(output));
-  const rules = result.summary.violations.filter((v) => v.rule.severity === "error").map((v) => v.rule.name);
-  // The API reports exit 0 for the json reporter; the CLI's err reporter exits with the error count.
-  return { exitCode: result.summary.error > 0 ? 1 : 0, rules };
-}
-
-const RULES = { allowed: config.allowed, allowedSeverity: config.allowedSeverity, forbidden: config.forbidden };
-const check = (edges: Edge[]): Promise<Outcome> => cruiseFixture(edges, RULES);
-const edge = (from: string, spec: string, kind?: Edge["kind"]): Edge => (kind ? { from, spec, kind } : { from, spec });
+afterAll(removeFixtures);
 
 async function expectPass(...edges: Edge[]): Promise<void> {
   for (const e of edges) expect(await check([e]), `${e.from} → ${e.spec}`).toEqual({ exitCode: 0, rules: [] });
@@ -107,9 +36,16 @@ const FAKE = "infrastructure/arachnid/fingerprint-check.fake.ts";
 
 /** At least one passing edge per MATRIX row (AB-1: one fixture per matrix row). */
 const ROW_FIXTURES: Record<string, Edge[]> = {
-  app: [edge("apps/web/a.ts", "../../shared/ui/b.ts"), edge("apps/chat/matrix/a.ts", "matrix-js-sdk")],
+  app: [
+    edge("apps/web/a.ts", "./b.ts"),
+    edge("apps/web/a.ts", "../../shared/ui/b.ts"),
+    edge("apps/chat/matrix/a.ts", "matrix-js-sdk"),
+  ],
   interface: [
+    edge("interfaces/http/a.ts", "./routes/b.ts"),
     edge("interfaces/http/a.ts", "../../domains/identity/b.ts"),
+    edge("interfaces/http/a.ts", "../../infrastructure/pds/b.ts"),
+    edge("interfaces/http/a.ts", "node:http"),
     edge("interfaces/admin/a.ts", "../../shared/http/b.ts"),
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
@@ -118,9 +54,11 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   "admin-service": [
     edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/jcs.ts"),
     edge("interfaces/chat-admin/a.ts", "../../shared/admin-envelope/jcs.ts"),
+    edge("interfaces/pds-admin/a.ts", "./b.ts"),
     edge("interfaces/pds-admin/a.ts", "node:crypto"),
   ],
   domain: [
+    edge("domains/identity/a.ts", "./sessions/b.ts"),
     edge("domains/identity/a.ts", "../../shared/errors/b.ts"),
     edge("domains/identity/a.ts", "../../shared/lexicons/b.ts"),
     edge("domains/identity/a.ts", "../content/index.ts"),
@@ -131,11 +69,22 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   infrastructure: [
     edge("infrastructure/pds/a.ts", "../../domains/identity/contract.ts"),
     edge("infrastructure/postgres/a.ts", "pg"),
+    edge("infrastructure/postgres/a.ts", "./b.ts"),
+    edge("infrastructure/pds/a.ts", "../net-guard/b.ts"),
+    edge("infrastructure/storage/a.ts", "../seal/b.ts"),
+    edge("infrastructure/pds/a.ts", "../../shared/config/b.ts"),
   ],
-  "net-guard": [edge("infrastructure/net-guard/a.ts", "undici")],
-  shared: [edge("shared/config/a.ts", "../errors/b.ts")],
-  "shared-ui-lexicons": [edge("shared/lexicons/a.ts", "@atproto/lex")],
-  "shared-admin-envelope": [edge("shared/admin-envelope/a.ts", "node:crypto")],
+  "net-guard": [
+    edge("infrastructure/net-guard/a.ts", "undici"),
+    edge("infrastructure/net-guard/a.ts", "./b.ts"),
+    edge("infrastructure/net-guard/a.ts", "node:dns"),
+  ],
+  shared: [edge("shared/config/a.ts", "../errors/b.ts"), edge("shared/http/a.ts", "node:http")],
+  "shared-ui-lexicons": [edge("shared/lexicons/a.ts", "@atproto/lex"), edge("shared/ui/a.ts", "./b.ts")],
+  "shared-admin-envelope": [
+    edge("shared/admin-envelope/a.ts", "node:crypto"),
+    edge("shared/admin-envelope/a.ts", "./b.ts"),
+  ],
   tooling: [
     edge("tests/integration/a.test.ts", "../../scripts/guards/files.ts"),
     edge("infrastructure/arachnid/fingerprint-check.test.ts", "./fingerprint-check.fake.ts"),
@@ -145,7 +94,7 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
 
 describe("dependency-cruiser runs", () => {
   test("depcruise_cruised_nonzero", () => {
-    const root = fixture([edge("a.ts", "./b.ts")]);
+    const root = fixture([edge("scripts/a.ts", "./b.ts")]);
     const small = spawnSync(DEPCRUISE, ["--config", CONFIG_PATH, "--output-type", "json", "."], {
       cwd: root,
       encoding: "utf8",
@@ -153,7 +102,9 @@ describe("dependency-cruiser runs", () => {
     expect(small.status, small.stderr).toBe(0);
     const json: ICruiseResult = JSON.parse(small.stdout);
     expect(json.summary.totalCruised).toBe(2);
-    expect(json.modules.find((m) => m.source === "a.ts")?.dependencies.map((d) => d.resolved)).toEqual(["b.ts"]);
+    expect(json.modules.find((m) => m.source === "scripts/a.ts")?.dependencies.map((d) => d.resolved)).toEqual([
+      "scripts/b.ts",
+    ]);
 
     const real = spawnSync(DEPCRUISE, ["--config", CONFIG_PATH, "--output-type", "json", "."], {
       cwd: ROOT,
@@ -268,6 +219,41 @@ describe("boundary rules", () => {
       edge("infrastructure/arachnid/fingerprint-check.test.ts", "./fingerprint-check.fake.ts"),
       edge("tests/integration/a.test.ts", `../../${FAKE}`),
     );
+  });
+
+  test("depcruise_net_guard_leaf", async () => {
+    await expectFail(
+      "net-guard-leaf",
+      edge("infrastructure/net-guard/a.ts", "../seal/b.ts"),
+      edge("infrastructure/net-guard/a.ts", "zod"),
+    );
+  });
+
+  test("depcruise_no_circular", async () => {
+    const { exitCode, rules } = await check([
+      edge("domains/identity/a.ts", "./b.ts"),
+      edge("domains/identity/b.ts", "./a.ts"),
+    ]);
+    expect(exitCode).not.toBe(0);
+    expect(rules).toContain("no-circular");
+  });
+
+  test("depcruise_root_files_are_not_tooling", async () => {
+    // Only *.config.* files at the root are tooling; any other root file has no MATRIX row.
+    await expectFail("not-in-allowed", edge("server.ts", "./domains/identity/b.ts"));
+    await expectPass(edge("vitest.config.ts", "./scripts/guards/files.ts"));
+  });
+
+  test("depcruise_fake_tsx_and_render_prefix", async () => {
+    await expectFail("fake-only-in-composition-root", edge("interfaces/http/routes/a.ts", "../x.fake.tsx"));
+    await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx/x.ts"));
+  });
+
+  test("depcruise_scans_every_source_file", () => {
+    // dependency-cruiser reads .mts/.cts only with the TypeScript parser, which TypeScript 7 no longer
+    // provides, so such a file would skip every boundary. None may exist until that changes.
+    const unscanned = sourceFiles(ROOT, ["."]).filter((f) => /\.(mts|cts)$/.test(f));
+    expect(unscanned).toEqual([]);
   });
 
   test("fake_files_outside_domains", () => {
