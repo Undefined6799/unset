@@ -96,7 +96,8 @@ describe("logger", () => {
     log.info("user.did:plc:abcdefghijklmnopqrstuvwx logged in" as never);
     const [record] = records();
     expect(record?.event).toBe("log.unknown_event");
-    expect(String(record?.kind).length).toBeLessThanOrEqual(40);
+    expect(Array.from(String(record?.kind)).length).toBeLessThanOrEqual(40);
+    expect(String(record?.kind)).not.toContain("did:plc");
   });
 
   test("logger_no_stack_message_in_prod", () => {

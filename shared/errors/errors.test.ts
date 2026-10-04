@@ -25,6 +25,13 @@ describe("error catalog", () => {
     expect(readErrorParam(new URLSearchParams("error=http.not_found"))).toBe("http.not_found");
   });
 
+  test("error_param_before_fragment_and_replaces_earlier", () => {
+    expect(withErrorParam("/login#frag", "csrf.denied")).toBe("/login?error=csrf.denied#frag");
+    const path = withErrorParam("/login?error=internal.error&next=1", "csrf.denied");
+    expect(path).toBe("/login?error=csrf.denied&next=1");
+    expect(readErrorParam(path.slice(path.indexOf("?")))).toBe("csrf.denied");
+  });
+
   test("error_param_rejects_unknown", () => {
     for (const query of ["?error=foo", "?error=config.invalid", "?error=<script>", "?error=csrf.denied<script>", ""]) {
       expect(readErrorParam(query), query).toBeNull();

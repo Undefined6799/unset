@@ -6,7 +6,14 @@ import { ERROR_CODES, type ErrorCode, isErrorCode } from "./catalog.ts";
  * validator produces those, and this function does not check it again.
  */
 export function withErrorParam(path: string, code: ErrorCode): string {
-  return `${path}${path.includes("?") ? "&" : "?"}error=${code}`;
+  const hashAt = path.indexOf("#");
+  const beforeHash = hashAt === -1 ? path : path.slice(0, hashAt);
+  const hash = hashAt === -1 ? "" : path.slice(hashAt);
+  const queryAt = beforeHash.indexOf("?");
+  const pathname = queryAt === -1 ? beforeHash : beforeHash.slice(0, queryAt);
+  const query = new URLSearchParams(queryAt === -1 ? "" : beforeHash.slice(queryAt + 1));
+  query.set("error", code); // replaces any earlier `error`, so the page reads this code and no carried-over one
+  return `${pathname}?${query}${hash}`;
 }
 
 /** The `error` query value when it is a public catalog code, else `null`: a page never shows the raw value. */
