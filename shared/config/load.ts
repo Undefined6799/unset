@@ -1,7 +1,7 @@
 // The typed config loader (P1.02): each process reads its configuration once at boot, refuses to start on any
 // missing or invalid key, and never prints a value; problems name keys and reasons only.
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
-import type { Config, Field, Fields, Kind, Schema } from "./schema.ts";
+import { type Config, type Field, type Fields, type Kind, type Schema, SECRET_KINDS } from "./schema.ts";
 
 export type Reason = "missing" | "invalid" | "unreadable" | "forbidden_in_env";
 export type Problem = { readonly key: string; readonly reason: Reason };
@@ -22,22 +22,29 @@ export class ConfigError extends Error {
 const MAX_SECRET_FILE_BYTES = 64 * 1024;
 const EX_CONFIG = 78;
 
-/** Reads a secret file (symlinks followed), or returns `undefined` when it is not a readable, private regular file. */
-function readSecretFile(path: string): string | undefined {
+const UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+type FileRead = { text: string } | { problem: "unreadable" | "invalid" };
+
+/** Reads a secret file (symlinks followed): a private regular file of UTF-8 text, at most 64 KiB. */
+function readSecretFile(path: string): FileRead {
   let fd: number | undefined;
   try {
-    fd = openSync(path, constants.O_RDONLY);
+    // O_NONBLOCK so a FIFO with no writer cannot hang boot; fstat below then refuses anything but a regular file.
+    fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
     const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size > MAX_SECRET_FILE_BYTES || (stat.mode & 0o002) !== 0) return undefined;
+    if (!stat.isFile() || stat.size > MAX_SECRET_FILE_BYTES || (stat.mode & 0o002) !== 0)
+      return { problem: "unreadable" };
     const buffer = Buffer.alloc(MAX_SECRET_FILE_BYTES + 1);
-    const length = readSync(fd, buffer, 0, buffer.length, 0);
-    if (length > MAX_SECRET_FILE_BYTES) return undefined; // grew after fstat
-    return buffer
-      .subarray(0, length)
-      .toString("utf8")
-      .replace(/\r?\n$/, "");
-  } catch {
-    return undefined; // ENOENT, EACCES, EISDIR: reported as `unreadable`, never as a value
+    let length = 0;
+    for (let n = -1; n !== 0 && length < buffer.length; length += n) {
+      n = readSync(fd, buffer, length, buffer.length - length, length);
+    }
+    if (length > MAX_SECRET_FILE_BYTES) return { problem: "unreadable" }; // grew after fstat
+    return { text: UTF8.decode(buffer.subarray(0, length)).replace(/\r?\n$/, "") };
+  } catch (error) {
+    // ENOENT, EACCES, EISDIR: `unreadable`; bytes that are not UTF-8: `invalid`. Never the value.
+    return { problem: error instanceof TypeError ? "invalid" : "unreadable" };
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
@@ -45,26 +52,32 @@ function readSecretFile(path: string): string | undefined {
 
 type Read = { raw: string | undefined } | { problem: Reason };
 
+/** An own property of the environment only, so a key can never read an inherited `Object.prototype` member. */
+const lookup = (env: Env, key: string): string | undefined => (Object.hasOwn(env, key) ? env[key] : undefined);
+
 /** Where a key's raw value comes from, and the checks on its source (step 1a–1c of the algorithm). */
 function readRaw(key: string, kind: Kind, env: Env): Read {
-  const prod = env.UNSET_ENV === "prod";
   if (kind === "secretFile") {
-    if (env[key] !== undefined && prod) return { problem: "forbidden_in_env" };
-    const path = env[`${key}_FILE`];
+    // A secret file's value never travels in plain env (visible in `docker inspect`), in any environment.
+    if (lookup(env, key) !== undefined) return { problem: "forbidden_in_env" };
+    const path = lookup(env, `${key}_FILE`);
     if (path === undefined || path.trim() === "") return { raw: undefined };
-    const contents = readSecretFile(path);
-    return contents === undefined ? { problem: "unreadable" } : { raw: contents };
+    const read = readSecretFile(path);
+    return "problem" in read ? read : { raw: read.text };
   }
-  if (kind === "secret" && prod && env[key] !== undefined) return { problem: "forbidden_in_env" };
-  return { raw: env[key] };
+  // Fail closed: only an exact dev or test environment may carry a `secret` in plain env.
+  const relaxed = ["dev", "test"].includes(lookup(env, "UNSET_ENV") ?? "");
+  if (kind === "secret" && !relaxed && lookup(env, key) !== undefined) return { problem: "forbidden_in_env" };
+  return { raw: lookup(env, key) };
 }
 
 function loadField(key: string, field: Field<unknown>, env: Env): { value: unknown } | { problem: Reason } {
   const read = readRaw(key, field.kind, env);
   if ("problem" in read) return read;
   if (read.raw === undefined || read.raw.trim() === "") {
-    // Secret fields have no default by construction (schema.ts), so this never defaults a secret.
-    return field.default === undefined ? { problem: "missing" } : { value: field.default };
+    if (field.default === undefined || SECRET_KINDS.has(field.kind)) return { problem: "missing" };
+    // A copy, so freezing the loaded config never freezes the schema's own default.
+    return { value: Array.isArray(field.default) ? [...field.default] : field.default };
   }
   const value = field.parse(read.raw);
   return value === undefined ? { problem: "invalid" } : { value };
@@ -80,7 +93,11 @@ function deepFreeze<T>(value: T): T {
 
 /** `UNSET_*` keys the schema does not read: named in a warning, because old and new code overlap in a deploy. */
 function unknownKeys<F extends Fields>(schema: Schema<F>, env: Env): string[] {
-  const known = new Set(Object.keys(schema.fields).flatMap((key) => [key, `${key}_FILE`]));
+  const known = new Set(
+    Object.entries(schema.fields).flatMap(([key, field]) =>
+      field.kind === "secretFile" ? [key, `${key}_FILE`] : [key],
+    ),
+  );
   return Object.keys(env)
     .filter((key) => key.startsWith("UNSET_") && !known.has(key))
     .sort();
@@ -122,9 +139,9 @@ export function describeConfig<F extends Fields>(
   env: Env = process.env,
 ): { key: string; kind: Kind; set: boolean }[] {
   return Object.entries(schema.fields)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([key, field]) => {
-      const source = env[field.kind === "secretFile" ? `${key}_FILE` : key];
+      const source = lookup(env, field.kind === "secretFile" ? `${key}_FILE` : key);
       return { key, kind: field.kind, set: source !== undefined && source.trim() !== "" };
     });
 }

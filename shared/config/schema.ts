@@ -12,6 +12,9 @@ export type Field<T> = {
 };
 
 export type Fields = Record<string, Field<unknown>>;
+
+/** Kinds whose value must come from the secret source rules and never from a default. */
+export const SECRET_KINDS: ReadonlySet<Kind> = new Set(["secret", "secretFile"]);
 /** A rule across keys, run after every key parsed; `key` is the one reported `invalid` when `holds` is false. */
 export type Rule<F extends Fields> = { readonly key: keyof F & string; readonly holds: (config: Config<F>) => boolean };
 export type Schema<F extends Fields> = { readonly fields: F; readonly rules: readonly Rule<F>[] };
@@ -21,22 +24,18 @@ export type Config<F extends Fields> = { readonly [K in keyof F]: F[K] extends F
 const withDefault = <T>(field: Omit<Field<T>, "default">, value: T | undefined): Field<T> =>
   value === undefined ? field : { ...field, default: value };
 
-/** A string; `pattern` must be anchored (`^…$`) so it judges the whole value. */
+/** A string. `pattern` judges the whole value (it is wrapped in `^(?:…)$`); stateful or multiline flags are refused. */
 export function str(options: { pattern?: RegExp; default?: string } = {}): Field<string> {
   const { pattern } = options;
-  if (pattern && !(pattern.source.startsWith("^") && pattern.source.endsWith("$"))) {
-    throw new Error(`str pattern must be anchored with ^ and $: ${pattern.source}`);
-  }
-  return withDefault(
-    { kind: "str", parse: (raw) => (pattern && !pattern.test(raw) ? undefined : raw) },
-    options.default,
-  );
+  if (pattern && /[gym]/.test(pattern.flags)) throw new Error(`str pattern may not use flags g, y or m: ${pattern}`);
+  const whole = pattern ? new RegExp(`^(?:${pattern.source})$`, pattern.flags) : undefined;
+  return withDefault({ kind: "str", parse: (raw) => (whole && !whole.test(raw) ? undefined : raw) }, options.default);
 }
 
-/** A decimal integer in `[min, max]`; no sign tricks, exponents, hex or surrounding spaces. */
+/** A decimal integer in `[min, max]`; no leading zeros, `-0`, exponents, hex or surrounding spaces. */
 export function int(options: { min: number; max: number; default?: number }): Field<number> {
   const parse = (raw: string): number | undefined => {
-    if (!/^-?[0-9]+$/.test(raw)) return undefined;
+    if (!/^(?:0|-?[1-9][0-9]*)$/.test(raw)) return undefined;
     const value = Number(raw);
     return Number.isSafeInteger(value) && value >= options.min && value <= options.max ? value : undefined;
   };
@@ -66,9 +65,16 @@ function parseUrl(raw: string, protocols: Protocols): URL | undefined {
   return parsed;
 }
 
-/** An absolute URL, returned as its normalised string (a string, so the frozen config stays immutable). */
+/**
+ * An absolute URL, returned as its normalised string (a string, so the frozen config stays immutable). A value the
+ * parser had to repair (`https:x.y`, backslashes, tabs) is refused: only adding the root `/` is accepted.
+ */
 export function url(options: { protocols: Protocols; default?: string }): Field<string> {
-  return withDefault({ kind: "url", parse: (raw) => parseUrl(raw, options.protocols)?.href }, options.default);
+  const parse = (raw: string): string | undefined => {
+    const href = parseUrl(raw, options.protocols)?.href;
+    return href === raw || href === `${raw}/` ? href : undefined;
+  };
+  return withDefault({ kind: "url", parse }, options.default);
 }
 
 /** Scheme, host and optional port, written exactly as the origin serialises (no path, not even `/`). */
@@ -76,15 +82,19 @@ export function origin(options: { protocols?: Protocols; default?: string } = {}
   const protocols = options.protocols ?? ["https:"];
   const parse = (raw: string): string | undefined => {
     const parsed = parseUrl(raw, protocols);
-    return parsed?.origin === raw ? raw : undefined;
+    // A trailing dot names a different origin for the same host; refuse it rather than guess.
+    return parsed?.origin === raw && !parsed.hostname.endsWith(".") ? raw : undefined;
   };
   return withDefault({ kind: "origin", parse }, options.default);
 }
 
-/** Comma-separated values of one kind; empty items are invalid. */
+/** Comma-separated values of one kind; an empty or space-padded item is invalid. A list never holds a secret. */
 export function list<T>(item: Field<T>, options: { default?: readonly T[] } = {}): Field<readonly T[]> {
+  if (SECRET_KINDS.has(item.kind)) throw new Error("a list cannot hold secrets: their source rules would not apply");
   const parse = (raw: string): readonly T[] | undefined => {
-    const values = raw.split(",").map((part) => item.parse(part));
+    const parts = raw.split(",");
+    if (parts.some((part) => part === "" || part !== part.trim())) return undefined;
+    const values = parts.map((part) => item.parse(part));
     return values.every((v) => v !== undefined) ? (values as T[]) : undefined;
   };
   return withDefault({ kind: "list", parse }, options.default);
@@ -106,8 +116,14 @@ export const secret = (options: SecretOptions): Field<Secret> => secretField("se
 /** A secret read from the file named by `<KEY>_FILE` (a Compose secret). No default exists. */
 export const secretFile = (options: SecretOptions): Field<Secret> => secretField("secretFile", options);
 
-/** A schema: the fields an entrypoint reads, and any rules across them. */
+const ENV_NAME = /^[A-Z][A-Z0-9_]*$/;
+
+/** A schema: the fields an entrypoint reads, and any rules across them. Keys are environment names. */
 export function defineConfig<F extends Fields>(fields: F, options: { rules?: readonly Rule<F>[] } = {}): Schema<F> {
+  for (const [key, field] of Object.entries(fields)) {
+    if (!ENV_NAME.test(key)) throw new Error(`config key is not an environment name: ${key}`);
+    if (SECRET_KINDS.has(field.kind) && "default" in field) throw new Error(`${key}: a secret has no default`);
+  }
   return { fields, rules: options.rules ?? [] };
 }
 
@@ -146,7 +162,8 @@ export function defineEntrypointConfig<F extends Fields>(
     key: "UNSET_COMMIT",
     holds: (config) => config.UNSET_COMMIT !== PLACEHOLDER_COMMIT || config.UNSET_ENV === "dev",
   };
-  // The `never` guard on `fields` is for callers only; the merged object is exactly the two field sets.
+  const clash = Object.keys(fields).filter((key) => key in COMMON_FIELDS);
+  if (clash.length > 0) throw new Error(`entrypoint config redefines common keys: ${clash.join(", ")}`);
   const all = { ...COMMON_FIELDS, ...fields } as typeof COMMON_FIELDS & F;
   return defineConfig(all, { rules: [commitRule, ...(options.rules ?? [])] });
 }
