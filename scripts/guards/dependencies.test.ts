@@ -7,7 +7,8 @@ import { scanAll, scanLockfile, scanManifest, scanNpmrc, workspaceNames } from "
 import { report } from "./files.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const WORKSPACES = new Set(["@unset/core"]);
+const WORKSPACES = new Map([["@unset/core", "shared/core"]]);
+const FOLDERS = new Set(WORKSPACES.values());
 const LINKED = { packages: { "node_modules/@unset/core": { resolved: "shared/core", link: true } } };
 const FROM_REGISTRY = {
   packages: {
@@ -20,8 +21,12 @@ const FROM_REGISTRY = {
 
 const manifest = (deps: Record<string, string>, lock: object = LINKED) =>
   scanManifest("package.json", JSON.stringify({ dependencies: deps }, null, 2), WORKSPACES, lock);
-const lockfile = (entry: object) =>
-  scanLockfile("package-lock.json", JSON.stringify({ packages: { "": {}, "node_modules/x": entry } }, null, 2));
+const lockfile = (entry: unknown, key = "node_modules/x") =>
+  scanLockfile(
+    "package-lock.json",
+    JSON.stringify({ lockfileVersion: 3, packages: { "": {}, [key]: entry } }, null, 2),
+    FOLDERS,
+  );
 
 describe("manifest pins", () => {
   test("pins_reject_ranges", () => {
@@ -39,6 +44,21 @@ describe("manifest pins", () => {
 
   test("pins_reject_unlinked_internal_star", () => {
     expect(manifest({ "@unset/core": "*" }, FROM_REGISTRY)).toHaveLength(1);
+  });
+
+  test("pins_reject_exact_internal_names", () => {
+    expect(manifest({ "@unset/ghost": "1.0.0" })).toHaveLength(1);
+    expect(manifest({ "@unset/core": "0.0.0" })).toHaveLength(1);
+  });
+
+  test("pins_reject_link_to_elsewhere", () => {
+    const elsewhere = { packages: { "node_modules/@unset/core": { resolved: "../elsewhere", link: true } } };
+    expect(manifest({ "@unset/core": "*" }, elsewhere)).toHaveLength(1);
+  });
+
+  test("pins_check_overrides", () => {
+    const json = { overrides: { a: "^1.0.0", b: "1.0.0", c: { d: "~2.0.0" }, e: "$e" } };
+    expect(scanManifest("package.json", JSON.stringify(json, null, 2), WORKSPACES, LINKED)).toHaveLength(2);
   });
 
   test("pins_reject_workspace_protocol", () => {
@@ -71,6 +91,18 @@ describe("lockfile sources", () => {
     );
   });
 
+  test("lockfile_rejects_registry_internal_and_stray_links", () => {
+    const registry = { resolved: "https://registry.npmjs.org/@unset/ghost/-/ghost-1.0.0.tgz", integrity };
+    expect(lockfile(registry, "node_modules/@unset/ghost")).toHaveLength(1);
+    expect(lockfile(registry, "node_modules/a/node_modules/@unset/ghost")).toHaveLength(1);
+    expect(lockfile({ resolved: "../elsewhere", link: true })).toHaveLength(1);
+  });
+
+  test("lockfile_rejects_malformed", () => {
+    expect(lockfile(null)).toHaveLength(1);
+    expect(scanLockfile("package-lock.json", JSON.stringify({ lockfileVersion: 1 }), FOLDERS)).toHaveLength(1);
+  });
+
   test("lockfile_accepts_registry_and_links", () => {
     expect(lockfile({ resolved: "https://registry.npmjs.org/x/-/x-1.0.0.tgz", integrity })).toEqual([]);
     expect(lockfile({ resolved: "shared/core", link: true })).toEqual([]);
@@ -83,6 +115,8 @@ describe("npmrc", () => {
     expect(scanNpmrc(".npmrc", npmrc)).toEqual([]);
     expect(scanNpmrc(".npmrc", npmrc.replace(/^@unset:registry=.*$/m, ""))).toHaveLength(1);
     expect(scanNpmrc(".npmrc", npmrc.replace(/^ignore-scripts=true$/m, ""))).toHaveLength(1);
+    expect(scanNpmrc(".npmrc", `${npmrc}\nignore-scripts=false\n`)).toHaveLength(1);
+    expect(scanNpmrc(".npmrc", `${npmrc}\n@unset:registry=https://registry.npmjs.org/\n`)).toHaveLength(1);
   });
 });
 
