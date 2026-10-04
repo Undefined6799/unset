@@ -1,0 +1,11 @@
+{
+  "domains + infrastructure + !infrastructure/net-guard + !infrastructure/audit + shared/config + shared/errors + shared/i18n + shared/log + shared/http + shared/admin-envelope": 9000,
+  "apps/web + interfaces/http": 7000,
+  "interfaces/api": 1200,
+  "interfaces/indexer": 1500,
+  "interfaces/media": 600,
+  "interfaces/review": 2500,
+  "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
+  "infrastructure/net-guard": 400,
+  "shared/ui": 2500
+}

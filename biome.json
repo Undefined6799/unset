@@ -6,9 +6,50 @@
   "linter": {
     "rules": {
       "preset": "recommended",
-      "suspicious": { "noExplicitAny": "error" },
-      "style": { "noNonNullAssertion": "error" }
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "warn",
+        "noImportantStyles": "error"
+      },
+      "correctness": { "noMissingVarFunction": "error" },
+      "style": {
+        "noHexColors": "error",
+        "noNonNullAssertion": "error",
+        "noParameterAssign": "error",
+        "useConst": "error"
+      },
+      "suspicious": {
+        "noConsole": "error",
+        "noEmptyBlockStatements": "error",
+        "noExplicitAny": "error",
+        "noFocusedTests": "error",
+        "noSkippedTests": "error"
+      }
     }
   },
-  "javascript": { "formatter": { "quoteStyle": "double", "trailingCommas": "all" } }
+  "javascript": { "formatter": { "quoteStyle": "double", "trailingCommas": "all" } },
+  "css": { "linter": { "enabled": true }, "formatter": { "enabled": true } },
+  "overrides": [
+    {
+      "includes": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": { "level": "warn", "options": { "maxLines": 300, "skipBlankLines": true } }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.generated.*"],
+      "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+    {
+      "includes": ["shared/ui/src/tokens.css"],
+      "linter": { "rules": { "style": { "noHexColors": "off" } } }
+    },
+    {
+      "includes": ["scripts/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    }
+  ]
 }
