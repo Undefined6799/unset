@@ -172,7 +172,7 @@ async function exchange(
   const addresses = await resolveVetted(
     target.host,
     { allow: target.allow },
-    { timeoutMs: Math.min(3_000, limits.timeoutMs), ...(hooks.lookup ? { lookup: hooks.lookup } : {}) },
+    { timeoutMs: Math.min(3_000, limits.timeoutMs), signal, ...(hooks.lookup ? { lookup: hooks.lookup } : {}) },
   );
   if (target.loopbackOnly && !addresses.every((a) => classifyAddress(a) === "loopback")) {
     throw new NetGuardError("egress.private_address");
