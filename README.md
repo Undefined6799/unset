@@ -15,7 +15,7 @@ Phase 0: repository, CI and guard rails only. No application code yet.
 | Path | What |
 | --- | --- |
 | `apps/` | User-facing UI only: `web`, `admin`, `chat` (Phase 6) |
-| `interfaces/` | Entry points, one process and container each: `http`, `api`, `indexer`, `media`, `review`, `pds-admin`, `chat-admin` |
+| `interfaces/` | Entry points, one process and container each: `http`, `api`, `indexer`, `media`, `review`, `pds-admin`, `chat-admin` (Phase 6) |
 | `domains/` | Product rules: `identity`, `content`, `social`, `feed`, `messaging`, `moderation`, `privacy` |
 | `infrastructure/` | External systems behind small contracts, `net-guard`, `seal`, `audit` |
 | `shared/` | Generic code with no product meaning (MIT): `lexicons`, `ui`, `config`, `errors`, `i18n` |
