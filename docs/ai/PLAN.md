@@ -99,7 +99,7 @@ The rebuild keeps the prototype's *lessons* and rewrites most of its *code*.
 24. No secret is ever optional. Agents never print the resolved config.
 25. Backups run in the stack, report freshness and raise an alert, with a scheduled restore drill. The prototype's backups failed silently for 18 days. An **outside dead-man's-switch heartbeat** (Alex, 2026-10-03, step-book answer 25: a hosted check that alerts when our ping stops, carrying no personal data; provider from a team shortlist before Phase 3) catches the case where the stack, and so its own alerting, is down.
 26. Every compose overlay pins `name:`.
-27. CI checks that the number of discovered test files equals the number executed. 20 of 47 UI test files were silently not running.
+27. CI checks that every discovered test file was executed, with no skipped case and no retry (§7). 20 of 47 UI test files were silently not running.
 
 **Prototype defects that must not be ported:**
 - A post edit wipes its likes and comments, because they are keyed on CID.
@@ -580,7 +580,7 @@ Boundary rules, enforced by dependency-cruiser from the first commit (refined wi
 Tooling (Alex, 2026-10-02, decision 16):
 - **TypeScript 7** (the Go port, GA 2026-07-08; TS 6 is Microsoft's last JS-based release) and **Node 26** (LTS 2026-10-28) from Phase 1; `engines.node: ">=26"`, `node:26` images by digest. One workspace (`apps/*`, `interfaces/*`, `domains/*`, `infrastructure/*`, `shared/*`) and one lockfile; TypeScript project references.
 - Biome 2.5 for lint and format, **CSS included**: `noHexColors`, `noMissingVarFunction`, `useLayeredStyles` and one GritQL plugin for token-only spacing, radius and font sizes replace Stylelint (optional second opinion only). Vite's Lightning CSS minifies. dependency-cruiser for the boundary rules above. **Not ESLint, Prettier or Nx** (decision 34, amendment A2): ESLint does not lint CSS, Nx's boundary rule drags the Nx workspace in, and neither is known to parse TypeScript 7.
-- **Vitest only** (the prototype's `node:test` plus Vitest split is how 20 UI test files stopped running); the "discovered equals executed" guard compares `vitest list --json` with the reporter's file list. Playwright smoke tests with axe-core against a production build, in both themes; Lighthouse CI; Semgrep per PR (§6.1).
+- **Vitest only** (the prototype's `node:test` plus Vitest split is how 20 UI test files stopped running). The test command is a small runner, `scripts/test/run.ts` (step book P0.04, finding F-24), that fails when any test was found but did not run: it globs every `*.test.{ts,tsx,mts,cts}` in the whole repository (`deployment/` and `docs/` included), compares that list with `vitest list --filesOnly --json` and with the JSON reporter's results, and exits non-zero on a file the include missed, a file with no passing or failing case (import error, empty file), a file or a single case that was skipped (`skip`, `todo`, `skipIf`; a conditional test lives in a Vitest project CI runs where the condition holds), and a stray `*.spec.*` or `*.test.js` outside the include. Vitest runs with `retry = 0` (a flaky test is a bug), `allowOnly = false` and `passWithNoTests = false`; test files are inside the typecheck, so a test that stops type-checking fails CI. Playwright smoke tests with axe-core against a production build, in both themes (Playwright keeps its own list under `tests/e2e/`, P1.26); Lighthouse CI; Semgrep per PR (§6.1).
 - Per-top-level-folder line budgets as CI warnings; the direct and transitive dependency counts recorded at each phase exit.
 - graphify graphs regenerated in CI.
 
@@ -595,7 +595,7 @@ Small PRs to a protected `main`; each phase ends at a demonstrable exit. No publ
   - real CODEOWNERS, LICENSE, SECURITY.md;
   - Renovate, secret scanning and push protection.
 - CI from commit 1, every action pinned by SHA:
-  - typecheck, test (discovered = executed), lint, `npm audit`, gitleaks;
+  - typecheck (test files included), test (discovered = executed, no skipped case, no retry), lint, `npm audit`, gitleaks;
   - SBOM, image scan, hadolint, actionlint;
   - images signed with cosign (key pair, no public transparency log) plus provenance attestations kept with the image.
 - **CI shape (decision 34, amendments A2 and A3):** security and supply-chain checks run from the first commit (secret scan, dependency audit, Semgrep, actions pinned by SHA, the egress and cookie guards, dependency-cruiser boundaries); image scanning and cosign signing start with the first container image; axe-core and Lighthouse gates start with the first page. Heavier checks are added only for a concrete reason.
