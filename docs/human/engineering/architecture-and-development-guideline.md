@@ -83,7 +83,10 @@ Folder responsibilities
 * pds-admin/ and chat-admin/ may import only their own folder, Node built-ins, and folders on the
   zero-dependency allowlist (today: shared/admin-envelope/). An allowlisted folder obeys the same
   rule, so nothing reaches these services transitively. Adding to the allowlist needs Alex's
-  approval in the PR. dependency-cruiser enforces both.
+  approval in the PR. dependency-cruiser enforces both. "Zero dependencies" means no third-party
+  package: these services list the allowlisted workspace packages in package.json like any other
+  workspace, and a test checks that their dependencies hold only allowlisted @unset/* packages and
+  that their installed closure contains no third-party package.
 * domains/ hold product rules and depend only on contracts they define; infrastructure implements
   those contracts. A domain may also import other domains' index.ts, shared/errors, shared/config
   types and shared/lexicons (the record validator); nothing else from outside. The composition root in each interface wires them.
