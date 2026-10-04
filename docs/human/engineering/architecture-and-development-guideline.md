@@ -1,7 +1,8 @@
 Architecture and Development Guideline (unset.sh)
 
 Status: ADOPTED by Alex 2026-10-04 04:39Z ("Apply all" card). Section 1 refined 05:10Z for the
-step book's layout-map open points O-1..O-11 (no change to intent). Adapted from the "Project Architecture & Development
+step book's layout-map open points O-1..O-11 (no change to intent); 13:35Z: jobs and retention are
+one process, domain imports listed. Adapted from the "Project Architecture & Development
 Handoff" (verbatim in unset-plan/architecture-handoff/chatgpt-handoff-verbatim.md) with six
 amendments that keep decisions Alex already made. Each amendment is marked [A1]..[A6] and explained
 in unset-plan/architecture-handoff/conflicts.md. It is the fourth guideline document
@@ -24,7 +25,8 @@ unset.sh/
 │   ├── indexer/          reads records from the network (Tap consumer)
 │   ├── media/            media proxy on the media domain
 │   ├── review/           upload checks (no-network compute + review-egress)
-│   ├── jobs/  retention/  audit-verify/  chat-auth/   other processes, added in their phase
+│   ├── jobs/  audit-verify/  chat-auth/   other processes, added in their phase
+│   │                     (jobs = all scheduled work incl. retention, under the retention role)
 │   ├── pds-admin/        sole holder of the PDS admin password; zero dependencies
 │   └── chat-admin/       Phase 6; zero dependencies
 │
@@ -76,7 +78,8 @@ Folder responsibilities
   rule, so nothing reaches these services transitively. Adding to the allowlist needs Alex's
   approval in the PR. dependency-cruiser enforces both.
 * domains/ hold product rules and depend only on contracts they define; infrastructure implements
-  those contracts. The composition root in each interface wires them.
+  those contracts. A domain may also import other domains' index.ts, shared/errors, shared/config
+  types and shared/lexicons (the record validator); nothing else from outside. The composition root in each interface wires them.
 * infrastructure/ translates external concepts at the boundary. A vendor SDK is imported in exactly
   one adapter folder per runtime: infrastructure/<system>/ on the server, apps/chat/matrix/ for
   matrix-js-sdk in the browser chat client. shared/lexicons/ may use @atproto/lex for its generated

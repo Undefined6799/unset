@@ -4,7 +4,9 @@ Auto-loaded for every agent in this repo. Keep it short; load only what the next
 
 ## Project
 AT Protocol-native identity and profile app with a small, auditable core. The plan is
-[`docs/ai/PLAN.md`](docs/ai/PLAN.md). Decisions live in [`docs/human/decisions/`](docs/human/decisions/).
+[`docs/ai/PLAN.md`](docs/ai/PLAN.md). Decisions live in [`docs/human/decisions/`](docs/human/decisions/);
+what the architecture optimises for, in order, and which rules a machine checks are in
+[`docs/human/architecture.md`](docs/human/architecture.md).
 Read the plan section for the area you touch before changing it.
 
 ## Engineering principles (Alex, 2026-10-03/04; read before designing or changing code)

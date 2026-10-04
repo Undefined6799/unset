@@ -348,6 +348,14 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   (P1.19, EN/FR catalogs) follows as its own slice and converts those modules first; no French page ships
   before it lands.
 
+- **Decision 34 trimmed by one folder (architecture thread, 2026-10-04 13:35Z, after the plan review against the
+  engineering rules, finding R5-01; no Alex decision changed):** `interfaces/retention` is dropped. `interfaces/jobs`
+  runs all scheduled work, the retention classes included, under the retention database role (as step P4.25
+  already does). A future job that needs a different grant becomes its own process with an ADR naming its driver
+  (rule AB-3). Drivers of the remaining phase-added processes: `jobs` keeps the deleting grants out of `web`;
+  `audit-verify` checks the audit chain heads with no write grant; `chat-auth` keeps OIDC issuance out of `web`.
+  `docs/human/architecture.md` (rule AB-4) records the ranked driving characteristics and the checked rules.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1

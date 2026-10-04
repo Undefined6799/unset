@@ -43,7 +43,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **DC-1. Make modules deep and size functions by what a reader must hold in mind. Split code where knowledge changes, never by the order steps run. Split a function only when the extracted piece has a name that lets the caller stop reading. Inline any layer that only forwards.**
 - Enforced by: review-only (no tool sees depth). Biome `noExcessiveCognitiveComplexity` at warn *(unverified)*. The 300-line file warning stays.
 - Source: APoSD 2nd ed. — ch. 4–7, ch. 9; Code Complete 2nd ed. — ch. 7 (§7.4); Refactoring 2nd ed. — ch. 3 (Middle Man, Shotgun Surgery); Pragmatic Programmer — Topics 9–10.
-- Status: PARTLY — AI §8–9, §12; ADG §2–3. Conflicts with README rule 3 (about 40 lines): see **D1**.
+- Status: PARTLY — AI §8–9, §12; ADG §2–3. README rule 3 reworded to match (D1, adopted).
 - Priority: P1
 
 **DC-2. Reach every module under `domains/`, `infrastructure/` and `shared/` only through its `index.ts`, tests included. Give each export a doc comment stating what its signature cannot: units, invariants, errors and security assumptions. Give each domain a README of at most 20 lines.**
@@ -75,7 +75,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - one vendor-SDK adapter folder per runtime;
 - interfaces never import each other;
 - only the serving interface imports its app's render entry;
-- `domains/` imports no Node I/O built-in and no npm package;
+- `domains/` imports only its own contracts, other domains' `index.ts`, `shared/errors`, `shared/config` types and `shared/lexicons` (the one record validator, called on the write path; its `@atproto/lex` dependency is the single npm exception); no Node I/O built-in and no other npm package;
 - the zero-dependency allowlist changes only with Alex's approval.
 - Enforced by: dependency-cruiser, with one fixture per matrix row, extending P0.05 (`vendor-sdk-only-in-infrastructure`, `depcruise_sdk_adapter`, `depcruise_no_interface_to_interface`, `depcruise_app_render_entry`, `depcruise_allowlist_exact`, `depcruise_allowed_edges`).
 - Source: Clean Architecture — ch. 14, ch. 22; FoSA 1st ed. ch. 6 / 2nd ed. ch. 11; Evans DDD — ch. 14 (anticorruption layer); Fairbanks — ch. 10.
@@ -95,7 +95,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Priority: P1
 
 **AB-4. Keep `docs/human/architecture.md` to these sections:**
-- the ranked driving characteristics (proposed: security and privacy; evolvability by AI authors; operational simplicity on one host);
+- the ranked driving characteristics (adopted 2026-10-04: security and privacy; evolvability by AI authors; operational simplicity on one host);
 - a table marking each architecture rule as *checked* (naming the check) or *review-only* (with a reason);
 - the module, runtime and deployment views, generated or checked from source.
 
@@ -116,7 +116,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **DM-2. Define repositories only for aggregates, named in domain words. Every per-account method takes the caller's `Did` as a SQL predicate. The use case owns the transaction. A core state change is one guarded `UPDATE … WHERE state = $expected` (zero rows means a conflict). Call Postgres invariants (`core.is_held`, `eraseDid`); never re-implement them.**
 - Enforced by: Semgrep (`BEGIN`/`COMMIT`/`.transaction(` only in `infrastructure/postgres/tx.ts`). One cross-account integration case per repository. Each phase's refine step labels its features core, supporting or generic, one line per phase.
 - Source: Evans DDD — ch. 6, ch. 15; IDDD — ch. 2 (subdomains), ch. 12; Cosmic Python — ch. 2, ch. 6; Hard Parts — ch. 6.
-- Status: PARTLY — AI §9, §15; Plan §5.2 (one hold predicate). NEW: the `Did` parameter and transaction ownership.
+- Status: PARTLY — AI §9, §15; `breakdown/02-shared-blocks.md` (one hold predicate, `core.is_held`). NEW: the `Did` parameter and transaction ownership.
 - Priority: P1 (the state-pair table test only for the upload machine, Phase 4)
 
 **DM-3. Use one glossary word per concept, spelled the same in code, SQL, routes, logs and UI keys. Qualify words that mean different things in different places (session, account, profile, report, review). Never name anything Helper, Manager, Utils or Wrapper. Names like ADG §13's `MessageService`, `MessageRepository` and `MatrixMessageGateway` name modules or plain objects, never classes.**
@@ -130,7 +130,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **DA-1. Keep every fact we decide (moderation, delist, suspension, tombstones, track requests) in an app-owned schema, and treat `idx` as derived data that can be dropped and rebuilt. No foreign key crosses into `idx`. Store network references as typed columns with no foreign key.**
 - Enforced by: the integration test `idx-rebuild-preserves-decisions`. A `pg_catalog` test that no foreign key enters `idx`. The erasure-coverage test.
 - Source: DDIA 1st ed. — Part III introduction, ch. 12; Database Internals — Anti-Entropy and Dissemination; SQL Antipatterns — Keyless Entry, Polymorphic Associations.
-- Status: PARTLY — Plan §2 rule 12, §5.2. P3.03 stores moderation state in `idx` (F-01).
+- Status: PARTLY — Plan §2 rule 12, §5.2; P3.03 keeps moderation state in `mod.account_state` (F-01 fixed).
 - Priority: P1
 
 **DA-2. Run effects that must outlive the request from a job or outbox row committed with the decision: email, the MAS seed, Arachnid, `pds-admin` verbs, the post-review publish, and multi-step cross-system writes. User-initiated PDS writes stay synchronous. Every write must survive a lost reply: choose rkeys before the call, use `swapCommit`, read and compare CIDs, and put a submission id on create forms.**
@@ -189,7 +189,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **RE-4. Report per service the four golden signals plus saturation (event-loop delay, heap, pool waiters, queue depth, disk) through `ops.report()`, never per user, with retention set in the retention table and the RoPA. Alert only on symptoms a person must act on, stream silence included, and name the runbook step in each alert.**
 - Enforced by: each composition root registers a reporter. A test that metrics carry no DID, IP or handle. A test that every `alert.send` class is in the runbook index. A heartbeat test `tap_stall_detected`.
 - Source: SRE — ch. 6, ch. 10; Release It! 2nd ed. — Transparency, Handshaking; Systems Performance 2nd ed. — ch. 2 (USE); SRW — ch. 5.
-- Status: PARTLY — EPA §6, admin design §11.4, Plan §2 rule 25, P3.02. Whether `ops.metric` fits decision 17: see **D9**.
+- Status: PARTLY — EPA §6, admin design §11.4, Plan §2 rule 25, P3.02. `ops.metric` fits decision 17 (D9, adopted).
 - Priority: P2, when: the second running process. Alert wording (review-only): an alert that fires twice with no action is fixed or deleted.
 
 **RE-5. Write a blameless postmortem within 7 days of every sev-1/sev-2 incident, rollback, data-loss near miss or failed restore drill, as `docs/human/runbooks/postmortem-<date>-<slug>.md`, with no user identifiers.**
@@ -214,7 +214,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **SE-2. Resolve every identifier a route accepts through a domain function taking `viewer: Did | null`. Answer missing, not-yours, deactivated, delisted and taken-down identically (`AccountUnavailable`), and keep hidden subjects out of counts and lists. Ship every route or guard change with a denial test. Private profiles answer the same way too (D7, adopted): `ProfilePrivate` is folded into `AccountUnavailable` for anyone but the owner.**
 - Enforced by: the signature convention. A Vitest per read route over the account states. P2 adds a cross-user authorization matrix generated from the route manifest (SE-4).
 - Source: OWASP API Security Top 10:2023 — API1, API3, API5; OWASP Top 10:2025 — A01; Anderson 3rd ed. — ch. 11; Khorikov — ch. 8.
-- Status: PARTLY — CLAUDE.md, admin design §11.1, Plan §5.4, phase-3 `AccountUnavailable`/`ProfilePrivate`.
+- Status: PARTLY — CLAUDE.md, admin design §11.1, Plan §5.4, phase-3 `AccountUnavailable` (P3.10, P3.12; `ProfilePrivate` folded in by D7).
 - Priority: P1 for denial tests. P2 for the matrix.
 
 **SE-3. Return only explicit view types built field by field; never a row, a spread row or an upstream response. Send user data through the single encoder for each context: React, `safeHref`, the island serialiser, or a header encoder that rejects CR/LF. Parse URLs once with WHATWG `URL`. Isolate bidi text (`dir="auto"`, `<bdi>`), and strip override and embedding controls only in identifiers and handles.**
@@ -241,13 +241,14 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - seal, the CSP builder, media sandbox headers;
 - grant matrix and migrations;
 - `audit/` append, `eraseDid`;
-- `shared/http/`, `shared/admin-envelope/`, `pds-admin`, `chat-admin`.
-- Enforced by: a CI check that a PR touching a trusted-base path touches only trusted-base files, their tests and docs. (CODEOWNERS adds nothing while Alex reviews every PR.)
+- `shared/http/`, `shared/admin-envelope/`, `pds-admin`, `chat-admin`, `chat-auth`;
+- the lexicons and permission set in `shared/lexicons/`, the legal-hold seal path, and `deployment/edge/`.
+- Enforced by: a CI check that a PR touching a trusted-base path touches only trusted-base files, their tests and docs. The CODEOWNERS security-review gate in Plan §9 stays and lists the same paths.
 - Source: Anderson 3rd ed. — ch. 27–28.
 - Status: PARTLY — `02-shared-blocks.md`, Plan §9. NEW: isolated PRs.
 - Priority: P1
 
-**SE-7. Log and measure only through a typed field allowlist (event, service, commit, reqId, route template, method, status, ms, code, dep, attempt, counts). Never log a DID, handle, IP, user agent, email, token, raw URL, record content or user-derived message. Correlate by `reqId` only.**
+**SE-7. Log and measure only through a typed field allowlist (event, service, commit, reqId, route template, method, status, ms, code, dep, attempt, counts). Never log a DID, handle, IP, user agent, email, token, raw URL, record content or user-derived message. Correlate by `reqId` only. This governs logs and metrics; the plan's accountability records (the audit lanes, `pds-admin`'s hash-linked log and the sealed C-16 buffer) are records with their own rules and keep the fields the plan gives them.**
 - Enforced by: the logger's type. Biome `noConsole` *(unverified)* or Semgrep outside the logger. A Vitest that sends PII-shaped values through every route group and greps the captured logs.
 - Source: SRE — ch. 6, ch. 12; DevOps Handbook — ch. 14 (Create Telemetry to Enable Seeing and Solving Problems).
 - Status: PARTLY — Plan §6 logging, P1.04 `request_log_uses_template`. NEW: the enforced schema.
@@ -255,8 +256,8 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 
 ## 7. Testing
 
-**TE-1. Test a domain through the functions it exports, so a behaviour-preserving refactor changes no test. Use no module mocking (`vi.mock`, `vi.doMock`, `vi.hoisted`). Double only unmanaged dependencies, and only through a contract our code defines. Fakes live in `*.fake.ts`, and the production composition root refuses to start with one wired.**
-- Enforced by: a Semgrep ban on module mocking. dependency-cruiser: no production import of `*.fake.ts`, and vendor SDKs only in their AB-1 adapter folder, tests included. A startup check.
+**TE-1. Test a domain through the functions it exports, so a behaviour-preserving refactor changes no test. Use no module mocking (`vi.mock`, `vi.doMock`, `vi.hoisted`). Double only unmanaged dependencies, and only through a contract our code defines. Fakes live in `*.fake.ts`. Only a composition root may import one, and only when the environment is not production (decision 23 runs the Arachnid fake on the closed-test host); production refuses to start with one wired.**
+- Enforced by: a Semgrep ban on module mocking. dependency-cruiser: `*.fake.ts` importable only from tests and `interfaces/*/compose.ts`, with the env check in that file, and vendor SDKs only in their AB-1 adapter folder, tests included. A startup check.
 - Source: Khorikov — ch. 2, ch. 5, ch. 8, ch. 11; GOOS — ch. 8 ("Only Mock Types That You Own"); Meszaros — ch. 5, ch. 15; SE@Google — ch. 13.
 - Status: PARTLY — EPA §2, ADG §5, Plan Phase 2 (Arachnid refusal).
 - Priority: P1
@@ -300,8 +301,8 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - one act per test, with no logic;
 - build data with builders that use reserved fake identities (`.test` or the dev PDS's suffix, `example.com`, generated DIDs);
 - no coverage gate;
-- no snapshot test except the CSP snapshot.
-- Enforced by: review. A guard against real-looking handles and emails in tests. A Semgrep ban on `toMatchSnapshot` outside the CSP test.
+- no snapshot test except the security-header snapshot (CSP, HSTS, nosniff, Referrer-Policy, Vary; P1.26), which exists so any header change is deliberate.
+- Enforced by: review. A guard against real-looking handles and emails in tests. A Semgrep ban on `toMatchSnapshot` outside the security-header test (P1.26).
 - Source: SE@Google — ch. 12 ("DAMP, Not DRY"); Khorikov — ch. 1, ch. 3; Meszaros — ch. 15, ch. 16; GOOS — ch. 22.
 - Status: PARTLY — EPA §2, §4, Plan §2 rule 15.
 - Priority: P1
@@ -367,7 +368,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **DL-5. Deploy the closed-test host the way production deploys (signed images by digest, the same preflight, `deploy <commit>`, single replica), with a smoke check beyond `/health` that rolls back on failure. Separate deploy from release only through named, typed switches with a fail-safe default; add no general feature-flag system.**
 - Enforced by: `smoke_failure_rolls_back`. Typed config validation.
 - Source: Continuous Delivery — ch. 5; Release It! 2nd ed. — Design for Deployment; DevOps Handbook — ch. 12; SRW — ch. 14.
-- Status: PARTLY — Plan §2 rule 23, P1.27, P1.30, P5.03, P5.08d. Timing per **D5**.
+- Status: PARTLY — Plan §2 rule 23, P1.27, P1.30, P2.26a (minimal digest deploy, D5), P5.03, P5.08d.
 - Priority: P2, when: the test track starts (end of Phase 2, if D5 = a)
 
 **DL-6. Write the commit subject as the step id plus a capitalised, imperative summary with no trailing period, completing "If applied, this commit will …" (`P1.07 Enforce exact Origin match in CSRF gate`). Separate the body with a blank line, wrap it at 72 and say what and why. Use no Conventional Commits prefix (D2).**
@@ -390,14 +391,14 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 **Each ADR has Context, Decision, Alternatives (at least two), Consequences and Compliance. A dev dependency needs only the EPA §5 note in its PR.**
 - Enforced by: the docs test (front matter, status values, the index lists every file). The DL-3 field "needs an ADR?".
 - Source: FoSA 1st ed. — ch. 19 (2nd ed. ch. 21); Documenting SA 2nd ed. — Prologue (rule 5, record rationale); APoSD 2nd ed. — ch. 11 (design it twice); Hard Parts — ch. 1.
-- Status: PARTLY — ADRs 0001–0002, P0.09, AI §15–16, EW §7, EPA §5.
+- Status: PARTLY — ADRs 0001 (append-only log, D8), 0002 (engineering rules), 0003 (bootstrap reconciliation), the no-orchestrator ADR (F-23), P0.09, AI §15–16, EW §7, EPA §5.
 - Priority: P1
 
 **DO-2. Record a decision Alex makes in a thread or on a card in an ADR, in the first PR that depends on it. Change an accepted ADR only to mark it superseded, under the transition D8 sets for ADR 0001. An agent whose change would contradict an accepted ADR stops and asks.**
 - Enforced by: the docs test (the body of an Accepted ADR is unchanged, apart from what D8 allows). Review.
 - Source: FoSA 1st ed. — ch. 19 (Groundhog Day, Email-Driven Architecture; 2nd ed. ch. 21).
 - Status: PARTLY — AI §16, ADR 0001, decisions 1–34 in the plan.
-- Priority: P1 once D8 is decided
+- Priority: P1 (D8 adopted)
 
 ## 11. Performance
 
@@ -452,7 +453,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Reason: it is a large dev-dependency tree, its TS 7 support is unverified, and it is slow. TE-5's "red with the control removed" gives most of the value now.
 
 **D7. Private profile versus missing.** Should a private profile look the same as a missing one?
-- Options: (a) keep the plan: a distinct `ProfilePrivate` error and a "private" page (Plan §5.4; `phase-3.md:1284,1296`); (b) fold private into `AccountUnavailable`, so outsiders cannot tell "exists but private" from "absent".
+- Options: (a) keep the plan: a distinct `ProfilePrivate` error and a "private" page (Plan §5.4; then P3.10 and P3.12 in phase-3.md); (b) fold private into `AccountUnavailable`, so outsiders cannot tell "exists but private" from "absent".
 - Recommendation: (b), if the product does not need to tell visitors the profile exists.
 - Reason: (b) leaks less, since existence itself is information (API3, Anderson ch. 11). Adopted (b) 2026-10-04; plan §5.4 and phase-3 `ProfilePrivate` change to match.
 
