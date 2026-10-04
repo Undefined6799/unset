@@ -1,0 +1,3 @@
+// fixture: interfaces/http/cookies.ts findings=2
+setCookie(c, "k", v, { ...base, domain });
+setCookie(c, "k", v, { "domain": d });

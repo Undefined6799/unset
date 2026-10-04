@@ -1,0 +1,4 @@
+// fixture: apps/web/src/compound.ts findings=3
+el.innerHTML += s;
+el.outerHTML ??= s;
+el["innerHTML"] = s;

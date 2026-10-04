@@ -8,7 +8,7 @@ const RULE = "inner-html";
 
 const SINKS = [
   /\bdangerouslySetInnerHTML\b/,
-  /\.(innerHTML|outerHTML)\s*=(?!=)/,
+  /(\.|\[\s*["'`])(inner|outer)HTML(["'`]\s*\])?\s*([+|&?]{1,2})?=(?!=)/,
   /\binsertAdjacentHTML\s*\(/,
   /\bdocument\.write(ln)?\s*\(/,
 ];

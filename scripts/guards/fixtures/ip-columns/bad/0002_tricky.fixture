@@ -1,0 +1,3 @@
+-- fixture: infrastructure/postgres/migrations/0002_tricky.sql findings=2
+CREATE TABLE app.notes (note text DEFAULT '--', client_ip text);
+CREATE TABLE app.other (id int); CREATE TABLE app.bad (ua text);

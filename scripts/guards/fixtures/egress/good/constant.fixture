@@ -3,3 +3,4 @@ export const a = () => fetch("https://plc.directory/x");
 export const b = (u: string) => fetch(u); // guard-allow: egress constant PDS URL
 import { readFile } from "node:fs";
 export const c = readFile;
+export const f = (key: string) => cache.fetch(key);

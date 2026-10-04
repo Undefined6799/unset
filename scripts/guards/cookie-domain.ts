@@ -8,7 +8,8 @@ export const SCANNED_DIRS = PRODUCT_DIRS;
 const RULE = "cookie-domain";
 
 const DOMAIN_ATTR = /;\s*domain\s*=/i; // "...; Domain=example.com" in a Set-Cookie string
-const DOMAIN_OPTION = /\bdomain\s*:/i; // { domain: ... } in a cookie options object
+// A domain option near cookie code: `domain: x`, `"domain": x`, shorthand `{ domain }`, or a built-up "Domain=".
+const DOMAIN_OPTION = /\bdomain\s*[:,}]|["'`]domain["'`]\s*:|\bdomain\s*=/i;
 const COOKIE_CONTEXT = /cookie/i;
 const NEAR = 5;
 

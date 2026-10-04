@@ -60,9 +60,12 @@ export type Finding = { file: string; line: number; rule: string; text: string }
 
 export const isTestFile = (file: string): boolean => /\.test\.[cm]?[jt]sx?$/.test(file);
 
-/** `guard-allow: <rule> <reason>` exempts a line, and only with a non-empty reason, so every exception is explained. */
+/**
+ * `// guard-allow: <rule> <reason>` exempts a line, and only as a line comment with a reason that has a word in it,
+ * so every exception is explained and a marker inside a string or a bare block comment does not count.
+ */
 export function allowed(line: string, rule: string): boolean {
-  return new RegExp(`guard-allow:\\s*${rule}\\s+\\S`).test(line);
+  return new RegExp(`//\\s*guard-allow:\\s*${rule}\\s+[^\\s*/]*\\w`).test(line);
 }
 
 const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true });
@@ -91,7 +94,8 @@ export function scanFiles(
 /** Module specifiers named on a line: `from "…"`, `import "…"`, `require("…")`, `import("…")`. */
 export function specifiersOn(line: string): string[] {
   const out: string[] = [];
-  const pattern = /\bfrom\s*["']([^"']+)["']|\bimport\s*\(?\s*["']([^"']+)["']|\brequire\s*\(\s*["']([^"']+)["']/g;
+  const pattern =
+    /\bfrom\s*["'`]([^"'`]+)["'`]|\bimport\s*\(?\s*["'`]([^"'`]+)["'`]|\brequire\s*\(\s*["'`]([^"'`]+)["'`]/g;
   for (const m of line.matchAll(pattern)) out.push(m[1] ?? m[2] ?? m[3] ?? "");
   return out;
 }

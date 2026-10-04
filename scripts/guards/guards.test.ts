@@ -48,6 +48,10 @@ function runFixtures(rule: string, kind: "bad" | "good", names?: string[]) {
     files[path] = text;
     expected[path] = Number(count);
   }
+  expect(Object.keys(expected).length, `${rule}/${kind} has fixtures with distinct paths`).toBe(
+    (names ?? readdirSync(dir)).length,
+  );
+  expect(Object.keys(expected).length).toBeGreaterThan(0);
   const actual: Record<string, number> = Object.fromEntries(Object.keys(files).map((p) => [p, 0]));
   for (const f of SCANNERS[rule]?.(tempRepo(files)) ?? []) actual[f.file] = (actual[f.file] ?? 0) + 1;
   return { expected, actual };
@@ -113,7 +117,8 @@ describe("ip-columns", () => {
     const root = tempRepo({ "infrastructure/postgres/migrations/0001.sql": migration });
     const entry = { table: "app.t", step: "P4.03", reason: "sealed transmission buffer (decision 21)" };
     expect(ipColumns.scanAll(root, [entry])).toEqual([]);
-    expect(ipColumns.scanAll(root, [{ ...entry, reason: " " }])).toHaveLength(1);
+    // An unexplained entry is a finding and exempts nothing, so its column is flagged too.
+    expect(ipColumns.scanAll(root, [{ ...entry, reason: " " }])).toHaveLength(2);
     expect(ipColumns.scanAll(root, [{ ...entry, step: "later" }])).toHaveLength(1);
     expect(ipColumns.scanAll(root, [entry, { ...entry, table: "app.nowhere" }])).toHaveLength(1);
   });

@@ -19,34 +19,51 @@ const STEP_ID = /^P\d+\.\d+[a-z]?$/;
 
 const normalise = (table: string): string => table.replaceAll('"', "").toLowerCase();
 
-/** Columns are attributed to the nearest preceding CREATE TABLE / ALTER TABLE. */
+/** Drops `--` comments and the contents of string literals, so neither hides nor invents a column. */
+function codeOnly(line: string): string {
+  return line.replace(/'(?:[^']|'')*'|--.*$/g, (m) => (m.startsWith("--") ? "" : "''"));
+}
+
+function mentionsAddress(text: string): boolean {
+  const named = (text.match(/[A-Za-z_][\w$]*/g) ?? []).some((t) => ADDRESS_NAME.test(t.toLowerCase()));
+  return named || ADDRESS_TYPE.test(text);
+}
+
+/** Columns are attributed to the nearest preceding CREATE TABLE / ALTER TABLE, statement by statement. */
 function scanMigration(file: string, source: string, allow: ReadonlySet<string>, seen: Set<string>): Finding[] {
   const findings: Finding[] = [];
   let table = "";
   source.split("\n").forEach((raw, i) => {
-    let text = raw.replace(/--.*$/, "");
-    const header = TABLE_HEADER.exec(text);
-    if (header) {
-      table = normalise(header[1] ?? "");
-      seen.add(table);
-      text = text.replace(header[0], " "); // The table's own name is not a column.
+    let hit = false;
+    for (let text of codeOnly(raw).split(";")) {
+      const header = TABLE_HEADER.exec(text);
+      if (header) {
+        table = normalise(header[1] ?? "");
+        seen.add(table);
+        text = text.replace(header[0], " "); // The table's own name is not a column.
+      }
+      if (mentionsAddress(text) && !allow.has(table)) hit = true;
     }
-    const named = (text.match(/[A-Za-z_][\w$]*/g) ?? []).some((t) => ADDRESS_NAME.test(t.toLowerCase()));
-    if ((ADDRESS_TYPE.test(text) || named) && !allow.has(table)) {
-      findings.push({ file, line: i + 1, rule: RULE, text: raw });
-    }
+    if (hit) findings.push({ file, line: i + 1, rule: RULE, text: raw });
   });
   return findings;
 }
 
+const isEntry = (e: unknown): e is AllowEntry =>
+  typeof e === "object" &&
+  e !== null &&
+  ["table", "step", "reason"].every((k) => typeof (e as Record<string, unknown>)[k] === "string");
+
 /** Every entry needs a step id and a reason, and must name a table some migration declares. */
-function checkAllowList(entries: readonly AllowEntry[], seen: ReadonlySet<string>): Finding[] {
+function checkAllowList(entries: readonly unknown[], seen: ReadonlySet<string>): Finding[] {
   return entries.flatMap((entry, i) => {
-    const problem = !STEP_ID.test(entry.step ?? "")
+    if (!isEntry(entry))
+      return [{ file: ALLOW_FILE, line: i + 1, rule: RULE, text: "entry needs table, step and reason" }];
+    const problem = !STEP_ID.test(entry.step)
       ? "unknown step id"
-      : !entry.reason?.trim()
+      : !entry.reason.trim()
         ? "empty reason"
-        : !seen.has(normalise(entry.table ?? ""))
+        : !seen.has(normalise(entry.table))
           ? "no migration declares this table"
           : "";
     return problem ? [{ file: ALLOW_FILE, line: i + 1, rule: RULE, text: `${entry.table}: ${problem}` }] : [];
@@ -68,7 +85,8 @@ function readAllowList(root: string): AllowEntry[] | Finding {
 
 export function scanAll(root: string, allowList: readonly AllowEntry[] | Finding = readAllowList(root)): Finding[] {
   if (!Array.isArray(allowList)) return [allowList as Finding];
-  const allow = new Set(allowList.map((e) => normalise(e.table ?? "")));
+  // Only a complete, reasoned entry exempts its table.
+  const allow = new Set(allowList.filter((e) => isEntry(e) && e.reason.trim()).map((e) => normalise(e.table)));
   const seen = new Set<string>();
   const migrations = filesUnder(root, SCANNED_DIRS, /\.sql$/).filter((f) => /(^|\/)migrations\//.test(f));
   const findings = scanFiles(root, migrations, RULE, (file, source) => scanMigration(file, source, allow, seen));
