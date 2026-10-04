@@ -2,7 +2,16 @@
 import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "coverage", ".worktrees", "graphify-out"]);
+/** Skipped by every walker and by Vitest: a bare name anywhere, or a repo-relative path. */
+export const SKIP_DIRS: ReadonlySet<string> = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "coverage",
+  ".worktrees",
+  "graphify-out",
+  "scripts/guards/fixtures",
+]);
 const SOURCE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
 /** Every source file under `root`, as repo-relative POSIX paths, sorted. */
@@ -16,10 +25,11 @@ export function sourceFiles(root: string, dirs: readonly string[]): string[] {
       return; // A listed top-level dir that does not exist yet is fine.
     }
     for (const entry of entries) {
-      if (SKIP_DIRS.has(entry.name)) continue;
       const path = join(dir, entry.name);
+      const rel = relative(root, path).split(sep).join("/");
+      if (SKIP_DIRS.has(entry.name) || SKIP_DIRS.has(rel)) continue;
       if (entry.isDirectory()) walk(path);
-      else if (SOURCE_EXT.test(entry.name)) out.push(relative(root, path).split(sep).join("/"));
+      else if (SOURCE_EXT.test(entry.name)) out.push(rel);
     }
   };
   for (const dir of dirs) walk(join(root, dir));
