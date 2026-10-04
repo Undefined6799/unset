@@ -526,6 +526,14 @@ review.
 Not in this step: the keys of individual features (each step adds its own fields); the deploy preflight (P1.30).
 Diagram: none.
 
+As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:23Z; all fail closed, each listed in the PR):
+  - (a) A `secretFile` key given as plain env → `forbidden_in_env` in every environment, not only prod.
+  - (b) A missing or unrecognised `UNSET_ENV` counts as prod for plain-env secrets; only exactly `dev` or `test` allows them.
+  - (c) `Secret` holds a string, so secret files must be UTF-8 text; invalid bytes → `invalid`.
+  - (d) `list` has no separator option: comma only; empty or padded items → invalid.
+  - (e) `bootOrExit` writes its `config.invalid` lines to stderr as JSON itself, because the logger (P1.03) depends on
+    config, not the other way round.
+
 ---
 
 ### P1.03 — Error model, error-code catalog, structured logger with a field allowlist
@@ -606,6 +614,17 @@ logging (P1.04). The field allowlist governs logs and metrics only (rule SE-7 as
 (P1.15), `pds-admin`'s hash-linked log (P2.09, P3.16) and the sealed C-16 buffer (P4.03, P5.07b) are records with their
 own rules and keep the fields their steps give them; no step routes them through this logger or its scrubber.
 Diagram: none.
+
+As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:23Z; all fail closed, each listed in the PR):
+  - (f) `scrub` redacts first, on a copy capped at 1000 chars, then truncates to 200 by code point. The specified
+    truncate-first order left partial IPs such as `192.16`.
+  - (g) Until the route table exists (P1.04k), a route is a template only if each segment is a parameter, `*`, a word
+    literal or `.well-known`; anything else logs `[route]`.
+  - (h) `reqId` is kept only if it is a UUID or 16 to 64 base64url chars, else `[reqId]`; it is never scrubbed.
+  - (i) Extra scrub patterns: any `did:*`, Basic credentials, bidi overrides.
+  - (j) `withErrorParam` takes a plain string until P1.09's `SafePath` lands, inserts before `#`, and replaces an earlier
+    `error` value.
+  - (k) The logger's write catch is the DC-4 exception the step asks for, commented with the rule.
 
 ---
 
