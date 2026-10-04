@@ -283,7 +283,7 @@ export function securityMdProblems(text: string): string[] {
 /** The book snapshot names the folder, planning round and date it copies. */
 export function bookSnapshotProblems(text: string): string[] {
   const found: string[] = [];
-  if (!/\bround \d+/i.test(text)) found.push("docs/ai/book/README.md names no round");
+  if (!/\bround\s+(\d+|"[^"\n]+")/i.test(text)) found.push("docs/ai/book/README.md names no round");
   if (!/\b\d{4}-\d{2}-\d{2}\b/.test(text)) found.push("docs/ai/book/README.md names no date");
   if (!text.includes("unset-plan/breakdown/")) found.push("docs/ai/book/README.md does not name its source folder");
   return found;

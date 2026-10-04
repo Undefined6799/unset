@@ -149,6 +149,9 @@ describe("other documents", () => {
   test("book_snapshot_marked", () => {
     expect(bookSnapshotProblems(read("docs/ai/book/README.md"))).toEqual([]);
     expect(bookSnapshotProblems("# Book\n\nA copy.\n")).toHaveLength(3);
+    expect(bookSnapshotProblems("From unset-plan/breakdown/, review round, 2026-10-04.")).toEqual([
+      "docs/ai/book/README.md names no round",
+    ]);
   });
 });
 
