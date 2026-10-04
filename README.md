@@ -35,4 +35,6 @@ npm run check                         # typecheck, lint, guards, tests
 
 ## License
 
+Licence: AGPL-3.0-only, with `shared/` under MIT as set out below; P0.13 confirms it, and the repository stays private until then.
+
 Everything is [AGPL-3.0-only](LICENSE) except `shared/` (the `sh.unset.*` lexicons, the UI kit and the generic helpers), which is [MIT](LICENSE-MIT) so other atproto apps can reuse the record types and helpers freely (Alex, 2026-10-03; folder set by decision 34, 2026-10-04).
