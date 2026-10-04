@@ -2,7 +2,8 @@ Architecture and Development Guideline (unset.sh)
 
 Status: ADOPTED by Alex 2026-10-04 04:39Z ("Apply all" card). Section 1 refined 05:10Z for the
 step book's layout-map open points O-1..O-11 (no change to intent); 13:35Z: jobs and retention are
-one process, domain imports listed. Adapted from the "Project Architecture & Development
+one process, domain imports listed; 13:55Z: offline owner CLIs live in interfaces/, jobs membership
+test. Adapted from the "Project Architecture & Development
 Handoff" (verbatim in unset-plan/architecture-handoff/chatgpt-handoff-verbatim.md) with six
 amendments that keep decisions Alex already made. Each amendment is marked [A1]..[A6] and explained
 in unset-plan/architecture-handoff/conflicts.md. It is the fourth guideline document
@@ -27,6 +28,7 @@ unset.sh/
 │   ├── review/           upload checks (no-network compute + review-egress)
 │   ├── jobs/  audit-verify/  chat-auth/   other processes, added in their phase
 │   │                     (jobs = all scheduled work incl. retention, under the retention role)
+│   ├── legal-hold-export/  Phase 4; offline CLI an owner runs on their own device, in no image
 │   ├── pds-admin/        sole holder of the PDS admin password; zero dependencies
 │   └── chat-admin/       Phase 6; zero dependencies
 │
@@ -71,6 +73,11 @@ Folder responsibilities
 * interfaces/ are the doors: they authenticate, apply the CSRF gate and limits, call a domain, and
   shape the response. Every running process has its own folder here, so process, network and
   database-role isolation from the plan stays intact; a new process adds a folder, never shares one.
+  An offline CLI a person runs on their own device (legal-hold-export) is also an entry point and
+  lives here, built into no container image; there is no top-level tools/ folder.
+  A scheduled job joins interfaces/jobs only if it needs no grant, network or egress beyond what
+  jobs already holds and parses no input from outside the system; otherwise it is its own process,
+  with an ADR naming its driver (AB-3).
   Interfaces do not import each other; code two of them need goes to shared/ (no product meaning)
   or a domain.
 * pds-admin/ and chat-admin/ may import only their own folder, Node built-ins, and folders on the

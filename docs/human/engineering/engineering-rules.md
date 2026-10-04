@@ -242,7 +242,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - grant matrix and migrations;
 - `audit/` append, `eraseDid`;
 - `shared/http/`, `shared/admin-envelope/`, `pds-admin`, `chat-admin`, `chat-auth`;
-- the lexicons and permission set in `shared/lexicons/`, the legal-hold seal path, and `deployment/edge/`.
+- the lexicons and permission set in `shared/lexicons/`, the legal-hold seal path and its offline export CLI `interfaces/legal-hold-export/`, and `deployment/edge/`.
 - Enforced by: a CI check that a PR touching a trusted-base path touches only trusted-base files, their tests and docs. The CODEOWNERS security-review gate in Plan §9 stays and lists the same paths.
 - Source: Anderson 3rd ed. — ch. 27–28.
 - Status: PARTLY — `02-shared-blocks.md`, Plan §9. NEW: isolated PRs.
