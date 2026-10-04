@@ -395,6 +395,13 @@ While turning the plan into build steps, the step-book thread found nine sequenc
   decision 40 ruleset is applied the day protection is available. Revisit before the repository goes public or before
   the first production account, whichever comes first. Plan §8 Phase 0 and its exit; step P0.03.
 
+- **Decision 42 (Alex, 2026-10-04 21:44Z, "Opaque ids" on the plan thread's card; own record: [0010](0010-opaque-chat-ids.md)):**
+  every member's Matrix user id is an opaque random localpart assigned at chat enrolment, never derived from the
+  handle or DID, because Synapse answers `keys/query` for any local user to any signed-in user with no shared-room
+  check and no setting closes it. The handle-to-chat-id mapping lives in our database behind the decision 36 lookup.
+  Cost: a private member shows as a raw id inside existing conversations until P6.00 picks how to show the verified
+  handle. Plan §5.6; steps P6.00 and P6.05.
+
 ## Consequences
 Nothing in Phase 0 depends on Q2a. Its review must happen before the first production account,
 since old `*.0x40.me` handles would collide with new ones. The evening decisions change Phase 1
