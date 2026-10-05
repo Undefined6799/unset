@@ -1418,8 +1418,8 @@ Edge cases and failures:
   - `-0` → serialises as `0`; round-trip compares with `-0` normalised (documented).
   - A string containing `</script>` or `<!--` → every U+003C becomes backslash-`u003c` → cannot close the element.
   - Very deep nesting → depth limit → `props_invalid` (no stack overflow).
-  - Two islands with the same id on one page → the server component asserts uniqueness per page (throws in dev and
-    test; in prod logs `islands.duplicate_id` and renders the second without hydration).
+  - Two islands with the same id on one page → moved to P1.23 (`renderPropsTag` is stateless); P1.23's per-request
+    counter makes ids unique (test `island_ids_unique_per_response`).
 
 Threats: server data embedded into HTML for islands.
   - T A string in props ends the `<script>` element and injects markup (XSS) → every `<`, `>`, `&`, U+2028 and U+2029
@@ -1457,6 +1457,12 @@ JavaScript, not JSON, for inline scripts we do not have). `fast-check`, `parse5`
 review.
 Not in this step: the island bootstrap that calls `readProps` and hydrates (P1.23).
 Diagram: none.
+
+As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:49Z):
+  - Inputs gain `jsdom` 30.1.1, an exact-pinned dev dependency for `read_props_missing` and the client tests.
+  - The duplicate-id edge case moved to P1.23, which satisfies it with the per-request counter (test
+    `island_ids_unique_per_response`).
+  - P1.23 calls `renderPropsTag`, `readProps` and `serializeProps` with the 15 360-byte bound, not its own 16 384.
 
 ---
 
@@ -2529,6 +2535,9 @@ As built and ruled (architecture thread, 2026-10-04 23:33Z):
   - Loopback, unspecified, multicast and broadcast keep their own non-public classes.
   - Tests: one row per range in the class table, plus mapped and NAT64 forms of `169.254.169.254` and `10.0.0.1`
     classifying the same as the bare IPv4 address.
+  - net-guard keeps its 400-line warning for real code; its `*.fake.ts` test servers no longer count (architecture
+    ruling 2026-10-04 23:53Z). If P1.18b's proxy pushes real code past 400, treat that as a signal to review the
+    module's depth, not as a reason to raise the number.
 
 ---
 
@@ -2693,6 +2702,34 @@ As built and ruled (architecture thread, 2026-10-04 23:33Z):
     `{ event: "egress.request", dep: <policy kind>, status, ms, counts: { bytes } }`.
     It has no `kind` and no bare `bytes`. The callback never receives the host, URL or IP.
     Test: `log_callback_never_sees_target`.
+  - net-guard keeps its 400-line warning for real code; its `*.fake.ts` test servers no longer count (architecture
+    ruling 2026-10-04 23:53Z). If P1.18b's proxy pushes real code past 400, treat that as a signal to review the
+    module's depth, not as a reason to raise the number.
+
+As ruled (architecture thread, 2026-10-04 23:53Z):
+  - TE-6 needs a real fast-check property test, and the deterministic 65 536-address sweep stays alongside it. The
+    sweep is exhaustive for what it covers, but it never feeds the classifier malformed or unusual text, which is
+    where SSRF bypasses live.
+  - Dependency-cruiser exemption, kept narrow: only `infrastructure/net-guard/**/*.test.ts` may import `fast-check`
+    (and `vitest`) despite `net-guard-leaf`. This is a tooling change, not a boundary change, because test files never
+    ship.
+  - Tests:
+    - `classifier_property` (fast-check, fixed `numRuns`, seed printed on failure). Generators produce text forms of
+      addresses in every reserved and private range, plus the public controls:
+      - octal, hex and short IPv4 forms (`0177.0.0.1`, `0x7f.1`, `127.1`, `2130706433`);
+      - zero-compressed and expanded IPv6;
+      - IPv4-mapped (`::ffff:a.b.c.d`, `::ffff:7f00:1`) and NAT64 (`64:ff9b::a.b.c.d`) forms;
+      - zone ids (`fe80::1%eth0`);
+      - leading or trailing whitespace and stray characters.
+      Property: every input either is refused as unparseable or classifies the same as its canonical address. No
+      reserved or private input ever classifies as public.
+    - Every shrunk counterexample is kept as a plain example test (TE-6).
+    - `fast_check_only_in_net_guard_tests`: a fixture `infrastructure/net-guard/x.ts` importing `fast-check` fails
+      dependency-cruiser, and the same import in `x.test.ts` passes.
+  - Built by the Phase 1 thread in P1.18a.
+  - Outputs gain (architecture ruling 2026-10-05 00:00Z): the PR flips docs/human/architecture.md's `net-guard-leaf`
+    row, following the table convention. Its "What it says" becomes exactly: "net-guard imports only Node built-ins,
+    undici and its own files; its *.test.ts may also import fast-check and vitest". The check name is unchanged.
 
 ---
 
@@ -3328,10 +3365,11 @@ and the spike's glue; P1.08 `buildCsp(group)` with its typed allowlist; P1.10 se
 - File convention: one island per file `*.island.tsx` under `apps/web/src/islands/` and `shared/ui/islands/`;
   the island name is the file stem; the registry is generated at build time.
 - `defineIsland<P>(component: (props: P) => Element, opts: { propsSchema: Validator<P>, maxPropsBytes?: int
-  /* default 16384 */ })`.
-- Server: `<Island name props>` renders
-  `<div data-island="<name>" data-island-id="<n>">…SSR…</div><script type="application/json"
-  data-island-props="<n>">…serialised…</script>` and sets `request.needsBootstrap = true`.
+  /* default 15360, P1.10's serializeProps bound; a larger value is refused */ })`.
+- Server: `<Island name props>` renders `<div data-island="<name>" data-island-id="<id>">…SSR…</div>` followed by
+  the props script that P1.10's `renderPropsTag(id, props)` writes, `<script type="application/json"
+  id="<id>">…serialised…</script>`, and sets `request.needsBootstrap = true`. The id is the per-request counter
+  `i1, i2, …`, which matches P1.10's id rule `^[a-z][a-z0-9-]{0,40}$`.
 - Document: when `needsBootstrap`, one `<script type="module" src="/assets/boot-<hash>.js">` plus
   `<link rel="modulepreload">` for the islands used on this page only; otherwise no script tag at all.
 - Client bootstrap behaviour (Algorithm below).
@@ -3355,7 +3393,8 @@ and the spike's glue; P1.08 `buildCsp(group)` with its typed allowlist; P1.10 se
 Server render of <Island name props>:
 1. name not in the registry → throw IslandUnknown (a programming error; the request gets P1.25's 500 page).
 2. propsSchema(props) fails → throw IslandPropsInvalid (programming error; 500).
-3. s = serializeIslandProps(props). If bytes(s) > maxPropsBytes:
+3. s = serializeProps(props, { maxBytes: maxPropsBytes }) (P1.10). A SerializeError with code
+   islands.props_invalid → throw IslandPropsInvalid (500). Code islands.props_too_large:
    - NODE_ENV test or development → throw IslandPropsTooLarge;
    - production → render the SSR markup without the props script and without setting needsBootstrap for
      this island (it stays static; every island must work without JS), and log code island.props_too_large
@@ -3364,8 +3403,8 @@ Server render of <Island name props>:
 
 Client bootstrap (type=module, so it runs after parsing):
 1. For each [data-island] element:
-   a. find script[data-island-props="<id>"]; missing → leave static, continue.
-   b. JSON.parse its text; throws → console.error("island.props_parse", name); continue.
+   a. readProps(id) (P1.10); PropsMissing → leave static, console.error("island.props_missing", name); continue.
+   b. The bootstrap never parses JSON itself; readProps does.
    c. url = manifest[name] (embedded at build); missing → console.error; continue.
    d. import(url); rejected (network, 404 after a deploy) → leave static; continue.
    e. propsSchema check on the client; fails → leave static; continue.
@@ -3384,6 +3423,8 @@ GET /assets/<file>:
 - An island throws while hydrating → it keeps its SSR markup; the others hydrate.
 - Props containing `</script>`, `<!--`, U+2028 → escaped by P1.10.
 - Two instances of one island → two ids, one module import.
+- Two islands with the same id on one page: moved here from P1.10, whose `renderPropsTag` is stateless. The
+  per-request counter makes ids unique (`island_ids_unique_per_response`).
 - Browser without Trusted Types → the directive is ignored; the path-scoped `script-src` still applies.
 - `/assets/..%2fsecret`, `/assets/%2e%2e/x` → regex rejects → 404.
 - HTML from the previous release references an old hash during a `docker-rollout` overlap → 404 for the old
@@ -3408,6 +3449,7 @@ GET /assets/<file>:
 - `island_props_too_large_prod`: production, 20 KB props → no props script, no bootstrap, one log line with the
   code and island name only; `island_props_too_large_dev_throws`.
 - `island_unknown_throws`; `island_props_invalid_throws`.
+- `island_ids_unique_per_response`: a page with three islands, two of the same name → three distinct ids.
 - `assets_serves_manifest_file`: exact headers; `assets_rejects_unlisted`, `assets_rejects_encoded_traversal`,
   `assets_rejects_bad_extension` → 404.
 - `csp_app_group_snapshot`: P1.08 snapshot contains `script-src https://<host>/assets/` and `trusted-types
