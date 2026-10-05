@@ -53,10 +53,10 @@ jobs:
       - run: npm run guards
       - run: npm test
       - run: npm run budgets
-      - name: Validate renovate.json
+      - name: Validate .github/renovate.json
         run: >-
           docker run --rm -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator "$RENOVATE_IMAGE"
-          --strict
+          --strict .github/renovate.json
 
   audit:
     runs-on: ubuntu-24.04
@@ -92,9 +92,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Scan full history
-        run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --redact --no-banner --config .gitleaks.toml .
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --redact --no-banner --config .github/.gitleaks.toml .
       - name: Scan working tree
-        run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" dir --redact --no-banner --config .gitleaks.toml .
+        run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" dir --redact --no-banner --config .github/.gitleaks.toml .
 
   actionlint:
     runs-on: ubuntu-24.04
@@ -123,7 +123,7 @@ jobs:
       - name: Semgrep CE
         run: >-
           docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE"
-          semgrep scan --config .semgrep/rules/ --config p/typescript --config p/nodejs --config p/owasp-top-ten
+          semgrep scan --config scripts/lint/semgrep/ --config p/typescript --config p/nodejs --config p/owasp-top-ten
           --metrics=off --error --sarif-output=semgrep.sarif
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: always()
@@ -183,5 +183,5 @@ jobs:
       - run: npm ci
       - name: Duplicate code (advice for the reviewer, never a gate)
         run: |
-          npx jscpd --config .jscpd.json . || true
+          npx jscpd --config .github/.jscpd.json . || true
           cat jscpd-report/jscpd-report.md >> "$GITHUB_STEP_SUMMARY" || true

@@ -1,6 +1,6 @@
-// Proves the custom Semgrep rules in .semgrep/rules/ match what they claim (P1.01s; ruling
+// Proves the custom Semgrep rules in scripts/lint/semgrep/ match what they claim (P1.01s; ruling
 // 2026-10-05: this runs in the CI `semgrep` job, not in Vitest). Fixtures live at
-// .semgrep/rules/fixtures/<rule-id>/<set>/<path>.ts, where <set> ends in _fails (each file must yield a
+// scripts/lint/semgrep/fixtures/<rule-id>/<set>/<path>.ts, where <set> ends in _fails (each file must yield a
 // finding from <rule-id>) or _passes (each file must yield no finding at all).
 //
 // The rules' own `paths.exclude` skips the fixtures folder so the repository scan never reports them,
@@ -20,7 +20,7 @@ export type Fixture = { file: string; rule: string; set: string; expect: "fail" 
 type Report = { results: { check_id: string; path: string }[]; errors: unknown[]; paths: { scanned: string[] } };
 
 const ROOT = join(import.meta.dirname, "..", "..");
-const RULES_DIR = join(ROOT, ".semgrep", "rules");
+const RULES_DIR = join(import.meta.dirname, "semgrep");
 const FIXTURES = "fixtures";
 
 /** `<rule>/<set>/<path>` relative to the fixtures folder; null unless the set ends in _fails or _passes. */
@@ -42,7 +42,7 @@ export function fixturesUnder(dir: string): Fixture[] {
   });
 }
 
-/** Semgrep prefixes a rule id with its config path (`.semgrep.rules.computed-import`). */
+/** Semgrep prefixes a rule id with its config path (`scripts.lint.semgrep.computed-import`). */
 export const ruleIdOf = (checkId: string): string => checkId.slice(checkId.lastIndexOf(".") + 1);
 
 export const declaredRuleIds = (yaml: string): string[] =>

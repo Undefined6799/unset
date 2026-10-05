@@ -47,7 +47,7 @@ describe("parseFixture", () => {
 });
 
 test("rule_id_is_the_suffix_after_the_last_dot", () => {
-  expect(ruleIdOf(".semgrep.rules.computed-import")).toBe("computed-import");
+  expect(ruleIdOf("scripts.lint.semgrep.computed-import")).toBe("computed-import");
   expect(ruleIdOf("tmp.x.rules.floating-promises")).toBe("floating-promises");
   expect(ruleIdOf("computed-import")).toBe("computed-import");
 });
@@ -58,8 +58,11 @@ describe("evaluate", () => {
   });
 
   test("checked_relative_to_the_repo_prefix_too", () => {
-    const results = GOOD.map((r) => ({ check_id: `.semgrep.${r.check_id}`, path: `.semgrep/rules/${r.path}` }));
-    const scanned = FIXTURES.map((f) => `.semgrep/rules/fixtures/${f.file}`);
+    const results = GOOD.map((r) => ({
+      check_id: `scripts.lint.semgrep.${r.check_id}`,
+      path: `scripts/lint/semgrep/${r.path}`,
+    }));
+    const scanned = FIXTURES.map((f) => `scripts/lint/semgrep/fixtures/${f.file}`);
     expect(evaluate(JSON.stringify({ results, errors: [], paths: { scanned } }), FIXTURES, DECLARED)).toEqual([]);
   });
 
@@ -124,7 +127,7 @@ describe("rule files", () => {
     "    paths:",
     "      exclude:",
     '        - "scripts/"',
-    '        - ".semgrep/rules/fixtures/"',
+    '        - "scripts/lint/semgrep/fixtures/"',
     "    severity: ERROR",
     "  - id: other",
     "    paths:",

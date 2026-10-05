@@ -1,4 +1,4 @@
-// The boundary rules in .dependency-cruiser.cjs, checked edge by edge on throwaway fixture trees (P0.05).
+// The boundary rules in scripts/lint/.dependency-cruiser.cjs, checked edge by edge on throwaway fixture trees (P0.05).
 import { spawnSync } from "node:child_process";
 import type { ICruiseResult } from "dependency-cruiser";
 import { afterAll, describe, expect, test } from "vitest";

@@ -1,14 +1,14 @@
 # The one bug form (P0.09b). It applies only the bug label; the severity label is set at triage.
 # Syntax: docs.github.com, "Syntax for issue forms" and "Syntax for GitHub's form schema".
 name: Bug
-description: Something does not work as it should. Not for vulnerabilities; see SECURITY.md.
+description: Something does not work as it should. Not for vulnerabilities; see .github/SECURITY.md.
 labels:
   - bug
 body:
   - type: markdown
     attributes:
       value: >-
-        Anything that may be a vulnerability goes to the private channel in SECURITY.md, never here.
+        Anything that may be a vulnerability goes to the private channel in .github/SECURITY.md, never here.
         Severities are defined in docs/human/severity.md; when two fit, propose the higher one.
   - type: textarea
     id: what-happened

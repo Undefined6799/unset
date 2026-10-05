@@ -7,7 +7,7 @@ with the bug form. The agent proposes one at triage, and Alex confirms every `se
 downgrade. The launch gate (step L.02) fails while any `sev-1` or `sev-2` bug is open, or any `sev-3` bug is not
 triaged.
 
-A possible vulnerability is never filed as a public issue. Report it privately as [`SECURITY.md`](../../SECURITY.md)
+A possible vulnerability is never filed as a public issue. Report it privately as [`.github/SECURITY.md`](../../.github/SECURITY.md)
 says.
 
 ## Severity 1

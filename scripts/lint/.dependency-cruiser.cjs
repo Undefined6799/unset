@@ -249,7 +249,7 @@ module.exports = {
     parser: "swc",
     doNotFollow: { path: "node_modules" },
     exclude: {
-      path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures|\\.semgrep/rules/fixtures)/",
+      path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures|scripts/lint/semgrep/fixtures)/",
     },
   },
 };

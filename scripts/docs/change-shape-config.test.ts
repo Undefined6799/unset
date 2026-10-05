@@ -15,7 +15,7 @@ describe("change-shape settings", () => {
   });
 
   test("renovate_titles_pass", () => {
-    const renovate = JSON.parse(read("renovate.json"));
+    const renovate = JSON.parse(read(".github/renovate.json"));
     expect(renovate.commitMessagePrefix).toBe("P0.08");
     expect(renovate.commitMessageAction).toBe("Update");
     // With semantic commits on, Renovate replaces the prefix with a Conventional Commits one.

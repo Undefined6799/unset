@@ -7,11 +7,11 @@ import { describe, expect, test } from "vitest";
 import { declaredRuleIds, fixturesUnder } from "./semgrep-fixtures.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const RULES_DIR = join(ROOT, ".semgrep", "rules");
+const RULES_DIR = join(ROOT, "scripts", "lint", "semgrep");
 const CI = readFileSync(join(ROOT, ".github", "workflows", "ci.yml"), "utf8");
 const ruleFiles = readdirSync(RULES_DIR).filter((f) => f.endsWith(".yml"));
 const text = (file: string): string => readFileSync(join(RULES_DIR, file), "utf8");
-const EXCLUDES = ["scripts/", "tests/", "**/*.test.ts", "/.semgrep/rules/fixtures/"];
+const EXCLUDES = ["scripts/", "tests/", "**/*.test.ts", "/scripts/lint/semgrep/fixtures/"];
 
 /** The text of each `- id:` entry in a rule file, keyed by id. */
 function rulesIn(yaml: string): Map<string, string> {
@@ -71,7 +71,7 @@ test("floating_promises_message_says_not_type_aware", () => {
 });
 
 test("rules_folder_loaded", () => {
-  expect(CI).toMatch(/semgrep scan [^\n]*--config \.semgrep\/rules\//);
+  expect(CI).toMatch(/semgrep scan [^\n]*--config scripts\/lint\/semgrep\//);
 });
 
 test("ci_runs_the_fixture_check", () => {

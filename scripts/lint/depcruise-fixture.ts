@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { cruise, type ICruiseResult } from "dependency-cruiser";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-export const CONFIG_PATH = join(ROOT, ".dependency-cruiser.cjs");
+export const CONFIG_PATH = join(ROOT, "scripts/lint/.dependency-cruiser.cjs");
 export const DEPCRUISE = join(ROOT, "node_modules", ".bin", "depcruise");
 
 export type Row = { name: string; from: object; to: object[] };

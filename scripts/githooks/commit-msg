@@ -1,0 +1,5 @@
+#!/bin/sh
+# Enable once per clone: git config core.hooksPath scripts/githooks
+# Checks the commit message with the same rules CI applies to every commit (P0.09c).
+set -eu
+exec node "$(dirname "$0")/../guards/commit-msg.ts" "$1"

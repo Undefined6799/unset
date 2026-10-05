@@ -1,5 +1,5 @@
 # P1.01s: a syntactic stand-in for rule DC-4 while Biome's noFloatingPromises cannot run on TypeScript 7.
-# Fixtures: .semgrep/rules/fixtures/floating-promises/, checked by scripts/lint/semgrep-fixtures.ts in CI.
+# Fixtures: scripts/lint/semgrep/fixtures/floating-promises/, checked by scripts/lint/semgrep-fixtures.ts in CI.
 rules:
   - id: floating-promises
     languages: [typescript]
@@ -20,7 +20,7 @@ rules:
         - "scripts/"
         - "tests/"
         - "**/*.test.ts"
-        - "/.semgrep/rules/fixtures/"
+        - "/scripts/lint/semgrep/fixtures/"
     # Semgrep does not enforce the async modifier in an arrow-function pattern (semgrep 1.178.0: the pattern
     # `const $F = async (...) => { ... }` also matches a plain arrow), so arrows and forEach callbacks are
     # matched by their source text instead. Function declarations do enforce it.
