@@ -100,6 +100,19 @@ describe("workflows", () => {
     expect(ci).not.toMatch(/cancel-in-progress:\s*true/);
   });
 
+  // Alex 2026-10-05 20:34Z: drafts are checked locally with `npm run check`; GitHub runs the checks once a PR is
+  // ready. A job skipped by `if:` is marked skipped (docs.github.com, workflow syntax, jobs.<job_id>.if), and marking a
+  // PR ready fires `ready_for_review`, which runs only when listed in `types` (events that trigger workflows).
+  test.each(workflowFiles)("pr_checks_wait_for_ready %s", (file) => {
+    const text = readFileSync(join(WORKFLOWS, file), "utf8");
+    if (!/^ {2}pull_request:/m.test(text)) return;
+    expect(text).toMatch(/^ {4}types: \[[^\]]*\bready_for_review\b[^\]]*\]$/m);
+    for (const [id, lines] of jobs(code(text))) {
+      const condition = lines.find((l) => /^ {4}if: /.test(l)) ?? "";
+      expect(condition, `${file} job ${id}`).toContain("!github.event.pull_request.draft");
+    }
+  });
+
   test("required_checks_listed", () => {
     const required: string[] = JSON.parse(readFileSync(join(ROOT, ".github", "required-checks.json"), "utf8"));
     // The P0.07 gate set plus P0.09c's pr-shape; every name is a real job in some workflow.

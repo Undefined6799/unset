@@ -25,10 +25,10 @@ describe("wiring", () => {
       expect(text).toMatch(new RegExp(`^ {6}${name}: \\$\\{\\{ [^}]+ \\}\\}$`, "m"));
     }
     expect(text).toContain("run: node scripts/guards/change-shape.ts");
-    expect(text).toMatch(/if: github\.event_name == 'pull_request'/);
+    expect(text).toMatch(/if: github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft$/m);
     expect(text).toMatch(/contents: read\n\s+pull-requests: read/);
     // An edited title, body or label set is checked again: the title becomes the squash subject.
-    expect(workflow).toContain("types: [opened, synchronize, reopened, edited, labeled, unlabeled]");
+    expect(workflow).toContain("types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled]");
   });
 
   test("hook_runs_check", () => {
