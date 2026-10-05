@@ -686,6 +686,25 @@ Diagram: none.
 
 ---
 
+### P1.04q — Route registration guard (split from P1.04k, SE-6)
+Tags: —            Depends on: P0.09c            Plan: as P1.04; §9 (rule SE-6, check paths)
+Where: `scripts/guards/` (the guard and its test); the fixture standing in for `apps/web/src/x.ts` (it calls
+  `app.post(`) lives under `scripts/guards/fixtures/`, never under `apps/`, because this is a check-path PR
+Size: ~40 source lines, ~40 test lines
+
+Why a separate step (relayed 2026-10-05 02:43Z): `route_registration_guard` forbids `app.get(` and `app.post(` outside
+`shared/http/server.ts` and `shared/http/routes.ts`. It lives in `scripts/guards/`, a check path, and P1.04k is a
+trusted-base product PR, so the guard gets its own `q` step. It depends on P0.09c only (amended 2026-10-05 02:59Z): on
+`main` it passes with no Hono anywhere, and on the P1.04k tree with Hono only in `server.ts` and `routes.ts`, so landing
+it first also guards P1.04k itself.
+
+Done when (tests): route_registration_guard: the fixture fails the guard, and the real tree passes.
+As built (#39): it flags `app.<hono verb>(` calls and any import of `hono` or `@hono/*` outside `shared/http/server.ts`
+  and `routes.ts`, with four fixtures under `scripts/guards/fixtures/route-registration/`.
+Diagram: none.
+
+---
+
 ### P1.04k — HTTP server kit in `shared/http/` (split from P1.04, SE-6)
 Tags: —            Depends on: P1.03, P1.04l            Plan: as P1.04; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
 Where: `shared/http/{server.ts,routes.ts,health.ts,shutdown.ts,errors.ts,config.ts}` + tests
@@ -717,24 +736,8 @@ Diagram: none.
 
 ---
 
-### P1.04q — Route registration guard (split from P1.04k, SE-6)
-Tags: —            Depends on: P1.04k            Plan: as P1.04; §9 (rule SE-6, check paths)
-Where: `scripts/guards/` (the guard and its test); the fixture standing in for `apps/web/src/x.ts` (it calls
-  `app.post(`) lives under `scripts/guards/fixtures/`, never under `apps/`, because this is a check-path PR
-Size: ~40 source lines, ~40 test lines
-
-Why a separate step (relayed 2026-10-05 02:43Z): `route_registration_guard` forbids `app.get(` and `app.post(` outside
-`shared/http/server.ts` and `shared/http/routes.ts`. It lives in `scripts/guards/`, a check path, and P1.04k is a
-trusted-base product PR, so the guard gets its own `q` step. It lands before P1.04 adds the first entrypoint; until then
-nothing outside the kit calls Hono.
-
-Done when (tests): route_registration_guard: the fixture fails the guard, and the real tree passes.
-Diagram: none.
-
----
-
 ### P1.04 — HTTP server skeleton per entrypoint
-Tags: —            Depends on: P1.04q            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
+Tags: —            Depends on: P1.04k, P1.04q            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
 Where: each `interfaces/<x>/main.ts`, `interfaces/<x>/compose.ts` and `interfaces/<x>/config.ts` (spreading P1.04k's
   `httpKitConfig`), together the composition root of its process (R1-14, rule TE-1; `interfaces/http` for `web`, then `api`, `media`, `admin` start an HTTP server;
   `indexer` and `review` start a health-only server); `interfaces/<x>/routes.manifest.json`; their tests

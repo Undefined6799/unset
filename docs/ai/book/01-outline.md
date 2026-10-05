@@ -107,9 +107,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
 | P1.04l | Name the HTTP server kit's log events (split from P1.04k, SE-6) | — | P1.03 | `phase-1.md` |
+| P1.04q | Route registration guard (split from P1.04k, SE-6) | — | P0.09c | `phase-1.md` |
 | P1.04k | HTTP server kit in `shared/http/` (split from P1.04, SE-6) | — | P1.03, P1.04l | `phase-1.md` |
-| P1.04q | Route registration guard (split from P1.04k, SE-6) | — | P1.04k | `phase-1.md` |
-| P1.04 | HTTP server skeleton per entrypoint | — | P1.04q | `phase-1.md` |
+| P1.04 | HTTP server skeleton per entrypoint | — | P1.04k, P1.04q | `phase-1.md` |
 | P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04 | `phase-1.md` |
 | P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05 | `phase-1.md` |
 | P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.04 | `phase-1.md` |
@@ -292,7 +292,7 @@ flowchart TD
   P1_03 --> P1_04k
   P1_03 --> P1_04l
   P1_04l --> P1_04k
-  P1_04k --> P1_04q
+  P1_04k --> P1_04
   P1_04q --> P1_04
   P1_08 --> P1_08i
   P1_12 --> P1_12p
