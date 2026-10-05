@@ -1,1 +1,1 @@
-["check", "audit", "secrets", "actionlint", "semgrep"]
+["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape"]

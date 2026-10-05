@@ -739,9 +739,11 @@ Not in this step: the deploy procedure (P5.03); PDS settings (P5.02a); backup in
 Diagram: "Deployment and network" and the tables above.
 
 ### P5.04 — Backups: age-encrypted, off-box, with freshness alerts
-Tags: [SEC]            Depends on: P5.02            Plan: §2 rules 22 and 25, §6 (backups N days, legal holds, transmission buffer), §8 Phase 5, §5.7, admin design §7.3, §8.1, §11.4; decision 21
+Tags: [SEC]            Depends on: P5.04q, P5.02            Plan: §2 rules 22 and 25, §6 (backups N days, legal holds, transmission buffer), §8 Phase 5, §5.7, admin design §7.3, §8.1, §11.4; decision 21
 Where: `deployment/backup/` (a TypeScript job in the `backup` image that calls `pg_dump`, `sqlite3`, `age` and `rclone` with argument arrays, never through a shell); `.github/workflows/backup-freshness.yml`
 Size: ~400 source lines, ~400 test lines
+Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.github/workflows/backup-freshness.yml` lands first as
+**P5.04q**; this step brings `deployment/backup/**`.
 
 Goal: copy every class of irreplaceable data off the host each night, encrypted to a key the host does not hold, into
 buckets the host cannot shorten or purge, never copying the C-16 transmission buffer, and alert within hours on any

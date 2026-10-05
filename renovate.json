@@ -16,6 +16,9 @@
   "dependencyDashboard": true,
   "labels": ["deps"],
   "branchPrefix": "renovate/",
+  "semanticCommits": "disabled",
+  "commitMessagePrefix": "P0.08",
+  "commitMessageAction": "Update",
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 6am on monday"]

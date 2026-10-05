@@ -37,7 +37,8 @@ Depth: **build-ready**. 18 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09 | Repository docs: slim CLAUDE.md/AGENTS.md, SECURITY.md, licence line, ADR index, the book | — | P0.03 | `phase-0.md` |
 | P0.09a | ~~Carried-over notes from the prototype~~ **Retired** (plan §8 Phase 0: no old note carried wholesale; `.00` steps port what they need) | — | P0.09 | `phase-0.md` |
 | P0.09b | Severity definitions, labels, bug template and triage form | [ALEX] | P0.03, P0.07 | `phase-0.md` |
-| P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b | `phase-0.md` |
+| P0.09e | Classify grant changes for the trusted base (split from P0.09c) | [SEC] | P0.03 | `phase-0.md` |
+| P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b, P0.09e | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11 | Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list | [ALEX] | Alex part: —; agent PR: P0.04, P0.07 | `phase-0.md` |
@@ -113,7 +114,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.09 | Return-path validator, fuzz-tested | [SEC] | P1.01 | `phase-1.md` |
 | P1.10 | Island props serialiser, fuzz-tested | [SEC] | P1.01 | `phase-1.md` |
 | P1.11g | Postgres bootstrap script: `migrator`, `tap`, the `PUBLIC` revokes (split from P1.11, SE-6) | [SEC] | P1.02 | `phase-1.md` |
-| P1.11 | Postgres and the migration runner as the `migrator` role | — | P1.11g, P1.02 | `phase-1.md` |
+| P1.11q | Transactions Semgrep rule, CI Postgres service, required check (check part of P1.11; SE-6 `q`) | — | P1.11g, P1.02 | `phase-1.md` |
+| P1.11 | Postgres and the migration runner as the `migrator` role | — | P1.11q, P1.11g, P1.02 | `phase-1.md` |
 | P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11 | `phase-1.md` |
 | P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12 | `phase-1.md` |
 | P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12 | `phase-1.md` |
@@ -131,7 +133,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.23 | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
-| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.04, P0.07 | `phase-1.md` |
+| P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
+| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11, P1.27, P1.28 | `phase-1.md` |
 | P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
@@ -321,7 +324,8 @@ Arachnid application, and the Phase 1 exit.
 | P1.14a | `sealTo`: encrypt-only sealing to an offline-held public key (age X25519) | [SEC] | P1.02, P1.14 | `phase-1.md` |
 | P1.15a | Audit retention: segments, retention-checked redaction, erasure by lane | [SEC] | P1.15 | `phase-1.md` |
 | P1.18b | `net-guard` forward-proxy mode and the egress proxy for processes that are not ours | [SEC] | P1.18a | `phase-1.md` |
-| P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
+| P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
+| P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.33, P1.33a, P0.12, P0.11, P1.29 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
@@ -710,7 +714,8 @@ Depth: **detail by risk; P5.00 refines** (contract parts in full, algorithms a r
 | P5.01 | Hosting and backup storage decision | [STOP] [ALEX] | P5.00 | `phase-5.md` |
 | P5.02g | `backup` role grants (SE-6) | [SEC] | P5.00, P1.12 | `phase-5.md` |
 | P5.02 | Production compose with profiles, per-container egress and own-host flows | [SEC] | P5.02g, P5.01 | `phase-5.md` |
-| P5.04 | Backups: age-encrypted, off-box, with freshness alerts | [SEC] | P5.02 | `phase-5.md` |
+| P5.04q | Backup-freshness workflow (check part of P5.04; SE-6 `q`) | [SEC] | P5.02 | `phase-5.md` |
+| P5.04 | Backups: age-encrypted, off-box, with freshness alerts | [SEC] | P5.04q, P5.02 | `phase-5.md` |
 | P5.05 | Restore drill on a fresh host, scripted and timed | [ALEX] | P5.04 | `phase-5.md` |
 | P5.06 | Secret inventory and rotation runbook | [SEC] [ALEX] | P5.02 | `phase-5.md` |
 | P5.07 | Ozone spike, then deployment | [SPIKE] [MOD] [SEC] | P5.02, P4.23 | `phase-5.md` |

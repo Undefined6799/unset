@@ -420,19 +420,21 @@ describe("what reads or watches existing data (ruling 2026-10-05)", () => {
 });
 
 describe("callers", () => {
-  /** The tracked TypeScript files that import grant-parse.ts. */
+  /** The tracked TypeScript files that import grant-parse.ts for its values. */
   const importers = (): string[] => {
     const root = join(import.meta.dirname, "..", "..");
     const files = execFileSync("git", ["ls-files", "*.ts"], { cwd: root, encoding: "utf8" })
       .split("\n")
       .filter(Boolean);
-    return files.filter((file) => /from "[^"]*\/grant-parse\.ts"/.test(readFileSync(join(root, file), "utf8")));
+    // A type-only import runs nothing, so it is not a caller.
+    const caller = /^import (?!type )[^;]*?from "[^"]*\/grant-parse\.ts"/m;
+    return files.filter((file) => caller.test(readFileSync(join(root, file), "utf8")));
   };
 
   test("no_runtime_caller_yet", () => {
-    // P0.09e ships the classifier with no caller; P0.09c wires it into the pr-shape job and flips this test.
+    // P0.09e shipped the classifier with no caller; P0.09c flipped this to its one caller, the pr-shape job.
     const callers = importers().filter((file) => !file.endsWith(".test.ts"));
-    expect(callers).toEqual([]);
+    expect(callers).toEqual(["scripts/guards/change-shape.ts"]);
     expect(importers()).toContain("scripts/guards/grant-parse.test.ts");
   });
 });

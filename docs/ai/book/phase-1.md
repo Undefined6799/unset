@@ -1460,6 +1460,7 @@ Edge cases and failures:
   - Keys named `__proto__` → `JSON.parse` creates an own property, not a prototype change; round-trip holds; tested.
   - `-0` → serialises as `0`; round-trip compares with `-0` normalised (documented).
   - A string containing `</script>` or `<!--` → every U+003C becomes backslash-`u003c` → cannot close the element.
+  - An object key needing a JSON escape or containing an HTML breaker → `props_invalid` (engine bug, see as-built).
   - Very deep nesting → depth limit → `props_invalid` (no stack overflow).
   - Two islands with the same id on one page → moved to P1.23 (`renderPropsTag` is stateless); P1.23's per-request
     counter makes ids unique (test `island_ids_unique_per_response`).
@@ -1506,6 +1507,15 @@ As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:49Z):
   - The duplicate-id edge case moved to P1.23, which satisfies it with the per-request counter (test
     `island_ids_unique_per_response`).
   - P1.23 calls `renderPropsTag`, `readProps` and `serializeProps` with the 15 360-byte bound, not its own 16 384.
+  - CI's fuzz test found a V8 `JSON.parse` bug, reproduced in Node 26.10 (V8 14.6) and headless Chrome 141: after
+    parsing `{"x":1,"\\\\":1}`, parsing `{"x":1,"\\n":1}` returns the key `"\\"`. `serializeProps` output was correct,
+    but an escaped key cannot round-trip in the browser (PR #32).
+  - `serializeProps` now refuses, with `islands.props_invalid`, any object key that JSON would escape (control
+    characters, `"`, `\`, U+2028, U+2029) or that holds one of the five HTML breakers from the escape table. Values
+    are unaffected and still escaped by the table.
+  - Tests: `refuses_escaped_keys` (one case per key class); `v8_key_cache_bug_pinned` reproduces the engine behaviour,
+    naming the Node and V8 versions it ran on (DO-3), so the refusal can be revisited when it starts failing on a fixed
+    engine.
 
 ---
 
@@ -1537,7 +1547,11 @@ Reuse: none. Not in this step: the runner and `0001_init.sql` (P1.11); every oth
 ---
 
 ### P1.11 — Postgres and the migration runner as the `migrator` role
-Tags: —            Depends on: P1.11g, P1.02            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
+Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.semgrep/rules/transactions.yml` and its fixtures, the
+Postgres service in `ci.yml` and `required-checks.json` land first as **P1.11q** (same tags, deps P1.11g, P1.02); this
+step brings `infrastructure/postgres/**` and the rest. The rule lands before `tx.ts` exists, which is harmless because
+nothing opens a transaction yet.
+Tags: —            Depends on: P1.11q, P1.11g, P1.02            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
 Where: `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`, `.semgrep/rules/transactions.yml` (+ its fixtures), `infrastructure/postgres/migrations/0001_init.sql`,
   (`deployment/postgres/init/00-bootstrap.sh` is **P1.11g**, trusted base, SE-6), `docs/human/db/migrations.md`, `.github/workflows/ci.yml` (Postgres service for the
   `check` job), `vitest` global setup `tests/integration/setup/pg.setup.ts` (the first `tests/` TypeScript, so this PR
@@ -3424,6 +3438,11 @@ and the spike's glue; P1.08 `buildCsp(group)` with its typed allowlist; P1.10 se
   the island name is the file stem; the registry is generated at build time.
 - `defineIsland<P>(component: (props: P) => Element, opts: { propsSchema: Validator<P>, maxPropsBytes?: int
   /* default 15360, P1.10's serializeProps bound; a larger value is refused */ })`.
+- Island props objects use plain keys only: `serializeProps` (P1.10) refuses any key that needs a JSON escape or holds
+  an HTML breaker, so `propsSchema` rejects such keys too. Data that needs arbitrary keys (user-chosen labels, maps
+  keyed by user text) travels as an array of `[key, value]` pairs or `{ key, value }` records, never as an object's own
+  keys. Test `island_props_user_keys_as_pairs`: an island whose props carry a user-text map renders and hydrates via
+  the pairs form, and the object form fails in dev with `IslandPropsInvalid`.
 - Server: `<Island name props>` renders `<div data-island="<name>" data-island-id="<id>">…SSR…</div>` followed by
   the props script that P1.10's `renderPropsTag(id, props)` writes, `<script type="application/json"
   id="<id>">…serialised…</script>`, and sets `request.needsBootstrap = true`. The id is the per-request counter
@@ -4039,7 +4058,15 @@ Any step fails → job fails; required check on main.
 
 ### P1.27 — Container images, mirrored upstreams, SBOM, provenance and signatures
 
-**Tags:** [SEC] · **Depends on:** P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
+Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.github/workflows/{images.yml,mirror.yml}`
+and `required-checks.json` land first as **P1.27q**; this step brings `deployment/images/node-app.Dockerfile`,
+`.dockerignore`, `scripts/verify-images.ts` and the ADR. P1.27q also adds the `images` entry to `required-checks.json`
+(ruling 2026-10-05 01:25Z; no follow-up step). While the Dockerfile does not exist, the `images` job prints
+`::notice title=images::skipped, no Dockerfile yet (lands in P1.27)` and exits 0; the static test
+`images_skip_only_without_dockerfile` pins the skip condition to exactly "the Dockerfile path is absent", so P1.27's
+PR is built and verified by the same job. P1.27 itself then touches only product paths, tooling and docs.
+
+**Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
 `deployment/images.lock.json`; `deployment/mirror.list.json`; `deployment/cosign.pub`; `.trivyignore.yaml`; `.hadolint.yaml`;
@@ -5203,7 +5230,10 @@ flowchart LR
 
 ### P1.33 — Server baseline (Alex)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.32 (Q2) (P1.28 only because step 11's probe runs through the edge) · **Plan:** §5.7 (host, Tailscale, admin access), §6 (access); review 04-infra; decision 20
+Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.github/workflows/outside-probe.yml` lands
+first as **P1.33q**; this step brings `deployment/host/**`, the temporary tool and the runbook.
+
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33q, P1.32 (Q2) (P1.28 only because step 11's probe runs through the edge) · **Plan:** §5.7 (host, Tailscale, admin access), §6 (access); review 04-infra; decision 20
 
 **Host:** under decision 20 there is no production host in Phase 1. This step baselines **the homelab host that
 runs the dev PDS** (on the login path until P5.02a, P1.34) **and its router**, because on a homelab the router is
