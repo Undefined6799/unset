@@ -1,44 +1,18 @@
 {
   "files": [],
   "references": [
-    {
-      "path": "scripts"
-    },
-    {
-      "path": "infrastructure/net-guard"
-    },
-    {
-      "path": "interfaces/admin"
-    },
-    {
-      "path": "interfaces/api"
-    },
-    {
-      "path": "interfaces/http"
-    },
-    {
-      "path": "interfaces/indexer"
-    },
-    {
-      "path": "interfaces/media"
-    },
-    {
-      "path": "interfaces/review"
-    },
-    {
-      "path": "shared/config"
-    },
-    {
-      "path": "shared/errors"
-    },
-    {
-      "path": "shared/http"
-    },
-    {
-      "path": "shared/log"
-    },
-    {
-      "path": "shared/ui"
-    }
+    { "path": "scripts" },
+    { "path": "infrastructure/net-guard" },
+    { "path": "interfaces/admin" },
+    { "path": "interfaces/api" },
+    { "path": "interfaces/http" },
+    { "path": "interfaces/indexer" },
+    { "path": "interfaces/media" },
+    { "path": "interfaces/review" },
+    { "path": "shared/config" },
+    { "path": "shared/errors" },
+    { "path": "shared/http" },
+    { "path": "shared/log" },
+    { "path": "shared/ui" }
   ]
 }
