@@ -39,10 +39,16 @@ rules:
               - pattern-inside: |
                   const $F = async (...) => $BODY;
                   ...
+              - pattern-inside: |
+                  const $F = async (...) => { ... };
+                  ...
           - pattern: $F(...);
           - pattern-not: await $F(...);
           - pattern-not: void $F(...);
           - pattern-not: return $F(...);
+          # A call that initialises a binding is kept, not floating.
+          - pattern-not-inside: const $V = $F(...);
+          - pattern-not-inside: let $V = $F(...);
       - patterns:
           - pattern: $P.then($A);
           - pattern-not: await $P.then($A);
