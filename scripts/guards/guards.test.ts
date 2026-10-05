@@ -9,6 +9,7 @@ import * as egress from "./egress.ts";
 import type { Finding } from "./files.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
@@ -19,6 +20,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "inner-html": innerHtml.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
+  "route-registration": routeRegistration.scanAll,
 };
 
 const temps: string[] = [];
@@ -131,5 +133,15 @@ describe("ip-columns", () => {
   test("ip_columns_allow_starts_empty", () => {
     const text = readFileSync(join(import.meta.dirname, "ip-columns.allow.json"), "utf8");
     expect(JSON.parse(text)).toEqual([]);
+  });
+});
+
+describe("route-registration", () => {
+  test("route_registration_guard", () => expectFixtures("route-registration", "bad", ["app-post.fixture"]));
+  test("route_registration_own_hono", () => expectFixtures("route-registration", "bad", ["own-hono.fixture"]));
+  test("route_registration_good_fixture", () => expectFixtures("route-registration", "good"));
+
+  test("route_registration_exemptions_exact", () => {
+    expect(routeRegistration.KIT_FILES).toEqual(["shared/http/server.ts", "shared/http/routes.ts"]);
   });
 });

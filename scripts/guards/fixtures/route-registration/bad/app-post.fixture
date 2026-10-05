@@ -1,0 +1,2 @@
+// fixture: apps/web/src/x.ts findings=1
+app.post("/profile", (c) => c.text("saved"));
