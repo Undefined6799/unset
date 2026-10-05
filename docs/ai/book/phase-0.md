@@ -1507,11 +1507,20 @@ Diagram: none.
 As built (2026-10-05):
   - YAML parser: `yaml` 2.9.1 (eemeli/yaml, ISC, no dependencies), an exact devDependency. It is the parser P0.09d's
     Reuse line names, and it is there for Phase 1's YAML parse tests (P1.29 and the workflow checks).
-  - The triage parser is `scripts/docs/triage.ts` (`parseTriage`). It reads the fields in their fixed order and stops
-    at the first order error. A downgrade needs `Mitigation test` and `Confirmed-by` at any severity, and a
-    `Confirmed-by` date must be a real day. Extra tests: `sev_3_needs_no_confirmation`, `sev_1_and_sev_2_need_alex`,
-    `downgrade_needs_test_and_alex`, `fixed_order_and_known_fields_only`, `confirmation_date_is_a_real_day`,
-    `surrounding_blank_lines_and_crlf_are_accepted`.
+  - The triage parser is `scripts/docs/triage.ts`: `readDefinitions(severity.md)` and `parseTriage(comment,
+    definitions)`. It reads the fields in their fixed order and stops at the first order error. Review findings added
+    three rules:
+    - `Matches` must be a definition line of the claimed severity (the rule of doubt);
+    - a downgrade carries a new field, `Downgraded-from`, exactly one level above `Triage`, so "one level, never from
+      1 to 3" can be checked;
+    - a downgrade needs `Mitigation test` and `Confirmed-by` at any severity.
+
+    The `upstream` label is L.02's to check. Extra tests: `definitions_read_from_severity_doc`,
+    `sev_3_needs_no_confirmation`, `sev_1_and_sev_2_need_alex`, `matches_a_definition_of_its_severity`,
+    `downgrade_drops_one_level_with_test_and_alex`, `downgrade_needs_every_field`, `fixed_order_and_known_fields_only`,
+    `confirmation_date_is_a_real_day`, `blank_lines_and_any_line_ending_are_accepted`.
+  - GitHub enforces an issue form's `required` only on public repositories ("Syntax for GitHub's form schema"). While
+    the repository is private, triage asks for any empty field, as severity.md says.
   - `labels.json` entries also carry a `color`, so re-creating a label is reproducible. The labels were created through
     the REST labels API (the same effect as `gh label create --force`). The repository's other labels (GitHub's
     defaults, plus `accessibility`, `dependencies`, `github_actions` and `javascript` from Renovate and Dependabot)

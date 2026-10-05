@@ -53,11 +53,15 @@ Without all three it counts at its full severity.
 
 ## Triage comment
 
-Triage is one issue comment in this fixed form, one field per line, in this order. The launch gate parses it.
+Triage is one issue comment in this fixed form, one field per line, in this order. The launch gate parses it with
+`scripts/docs/triage.ts`.
 
 - `Triage: sev-1`, `sev-2` or `sev-3`.
-- `Matches:` the definition line above that the bug matches.
+- `Matches:` one definition line from this file, copied. It must be a line of the severity in `Triage`, or for a
+  downgrade, of the severity in `Downgraded-from`. Case, spacing and the list's closing `;` or `.` do not matter.
 - `Decision: fix`, `accept-for-launch` or `upstream-mitigated` (the downgrade).
+- `Downgraded-from: sev-1` or `sev-2`. Only for a downgrade, and required for one. It is exactly one level above
+  `Triage`.
 - `Mitigation test:` the id of the test covering the mitigation. Only for a downgrade, and required for one.
 - `Confirmed-by: Alex YYYY-MM-DD`. Required for `sev-1`, for `sev-2` and for every downgrade.
 
@@ -70,7 +74,10 @@ Decision: fix
 Confirmed-by: Alex 2026-10-05
 ```
 
-Then add the `triaged` label and the severity label.
+Then add the `triaged` label and the severity label. A downgrade also carries the `upstream` label.
+
+The bug form marks every field as required, but GitHub enforces that only on public repositories. While this
+repository is private, triage asks the reporter for any field left empty.
 
 ## Changing a definition
 
