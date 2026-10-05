@@ -207,8 +207,8 @@ describe("guardedRequest", () => {
     await guard.request(atproto, { url: "https://bsky.social/xrpc/secret.path?did=did:plc:abc" });
     await codeOf(guard.request(atproto, { url: "https://unknown.example/other" }));
     expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({ policy: "atproto", status: 200 });
-    expect(events[1]).toMatchObject({ policy: "atproto", status: null, code: "egress.dns_failed" });
+    expect(events[0]).toMatchObject({ event: "egress.request", dep: "atproto", status: 200 });
+    expect(events[1]).toMatchObject({ dep: "atproto", status: null, code: "egress.dns_failed" });
     const text = JSON.stringify(events);
     for (const piece of ["bsky.social", "unknown.example", "xrpc", "secret", "did:plc", "93.184", "other"]) {
       expect(text).not.toContain(piece);
@@ -221,9 +221,10 @@ describe("guardedRequest", () => {
     await guard.request(atproto, { url: "https://bsky.social/x" });
     await codeOf(guard.request(atproto, { url: "https://10.0.0.1/x" }));
     for (const event of events) {
-      expect(Object.keys(event).sort()).toEqual(expect.arrayContaining(["bytes", "ms", "policy", "status"]));
+      expect(Object.keys(event).sort()).toEqual(expect.arrayContaining(["counts", "dep", "event", "ms", "status"]));
+      expect(Object.keys(event.counts)).toEqual(["bytes"]);
       for (const [key, value] of Object.entries(event)) {
-        expect(["policy", "status", "ms", "bytes", "code"], key).toContain(key);
+        expect(["event", "dep", "status", "ms", "counts", "code"], key).toContain(key);
         if (typeof value === "string") expect(value).toMatch(/^(atproto|egress\.[a-z_]+)$/);
       }
     }

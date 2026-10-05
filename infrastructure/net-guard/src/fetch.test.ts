@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { TLSSocket } from "node:tls";
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { guardedFetch } from "./libraryFetch.ts";
+import { guardedFetch, libraryFetch } from "./libraryFetch.ts";
 import { atproto, plc } from "./policies.ts";
 import {
   type FakeServer,
@@ -12,7 +13,7 @@ import {
   loopbackDial,
   testCertificate,
 } from "./remote.fake.ts";
-import { createNetGuardWith } from "./request.ts";
+import { createNetGuardWith, type EgressEvent } from "./request.ts";
 import { NetGuardError } from "./resolve.ts";
 
 const tls = testCertificate();
@@ -26,11 +27,12 @@ afterAll(() => server.close());
 
 function fetchFor(defaults: { maxBytes?: number; timeoutMs?: number } = {}, policy = plc) {
   const resolver = fakeResolver({ "plc.directory": [PUBLIC], "bsky.social": [PUBLIC] });
+  const events: EgressEvent[] = [];
   const guard = createNetGuardWith(
-    { internalHosts: [], allowLoopback: false, commit: "c".repeat(40), ca: tls.cert },
+    { internalHosts: [], allowLoopback: false, commit: "c".repeat(40), ca: tls.cert, onRequest: (e) => events.push(e) },
     { lookup: resolver.lookup, ...loopbackDial(server.port).hooks },
   );
-  return { fetch: guardedFetch(guard, policy, defaults), resolver };
+  return { fetch: guardedFetch(guard, policy, defaults), resolver, guard, events };
 }
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
@@ -132,5 +134,55 @@ describe("guardedFetch", () => {
     for (const provider of ["anthropic", "openai", "claude", "gemini", "mistral"]) {
       expect(source, provider).not.toContain(provider);
     }
+  });
+
+  test("caller_host_header_refused", async () => {
+    let sni: string | false | null = false;
+    handler = (req, res) => {
+      sni = (req.socket as TLSSocket).servername;
+      res.end(req.headers.host);
+    };
+    const { fetch } = fetchFor();
+    await expect(fetch("https://plc.directory/", { headers: { host: "unset.ac" } })).rejects.toThrow(TypeError);
+    expect(await (await fetch("https://plc.directory/")).text()).toBe("plc.directory");
+    expect(sni).toBe("plc.directory");
+  });
+
+  test("only_get_and_post", async () => {
+    const { fetch, events } = fetchFor();
+    await expect(fetch("https://plc.directory/", { method: "PUT" })).rejects.toThrow(TypeError);
+    expect(events.at(-1)).toMatchObject({ code: "egress.invalid" });
+  });
+
+  test("odd_status_is_failure_event", async () => {
+    handler = (_req, res) => {
+      res.writeHead(600);
+      res.end("x");
+    };
+    const { fetch, events } = fetchFor();
+    expect(await codeOf(fetch("https://plc.directory/"))).toBe("egress.connect");
+    expect(events.at(-1)).toMatchObject({ code: "egress.connect" });
+  });
+
+  test("null_body_status_and_length_header", async () => {
+    handler = (_req, res) => {
+      res.writeHead(304, { etag: "x" });
+      res.end();
+    };
+    const { fetch } = fetchFor();
+    const notModified = await fetch("https://plc.directory/");
+    expect([notModified.status, notModified.body]).toEqual([304, null]);
+    handler = (_req, res) => res.end("four");
+    const ok = await fetch("https://plc.directory/");
+    expect(ok.headers.get("content-length")).toBeNull();
+    expect(await ok.text()).toBe("four");
+  });
+
+  test("library_fetch_defaults", async () => {
+    handler = (_req, res) => res.end(Buffer.alloc((1 << 20) + 1));
+    const { guard, events } = fetchFor();
+    const fetch = libraryFetch(guard);
+    expect(await codeOf(fetch("https://bsky.social/"))).toBe("egress.too_large");
+    expect(events.at(-1)).toMatchObject({ dep: "atproto" });
   });
 });

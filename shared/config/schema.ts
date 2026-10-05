@@ -4,11 +4,15 @@ import { Secret } from "./secret.ts";
 
 export type Kind = "str" | "int" | "bool" | "oneOf" | "url" | "origin" | "list" | "secret" | "secretFile";
 
-/** One configuration key. `parse` returns `undefined` for an invalid value; it never throws and never logs. */
+/**
+ * One configuration key. `parse` returns `undefined` for an invalid value; it never throws and never logs. `holds` is
+ * a rule across keys carried by the field itself, so a schema that merges the field cannot leave its rule out.
+ */
 export type Field<T> = {
   readonly kind: Kind;
   readonly parse: (raw: string) => T | undefined;
   readonly default?: T;
+  readonly holds?: (config: Readonly<Record<string, unknown>>) => boolean;
 };
 
 export type Fields = Record<string, Field<unknown>>;
@@ -23,6 +27,15 @@ export type Config<F extends Fields> = { readonly [K in keyof F]: F[K] extends F
 
 const withDefault = <T>(field: Omit<Field<T>, "default">, value: T | undefined): Field<T> =>
   value === undefined ? field : { ...field, default: value };
+
+/** `field` with a rule across keys that every schema merging it runs; the field's key is reported when it fails. */
+export const withRule = <T>(
+  field: Field<T>,
+  holds: (config: Readonly<Record<string, unknown>>) => boolean,
+): Field<T> => ({
+  ...field,
+  holds,
+});
 
 /** A string. `pattern` judges the whole value (it is wrapped in `^(?:…)$`); stateful or multiline flags are refused. */
 export function str(options: { pattern?: RegExp; default?: string } = {}): Field<string> {
@@ -124,7 +137,11 @@ export function defineConfig<F extends Fields>(fields: F, options: { rules?: rea
     if (!ENV_NAME.test(key)) throw new Error(`config key is not an environment name: ${key}`);
     if (SECRET_KINDS.has(field.kind) && "default" in field) throw new Error(`${key}: a secret has no default`);
   }
-  return { fields, rules: options.rules ?? [] };
+  const carried = Object.entries(fields).flatMap(([key, field]): Rule<F>[] => {
+    const { holds } = field;
+    return holds ? [{ key, holds: (config) => holds(config) }] : [];
+  });
+  return { fields, rules: [...carried, ...(options.rules ?? [])] };
 }
 
 /**

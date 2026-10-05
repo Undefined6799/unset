@@ -87,7 +87,7 @@ export function loopbackDial(port: number) {
       lookupFor: (addresses: readonly string[]) => {
         const pinned = pinnedLookup(addresses);
         return (host: string, options: unknown, callback: (e: Error | null, a?: unknown, f?: number) => void) =>
-          pinned(host, options, (error, address, family) => {
+          pinned(host, options, (error, address) => {
             if (error) return callback(error);
             const first = Array.isArray(address) ? address[0]?.address : address;
             dialled.push(String(first));

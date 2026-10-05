@@ -2,27 +2,9 @@
 // Built on the guarded request, so policy, pinning, the no-redirect rule and the decompression cap all apply; undici's
 // own fetch would follow redirects and decompress by itself.
 import { atproto, type Policy } from "./policies.ts";
-import type { GuardedRequest, GuardedResponse, NetGuard } from "./request.ts";
+import { type GuardedRequest, type GuardedResponse, type NetGuard, NULL_BODY_STATUSES } from "./request.ts";
 
 export type FetchDefaults = { timeoutMs?: number; maxBytes?: number; accept?: readonly string[] };
-
-import { NetGuardError } from "./resolve.ts";
-
-const MAX_REQUEST_BODY = 1024 * 1024;
-const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
-
-/** A request body read into memory, refused past 1 MiB (a ReadableStream body included). */
-async function bufferBody(request: Request): Promise<Uint8Array | undefined> {
-  if (request.body === null) return undefined;
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for await (const chunk of request.body) {
-    total += chunk.length;
-    if (total > MAX_REQUEST_BODY) throw new NetGuardError("egress.too_large");
-    chunks.push(chunk);
-  }
-  return new Uint8Array(Buffer.concat(chunks));
-}
 
 function toResponse(result: GuardedResponse): Response {
   const headers = new Headers();
@@ -35,22 +17,20 @@ function toResponse(result: GuardedResponse): Response {
   return new Response(body as ConstructorParameters<typeof Response>[0], { status: result.status, headers });
 }
 
-/** A WHATWG fetch through `guard`. The caller's `redirect` option is ignored: a redirect is always refused. */
+/**
+ * A WHATWG fetch through `guard`. The caller's `redirect` option is ignored: a redirect is always refused. The method,
+ * headers (a `host` header included) and the 1 MiB body cap are checked by the guard, so each refusal is reported.
+ */
 export function guardedFetch(guard: NetGuard, policy: Policy, defaults: FetchDefaults = {}): typeof fetch {
   return async (input, init) => {
     const req = new Request(input, init);
-    if (req.method !== "GET" && req.method !== "POST") throw new TypeError(`net-guard does not send ${req.method}`);
-    const headers: Record<string, string> = {};
-    req.headers.forEach((value, name) => {
-      headers[name] = value;
-    });
-    const body = await bufferBody(req);
+    const headers: Record<string, string> = Object.fromEntries(req.headers);
     const options: GuardedRequest = {
       url: req.url,
-      method: req.method,
+      method: req.method as "GET" | "POST", // checked by the guard
       headers,
       signal: req.signal,
-      ...(body ? { body } : {}),
+      ...(req.body ? { body: req.body } : {}),
       ...(defaults.timeoutMs ? { timeoutMs: defaults.timeoutMs } : {}),
       ...(defaults.maxBytes ? { maxBytes: defaults.maxBytes } : {}),
       ...(defaults.accept ? { accept: defaults.accept } : {}),

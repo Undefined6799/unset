@@ -18,3 +18,14 @@ export const plc: Policy = { name: "plc", kind: "fixed", hosts: ["plc.directory"
 
 /** User PDSes and authorization servers, did:web documents and `.well-known/atproto-did`; our own PDS included. */
 export const atproto: Policy = { name: "atproto", kind: "public" };
+
+/** True when `origin` is exactly the serialised origin of an http or https URL (no path, case or default port). */
+const isHttpOrigin = (origin: string): boolean =>
+  URL.canParse(origin) && ["http:", "https:"].includes(new URL(origin).protocol) && new URL(origin).origin === origin;
+
+/** An `internal` policy; throws (a programming error) for any origin that is not exactly an http(s) origin. */
+export function internalPolicy(name: string, origins: readonly string[]): Policy {
+  const bad = origins.filter((origin) => !isHttpOrigin(origin));
+  if (origins.length === 0 || bad.length > 0) throw new TypeError("internal policy origins must be http(s) origins");
+  return { name, kind: "internal", origins: [...origins] };
+}

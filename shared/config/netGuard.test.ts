@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { ConfigError, defineEntrypointConfig, loadConfig, netGuardFields, netGuardRules } from "./index.ts";
+import { ConfigError, defineEntrypointConfig, loadConfig, netGuardFields } from "./index.ts";
 
-const schema = defineEntrypointConfig(netGuardFields, { rules: netGuardRules() });
+// Merged with no rules, as an interface would: the cross-field rules travel with the fields.
+const schema = defineEntrypointConfig(netGuardFields);
 const base = { UNSET_SERVICE: "http", UNSET_COMMIT: "a".repeat(40), LISTEN_PORT: "8080" };
 const quiet = { onUnknownKeys: () => undefined };
 
