@@ -41,7 +41,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 ## 1. Design and code
 
 **DC-1. Make modules deep and size functions by what a reader must hold in mind. Split code where knowledge changes, never by the order steps run. Split a function only when the extracted piece has a name that lets the caller stop reading. Inline any layer that only forwards.**
-- Enforced by: review-only (no tool sees depth). Biome `noExcessiveCognitiveComplexity` at warn *(unverified)*. The 300-line file warning stays.
+- Enforced by: review-only (no tool sees depth). Biome `noExcessiveCognitiveComplexity` at warn *(unverified)*. The 300-line file warning stays. File and module line budgets (P0.05) are warnings that prompt a reviewer to look, never a target: tests and `*.fake.ts` do not count, and a module may grow past its budget when splitting it would make it harder to read, with the reason recorded in the budget file next to the raised number (Alex, 2026-10-05: simple, readable, easy to maintain beats staying under a number).
 - Source: APoSD 2nd ed. — ch. 4–7, ch. 9; Code Complete 2nd ed. — ch. 7 (§7.4); Refactoring 2nd ed. — ch. 3 (Middle Man, Shotgun Surgery); Pragmatic Programmer — Topics 9–10.
 - Status: PARTLY — AI §8–9, §12; ADG §2–3. README rule 3 reworded to match (D1, adopted).
 - Priority: P1

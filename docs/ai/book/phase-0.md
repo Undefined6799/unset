@@ -1091,6 +1091,7 @@ As ruled (architecture thread, 2026-10-05 00:00Z; carried by the Phase 0 thread)
   - This is accepted because the command installs nothing. No other job or script may pass the override.
   - Test `audit_override_only_in_audit_job` (`scripts/guards/workflow-pins.test.ts`): the string `@unset:registry=`
     appears in `ci.yml` exactly once, inside the `audit` job's `npm audit signatures` line.
+
 ---
 
 ### P0.08 — Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard
@@ -1191,14 +1192,18 @@ Not in this step: Tap pinned-commit tracking (custom manager, P3.02); base-image
 Diagram: none.
 
 
-As ruled (architecture thread, 2026-10-05 00:00Z, condition of the P0.07 audit override; carried by the Phase 0
-thread): `npm ci` follows each lockfile entry's `resolved` URL, so a tampered lockfile could fetch a third-party
-`@unset/*` package despite `.npmrc`. The ruling asked for a new guard `lockfile-unset-links` in P0.06; this step's
-`scripts/guards/dependencies.ts` already enforces it (an `@unset/*` entry that is not `"link": true` to a workspace
-folder fails, and so does any URL, `file:` or path outside the workspaces), so no second guard was written. The one
-gap, a link entry carrying `integrity`, now fails too. Test `lockfile_unset_links`: a registry URL, `"link": false`,
-`../outside`, an `integrity` field, `file:` and a link with no `resolved` each fail; `{ "resolved": "shared/core",
-"link": true }` passes.
+As built and ruled (Phase 0 thread, PR 25 and its follow-up; architecture thread, 2026-10-05 00:00Z, confirmed):
+  - `npm ci` follows each lockfile entry's `resolved` URL, so a tampered lockfile could fetch a third-party
+    `@unset/*` package despite `.npmrc`. This step's `scripts/guards/dependencies.ts` already required every
+    `node_modules/@unset/*` entry to be `"link": true` to a workspace folder; a registry URL, a `file:` path or a `../`
+    path fails. No separate guard is added to P0.06.
+  - Gaps closed: a link entry carrying `integrity` fails; a link must point each name at that workspace's own folder
+    (the folder whose `package.json` declares the name), so a trusted name can never point at another folder.
+  - `resolved` may hold only the relative path of a declared workspace (confirmed by the architecture thread).
+  - Test `lockfile_unset_links`: a registry URL, `"link": false`, `../outside`, an `integrity` field, `file:`, a link
+    with no `resolved`, and `@unset/core` linked to `@unset/other`'s folder each fail;
+    `{ "resolved": "shared/core", "link": true }` under `@unset/core` passes.
+
 ---
 
 ### P0.09 — Repository docs: slim CLAUDE.md/AGENTS.md, SECURITY.md, licence line, ADR index, the book
