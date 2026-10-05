@@ -11,6 +11,7 @@ export type NetGuardCode =
   | "egress.internal_name"
   | "egress.private_address"
   | "egress.dns_failed"
+  | "egress.dns_no_record"
   | "egress.dns_timeout"
   | "egress.connect"
   | "egress.tls"
