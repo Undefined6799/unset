@@ -15,13 +15,43 @@ const NOT_SOURCE: readonly RegExp[] = [
   /^shared\/lexicons\/.*\.json$/,
 ];
 
-/** Sums added + deleted lines of `git diff --numstat` rows; binary rows (`-`) count 0. */
+/**
+ * The `git diff` arguments for the count (P0.09h): `--find-renames` at git's default 50% similarity, so a moved file
+ * pairs with its old path and a heavy rewrite does not (git v2.43.0 `Documentation/diff-options.txt`, `-M`). The
+ * threshold is never lowered: a rewritten file must not pass as a cheap move.
+ */
+export const NUMSTAT_ARGS = ["-z", "--numstat", "--find-renames"] as const;
+
+/**
+ * `git diff -z --numstat` output as tab-separated lines: `added, deleted, path`, plus the old path for a rename. With
+ * `-z` a rename is `added TAB deleted TAB NUL old NUL new NUL` (git v2.43.0 `Documentation/diff-format.txt:165-179`).
+ * A path with a newline is refused, since the lines could not carry it.
+ */
+export function numstatLines(z: string): string {
+  const fields = z.split("\0");
+  const rows: string[] = [];
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i] ?? "";
+    if (field === "") continue;
+    const row = field.endsWith("\t") ? [`${field}${fields[i + 2] ?? ""}`, fields[i + 1] ?? ""] : [field];
+    if (field.endsWith("\t")) i += 2;
+    if (row.some((part) => part.includes("\n"))) throw new Error("a changed path contains a newline");
+    rows.push(row.join("\t"));
+  }
+  return rows.join("\n");
+}
+
+/**
+ * Sums added + deleted lines of the numstat lines; binary rows (`-`) count 0. A rename counts its changed lines like an
+ * edit in place, and a pure rename (nothing changed) counts 1. Whether a row counts at all goes by its new path.
+ */
 function countSource(numstat: string): number {
   let changed = 0;
   for (const row of numstat.split(/\r?\n/)) {
-    const [added, deleted, path] = row.split("\t");
+    const [added, deleted, path, from] = row.split("\t");
     if (path === undefined || NOT_SOURCE.some((pattern) => pattern.test(path))) continue;
-    changed += (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+    const lines = (Number.parseInt(added ?? "", 10) || 0) + (Number.parseInt(deleted ?? "", 10) || 0);
+    changed += from !== undefined && lines === 0 ? 1 : lines;
   }
   return changed;
 }
