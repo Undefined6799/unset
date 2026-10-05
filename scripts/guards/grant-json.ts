@@ -5,7 +5,7 @@
 import { colKey, key, lineAt, type QName } from "./grant-sql.ts";
 
 export type Verdict = { kind: "trusted" | "feature" | "neutral"; reason: string };
-/** The same shape as grant-parse.ts's Finding, declared here so the two files do not import each other. */
+/** The same shape as grant-parse.ts's GrantFinding, declared here so the two files do not import each other. */
 type Finding = Verdict & { path: string; line: number; statement: string };
 export type Matrix = { tables: Record<string, unknown>; [section: string]: unknown };
 export const UNCLASSIFIED: Verdict = { kind: "trusted", reason: "unclassified" };
