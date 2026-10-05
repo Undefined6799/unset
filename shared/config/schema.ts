@@ -28,7 +28,10 @@ export type Config<F extends Fields> = { readonly [K in keyof F]: F[K] extends F
 const withDefault = <T>(field: Omit<Field<T>, "default">, value: T | undefined): Field<T> =>
   value === undefined ? field : { ...field, default: value };
 
-/** `field` with a rule across keys that every schema merging it runs; the field's key is reported when it fails. */
+/**
+ * `field` with a rule across keys. Invariant: `defineConfig` runs the rule of every field it is given, so a schema
+ * can never take the field without its rule. The field's key is reported `invalid` when the rule fails.
+ */
 export const withRule = <T>(
   field: Field<T>,
   holds: (config: Readonly<Record<string, unknown>>) => boolean,
