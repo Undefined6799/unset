@@ -26,23 +26,12 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
   "composition-root": compositionRoot.scanAll,
-  "case-collision": (root) => caseCollision.scanAll(tracked(root)),
 };
 
 const temps: string[] = [];
 afterAll(() => {
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 });
-
-/** Makes `root` a git repository with every file staged, since the case guard reads `git ls-files`. */
-function tracked(root: string): string {
-  for (const args of [
-    ["init", "-q"],
-    ["add", "-A"],
-  ])
-    execFileSync("git", ["-C", root, ...args], { env: withoutGitEnv() });
-  return root;
-}
 
 function tempRepo(files: Record<string, string | Uint8Array>): string {
   const root = mkdtempSync(join(tmpdir(), "guards-"));
@@ -54,8 +43,8 @@ function tempRepo(files: Record<string, string | Uint8Array>): string {
   return root;
 }
 
-/** Copies the named fixtures into one temp repo, scans it, and returns expected and actual findings per path. */
-function runFixtures(rule: string, kind: "bad" | "good", names?: string[]) {
+/** Reads the named fixtures: their contents by target path, and the findings expected at each path. */
+function readFixtures(rule: string, kind: "bad" | "good", names?: string[]) {
   const dir = join(FIXTURES, rule, kind);
   const files: Record<string, string> = {};
   const expected: Record<string, number> = {};
@@ -70,9 +59,20 @@ function runFixtures(rule: string, kind: "bad" | "good", names?: string[]) {
     (names ?? readdirSync(dir)).length,
   );
   expect(Object.keys(expected).length).toBeGreaterThan(0);
-  const actual: Record<string, number> = Object.fromEntries(Object.keys(files).map((p) => [p, 0]));
-  for (const f of SCANNERS[rule]?.(tempRepo(files)) ?? []) actual[f.file] = (actual[f.file] ?? 0) + 1;
-  return { expected, actual };
+  return { files, expected };
+}
+
+/** Counts findings per path, starting every expected path at zero. */
+function countFindings(paths: string[], findings: Finding[]): Record<string, number> {
+  const actual: Record<string, number> = Object.fromEntries(paths.map((p) => [p, 0]));
+  for (const f of findings) actual[f.file] = (actual[f.file] ?? 0) + 1;
+  return actual;
+}
+
+/** Copies the named fixtures into one temp repo, scans it, and returns expected and actual findings per path. */
+function runFixtures(rule: string, kind: "bad" | "good", names?: string[]) {
+  const { files, expected } = readFixtures(rule, kind, names);
+  return { expected, actual: countFindings(Object.keys(files), SCANNERS[rule]?.(tempRepo(files)) ?? []) };
 }
 
 function expectFixtures(rule: string, kind: "bad" | "good", names?: string[]): void {
@@ -194,21 +194,64 @@ describe("composition-root", () => {
   });
 });
 
+/**
+ * A git repository whose index lists `paths` (each an empty blob) without writing them to disk: on a case-insensitive
+ * file system `Foo.ts` written after `foo.ts` would overwrite it, and the pair could never be staged.
+ */
+function indexedRepo(paths: string[]): string {
+  const root = tempRepo({});
+  const git = (args: string[], input?: string) =>
+    execFileSync("git", ["-C", root, ...args], { env: withoutGitEnv(), encoding: "utf8", input }).trim();
+  git(["init", "-q"]);
+  const blob = git(["hash-object", "-w", "--stdin"], "");
+  git(["update-index", "-z", "--index-info"], paths.map((p) => `100644 ${blob}\t${p}\0`).join(""));
+  return root;
+}
+
+function expectCaseFixtures(kind: "bad" | "good", names?: string[]): void {
+  const { files, expected } = readFixtures("case-collision", kind, names);
+  const paths = Object.keys(files);
+  expect(countFindings(paths, caseCollision.scanAll(indexedRepo(paths)))).toEqual(expected);
+}
+
+const flagged = (paths: string[]) => caseCollision.scanAll(indexedRepo(paths)).map((f) => f.file);
+
 describe("case-collision", () => {
-  test("case_pair_file_fails", () =>
-    expectFixtures("case-collision", "bad", ["file-lower.fixture", "file-upper.fixture"]));
-  test("case_pair_dir_fails", () =>
-    expectFixtures("case-collision", "bad", ["dir-lower.fixture", "dir-upper.fixture"]));
-  test("distinct_names_pass", () => expectFixtures("case-collision", "good"));
+  test("case_pair_file_fails", () => expectCaseFixtures("bad", ["file-lower.fixture", "file-upper.fixture"]));
+  test("distinct_names_pass", () => expectCaseFixtures("good"));
+  test("case_pair_dir_fails", () => expect(flagged(["a/x.ts", "A/x.ts"])).toEqual(["A", "a"]));
+  test("case_pair_dir_different_files_fails", () => expect(flagged(["a/x.ts", "A/y.ts"])).toEqual(["A", "a"]));
+  test("case_file_against_dir_fails", () => expect(flagged(["foo", "Foo/bar.ts"])).toEqual(["Foo", "foo"]));
+  test("case_pair_reported_once_at_top", () => expect(flagged(["a/b/x.ts", "A/B/X.ts"])).toEqual(["A", "a"]));
+
+  test("case_unicode_forms_fail", () => {
+    const files = (paths: string[]) => caseCollision.findCaseCollisions(paths).map((f) => f.file);
+    expect(files(["caf\u00e9.ts", "cafe\u0301.ts"])).toHaveLength(2); // NFC and NFD
+    expect(files(["\u03c3.ts", "\u03c2.ts"])).toHaveLength(2); // sigma and final sigma fold together
+  });
 
   test("case_pair_names_the_other_path", () => {
     expect(caseCollision.findCaseCollisions(["b.ts", "Foo.ts", "foo.ts"])).toEqual([
-      { file: "Foo.ts", line: 1, rule: "case-collision", text: "differs only in case from foo.ts" },
-      { file: "foo.ts", line: 1, rule: "case-collision", text: "differs only in case from Foo.ts" },
+      {
+        file: "Foo.ts",
+        line: 1,
+        rule: "case-collision",
+        text: "same name as foo.ts on a case-insensitive file system",
+      },
+      {
+        file: "foo.ts",
+        line: 1,
+        rule: "case-collision",
+        text: "same name as Foo.ts on a case-insensitive file system",
+      },
     ]);
   });
 
   test("case_guard_fails_closed_outside_git", () => {
-    expect(() => caseCollision.scanAll(tempRepo({ "a.ts": "" }))).toThrow();
+    expect(() => caseCollision.scanAll(tempRepo({ "a.ts": "" }))).toThrow(/not a git repository/);
+  });
+
+  test("case_guard_fails_closed_on_empty_index", () => {
+    expect(() => caseCollision.scanAll(indexedRepo([]))).toThrow(/listed no paths/);
   });
 });

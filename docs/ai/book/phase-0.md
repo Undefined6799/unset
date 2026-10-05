@@ -2115,16 +2115,25 @@ Where: one check PR. New `scripts/guards/case-collision.ts`, its fixtures under
 Why: on a case-insensitive file system (macOS, Windows) two tracked paths that differ only in letter case check out as
 one file, and one silently replaces the other. P1.05 nearly shipped `clientIp.ts` beside `ClientIp.ts`.
 
-Algorithm: take `git ls-files -z` (with `withoutGitEnv`, P0.09j), group the paths by their lowercased form, and report
-every path in a group of more than one, naming the others. No `guard-allow`: a pair is fixed by renaming. The guard reads
-names only, so the shared unreadable-file test skips it; it throws outside a git repository or when nothing is tracked,
-so it fails closed.
+Algorithm: take `git ls-files -z` (with `withoutGitEnv`, P0.09j) and add every folder above each path, so `a/x.ts`
+beside `A/y.ts` and a file `foo` beside a folder `Foo/` collide too. Group the entries by name after Unicode NFC and an
+upper-then-lower case fold (NFD `café` matches NFC `café`, `σ` matches `ς`, as APFS and NTFS treat them), and report
+every entry in a group of more than one, naming the others. A group whose parents differ is skipped, since its parents
+collide and that finding is the one to fix. No `guard-allow`: a pair is fixed by renaming. The guard reads names only,
+so the shared unreadable-file test skips it; it throws outside a git repository or when nothing is tracked, so it fails
+closed.
+
+Fixtures and test repositories are built in the git index with `update-index --index-info`, never on disk: on a
+case-insensitive file system `Foo.ts` written after `foo.ts` overwrites it, and the bad cases could not be staged
+(adversarial review).
 
 Done when (tests, `scripts/guards/guards.test.ts` and `repo.test.ts`):
   - `case_pair_file_fails`: `foo.ts` plus `Foo.ts` fails, one finding on each.
-  - `case_pair_dir_fails`: `a/x.ts` plus `A/x.ts` fails.
+  - `case_pair_dir_fails`: `a/x.ts` plus `A/x.ts` fails, reported once on `a` and `A`.
   - `distinct_names_pass`: `foo.ts`, `food.ts` and `a/foo.ts` pass.
-  - `case_pair_names_the_other_path` and `case_guard_fails_closed_outside_git`.
+  - `case_pair_dir_different_files_fails`, `case_file_against_dir_fails`, `case_pair_reported_once_at_top`,
+    `case_unicode_forms_fail`, `case_pair_names_the_other_path`.
+  - `case_guard_fails_closed_outside_git` and `case_guard_fails_closed_on_empty_index`.
   - `repo_clean > case-collision`: the real tree passes.
 
 ---
