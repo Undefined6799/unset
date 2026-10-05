@@ -17,6 +17,8 @@ const EVENTS = [
   "http.late_result",
   "http.listen_failed",
   "http.drain",
+  // P1.05, the trusted proxy: a header-mode request that did not come from the edge (logged without its address).
+  "proxy.untrusted_peer",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

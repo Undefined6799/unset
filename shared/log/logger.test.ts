@@ -108,6 +108,13 @@ describe("logger", () => {
     expect(records().map((r) => r.event)).toEqual([...events]);
   });
 
+  test("logger_trusted_proxy_event", () => {
+    // P1.05's trusted proxy logs this, without an address, when a request did not come from the edge.
+    const { log, records } = capture();
+    log.warn("proxy.untrusted_peer");
+    expect(records().map((r) => r.event)).toEqual(["proxy.untrusted_peer"]);
+  });
+
   test("logger_no_stack_message_in_prod", () => {
     const { log, lines } = capture("prod");
     log.logError(new Error("secret value"));
