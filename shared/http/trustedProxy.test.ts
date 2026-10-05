@@ -82,13 +82,26 @@ describe("header mode", () => {
     expect(resolver().key(headers)).toBe("9.9.9.9");
   });
 
-  test("trusted_peer_mapped_v4", () => {
+  test("mapped_trusted_proxy_trusted", () => {
+    const { key } = resolver();
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:10.0.0.5")).toBe("9.9.9.9");
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:a00:5")).toBe("9.9.9.9");
+  });
+
+  test("mapped_untrusted_not_trusted", () => {
     const { key, untrusted } = resolver();
-    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:10.0.0.2")).toBe("9.9.9.9");
-    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:a00:2")).toBe("9.9.9.9");
-    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:203.0.113.7")).toBeNull();
-    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:cb00:7107")).toBeNull();
+    expect(key({ "x-forwarded-for": "8.8.8.8" }, "::ffff:9.9.9.9")).toBeNull();
+    expect(key({ "x-forwarded-for": "8.8.8.8" }, "::ffff:909:909")).toBeNull();
     expect(untrusted()).toBe(2);
+  });
+
+  test("untrusted_private_peer_not_trusted", () => {
+    // Only the configured CIDRs are trusted: no private-range table, no "trust all private ranges" shortcut.
+    const { key, untrusted } = resolver({ TRUSTED_PROXY_CIDRS: ["192.168.1.0/24"] });
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "10.0.0.2")).toBeNull();
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "fd00::2")).toBeNull();
+    expect(untrusted()).toBe(2);
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "192.168.1.7")).toBe("9.9.9.9");
   });
 
   test("mapped_entries_match_like_v4", () => {
@@ -99,7 +112,8 @@ describe("header mode", () => {
   });
 
   test("mapped_forms_match_like_v4", () => {
-    // DO-3: Node 26.10's BlockList matches mapped forms against IPv4 rules itself; unmapV4 keeps that independent.
+    // DO-3: Node 26.10's BlockList matches mapped forms against IPv4 rules itself ("IPv6 notation for IPv4 addresses
+    // works", https://nodejs.org/docs/v26.10.0/api/net.html#blocklistcheckaddress-type); unmapV4 keeps that independent.
     const list = new BlockList();
     list.addSubnet("10.0.0.0", 8, "ipv4");
     expect(list.check("::ffff:10.0.0.2", "ipv6")).toBe(true);

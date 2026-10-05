@@ -38,7 +38,7 @@ describe("ClientIp", () => {
     },
   );
 
-  test("node_net_imports_are_parsers_only", () => {
+  test("node_net_imports_exact", () => {
     // Architecture ruling 2026-10-05: the kit takes only these names from node:net, all of which open no socket, so
     // a later createConnection or Socket fails here. Named imports only: no namespace, default or require.
     const allowed = new Set(["BlockList", "isIPv4", "isIPv6"]);

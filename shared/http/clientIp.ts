@@ -46,8 +46,9 @@ export class ClientIp {
 
 /**
  * An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`, or its hex form `::ffff:a00:2`) as `a.b.c.d`; anything else unchanged.
- * Node 26.10's BlockList also matches the mapped forms against IPv4 rules (test mapped_forms_match_like_v4); we unmap
- * first anyway, as net-guard does, so the rate key never depends on how a proxy wrote the address.
+ * Node 26.10's BlockList also matches mapped forms against IPv4 rules (nodejs.org/docs/v26.10.0/api/net.html,
+ * blockList.check; test mapped_forms_match_like_v4); we unmap first anyway, as net-guard does, so the rate key never
+ * depends on how a proxy wrote the address.
  */
 export function unmapV4(text: string): string {
   const dotted = MAPPED_V4.exec(text)?.[1];
