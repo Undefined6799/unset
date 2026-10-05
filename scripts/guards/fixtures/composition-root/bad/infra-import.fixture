@@ -1,0 +1,5 @@
+// fixture: interfaces/http/main.ts findings=3
+// No compose.ts beside it in this fixture, which is a finding on line 1 too.
+import { compose } from "./compose.ts";
+import { createPool } from "../../infrastructure/postgres/x.ts";
+import { guardedFetch } from "@unset/infrastructure-net-guard";

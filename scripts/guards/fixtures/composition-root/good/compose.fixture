@@ -1,0 +1,6 @@
+// fixture: interfaces/http/compose.ts findings=0
+import { guardedFetch } from "@unset/infrastructure-net-guard";
+import { createServer } from "@unset/shared-http";
+export async function compose(config) {
+  return { server: createServer({ config, routes: [], policies: {}, log }), fetch: guardedFetch };
+}

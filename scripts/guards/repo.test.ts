@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
+import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as egress from "./egress.ts";
 import { type Finding, report } from "./files.ts";
@@ -20,6 +21,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["web-no-moderator", webNoModerator.scanAll],
   ["ip-columns", ipColumns.scanAll],
   ["route-registration", routeRegistration.scanAll],
+  ["composition-root", compositionRoot.scanAll],
 ];
 
 describe("repo_clean", () => {
@@ -34,15 +36,17 @@ test("report_format", () => {
 });
 
 test("unreadable_file_is_finding", () => {
-  const root = mkdtempSync(join(tmpdir(), "guards-"));
-  afterAll(() => rmSync(root, { recursive: true, force: true }));
   const invalid = new Uint8Array([0x63, 0x6f, 0xff, 0xfe, 0x0a]);
-  for (const file of ["apps/web/src/bad.ts", "infrastructure/postgres/migrations/0001.sql"]) {
+  const scanned: Record<string, string> = {
+    "ip-columns": "infrastructure/postgres/migrations/0001.sql",
+    "composition-root": "interfaces/http/main.ts",
+  };
+  for (const [rule, scanAll] of RULES) {
+    const root = mkdtempSync(join(tmpdir(), "guards-"));
+    afterAll(() => rmSync(root, { recursive: true, force: true }));
+    const file = scanned[rule] ?? "apps/web/src/bad.ts";
     mkdirSync(dirname(join(root, file)), { recursive: true });
     writeFileSync(join(root, file), invalid);
-  }
-  for (const [rule, scanAll] of RULES) {
-    const file = rule === "ip-columns" ? "infrastructure/postgres/migrations/0001.sql" : "apps/web/src/bad.ts";
     expect(scanAll(root), rule).toEqual([{ file, line: 1, rule, text: "unreadable" }]);
   }
 });

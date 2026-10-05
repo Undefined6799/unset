@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as egress from "./egress.ts";
 import type { Finding } from "./files.ts";
@@ -21,6 +22,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "web-no-moderator": webNoModerator.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
+  "composition-root": compositionRoot.scanAll,
 };
 
 const temps: string[] = [];
@@ -143,5 +145,37 @@ describe("route-registration", () => {
 
   test("route_registration_exemptions_exact", () => {
     expect(routeRegistration.KIT_FILES).toEqual(["shared/http/server.ts", "shared/http/routes.ts"]);
+  });
+});
+
+describe("composition-root", () => {
+  test("composition_root_split", () => expectFixtures("composition-root", "bad", ["infra-import.fixture"]));
+  test("composition_root_compose_present", () => expectFixtures("composition-root", "bad", ["no-compose.fixture"]));
+  test("composition_root_good_fixture", () => expectFixtures("composition-root", "good"));
+  test("composition_root_empty_tree_passes", () => {
+    expect(compositionRoot.scanAll(tempRepo({ "shared/x/index.ts": "export {};" }))).toEqual([]);
+    expect(compositionRoot.scanAll(join(import.meta.dirname, "..", ".."))).toEqual([]);
+  });
+
+  test("composition_root_needs_one_compose_import", () => {
+    const compose = "export async function compose() {}";
+    const none = tempRepo({ "interfaces/api/main.ts": "start();", "interfaces/api/compose.ts": compose });
+    expect(compositionRoot.scanAll(none).map((f) => f.text)).toEqual(["no import of ./compose.ts"]);
+    const twice = 'import { compose } from "./compose.ts";\nconst again = await import("./compose.ts");';
+    const two = tempRepo({ "interfaces/api/main.ts": twice, "interfaces/api/compose.ts": compose });
+    expect(compositionRoot.scanAll(two)).toEqual([
+      {
+        file: "interfaces/api/main.ts",
+        line: 2,
+        rule: "composition-root",
+        text: 'const again = await import("./compose.ts");',
+      },
+    ]);
+  });
+
+  test("composition_root_only_entrypoint_main", () => {
+    const infra = 'import { x } from "../../../infrastructure/postgres/x.ts";';
+    expect(compositionRoot.scanAll(tempRepo({ "interfaces/http/routes/main.ts": infra }))).toEqual([]);
+    expect(compositionRoot.scanAll(tempRepo({ "interfaces/http/compose.ts": infra }))).toEqual([]);
   });
 });

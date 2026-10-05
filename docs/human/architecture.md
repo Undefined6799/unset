@@ -48,7 +48,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
 | ADG §1 | Product code never imports repository tooling (`scripts/`, `tests/`, configs) | checked: `no-product-imports-tooling` |
 | ADG §2 | Infrastructure implements domain contracts and never reaches an entry point | checked: `infrastructure-not-entry` |
-| AB-2 | Adapters are built only in the process's composition root (`main.ts`/`compose.ts`) | review-only: `MATRIX` lets an interface import infrastructure, and no tool tells construction from use; `domain-pure` keeps adapters out of domains |
+| AB-2 | Adapters are built only in the process's composition root (`main.ts`/`compose.ts`) | checked: `scripts/guards/composition-root.ts`, `composition_root_split` (each interface's main.ts has a compose.ts beside it, imports it, and imports nothing from infrastructure); `domain-pure` keeps adapters out of domains. Review-only: `MATRIX` lets an interface import infrastructure, and no tool tells construction from use |
 | AB-2 | A port exists only for I/O or non-determinism | review-only: no tool can tell why an interface exists |
 | ADG §1 | `shared/` leaf folders import nothing product-specific | checked: `shared-leaf` |
 | ADG §1 | `pds-admin` and `chat-admin` import only themselves, Node built-ins and the zero-dependency allowlist | checked: `admin-services-zero-deps`, `depcruise_allowlist_exact` |
