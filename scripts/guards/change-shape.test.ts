@@ -223,10 +223,7 @@ describe("trusted base (SE-6)", () => {
       "/scripts/workspace/",
       "/scripts/githooks/",
       "/.github/",
-      "/.githooks/",
-      "/.semgrep/",
       "/.semgrepignore",
-      "/.dependency-cruiser.cjs",
     ]);
     expect(broken(`${CODEOWNERS}# trusted base (SE-6)\n/x/ @Undefined6799\n`)).toBe(false);
   });

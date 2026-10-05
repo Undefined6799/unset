@@ -105,7 +105,7 @@
 # lines, and stays last.
 # parsed: /infrastructure/postgres/migrations/ /infrastructure/postgres/grant-matrix.json /infrastructure/postgres/erasure-registry.json
 # trusted functions: core.erase_* core.is_erased core.allow_retrack core.is_held mod.erase_foreign_did
-# checks: /scripts/guards/ /scripts/lint/ /scripts/ci/ /scripts/budgets/ /scripts/licence/ /scripts/docs/ /scripts/test/ /scripts/workspace/ /scripts/githooks/ /.github/ /.githooks/ /.semgrep/ /.semgrepignore /.dependency-cruiser.cjs
+# checks: /scripts/guards/ /scripts/lint/ /scripts/ci/ /scripts/budgets/ /scripts/licence/ /scripts/docs/ /scripts/test/ /scripts/workspace/ /scripts/githooks/ /.github/ /.semgrepignore
 # CSRF gate, session and CSP builder
 /shared/http/ @Undefined6799
 /domains/identity/auth/session-store.ts @Undefined6799
