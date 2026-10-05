@@ -16,6 +16,10 @@ const CONFIG: HttpKitConfig = {
   HTTP_ALLOWED_HOSTS: ["unset.test", ".0x40.me"],
   SHUTDOWN_GRACE_MS: 1000,
   REQUEST_DEADLINE_MS: 30000,
+  TRUSTED_PROXY_MODE: "header",
+  TRUSTED_PROXY_HEADER: "x-forwarded-for",
+  TRUSTED_PROXY_CIDRS: ["10.0.0.0/8"],
+  TRUSTED_PROXY_HOPS: 1,
 };
 
 const ok = () => new Response("ok");
@@ -33,10 +37,10 @@ function kit(options: Partial<ServerOptions> = {}) {
     ...options,
   });
   const records = () => lines.map((line) => JSON.parse(line) as Record<string, unknown>);
-  const request = (path: string, init: RequestInit & { host?: string } = {}) => {
+  const request = (path: string, init: RequestInit & { host?: string; peer?: string } = {}) => {
     const headers = new Headers(init.headers);
     if (init.host !== "") headers.set("host", init.host ?? "unset.test");
-    return server.request(new Request(`http://internal${path}`, { ...init, headers }));
+    return server.request(new Request(`http://internal${path}`, { ...init, headers }), init.peer);
   };
   return { server, request, lines, records };
 }
@@ -312,7 +316,7 @@ describe("startup checks", () => {
         group: "app",
         ...get,
         rateLimit: "page",
-        middleware: ["requestId", "hostCheck", "methodCheck"],
+        middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck"],
       },
       {
         method: "POST",
@@ -323,7 +327,7 @@ describe("startup checks", () => {
         rateLimit: "page",
         mutates: true,
         deadlineMs: undefined,
-        middleware: ["requestId", "hostCheck", "methodCheck", "contentTypeCheck"],
+        middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck", "contentTypeCheck"],
       },
     ]);
   });
@@ -347,7 +351,67 @@ describe("startup checks", () => {
       rateLimit: "page",
       mutates: true,
       deadlineMs: 60_000,
-      middleware: ["requestId", "hostCheck", "methodCheck", "contentTypeCheck"],
+      middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck", "contentTypeCheck"],
     });
+  });
+
+  test("trusted_proxy_on_every_route_but_health", () => {
+    // Fail closed by allowlist (architecture ruling 2026-10-05): only GET /health may skip trustedProxy.
+    const routes = [
+      page({ method: "GET", path: "/" }),
+      page({ method: "POST", path: "/form" }),
+      page({ method: "GET", path: "/@:handle", group: "profile" }),
+      defineRoute({ method: "GET", path: "/assets/*", group: "static", rateLimit: "exempt", handler: ok }),
+    ];
+    const { server } = kit({ routes });
+    const skipping = server.routeTable().filter((r) => !r.middleware.includes("trustedProxy"));
+    expect(skipping.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /health"]);
+  });
+});
+
+describe("trusted proxy", () => {
+  const seen = () => {
+    const keys: (string | null)[] = [];
+    const route = page({
+      method: "GET",
+      path: "/who",
+      handler: ({ clientIp }) => {
+        keys.push(clientIp?.rateKey() ?? null);
+        return new Response("ok");
+      },
+    });
+    return { keys, ...kit({ routes: [route] }) };
+  };
+
+  test("handler_gets_client_ip", async () => {
+    const { keys, request } = seen();
+    await request("/who", { peer: "10.0.0.2", headers: { "x-forwarded-for": "1.1.1.1, 9.9.9.9" } });
+    await request("/who", { peer: "203.0.113.7", headers: { "x-forwarded-for": "9.9.9.9" } });
+    await request("/who", { headers: { "x-forwarded-for": "9.9.9.9" } });
+    expect(keys).toEqual(["9.9.9.9", null, null]);
+  });
+
+  test("untrusted_peer_logged_once_per_minute", async () => {
+    let clock = 0;
+    const { request, records } = kit({ routes: [page({ method: "GET", path: "/who" })], now: () => clock });
+    const untrusted = () => request("/who", { peer: "203.0.113.7", headers: { "x-forwarded-for": "9.9.9.9" } });
+    await untrusted();
+    await untrusted();
+    clock = 60_000;
+    await untrusted();
+    const lines = records().filter((r) => r.event === "proxy.untrusted_peer");
+    expect(lines).toHaveLength(2);
+    expect(JSON.stringify(records())).not.toContain("203.0.113.7");
+    expect(JSON.stringify(records())).not.toContain("9.9.9.9");
+  });
+
+  test("health_reads_no_request_input", async () => {
+    // /health answers status, service and commit only, whatever the request carries; it reads no client identity.
+    const { request } = kit();
+    const forged = { "x-forwarded-for": "9.9.9.9", cookie: "s=1", authorization: "Bearer x" };
+    const plain = await request("/health");
+    const loud = await request("/health?who=1", { peer: "203.0.113.7", host: "evil.example", headers: forged });
+    expect(await loud.json()).toEqual(await plain.json());
+    expect(await (await request("/health")).json()).toEqual({ status: "ok", service: "http", commit: COMMIT });
   });
 });
