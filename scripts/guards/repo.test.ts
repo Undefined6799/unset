@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
+import * as caseCollision from "./case-collision.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as egress from "./egress.ts";
@@ -22,6 +23,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["ip-columns", ipColumns.scanAll],
   ["route-registration", routeRegistration.scanAll],
   ["composition-root", compositionRoot.scanAll],
+  ["case-collision", caseCollision.scanAll],
 ];
 
 describe("repo_clean", () => {
@@ -41,7 +43,8 @@ test("unreadable_file_is_finding", () => {
     "ip-columns": "infrastructure/postgres/migrations/0001.sql",
     "composition-root": "interfaces/http/main.ts",
   };
-  for (const [rule, scanAll] of RULES) {
+  // case-collision reads only names from git, never file contents.
+  for (const [rule, scanAll] of RULES.filter(([rule]) => rule !== "case-collision")) {
     const root = mkdtempSync(join(tmpdir(), "guards-"));
     afterAll(() => rmSync(root, { recursive: true, force: true }));
     const file = scanned[rule] ?? "apps/web/src/bad.ts";

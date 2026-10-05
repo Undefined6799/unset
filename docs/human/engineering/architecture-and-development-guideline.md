@@ -98,6 +98,9 @@ Folder responsibilities
 * deployment/ holds what puts the system on machines, backup scripts included. No Redis, queue or
   other service is added without a concrete need; Postgres and in-memory limits are the default.
 * scripts/ holds repository tooling (CI guards, budgets, dev seed). Product code never imports it.
+* No two tracked paths may differ only in letter case, so the repository checks out the same on
+  case-insensitive file systems (macOS, Windows). A guard in scripts/guards/ fails on any such pair
+  (ruling 2026-10-05, after the P1.05 clientIp.ts / ClientIp.ts collision).
 * tests/ hold integration and end-to-end tests. Unit tests sit next to the code they test.
 * docs/human/ holds what a person must read or follow and is kept current; docs/ai/ is working material.
 

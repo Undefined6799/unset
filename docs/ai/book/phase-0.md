@@ -2103,6 +2103,32 @@ Done when (tests, `scripts/guards/git-env.test.ts`):
 
 ---
 
+### P0.09k — Case-collision guard (architecture ruling, 2026-10-05 13:28Z)
+Tags: —            Depends on: P0.09j            Plan: guideline 34, "Folder responsibilities"
+Where: one check PR. New `scripts/guards/case-collision.ts`, its fixtures under
+  `scripts/guards/fixtures/case-collision/`, registered in `guards.test.ts` and `repo.test.ts` like
+  `route-registration`. Documentation that rides along: the guideline re-copy with its new bullet after `scripts/`, and
+  the `architecture.md` row, which reads "checked" straight away because this PR builds the check. The row names
+  `scripts/guards/case-collision.ts` and its two failing-pair tests, since `architecture_rule_table_matches_depcruise`
+  accepts only a real file, test or dependency-cruiser rule name.
+
+Why: on a case-insensitive file system (macOS, Windows) two tracked paths that differ only in letter case check out as
+one file, and one silently replaces the other. P1.05 nearly shipped `clientIp.ts` beside `ClientIp.ts`.
+
+Algorithm: take `git ls-files -z` (with `withoutGitEnv`, P0.09j), group the paths by their lowercased form, and report
+every path in a group of more than one, naming the others. No `guard-allow`: a pair is fixed by renaming. The guard reads
+names only, so the shared unreadable-file test skips it; it throws outside a git repository or when nothing is tracked,
+so it fails closed.
+
+Done when (tests, `scripts/guards/guards.test.ts` and `repo.test.ts`):
+  - `case_pair_file_fails`: `foo.ts` plus `Foo.ts` fails, one finding on each.
+  - `case_pair_dir_fails`: `a/x.ts` plus `A/x.ts` fails.
+  - `distinct_names_pass`: `foo.ts`, `food.ts` and `a/foo.ts` pass.
+  - `case_pair_names_the_other_path` and `case_guard_fails_closed_outside_git`.
+  - `repo_clean > case-collision`: the real tree passes.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),

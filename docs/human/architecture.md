@@ -46,6 +46,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
 | DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | checked: `infra-shared-via-index` |
 | ADG §1 | Domains use no Node I/O built-ins | checked: `domain-no-io-builtins` |
+| ADG §1 | No two tracked paths differ only in letter case | checked: `scripts/guards/case-collision.ts`, `case_pair_file_fails`, `case_pair_dir_fails` |
 | ADG §1 | Product code never imports repository tooling (`scripts/`, `tests/`, configs) | checked: `no-product-imports-tooling` |
 | ADG §2 | Infrastructure implements domain contracts and never reaches an entry point | checked: `infrastructure-not-entry` |
 | AB-2 | Adapters are built only in the process's composition root (`main.ts`/`compose.ts`) | checked: `scripts/guards/composition-root.ts`, `composition_root_split` (each interface's main.ts has a compose.ts beside it, imports it, and imports nothing from infrastructure); `domain-pure` keeps adapters out of domains. Review-only: `MATRIX` lets an interface import infrastructure, and no tool tells construction from use |

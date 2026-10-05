@@ -1,13 +1,16 @@
 // Each guard against planted fixtures (fixtures/<rule>/{bad,good}/*.fixture). The first line of a fixture names the
 // path it is copied to and the number of findings expected there; the .fixture suffix keeps it out of the real scan.
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import * as caseCollision from "./case-collision.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as egress from "./egress.ts";
 import type { Finding } from "./files.ts";
+import { withoutGitEnv } from "./git-env.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
 import * as routeRegistration from "./route-registration.ts";
@@ -23,12 +26,23 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
   "composition-root": compositionRoot.scanAll,
+  "case-collision": (root) => caseCollision.scanAll(tracked(root)),
 };
 
 const temps: string[] = [];
 afterAll(() => {
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 });
+
+/** Makes `root` a git repository with every file staged, since the case guard reads `git ls-files`. */
+function tracked(root: string): string {
+  for (const args of [
+    ["init", "-q"],
+    ["add", "-A"],
+  ])
+    execFileSync("git", ["-C", root, ...args], { env: withoutGitEnv() });
+  return root;
+}
 
 function tempRepo(files: Record<string, string | Uint8Array>): string {
   const root = mkdtempSync(join(tmpdir(), "guards-"));
@@ -177,5 +191,24 @@ describe("composition-root", () => {
     const infra = 'import { x } from "../../../infrastructure/postgres/x.ts";';
     expect(compositionRoot.scanAll(tempRepo({ "interfaces/http/routes/main.ts": infra }))).toEqual([]);
     expect(compositionRoot.scanAll(tempRepo({ "interfaces/http/compose.ts": infra }))).toEqual([]);
+  });
+});
+
+describe("case-collision", () => {
+  test("case_pair_file_fails", () =>
+    expectFixtures("case-collision", "bad", ["file-lower.fixture", "file-upper.fixture"]));
+  test("case_pair_dir_fails", () =>
+    expectFixtures("case-collision", "bad", ["dir-lower.fixture", "dir-upper.fixture"]));
+  test("distinct_names_pass", () => expectFixtures("case-collision", "good"));
+
+  test("case_pair_names_the_other_path", () => {
+    expect(caseCollision.findCaseCollisions(["b.ts", "Foo.ts", "foo.ts"])).toEqual([
+      { file: "Foo.ts", line: 1, rule: "case-collision", text: "differs only in case from foo.ts" },
+      { file: "foo.ts", line: 1, rule: "case-collision", text: "differs only in case from Foo.ts" },
+    ]);
+  });
+
+  test("case_guard_fails_closed_outside_git", () => {
+    expect(() => caseCollision.scanAll(tempRepo({ "a.ts": "" }))).toThrow();
   });
 });
