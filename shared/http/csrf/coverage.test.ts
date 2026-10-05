@@ -26,6 +26,9 @@ const CONFIG: HttpKitConfig = {
   TRUSTED_PROXY_HOPS: 1,
   HTTP_BODY_LIMIT_BYTES: 65_536,
   RATE_LIMIT_MAX_KEYS: 100_000,
+  MEDIA_ORIGIN: "https://unset-media.test",
+  ASSETS_BASE: "",
+  DEV_VITE_ORIGIN: "",
 };
 const GROUPS: readonly RouteGroup[] = ["app", "profile", "media", "admin", "api"];
 

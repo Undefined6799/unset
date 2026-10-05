@@ -2,7 +2,7 @@
 // errors rendered by code, a deadline on every request, and a graceful drain on SIGTERM.
 //
 // Middleware order (later steps fill the empty slots): requestId → hostCheck → trustedProxy (P1.05) →
-// securityHeaders (P1.08) → methodCheck → contentTypeCheck → bodyLimit (P1.06) → rateLimitIp (P1.06) → csrf (P1.07)
+// securityHeaders (P1.08, set on the final response) → methodCheck → contentTypeCheck → bodyLimit (P1.06) → rateLimitIp (P1.06) → csrf (P1.07)
 // → session (Phase 2) → rateLimitDid (P1.06) → handler.
 import { randomUUID } from "node:crypto";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
@@ -11,6 +11,7 @@ import type { LogFields, Logger } from "@unset/shared-log";
 import { Hono } from "hono";
 import type { ClientIp } from "./clientIp.ts";
 import { type HttpKitConfig, hostAllowed } from "./config.ts";
+import { headerSets } from "./csp/headers.ts";
 import { createCsrfGate } from "./csrf/gate.ts";
 import { errorResponse, groupForPath } from "./errors.ts";
 import { createHealth, type Readiness } from "./health.ts";
@@ -109,6 +110,7 @@ export function createServer(options: ServerOptions) {
   const exit = options.exit ?? ((code: number) => process.exit(code));
   const publicOrigin = new URL(config.PUBLIC_ORIGIN);
   const csrfGate = createCsrfGate(config.PUBLIC_ORIGIN);
+  const securityHeaders = headerSets(config); // step 1 of P1.08: built once at boot, frozen
   const health = createHealth({
     service: config.UNSET_SERVICE,
     commit: config.UNSET_COMMIT,
@@ -206,6 +208,23 @@ export function createServer(options: ServerOptions) {
     return fail("csrf.denied", route.group);
   }
 
+  /**
+   * securityHeaders (P1.08): the group's headers on the final response, so no handler or error page can drop or
+   * weaken them. A handler's own CSP is replaced and logged; any failure here answers 500 with the `static` set.
+   */
+  function secured(response: Response, group: RouteGroup, route: string | undefined): Response {
+    try {
+      const out = new Response(response.body, response);
+      if (out.headers.has("content-security-policy")) log.warn("csp.handler_override", route ? { route } : {});
+      for (const [name, value] of Object.entries(securityHeaders[group])) out.headers.set(name, value);
+      return out;
+    } catch {
+      const fallback = fail("internal.error", "static");
+      for (const [name, value] of Object.entries(securityHeaders.static)) fallback.headers.set(name, value);
+      return fallback;
+    }
+  }
+
   /** 413, closing the connection so the client cannot keep streaming the rest of the body. */
   const tooLarge = (group: RouteGroup) => fail("http.payload_too_large", group, { connection: "close" });
 
@@ -273,9 +292,10 @@ export function createServer(options: ServerOptions) {
     const reqId = randomUUID();
     const checked = check(request);
     const matched = checked instanceof Response ? undefined : checked;
-    let response = matched ? await run(matched, request, reqId, peer) : (checked as Response);
+    const group = matched ? matched.route.group : errorGroup(new URL(request.url).pathname);
+    const answered = matched ? await run(matched, request, reqId, peer) : (checked as Response);
+    const response = secured(answered, group, matched?.route.path);
     if (health.state === "draining") {
-      response = new Response(response.body, response);
       response.headers.set("connection", "close");
     }
     log.info("http.request", {

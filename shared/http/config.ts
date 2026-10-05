@@ -7,6 +7,25 @@ const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 /** An exact lowercase host, or a leading-dot suffix entry (`.0x40.me`) matching exactly one label below it. */
 const HOST_ENTRY = new RegExp(`\\.?${LABEL}(?:\\.${LABEL})*`);
 
+/**
+ * Top-level domains whose registrable domain is the last two labels (P1.08; plan §5.2): the product's domains (`.sh`,
+ * `.ac`, `.me`, `.space`), the media domain's (`.net`), and `.test` for test config. Any other TLD is refused, so
+ * the same-site check needs no public-suffix library and never guesses.
+ */
+export const KNOWN_TLDS: readonly string[] = [".sh", ".ac", ".me", ".space", ".net", ".test"];
+
+/** The site (registrable domain) of a URL's host: an IP or one-label host is its own site; else known TLDs only. */
+export function siteOf(host: string): string | undefined {
+  if (host.startsWith("[") || /^[0-9.]+$/.test(host)) return host;
+  const labels = host.split(".");
+  if (labels.length === 1) return host;
+  return KNOWN_TLDS.includes(`.${labels.at(-1)}`) ? labels.slice(-2).join(".") : undefined;
+}
+
+/** True when `value` is `https:`, or plain http where UNSET_ENV is dev (fail closed when UNSET_ENV is absent). */
+const secureOrDev = (value: unknown, config: Readonly<Record<string, unknown>>) =>
+  String(value).startsWith("https:") || config.UNSET_ENV === "dev";
+
 /** True when `host` (lowercase, no port) is an exact entry, or one label below a leading-dot suffix entry. */
 export function hostAllowed(host: string, entries: readonly string[]): boolean {
   return entries.some((entry) => {
@@ -18,9 +37,8 @@ export function hostAllowed(host: string, entries: readonly string[]): boolean {
 
 export const httpKitConfig = {
   /** This process's public origin. Plain http only in dev (fail closed when UNSET_ENV is absent). */
-  PUBLIC_ORIGIN: withRule(
-    origin({ protocols: ["https:", "http:"] }),
-    (config) => String(config.PUBLIC_ORIGIN).startsWith("https:") || config.UNSET_ENV === "dev",
+  PUBLIC_ORIGIN: withRule(origin({ protocols: ["https:", "http:"] }), (config) =>
+    secureOrDev(config.PUBLIC_ORIGIN, config),
   ),
   /** Hosts this process answers for; anything else is 421. The public origin's own host must be one of them. */
   HTTP_ALLOWED_HOSTS: withRule(list(str({ pattern: HOST_ENTRY })), (config) =>
@@ -48,6 +66,29 @@ export const httpKitConfig = {
   HTTP_BODY_LIMIT_BYTES: int({ min: 1024, max: 1_048_576, default: 65_536 }),
   /** Rate-limit buckets held at once (P1.06): about 12 MB at the default; past it, new keys share a strict bucket. */
   RATE_LIMIT_MAX_KEYS: int({ min: 1, max: 1_000_000, default: 100_000 }),
+  /**
+   * The media proxy's origin (P1.08), listed in the page CSPs' `img-src`. It must be another site than the public
+   * origin (plan §5.2), so an uploaded file opened directly never runs in ours. The media process serves this origin
+   * itself, so it alone skips the comparison.
+   */
+  MEDIA_ORIGIN: withRule(origin({ protocols: ["https:", "http:"] }), (config) => {
+    if (!secureOrDev(config.MEDIA_ORIGIN, config)) return false;
+    if (config.UNSET_SERVICE === "media") return true;
+    const media = siteOf(new URL(String(config.MEDIA_ORIGIN)).hostname);
+    return media !== undefined && media !== siteOf(new URL(String(config.PUBLIC_ORIGIN)).hostname);
+  }),
+  /** Where scripts, styles and fonts load from: `<origin>/assets/`, exactly. Empty means `${PUBLIC_ORIGIN}/assets/`. */
+  ASSETS_BASE: withRule(str({ default: "" }), (config) => {
+    const value = String(config.ASSETS_BASE);
+    if (value === "") return true;
+    return URL.canParse(value) && `${new URL(value).origin}/assets/` === value && secureOrDev(value, config);
+  }),
+  /** The Vite dev server (P1.20), allowed in script-src and connect-src. Refused unless UNSET_ENV is dev. */
+  DEV_VITE_ORIGIN: withRule(str({ default: "" }), (config) => {
+    const value = String(config.DEV_VITE_ORIGIN);
+    if (value === "") return true;
+    return config.UNSET_ENV === "dev" && URL.canParse(value) && new URL(value).origin === value;
+  }),
 };
 
 /** What the kit reads from an entrypoint's loaded config: the common keys (P1.02) and its own fragment. */
@@ -66,4 +107,7 @@ export type HttpKitConfig = Readonly<{
   TRUSTED_PROXY_HOPS: number;
   HTTP_BODY_LIMIT_BYTES: number;
   RATE_LIMIT_MAX_KEYS: number;
+  MEDIA_ORIGIN: string;
+  ASSETS_BASE: string;
+  DEV_VITE_ORIGIN: string;
 }>;

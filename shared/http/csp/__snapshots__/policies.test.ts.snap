@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`csp policies > snapshot_per_group > dev 1`] = `
+{
+  "admin": "default-src 'none'; script-src http://localhost:5173 http://localhost:8080/assets/; style-src http://localhost:8080/assets/; img-src 'self'; font-src http://localhost:8080/assets/; connect-src 'self' http://localhost:5173 ws://localhost:5173; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
+  "api": "default-src 'none'; frame-ancestors 'none'",
+  "app": "default-src 'none'; script-src http://localhost:5173 http://localhost:8080/assets/; style-src http://localhost:8080/assets/; img-src 'self' http://127.0.0.1:8081; font-src http://localhost:8080/assets/; connect-src 'self' http://localhost:5173 ws://localhost:5173; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
+  "media": "default-src 'none'; sandbox",
+  "profile": "default-src 'none'; style-src http://localhost:8080/assets/; img-src http://127.0.0.1:8081; font-src http://localhost:8080/assets/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  "static": "default-src 'none'; frame-ancestors 'none'",
+}
+`;
+
+exports[`csp policies > snapshot_per_group > prod 1`] = `
+{
+  "admin": "default-src 'none'; script-src https://unset.sh/assets/; style-src https://unset.sh/assets/; img-src 'self'; font-src https://unset.sh/assets/; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
+  "api": "default-src 'none'; frame-ancestors 'none'",
+  "app": "default-src 'none'; script-src https://unset.sh/assets/; style-src https://unset.sh/assets/; img-src 'self' https://unsetcdn.net; font-src https://unset.sh/assets/; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
+  "media": "default-src 'none'; sandbox",
+  "profile": "default-src 'none'; style-src https://unset.sh/assets/; img-src https://unsetcdn.net; font-src https://unset.sh/assets/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  "static": "default-src 'none'; frame-ancestors 'none'",
+}
+`;

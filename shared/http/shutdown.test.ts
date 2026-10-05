@@ -32,7 +32,8 @@ async function serve(
         PUBLIC_ORIGIN: "http://127.0.0.1:${free}", HTTP_ALLOWED_HOSTS: ["127.0.0.1"], SHUTDOWN_GRACE_MS: ${graceMs},
         REQUEST_DEADLINE_MS: 30000, TRUSTED_PROXY_MODE: "socket", TRUSTED_PROXY_HEADER: "",
         TRUSTED_PROXY_CIDRS: [], TRUSTED_PROXY_HOPS: 1,
-        HTTP_BODY_LIMIT_BYTES: 65536, RATE_LIMIT_MAX_KEYS: 100000 },
+        HTTP_BODY_LIMIT_BYTES: 65536, RATE_LIMIT_MAX_KEYS: 100000,
+        MEDIA_ORIGIN: "https://unset-media.test", ASSETS_BASE: "", DEV_VITE_ORIGIN: "" },
       routes: [
         route("/slow", () => new Promise((resolve) => setTimeout(() => resolve(new Response("done")), 300))),
         route("/never", () => new Promise(() => {})),
