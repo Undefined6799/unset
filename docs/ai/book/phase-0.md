@@ -1944,10 +1944,15 @@ Outputs:
     other changed path is trusted base or one of its riders (root `package.json` is neither), and (3) every lockfile
     entry the PR adds, changes or moves is that package's own workspace entry (or its link) or a package in its
     dependency closure, matched by name and version, so an npm hoisting move passes. Anything else fails closed.
-  - `lockfileStrays(base, head, workspaces)` (pure, `lockfile-scope.ts`): the closure follows Node's lookup through
-    the lockfile's `packages` paths and follows workspace links. Added and changed entries are judged against the head
-    closure, removed and changed entries against the base closure (an upgrade drops the old copy); a removal and an
-    addition with the same identity and content are a move, not a change.
+  - `lockfileStrays(base, head, workspaces)` (pure, `lockfile-scope.ts`): the closure is the set of install paths
+    reachable through Node's lookup over the lockfile's `packages` paths, workspace links followed. Added and changed
+    entries must sit in the head closure, removed and changed ones in the base closure (an upgrade drops the old copy);
+    a removal and an addition with the same name and content are a move, and a change of only `dev`, `optional`,
+    `devOptional` or `peer` inside either closure passes. As built after the adversarial review: an entry is judged by
+    its path, never by a name and version that happen to be in the closure; a `name` that differs from the name its
+    path loads fails; and a version the base already has must keep its `resolved`, `integrity`, `hasInstallScript`,
+    `bin` and dependency lists at every path. A version new to the lockfile is taken as npm wrote it (no registry
+    lookup); the dependencies guard, audit, the 7-day rule and the SBOM judge it.
   - `change-shape.ts` gathers which package manifests change a dependency field (an added or deleted manifest has
     none on the missing side; unreadable JSON is no change) and both sides of a modified lockfile (unreadable → none).
     A failure names the stray entries: `package-lock.json (node_modules/c (c@1.1.0))`.
@@ -1959,7 +1964,9 @@ Done when (tests):
     stray entry and an unreadable lockfile → fail.
   - lockfile_scope_* (`lockfile-scope.test.ts`): dependency added and upgraded pass; hoisting move passes; an
     unrelated feature package's version bump fails; a removed entry outside the closure fails; the root entry and an
-    unreadable lockfile fail.
+    unreadable lockfile fail; `lockfile_scope_judges_paths_not_names` (a feature copy's tarball swap, a borrowed name
+    or version outside the tree, an alias, a known version's new tarball or dependencies all fail);
+    `lockfile_scope_dev_flag_flip_passes`.
   - lockfile_rides_end_to_end (`change-shape-wiring.test.ts`): through real git, a dependency change passes, a
     scripts-only change and an unreadable manifest leave the lockfile outside.
 Not in this step: any other generated file in a trusted folder (each gets its own ruling).

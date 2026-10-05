@@ -76,6 +76,46 @@ describe("lockfile scope", () => {
     ]);
   });
 
+  test("lockfile_scope_judges_paths_not_names", () => {
+    // Adversarial review of P0.09f: an entry outside the trusted package's install tree fails even when a package of
+    // the same name and version is in its closure, and a copy of a base package keeps its tarball and dependencies.
+    const EVIL = { resolved: "https://evil.example/x.tgz", integrity: "sha512-EVIL", hasInstallScript: true };
+    const nested = withChanges({ "domains/content/node_modules/a": pkg("1.0.0") });
+    const swap = { ...ADD_HONO, "domains/content/node_modules/a": { ...pkg("1.0.0"), ...EVIL } };
+    expect(strays({ ...nested, ...swap }, nested)).toEqual(["domains/content/node_modules/a (a@1.0.0)"]);
+    const spoof = { name: "hono", version: "4.0.0", ...EVIL };
+    expect(strays(withChanges({ ...ADD_HONO, "domains/content/node_modules/evil": spoof }))).toEqual([
+      "domains/content/node_modules/evil (evil@4.0.0)",
+    ]);
+    const borrowed = { version: "4.0.0", ...EVIL };
+    expect(strays(withChanges({ ...ADD_HONO, "domains/content/node_modules/hono": borrowed }))).toEqual([
+      "domains/content/node_modules/hono (hono@4.0.0)",
+    ]);
+    // An alias name inside the closure is refused too: the key decides what Node loads.
+    expect(strays(withChanges({ ...ADD_HONO, "node_modules/b": { ...pkg("2.0.0"), name: "c" } }))).toEqual([
+      "node_modules/b (b@2.0.0)",
+    ]);
+    // A version the base already has may not change its tarball or grow dependencies at any path.
+    expect(strays(withChanges({ ...ADD_HONO, "node_modules/a": { ...pkg("1.0.0"), ...EVIL } }))).toEqual([
+      "node_modules/a (a@1.0.0)",
+    ]);
+    const grown = withChanges({
+      ...ADD_HONO,
+      "node_modules/a": pkg("1.0.0", { evil: "1" }),
+      "node_modules/evil": pkg("1.0.0"),
+    });
+    expect(strays(grown)).toEqual(["node_modules/a (a@1.0.0)"]);
+  });
+
+  test("lockfile_scope_dev_flag_flip_passes", () => {
+    // A dependency that only tooling used becomes a runtime one: npm drops `dev: true` on its entry.
+    const base = withChanges({ "node_modules/v": { ...pkg("2.0.0"), dev: true } });
+    const runtime = { name: "@unset/shared-http", version: "0.0.0", dependencies: { a: "1.0.0", v: "2.0.0" } };
+    const head = withChanges({ "shared/http": runtime, "node_modules/v": pkg("2.0.0") });
+    expect(strays(head, base)).toEqual([]);
+    expect(strays(base, head)).toEqual([]);
+  });
+
   test("lockfile_scope_unreadable_fails", () => {
     expect(lockfileStrays({}, lock(BASE), ["shared/http"])).toEqual(["package-lock.json has no packages map"]);
     expect(lockfileStrays(lock(BASE), null, ["shared/http"])).toEqual(["package-lock.json has no packages map"]);
