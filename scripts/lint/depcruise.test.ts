@@ -247,7 +247,15 @@ describe("boundary rules", () => {
       "net-guard-leaf",
       edge("infrastructure/net-guard/a.ts", "../seal/index.ts"),
       edge("infrastructure/net-guard/a.ts", "zod"),
+      edge("infrastructure/net-guard/src/a.ts", "fast-check"),
+      edge("infrastructure/net-guard/src/a.test.ts", "zod"),
+      edge("infrastructure/net-guard/src/a.test.ts", "../../seal/index.ts"),
     );
+  });
+
+  test("depcruise_net_guard_tests_may_use_fast_check", async () => {
+    // Test files never ship, so property tests (TE-6) may use fast-check; shipped files may not (ruling 2026-10-04).
+    await expectPass(edge("infrastructure/net-guard/src/a.test.ts", "fast-check"));
   });
 
   test("depcruise_no_circular", async () => {
