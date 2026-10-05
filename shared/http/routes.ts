@@ -27,6 +27,8 @@ export type RouteSpec = {
   /** A policy in the serving interface's own table (P1.06p), or `"exempt"`, allowed only for group `static`. */
   rateLimit: string;
   mutates?: boolean;
+  /** The route needs a signed-in session; a policy with a per-DID entry requires it (P1.06). */
+  requiresSession?: boolean;
   deadlineMs?: number;
   handler: Handler;
 };
@@ -39,6 +41,8 @@ export type Route = Readonly<{
   bodyLimit: number | undefined;
   rateLimit: string;
   mutates: boolean;
+  /** `true`, or absent (like the other unset options) so a route without it keeps its committed manifest entry. */
+  requiresSession: true | undefined;
   deadlineMs: number | undefined;
   handler: Handler;
 }>;
@@ -104,6 +108,7 @@ export function defineRoute(spec: RouteSpec): Route {
     bodyLimit: spec.bodyLimit,
     rateLimit: spec.rateLimit,
     mutates: spec.mutates ?? post,
+    requiresSession: spec.requiresSession === true ? true : undefined,
     deadlineMs: spec.deadlineMs,
     handler: spec.handler,
   });

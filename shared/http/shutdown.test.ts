@@ -31,12 +31,13 @@ async function serve(
       config: { UNSET_ENV: "test", UNSET_SERVICE: "http", UNSET_COMMIT: "${"c".repeat(40)}", LISTEN_PORT: ${free},
         PUBLIC_ORIGIN: "http://127.0.0.1:${free}", HTTP_ALLOWED_HOSTS: ["127.0.0.1"], SHUTDOWN_GRACE_MS: ${graceMs},
         REQUEST_DEADLINE_MS: 30000, TRUSTED_PROXY_MODE: "socket", TRUSTED_PROXY_HEADER: "",
-        TRUSTED_PROXY_CIDRS: [], TRUSTED_PROXY_HOPS: 1 },
+        TRUSTED_PROXY_CIDRS: [], TRUSTED_PROXY_HOPS: 1,
+        HTTP_BODY_LIMIT_BYTES: 65536, RATE_LIMIT_MAX_KEYS: 100000 },
       routes: [
         route("/slow", () => new Promise((resolve) => setTimeout(() => resolve(new Response("done")), 300))),
         route("/never", () => new Promise(() => {})),
       ],
-      policies: { p: {} },
+      policies: { default: [{ capacity: 100, refillPerSec: 10, scope: "ip" }], p: [{ capacity: 100, refillPerSec: 10, scope: "ip" }] },
       log: createLogger({ service: "http", commit: "${"c".repeat(40)}", env: "test", write: () => {} }),
     });
     const port = await server.listen();

@@ -20,7 +20,14 @@ const CONFIG: HttpKitConfig = {
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   TRUSTED_PROXY_CIDRS: ["10.0.0.0/8"],
   TRUSTED_PROXY_HOPS: 1,
+  HTTP_BODY_LIMIT_BYTES: 65_536,
+  RATE_LIMIT_MAX_KEYS: 100_000,
 };
+/** Room for every test's requests; the limits tests below set their own. */
+const POLICIES = {
+  default: [{ capacity: 10_000, refillPerSec: 100, scope: "ip" }],
+  page: [{ capacity: 10_000, refillPerSec: 100, scope: "ip" }],
+} as const;
 
 const ok = () => new Response("ok");
 const page = (spec: Partial<RouteSpec> & Pick<RouteSpec, "method" | "path">) =>
@@ -32,7 +39,7 @@ function kit(options: Partial<ServerOptions> = {}) {
   const server = createServer({
     config: CONFIG,
     routes: [page({ method: "GET", path: "/" }), page({ method: "POST", path: "/form" })],
-    policies: { page: {} },
+    policies: POLICIES,
     log,
     ...options,
   });
@@ -316,7 +323,7 @@ describe("startup checks", () => {
         group: "app",
         ...get,
         rateLimit: "page",
-        middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck"],
+        middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"],
       },
       {
         method: "POST",
@@ -327,7 +334,15 @@ describe("startup checks", () => {
         rateLimit: "page",
         mutates: true,
         deadlineMs: undefined,
-        middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck", "contentTypeCheck"],
+        middleware: [
+          "requestId",
+          "hostCheck",
+          "trustedProxy",
+          "methodCheck",
+          "contentTypeCheck",
+          "bodyLimit",
+          "rateLimitIp",
+        ],
       },
     ]);
   });
@@ -340,6 +355,7 @@ describe("startup checks", () => {
       bodyLimit: 1024,
       deadlineMs: 60_000,
       mutates: true,
+      requiresSession: true,
     });
     const { server } = kit({ routes: [route] });
     expect(server.routeTable().find((r) => r.path === "/upload")).toEqual({
@@ -350,8 +366,19 @@ describe("startup checks", () => {
       bodyLimit: 1024,
       rateLimit: "page",
       mutates: true,
+      requiresSession: true,
       deadlineMs: 60_000,
-      middleware: ["requestId", "hostCheck", "trustedProxy", "methodCheck", "contentTypeCheck"],
+      middleware: [
+        "requestId",
+        "hostCheck",
+        "trustedProxy",
+        "methodCheck",
+        "contentTypeCheck",
+        "bodyLimit",
+        "rateLimitIp",
+        "session",
+        "rateLimitDid",
+      ],
     });
   });
 
@@ -413,5 +440,153 @@ describe("trusted proxy", () => {
     const loud = await request("/health?who=1", { peer: "203.0.113.7", host: "evil.example", headers: forged });
     expect(await loud.json()).toEqual(await plain.json());
     expect(await (await request("/health")).json()).toEqual({ status: "ok", service: "http", commit: COMMIT });
+  });
+});
+
+describe("limits", () => {
+  const echo = page({
+    method: "POST",
+    path: "/echo",
+    handler: async ({ request }) => new Response(String((await request.arrayBuffer()).byteLength)),
+  });
+  const form = { "content-type": "application/x-www-form-urlencoded" };
+  const stream = (bytes: number) =>
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let sent = 0; sent < bytes; sent += 10_000)
+          controller.enqueue(new Uint8Array(Math.min(10_000, bytes - sent)));
+        controller.close();
+      },
+    });
+
+  test("body_413_by_length", async () => {
+    let called = false;
+    const route = page({
+      method: "POST",
+      path: "/form",
+      handler: () => {
+        called = true;
+        return new Response();
+      },
+    });
+    const { request } = kit({ routes: [route] });
+    const response = await request("/form", { method: "POST", headers: { ...form, "content-length": "70000" } });
+    expect(response.status).toBe(413);
+    expect(response.headers.get("connection")).toBe("close");
+    expect(called).toBe(false);
+  });
+
+  test("body_413_streamed", async () => {
+    const { request } = kit({ routes: [echo] });
+    const big = await request("/echo", {
+      method: "POST",
+      headers: form,
+      body: stream(70_000),
+      duplex: "half",
+    } as RequestInit);
+    expect(big.status).toBe(413);
+    const small = await request("/echo", {
+      method: "POST",
+      headers: form,
+      body: stream(60_000),
+      duplex: "half",
+    } as RequestInit);
+    expect(await small.text()).toBe("60000");
+  });
+
+  test("body_413_streamed_even_if_handler_swallows", async () => {
+    const swallow = page({
+      method: "POST",
+      path: "/swallow",
+      handler: async ({ request }) => {
+        await request.arrayBuffer().catch(() => undefined);
+        return new Response("ok");
+      },
+    });
+    const { request } = kit({ routes: [swallow] });
+    const big = await request("/swallow", {
+      method: "POST",
+      headers: form,
+      body: stream(70_000),
+      duplex: "half",
+    } as RequestInit);
+    expect(big.status).toBe(413);
+  });
+
+  test("route_body_limit_wins", async () => {
+    const small = page({ method: "POST", path: "/small", bodyLimit: 1024, handler: echo.handler });
+    const { request } = kit({ routes: [small] });
+    expect((await request("/small", { method: "POST", headers: form, body: "x".repeat(2000) })).status).toBe(413);
+  });
+
+  test("body_conflicting_headers_400", async () => {
+    const { request } = kit({ routes: [echo] });
+    const both = { ...form, "content-length": "5", "transfer-encoding": "chunked" };
+    expect((await request("/echo", { method: "POST", headers: both, body: "hello" })).status).toBe(400);
+    const odd = { ...form, "content-length": "+5" };
+    expect((await request("/echo", { method: "POST", headers: odd, body: "hello" })).status).toBe(400);
+  });
+
+  const LIMITED = {
+    default: [{ capacity: 100, refillPerSec: 1, scope: "ip" }],
+    login: [{ capacity: 2, refillPerSec: 0.1, scope: "ip" }],
+    follow: [{ capacity: 120, refillPerSec: 2, scope: "did" }],
+  } as const;
+
+  test("rate_limit_429_with_retry_after", async () => {
+    const login = page({ method: "GET", path: "/login", rateLimit: "login" });
+    const { request } = kit({ routes: [login], policies: LIMITED });
+    const peer = { peer: "10.0.0.2", headers: { "x-forwarded-for": "9.9.9.9" } };
+    expect((await request("/login", peer)).status).toBe(200);
+    expect((await request("/login", peer)).status).toBe(200);
+    const denied = await request("/login", peer);
+    expect(denied.status).toBe(429);
+    expect(Number(denied.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+  });
+
+  test("did_limit_at_route_level", async () => {
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", requiresSession: true });
+    const session = async () => ({ did: "did:plc:alice" });
+    const { request } = kit({ routes: [follow], policies: LIMITED, session });
+    const statuses: number[] = [];
+    for (let i = 1; i <= 121; i += 1) {
+      const peer = { peer: "10.0.0.2", headers: { ...form, "x-forwarded-for": `9.9.${i >> 8}.${i & 255}` } };
+      statuses.push((await request("/follow", { method: "POST", body: "a=1", ...peer })).status);
+    }
+    expect(statuses.slice(0, 120).every((status) => status === 200)).toBe(true);
+    expect(statuses[120]).toBe(429);
+  });
+
+  test("did_policy_requires_session", () => {
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow" });
+    expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/requiresSession/);
+  });
+
+  test("session_route_without_session_denies", async () => {
+    let called = false;
+    const follow = page({
+      method: "POST",
+      path: "/follow",
+      rateLimit: "follow",
+      requiresSession: true,
+      handler: () => {
+        called = true;
+        return new Response();
+      },
+    });
+    const { request, records } = kit({ routes: [follow], policies: LIMITED });
+    expect((await request("/follow", { method: "POST", headers: form, body: "a=1" })).status).toBe(500);
+    expect(called).toBe(false);
+    expect(records().map((r) => r.event)).toContain("ratelimit.no_session");
+  });
+
+  test("salt_never_logged", async () => {
+    const login = page({ method: "GET", path: "/login", rateLimit: "login" });
+    const { request, lines } = kit({ routes: [login], policies: LIMITED });
+    for (let i = 0; i < 5; i += 1)
+      await request("/login", { peer: "10.0.0.2", headers: { "x-forwarded-for": "9.9.9.9" } });
+    const text = lines.join("\n");
+    expect(text).not.toMatch(/[0-9a-f]{64}/i);
+    expect(text).not.toMatch(/[A-Za-z0-9+/_-]{43,}/);
   });
 });
