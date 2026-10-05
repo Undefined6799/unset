@@ -1,4 +1,11 @@
 {
   "files": [],
-  "references": [{ "path": "scripts" }, { "path": "infrastructure/net-guard" }, { "path": "shared/config" }]
+  "references": [
+    { "path": "scripts" },
+    { "path": "infrastructure/net-guard" },
+    { "path": "shared/config" },
+    { "path": "shared/errors" },
+    { "path": "shared/http" },
+    { "path": "shared/log" }
+  ]
 }

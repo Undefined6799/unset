@@ -1,0 +1,49 @@
+# The one bug form (P0.09b). It applies only the bug label; the severity label is set at triage.
+# Syntax: docs.github.com, "Syntax for issue forms" and "Syntax for GitHub's form schema".
+name: Bug
+description: Something does not work as it should. Not for vulnerabilities; see SECURITY.md.
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Anything that may be a vulnerability goes to the private channel in SECURITY.md, never here.
+        Severities are defined in docs/human/severity.md; when two fit, propose the higher one.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: proposed-severity
+    attributes:
+      label: Proposed severity
+      description: Alex confirms every sev-1 and sev-2 at triage.
+      options:
+        - sev-1
+        - sev-2
+        - sev-3
+    validations:
+      required: true
+  - type: input
+    id: definition-line
+    attributes:
+      label: Definition line it matches
+      description: Copy the line from docs/human/severity.md that this bug matches.
+    validations:
+      required: true
