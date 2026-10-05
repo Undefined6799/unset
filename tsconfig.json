@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "scripts" }, { "path": "shared/config" }]
+  "references": [{ "path": "scripts" }, { "path": "shared/config" }, { "path": "shared/http" }]
 }
