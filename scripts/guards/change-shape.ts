@@ -22,6 +22,8 @@ export type ShapeInput = {
   title: string;
   body: string;
   labels: readonly string[];
+  /** The PR's author as GitHub reports it: `user.login` and `user.type` ("User" or "Bot"). */
+  author: { login: string; type: string };
   commits: readonly { sha: string; message: string }[];
   numstat: string;
   template: string;
@@ -40,6 +42,8 @@ const ERASURE_REGISTRY = "infrastructure/postgres/erasure-registry.json";
 const KNOWN_PARSED = [`/${MIGRATIONS}`, `/${GRANT_MATRIX}`, `/${ERASURE_REGISTRY}`];
 const TEMPLATE = ".github/pull_request_template.md";
 const GIT_TIMEOUT_MS = 30_000;
+/** Renovate writes its own PR body, so it alone skips the template headings (P0.09i, rule DL-3). */
+const isRenovate = (author: ShapeInput["author"]): boolean => author.login === "renovate[bot]" && author.type === "Bot";
 
 const describeFinding = (f: GrantFinding): string =>
   `[SE-6] ${f.path}:${f.line} ${f.reason}: ${f.statement.replace(/\s+/g, " ").trim().slice(0, 80)}`;
@@ -64,7 +68,7 @@ export function runChangeShape(input: ShapeInput): ShapeResult {
   if (size.level === "fail") out.errors.push(sizeLine);
   if (size.level === "warn") out.warnings.push(sizeLine);
 
-  const missing = checkPrTemplate(input.body, input.template);
+  const missing = isRenovate(input.author) ? [] : checkPrTemplate(input.body, input.template);
   if (missing.length > 0) out.errors.push(`[DL-3] PR body is missing headings: ${missing.join(", ")}`);
 
   const { patterns, parsedPaths, checks } = input.trustedBase;
@@ -216,6 +220,7 @@ function gather(env: Record<string, string>, base: string, head: string): ShapeI
     title: env.PR_TITLE as string,
     body: env.PR_BODY as string,
     labels,
+    author: { login: env.PR_AUTHOR as string, type: env.PR_AUTHOR_TYPE as string },
     commits,
     numstat: numstat(base, head),
     // The base's template: a PR cannot drop a heading by deleting it from the template.
@@ -238,7 +243,7 @@ const commandData = (text: string): string =>
   text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 
 function main(): number {
-  const names = ["PR_TITLE", "PR_BODY", "PR_LABELS", "BASE_SHA", "HEAD_SHA"] as const;
+  const names = ["PR_TITLE", "PR_BODY", "PR_LABELS", "PR_AUTHOR", "PR_AUTHOR_TYPE", "BASE_SHA", "HEAD_SHA"] as const;
   const env: Record<string, string> = {};
   for (const name of names) {
     const value = process.env[name];

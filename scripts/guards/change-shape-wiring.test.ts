@@ -20,7 +20,7 @@ describe("wiring", () => {
     expect(job).toBeDefined();
     const text = (job ?? []).join("\n");
     // Every PR value reaches the script through env:, never through ${{ }} in a run: line.
-    for (const name of ["PR_TITLE", "PR_BODY", "PR_LABELS", "BASE_SHA", "HEAD_SHA"]) {
+    for (const name of ["PR_TITLE", "PR_BODY", "PR_LABELS", "PR_AUTHOR", "PR_AUTHOR_TYPE", "BASE_SHA", "HEAD_SHA"]) {
       expect(text).toMatch(new RegExp(`^ {6}${name}: \\$\\{\\{ [^}]+ \\}\\}$`, "m"));
     }
     expect(text).toContain("run: node scripts/guards/change-shape.ts");
@@ -86,6 +86,8 @@ describe("wiring", () => {
       PR_TITLE: "P1.07 Change the gate",
       PR_BODY: read(".github/pull_request_template.md"),
       PR_LABELS: '["kind/fix"]',
+      PR_AUTHOR: "Undefined6799",
+      PR_AUTHOR_TYPE: "User",
       BASE_SHA: base,
       HEAD_SHA: sh("rev-parse", "HEAD"),
     };
@@ -176,6 +178,8 @@ describe("wiring", () => {
             PR_TITLE: "P1.04k Add the server kit",
             PR_BODY: read(".github/pull_request_template.md"),
             PR_LABELS: '["kind/build"]',
+            PR_AUTHOR: "Undefined6799",
+            PR_AUTHOR_TYPE: "User",
             BASE_SHA: base,
             HEAD_SHA: sh("rev-parse", "HEAD"),
           },
