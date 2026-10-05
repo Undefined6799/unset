@@ -1,0 +1,75 @@
+# P1.01s: a syntactic stand-in for rule DC-4 while Biome's noFloatingPromises cannot run on TypeScript 7.
+# Fixtures: .semgrep/rules/fixtures/floating-promises/, checked by scripts/lint/semgrep-fixtures.ts in CI.
+rules:
+  - id: floating-promises
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      Possible floating promise: its rejection is lost (rule DC-4). Start the statement with await, return
+      or void, add .catch(...) or a second .then argument, and never pass an async callback to forEach.
+      This rule is syntactic and not type-aware: it sees only calls to functions declared async in the same
+      file, .then(...) without a rejection handler and .forEach(async ...). A reviewer still owns every
+      other promise-returning call.
+    # Off, so `$F(...);` matches only a statement that is exactly that call, never the same call inside
+    # await, return, void or an assignment (semgrep interfaces/Rule_options.atd: implicit_deep_exprstmt,
+    # default true).
+    options:
+      implicit_deep_exprstmt: false
+    paths:
+      exclude:
+        - "scripts/"
+        - "tests/"
+        - "**/*.test.ts"
+        - "/.semgrep/rules/fixtures/"
+    # Semgrep does not enforce the async modifier in an arrow-function pattern (semgrep 1.178.0: the pattern
+    # `const $F = async (...) => { ... }` also matches a plain arrow), so arrows and forEach callbacks are
+    # matched by their source text instead. Function declarations do enforce it.
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  async function $F(...) { ... }
+                  ...
+              - pattern-inside: |
+                  ...
+                  async function $F(...) { ... }
+              - pattern-inside: |
+                  export async function $F(...) { ... }
+                  ...
+              - pattern-inside: |
+                  ...
+                  export async function $F(...) { ... }
+          - pattern: $F(...);
+          - pattern-not: await $F(...);
+          - pattern-not: void $F(...);
+          - pattern-not: return $F(...);
+          # A call that initialises a binding is kept, not floating.
+          - pattern-not-inside: const $V = $F(...);
+          - pattern-not-inside: let $V = $F(...);
+      - patterns:
+          - pattern-inside: |
+              const $F = $INIT;
+              ...
+          - metavariable-regex:
+              metavariable: $INIT
+              regex: ^async\b
+          - pattern: $F(...);
+          - pattern-not: await $F(...);
+          - pattern-not: void $F(...);
+          - pattern-not: return $F(...);
+          - pattern-not-inside: const $V = $F(...);
+          - pattern-not-inside: let $V = $F(...);
+      - patterns:
+          - pattern: $P.then($A);
+          - pattern-not: await $P.then($A);
+          - pattern-not: void $P.then($A);
+          - pattern-not: return $P.then($A);
+          # A chain that ends in .catch handles the rejection; a bound result is kept.
+          - pattern-not-inside: $X.catch(...)
+          - pattern-not-inside: const $V = $E;
+          - pattern-not-inside: let $V = $E;
+      - patterns:
+          - pattern: $P.forEach($CB)
+          - metavariable-regex:
+              metavariable: $CB
+              regex: ^async\b

@@ -6,6 +6,7 @@
     { "path": "shared/config" },
     { "path": "shared/errors" },
     { "path": "shared/http" },
-    { "path": "shared/log" }
+    { "path": "shared/log" },
+    { "path": "shared/ui" }
   ]
 }

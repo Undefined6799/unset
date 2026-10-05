@@ -1,0 +1,33 @@
+# P1.01s: dependency-cruiser follows only string-literal specifiers, so a computed import could reach a
+# module the boundary matrix forbids (rule AB-1). No allow comment and no per-file exception.
+# Fixtures: .semgrep/rules/fixtures/computed-import/, checked by scripts/lint/semgrep-fixtures.ts in CI.
+rules:
+  - id: computed-import
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      Computed module specifier: dependency-cruiser cannot follow it, so the boundary matrix (rule AB-1)
+      cannot check what it loads. Use a string literal. There is no allow comment; a real need for a dynamic
+      import is a design question for the architecture thread, not a suppression.
+    paths:
+      exclude:
+        - "scripts/"
+        - "tests/"
+        - "**/*.test.ts"
+        - "/.semgrep/rules/fixtures/"
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: import($X)
+              - pattern: require($X)
+              - pattern: createRequire(...)($X)
+          - pattern-not: import("...")
+          - pattern-not: require("...")
+          - pattern-not: createRequire(...)("...")
+          # A template literal with no substitution is a literal; one with ${...} is not. Regex matching is
+          # left-anchored PCRE2 on the source text of $X (docs.semgrep.dev/writing-rules/rule-syntax).
+          - metavariable-regex:
+              metavariable: $X
+              regex: ^(?:(?!`[^`]*`$)|[\s\S]*\$\{)
+      - pattern: module.require(...)
+      - pattern: process.mainModule.require(...)

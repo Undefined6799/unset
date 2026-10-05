@@ -248,7 +248,9 @@ module.exports = {
   options: {
     parser: "swc",
     doNotFollow: { path: "node_modules" },
-    exclude: { path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures)/" },
+    exclude: {
+      path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures|\\.semgrep/rules/fixtures)/",
+    },
   },
 };
 
