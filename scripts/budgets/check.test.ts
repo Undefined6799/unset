@@ -44,6 +44,12 @@ test("count_excludes_tests_and_generated", () => {
   expect(check(root, { "interfaces/media": 10 })).toEqual([]);
 });
 
+test("budgets_skip_fakes", () => {
+  // A fake is a test double, not module code (architecture ruling 2026-10-04 23:53Z).
+  const root = tree({ "infrastructure/net-guard/x.ts": lines(50), "infrastructure/net-guard/x.fake.ts": lines(500) });
+  expect(check(root, { "infrastructure/net-guard": 100 })).toEqual([]);
+});
+
 test("budget_overrun_warns_not_fails", () => {
   const root = tree({
     "interfaces/media/a.ts": lines(12),
