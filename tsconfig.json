@@ -4,6 +4,7 @@
     { "path": "scripts" },
     { "path": "shared/config" },
     { "path": "shared/errors" },
+    { "path": "shared/http" },
     { "path": "shared/log" }
   ]
 }
