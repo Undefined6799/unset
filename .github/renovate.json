@@ -14,7 +14,7 @@
   "separateMajorMinor": true,
   "automerge": false,
   "dependencyDashboard": true,
-  "labels": ["deps"],
+  "labels": ["deps", "kind/build"],
   "branchPrefix": "renovate/",
   "semanticCommits": "disabled",
   "commitMessagePrefix": "P0.08",
@@ -24,7 +24,7 @@
     "schedule": ["before 6am on monday"]
   },
   "vulnerabilityAlerts": {
-    "labels": ["security"],
+    "labels": ["security", "kind/build"],
     "minimumReleaseAge": "7 days",
     "rangeStrategy": "pin"
   },

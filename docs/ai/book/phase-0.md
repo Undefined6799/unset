@@ -2014,6 +2014,35 @@ Not in this step: removing the old `# checks:` entries (the next check PR does i
 
 ---
 
+### P0.09i — pr-shape skips the template headings for Renovate only (architecture ruling 2026-10-05 11:55Z)
+Tags: —            Depends on: P0.09g            Plan: DL-3 (PR template), SE-6
+Where: one check PR. `scripts/guards/change-shape.ts` and its tests, `.github/workflows/pr-shape.yml` (env inputs),
+  `.github/renovate.json`; `docs/human/engineering/engineering-rules.md` re-copied (DL-3 "Enforced by")
+Size: ~10 source lines, ~40 test lines
+
+Why: Renovate writes its own PR body, so its PRs failed pr-shape on one error only, the missing template headings
+(#41 was the first).
+
+Outputs (as built):
+  - The heading check is skipped only when `github.event.pull_request.user.login` is exactly `renovate[bot]` and
+    `user.type` is `Bot`. Both reach the script through `env` (`PR_AUTHOR`, `PR_AUTHOR_TYPE`), like its other inputs,
+    and the job fails closed if either is missing. Never keyed on a label.
+  - Every other check still runs on Renovate PRs, the kind-label warning included.
+  - `.github/renovate.json` gives every Renovate PR exactly one kind label, `kind/build` (an existing label; the
+    ruling's example `kind/deps` does not exist, and creating labels is a settings change): in `labels` beside `deps`,
+    and in `vulnerabilityAlerts.labels` beside `security`, because `labels` is non-mergeable and that block replaces
+    it. DO-3: Renovate 44.115.13 `docs/usage/configuration-options.md` (`labels`: labels on every PR it creates, kept
+    in sync on GitHub; non-mergeable), and `dist/workers/repository/update/pr/labels.js` `prepareLabels(config)`, which
+    every PR uses, lock-file maintenance included (that block does not set `labels`).
+
+Done when (tests, `change-shape.test.ts`):
+  - renovate_bot_skips_headings, other_bot_needs_headings, user_spoofing_renovate_login_fails,
+    renovate_without_kind_label_warns (title and size still checked too), renovate_labels_its_prs_with_one_kind.
+  - title_never_interpolated (`change-shape-wiring.test.ts`) covers the two new env inputs.
+Not in this step: P0.09h (pure renames count once in the size guard), which follows it.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),

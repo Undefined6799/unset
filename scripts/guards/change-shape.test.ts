@@ -424,6 +424,7 @@ describe("the pr-shape job", () => {
     title: "P0.09c Check the shape of every change",
     body: goodBody,
     labels: ["kind/build"],
+    author: { login: "Undefined6799", type: "User" },
     commits: [{ sha: "abc1234", message: "P0.09c Check the shape of every change\n" }],
     numstat: "10\t0\tscripts/guards/x.ts",
     template: TEMPLATE,
@@ -479,5 +480,39 @@ describe("the pr-shape job", () => {
       "[PF-1] a `-- why: speed` index needs p50, p95 and p99 before and after in Performance evidence",
     );
     expect(out.warnings).toEqual(["[D2] expected exactly one kind/* label, found none"]);
+  });
+
+  // P0.09i (architecture ruling 2026-10-05 11:55Z): Renovate writes its own body, so only DL-3 is waived, and only for
+  // the account GitHub reports as the renovate[bot] app; a person cannot register a "[bot]" login.
+  const renovate = { login: "renovate[bot]", type: "Bot" };
+  const headingErrors = (author: { login: string; type: string }): string[] =>
+    runChangeShape(input({ author, body: "Renovate's table" })).errors.filter((e) => e.startsWith("[DL-3]"));
+
+  test("renovate_bot_skips_headings", () => {
+    expect(headingErrors(renovate)).toEqual([]);
+  });
+
+  test("other_bot_needs_headings", () => {
+    expect(headingErrors({ login: "dependabot[bot]", type: "Bot" })).toHaveLength(1);
+  });
+
+  test("user_spoofing_renovate_login_fails", () => {
+    expect(headingErrors({ login: "renovate[bot]", type: "User" })).toHaveLength(1);
+  });
+
+  test("renovate_without_kind_label_warns", () => {
+    // Every other check still runs on its PRs: the kind label, the title and the size.
+    const out = runChangeShape(
+      input({ author: renovate, body: "", labels: ["deps"], title: "Update x", numstat: "900\t0\tapps/web/a.ts" }),
+    );
+    expect(out.warnings).toContain("[D2] expected exactly one kind/* label, found none");
+    expect(out.errors.some((e) => e.startsWith("[D2] PR title"))).toBe(true);
+    expect(out.errors.some((e) => e.startsWith("[D3] PR size"))).toBe(true);
+  });
+
+  test("renovate_labels_its_prs_with_one_kind", () => {
+    const config = JSON.parse(read(".github/renovate.json"));
+    for (const labels of [config.labels, config.vulnerabilityAlerts.labels] as string[][])
+      expect(labels.filter((l) => l.startsWith("kind/"))).toEqual(["kind/build"]);
   });
 });

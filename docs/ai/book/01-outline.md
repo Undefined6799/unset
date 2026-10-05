@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 20 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f and P0.09g added 2026-10-05).
+Depth: **build-ready**. 21 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g and P0.09i added 2026-10-05).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -41,6 +41,7 @@ Depth: **build-ready**. 20 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b, P0.09e | `phase-0.md` |
 | P0.09f | Let the root lockfile ride with a trusted package's dependency change (SE-6 ruling 2026-10-05 02:50Z) | [SEC] | P0.09c | `phase-0.md` |
 | P0.09g | Repo-root tidy (config files out of the root) | — | P0.09f, P0.13 | `phase-0.md` |
+| P0.09i | pr-shape skips template headings for Renovate only | — | P0.09g | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11 | Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list | [ALEX] | Alex part: —; agent PR: P0.04, P0.07 | `phase-0.md` |
@@ -65,6 +66,7 @@ flowchart TD
   P0_09d["P0.09d AI notes vault and guard"]
   P0_09f["P0.09f Lockfile rides with trusted deps"]
   P0_09g["P0.09g Repo-root tidy"]
+  P0_09i["P0.09i Renovate skips template headings"]
   P0_10["P0.10 Secret scanning"]
   P0_11["P0.11 Domains"]
   P0_12["P0.12 Offline key ceremony and the key"]
@@ -87,6 +89,7 @@ flowchart TD
   P0_09c --> P0_09f
   P0_09f --> P0_09g
   P0_13 --> P0_09g
+  P0_09g --> P0_09i
   P0_07 --> P0_10
   P0_07 --> P0_11
   P0_10 --> P0_12
