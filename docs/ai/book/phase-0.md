@@ -1098,6 +1098,10 @@ As ruled (architecture thread, 2026-10-05 00:00Z; carried by the Phase 0 thread)
   - Test `audit_override_only_in_audit_job` (`scripts/guards/workflow-pins.test.ts`): the string `@unset:registry=`
     appears in `ci.yml` exactly once, inside the `audit` job's `npm audit signatures` line.
 
+Extended by P1.01s (2026-10-05): custom rule ids must appear in the SARIF rule list. `semgrep-rules-ran.ts` reads the
+ids declared under `.semgrep/rules/` and fails if any is missing from `semgrep.sarif`, so the custom rules loading
+nothing in the main scan is caught.
+
 ---
 
 ### P0.08 — Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard
