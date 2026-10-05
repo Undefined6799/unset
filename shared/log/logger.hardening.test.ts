@@ -62,7 +62,7 @@ describe("logger hardening", () => {
   test("logger_scrubs_before_truncating", () => {
     const reason = reasonOf(`${"x".repeat(185)}192.168.100.200`);
     expect(reason).not.toContain("192.16");
-    expect(reasonOf("‮evil")).toBe("?evil");
+    expect(reasonOf("\u202eevil")).toBe("?evil");
   });
 
   test("logger_route_rejects_raw_paths", () => {
