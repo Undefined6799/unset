@@ -1,0 +1,6 @@
+// fixture: interfaces/http/main.ts findings=0
+import { bootOrExit } from "@unset/shared-config";
+import { compose } from "./compose.ts";
+import { config as schema } from "./config.ts";
+const services = await compose(bootOrExit(schema, process.env));
+await services.server.listen();
