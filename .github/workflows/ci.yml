@@ -68,7 +68,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high
-      - run: npm audit signatures
+      # The @unset scope override applies only to this signature-key fetch: npm prefetches keys for every
+      # registry any edge uses, workspace edges included, but never verifies or downloads a workspace. .npmrc
+      # stays fail-closed for every install, and the dependency guard (scripts/guards/dependencies.ts) keeps every
+      # @unset/* lockfile entry a plain workspace link. No other job may pass it (audit_override_only_in_audit_job).
+      - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/
 
   secrets:
     runs-on: ubuntu-24.04

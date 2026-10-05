@@ -98,6 +98,23 @@ describe("lockfile sources", () => {
     expect(lockfile({ resolved: "../elsewhere", link: true })).toHaveLength(1);
   });
 
+  test("lockfile_unset_links", () => {
+    // Architecture ruling 2026-10-05 00:00Z (P0-A5): npm ci follows `resolved`, so every @unset/* entry must be a
+    // plain link to a workspace folder; the dead scope registry in .npmrc alone does not stop a tampered lockfile.
+    const key = "node_modules/@unset/core";
+    for (const entry of [
+      { resolved: "https://registry.npmjs.org/@unset/core/-/core-1.0.0.tgz", link: true },
+      { resolved: "shared/core", link: false },
+      { resolved: "../outside", link: true },
+      { resolved: "shared/core", link: true, integrity: "sha512-AAAA" },
+      { resolved: "file:shared/core", link: true },
+      { link: true },
+    ]) {
+      expect(lockfile(entry, key), JSON.stringify(entry)).toHaveLength(1);
+    }
+    expect(lockfile({ resolved: "shared/core", link: true }, key)).toEqual([]);
+  });
+
   test("lockfile_rejects_malformed", () => {
     expect(lockfile(null)).toHaveLength(1);
     expect(scanLockfile("package-lock.json", JSON.stringify({ lockfileVersion: 1 }), FOLDERS)).toHaveLength(1);
