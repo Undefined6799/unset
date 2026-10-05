@@ -2056,8 +2056,8 @@ As built:
   - The count runs `git diff -z --numstat --find-renames` at git's default 50% similarity, never lowered, so a heavy
     rewrite stays a delete plus an add (git v2.43.0 `Documentation/diff-options.txt`, `-M`). `numstatLines` reads the
     `-z` rename form `added TAB deleted TAB NUL old NUL new NUL` (`Documentation/diff-format.txt:165-179`).
-  - A pure rename counts 1; a rename with edits counts its changed lines, like an edit in place; whether a row counts
-    at all goes by its new path. Path classification for SE-6 (`git diff --raw --no-renames`) is unchanged: a move
+  - A pure rename counts 1; a rename with edits counts its changed lines, like an edit in place; a renamed row counts when either path is source
+    (architecture ruling 13:10Z), so edited source cannot hide by moving into an excluded path. Path classification for SE-6 (`git diff --raw --no-renames`) is unchanged: a move
     still shows both paths there.
   - CODEOWNERS: the old root entries `/.githooks/`, `/.semgrep/` and `/.dependency-cruiser.cjs` leave the
     `# checks:` line (P0.09g kept them while the guard read base and head together), and `no_old_root_paths_referenced`
@@ -2068,7 +2068,8 @@ Done when (tests, `scripts/guards/pr-size.test.ts`, each on a real throwaway rep
   - `rename_with_edit_counts_changed_lines`: the same move with two lines replaced → 4.
   - `delete_and_unrelated_add_still_count`: a 300-line file deleted and a different 200-line file added → 500.
   - `rewrite_is_not_a_rename`: the move with 200 of 300 lines rewritten → 600.
-  - `rename_out_of_tests_counts_once`, `numstat_lines_refuses_newline_paths`; the existing size tests pass unchanged.
+  - `rename_counts_by_stricter_path`, `rename_with_edit_into_excluded_path_counts_changed_lines`,
+    `numstat_lines_refuses_newline_paths`; the existing size tests pass unchanged.
 
 ---
 

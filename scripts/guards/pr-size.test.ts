@@ -74,11 +74,21 @@ describe("pr size and renames", () => {
     expect(count).toBe(600);
   });
 
-  test("rename_out_of_tests_counts_once", () => {
-    // Paths outside the count still decide by the new path: a pure move into source costs 1, a move into tests 0.
+  test("rename_counts_by_stricter_path", () => {
+    // A renamed row counts when either path is source (architecture ruling 2026-10-05 13:10Z): a pure move costs 1
+    // both ways, and only a move between two excluded paths costs nothing.
     expect(numstatLines("0\t0\t\0tests/a.ts\0apps/web/a.ts\0")).toBe("0\t0\tapps/web/a.ts\ttests/a.ts");
     expect(measurePrSize("0\t0\tapps/web/a.ts\ttests/a.ts", [], "").changed).toBe(1);
-    expect(measurePrSize("0\t0\ttests/a.ts\tapps/web/a.ts", [], "").changed).toBe(0);
+    expect(measurePrSize("0\t0\ttests/a.ts\tapps/web/a.ts", [], "").changed).toBe(1);
+    expect(measurePrSize("0\t0\ttests/b.ts\ttests/a.ts", [], "").changed).toBe(0);
+  });
+
+  test("rename_with_edit_into_excluded_path_counts_changed_lines", () => {
+    // Renaming edited source into an excluded path must not hide the edit.
+    const edited = file.replace("line 10\n", "edited 10\n").replace("line 20\n", "edited 20\n");
+    const into = (to: string) => countAfter({ "apps/web/a.ts": file }, (dir) => mv(dir, "apps/web/a.ts", to, edited));
+    expect(into("apps/web/a.generated.ts")).toBe(4);
+    expect(into("tests/a.ts")).toBe(4);
   });
 
   test("numstat_lines_refuses_newline_paths", () => {
