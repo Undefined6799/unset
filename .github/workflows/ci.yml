@@ -123,7 +123,7 @@ jobs:
       - name: Semgrep CE
         run: >-
           docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE"
-          semgrep scan --config p/typescript --config p/nodejs --config p/owasp-top-ten
+          semgrep scan --config .semgrep/rules/ --config p/typescript --config p/nodejs --config p/owasp-top-ten
           --metrics=off --error --sarif-output=semgrep.sarif
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: always()
@@ -132,6 +132,12 @@ jobs:
       - name: Fail if no rules ran
         if: always()
         run: node scripts/ci/semgrep-rules-ran.ts semgrep.sarif
+      # P1.01s: each custom rule fires on its must-fail fixtures and stays silent on its must-pass ones.
+      # The script copies the rules (paths blocks stripped) and fixtures to a temp dir, scans that copy with
+      # $SEMGREP_IMAGE --json and fails closed on a missing report, zero fixtures or any mismatch.
+      - name: Prove custom rules on fixtures
+        if: always()
+        run: node scripts/lint/semgrep-fixtures.ts run
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

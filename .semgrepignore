@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.generated.*
 scripts/guards/fixtures/
+.semgrep/rules/fixtures/
