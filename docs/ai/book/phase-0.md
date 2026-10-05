@@ -1080,6 +1080,17 @@ public); graphify in CI (PI-2, no step yet); the commit-message and PR-title che
 heading check (P0.09c, decision 35).
 Diagram: none.
 
+
+As ruled (architecture thread, 2026-10-05 00:00Z; carried by the Phase 0 thread):
+  - Why: PR 23, the first `@unset/*` workspace, turned the audit job red. `npm audit signatures` prefetches signing
+    keys for every registry used by any edge, workspace edges included, and `.npmrc` pins `@unset:registry` to
+    `https://127.0.0.1:9/` (fail-closed), so the key fetch got ECONNREFUSED.
+  - In the `audit` job only, run `npm audit signatures --@unset:registry=https://registry.npmjs.org/`.
+  - Comment it in `ci.yml`: the override applies only to the signature-key fetch, and workspaces are never verified
+    or downloaded. `.npmrc` stays fail-closed for every install.
+  - This is accepted because the command installs nothing. No other job or script may pass the override.
+  - Test `audit_override_only_in_audit_job` (`scripts/guards/workflow-pins.test.ts`): the string `@unset:registry=`
+    appears in `ci.yml` exactly once, inside the `audit` job's `npm audit signatures` line.
 ---
 
 ### P0.08 — Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard
@@ -1179,6 +1190,15 @@ Reuse: bootstrap `.github/dependabot.yml:1-11` → REJECT (replaced, plan §6.1)
 Not in this step: Tap pinned-commit tracking (custom manager, P3.02); base-image digests (P1.27); owning a scope (P0-A5).
 Diagram: none.
 
+
+As ruled (architecture thread, 2026-10-05 00:00Z, condition of the P0.07 audit override; carried by the Phase 0
+thread): `npm ci` follows each lockfile entry's `resolved` URL, so a tampered lockfile could fetch a third-party
+`@unset/*` package despite `.npmrc`. The ruling asked for a new guard `lockfile-unset-links` in P0.06; this step's
+`scripts/guards/dependencies.ts` already enforces it (an `@unset/*` entry that is not `"link": true` to a workspace
+folder fails, and so does any URL, `file:` or path outside the workspaces), so no second guard was written. The one
+gap, a link entry carrying `integrity`, now fails too. Test `lockfile_unset_links`: a registry URL, `"link": false`,
+`../outside`, an `integrity` field, `file:` and a link with no `resolved` each fail; `{ "resolved": "shared/core",
+"link": true }` passes.
 ---
 
 ### P0.09 — Repository docs: slim CLAUDE.md/AGENTS.md, SECURITY.md, licence line, ADR index, the book
@@ -2374,6 +2394,9 @@ shared file was edited.
   npm support for the dormant scope. *Recommendation (provisional): (b) if `plugin-api` may ever be published for
   third-party plugin authors, else (a); the `.npmrc` block stays in every case.* Decision 25 defers any `plugin-api`
   package to the first real plugin, so (a) stands until then.
+  2026-10-05: with workspaces present, the scope block also covers `npm audit signatures`. That job alone overrides
+  the scope registry for the key fetch (P0.07). P0.08's dependency guard closes the `npm ci` resolved-URL path. Option
+  (a) stands.
 - **P0-A6. Licence of the lexicon schemas**, which P1.35 publishes in Phase 1, before P0.13 is decided. (a) The schemas are
   interface data, exempt from "nothing public", under MIT or CC0. (b) Wait for P0.13. *Recommendation (provisional):
   (a).* **Answered by Alex 2026-10-03 11:49Z: (b) wait for the code licence; then answered by #54 at 11:50Z: the

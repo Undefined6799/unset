@@ -2727,6 +2727,9 @@ As ruled (architecture thread, 2026-10-04 23:53Z):
     - `fast_check_only_in_net_guard_tests`: a fixture `infrastructure/net-guard/x.ts` importing `fast-check` fails
       dependency-cruiser, and the same import in `x.test.ts` passes.
   - Built by the Phase 1 thread in P1.18a.
+  - Outputs gain (architecture ruling 2026-10-05 00:00Z): the PR flips docs/human/architecture.md's `net-guard-leaf`
+    row, following the table convention. Its "What it says" becomes exactly: "net-guard imports only Node built-ins,
+    undici and its own files; its *.test.ts may also import fast-check and vitest". The check name is unchanged.
 
 ---
 
