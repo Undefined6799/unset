@@ -9,6 +9,7 @@ import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
 import * as egress from "./egress.ts";
 import { type Finding, report } from "./files.ts";
+import * as inlineStyle from "./inline-style.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
 import * as routeRegistration from "./route-registration.ts";
@@ -19,6 +20,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["egress", egress.scanAll],
   ["cookie-domain", cookieDomain.scanAll],
   ["inner-html", innerHtml.scanAll],
+  ["inline-style", inlineStyle.scanAll],
   ["web-no-moderator", webNoModerator.scanAll],
   ["ip-columns", ipColumns.scanAll],
   ["route-registration", routeRegistration.scanAll],
@@ -42,6 +44,7 @@ test("unreadable_file_is_finding", () => {
   const scanned: Record<string, string> = {
     "ip-columns": "infrastructure/postgres/migrations/0001.sql",
     "composition-root": "interfaces/http/main.ts",
+    "inline-style": "apps/web/src/Bad.tsx",
   };
   // case-collision reads only names from git, never file contents.
   for (const [rule, scanAll] of RULES.filter(([rule]) => rule !== "case-collision")) {
