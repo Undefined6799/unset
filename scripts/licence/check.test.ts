@@ -3,7 +3,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { findWorkspaces } from "../workspace/references.ts";
-import { checkPackage, checkRepository, flatten, type LsNode, PERMISSIVE, satisfies } from "./check.ts";
+import {
+  checkPackage,
+  checkRepository,
+  flatten,
+  indexByPath,
+  type LsNode,
+  PERMISSIVE,
+  productionTree,
+  rootDependenciesNotListed,
+  satisfies,
+} from "./check.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const read = (file: string): string => readFileSync(join(ROOT, file), "utf8");
@@ -99,8 +109,115 @@ describe("licence", () => {
     expect(flatten({ dependencies: { x: { missing: true } } })).toHaveLength(1);
   });
 
-  test("repository_has_no_conflicts", () => {
+  test("package_without_version_checked", () => {
+    // npm prints `version` only when it is set; an installed package without one still ships, and so does its tree.
+    const tree: LsNode = {
+      dependencies: {
+        nover: {
+          license: "GPL-3.0-only",
+          path: "/n/nover",
+          dependencies: { evil: { version: "1.0.0", license: "GPL-3.0-only", path: "/n/evil" } },
+        },
+      },
+    };
+    expect(checkPackage("p", "MIT", flatten(tree))).toEqual([
+      "p (MIT): nover@? is GPL-3.0-only",
+      "p (MIT): evil@1.0.0 is GPL-3.0-only",
+    ]);
+  });
+
+  test("root_dependency_not_listed_fails", () => {
+    // With --workspaces, npm 11.19.1 leaves an uninstalled root dependency out of the JSON entirely (ls.js
+    // filterBySelectedWorkspaces), so the manifest is compared with the tree. A missing optional one ships nothing.
+    const manifest = { name: "r", dependencies: { gone: "1.0.0", here: "1.0.0" }, optionalDependencies: { opt: "1" } };
+    const tree: LsNode = { dependencies: { here: { version: "1.0.0", license: "MIT", path: "/n/here" } } };
+    expect(rootDependenciesNotListed(manifest, tree)).toEqual(["r: gone is not installed, so its licence is unknown"]);
+  });
+
+  test("nested_copy_different_licence_fails", () => {
+    // Two installed copies of one name@version may carry different manifests; each copy's licence is checked.
+    const tree: LsNode = {
+      dependencies: {
+        a: {
+          version: "1.0.0",
+          license: "MIT",
+          dependencies: { x: { version: "1.0.0", license: "MIT", path: "/a/x" } },
+        },
+        b: {
+          version: "1.0.0",
+          license: "MIT",
+          dependencies: { x: { version: "1.0.0", license: "GPL-3.0-only", path: "/b/x" } },
+        },
+      },
+    };
+    expect(checkPackage("p", "MIT", flatten(tree))).toEqual(["p (MIT): x@1.0.0 is GPL-3.0-only"]);
+  });
+
+  test("deduped_stub_expanded_by_path", () => {
+    // npm 11.19.1 lists a package in full under one workspace and as a childless stub, at the same install path,
+    // under the next; the stub's workspace still ships the full copy's dependencies.
+    const lib = (dependencies: Record<string, LsNode> = {}): LsNode => ({
+      version: "1.0.0",
+      license: "MIT",
+      path: "/n/lib",
+      _dependencies: { evil: "^1.0.0" },
+      dependencies,
+    });
+    const first: LsNode = {
+      path: "/ws/first",
+      dependencies: { lib: lib({ evil: { version: "1.0.0", license: "GPL-3.0-only", path: "/n/evil" } }) },
+    };
+    const second: LsNode = { path: "/ws/second", dependencies: { lib: lib() } };
+    const index = indexByPath({ dependencies: { first, second } });
+    expect(checkPackage("second", "MIT", flatten(second, index))).toEqual(["second (MIT): evil@1.0.0 is GPL-3.0-only"]);
+  });
+
+  test("missing_expansion_fails", () => {
+    // A childless copy that declares dependencies but has no full copy anywhere fails closed.
+    const stub = (fields: LsNode): LsNode => ({ dependencies: { s: { version: "1.0.0", license: "MIT", ...fields } } });
+    const unlisted = ["p: s@1.0.0 has children not listed by npm ls"];
+    expect(checkPackage("p", "MIT", flatten(stub({ path: "/s", _dependencies: { x: "*" } })))).toEqual(unlisted);
+    expect(checkPackage("p", "MIT", flatten(stub({ path: "/s", peerDependencies: { x: "*" } })))).toEqual(unlisted);
+    // An optional peer need not be installed, and a package that declares nothing has nothing to list.
+    const optional = { path: "/s", peerDependencies: { x: "*" }, peerDependenciesMeta: { x: { optional: true } } };
+    expect(checkPackage("p", "MIT", flatten(stub(optional)))).toEqual([]);
+    expect(checkPackage("p", "MIT", flatten(stub({ path: "/s", _dependencies: {} })))).toEqual([]);
+  });
+
+  test("one_npm_ls_call", () => {
+    // Every workspace is split out of one listed tree; a stub under the last workspace expands through the first.
+    const root = manifest("package.json") as { name: string };
+    const names = findWorkspaces(ROOT).map(({ pkg }) => String(pkg.name));
+    const bad = { evil: { version: "1.0.0", license: "GPL-3.0-only", path: "/n/evil" } };
+    const lib = { version: "1.0.0", license: "MIT", path: "/n/lib", _dependencies: { evil: "*" } };
+    const workspace = (name: string, i: number): LsNode => ({
+      version: "0.0.0",
+      path: `/ws/${name}`,
+      dependencies: i === 0 ? { lib: { ...lib, dependencies: bad } } : i === names.length - 1 ? { lib } : {},
+    });
+    let calls = 0;
+    const list = () => {
+      calls++;
+      return { name: root.name, dependencies: Object.fromEntries(names.map((n, i) => [n, workspace(n, i)])) };
+    };
+    const conflicts = checkRepository(list);
+    expect(calls).toBe(1);
+    expect(conflicts.filter((c) => c.includes("evil@1.0.0")).map((c) => c.split(" ")[0])).toEqual([
+      names[0],
+      names[names.length - 1],
+    ]);
+  });
+
+  // The bound is about 3x the measured run (0.44 s on npm 11.19.1, down from 2.4 s with one npm ls per workspace).
+  test("repository_has_no_conflicts", { timeout: 1_500 }, () => {
     // The real tree through `npm ls`, as `node scripts/licence/check.ts` runs it.
-    expect(checkRepository()).toEqual([]);
+    let calls = 0;
+    expect(
+      checkRepository(() => {
+        calls++;
+        return productionTree();
+      }),
+    ).toEqual([]);
+    expect(calls).toBe(1);
   });
 });
