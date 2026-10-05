@@ -11,6 +11,7 @@ import type { LogFields, Logger } from "@unset/shared-log";
 import { Hono } from "hono";
 import type { ClientIp } from "./clientIp.ts";
 import { type HttpKitConfig, hostAllowed } from "./config.ts";
+import { createCsrfGate } from "./csrf/gate.ts";
 import { errorResponse, groupForPath } from "./errors.ts";
 import { createHealth, type Readiness } from "./health.ts";
 import { BodyTooLarge, limitBody } from "./limits/bodyLimit.ts";
@@ -79,6 +80,7 @@ function middlewareOf(route: Pick<Route, "path" | "method" | "rateLimit" | "requ
     "methodCheck",
     ...(route.method === "POST" ? ["contentTypeCheck", "bodyLimit"] : []),
     ...(route.rateLimit === "exempt" ? [] : ["rateLimitIp"]),
+    ...(route.method === "POST" ? ["csrf"] : []),
     ...(route.requiresSession ? ["session", "rateLimitDid"] : []),
   ];
 }
@@ -106,6 +108,7 @@ export function createServer(options: ServerOptions) {
   const now = options.now ?? (() => performance.now());
   const exit = options.exit ?? ((code: number) => process.exit(code));
   const publicOrigin = new URL(config.PUBLIC_ORIGIN);
+  const csrfGate = createCsrfGate(config.PUBLIC_ORIGIN);
   const health = createHealth({
     service: config.UNSET_SERVICE,
     commit: config.UNSET_COMMIT,
@@ -194,11 +197,20 @@ export function createServer(options: ServerOptions) {
     return fail("http.rate_limited", route.group, { "retry-after": String(verdict.retryAfterS) });
   }
 
+  /** csrf (P1.07): a 403 when a POST is not same-origin; GET and HEAD routes are never gated (they cannot mutate). */
+  function csrfDenied(route: Route, request: Request): Response | undefined {
+    if (route.method !== "POST") return undefined;
+    const decision = csrfGate(request);
+    if (decision.ok) return undefined;
+    log.warn("csrf.denied", { route: route.path, reason: decision.reason });
+    return fail("csrf.denied", route.group);
+  }
+
   /** 413, closing the connection so the client cannot keep streaming the rest of the body. */
   const tooLarge = (group: RouteGroup) => fail("http.payload_too_large", group, { connection: "close" });
 
   /**
-   * Steps 7–11 in order: bodyLimit → rateLimitIp → (csrf, P1.07) → session → rateLimitDid. A response means the
+   * Steps 7–11 in order: bodyLimit → rateLimitIp → csrf (P1.07) → session → rateLimitDid. A response means the
    * request stops here; otherwise the request to hand on, its body counted against the limit.
    */
   async function admit(route: Route, request: Request, clientIp: ClientIp | null): Promise<Admitted | Response> {
@@ -210,6 +222,8 @@ export function createServer(options: ServerOptions) {
     }
     const byIp = rateLimited(route, { ip: clientIp });
     if (byIp) return byIp;
+    const crossSite = csrfDenied(route, request);
+    if (crossSite) return crossSite;
     if (!route.requiresSession) return admitted;
     const session = options.session ? await options.session(admitted.request) : null;
     if (session === null) {

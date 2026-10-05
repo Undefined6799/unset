@@ -1,6 +1,7 @@
 // Route definitions (P1.04k). `defineRoute` is the only way to register a route: it checks every option at startup,
 // so a route can never run without a rate-limit policy or a request deadline.
 import type { ClientIp } from "./clientIp.ts";
+import { GET_MUTATION_EXCEPTIONS } from "./csrf/exceptions.ts";
 
 export type RouteGroup = "app" | "profile" | "static" | "media" | "admin" | "api";
 export type RouteMethod = "GET" | "HEAD" | "POST";
@@ -102,6 +103,11 @@ export function defineRoute(spec: RouteSpec): Route {
   checkIdentity(spec);
   checkLimits(spec);
   const post = spec.method === "POST";
+  const mutates = spec.mutates ?? post;
+  // P1.07 step 10: a GET is not CSRF-gated, so it may change state only on a listed path.
+  if (!post && mutates && !GET_MUTATION_EXCEPTIONS.some((entry) => entry.path === spec.path)) {
+    throw new Error(`${spec.path}: a ${spec.method} route cannot mutate unless listed in GET_MUTATION_EXCEPTIONS`);
+  }
   const accepts = post ? (spec.accepts ?? ["application/x-www-form-urlencoded"]) : [];
   if (post && (accepts.length === 0 || !accepts.every((type) => MEDIA_TYPE.test(type)))) {
     throw new Error(`${spec.path}: accepts must list lowercase media types`);
@@ -113,7 +119,7 @@ export function defineRoute(spec: RouteSpec): Route {
     accepts: Object.freeze([...accepts]),
     bodyLimit: spec.bodyLimit,
     rateLimit: spec.rateLimit,
-    mutates: spec.mutates ?? post,
+    mutates,
     requiresSession: spec.session === "required" ? true : undefined,
     deadlineMs: spec.deadlineMs,
     handler: spec.handler,

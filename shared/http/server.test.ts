@@ -47,6 +47,8 @@ function kit(options: Partial<ServerOptions> = {}) {
   const request = (path: string, init: RequestInit & { host?: string; peer?: string } = {}) => {
     const headers = new Headers(init.headers);
     if (init.host !== "") headers.set("host", init.host ?? "unset.test");
+    // A browser's same-origin POST, so these tests reach the checks they are about; csrf/gate.test.ts owns the gate.
+    if (init.method === "POST" && !headers.has("sec-fetch-site")) headers.set("sec-fetch-site", "same-origin");
     return server.request(new Request(`http://internal${path}`, { ...init, headers }), init.peer);
   };
   return { server, request, lines, records };
@@ -344,6 +346,7 @@ describe("startup checks", () => {
           "contentTypeCheck",
           "bodyLimit",
           "rateLimitIp",
+          "csrf",
         ],
       },
     ]);
@@ -398,6 +401,7 @@ describe("startup checks", () => {
         "contentTypeCheck",
         "bodyLimit",
         "rateLimitIp",
+        "csrf",
         "session",
         "rateLimitDid",
       ],
