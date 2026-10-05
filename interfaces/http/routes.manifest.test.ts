@@ -17,6 +17,7 @@ const ENV = {
   LISTEN_PORT: "8080",
   PUBLIC_ORIGIN: "https://unset.test",
   HTTP_ALLOWED_HOSTS: "unset.test",
+  MEDIA_ORIGIN: "https://unset-media.test",
   TRUSTED_PROXY_MODE: "header",
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8",

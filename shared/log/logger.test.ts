@@ -130,6 +130,13 @@ describe("logger", () => {
     expect(records().map((r) => [r.event, r.reason])).toEqual([["csrf.denied", "origin_mismatch"]]);
   });
 
+  test("logger_csp_event", () => {
+    // P1.08's security headers log this, with the route template only, when a handler's own CSP was replaced.
+    const { log, records } = capture();
+    log.warn("csp.handler_override", { route: "/@:handle" });
+    expect(records().map((r) => [r.event, r.route])).toEqual([["csp.handler_override", "/@:handle"]]);
+  });
+
   test("logger_no_stack_message_in_prod", () => {
     const { log, lines } = capture("prod");
     log.logError(new Error("secret value"));
