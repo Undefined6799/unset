@@ -904,8 +904,28 @@ Diagram: none.
 
 ---
 
+### P1.05e — Trusted proxy keys in the entrypoint test envs (split from P1.05, SE-6)
+Tags: —            Depends on: P1.04            Plan: as P1.05; §5.7; §9 (rule SE-6)
+Where: the six `interfaces/{http,api,media,admin,indexer,review}/routes.manifest.test.ts`, in their fixed envs only
+  (product paths)
+
+Why a separate step (relayed 2026-10-05 13:09Z): P1.05 makes `TRUSTED_PROXY_MODE` required with no default, and the six
+manifest tests load the kit config from a fixed env, so the key added in `shared/http` alone would turn them red. The
+test files are product paths and cannot ride in the trusted-base P1.05 PR. `loadConfig` ignores env keys it does not
+declare outside `UNSET_*` (`shared/config/load.ts` lines 95-102), so the keys land first and change nothing on main.
+
+Change (plan §5.7): `http`, `api`, `media`, `indexer` and `review` get `TRUSTED_PROXY_MODE=header`, a
+`TRUSTED_PROXY_HEADER` and test `TRUSTED_PROXY_CIDRS` (never `0.0.0.0/0` or `::/0`, which P1.05 rejects); `admin` gets
+`TRUSTED_PROXY_MODE=socket`. Each env spells the keys as its existing kit keys.
+
+Done when (tests): the six manifest tests stay green on main with the new keys; P1.05's branch, rebased on P1.05e,
+keeps them green.
+Diagram: none.
+
+---
+
 ### P1.05 — Trusted proxy: the client IP from one configured header only
-Tags: [SEC]            Depends on: P1.04            Plan: §2 rule 16, §5.2 (rate limits keyed on client IP), §5.7 (`admin` takes the IP from the socket), §10
+Tags: [SEC]            Depends on: P1.04, P1.05e            Plan: §2 rule 16, §5.2 (rate limits keyed on client IP), §5.7 (`admin` takes the IP from the socket), §10
 Where: `shared/http/proxy/{clientIp.ts,ClientIp.ts}` + tests; its config keys in the kit fragment
   `shared/http/config.ts` (P1.04k), so this PR touches only `shared/http/` (SE-6)
 Size: ~120 source lines, ~180 test lines
@@ -977,6 +997,13 @@ Done when (tests):
   - not_printable: `String(ip)`, `JSON.stringify({ip})` → `"[ip]"`.
   - config_rejects_any_cidr: `TRUSTED_PROXY_CIDRS=0.0.0.0/0` → `ConfigError` invalid.
   - exception_is_null: header parser stubbed to throw → `null`, request continues.
+  - trusted_proxy_on_every_route_but_health: every route other than `GET /health` lists `trustedProxy` in its
+    middleware, checked by allowlist so a new route cannot silently drop it. `trustedProxy` skips `/health` the way
+    `hostCheck` does (`server.ts` lines 55-61); the six manifests stay unchanged (architecture ruling 2026-10-05 13:10Z:
+    the client IP feeds rate limits only, §5.2, never logs, SE-7, and `/health` is exempt from rate limiting).
+  - health_reads_no_request_input: `/health` returns only `status` and `commit` and reads no request input that would
+    need a client identity.
+  Abuse limiting of `/health` stays with the edge, which limits per client in memory (P1.28); it is not a kit test.
 
 Reuse: prototype `/home/claude/0x40/app/src/lib/audit.ts:36-40` (leftmost `X-Forwarded-For`, then `X-Real-IP`) → REJECT
 (leftmost is client-controlled). Prototype Traefik keyed on `CF-Connecting-IP` (review 04 §3) → LESSON (only valid behind
