@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from "node:util";
 import { checkCommitMessage, checkPrTitle } from "./commit-msg.ts";
 import { type ChangedPath, classifyGrantChanges, type GrantFinding, type GrantSide } from "./grant-parse.ts";
 import { checkPerfEvidence } from "./perf-evidence.ts";
-import { measurePrSize } from "./pr-size.ts";
+import { measurePrSize, NUMSTAT_ARGS, numstatLines } from "./pr-size.ts";
 import { checkPrTemplate } from "./pr-template.ts";
 import {
   checkPathsMixed,
@@ -187,12 +187,8 @@ function docFacts(base: string, head: string, changed: readonly RawChange[]): Do
   };
 }
 
-/** `git diff -z --numstat` rows as the tab-separated lines measurePrSize reads; a path with a newline is refused. */
-function numstat(base: string, head: string): string {
-  const rows = fields(git("diff", "-z", "--numstat", "--no-renames", `${base}...${head}`));
-  if (rows.some((row) => row.includes("\n"))) throw new Error("a changed path contains a newline");
-  return rows.join("\n");
-}
+/** The numstat lines measurePrSize reads, with renames paired (P0.09h). */
+const numstat = (base: string, head: string): string => numstatLines(git("diff", ...NUMSTAT_ARGS, `${base}...${head}`));
 
 function grantSide(sha: string, migrations: readonly string[]): GrantSide {
   return {

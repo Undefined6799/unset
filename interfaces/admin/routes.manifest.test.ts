@@ -15,6 +15,7 @@ const ENV = {
   LISTEN_PORT: "8080",
   PUBLIC_ORIGIN: "https://unset.test",
   HTTP_ALLOWED_HOSTS: "unset.test",
+  TRUSTED_PROXY_MODE: "socket",
 };
 type Entry = { method: string; path: string };
 /** Each route keyed by "METHOD path", as JSON keeps it: an unset option is absent, as in the committed file. */
