@@ -2295,6 +2295,10 @@ first real plugin, decision 25).
 Diagram: none.
 
 ### P2.16b — PDQ hasher (one module for images and video frames)
+
+One step (SE-6 recount, 2026-10-05 01:43Z): `scripts/fetch-pdq-vectors.ts` fetches reference data and decides no pass
+or fail, so this stays one step.
+
 Tags: [SEC]            Depends on: P1.01            Plan: §5.8 "Fingerprints" (PDQ computed locally; only hashes leave)
 Where: `domains/moderation/fingerprint/pdq/{pdq.ts, dihedral.ts, preprocess.ts, README.md}` + tests; `scripts/fetch-pdq-vectors.ts`
   (CI fetch of the reference data); `docs/human/decisions/00xx-pdq-implementation.md`
@@ -3661,7 +3665,14 @@ Diagram: see the three sequence diagrams at the top of this file.
 ---
 
 ### P2.26a — Minimal deploy by verified digest for the test host (added, decision 35 D5)
-Tags: [SEC]            Depends on: P2.26, P1.27, P1.30, P1.11, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+
+Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
+`scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
+`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26aq** holds that
+test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
+`rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
+
+Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.30, P1.11, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`

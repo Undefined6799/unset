@@ -1546,7 +1546,7 @@ Where: new `scripts/guards/commit-msg.ts`, `scripts/guards/pr-size.ts`, `scripts
   `.github/CODEOWNERS` (the `# checks:` line);
   `.github/required-checks.json` (appends `pr-shape`); `.github/labels.json` (appends labels); `renovate.json`
   (commit prefix). The grant classifier (`grant-sql.ts`, `grant-json.ts`, `grant-parse.ts` and their tests) is P0.09e's.
-Size: ~565 source lines as built (the classifier spec below moves to P0.09e in the book-edit PR that follows)
+Size: ~565 source lines as built
 
 Why here (letter suffix): the plan's Phase 0 CI list gained these three checks with decision 35 (2026-10-04); they need
 the CI workflow (P0.07), the PR template (P0.09) and the label list (P0.09b), so they come after all three.
@@ -1593,6 +1593,7 @@ Outputs:
     closed). A step whose change spans both becomes two steps (SE-6 as ruled 2026-10-04): a kit or other trusted-base
     change is split out just ahead as `<id>k`, a grants change as `<id>g` (one letter, so the id still matches
     `checkCommitMessage`), each its own PR titled with its own id.
+  - `classifyGrantChanges` and its spec moved to P0.09e (split 2026-10-05); this step uses it in `change-shape.ts`.
   - `checkPathsMixed(changedPaths: string[], checks: string[]) -> string[]` (pure; SE-6 ruling 2026-10-05, refined
     01:15Z, amended 01:40Z): when a changed path matches a `# checks:` pattern (the CODEOWNERS trusted-base section's
     machine-read line: the `scripts/` check folders, `.github/`, `.githooks/`, `.semgrep/`, `.semgrepignore`,
@@ -1606,70 +1607,6 @@ Outputs:
     (`pull_request_target`) is rejected. The `# checks:` lines of the base and head sections are read as one union, so a
     PR cannot drop a path from the list to escape; neither side having the line exits 1. Root `package.json` is off the
     list (adding a workspace must touch it), so a change to its `check` script is review-only.
-  - `classifyGrantChanges(input: { base: { migrations: {path, sql}[], grantMatrix: string | null, erasureRegistry:
-    string | null }, head: { same shape }, changed: { path, status: "A" | "M" | "D" | "R" }[] }) -> GrantFinding[]`
-    where `GrantFinding = { path, line, kind: "trusted" | "feature" | "neutral", reason, statement }` (pure, in
-    `grant-parse.ts`). It implements rule SE-6's "Enforced by" (engineering rules, as updated after the 2026-10-04
-    follow-up ruling; plan §9 at `6275827`) and nothing more: it parses migrations, `grant-matrix.json` and
-    `erasure-registry.json`, and fails closed. `roles.json` is not parsed: it is a whole-path trusted-base file.
-    1. **Objects this PR creates** are those created by its added migration files and absent from the base branch's
-       migrations: tables (`CREATE TABLE` and its columns), columns (`ALTER TABLE … ADD COLUMN`, that column only),
-       views (`CREATE [MATERIALIZED] VIEW`), sequences (`CREATE SEQUENCE`, and the one an identity or serial column of a
-       new table makes) and functions (`CREATE FUNCTION`, `CREATE PROCEDURE`, SECURITY DEFINER included). A schema is
-       never a created object for this purpose, since a schema grant always counts.
-    2. The SQL is split into statements by a tokenizer that knows `--` and `/* */` comments, quoted identifiers,
-       string literals and dollar quotes. Names are compared schema-qualified and case-folded as Postgres folds them.
-    3. **`trusted`**, exactly SE-6's kinds (a–e; f and g implement its `eraseDid` entry and its column grants):
-       a. any role statement or role attribute: `CREATE`, `ALTER` or `DROP` `ROLE`, `USER` or `GROUP` (a password or
-          other attribute included), and role membership (`GRANT <role> TO …`, `REVOKE <role> FROM …`);
-       b. a schema grant: `GRANT` or `REVOKE … ON SCHEMA`, and `… ON ALL … IN SCHEMA`;
-       c. on an object the PR does not create: `GRANT` or `REVOKE` on a table, view, sequence, column or function (a
-          column-list grant rides only when every listed column is created by the PR; a table-wide grant on an existing
-          table is trusted even when the PR adds a column to it); `ALTER DEFAULT PRIVILEGES` (it targets future objects
-          of a schema, never one this PR creates, so it is always trusted); `CREATE`, `ALTER` or `DROP POLICY` and
-          `ALTER TABLE … ENABLE | DISABLE | FORCE | NO FORCE ROW LEVEL SECURITY`;
-       d. a changed or removed `erasure-registry.json` row (rule 6);
-       e. any `CREATE OR REPLACE` or `ALTER` of a function or view the PR does not create (SE-6's wording; plan §9 at
-          `badf15a`): a new body
-          or definition, or an `ALTER` of its `SECURITY`, owner, `search_path` or anything else; definer and invoker
-          functions alike, procedures and materialized views included;
-       f. creating, replacing, altering or granting on a function named on the CODEOWNERS section's `# trusted
-          functions:` line (P0.03: the `eraseDid` family `core.erase_*`, `core.is_erased`, `core.allow_retrack`,
-          `core.is_held`, `mod.erase_foreign_did`; the line grows in the trusted-base step that first names a function:
-          P1.15 the audit append functions, P4.07k/P4.07h the legal-hold definers), so the SQL of SE-6's function
-          families is trusted base even when new. **Fail closed for families without names yet** (column-list ruling,
-          plan §9 at `9c54e52`): any `CREATE [OR REPLACE] FUNCTION | PROCEDURE` in schema `audit`, and any `SECURITY
-          DEFINER` function in a legal-hold migration (file name containing `legal-hold` or `legal_hold`, or a body that
-          names a `legal_hold` table; migrations live in `infrastructure/postgres/migrations/`, P1.01), is `trusted`
-          with reason `trusted_family_unnamed`, even when the PR creates it;
-       g. `ALTER TABLE … ADD COLUMN` on a table the PR does not create, unless the base `grant-matrix.json` proves the
-          new column's inherited grants were already intended: every entry for that table is column-level, or is a
-          table-level entry marked `"wholeTable": true` (P1.12: that role is meant to read every column, present and
-          future). A table with no matrix entry, a table-level entry without the flag, or an unreadable matrix →
-          trusted (fail closed). Setting or clearing `wholeTable` on an existing table's entry is a matrix change on an
-          existing object, so trusted by c.
-       The same statements on an object the PR creates are `feature`.
-    4. **`neutral`**, a closed list of statements that are none of the above: `CREATE TABLE`, `CREATE [UNIQUE] INDEX
-       [CONCURRENTLY]`, `CREATE [OR REPLACE] [MATERIALIZED] VIEW` (of a new name), `CREATE [OR REPLACE] FUNCTION |
-       PROCEDURE` of a new name not on the `# trusted functions:` line,
-       `CREATE TRIGGER`, `CREATE TYPE`, `CREATE DOMAIN`, `CREATE SEQUENCE`, `CREATE SCHEMA`, `ALTER TABLE` (subject to 3g) with only
-       `ADD COLUMN`, `ADD CONSTRAINT`, `VALIDATE CONSTRAINT`, `ALTER COLUMN … SET | DROP DEFAULT | NOT NULL`, `DROP
-       COLUMN`; `DROP INDEX`, `COMMENT ON`, `INSERT`, `UPDATE`, `DELETE`, `SET ROLE`, `RESET ROLE`, `SET LOCAL` (session
-       only; P1.15 builds the audit objects under `SET ROLE audit_owner`), `BEGIN`, `COMMIT`. The list grows only by a
-       PR to this guard (`/scripts/guards/`, CODEOWNERS).
-    5. **Fail closed:** anything not classified by 3 or 4 is `trusted` with reason `unclassified`: an unknown verb, a
-       `DO` block, `EXECUTE` of dynamic SQL, a statement the tokenizer cannot close (an unterminated quote or dollar
-       quote), and statements kept off the neutral list on purpose because their effect on access is not a plain
-       create (`ALTER TABLE … OWNER TO`, `DROP TABLE`, `DROP FUNCTION`, `DROP VIEW`). A migration file that already exists on
-       the base branch and is modified, renamed or deleted cannot be read as a list of new statements, so it is
-       `unclassified` too (P1.11 forbids editing a merged migration).
-    6. `grant-matrix.json` and `erasure-registry.json` are parsed as JSON on both sides. Matrix: a privilege added,
-       removed or changed on an object is `trusted` unless the PR creates the object (then `feature`); any change under
-       `roles` (role attributes and membership) or `schemas` (schema grants) is `trusted`, and so is a change to
-       `pluginRule`, which is a rule about roles and schemas. Registry (`"<schema>.<table>.<column>": {strategy, …}`): a
-       row added for a column the PR creates is `feature`; a changed or removed row is `trusted`; a row added for a
-       column that already exists is not one of the riding kinds and is `trusted` (`unclassified`, fail closed). Either
-       file failing to parse, or holding an unknown top-level key → `trusted`, `unclassified`.
   - `checkPerfEvidence(diff: string, body: string) -> missing: boolean` (pure; plan §6.1 Data access, rule PF-1): the
     diff adds a `-- why: speed` line in a migration (P1.11's index rule) and the body's `Performance evidence` field
     is `n/a` or lacks `p50`, `p95` and `p99` → missing (error).
@@ -1764,57 +1701,11 @@ Done when (tests): (`scripts/guards/change-shape.test.ts`; pure functions with f
     `domains/content/x.ts` → fail; the same migration holding only `CREATE TABLE app.x` and its grants + `domains/content/x.ts`
     → ok, not touched; `domains/content/x.ts` alone → ok, not touched; `shared/http/README.md` + `shared/http/csp/build.ts`
     → ok.
-  - grant_parse_feature_create_and_grant_passes (`grant-parse.test.ts`; SE-6 ruling 2026-10-04): a PR adding
-    `0042_x.sql` with `CREATE TABLE app.x (…)`, `GRANT SELECT, INSERT ON app.x TO web`, `CREATE FUNCTION app.f() …
-    SECURITY DEFINER`, `GRANT EXECUTE ON FUNCTION app.f() TO web`, `ALTER TABLE app.x ENABLE ROW LEVEL SECURITY`, the
-    matching `grant-matrix.json` rows, an `erasure-registry.json` row for a `did` column of `app.x`, and
-    `domains/content/x.ts` → no `trusted` finding; isolation ok, not touched. A `CREATE VIEW app.v` and `CREATE SEQUENCE
-    app.s` with grants on them → `feature` too.
-  - grant_parse_widen_existing_fails: base migrations create `app.account`; the PR adds a migration with
-    `GRANT SELECT ON app.account TO api` beside `domains/content/x.ts` → one `trusted` finding naming that statement;
-    isolation fails with `outside = ["domains/content/x.ts"]`. The same migration with only its `grant-matrix.json` row
-    and `tests/integration/postgres/grants.test.ts` → ok, touched. The same `GRANT` beside `CREATE TABLE app.y` in one
-    file → `mixed_grant_change`.
-  - grant_parse_unparseable_fails: beside a feature file, a new migration holding (a) `DO $$ BEGIN EXECUTE 'GR' ||
-    'ANT SELECT ON app.account TO api'; END $$;`, (b) an unterminated dollar quote, (c) an unknown verb `SECURITY LABEL
-    …`, and (d) an `erasure-registry.json` that is not valid JSON → each gives `trusted`, `unclassified`, and the PR
-    fails.
-  - grant_parse_replace_definer_fails (3e): base migrations create `core.f()` `SECURITY DEFINER`; the PR adds a
-    migration with `CREATE OR REPLACE FUNCTION core.f() … SECURITY DEFINER` beside `domains/content/x.ts` → one
-    `trusted` finding, isolation fails with `outside = ["domains/content/x.ts"]`; the same migration alone (with its
-    tests) → ok, touched.
-  - grant_parse_existing_function_or_view_changed (3e), each beside a feature file → trusted, PR fails: `CREATE OR
-    REPLACE FUNCTION app.g()` where base has `app.g()` as `SECURITY INVOKER`; `CREATE OR REPLACE VIEW app.v` where base
-    has `app.v`; `ALTER FUNCTION app.g() SET search_path = pg_catalog, app`; `ALTER FUNCTION app.g() SECURITY DEFINER`;
-    `ALTER VIEW app.v OWNER TO web`. The same five on a function or view the PR creates → neutral.
-  - grant_parse_add_column (3g): base `app.account` with a table-level `web` entry marked `wholeTable` → `ADD COLUMN`
-    neutral, PR passes with feature code; the same entry without the flag → trusted, PR fails; `app.account` with only
-    column-level entries → neutral; a table absent from the matrix → trusted; the PR setting `wholeTable` on
-    `app.account`'s existing entry → trusted.
-  - grant_parse_cases (one row each): `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES TO web` → trusted; `CREATE
-    ROLE x` → trusted; `GRANT audit_owner TO migrator` → trusted; `GRANT USAGE ON SCHEMA mod TO admin` → trusted;
-    `CREATE POLICY p ON app.x` with `app.x` new → feature, existing → trusted; `GRANT SELECT (c) ON app.account TO
-    admin` with `c` added by the PR → feature, with `c` existing → trusted; `GRANT SELECT ON app.account` after the PR
-    adds a column → trusted; `ALTER ROLE web PASSWORD …` → trusted; `REVOKE ALL ON ALL TABLES IN SCHEMA app FROM
-    PUBLIC` → trusted; `CREATE OR REPLACE FUNCTION` of a base function → trusted (3e); `CREATE FUNCTION
-    core.erase_x` (new, matching `# trusted functions:`) → trusted (3f); `ALTER TABLE app.x OWNER TO web` →
-    `unclassified`; `SET ROLE audit_owner` → neutral; a modified merged migration → `unclassified`; a
-    `grant-matrix.json` row for an existing table → trusted, for a new one → feature; a `grant-matrix.json` `schemas`
-    entry → trusted; registry: a row added for a new column → feature, a changed `strategy` on an existing row →
-    trusted, a removed row → trusted, a row added for an existing column → trusted; any `roles.json` change
-    (`passwordFrom` null → a path included) → a trusted-base file by its path; a comment or string containing `GRANT`
-    → not a statement.
   - trusted_base_list_from_codeowners: patterns parsed from a fixture CODEOWNERS equal its `# trusted base (SE-6)`
     section; the real file's section is non-empty, is the last section, and contains `/deployment/edge/`,
     `/shared/lexicons/` and `/interfaces/chat-auth/`; a fixture without the section → error; a fixture with a path
     line after the section (a later section) → error; a fixture with a blank line inside the section → error; a
     fixture with two `# trusted functions:` lines → error.
-  - grant_parse_trusted_families (column-list ruling; SE-6's three function families): `CREATE FUNCTION
-    audit.append_x()` (new, not on the line) → trusted, `trusted_family_unnamed`; `CREATE FUNCTION
-    core.hold_x() … SECURITY DEFINER` in `0050_legal_hold.sql` (new) → trusted; the same function without `SECURITY
-    DEFINER` in a migration unrelated to legal hold → neutral; once a fixture line names `audit.append_x`, its
-    `CREATE FUNCTION` → trusted by 3f; `CREATE FUNCTION app.f()` (new, plain) → neutral. Each beside
-    `domains/content/x.ts` → the PR fails `[SE-6]` for the trusted ones.
   - check_pr_alone_ok, check_plus_product_fails, check_plus_docs_and_tests_ok, checks_line_union_of_base_and_head (a
     PR that removes `.semgrep/` from `# checks:` and edits `.semgrep/` plus `domains/` still fails), fixture_is_check_path
     (`checkPathsMixed`, SE-6 ruling 2026-10-05 refined 01:15Z); doc_exemptions_in_both_checks and
@@ -1856,7 +1747,8 @@ As built (2026-10-05):
     Root `package.json` is off the `# checks:` list and stays review-only. The ruling named `guards`, `lint`, `ci`,
     `budgets`, `licence` and `docs`; this PR also lists `scripts/test/` (the root `test` script runs `run.ts`, so
     `checks_list_complete` requires it) and `scripts/workspace/` (its `references.ts` decides the workspace tests and
-    P0.13's licence check imports it).
+    P0.13's licence check imports it). A `scripts/` module a check imports is part of that check and sits in a check
+    folder (ruling 01:47Z); a dependency-cruiser rule may enforce it later.
   - Documentation exemptions (rulings 2026-10-05 01:31Z and 01:40Z; `isDocumentation` in `trusted-base.ts`): changed
     paths come from `git diff -z --raw`, so each carries its head mode, and only a regular file qualifies. A
     `package.json` counts as licence-only when base and head parse to deep-equal objects once `license` is dropped
@@ -1871,11 +1763,140 @@ As built (2026-10-05):
 
 ---
 
-### P0.09e — Grant classifier for the trusted base (split from P0.09c, architecture ruling 2026-10-05)
-Tags: [SEC]            Depends on: P0.03 (the trusted-base section)            Plan: §9 trusted base (rule SE-6)
-Split out of P0.09c so each PR stays near DL-1's size: `classifyGrantChanges` and its `grant_parse_*` tests exactly as
-P0.09c's Outputs (rules 1 to 6) and "Done when" specify them; P0.09c keeps everything else and depends on this step.
-The classifier has no caller until P0.09c's `change-shape.ts`; its tests are its only importer.
+### P0.09e — Classify grant changes for the trusted base (split from P0.09c, 2026-10-05)
+Tags: [SEC]            Depends on: P0.03 (the CODEOWNERS trusted-base section)            Plan: §9 trusted base (rule SE-6)
+Where: `scripts/guards/grant-sql.ts`, `scripts/guards/grant-json.ts`, `scripts/guards/grant-parse.ts`,
+  `scripts/guards/grant-parse.test.ts` + SQL and JSON fixtures
+Size: ~676 source and test lines as built (one pure module set plus its tests)
+Order: letters name steps, not merge order. P0.09e merges BEFORE P0.09c, which depends on it.
+
+Goal: one pure function says, for each changed migration and grant file, whether a change is trusted base, feature
+work or neutral, so P0.09c can enforce SE-6's "a trusted-base change changes nothing else".
+
+Inputs: P0.03's CODEOWNERS `# trusted base (SE-6)` section, with its `# parsed:` and `# trusted functions:` lines. No
+other step's code.
+Outputs (moved unchanged from P0.09c, items 1 to 6; nothing added or removed):
+  - `classifyGrantChanges(input: { base: { migrations: {path, sql}[], grantMatrix: string | null, erasureRegistry:
+    string | null }, head: { same shape }, changed: { path, status: "A" | "M" | "D" | "R" }[] }) -> GrantFinding[]`
+    where `GrantFinding = { path, line, kind: "trusted" | "feature" | "neutral", reason, statement }` (pure, in
+    `grant-parse.ts`). It implements rule SE-6's "Enforced by" (engineering rules, as updated after the 2026-10-04
+    follow-up ruling; plan §9 at `6275827`) and nothing more: it parses migrations, `grant-matrix.json` and
+    `erasure-registry.json`, and fails closed. `roles.json` is not parsed: it is a whole-path trusted-base file.
+    1. **Objects this PR creates** are those created by its added migration files and absent from the base branch's
+       migrations: tables (`CREATE TABLE` and its columns), columns (`ALTER TABLE … ADD COLUMN`, that column only),
+       views (`CREATE [MATERIALIZED] VIEW`), sequences (`CREATE SEQUENCE`, and the one an identity or serial column of a
+       new table makes) and functions (`CREATE FUNCTION`, `CREATE PROCEDURE`, SECURITY DEFINER included). A schema is
+       never a created object for this purpose, since a schema grant always counts.
+    2. The SQL is split into statements by a tokenizer that knows `--` and `/* */` comments, quoted identifiers,
+       string literals and dollar quotes. Names are compared schema-qualified and case-folded as Postgres folds them.
+    3. **`trusted`**, exactly SE-6's kinds (a–e; f and g implement its `eraseDid` entry and its column grants):
+       a. any role statement or role attribute: `CREATE`, `ALTER` or `DROP` `ROLE`, `USER` or `GROUP` (a password or
+          other attribute included), and role membership (`GRANT <role> TO …`, `REVOKE <role> FROM …`);
+       b. a schema grant: `GRANT` or `REVOKE … ON SCHEMA`, and `… ON ALL … IN SCHEMA`;
+       c. on an object the PR does not create: `GRANT` or `REVOKE` on a table, view, sequence, column or function (a
+          column-list grant rides only when every listed column is created by the PR; a table-wide grant on an existing
+          table is trusted even when the PR adds a column to it); `ALTER DEFAULT PRIVILEGES` (it targets future objects
+          of a schema, never one this PR creates, so it is always trusted); `CREATE`, `ALTER` or `DROP POLICY` and
+          `ALTER TABLE … ENABLE | DISABLE | FORCE | NO FORCE ROW LEVEL SECURITY`;
+       d. a changed or removed `erasure-registry.json` row (rule 6);
+       e. any `CREATE OR REPLACE` or `ALTER` of a function or view the PR does not create (SE-6's wording; plan §9 at
+          `badf15a`): a new body
+          or definition, or an `ALTER` of its `SECURITY`, owner, `search_path` or anything else; definer and invoker
+          functions alike, procedures and materialized views included;
+       f. creating, replacing, altering or granting on a function named on the CODEOWNERS section's `# trusted
+          functions:` line (P0.03: the `eraseDid` family `core.erase_*`, `core.is_erased`, `core.allow_retrack`,
+          `core.is_held`, `mod.erase_foreign_did`; the line grows in the trusted-base step that first names a function:
+          P1.15 the audit append functions, P4.07k/P4.07h the legal-hold definers), so the SQL of SE-6's function
+          families is trusted base even when new. **Fail closed for families without names yet** (column-list ruling,
+          plan §9 at `9c54e52`): any `CREATE [OR REPLACE] FUNCTION | PROCEDURE` in schema `audit`, and any `SECURITY
+          DEFINER` function in a legal-hold migration (file name containing `legal-hold` or `legal_hold`, or a body that
+          names a `legal_hold` table; migrations live in `infrastructure/postgres/migrations/`, P1.01), is `trusted`
+          with reason `trusted_family_unnamed`, even when the PR creates it;
+       g. `ALTER TABLE … ADD COLUMN` on a table the PR does not create, unless the base `grant-matrix.json` proves the
+          new column's inherited grants were already intended: every entry for that table is column-level, or is a
+          table-level entry marked `"wholeTable": true` (P1.12: that role is meant to read every column, present and
+          future). A table with no matrix entry, a table-level entry without the flag, or an unreadable matrix →
+          trusted (fail closed). Setting or clearing `wholeTable` on an existing table's entry is a matrix change on an
+          existing object, so trusted by c.
+       The same statements on an object the PR creates are `feature`.
+    4. **`neutral`**, a closed list of statements that are none of the above: `CREATE TABLE`, `CREATE [UNIQUE] INDEX
+       [CONCURRENTLY]`, `CREATE [OR REPLACE] [MATERIALIZED] VIEW` (of a new name), `CREATE [OR REPLACE] FUNCTION |
+       PROCEDURE` of a new name not on the `# trusted functions:` line,
+       `CREATE TRIGGER`, `CREATE TYPE`, `CREATE DOMAIN`, `CREATE SEQUENCE`, `CREATE SCHEMA`, `ALTER TABLE` (subject to 3g) with only
+       `ADD COLUMN`, `ADD CONSTRAINT`, `VALIDATE CONSTRAINT`, `ALTER COLUMN … SET | DROP DEFAULT | NOT NULL`, `DROP
+       COLUMN`; `DROP INDEX`, `COMMENT ON`, `INSERT`, `UPDATE`, `DELETE`, `SET ROLE`, `RESET ROLE`, `SET LOCAL` (session
+       only; P1.15 builds the audit objects under `SET ROLE audit_owner`), `BEGIN`, `COMMIT`. The list grows only by a
+       PR to this guard (`/scripts/guards/`, CODEOWNERS).
+    5. **Fail closed:** anything not classified by 3 or 4 is `trusted` with reason `unclassified`: an unknown verb, a
+       `DO` block, `EXECUTE` of dynamic SQL, a statement the tokenizer cannot close (an unterminated quote or dollar
+       quote), and statements kept off the neutral list on purpose because their effect on access is not a plain
+       create (`ALTER TABLE … OWNER TO`, `DROP TABLE`, `DROP FUNCTION`, `DROP VIEW`). A migration file that already exists on
+       the base branch and is modified, renamed or deleted cannot be read as a list of new statements, so it is
+       `unclassified` too (P1.11 forbids editing a merged migration).
+    6. `grant-matrix.json` and `erasure-registry.json` are parsed as JSON on both sides. Matrix: a privilege added,
+       removed or changed on an object is `trusted` unless the PR creates the object (then `feature`); any change under
+       `roles` (role attributes and membership) or `schemas` (schema grants) is `trusted`, and so is a change to
+       `pluginRule`, which is a rule about roles and schemas. Registry (`"<schema>.<table>.<column>": {strategy, …}`): a
+       row added for a column the PR creates is `feature`; a changed or removed row is `trusted`; a row added for a
+       column that already exists is not one of the riding kinds and is `trusted` (`unclassified`, fail closed). Either
+       file failing to parse, or holding an unknown top-level key → `trusted`, `unclassified`.
+No caller until P0.09c, which wires it in through `change-shape.ts`. The 2026-10-05 SE-6 ruling narrows items 3 and 4;
+see As built below.
+
+Algorithm: as the Outputs above. Threats: a grant smuggled into a feature PR → `trusted` or `unclassified`, never
+`feature` (`grant_parse_widen_existing_fails`, `grant_parse_cases`, `grant_parse_unparseable_fails`).
+Done when (tests, `grant-parse.test.ts`; moved unchanged from P0.09c):
+  - grant_parse_feature_create_and_grant_passes (`grant-parse.test.ts`; SE-6 ruling 2026-10-04): a PR adding
+    `0042_x.sql` with `CREATE TABLE app.x (…)`, `GRANT SELECT, INSERT ON app.x TO web`, `CREATE FUNCTION app.f() …
+    SECURITY DEFINER`, `GRANT EXECUTE ON FUNCTION app.f() TO web`, `ALTER TABLE app.x ENABLE ROW LEVEL SECURITY`, the
+    matching `grant-matrix.json` rows, an `erasure-registry.json` row for a `did` column of `app.x`, and
+    `domains/content/x.ts` → no `trusted` finding; isolation ok, not touched. A `CREATE VIEW app.v` and `CREATE SEQUENCE
+    app.s` with grants on them → `feature` too.
+  - grant_parse_widen_existing_fails: base migrations create `app.account`; the PR adds a migration with
+    `GRANT SELECT ON app.account TO api` beside `domains/content/x.ts` → one `trusted` finding naming that statement;
+    isolation fails with `outside = ["domains/content/x.ts"]`. The same migration with only its `grant-matrix.json` row
+    and `tests/integration/postgres/grants.test.ts` → ok, touched. The same `GRANT` beside `CREATE TABLE app.y` in one
+    file → `mixed_grant_change`.
+  - grant_parse_unparseable_fails: beside a feature file, a new migration holding (a) `DO $$ BEGIN EXECUTE 'GR' ||
+    'ANT SELECT ON app.account TO api'; END $$;`, (b) an unterminated dollar quote, (c) an unknown verb `SECURITY LABEL
+    …`, and (d) an `erasure-registry.json` that is not valid JSON → each gives `trusted`, `unclassified`, and the PR
+    fails.
+  - grant_parse_replace_definer_fails (3e): base migrations create `core.f()` `SECURITY DEFINER`; the PR adds a
+    migration with `CREATE OR REPLACE FUNCTION core.f() … SECURITY DEFINER` beside `domains/content/x.ts` → one
+    `trusted` finding, isolation fails with `outside = ["domains/content/x.ts"]`; the same migration alone (with its
+    tests) → ok, touched.
+  - grant_parse_existing_function_or_view_changed (3e), each beside a feature file → trusted, PR fails: `CREATE OR
+    REPLACE FUNCTION app.g()` where base has `app.g()` as `SECURITY INVOKER`; `CREATE OR REPLACE VIEW app.v` where base
+    has `app.v`; `ALTER FUNCTION app.g() SET search_path = pg_catalog, app`; `ALTER FUNCTION app.g() SECURITY DEFINER`;
+    `ALTER VIEW app.v OWNER TO web`. The same five on a function or view the PR creates → neutral.
+  - grant_parse_add_column (3g): base `app.account` with a table-level `web` entry marked `wholeTable` → `ADD COLUMN`
+    neutral, PR passes with feature code; the same entry without the flag → trusted, PR fails; `app.account` with only
+    column-level entries → neutral; a table absent from the matrix → trusted; the PR setting `wholeTable` on
+    `app.account`'s existing entry → trusted.
+  - grant_parse_cases (one row each): `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES TO web` → trusted; `CREATE
+    ROLE x` → trusted; `GRANT audit_owner TO migrator` → trusted; `GRANT USAGE ON SCHEMA mod TO admin` → trusted;
+    `CREATE POLICY p ON app.x` with `app.x` new → feature, existing → trusted; `GRANT SELECT (c) ON app.account TO
+    admin` with `c` added by the PR → feature, with `c` existing → trusted; `GRANT SELECT ON app.account` after the PR
+    adds a column → trusted; `ALTER ROLE web PASSWORD …` → trusted; `REVOKE ALL ON ALL TABLES IN SCHEMA app FROM
+    PUBLIC` → trusted; `CREATE OR REPLACE FUNCTION` of a base function → trusted (3e); `CREATE FUNCTION
+    core.erase_x` (new, matching `# trusted functions:`) → trusted (3f); `ALTER TABLE app.x OWNER TO web` →
+    `unclassified`; `SET ROLE audit_owner` → neutral; a modified merged migration → `unclassified`; a
+    `grant-matrix.json` row for an existing table → trusted, for a new one → feature; a `grant-matrix.json` `schemas`
+    entry → trusted; registry: a row added for a new column → feature, a changed `strategy` on an existing row →
+    trusted, a removed row → trusted, a row added for an existing column → trusted; any `roles.json` change
+    (`passwordFrom` null → a path included) → a trusted-base file by its path; a comment or string containing `GRANT`
+    → not a statement.
+  - grant_parse_trusted_families (column-list ruling; SE-6's three function families): `CREATE FUNCTION
+    audit.append_x()` (new, not on the line) → trusted, `trusted_family_unnamed`; `CREATE FUNCTION
+    core.hold_x() … SECURITY DEFINER` in `0050_legal_hold.sql` (new) → trusted; the same function without `SECURITY
+    DEFINER` in a migration unrelated to legal hold → neutral; once a fixture line names `audit.append_x`, its
+    `CREATE FUNCTION` → trusted by 3f; `CREATE FUNCTION app.f()` (new, plain) → neutral. Each beside
+    `domains/content/x.ts` → the PR fails `[SE-6]` for the trusted ones.
+  - no_runtime_caller_yet: a static check that only tests import `grant-parse.ts`. P0.09c flips it to "only
+    `change-shape.ts` and tests".
+  - The done-check line: AI notes updated or none needed.
+Not in this step: the isolation check, the CI job, the hook, labels, Renovate and the architecture row (P0.09c).
+Reuse: none.
 As built (2026-10-05): three files, each one job: `scripts/guards/grant-sql.ts` (tokenizer, statements, the objects a
   migration creates), `grant-json.ts` (rule 6, the two JSON files) and `grant-parse.ts` (rules 3 to 5 and
   `classifyGrantChanges`). Its cases are inline SQL and JSON in `grant-parse.test.ts`, not fixture files.
