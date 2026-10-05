@@ -2343,10 +2343,32 @@ Diagram: none.
 
 ---
 
+### P0.11a — Reserved-label list and registrar checklist (agent part of P0.11)
+Tags: —            Depends on: P0.04, P0.07            Plan: §5.2 (handle-domain rules), §11 Q1
+Where: one product PR. `deployment/reserved-labels.txt`, `deployment/reserved-labels.test.ts`, `deployment/tsconfig.json`
+  (so `tsc -b` typechecks the test) and its reference in the root `tsconfig.json`; the registrar checklist
+  `docs/human/domains-checklist.md` (documentation).
+
+Why: split out of P0.11 (book edit 2026-10-05-p011a-reserved-labels). This part needs nothing from Alex and lands now;
+`docs/human/domains.md` waits on his registrars and DS dates and stays in P0.11.
+
+Outputs:
+  - `deployment/reserved-labels.txt`: the plan §5.2 minimum and P0.11's proposed additions, as P0.11 lists them, for
+    Alex to accept or strike in review.
+  - `docs/human/domains-checklist.md`: P0.11's Algorithm steps 1 to 4 as Alex's checklist, with the media-domain and
+    look-alike candidate lists filled in. Availability is unverified (RDAP and WHOIS are blocked from the agent's
+    network); Alex checks at the registrar.
+
+Done when (tests):
+  - reserved_labels_format (`deployment/reserved-labels.test.ts`), moved here from P0.11 unchanged.
+  - The checklist exists with every candidate list filled in.
+
+---
+
 ### P0.11 — Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list
-Tags: [ALEX]            Depends on: Alex part — none (day one); agent PR part — P0.04, P0.07            Plan: §5.2 (domains, handle-domain rules), §11 Q1, §8 Phase 0 and Phase 1 ("Register `unset.ac`")
-Where: registrar and DNS provider (Alex); repository files `docs/human/domains.md`, `deployment/reserved-labels.txt`,
-  `deployment/reserved-labels.test.ts` (agent, by PR)
+Tags: [ALEX]            Depends on: Alex part — none (day one); agent PR part — P0.04, P0.07, P0.11a            Plan: §5.2 (domains, handle-domain rules), §11 Q1, §8 Phase 0 and Phase 1 ("Register `unset.ac`")
+Where: registrar and DNS provider (Alex); repository file `docs/human/domains.md` (agent, by PR). The reserved-label list
+  and the registrar checklist moved to P0.11a.
 Size: ~45 lines of data, ~100 lines of docs, ~50 test lines
 
 Goal: every domain the product will use is registered, locked and DNSSEC-signed; domains with no service yet cannot get
@@ -2392,8 +2414,8 @@ Algorithm (Alex's checklist, prepared by the agent with the candidate lists fill
      `ad` flag (`dig +dnssec @1.1.1.1 <domain> SOA`).
   4. Apply the parked set to each parked domain, the serving CAA to serving domains. Never publish anything under
      `int.unset.sh` (admin design §5.1).
-  5. Tell the agent the registrars and DS dates. The agent opens the PR with `docs/human/domains.md`, the reserved list and its
-     test, and runs the checks below.
+  5. Tell the agent the registrars and DS dates. The agent opens the PR with `docs/human/domains.md` and runs the checks
+     below (the reserved list landed in P0.11a).
   6. Alex strikes or accepts the proposed labels in review, and approves.
 
 Edge cases and failures:
@@ -2405,7 +2427,7 @@ Edge cases and failures:
   - Existing `*.0x40.me` handles from the prototype → unchanged here; L.01 retires them.
 
 Done when (tests):
-  - reserved_labels_format (`deployment/reserved-labels.test.ts`): every non-comment line matches
+  - reserved_labels_format (`deployment/reserved-labels.test.ts`, now built in P0.11a): every non-comment line matches
     `^(_\*|xn--\*|[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)$`; the eight plan labels and `_*` present; no duplicates.
   - dnssec_validates (checked): `dig +dnssec @1.1.1.1 <domain> SOA` → `ad` flag, and `dig DS <domain> @<parent ns>`
     returns a record, for each domain; outputs in the PR.
