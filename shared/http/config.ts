@@ -44,6 +44,10 @@ export const httpKitConfig = {
   }),
   /** How many trusted proxies append to the header; the hop count is explicit, never inferred from the CIDRs. */
   TRUSTED_PROXY_HOPS: int({ min: 1, max: 3, default: 1 }),
+  /** The default request body cap (P1.06); a route may set its own `bodyLimit`. */
+  HTTP_BODY_LIMIT_BYTES: int({ min: 1024, max: 1_048_576, default: 65_536 }),
+  /** Rate-limit buckets held at once (P1.06): about 12 MB at the default; past it, new keys share a strict bucket. */
+  RATE_LIMIT_MAX_KEYS: int({ min: 1, max: 1_000_000, default: 100_000 }),
 };
 
 /** What the kit reads from an entrypoint's loaded config: the common keys (P1.02) and its own fragment. */
@@ -60,4 +64,6 @@ export type HttpKitConfig = Readonly<{
   TRUSTED_PROXY_HEADER: string;
   TRUSTED_PROXY_CIDRS: readonly string[];
   TRUSTED_PROXY_HOPS: number;
+  HTTP_BODY_LIMIT_BYTES: number;
+  RATE_LIMIT_MAX_KEYS: number;
 }>;

@@ -9,22 +9,28 @@ import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { AppError, type ErrorCode } from "@unset/shared-errors";
 import type { LogFields, Logger } from "@unset/shared-log";
 import { Hono } from "hono";
+import type { ClientIp } from "./clientIp.ts";
 import { type HttpKitConfig, hostAllowed } from "./config.ts";
 import { errorResponse, groupForPath } from "./errors.ts";
 import { createHealth, type Readiness } from "./health.ts";
+import { BodyTooLarge, limitBody } from "./limits/bodyLimit.ts";
+import { hasDidEntry, type PolicyTable } from "./limits/policy.ts";
+import { createRateLimiter, type RateLimiter, type RateSubject } from "./limits/rateLimit.ts";
 import { compileRoute, defineRoute, type Route, type RouteGroup } from "./routes.ts";
 import { type CloseHook, drain, exitOnSignals } from "./shutdown.ts";
 import { createClientIpResolver } from "./trustedProxy.ts";
 
-/** An interface's rate-limit policies by name (P1.06p fills the values); routes name one of its keys. */
-export type PolicyTable = Readonly<Record<string, unknown>>;
+/** The signed-in DID for a request, or null. Phase 2's session layer supplies it; until then no session exists. */
+export type SessionReader = (request: Request) => Promise<{ did: string } | null>;
 /** A route as P1.04's committed manifest records it: every `defineRoute` option except the handler, plus its checks. */
 export type RouteInfo = Omit<Route, "handler"> & { middleware: string[] };
 
 export type ServerOptions = {
   config: HttpKitConfig;
   routes: readonly Route[];
+  /** The interface's own rate-limit table (P1.06p); routes name one of its keys. */
   policies: PolicyTable;
+  session?: SessionReader;
   log: Logger;
   readiness?: readonly Readiness[];
   onClose?: readonly CloseHook[];
@@ -37,10 +43,14 @@ export type ServerOptions = {
 /** Node's HTTP/1.1 server, which `createAdaptorServer` returns when given no other `createServer`. */
 type NodeServer = Extract<ServerType, { closeIdleConnections: unknown }>;
 type Matched = { route: Route; params: Record<string, string> };
+/** A request past the checks, and whether its streamed body has gone over the limit. */
+type Admitted = { request: Request; exceeded: () => boolean };
 /** The bindings `@hono/node-server` 2.1.1 passes to `fetch`: `{ incoming, outgoing }` (its dist/conninfo.mjs). */
 type NodeBindings = { incoming?: { socket?: { remoteAddress?: string } } };
 /** `proxy.untrusted_peer` is logged at most once per this window, so a misrouted flood cannot flood the log. */
 const UNTRUSTED_PEER_LOG_MS = 60_000;
+/** How often idle rate-limit buckets are swept and the salt's age checked (P1.06 step 5). */
+const SWEEP_MS = 10_000;
 
 const LOGGED_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
@@ -50,19 +60,26 @@ function checkRoutes(routes: readonly Route[], policies: PolicyTable): void {
     const key = `${route.method} ${route.path}`;
     if (seen.has(key)) throw new Error(`route defined twice: ${key}`);
     seen.add(key);
-    if (route.rateLimit !== "exempt" && !Object.hasOwn(policies, route.rateLimit)) {
+    if (route.rateLimit === "exempt") continue;
+    const policy = Object.hasOwn(policies, route.rateLimit) ? policies[route.rateLimit] : undefined;
+    if (policy === undefined) {
       throw new Error(`${key}: rate-limit policy ${route.rateLimit} is not in this interface's table`);
+    }
+    if (Array.isArray(policy) && hasDidEntry(policy) && !route.requiresSession) {
+      throw new Error(`${key}: policy ${route.rateLimit} limits per DID, so the route must set session: "required"`);
     }
   }
 }
 
 /** The checks a route passes through, in order (P1.07's static test reads them). */
-function middlewareOf(route: Pick<Route, "path" | "method">): string[] {
+function middlewareOf(route: Pick<Route, "path" | "method" | "rateLimit" | "requiresSession">): string[] {
   return [
     "requestId",
     ...(route.path === "/health" ? [] : ["hostCheck", "trustedProxy"]),
     "methodCheck",
-    ...(route.method === "POST" ? ["contentTypeCheck"] : []),
+    ...(route.method === "POST" ? ["contentTypeCheck", "bodyLimit"] : []),
+    ...(route.rateLimit === "exempt" ? [] : ["rateLimitIp"]),
+    ...(route.requiresSession ? ["session", "rateLimitDid"] : []),
   ];
 }
 
@@ -100,11 +117,20 @@ export function createServer(options: ServerOptions) {
     path: "/health",
     group: "static",
     rateLimit: "exempt",
+    session: "none",
     handler: () => health.respond(),
   });
   const routes = [healthRoute, ...options.routes];
   checkRoutes(routes, options.policies);
   const compiled = routes.map(compileRoute);
+  // Built only when a route is limited, so an interface with no routes yet needs no table (its table comes at P1.06p).
+  const limiter: RateLimiter | undefined = routes.some((r) => r.rateLimit !== "exempt")
+    ? createRateLimiter(options.policies, {
+        maxKeys: config.RATE_LIMIT_MAX_KEYS,
+        onError: () => log.error("ratelimit.error", {}),
+        now,
+      })
+    : undefined;
 
   let untrustedLoggedAt = Number.NEGATIVE_INFINITY;
   const clientIpOf = createClientIpResolver(config, () => {
@@ -160,17 +186,59 @@ export function createServer(options: ServerOptions) {
     return acceptsBody(request, found.route) ? found : fail("http.unsupported_media_type", found.route.group);
   }
 
-  /** Step 1 and 6: the handler under the route's deadline; `AppError` by code, anything else as `internal.error`. */
+  /** rateLimitIp and rateLimitDid: a 429 with `Retry-After` when `subject` is over the route's policy. */
+  function rateLimited(route: Route, subject: RateSubject): Response | undefined {
+    if (limiter === undefined || route.rateLimit === "exempt") return undefined;
+    const verdict = limiter.consume(route.rateLimit, subject);
+    if (verdict.ok) return undefined;
+    return fail("http.rate_limited", route.group, { "retry-after": String(verdict.retryAfterS) });
+  }
+
+  /** 413, closing the connection so the client cannot keep streaming the rest of the body. */
+  const tooLarge = (group: RouteGroup) => fail("http.payload_too_large", group, { connection: "close" });
+
+  /**
+   * Steps 7–11 in order: bodyLimit → rateLimitIp → (csrf, P1.07) → session → rateLimitDid. A response means the
+   * request stops here; otherwise the request to hand on, its body counted against the limit.
+   */
+  async function admit(route: Route, request: Request, clientIp: ClientIp | null): Promise<Admitted | Response> {
+    let admitted: Admitted = { request, exceeded: () => false };
+    if (route.method === "POST") {
+      const limited = limitBody(request, route.bodyLimit ?? config.HTTP_BODY_LIMIT_BYTES);
+      if (!limited.ok) return limited.status === 413 ? tooLarge(route.group) : fail("http.bad_request", route.group);
+      admitted = limited;
+    }
+    const byIp = rateLimited(route, { ip: clientIp });
+    if (byIp) return byIp;
+    if (!route.requiresSession) return admitted;
+    const session = options.session ? await options.session(admitted.request) : null;
+    if (session === null) {
+      // Fail closed: a session-only route never runs, and is never limited as "no DID, no limit".
+      log.error("ratelimit.no_session", { route: route.path });
+      return fail("internal.error", route.group);
+    }
+    return rateLimited(route, { did: session.did }) ?? admitted;
+  }
+
+  /** Steps 1 and 7–12: the checks and the handler under the route's deadline; errors render by code. */
   async function run({ route, params }: Matched, request: Request, reqId: string, peer?: string): Promise<Response> {
     const deadline = AbortSignal.timeout(route.deadlineMs ?? config.REQUEST_DEADLINE_MS);
     // Step 2b, trustedProxy: every route but /health, which needs no client identity (architecture ruling 2026-10-05).
     const clientIp = route.path === "/health" ? null : clientIpOf(request.headers, peer);
-    const result = Promise.resolve().then(() => route.handler({ request, clientIp, params, deadline, reqId }));
+    let exceeded = () => false;
+    const admitThenHandle = async (): Promise<Response> => {
+      const admitted = await admit(route, request, clientIp);
+      if (admitted instanceof Response) return admitted;
+      exceeded = admitted.exceeded;
+      return route.handler({ request: admitted.request, clientIp, params, deadline, reqId });
+    };
+    const result = admitThenHandle(); // awaited in the race below; after a deadline, its late result is logged
     const timedOut = new Promise<"deadline">((resolve) => {
       deadline.addEventListener("abort", () => resolve("deadline"), { once: true });
     });
     try {
       const outcome = await Promise.race([result, timedOut]);
+      if (exceeded()) return tooLarge(route.group); // the body went over the limit, whatever the handler answered
       if (outcome !== "deadline") return outcome;
       log.warn("http.deadline", { route: route.path, reqId });
       result.then(
@@ -179,6 +247,7 @@ export function createServer(options: ServerOptions) {
       );
       return fail("http.deadline", route.group);
     } catch (error) {
+      if (exceeded() || error instanceof BodyTooLarge) return tooLarge(route.group);
       if (error instanceof AppError) return fail(error.code, route.group);
       log.logError(error);
       return fail("internal.error", route.group);
@@ -211,9 +280,11 @@ export function createServer(options: ServerOptions) {
 
   let inFlight = 0;
   let server: NodeServer | undefined;
+  let sweeper: ReturnType<typeof setInterval> | undefined;
 
   const close = async (): Promise<0 | 1> => {
     health.setState("draining");
+    clearInterval(sweeper);
     log.info("http.drain", { phase: "start" });
     const code = server
       ? await drain(server, {
@@ -248,6 +319,7 @@ export function createServer(options: ServerOptions) {
         });
         node.listen(config.LISTEN_PORT, () => {
           server = node;
+          if (limiter) sweeper = setInterval(limiter.sweep, SWEEP_MS).unref();
           health.setState("running");
           exitOnSignals(close, exit);
           const address = node.address();

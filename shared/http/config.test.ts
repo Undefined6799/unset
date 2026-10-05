@@ -40,7 +40,21 @@ describe("httpKitConfig", () => {
       TRUSTED_PROXY_HEADER: "x-forwarded-for",
       TRUSTED_PROXY_CIDRS: ["10.0.0.0/8", "fd00::/8"],
       TRUSTED_PROXY_HOPS: 1,
+      HTTP_BODY_LIMIT_BYTES: 65_536,
+      RATE_LIMIT_MAX_KEYS: 100_000,
     });
+  });
+
+  test("limit_keys_bounded", () => {
+    expect(problems({ ...ENV, HTTP_BODY_LIMIT_BYTES: "1023" }, load)).toEqual([
+      { key: "HTTP_BODY_LIMIT_BYTES", reason: "invalid" },
+    ]);
+    expect(problems({ ...ENV, HTTP_BODY_LIMIT_BYTES: "1048577" }, load)).toEqual([
+      { key: "HTTP_BODY_LIMIT_BYTES", reason: "invalid" },
+    ]);
+    expect(problems({ ...ENV, RATE_LIMIT_MAX_KEYS: "0" }, load)).toEqual([
+      { key: "RATE_LIMIT_MAX_KEYS", reason: "invalid" },
+    ]);
   });
 
   test("plain_http_only_in_dev", () => {
