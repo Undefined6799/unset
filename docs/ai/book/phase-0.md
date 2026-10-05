@@ -2103,6 +2103,45 @@ Done when (tests, `scripts/guards/git-env.test.ts`):
 
 ---
 
+### P0.09k — Case-collision guard (architecture rulings, 2026-10-05 13:28Z and 13:41Z)
+Tags: —            Depends on: P0.09j            Plan: guideline 34, "Folder responsibilities"
+Where: one check PR. New `scripts/guards/case-collision.ts`, its fixtures under
+  `scripts/guards/fixtures/case-collision/`, registered in `guards.test.ts` and `repo.test.ts` like
+  `route-registration`. Documentation that rides along: the guideline re-copy with its new bullet after `scripts/`, and
+  the `architecture.md` row, which reads "checked" straight away because this PR builds the check. The row names
+  `scripts/guards/case-collision.ts` and its two failing-pair tests, since `architecture_rule_table_matches_depcruise`
+  accepts only a real file, test or dependency-cruiser rule name.
+
+Rule (guideline bullet): no two tracked paths may collide on a case-insensitive or normalising file system, whether by
+letter case, by Unicode normalisation (NFC/NFD, final sigma), or as a file beside a folder of the same name. On macOS or
+Windows such a pair checks out as one entry, and one silently replaces or merges into the other. P1.05 nearly shipped `clientIp.ts` beside `ClientIp.ts`.
+
+Algorithm: take `git ls-files -z` (with `withoutGitEnv`, P0.09j) and add every folder above each path, so `a/x.ts`
+beside `A/y.ts` and a file `foo` beside a folder `Foo/` collide too. Group the entries by name after Unicode NFC and an
+upper-then-lower case fold (NFD `café` matches NFC `café`, `σ` matches `ς`, as APFS and NTFS treat them), and report
+every entry in a group of more than one, naming the others. A group whose parents differ is skipped, since its parents
+collide and that finding is the one to fix. No `guard-allow`: a pair is fixed by renaming. The guard reads names only,
+so the shared unreadable-file test skips it; it throws outside a git repository or when nothing is tracked, so it fails
+closed.
+
+Fixtures and test repositories are built in the git index with `update-index --index-info`, never on disk: on a
+case-insensitive file system `Foo.ts` written after `foo.ts` overwrites it, and the bad cases could not be staged
+(adversarial review).
+
+Done when (tests, `scripts/guards/guards.test.ts` and `repo.test.ts`):
+  - `case_pair_file_fails`: `foo.ts` plus `Foo.ts` fails, one finding on each.
+  - `case_pair_dir_fails`: `a/x.ts` plus `A/x.ts` fails, reported once on `a` and `A`.
+  - `file_beside_same_name_folder_fails`: a file `docs` plus `Docs/x.md` fails.
+  - `nfc_nfd_pair_fails`: `café.md` in NFC plus the same name in NFD fails.
+  - `final_sigma_pair_fails`: names differing only by σ against ς fail.
+  - `distinct_names_pass`: `foo.ts`, `food.ts` and `a/foo.ts` pass.
+  - `git_error_fails_closed`: outside a git repository the guard throws; `case_guard_fails_closed_on_empty_index` covers
+    an empty index.
+  - Also `case_pair_dir_different_files_fails`, `case_pair_reported_once_at_top` and `case_pair_names_the_other_path`.
+  - `repo_clean > case-collision`: the real tree passes.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),
