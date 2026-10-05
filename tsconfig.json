@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "scripts" }, { "path": "infrastructure/net-guard" }]
+  "references": [{ "path": "scripts" }, { "path": "shared/config" }, { "path": "infrastructure/net-guard" }]
 }

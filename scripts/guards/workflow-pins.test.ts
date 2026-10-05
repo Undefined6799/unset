@@ -107,3 +107,16 @@ describe("workflows", () => {
     for (const name of required) expect(ids).toContain(name);
   });
 });
+
+describe("audit scope override", () => {
+  // Architecture ruling 2026-10-05 00:00Z (P0.07, P0-A5): only the audit job's read-only `npm audit signatures`
+  // points the @unset scope at the public registry, for its signing-key fetch; every install stays fail-closed.
+  test("audit_override_only_in_audit_job", () => {
+    const lines = ci.split("\n");
+    const hits = lines.flatMap((line, i) => (line.includes("@unset:registry=") ? [i] : []));
+    expect(hits).toHaveLength(1);
+    const at = hits[0] ?? -1;
+    expect(lines[at]).toMatch(/^ {6}- run: npm audit signatures --@unset:registry=https:\/\/registry\.npmjs\.org\/$/);
+    expect(lines.slice(0, at).findLast((line) => /^ {2}[\w-]+:$/.test(line))).toBe("  audit:");
+  });
+});

@@ -32,11 +32,14 @@ jobs:
     permissions:
       contents: read
     env:
+      # The notes guard's code-moved rule diffs BASE_SHA...HEAD; a missing base fails it (P0.09d).
+      BASE_SHA: ${{ github.event.before }}
       RENOVATE_IMAGE: renovate/renovate:44.115.13@sha256:0c04185c9e7ea5284da22ea0b2a2c88dcd3687badd8feb6c71691659b380df9b
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # adr_immutable compares ADRs with origin/main.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
@@ -44,6 +47,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - name: Compare a pull request with the base it was merged onto
+        if: github.event_name == 'pull_request'
+        run: echo "BASE_SHA=$(git rev-parse HEAD^1)" >> "$GITHUB_ENV"
       - run: npm run guards
       - run: npm test
       - run: npm run budgets
@@ -67,7 +73,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high
-      - run: npm audit signatures
+      # The @unset scope override applies only to this signature-key fetch: npm prefetches keys for every
+      # registry any edge uses, workspace edges included, but never verifies or downloads a workspace. .npmrc
+      # stays fail-closed for every install, and the dependency guard (scripts/guards/dependencies.ts) keeps every
+      # @unset/* lockfile entry a plain workspace link. No other job may pass it (audit_override_only_in_audit_job).
+      - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/
 
   secrets:
     runs-on: ubuntu-24.04
