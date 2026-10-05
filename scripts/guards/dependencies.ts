@@ -74,7 +74,11 @@ export function scanManifest(
 /** Why one installed package's source is not allowed, or null when it is. */
 function entryProblem(path: string, entry: LockEntry | null, folders: ReadonlySet<string>): string | null {
   if (typeof entry !== "object" || entry === null) return "not an object";
-  if (entry.link === true) return folders.has(entry.resolved ?? "") ? null : `link to ${entry.resolved ?? "nowhere"}`;
+  if (entry.link === true) {
+    // A link fetches nothing, so a hash on one means the entry was hand-edited (ruling 2026-10-05, P0-A5).
+    if (entry.integrity !== undefined) return "link carries an integrity hash";
+    return folders.has(entry.resolved ?? "") ? null : `link to ${entry.resolved ?? "nowhere"}`;
+  }
   if (path.split("node_modules/").at(-1)?.startsWith(INTERNAL_SCOPE)) return "internal name not linked locally";
   if (!entry.resolved?.startsWith(REGISTRY)) return `resolved ${entry.resolved ?? "missing"}`;
   if (!entry.integrity?.startsWith("sha512-")) return `integrity ${entry.integrity ?? "missing"}`;

@@ -1,6 +1,6 @@
 # Engineering Rules (unset.sh)
 
-Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the 48 rules with the recommended option for each of D1-D9). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
+Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the 48 rules with the recommended option for each of D1-D9). DO-3 added 2026-10-05 at Alex's request (rule 49). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
 
 These rules sit beside the four guidelines in `engineering/` and never weaken a security or privacy decision in the plan. Where a rule and the plan disagree, the plan wins. Where a rule and the ADG disagree on structure, the ADG wins.
 
@@ -400,6 +400,12 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Source: FoSA 1st ed. — ch. 19 (Groundhog Day, Email-Driven Architecture; 2nd ed. ch. 21).
 - Status: PARTLY — AI §16, ADR 0001, decisions 1–34 in the plan.
 - Priority: P1 (D8 adopted)
+
+**DO-3. Work from current official documentation, never from memory alone. Before relying on how a library, API, tool, protocol or service behaves, read its official documentation, or its source, for the exact version we pin, and cite what you read (URL or file path, plus the version) in the code comment, commit, PR or reply. When the documentation and memory disagree, the documentation wins. When it is silent or unreachable, say so and treat the behaviour as unverified until a test proves it.**
+- Enforced by: review-only. A reviewer asks "where is this documented?" for any behaviour a change depends on; a claim with no citation is treated as unverified. CLAUDE.md states the rule.
+- Source: Pragmatic Programmer 2nd ed. — Topic 38 (Programming by Coincidence: rely only on reliable things, document your assumptions); Alex, 2026-10-04 23:59Z ("a real professional always refers to the most updated current documentation").
+- Status: NEW (Alex, 2026-10-05). The CLAUDE.md rule "read a real client" for Matrix work is one case of it.
+- Priority: P1
 
 ## 11. Performance
 
