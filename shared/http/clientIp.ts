@@ -4,6 +4,7 @@ import { isIPv4, isIPv6 } from "node:net"; // guard-allow: egress parses address
 
 const HIDDEN = "[ip]";
 const MAPPED_V4 = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i;
+const MAPPED_V4_HEX = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i;
 
 export class ClientIp {
   readonly kind: "v4" | "v6";
@@ -43,9 +44,18 @@ export class ClientIp {
   }
 }
 
-/** `::ffff:a.b.c.d` as `a.b.c.d`; anything else unchanged. */
+/**
+ * An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`, or its hex form `::ffff:a00:2`) as `a.b.c.d`; anything else unchanged.
+ * Node 26.10's BlockList also matches the mapped forms against IPv4 rules (test mapped_forms_match_like_v4); we unmap
+ * first anyway, as net-guard does, so the rate key never depends on how a proxy wrote the address.
+ */
 export function unmapV4(text: string): string {
-  return MAPPED_V4.exec(text)?.[1] ?? text;
+  const dotted = MAPPED_V4.exec(text)?.[1];
+  if (dotted !== undefined) return dotted;
+  const hex = MAPPED_V4_HEX.exec(text);
+  if (hex === null) return text;
+  const [high, low] = [Number.parseInt(hex[1] ?? "", 16), Number.parseInt(hex[2] ?? "", 16)];
+  return [high >> 8, high & 255, low >> 8, low & 255].join(".");
 }
 
 /** The first four hextets of a valid IPv6 address, expanded and lowercase, as `a:b:c:d::/64`. */

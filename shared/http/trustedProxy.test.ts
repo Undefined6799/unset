@@ -1,4 +1,5 @@
 // The trusted proxy (P1.05): the client address from the one configured header, only from the edge, rightmost first.
+import { BlockList } from "node:net";
 import { describe, expect, test } from "vitest";
 import { createClientIpResolver, type ProxySettings } from "./trustedProxy.ts";
 
@@ -82,7 +83,27 @@ describe("header mode", () => {
   });
 
   test("trusted_peer_mapped_v4", () => {
-    expect(resolver().key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:10.0.0.2")).toBe("9.9.9.9");
+    const { key, untrusted } = resolver();
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:10.0.0.2")).toBe("9.9.9.9");
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:a00:2")).toBe("9.9.9.9");
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:203.0.113.7")).toBeNull();
+    expect(key({ "x-forwarded-for": "9.9.9.9" }, "::ffff:cb00:7107")).toBeNull();
+    expect(untrusted()).toBe(2);
+  });
+
+  test("mapped_entries_match_like_v4", () => {
+    // A mapped trusted proxy in the header is stepped over; a mapped client is the client, keyed as IPv4.
+    const { key } = resolver({ TRUSTED_PROXY_HOPS: 2 });
+    expect(key({ "x-forwarded-for": "9.9.9.9, ::ffff:10.0.0.5" })).toBe("9.9.9.9");
+    expect(key({ "x-forwarded-for": "1.1.1.1, ::ffff:9.9.9.9" })).toBe("9.9.9.9");
+  });
+
+  test("mapped_forms_match_like_v4", () => {
+    // DO-3: Node 26.10's BlockList matches mapped forms against IPv4 rules itself; unmapV4 keeps that independent.
+    const list = new BlockList();
+    list.addSubnet("10.0.0.0", 8, "ipv4");
+    expect(list.check("::ffff:10.0.0.2", "ipv6")).toBe(true);
+    expect(list.check("::ffff:203.0.113.7", "ipv6")).toBe(false);
   });
 
   test("missing_peer_is_null", () => {
