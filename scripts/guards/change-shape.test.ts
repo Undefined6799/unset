@@ -18,6 +18,8 @@ import {
 const docsFor = (paths: readonly string[], symlinks: string[] = [], licenceOnly: string[] = []): DocFacts => ({
   regular: new Set(paths.filter((p) => !symlinks.includes(p))),
   licenceOnly: new Set(licenceOnly),
+  dependencyChanges: new Set(),
+  lockfiles: null,
 });
 
 const ROOT = join(import.meta.dirname, "..", "..");
