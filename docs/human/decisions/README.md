@@ -20,3 +20,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0010](0010-opaque-chat-ids.md) | Opaque chat ids close the key-query membership leak (decision 42) | Accepted 2026-10-04 |
 | [0011](0011-no-orchestrator-until-measured-need.md) | No orchestrator until a measured need beyond one host (rule AB-3) | Accepted 2026-10-04 |
 | [0012](0012-licence.md) | AGPL-3.0-only for the product, MIT for `shared/` (decision 27) | Accepted 2026-10-03 |
+| [0013](0013-pdq-implementation.md) | PDQ hasher: a bit-exact TypeScript port of the reference (P2.16b) | Proposed (awaiting Alex) |

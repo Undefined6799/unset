@@ -3,6 +3,7 @@
   "references": [
     { "path": "scripts" },
     { "path": "deployment" },
+    { "path": "domains/moderation" },
     { "path": "infrastructure/net-guard" },
     { "path": "interfaces/admin" },
     { "path": "interfaces/api" },
@@ -14,6 +15,7 @@
     { "path": "shared/errors" },
     { "path": "shared/http" },
     { "path": "shared/log" },
-    { "path": "shared/ui" }
+    { "path": "shared/ui" },
+    { "path": "tests" }
   ]
 }
