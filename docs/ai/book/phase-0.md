@@ -2043,6 +2043,45 @@ Not in this step: P0.09h (pure renames count once in the size guard), which foll
 
 ---
 
+### P0.09l — Checks skip draft PRs (Alex, 2026-10-05 20:34Z)
+Tags: —            Depends on: P0.09i (the last step touching pr-shape.yml); any order with P0.09k            Plan: decision 41 (CI advisory on the free plan), DL rules on hand-off
+Where: one check PR. `.github/workflows/ci.yml`, `.github/workflows/pr-shape.yml`, `scripts/guards/workflow-pins.test.ts`
+  and `scripts/guards/change-shape-wiring.test.ts`. `required-checks.json` is unchanged. No ADR.
+
+Why: Alex, in the project chat at 20:34Z: "if we can run the full check locally, maybe we should not run the check on
+github for draft. draft are tested locally and github check only when they are ready".
+
+Rule recorded:
+  - A draft PR is gated by the local full check: `npm run check` before every push to a draft, plus
+    `npm run semgrep:fixtures` when Docker is present. The agent states the result in the PR body or its status.
+  - GitHub runs the checks only when the PR is not a draft: on `ready_for_review`, on every push to a ready PR, and on
+    pushes to main.
+  - Hand-off: a PR counts as green only when every job in `required-checks.json` has a completed **success**, not a
+    skip, on the current head. So the order is: mark ready, wait for that run, hand over.
+
+Algorithm:
+  1. Add `ready_for_review` to the `pull_request` types in both workflows. `ci.yml` had no `types`, so it lists the
+     defaults (`opened`, `synchronize`, `reopened`) as well.
+  2. Every `ci.yml` job gets `if: github.event_name != 'pull_request' || github.event.pull_request.draft == false`, so
+     any event that is not a pull request (today only `push` to main) still runs. `pr-shape.yml`'s job, which only
+     ever runs on pull requests, gets `if: github.event_name == 'pull_request' && github.event.pull_request.draft ==
+     false`.
+  3. No workflow-level `paths` or `branches` filter: that leaves required checks pending rather than skipped.
+
+Done when (tests, `scripts/guards/workflow-pins.test.ts`):
+  - `draft_pr_skips_jobs`: every job in each `pull_request` workflow carries the draft condition.
+  - `ready_for_review_triggers`: each `pull_request` workflow lists `ready_for_review`.
+  - `main_push_unchanged`: `ci.yml`'s `push` trigger to main is unchanged, and every job's condition admits any event
+    that is not a pull request.
+  - `title_never_interpolated` (`change-shape-wiring.test.ts`) checks pr-shape's new trigger list and condition.
+  - DO-3: github/docs `workflow-syntax.md` (`jobs.<job_id>.if`) marks a job whose condition is false as skipped, and
+    `events-that-trigger-workflows.md` says a `pull_request` workflow runs only for `opened`, `synchronize` and
+    `reopened` unless `types` lists more. A skipped required check may count as passing under branch protection
+    (unverified until protection exists). That is harmless, because a draft cannot merge and marking it ready runs
+    everything again. The PR proves on itself that marking it ready starts a full, non-skipped run on the same head.
+
+---
+
 ### P0.09h — Size guard counts a pure rename once (architecture ruling 2026-10-05 03:47Z)
 Tags: —            Depends on: P0.09g, P0.09i            Plan: D3 / DL-1 (PR size), SE-6
 Where: one check PR. `scripts/guards/pr-size.ts` and `change-shape.ts`, new `pr-size.test.ts`; CODEOWNERS

@@ -100,16 +100,29 @@ describe("workflows", () => {
     expect(ci).not.toMatch(/cancel-in-progress:\s*true/);
   });
 
-  // Alex 2026-10-05 20:34Z: drafts are checked locally with `npm run check`; GitHub runs the checks once a PR is
-  // ready. A job skipped by `if:` is marked skipped (docs.github.com, workflow syntax, jobs.<job_id>.if), and marking a
-  // PR ready fires `ready_for_review`, which runs only when listed in `types` (events that trigger workflows).
-  test.each(workflowFiles)("pr_checks_wait_for_ready %s", (file) => {
-    const text = readFileSync(join(WORKFLOWS, file), "utf8");
-    if (!/^ {2}pull_request:/m.test(text)) return;
-    expect(text).toMatch(/^ {4}types: \[[^\]]*\bready_for_review\b[^\]]*\]$/m);
-    for (const [id, lines] of jobs(code(text))) {
+  // P0.09l (Alex 2026-10-05 20:34Z): drafts are checked locally with `npm run check`; GitHub runs the checks once a
+  // PR is ready. A job whose `if:` is false is marked skipped (github/docs workflow-syntax.md, jobs.<job_id>.if), and
+  // marking a PR ready fires `ready_for_review`, which runs only when listed in `types` (events-that-trigger-workflows.md).
+  const prWorkflows = workflowFiles.filter((f) => /^ {2}pull_request:/m.test(readFileSync(join(WORKFLOWS, f), "utf8")));
+
+  test.each(prWorkflows)("draft_pr_skips_jobs %s", (file) => {
+    for (const [id, lines] of jobs(code(readFileSync(join(WORKFLOWS, file), "utf8")))) {
       const condition = lines.find((l) => /^ {4}if: /.test(l)) ?? "";
-      expect(condition, `${file} job ${id}`).toContain("!github.event.pull_request.draft");
+      expect(condition, `${file} job ${id}`).toContain("github.event.pull_request.draft == false");
+    }
+  });
+
+  test.each(prWorkflows)("ready_for_review_triggers %s", (file) => {
+    const text = readFileSync(join(WORKFLOWS, file), "utf8");
+    expect(text).toMatch(/^ {4}types: \[[^\]]*\bready_for_review\b[^\]]*\]$/m);
+  });
+
+  test("main_push_unchanged", () => {
+    expect(ci).toMatch(/^ {2}push:\n {4}branches: \[main\]$/m);
+    // Every ci.yml job runs on any event that is not a pull request, so a push to main still runs everything.
+    for (const [id, lines] of jobs(code(ci))) {
+      const condition = lines.find((l) => /^ {4}if: /.test(l)) ?? "";
+      expect(condition, `ci.yml job ${id}`).toMatch(/^ {4}if: github\.event_name != 'pull_request' \|\| /);
     }
   });
 

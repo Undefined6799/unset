@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   check:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -62,7 +62,7 @@ jobs:
           --strict --no-global .github/renovate.json
 
   audit:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -84,7 +84,7 @@ jobs:
       - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/
 
   secrets:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -102,7 +102,7 @@ jobs:
         run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" dir --redact --no-banner --config .github/.gitleaks.toml .
 
   actionlint:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -116,7 +116,7 @@ jobs:
       - run: docker run --rm -v "$PWD:/repo" -w /repo "$ACTIONLINT_IMAGE" -color
 
   semgrep:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -153,7 +153,7 @@ jobs:
           if-no-files-found: error
 
   sbom:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -175,7 +175,7 @@ jobs:
           if-no-files-found: error
 
   duplicates:
-    if: github.event_name == 'push' || !github.event.pull_request.draft
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
