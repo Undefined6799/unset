@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 18 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening).
+Depth: **build-ready**. 19 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f added 2026-10-05).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -39,6 +39,7 @@ Depth: **build-ready**. 18 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09b | Severity definitions, labels, bug template and triage form | [ALEX] | P0.03, P0.07 | `phase-0.md` |
 | P0.09e | Classify grant changes for the trusted base (split from P0.09c) | [SEC] | P0.03 | `phase-0.md` |
 | P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b, P0.09e | `phase-0.md` |
+| P0.09f | Let the root lockfile ride with a trusted package's dependency change (SE-6 ruling 2026-10-05 02:50Z) | [SEC] | P0.09c | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11 | Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list | [ALEX] | Alex part: —; agent PR: P0.04, P0.07 | `phase-0.md` |
@@ -61,6 +62,7 @@ flowchart TD
   P0_09b["P0.09b Severity definitions"]
   P0_09c["P0.09c Change-shape checks"]
   P0_09d["P0.09d AI notes vault and guard"]
+  P0_09f["P0.09f Lockfile rides with trusted deps"]
   P0_10["P0.10 Secret scanning"]
   P0_11["P0.11 Domains"]
   P0_12["P0.12 Offline key ceremony and the key"]
@@ -80,6 +82,7 @@ flowchart TD
   P0_09 --> P0_09c
   P0_09b --> P0_09c
   P0_06 --> P0_09d
+  P0_09c --> P0_09f
   P0_07 --> P0_10
   P0_07 --> P0_11
   P0_10 --> P0_12
@@ -103,8 +106,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.01s | Semgrep custom rules: computed imports and floating promises (parallel-safe) | [SEC] | P1.01, P0.07 | `phase-1.md` |
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
-| P1.04k | HTTP server kit in `shared/http/` (split from P1.04, SE-6) | — | P1.03 | `phase-1.md` |
-| P1.04 | HTTP server skeleton per entrypoint | — | P1.04k | `phase-1.md` |
+| P1.04l | Name the HTTP server kit's log events (split from P1.04k, SE-6) | — | P1.03 | `phase-1.md` |
+| P1.04k | HTTP server kit in `shared/http/` (split from P1.04, SE-6) | — | P1.03, P1.04l | `phase-1.md` |
+| P1.04q | Route registration guard (split from P1.04k, SE-6) | — | P1.04k | `phase-1.md` |
+| P1.04 | HTTP server skeleton per entrypoint | — | P1.04q | `phase-1.md` |
 | P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04 | `phase-1.md` |
 | P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05 | `phase-1.md` |
 | P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.04 | `phase-1.md` |
@@ -165,6 +170,8 @@ flowchart TD
   P1_03["P1.03 Error model"]
   P1_04["P1.04 HTTP server skeleton per"]
   P1_04k["P1.04k HTTP server kit in shared/http/"]
+  P1_04l["P1.04l HTTP kit log events"]
+  P1_04q["P1.04q route registration guard"]
   P1_05["P1.05 Trusted proxy"]
   P1_06["P1.06 Body limits and the rate-limit"]
   P1_06p["P1.06p Per-interface rate-limit tables"]
@@ -283,7 +290,10 @@ flowchart TD
   P1_29 --> P2_13a
   P1_30 --> P2_13a
   P1_03 --> P1_04k
-  P1_04k --> P1_04
+  P1_03 --> P1_04l
+  P1_04l --> P1_04k
+  P1_04k --> P1_04q
+  P1_04q --> P1_04
   P1_08 --> P1_08i
   P1_12 --> P1_12p
   P1_12p --> P1_29

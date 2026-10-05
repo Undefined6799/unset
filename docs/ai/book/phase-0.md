@@ -1926,6 +1926,46 @@ As built (2026-10-05): three files, each one job: `scripts/guards/grant-sql.ts` 
 
 ---
 
+### P0.09f — Let the root lockfile ride with a trusted package's dependency change (SE-6)
+Tags: [SEC]            Depends on: P0.09c            Plan: §9 trusted base (rule SE-6 "Enforced by", ruling 2026-10-05 02:50Z)
+Where: `scripts/guards/trusted-base.ts`, `scripts/guards/change-shape.ts`, new `scripts/guards/lockfile-scope.ts`, their
+  tests; `docs/human/engineering/engineering-rules.md` re-copied
+Size: ~150 source lines, ~200 test lines
+
+Why (reported by Phase 1 on P1.04k): `checkTrustedBaseIsolation` read the root `package-lock.json` as a feature path,
+so a trusted package that adds a dependency (P1.04k: `hono`, `@hono/node-server`) could not land: its `package.json`
+and the lockfile must change together, and splitting them breaks `npm ci`.
+
+Goal: the lockfile rides along with a trusted-base PR exactly when the ruling allows, and fails closed otherwise.
+
+Outputs:
+  - The root `package-lock.json` rides only when (1) the PR changes a dependency field (`dependencies`,
+    `devDependencies`, `peerDependencies`, `optionalDependencies`) of a trusted package's `package.json`, (2) every
+    other changed path is trusted base or one of its riders (root `package.json` is neither), and (3) every lockfile
+    entry the PR adds, changes or moves is that package's own workspace entry (or its link) or a package in its
+    dependency closure, matched by name and version, so an npm hoisting move passes. Anything else fails closed.
+  - `lockfileStrays(base, head, workspaces)` (pure, `lockfile-scope.ts`): the closure follows Node's lookup through
+    the lockfile's `packages` paths and follows workspace links. Added and changed entries are judged against the head
+    closure, removed and changed entries against the base closure (an upgrade drops the old copy); a removal and an
+    addition with the same identity and content are a move, not a change.
+  - `change-shape.ts` gathers which package manifests change a dependency field (an added or deleted manifest has
+    none on the missing side; unreadable JSON is no change) and both sides of a modified lockfile (unreadable → none).
+    A failure names the stray entries: `package-lock.json (node_modules/c (c@1.1.0))`.
+
+Done when (tests):
+  - lockfile_rides_with_trusted_dependency_change (`lockfile-scope.test.ts`): the ruled three (manifest dependency
+    change plus lockfile plus trusted code passes; lockfile without a manifest dependency change fails; lockfile plus a
+    trusted manifest plus a feature path fails), plus a feature manifest's dependency change, the root manifest, a
+    stray entry and an unreadable lockfile → fail.
+  - lockfile_scope_* (`lockfile-scope.test.ts`): dependency added and upgraded pass; hoisting move passes; an
+    unrelated feature package's version bump fails; a removed entry outside the closure fails; the root entry and an
+    unreadable lockfile fail.
+  - lockfile_rides_end_to_end (`change-shape-wiring.test.ts`): through real git, a dependency change passes, a
+    scripts-only change and an unreadable manifest leave the lockfile outside.
+Not in this step: any other generated file in a trusted folder (each gets its own ruling).
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),
