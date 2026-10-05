@@ -1791,8 +1791,10 @@ Diagram: none.
 
 ### P2.13b — graphify code graphs in CI (added, editor pass 2026-10-04 evening; plan §7, §9; PI-2)
 Tags: —            Depends on: P2.13a, P0.07            Plan: §7 tooling ("graphify graphs regenerated in CI"), §9 "Measured" ("graphify graphs diffed in PRs, so 'who calls this' is a command, not a guess"); phase-0 plan issue PI-2 (deferred in ADR 0007)
-Where: `<top>/graphify-out/` committed per top-level folder that holds code (`apps/`, `interfaces/`, `domains/`,
-  `infrastructure/`, `shared/`; `scripts/` too); `.graphifyignore`; `.github/workflows/ci.yml` (new job `graphs`);
+Where: `docs/graphs/<top>/` committed per top-level folder that holds code (`apps`, `interfaces`, `domains`,
+  `infrastructure`, `shared`; `scripts` too; ruling 2026-10-05 01:25Z: no graph inside a product folder, no new root
+  folder, and `docs/` rides with a check PR, so this stays one step); `.graphifyignore`; `.gitignore` (gains
+  `**/graphify-out/`, so a stray local run never lands inside a product folder); `.github/workflows/ci.yml` (new job `graphs`);
   the graphify pin (`scripts/graphify/requirements.txt` with hashes, or a digest-pinned image); `scripts/graphify/graphs.test.ts`
 Size: ~40 lines of YAML and config, ~60 test lines, plus the generated graphs
 
@@ -1811,8 +1813,8 @@ Outputs:
     pinned by index digest; the PR names which. It reads source only and needs no network after install (the job runs
     the graph step with networking off: `docker run --network none`, or `unshare -n` on the runner).
   - CI job `graphs` (10 min, `pull_request` and `push` to `main`, `permissions: { contents: read }`): for each
-    top-level folder that holds code, `graphify update <folder>`; then `git diff --exit-code -- '*/graphify-out/'` fails
-    the job when a committed graph is stale (the author runs `npm run graphs` and commits the result); every
+    top-level folder that holds code, the graph is regenerated into `docs/graphs/<folder>/` (Algorithm step 0); then
+    `git diff --exit-code -- docs/graphs/` fails the job when a committed graph is stale (the author runs `npm run graphs` and commits the result); every
     `graph.html` is uploaded with `actions/upload-artifact` (SHA-pinned).
   - `package.json` `"graphs"`: the same loop locally.
   - Determinism: the committed output must not change between two runs on the same tree. A field that does (a build
@@ -1823,6 +1825,18 @@ Outputs:
   - The job is advisory until protection exists (decision 41); `.github/required-checks.json` gains `graphs`.
 
 Algorithm:
+  0. Output directory (DO-3, step book thread 2026-10-05, from upstream sources since graphify was not installed):
+     `graphify extract` takes `--out <dir>` (PR #1246, per https://github.com/Graphify-Labs/graphify/issues/1287);
+     `graphify update` has no `--out` (the CLI reference https://docs.graphify.com/reference/overview, checked against
+     0.9.62, lists `--out` only on `merge-graphs`); a `GRAPHIFY_OUT` variable exists and some commands honour it
+     (`hook-guard` as of 0.9.74, https://github.com/Graphify-Labs/graphify/issues/4040), unverified for `update`. So the
+     first build action is the learning test `graphify_out_dir_learning`: in a temp copy, run the pinned `graphify
+     update <top>` with `GRAPHIFY_OUT=<tmp>/out` and record where the output lands. If it lands there, the job sets
+     `GRAPHIFY_OUT=docs/graphs/<top>` per folder. Otherwise it runs `graphify update <top>` and moves
+     `<top>/graphify-out/` to `docs/graphs/<top>/`, or, if the pinned `extract --out` is AST-only with no network or
+     API cost, uses `graphify extract <top> --out docs/graphs/<top>`. The PR records which. Either way the staleness
+     check compares the regenerated `docs/graphs/<top>/` with the committed copy, and `graph.html` is uploaded from
+     there.
   1. Confirm graphify's distribution and licence at PR time (a pinned, hash-verifiable artefact). Not available that
      way → stop and ask; never `pip install graphify` unpinned or `curl | sh`.
   2. Run it twice on the same tree; diff the outputs; set the determinism filter (above).
@@ -1838,6 +1852,8 @@ Done when (tests):
     actions, pins graphify (hashes or digest), runs with networking off, and uploads `graph.html`.
   - graphs_stale_fails: on a scratch branch, a source edit without regenerating → `graphs` fails (run URL in the PR).
   - graphs_deterministic: two runs on the same tree produce identical committed files after the filter.
+  - graphify_out_dir_learning: the learning test of Algorithm step 0, run first.
+  - no_graphify_out_in_product: after the CI run, no `graphify-out/` directory exists under any product path.
   - graphs_required_listed: `graphs` is in `.github/required-checks.json` and is a job id in `ci.yml`.
 
 Reuse: graphify → USE (plan §7 names it; the prototype graphed every package with it). Provisional — for reuse review.

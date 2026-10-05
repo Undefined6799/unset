@@ -63,7 +63,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | AB-4 | Every guard proves it examined more than zero items and fails on a known-bad fixture | checked: `scripts/guards/guards.test.ts`, `depcruise_cruised_nonzero` |
 | DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | planned: P1.11 |
 | DA-1 | `idx` can be dropped and rebuilt without losing a decision | planned: P3.03 |
-| SE-6 | A PR that touches the trusted base touches nothing else | planned: P0.09c |
+| SE-6 | A PR that touches the trusted base touches nothing else, and a PR that changes a check changes no product path | checked: `trusted_base_isolated`, `trusted_base_list_from_codeowners`, `check_plus_product_fails` |
 
 The docs test (P0.09, `architecture_rule_table_matches_depcruise`) reads this table. It fails if a named check
 does not exist, a `forbidden` rule or `MATRIX` has no row, a planned step has already merged, or a review-only row

@@ -1,0 +1,40 @@
+# The shape of a pull request (P0.09c): title, commits, size, template headings, trusted base (SE-6) and
+# performance evidence (PF-1). Its own workflow so that editing the title, body or labels re-runs only this check:
+# the title becomes the squash subject on main, so an edit after a green run must be checked again.
+# The rules of ci.yml's header hold here too (scripts/guards/workflow-pins.test.ts checks every workflow).
+
+name: pr-shape
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions: {}
+
+concurrency:
+  group: pr-shape-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pr-shape:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # base...head needs the merge base.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/guards/change-shape.ts

@@ -431,6 +431,11 @@ Not in this step: secret scanning and 2FA (P0.10); the extra required checks (P0
 coverage check (`codeowners_security_paths_match`, a warning-level test added in P1.01 once paths exist).
 Diagram: none.
 
+Later edit (SE-6 ruling 2026-10-05, refined 01:15Z; built in P0.09c): the trusted-base section gains one machine-read
+line, `# checks:`, listing the check paths: the `scripts/` folders whose code decides pass or fail (`guards`, `lint`,
+`ci`, `budgets`, `licence`, `docs`, `test`, `workspace`; each new check folder is added when created), `/.github/`,
+`/.githooks/`, `/.semgrep/`, `/.semgrepignore` and `/.dependency-cruiser.cjs`. CODEOWNERS stays the one list.
+
 ---
 
 ### P0.04 — Toolchain: TypeScript 7, Node 26, Vitest only, `.npmrc`, "discovered equals executed"
@@ -1536,11 +1541,12 @@ As built (2026-10-05):
 ### P0.09c — Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35)
 Tags: [ALEX] (tail: required check) [SEC]            Depends on: P0.07, P0.08, P0.09, P0.09b, P0.09e, P0.03 (the trusted-base section)           Plan: §8 Phase 0 CI list (commit-message and PR-title check, PR size guard, PR template heading check; decision 35, rules DL-1, DL-3, DL-6, D2, D3); §9 trusted base (rule SE-6); §6.1 Data access (rule PF-1)
 Where: new `scripts/guards/commit-msg.ts`, `scripts/guards/pr-size.ts`, `scripts/guards/pr-template.ts`,
-  `scripts/guards/trusted-base.ts`, `scripts/guards/grant-parse.ts`, `scripts/guards/perf-evidence.ts`,
-  `scripts/guards/change-shape.test.ts`, `scripts/guards/grant-parse.test.ts` + SQL and JSON fixtures, new `.githooks/commit-msg`; `.github/workflows/ci.yml` (new job `pr-shape`);
+  `scripts/guards/trusted-base.ts`, `scripts/guards/perf-evidence.ts`, `scripts/guards/change-shape.ts`,
+  `scripts/guards/change-shape.test.ts`, new `.githooks/commit-msg`; `.github/workflows/ci.yml` (new job `pr-shape`);
+  `.github/CODEOWNERS` (the `# checks:` line);
   `.github/required-checks.json` (appends `pr-shape`); `.github/labels.json` (appends labels); `renovate.json`
-  (commit prefix)
-Size: ~230 source lines, ~330 test lines
+  (commit prefix). The grant classifier (`grant-sql.ts`, `grant-json.ts`, `grant-parse.ts` and their tests) is P0.09e's.
+Size: ~565 source lines as built (the classifier spec below moves to P0.09e in the book-edit PR that follows)
 
 Why here (letter suffix): the plan's Phase 0 CI list gained these three checks with decision 35 (2026-10-04); they need
 the CI workflow (P0.07), the PR template (P0.09) and the label list (P0.09b), so they come after all three.
@@ -1587,6 +1593,19 @@ Outputs:
     closed). A step whose change spans both becomes two steps (SE-6 as ruled 2026-10-04): a kit or other trusted-base
     change is split out just ahead as `<id>k`, a grants change as `<id>g` (one letter, so the id still matches
     `checkCommitMessage`), each its own PR titled with its own id.
+  - `checkPathsMixed(changedPaths: string[], checks: string[]) -> string[]` (pure; SE-6 ruling 2026-10-05, refined
+    01:15Z, amended 01:40Z): when a changed path matches a `# checks:` pattern (the CODEOWNERS trusted-base section's
+    machine-read line: the `scripts/` check folders, `.github/`, `.githooks/`, `.semgrep/`, `.semgrepignore`,
+    `.dependency-cruiser.cjs`; generators and dev tools under `scripts/` are not check paths, narrowed 01:43Z), it returns the changed product paths (`apps/`, `interfaces/`, `domains/`,
+    `infrastructure/`, `shared/`, `deployment/`); a non-empty result fails `[SE-6]`. Tests, fixtures, `docs/human`,
+    `docs/ai` and repo config such as `renovate.json` ride along. Documentation inside a product folder does not count
+    as product, in this check and in trusted-base isolation alike: a regular file (git mode 100644) that is a package's
+    `LICENSE`, `LICENSE.md` or `LICENSE.txt`, any `*.md`, or a `package.json` whose diff changes only `license`. A
+    symlink is judged by its location. On `pull_request`, CI runs the
+    PR's own workflow and guards, so human review of a check PR is the gate. Running the base commit's copy
+    (`pull_request_target`) is rejected. The `# checks:` lines of the base and head sections are read as one union, so a
+    PR cannot drop a path from the list to escape; neither side having the line exits 1. Root `package.json` is off the
+    list (adding a workspace must touch it), so a change to its `check` script is review-only.
   - `classifyGrantChanges(input: { base: { migrations: {path, sql}[], grantMatrix: string | null, erasureRegistry:
     string | null }, head: { same shape }, changed: { path, status: "A" | "M" | "D" | "R" }[] }) -> GrantFinding[]`
     where `GrantFinding = { path, line, kind: "trusted" | "feature" | "neutral", reason, statement }` (pure, in
@@ -1796,6 +1815,11 @@ Done when (tests): (`scripts/guards/change-shape.test.ts`; pure functions with f
     DEFINER` in a migration unrelated to legal hold → neutral; once a fixture line names `audit.append_x`, its
     `CREATE FUNCTION` → trusted by 3f; `CREATE FUNCTION app.f()` (new, plain) → neutral. Each beside
     `domains/content/x.ts` → the PR fails `[SE-6]` for the trusted ones.
+  - check_pr_alone_ok, check_plus_product_fails, check_plus_docs_and_tests_ok, checks_line_union_of_base_and_head (a
+    PR that removes `.semgrep/` from `# checks:` and edits `.semgrep/` plus `domains/` still fails), fixture_is_check_path
+    (`checkPathsMixed`, SE-6 ruling 2026-10-05 refined 01:15Z); doc_exemptions_in_both_checks and
+    symlink_license_not_exempt (amended 01:40Z); checks_list_complete: every `scripts/` folder a workflow or the root
+    `package.json` runs is on the `# checks:` line (01:43Z).
   - perf_evidence_required (PF-1): a diff adding `-- why: speed` with `Performance evidence: n/a` → error; with a
     before-and-after line naming p50, p95 and p99 → ok; `-- why: unique` with `n/a` → ok.
   - planted (agent, recorded in the PR): a scratch PR titled `fix: thing` fails `pr-shape`; closed, branch deleted.
@@ -1806,6 +1830,44 @@ Not in this step: the red-first CI job for bug-fix PRs (rule TE-5, P2, when bug-
 section requirement when `expect(` lines are removed (rule DL-1; lands with its trigger, the first loosened assertion);
 the review-queue cap (D4 is a CLAUDE.md instruction, P0.09).
 Diagram: none.
+
+As built (2026-10-05):
+  - Files: the grant classifier was split out as P0.09e and merged first. `grant-isolation.test.ts` runs the
+    classifier and `checkTrustedBaseIsolation` together on the PRs the `grant_parse_*` tests describe. The wiring
+    tests sit in `change-shape-wiring.test.ts` (`title_never_interpolated`, `hook_runs_check`, and
+    `job_reads_git_safely`, which runs the job on a throwaway repository); `required_check_listed` and
+    `renovate_titles_pass` sit in `scripts/docs/change-shape-config.test.ts`, and the new labels in P0.09b's
+    `labels_listed`. The proposed P0.09f was folded back in (ruling 2026-10-05 01:15Z): repo config and tests may ride
+    with a check PR, so labels, required checks and Renovate ship here.
+  - Workflow: `pr-shape` is its own workflow, `.github/workflows/pr-shape.yml`, with `permissions: {}`, on the
+    `pull_request` types opened, synchronize, reopened, edited, labeled and unlabeled, so a retitle or a label change
+    re-checks without a push. `ci.yml` is unchanged.
+  - Commits: `git log --no-merges`, so the "Merge branch 'main'" commits an owning thread makes are not checked;
+    `checkCommitMessage` also passes git's and GitHub's merge subjects, since `git merge` runs the hook. Without a
+    step id, only `subject.no_step_id` and `subject.conventional_prefix` are reported. A step id is at most 6
+    characters, so the 72-character subject cap never binds before the 50-character summary cap.
+  - The trusted-base patterns, `# parsed:` paths, trusted functions and `# checks:` paths are the union of the base and
+    head CODEOWNERS sections (`unionTrustedBase`); either section unreadable, a `# parsed:` path the guard cannot read,
+    or no `# checks:` line on either side exits 1. Git output is read with `-z`, so a non-ASCII path still matches.
+    The template headings come from the base branch's template. A `mixed_grant_change` file counts as touching the
+    trusted base. Trusted findings print as `::notice` when the PR passes, and as errors beside the `[SE-6]` failure.
+  - Check paths versus product paths: `checkPathsMixed` sits beside `checkTrustedBaseIsolation` in `trusted-base.ts`.
+    This PR itself is a check PR (scripts/guards, .github, .githooks) with tests, docs and `renovate.json` riding along.
+    Root `package.json` is off the `# checks:` list and stays review-only. The ruling named `guards`, `lint`, `ci`,
+    `budgets`, `licence` and `docs`; this PR also lists `scripts/test/` (the root `test` script runs `run.ts`, so
+    `checks_list_complete` requires it) and `scripts/workspace/` (its `references.ts` decides the workspace tests and
+    P0.13's licence check imports it).
+  - Documentation exemptions (rulings 2026-10-05 01:31Z and 01:40Z; `isDocumentation` in `trusted-base.ts`): changed
+    paths come from `git diff -z --raw`, so each carries its head mode, and only a regular file qualifies. A
+    `package.json` counts as licence-only when base and head parse to deep-equal objects once `license` is dropped
+    (`node:util` `isDeepStrictEqual`); an unreadable side is not documentation. A file under a `# parsed:` path is
+    judged by its grant findings before any exemption. The end-to-end test adds a symlink named `LICENSE`, which the
+    job reports as a product path.
+  - `renovate.json` also sets `"semanticCommits": "disabled"`: Renovate's `commitMessagePrefix` is replaced by a
+    semantic prefix when semantic commits are on (docs.renovatebot.com/configuration-options, read 2026-10-05).
+  - Planted check: no scratch branch (agents push only to their own branch). The PR was first opened titled
+    `fix: thing`, `pr-shape` failed on it, and the title was then corrected.
+  - Alex tail: deferred with the ruleset (decision 41); `required-checks.json` lists `pr-shape` now.
 
 ---
 
@@ -1839,7 +1901,7 @@ As built (2026-10-05): three files, each one job: `scripts/guards/grant-sql.ts` 
   - `grant-parse.ts` (348 non-blank lines) and its test file are over Biome's 300-line warning: the classifier is one
     ordered sequence of rules, and splitting it further would scatter the verdict constants it shares.
   - Any file under `migrations/` is read as SQL, a README included (it comes out `unclassified`).
-  - `no_runtime_caller_yet`: only tests import `grant-parse.ts` until P0.09c flips it.
+  - `no_runtime_caller_yet`: only tests import `grant-parse.ts` until P0.09c flips it (flipped there: `change-shape.ts`).
 
 ---
 
@@ -2283,7 +2345,10 @@ Algorithm:
      package's licence (in the ADR); print conflicts; exit 1 on any conflict or any package with no licence field. No
      `npx` tool (its unpinned tree would run with install scripts).
   4. One PR adding the MIT packages' `LICENSE` files and setting every `package.json` `license` field, with the check's
-     output.
+     output. A file named exactly `LICENSE`, `LICENSE.md` or `LICENSE.txt` at a package root counts as documentation in
+     the SE-6 isolation check (ruling 2026-10-05), so the MIT `LICENSE` files in `shared/*` ride in one PR with the
+     `package.json` `license` fields. `scripts/licence/` is a check path, but the documentation exemptions (LICENSE
+     files, `*.md`, license-only `package.json` diffs) let the PR stay one: see SE-6 as amended 01:40Z.
   5. A conflict → stop and ask Alex with the dependency named.
 
 Edge cases and failures:

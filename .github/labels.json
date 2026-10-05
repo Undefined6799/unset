@@ -33,5 +33,35 @@
     "name": "security-review",
     "color": "1d76db",
     "description": "Touches auth, identity, crypto, egress or personal data: needs a security review."
+  },
+  {
+    "name": "large-pr",
+    "color": "e99695",
+    "description": "Over 800 changed source lines; the body's Large PR: line says why (D3)."
+  },
+  {
+    "name": "kind/feature",
+    "color": "a2eeef",
+    "description": "Kind of change (D2): new behaviour."
+  },
+  {
+    "name": "kind/fix",
+    "color": "a2eeef",
+    "description": "Kind of change (D2): corrects behaviour that was wrong."
+  },
+  {
+    "name": "kind/refactor",
+    "color": "a2eeef",
+    "description": "Kind of change (D2): new structure, same behaviour."
+  },
+  {
+    "name": "kind/docs",
+    "color": "a2eeef",
+    "description": "Kind of change (D2): documentation only."
+  },
+  {
+    "name": "kind/build",
+    "color": "a2eeef",
+    "description": "Kind of change (D2): CI, tooling, guards or dependencies."
   }
 ]

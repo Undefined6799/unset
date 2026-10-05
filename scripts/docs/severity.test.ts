@@ -37,7 +37,20 @@ describe("severity definitions and labels", () => {
   test("labels_listed", () => {
     const labels: { name: string; description: string; color: string }[] = JSON.parse(read(".github/labels.json"));
     const names = labels.map((l) => l.name);
-    expect(names).toEqual(["bug", ...SEVERITY_LABELS, "triaged", "upstream", "security-review"]);
+    expect(names).toEqual([
+      "bug",
+      ...SEVERITY_LABELS,
+      "triaged",
+      "upstream",
+      "security-review",
+      // P0.09c: the PR size override and the kind of change (D2, D3).
+      "large-pr",
+      "kind/feature",
+      "kind/fix",
+      "kind/refactor",
+      "kind/docs",
+      "kind/build",
+    ]);
     expect(new Set(names).size).toBe(names.length);
     for (const label of labels) {
       expect(label.description.trim(), label.name).not.toBe("");
