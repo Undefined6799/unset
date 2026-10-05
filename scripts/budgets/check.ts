@@ -8,8 +8,7 @@ import { read, sourceFiles } from "../guards/files.ts";
 export type Warning = { key: string; lines: number; max: number; level: "warning" | "notice" };
 
 const COUNTED = /\.(ts|tsx)$/;
-// Tests, fakes (test doubles; architecture ruling 2026-10-04 23:53Z) and generated code are not module code.
-const NOT_COUNTED = /\.(test|generated)\.[^/]+$|\.fake\.ts$/;
+const NOT_COUNTED = /\.(test|generated)\.[^/]+$/;
 const NOTICE_SHARE = 0.9;
 
 /** Non-blank lines that are not only a comment. Approximate: a comment opened after code, or "/*" inside a
