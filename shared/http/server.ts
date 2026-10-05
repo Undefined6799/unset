@@ -226,11 +226,13 @@ export function createServer(options: ServerOptions) {
     // Step 2b, trustedProxy: every route but /health, which needs no client identity (architecture ruling 2026-10-05).
     const clientIp = route.path === "/health" ? null : clientIpOf(request.headers, peer);
     let exceeded = () => false;
-    const result = admit(route, request, clientIp).then((admitted) => {
+    const admitThenHandle = async (): Promise<Response> => {
+      const admitted = await admit(route, request, clientIp);
       if (admitted instanceof Response) return admitted;
       exceeded = admitted.exceeded;
       return route.handler({ request: admitted.request, clientIp, params, deadline, reqId });
-    });
+    };
+    const result = admitThenHandle(); // awaited in the race below; after a deadline, its late result is logged
     const timedOut = new Promise<"deadline">((resolve) => {
       deadline.addEventListener("abort", () => resolve("deadline"), { once: true });
     });
