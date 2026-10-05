@@ -143,12 +143,43 @@ function changesOnlyLicence(base: string, head: string, path: string): boolean {
   }
 }
 
+const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
+
+/** A package.json whose dependency fields differ between base and head; an added or deleted one has none on the
+ * missing side. Unreadable JSON is not a dependency change, so the lockfile does not ride (fail closed). */
+function changesDependencies(base: string, head: string, change: RawChange): boolean {
+  try {
+    const [before, after] = [base, head].map((sha) => {
+      const absent = (sha === base && change.status === "A") || (sha === head && change.status === "D");
+      const manifest = absent ? {} : (JSON.parse(git("show", `${sha}:${change.path}`)) as Record<string, unknown>);
+      return DEPENDENCY_FIELDS.map((field) => manifest[field]);
+    });
+    return !isDeepStrictEqual(before, after);
+  } catch {
+    return false;
+  }
+}
+
+/** Both sides of a modified root lockfile, parsed; null when the PR does not modify it or a side is unreadable. */
+function lockfiles(base: string, head: string, changed: readonly RawChange[]): DocFacts["lockfiles"] {
+  if (!changed.some((c) => c.path === "package-lock.json" && c.status === "M")) return null;
+  try {
+    const [before, after] = [base, head].map((sha) => JSON.parse(git("show", `${sha}:package-lock.json`)) as unknown);
+    return { base: before, head: after };
+  } catch {
+    return null;
+  }
+}
+
 function docFacts(base: string, head: string, changed: readonly RawChange[]): DocFacts {
   const regular = changed.filter((c) => c.mode === "100644").map((c) => c.path);
-  const manifests = changed.filter((c) => c.status === "M" && /^[^/]+\/[^/]+\/package\.json$/.test(c.path));
+  const packageManifests = changed.filter((c) => /^[^/]+\/[^/]+\/package\.json$/.test(c.path));
+  const modified = packageManifests.filter((c) => c.status === "M");
   return {
     regular: new Set(regular),
-    licenceOnly: new Set(manifests.filter((c) => changesOnlyLicence(base, head, c.path)).map((c) => c.path)),
+    licenceOnly: new Set(modified.filter((c) => changesOnlyLicence(base, head, c.path)).map((c) => c.path)),
+    dependencyChanges: new Set(packageManifests.filter((c) => changesDependencies(base, head, c)).map((c) => c.path)),
+    lockfiles: lockfiles(base, head, changed),
   };
 }
 
