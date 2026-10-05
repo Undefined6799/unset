@@ -4,7 +4,20 @@ import { AppError, type ErrorCode } from "@unset/shared-errors";
 import { scrub } from "./scrub.ts";
 
 /** Known events. A later step adds the events it logs here; anything else is logged as `log.unknown_event`. */
-const EVENTS = ["config.invalid", "config.unknown_keys", "error", "log.unknown_event", "log.serialize_failed"] as const;
+const EVENTS = [
+  "config.invalid",
+  "config.unknown_keys",
+  "error",
+  "log.unknown_event",
+  "log.serialize_failed",
+  // P1.04k, the HTTP server kit: one line per response, a fired deadline, a handler result that came too late, a
+  // failed listen, and the shutdown drain.
+  "http.request",
+  "http.deadline",
+  "http.late_result",
+  "http.listen_failed",
+  "http.drain",
+] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
 /** The only fields a log line may carry. `route` is a route template (`/@:handle`), never a raw path. */
