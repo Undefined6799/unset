@@ -1590,7 +1590,7 @@ Outputs:
     client always released; built on `withClient`. A Semgrep rule (`.semgrep/rules/transactions.yml`, run by P0.07's
     `semgrep` job with `--config .semgrep/rules/` added beside the registry packs; folder created by P1.01s) allows `BEGIN`, `COMMIT` and `.transaction(` in TypeScript only in `tx.ts`: a SQL string starting
     with `BEGIN`, `COMMIT`, `START TRANSACTION` or `ROLLBACK`, or a `.transaction(` call, anywhere else fails
-    (migrations are `.sql` files run by `migrate.ts` inside `tx.ts`, so they are not TypeScript and not scanned). If P1.01s's SARIF check hard-coded its rule ids instead of reading them from the rule files, this step adds the `transactions.yml` id to that list. This
+    (migrations are `.sql` files run by `migrate.ts` inside `tx.ts`, so they are not TypeScript and not scanned). This
     step's PR flips the DM-2 row of `docs/human/architecture.md` to `checked: transactions-only-in-tx` (P0.09's
     table convention).
   - `checkConnectionBudget(client, pools: number[], maxReplicas)`: at boot, after every pool of the process exists (the
