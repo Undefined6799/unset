@@ -54,7 +54,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | `pds-admin` and `chat-admin` import only themselves, Node built-ins and the zero-dependency allowlist | checked: `admin-services-zero-deps`, `depcruise_allowlist_exact` |
 | ADG §1 | A folder on the zero-dependency allowlist obeys the same rule | checked: `allowlist-zero-deps` |
 | ADG §1 | A vendor SDK is imported in one adapter folder per runtime | checked: `vendor-sdk-one-adapter` |
-| plan §5.4 | `net-guard` imports only Node built-ins, `undici` and its own files | checked: `net-guard-leaf` |
+| plan §5.4 | net-guard imports only Node built-ins, undici and its own files; its *.test.ts may also import fast-check and vitest | checked: `net-guard-leaf` |
 | TE-1 | Fakes are used only in tests and in non-production composition roots | checked: `fake-only-in-composition-root`, `fake_boot_refused_in_prod` |
 | DC-1 | No dependency cycles | checked: `no-circular` |
 | DC-1 | No orphan modules | checked: `no-orphans` |
