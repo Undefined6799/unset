@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 21 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g and P0.09i added 2026-10-05).
+Depth: **build-ready**. 22 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09i and P0.13a added 2026-10-05).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -47,6 +47,7 @@ Depth: **build-ready**. 21 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.11 | Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list | [ALEX] | Alex part: —; agent PR: P0.04, P0.07 | `phase-0.md` |
 | P0.12 | Offline key ceremony and the key inventory | [ALEX] [SEC] | ceremony: P0.10; agent PR: P0.04, P0.07 | `phase-0.md` |
 | P0.13 | Licence decision gates the first public commit (answered: AGPL-3.0 apps, MIT building blocks and lexicons; per-package licence files) | [STOP] (answered) | the question: —; ADR PR: P0.04, P0.07 | `phase-0.md` |
+| P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
 | P0.14 | Phase 0 exit: planted faults are blocked; protection drills wait until protection exists (decision 41) | [ALEX] (tail: drill D approval and merge) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
 
 ```mermaid
@@ -71,6 +72,7 @@ flowchart TD
   P0_11["P0.11 Domains"]
   P0_12["P0.12 Offline key ceremony and the key"]
   P0_13["P0.13 Licence decision gates the first"]
+  P0_13a["P0.13a Licence check speed"]
   P0_14["P0.14 Phase 0 exit"]
   P0_01 --> P0_02
   P0_02 --> P0_03
@@ -94,13 +96,14 @@ flowchart TD
   P0_07 --> P0_11
   P0_10 --> P0_12
   P0_07 --> P0_13
+  P0_13 --> P0_13a
   P0_08 --> P0_14
   P0_10 --> P0_14
 ```
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 53 steps: 39 from `phase-1.md`, 14 from `phase-2.md` (including the
+Depth: **build-ready**. 55 steps: 41 from `phase-1.md`, 14 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -116,7 +119,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.04l | Name the HTTP server kit's log events (split from P1.04k, SE-6) | — | P1.03 | `phase-1.md` |
 | P1.04q | Route registration guard (split from P1.04k, SE-6) | — | P0.09c | `phase-1.md` |
 | P1.04k | HTTP server kit in `shared/http/` (split from P1.04, SE-6) | — | P1.03, P1.04l | `phase-1.md` |
-| P1.04 | HTTP server skeleton per entrypoint | — | P1.04k, P1.04q | `phase-1.md` |
+| P1.04c | Composition root guard (split from P1.04, SE-6) | — | P0.09c | `phase-1.md` |
+| P1.04m | Route table lists every route option (split from P1.04, SE-6) | — | P1.04k | `phase-1.md` |
+| P1.04 | HTTP server skeleton per entrypoint | — | P1.04k, P1.04q, P1.04c, P1.04m, P0.13a | `phase-1.md` |
 | P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04 | `phase-1.md` |
 | P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05 | `phase-1.md` |
 | P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.04 | `phase-1.md` |
@@ -179,6 +184,8 @@ flowchart TD
   P1_04k["P1.04k HTTP server kit in shared/http/"]
   P1_04l["P1.04l HTTP kit log events"]
   P1_04q["P1.04q route registration guard"]
+  P1_04c["P1.04c composition root guard"]
+  P1_04m["P1.04m route table options"]
   P1_05["P1.05 Trusted proxy"]
   P1_06["P1.06 Body limits and the rate-limit"]
   P1_06p["P1.06p Per-interface rate-limit tables"]
@@ -299,8 +306,10 @@ flowchart TD
   P1_03 --> P1_04k
   P1_03 --> P1_04l
   P1_04l --> P1_04k
-  P1_04k --> P1_04
   P1_04q --> P1_04
+  P1_04c --> P1_04
+  P1_04k --> P1_04m
+  P1_04m --> P1_04
   P1_08 --> P1_08i
   P1_12 --> P1_12p
   P1_12p --> P1_29

@@ -726,8 +726,8 @@ Outputs: everything P1.04's Outputs list except the composition roots and the ro
   in this fragment and never edit an interface.
 Algorithm: P1.04's "Algorithm (per request)", shutdown and startup, unchanged.
 Edge cases and failures: all of P1.04's (they are the kit's).
-Done when (tests): every P1.04 test except `composition_root_split` and `route_manifest_matches`, which need real
-  entrypoints and stay with P1.04, and `route_registration_guard`, which P1.04q owns; plus
+Done when (tests): every P1.04 test except `route_manifest_matches`, which needs real entrypoints and stays with
+  P1.04, and `route_registration_guard`, which P1.04q owns (`composition_root_split` is P1.04c's); plus
   - kit_config_fragment: `loadConfig(defineConfig({ ...httpKitConfig }))` with `REQUEST_DEADLINE_MS=500` → `invalid`;
     with valid values → the four keys typed.
 Reuse: as P1.04.
@@ -736,8 +736,48 @@ Diagram: none.
 
 ---
 
+### P1.04c — Composition root guard (split from P1.04, SE-6)
+Tags: —            Depends on: P0.09c            Plan: as P1.04; §9 (rule SE-6, check paths)
+Where: `scripts/guards/composition-root.ts` and its test; fixtures under `scripts/guards/fixtures/`, never under
+  `interfaces/`, because this is a check-path PR. Registered in `guards.test.ts` and `repo.test.ts`, as
+  `route-registration` is.
+
+Why a separate step (relayed 2026-10-05 12:07Z): `composition_root_split` is a repo scan with a fixture, so it is a
+guard, and guards live in `scripts/guards/`, a check path. P1.04 creates product folders under `interfaces/`, so under
+SE-6 the guard cannot ride with it. It lands before P1.04, in any order with P1.04q, P1.04k and P1.04m.
+
+Done when (tests):
+  - composition_root_split: for every `interfaces/*/main.ts`, the scan finds exactly one import of `./compose.ts` and no
+    other import from `infrastructure/**`; a fixture `main.ts` importing `../../infrastructure/postgres/x.ts` fails.
+  - composition_root_compose_present: an `interfaces/*` folder with a `main.ts` but no `compose.ts` fails (fixture).
+  - composition_root_empty_tree_passes: the real tree passes (today it has no `interfaces/`).
+Diagram: none.
+
+---
+
+### P1.04m — Route table lists every route option (split from P1.04, SE-6)
+Tags: —            Depends on: P1.04k            Plan: as P1.04; §9 trusted base (rule SE-6), findings F-27
+Where: `shared/http/server.ts` and `server.test.ts` only (trusted base)
+Size: ~10 source lines
+
+Why a separate step (relayed 2026-10-05 12:09Z): P1.04's `RouteInfo` line listed `{ method, path, group, middleware }`,
+and P1.04k (#43) built exactly that, but the F-27 route manifest holds every `defineRoute` option except `handler`, and
+`route_manifest_matches` compares the manifest with `routeTable()`. The manifest rule is the intended one: a changed
+route option must show in the PR diff for security review. Fixing `RouteInfo` changes `shared/http/`, which is trusted
+base, so it cannot ride in P1.04. It is additive and adds no behaviour. It lands before P1.04, in either order with
+P1.04c.
+
+Change: `RouteInfo` gains `accepts`, `bodyLimit`, `rateLimit`, `mutates` and `deadlineMs`. P1.06, which adds
+`requiresSession` to `defineRoute`, also adds it to `RouteInfo` and to the `route_table_lists_middleware` assertion.
+
+Done when (tests): `route_table_lists_middleware` is extended: a route defined with each option set returns each of
+them in `routeTable()`, and a route left on defaults returns the resolved defaults.
+Diagram: none.
+
+---
+
 ### P1.04 — HTTP server skeleton per entrypoint
-Tags: —            Depends on: P1.04k, P1.04q            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
+Tags: —            Depends on: P1.04k, P1.04q, P1.04c, P1.04m, P0.13a            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
 Where: each `interfaces/<x>/main.ts`, `interfaces/<x>/compose.ts` and `interfaces/<x>/config.ts` (spreading P1.04k's
   `httpKitConfig`), together the composition root of its process (R1-14, rule TE-1; `interfaces/http` for `web`, then `api`, `media`, `admin` start an HTTP server;
   `indexer` and `review` start a health-only server); `interfaces/<x>/routes.manifest.json`; their tests
@@ -745,7 +785,8 @@ Size: ~60 source lines, ~60 test lines
 
 Split (SE-6, editor pass 2026-10-04): the kit described below (`shared/http/`) is built by **P1.04k**, alone, because it
 is trusted base. This step builds only what lives in `interfaces/`: the composition roots, the route manifests and each
-entrypoint's `config.ts`, with the tests `composition_root_split` and `route_manifest_matches`. The rest of this step's
+entrypoint's `config.ts`, with the test `route_manifest_matches` (P1.04c owns `composition_root_split`; P1.04m makes
+`routeTable()` list every option). The rest of this step's
 text stays the kit's specification.
 
 Goal: every entrypoint starts one Hono server through one function that answers `/health` with the commit, refuses
@@ -763,7 +804,8 @@ Outputs:
   - `createServer({ config, routes: Route[], policies: PolicyTable, readiness?: Array<() => Promise<boolean>>, allowedHosts: string[] }):
     (`policies` is the interface's own table, P1.06p; a route naming a policy absent from it → throws at startup)
     { listen(): Promise<void>, close(): Promise<void>, routeTable(): RouteInfo[] }`. `routeTable()` returns
-    `{ method, path, group, middleware: string[] }` per route (used by the CSRF static test, P1.07).
+    `{ method, path, group, middleware: string[], accepts, bodyLimit, rateLimit, mutates, deadlineMs }` per route
+    (P1.04m; used by the CSRF static test, P1.07). P1.06 adds `requiresSession` here when it adds the option.
   - Route manifest (findings F-27): each entrypoint commits `interfaces/<name>/routes.manifest.json`, one entry per
     route with every `defineRoute` option except `handler` (method, path, group, accepts, bodyLimit, rateLimit, mutates,
     `requiresSession` from P1.06, deadlineMs). A test compares it with `routeTable()`, so a new route or a changed
@@ -850,9 +892,7 @@ Done when (tests): (Hono's `app.request()` in-process, plus one real-socket test
   - request_deadline_503: a route with `deadlineMs: 1000` whose handler awaits a fake call that settles only when
     `ctx.deadline` aborts → 503 `http.deadline` within 1.1 s, and the fake saw the abort.
   - route_deadline_bounds: `deadlineMs: 130000`, `400000` or `0` → `defineRoute` throws; `120000` → accepted.
-  - composition_root_split: for every `interfaces/*/main.ts`, a scan finds exactly one import of `./compose.ts` and no
-    other `infrastructure/**` import; every `interfaces/*` with a `main.ts` has a `compose.ts` (a fixture `main.ts`
-    importing `../../infrastructure/postgres/x.ts` fails).
+  - ~~composition_root_split~~: moved to P1.04c (a repo scan with fixtures is a guard, a check path; SE-6).
   - route_manifest_matches: each entrypoint's `routeTable()` equals its committed `routes.manifest.json`; a fixture
     server with one extra route → the test fails naming it.
 
@@ -990,7 +1030,8 @@ Outputs:
       `rateLimitIp` (before `csrf`) consumes the policy's `ip` and `global` entries with `{ ip }`;
       `rateLimitDid` (after `session`) consumes the policy's `did` entries with `{ did: session.did }`.
     A route whose policy has a `did` entry must also declare `requiresSession: true`; `defineRoute` throws at startup
-    otherwise. If `rateLimitDid` still finds no session at run time, it denies (500 `internal.error`, logged as
+    otherwise. `requiresSession` also joins `RouteInfo` and the `route_table_lists_middleware` assertion (P1.04m), in
+    this kit step. If `rateLimitDid` still finds no session at run time, it denies (500 `internal.error`, logged as
     `ratelimit.no_session`): fail closed, never "no DID, no limit". Both answer 429 `http.rate_limited` with
     `Retry-After` when a bucket is empty.
   - Process-held secret `salt`: 32 random bytes from `crypto.randomBytes`, created at start and replaced every 24 h;
