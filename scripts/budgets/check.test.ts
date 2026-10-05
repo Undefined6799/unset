@@ -62,6 +62,29 @@ test("budget_overrun_warns_not_fails", () => {
   expect(readFileSync(summary, "utf8")).toContain("| interfaces/media | 12 | 10 | warning |");
 });
 
+test("budget_reason_field", () => {
+  // Alex via architecture, 2026-10-05: a raised budget is allowed when it records why; budgets warn, never gate.
+  const run = (budgets: object) => {
+    const root = tree({
+      "infrastructure/net-guard/a.ts": lines(460),
+      "scripts/budgets/budgets.json": JSON.stringify(budgets),
+    });
+    const out: string[] = [];
+    expect(main(root, (line) => out.push(line))).toBe(0);
+    return out;
+  };
+  const reason = "the proxy reads best as one module (review 2026-10-05)";
+  expect(run({ "infrastructure/net-guard": { max: 500, reason } })).toEqual([
+    `::notice title=line-budget::infrastructure/net-guard 460/500 (raised: ${reason})`,
+  ]);
+  expect(run({ "infrastructure/net-guard": 500 })).toEqual([
+    "::warning title=line-budget::infrastructure/net-guard raised to 500 above the plan's 400 without a reason",
+    "::notice title=line-budget::infrastructure/net-guard 460/500",
+  ]);
+  expect(run({ "infrastructure/net-guard": { max: 500, reason: " " } })[0]).toMatch(/without a reason$/);
+  expect(run({ "infrastructure/net-guard": { max: "500" } })[0]).toMatch(/^::warning title=line-budget::budget check/);
+});
+
 test("budget_near_limit_is_a_notice", () => {
   const root = tree({ "interfaces/media/a.ts": lines(10) });
   expect(check(root, { "interfaces/media": 11 })).toEqual([
