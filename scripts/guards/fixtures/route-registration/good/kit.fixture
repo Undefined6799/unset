@@ -1,0 +1,4 @@
+// fixture: shared/http/server.ts findings=0
+import { Hono } from "hono";
+const app = new Hono();
+app.all("*", (c) => handle(c.req.raw));

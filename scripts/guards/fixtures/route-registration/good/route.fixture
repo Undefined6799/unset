@@ -1,0 +1,5 @@
+// fixture: interfaces/http/routes/profile.ts findings=0
+import { defineRoute } from "@unset/shared-http";
+const cached = map.get(key);
+const host = request.headers.get("host");
+export const profile = defineRoute({ method: "GET", path: "/@:handle", group: "profile", rateLimit: "page", handler });

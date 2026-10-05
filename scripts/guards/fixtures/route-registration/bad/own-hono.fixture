@@ -1,0 +1,6 @@
+// fixture: interfaces/http/side-door.ts findings=4
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+const app = new Hono();
+app.get("/x", (c) => c.text("x"));
+app .use ("*", next);
