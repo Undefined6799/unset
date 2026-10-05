@@ -31,9 +31,8 @@ const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
-// Root files count as tooling only when they are config files (vitest.config.ts, this file).
-const TOOLING =
-  "^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|^\\.dependency-cruiser\\.cjs$|\\.test\\.(ts|tsx|mts|cts)$";
+// Root files count as tooling only when they are config files (vitest.config.ts).
+const TOOLING = "^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|tsx|mts|cts)$";
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
 const LEAF_SHARED = "^shared/(ui|lexicons|admin-envelope)/";
@@ -249,7 +248,7 @@ module.exports = {
     parser: "swc",
     doNotFollow: { path: "node_modules" },
     exclude: {
-      path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures|\\.semgrep/rules/fixtures)/",
+      path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures|scripts/lint/semgrep/fixtures)/",
     },
   },
 };

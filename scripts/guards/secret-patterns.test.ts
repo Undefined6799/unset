@@ -10,9 +10,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
-/** The regex of each custom rule, read from .gitleaks.toml so the test checks what CI runs. */
+/** The regex of each custom rule, read from .github/.gitleaks.toml so the test checks what CI runs. */
 function rules(): Map<string, RegExp> {
-  const toml = readFileSync(join(ROOT, ".gitleaks.toml"), "utf8");
+  const toml = readFileSync(join(ROOT, ".github/.gitleaks.toml"), "utf8");
   const out = new Map<string, RegExp>();
   for (const block of toml.split("[[rules]]").slice(1)) {
     const id = /^id = "([^"]+)"/m.exec(block)?.[1];
@@ -44,7 +44,7 @@ const bech32Upper = (length: number): string =>
 const RULES = rules();
 const rule = (id: string): RegExp => {
   const re = RULES.get(id);
-  if (!re) throw new Error(`.gitleaks.toml has no rule ${id}`);
+  if (!re) throw new Error(`.github/.gitleaks.toml has no rule ${id}`);
   return re;
 };
 

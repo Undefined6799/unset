@@ -120,9 +120,9 @@ describe("ADRs", () => {
 
 describe("other documents", () => {
   test("security_md_scope", () => {
-    expect(securityMdProblems(read("SECURITY.md"))).toEqual([]);
-    expect(securityMdProblems(read("SECURITY.md").replace("`chat-admin`", "chat admin"))).toEqual([
-      "SECURITY.md does not name `chat-admin`",
+    expect(securityMdProblems(read(".github/SECURITY.md"))).toEqual([]);
+    expect(securityMdProblems(read(".github/SECURITY.md").replace("`chat-admin`", "chat admin"))).toEqual([
+      ".github/SECURITY.md does not name `chat-admin`",
     ]);
   });
 
@@ -158,7 +158,7 @@ describe("other documents", () => {
 describe("architecture rule table", () => {
   /** The checks that exist: config rules, test names, and test or guard files the table names. */
   const knownChecks = (rows: ReturnType<typeof architectureRows>): KnownChecks => {
-    const config = createRequire(import.meta.url)(join(ROOT, ".dependency-cruiser.cjs")) as {
+    const config = createRequire(import.meta.url)(join(ROOT, "scripts/lint/.dependency-cruiser.cjs")) as {
       forbidden: { name: string }[];
     };
     const subjects = execFileSync("git", ["log", "--format=%s", "origin/main"], { cwd: ROOT, encoding: "utf8" });

@@ -17,7 +17,7 @@
   "scripts": {
     "check": "npm run typecheck && npm run lint && npm run guards && npm test",
     "typecheck": "tsc -b",
-    "lint": "biome ci . && depcruise --config .dependency-cruiser.cjs .",
+    "lint": "biome ci . && depcruise --config scripts/lint/.dependency-cruiser.cjs .",
     "format": "biome format --write .",
     "guards": "vitest run scripts/guards",
     "notes:index": "node scripts/guards/notes.ts",

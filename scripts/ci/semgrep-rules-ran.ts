@@ -1,5 +1,5 @@
 // Fails the semgrep job when its SARIF shows that no rules ran (a registry outage or licence change
-// must never pass as a clean scan; P0.07 algorithm step 7), or that a rule in .semgrep/rules/ was not loaded
+// must never pass as a clean scan; P0.07 algorithm step 7), or that a rule in scripts/lint/semgrep/ was not loaded
 // (P1.01s: registry rules must never stand in for ours). Logs the engine version and rule count.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 type Sarif = { runs?: { tool?: { driver?: { semanticVersion?: string; rules?: { id: string }[] } } }[] };
 
-const RULES_DIR = ".semgrep/rules";
+const RULES_DIR = "scripts/lint/semgrep";
 
 function drivers(sarifText: string) {
   const sarif: Sarif = JSON.parse(sarifText);
@@ -28,7 +28,7 @@ export function declaredRuleIds(yamlText: string): string[] {
 
 /**
  * The declared ids the SARIF does not list. Semgrep prefixes a local rule id with its config path
- * (`.semgrep.rules.computed-import`), so an id matches on the part after the last dot.
+ * (`scripts.lint.semgrep.computed-import`), so an id matches on the part after the last dot.
  */
 export function missingCustomRules(sarifText: string, ids: readonly string[]): string[] {
   const loaded = new Set(drivers(sarifText).flatMap((d) => (d.rules ?? []).map((r) => r.id.split(".").pop())));

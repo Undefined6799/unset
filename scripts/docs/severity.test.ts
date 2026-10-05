@@ -88,7 +88,7 @@ describe("severity definitions and labels", () => {
     const config = parse(read(".github/ISSUE_TEMPLATE/config.yml"));
     expect(config.blank_issues_enabled).toBe(false);
     expect(config.contact_links).toHaveLength(1);
-    expect(config.contact_links[0].url).toBe("https://github.com/Undefined6799/unset/blob/main/SECURITY.md");
+    expect(config.contact_links[0].url).toBe("https://github.com/Undefined6799/unset/blob/main/.github/SECURITY.md");
   });
 
   test("triage_form_example_parses", () => {

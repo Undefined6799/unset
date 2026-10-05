@@ -240,7 +240,7 @@ describe("workspace references", () => {
 
   test("matrix_targets_have_no_path_not", () => {
     // mayReference reads only `to.path`; a `to.pathNot` would need the same handling there first.
-    const matrix = createRequire(import.meta.url)(join(ROOT, ".dependency-cruiser.cjs")).MATRIX as {
+    const matrix = createRequire(import.meta.url)(join(ROOT, "scripts/lint/.dependency-cruiser.cjs")).MATRIX as {
       to: object[];
     }[];
     expect(matrix.flatMap((row) => row.to).filter((to) => "pathNot" in to)).toEqual([]);

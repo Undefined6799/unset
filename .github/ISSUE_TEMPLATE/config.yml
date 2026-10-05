@@ -2,5 +2,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report a vulnerability privately
-    url: https://github.com/Undefined6799/unset/blob/main/SECURITY.md
-    about: Never open a public issue for anything that may be a vulnerability. Email it as SECURITY.md says.
+    url: https://github.com/Undefined6799/unset/blob/main/.github/SECURITY.md
+    about: Never open a public issue for anything that may be a vulnerability. Email it as .github/SECURITY.md says.

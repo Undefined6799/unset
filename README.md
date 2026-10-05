@@ -29,7 +29,7 @@ Requires Node 26 (see `.nvmrc`).
 
 ```sh
 npm ci
-git config core.hooksPath .githooks   # secret scan + guards before each commit
+git config core.hooksPath scripts/githooks   # secret scan + guards before each commit
 npm run check                         # typecheck, lint, guards, tests
 ```
 

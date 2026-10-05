@@ -44,7 +44,7 @@
 /interfaces/legal-hold-export/ @Undefined6799
 
 # Boundary rules
-/.dependency-cruiser.cjs @Undefined6799
+/scripts/lint/.dependency-cruiser.cjs @Undefined6799
 
 # Islands and links
 /shared/ui/islands/ @Undefined6799
@@ -83,7 +83,7 @@
 /deployment/ @Undefined6799
 /package-lock.json @Undefined6799
 /.npmrc @Undefined6799
-/renovate.json @Undefined6799
+/.github/renovate.json @Undefined6799
 
 # Edge (inside /deployment/; listed alone so the SE-6 list maps one to one)
 /deployment/edge/ @Undefined6799
@@ -105,7 +105,7 @@
 # lines, and stays last.
 # parsed: /infrastructure/postgres/migrations/ /infrastructure/postgres/grant-matrix.json /infrastructure/postgres/erasure-registry.json
 # trusted functions: core.erase_* core.is_erased core.allow_retrack core.is_held mod.erase_foreign_did
-# checks: /scripts/guards/ /scripts/lint/ /scripts/ci/ /scripts/budgets/ /scripts/licence/ /scripts/docs/ /scripts/test/ /scripts/workspace/ /.github/ /.githooks/ /.semgrep/ /.semgrepignore /.dependency-cruiser.cjs
+# checks: /scripts/guards/ /scripts/lint/ /scripts/ci/ /scripts/budgets/ /scripts/licence/ /scripts/docs/ /scripts/test/ /scripts/workspace/ /scripts/githooks/ /.github/ /.githooks/ /.semgrep/ /.semgrepignore /.dependency-cruiser.cjs
 # CSRF gate, session and CSP builder
 /shared/http/ @Undefined6799
 /domains/identity/auth/session-store.ts @Undefined6799

@@ -221,6 +221,7 @@ describe("trusted base (SE-6)", () => {
       "/scripts/docs/",
       "/scripts/test/",
       "/scripts/workspace/",
+      "/scripts/githooks/",
       "/.github/",
       "/.githooks/",
       "/.semgrep/",

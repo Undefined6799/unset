@@ -37,7 +37,7 @@ describe("wiring", () => {
       const file = join(dir, "COMMIT_EDITMSG");
       writeFileSync(file, message);
       try {
-        execFileSync("sh", [join(ROOT, ".githooks/commit-msg"), file], { cwd: ROOT, stdio: "pipe" });
+        execFileSync("sh", [join(ROOT, "scripts/githooks/commit-msg"), file], { cwd: ROOT, stdio: "pipe" });
         return 0;
       } catch (error) {
         return (error as { status: number }).status;

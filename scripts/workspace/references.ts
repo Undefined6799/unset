@@ -12,7 +12,7 @@ type Row = { name: string; from: PathRule; to: (PathRule & { dependencyTypes?: s
 type BoundaryConfig = { MATRIX: Row[]; ZERO_DEP_ALLOWLIST: string[]; RENDER_ENTRIES: Record<string, string> };
 
 const ROOT = join(import.meta.dirname, "..", "..");
-const boundaries: BoundaryConfig = createRequire(import.meta.url)(join(ROOT, ".dependency-cruiser.cjs"));
+const boundaries: BoundaryConfig = createRequire(import.meta.url)(join(ROOT, "scripts/lint/.dependency-cruiser.cjs"));
 
 /** Top-level folders that may hold workspaces (decision 34); root package.json `workspaces` lists the same. */
 export const WORKSPACE_TOPS = ["apps", "interfaces", "domains", "infrastructure", "shared"] as const;

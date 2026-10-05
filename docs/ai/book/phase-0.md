@@ -1973,6 +1973,47 @@ Not in this step: any other generated file in a trusted folder (each gets its ow
 
 ---
 
+### P0.09g — Repo-root tidy: config and check files out of the root (Alex, "Move the nine", 2026-10-05 03:01Z)
+Tags: —            Depends on: P0.09f, P0.13            Plan: decision 34 (layout), SE-6
+Where: one check PR, no product path. `.github/`, `scripts/lint/`, `scripts/githooks/`, `package.json`, the tests and
+  docs that name the moved files; new `scripts/docs/root-layout.test.ts`
+Size: ~60 source lines changed, ~90 test lines; the rest are renames
+
+Why: Alex asked for a root folder with fewer files (2026-10-05 02:45Z) and approved the architecture thread's plan.
+
+Outputs (as built):
+  - `renovate.json`, `SECURITY.md`, `.gitleaks.toml` and `.jscpd.json` are in `.github/`; `ci.yml` passes
+    `--config .github/.gitleaks.toml` to both gitleaks scans and `--config .github/.jscpd.json` to jscpd, and names
+    `.github/renovate.json` to the Renovate validator, so a missing file fails instead of validating nothing. Renovate
+    44.115.13 reads `.github/renovate.json` (`dist/config/app-strings.js`, `configFileNames`). GitHub's reading of
+    `.github/SECURITY.md` is unverified until it merges (the docs page answered 403 here).
+  - `.dependency-cruiser.cjs` is in `scripts/lint/`; the `lint` script passes its `--config`.
+  - The Semgrep rules and fixtures are in `scripts/lint/semgrep/`; the semgrep job, `semgrep-rules-ran.ts`,
+    `semgrep-fixtures.ts` and the rule excludes follow. `scripts/tsconfig.json` excludes the fixtures, as it does
+    `guards/fixtures`.
+  - `.githooks/` is `scripts/githooks/`; the README and both hooks say `git config core.hooksPath scripts/githooks`.
+    The pre-commit hook now passes `--config .github/.gitleaks.toml`: gitleaks 8.30.1 (`cmd/root.go`) otherwise falls
+    back to its default rules without a word once the root has no `.gitleaks.toml`.
+  - `.semgrepignore` stays. Semgrep 1.178.0 (the pinned release, from PyPI, not the pinned image) targeted 211 files
+    with it and 208 with the same patterns as `--exclude` flags: without an ignore file Semgrep applies its default
+    ignores and dropped `scripts/test/`.
+  - `LICENSE-MIT` stays: the README, ADR 0012 and `scripts/licence/check.test.ts` reference it.
+  - CODEOWNERS: `/scripts/githooks/` joins the `# checks:` line; the old entries stay until this PR merges (the guard
+    reads base and head together). The owner lines name the new paths.
+
+Done when (tests):
+  - The existing guard, docs and Semgrep fixture tests pass with the new paths, `checks_list_complete` included; the
+    fixture check and the SARIF rules-ran check pass on a local Semgrep 1.178.0 run.
+  - `moved_files_left_the_root`, `no_old_root_paths_referenced` (workflows, `package.json`, CODEOWNERS apart from the
+    `# checks:` line, `scripts/` sources, README, CLAUDE.md, AGENTS.md and `docs/human/` apart from ADRs and the
+    `engineering-rules.md` byte copy), `hooks_path_documented` and `tools_read_their_moved_config`
+    (`scripts/docs/root-layout.test.ts`).
+  - `semgrep_exclude_same_file_set` is dropped: the counts differ, so `.semgrepignore` stays.
+Not in this step: removing the old `# checks:` entries (the next check PR does it); the rule text in
+  `engineering-rules.md` that still names the old paths (the architecture thread's copy).
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),

@@ -1,6 +1,6 @@
 # P1.01s: dependency-cruiser follows only string-literal specifiers, so a computed import could reach a
 # module the boundary matrix forbids (rule AB-1). No allow comment and no per-file exception.
-# Fixtures: .semgrep/rules/fixtures/computed-import/, checked by scripts/lint/semgrep-fixtures.ts in CI.
+# Fixtures: scripts/lint/semgrep/fixtures/computed-import/, checked by scripts/lint/semgrep-fixtures.ts in CI.
 rules:
   - id: computed-import
     languages: [typescript]
@@ -14,7 +14,7 @@ rules:
         - "scripts/"
         - "tests/"
         - "**/*.test.ts"
-        - "/.semgrep/rules/fixtures/"
+        - "/scripts/lint/semgrep/fixtures/"
     pattern-either:
       - patterns:
           - pattern-either:

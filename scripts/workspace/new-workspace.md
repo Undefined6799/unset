@@ -28,7 +28,7 @@ lockfile records the workspace.
 
 ## What it may reference
 
-The dependency-cruiser `MATRIX` in `.dependency-cruiser.cjs` is the one list; a workspace may reference another when
+The dependency-cruiser `MATRIX` in `scripts/lint/.dependency-cruiser.cjs` is the one list; a workspace may reference another when
 the MATRIX lets its code import that workspace's `index.ts` (or, for an app, its render entry). In short:
 
 - `apps/<x>`: `shared/*` only. Islands reach the server over HTTP, never by import.

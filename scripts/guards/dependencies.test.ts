@@ -150,7 +150,7 @@ describe("npmrc", () => {
 });
 
 describe("renovate", () => {
-  const renovate = JSON.parse(readFileSync(join(ROOT, "renovate.json"), "utf8"));
+  const renovate = JSON.parse(readFileSync(join(ROOT, ".github/renovate.json"), "utf8"));
   test("renovate_vuln_policy_explicit", () => {
     expect(renovate.vulnerabilityAlerts).toHaveProperty("minimumReleaseAge");
     expect(renovate.vulnerabilityAlerts.rangeStrategy).toBeDefined();

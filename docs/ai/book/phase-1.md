@@ -1582,12 +1582,12 @@ Reuse: none. Not in this step: the runner and `0001_init.sql` (P1.11); every oth
 ---
 
 ### P1.11 — Postgres and the migration runner as the `migrator` role
-Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.semgrep/rules/transactions.yml` and its fixtures, the
+Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `scripts/lint/semgrep/transactions.yml` and its fixtures, the
 Postgres service in `ci.yml` and `required-checks.json` land first as **P1.11q** (same tags, deps P1.11g, P1.02); this
 step brings `infrastructure/postgres/**` and the rest. The rule lands before `tx.ts` exists, which is harmless because
 nothing opens a transaction yet.
 Tags: —            Depends on: P1.11q, P1.11g, P1.02            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
-Where: `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`, `.semgrep/rules/transactions.yml` (+ its fixtures), `infrastructure/postgres/migrations/0001_init.sql`,
+Where: `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`, `scripts/lint/semgrep/transactions.yml` (+ its fixtures), `infrastructure/postgres/migrations/0001_init.sql`,
   (`deployment/postgres/init/00-bootstrap.sh` is **P1.11g**, trusted base, SE-6), `docs/human/db/migrations.md`, `.github/workflows/ci.yml` (Postgres service for the
   `check` job), `vitest` global setup `tests/integration/setup/pg.setup.ts` (the first `tests/` TypeScript, so this PR
   adds `tests/integration/tsconfig.json` and its root reference, P1.01's `every_ts_file_in_a_project`), `.github/required-checks.json` (appends any new
@@ -1636,8 +1636,8 @@ Outputs:
   - `infrastructure/postgres/tx.ts` (rule DM-2; architecture table "planned: P1.11"): `withTransaction(pool, deadline,
     fn: (client) => Promise<T>) -> Promise<T>`, the only place a transaction is opened: `BEGIN` (with the isolation
     level the caller names, default `READ COMMITTED`), `COMMIT` on success, `ROLLBACK` on any throw or deadline, the
-    client always released; built on `withClient`. A Semgrep rule (`.semgrep/rules/transactions.yml`, run by P0.07's
-    `semgrep` job with `--config .semgrep/rules/` added beside the registry packs; folder created by P1.01s) allows `BEGIN`, `COMMIT` and `.transaction(` in TypeScript only in `tx.ts`: a SQL string starting
+    client always released; built on `withClient`. A Semgrep rule (`scripts/lint/semgrep/transactions.yml`, run by P0.07's
+    `semgrep` job with `--config scripts/lint/semgrep/` added beside the registry packs; folder created by P1.01s) allows `BEGIN`, `COMMIT` and `.transaction(` in TypeScript only in `tx.ts`: a SQL string starting
     with `BEGIN`, `COMMIT`, `START TRANSACTION` or `ROLLBACK`, or a `.transaction(` call, anywhere else fails
     (migrations are `.sql` files run by `migrate.ts` inside `tx.ts`, so they are not TypeScript and not scanned). This
     step's PR flips the DM-2 row of `docs/human/architecture.md` to `checked: transactions-only-in-tx` (P0.09's
@@ -4988,7 +4988,7 @@ caching and the edge's `Accept-Language` normalisation (P3.12, P5).
 
 ### P1.14a — `sealTo`: encrypt-only sealing to an offline-held public key (age X25519)
 Tags: [SEC]            Depends on: P1.02, P1.14            Plan: §5.8 and decision 21 (per-upload transmission buffer sealed to the legal-hold key), §6 (invariant 3 exception)
-Where: `infrastructure/seal/sealTo.ts` + tests; `.dependency-cruiser.cjs` rule; `docs/human/runbooks/open-sealed.md`
+Where: `infrastructure/seal/sealTo.ts` + tests; `scripts/lint/.dependency-cruiser.cjs` rule; `docs/human/runbooks/open-sealed.md`
 Size: ~100 source lines, ~180 test lines
 
 Why a separate step (letter suffix): the real fingerprint check (P5.07b: the image transmission buffer and the image
@@ -6650,7 +6650,7 @@ Editor pass A (column-list ruling, decisions 40–42, architecture table; relays
   creating step.
 - P1.16: `app.single_use` grants by column list (registry column `bind_did`); `retention` DELETE as `rowPrivileges`.
 - P1.11 (architecture table, DM-2 "planned: P1.11"): new `infrastructure/postgres/tx.ts` (`withTransaction`) and a
-  Semgrep rule allowing `BEGIN`, `COMMIT` and `.transaction(` only there (`.semgrep/rules/transactions.yml`, wired into
+  Semgrep rule allowing `BEGIN`, `COMMIT` and `.transaction(` only there (`scripts/lint/semgrep/transactions.yml`, wired into
   P0.07's `semgrep` job); tests `tx_commit_and_rollback`, `transactions_only_in_tx`. The Semgrep custom-rules folder is created by P1.01s (added 2026-10-04 late); this rule joins it.
   in the book, so P1.11 creates the rules folder (routed to the coordinator: P0.05's two moved checks need a home).
 - P1.01 (Phase 1 build thread, via the coordinator): `tsc -b` does not fail on a missing `references` entry (npm links

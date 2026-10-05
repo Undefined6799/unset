@@ -275,9 +275,11 @@ export function testNames(root: string, dirs: string[]): Set<string> {
   return names;
 }
 
-/** SECURITY.md names every entrypoint. */
+/** .github/SECURITY.md names every entrypoint. */
 export function securityMdProblems(text: string): string[] {
-  return ENTRYPOINTS.filter((e) => !new RegExp(`\`${e}\``).test(text)).map((e) => `SECURITY.md does not name \`${e}\``);
+  return ENTRYPOINTS.filter((e) => !new RegExp(`\`${e}\``).test(text)).map(
+    (e) => `.github/SECURITY.md does not name \`${e}\``,
+  );
 }
 
 /** The book snapshot names the folder, planning round and date it copies. */

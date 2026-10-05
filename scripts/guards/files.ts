@@ -11,7 +11,7 @@ export const SKIP_DIRS: ReadonlySet<string> = new Set([
   ".worktrees",
   "graphify-out",
   "scripts/guards/fixtures",
-  ".semgrep/rules/fixtures",
+  "scripts/lint/semgrep/fixtures",
 ]);
 const SOURCE_EXT = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
