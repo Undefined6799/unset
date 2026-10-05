@@ -375,7 +375,8 @@ Diagram: none.
 ### P1.01s — Semgrep custom rules: computed imports and floating promises
 Tags: [SEC]            Depends on: P1.01, P0.07            Plan: §2 (boundaries enforced by CI), rules DC-4 and AB-1 (fallbacks owed by P0.05)
 Where: `.semgrep/rules/{computed-import.yml,floating-promises.yml}` + `.semgrep/rules/fixtures/`, `.github/workflows/ci.yml` (one flag), `scripts/lint/semgrep-rules.test.ts`
-Size: ~60 rule lines, ~120 test and fixture lines. Parallel-safe: touches only `.semgrep/` and one CI line.
+Size: ~60 rule lines, ~120 test and fixture lines. Touches `.semgrep/` and five Phase 0 files (listed in the
+as-built block); coordinate with the Phase 0 thread before building.
 
 Goal: close the two gaps P0.05 left open. dependency-cruiser cannot follow an import whose specifier is not a string
 literal, and Biome's `noFloatingPromises` does not run on TypeScript 7 sources. Both now fail CI, closed.
@@ -461,6 +462,21 @@ step 3 and the `semgrep-rules.test.ts` description above.
     - New static tests: `ci_calls_fixture_script`, `every_rule_has_fixtures`, `every_rule_id_in_must_fail`.
     - New CI-script tests: `zero_fixtures_fails`, `rule_count_mismatch_fails`.
   - P1.11's `transactions.yml` follows the same pattern: its fixtures run in the CI script, not inside Vitest.
+
+As built (Phase 1 thread, 2026-10-05): besides `.semgrep/rules/`, P1.01s touches five Phase 0 files, coordinated with
+the Phase 0 thread:
+  - `.github/workflows/ci.yml`: `--config .semgrep/rules/` on the scan line, plus a step "Prove custom rules on
+    fixtures" running `node scripts/lint/semgrep-fixtures.ts`.
+  - `scripts/guards/files.ts`: `SKIP_DIRS` gains `.semgrep/rules/fixtures`. The deliberately bad fixtures redeclare
+    `require`, `module` and `process`, so they cannot be typechecked.
+  - `.dependency-cruiser.cjs`: `options.exclude` gains `\.semgrep/rules/fixtures`.
+  - `.semgrepignore`: gains `.semgrep/rules/fixtures/`. The fixture step scans a temp copy with the `paths` blocks
+    stripped.
+  - `package.json`: a `semgrep:fixtures` script, outside `check`.
+  - `scripts/ci/semgrep-rules-ran.ts` (P0.07) gains an assertion that every rule id declared under `.semgrep/rules/`
+    appears in `semgrep.sarif`'s rule list. P0.07's zero-rules check counts all SARIF rules, so it would not notice
+    `.semgrep/rules/` loading nothing. The ids are read from the rule files, not hard-coded, so P1.11's
+    `transactions.yml` id is covered without a change.
 
 ---
 

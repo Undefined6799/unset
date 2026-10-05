@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "scripts" },
+    { "path": "infrastructure/net-guard" },
     { "path": "shared/config" },
     { "path": "shared/errors" },
     { "path": "shared/http" },
