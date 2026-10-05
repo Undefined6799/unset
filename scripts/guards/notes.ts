@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Finding, filesUnder, read } from "./files.ts";
+import { withoutGitEnv } from "./git-env.ts";
 import { fieldReader, linkTarget, readHeader } from "./notes-header.ts";
 
 export const VAULT = "docs/ai";
@@ -240,7 +241,7 @@ export function checkNotes(
 }
 
 const git = (root: string, args: string[]): string =>
-  execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: withoutGitEnv() });
 const lines = (text: string): string[] => text.split("\n").filter(Boolean);
 
 /**

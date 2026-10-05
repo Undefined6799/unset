@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { withoutGitEnv } from "./git-env.ts";
 import { code, jobs } from "./workflows.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -62,7 +63,8 @@ describe("wiring", () => {
     // feature file. Without `git -z` the quoted path matched nothing.
     const dir = mkdtempSync(join(tmpdir(), "pr-shape-"));
     temps.push(dir);
-    const sh = (...args: string[]) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
+    const sh = (...args: string[]) =>
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: withoutGitEnv() }).trim();
     const put = (path: string, text: string) => {
       execFileSync("mkdir", ["-p", join(dir, path, "..")]);
       writeFileSync(join(dir, path), text);
@@ -82,7 +84,7 @@ describe("wiring", () => {
     sh("add", "-A");
     sh("commit", "-q", "-m", "P1.07 Change the gate");
     const env = {
-      ...process.env,
+      ...withoutGitEnv(),
       PR_TITLE: "P1.07 Change the gate",
       PR_BODY: read(".github/pull_request_template.md"),
       PR_LABELS: '["kind/fix"]',
@@ -141,7 +143,8 @@ describe("wiring", () => {
     // fields change; a scripts-only or unreadable manifest change leaves it outside the trusted base.
     const dir = mkdtempSync(join(tmpdir(), "pr-shape-lock-"));
     temps.push(dir);
-    const sh = (...args: string[]) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
+    const sh = (...args: string[]) =>
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: withoutGitEnv() }).trim();
     const put = (path: string, text: string) => {
       execFileSync("mkdir", ["-p", join(dir, path, "..")]);
       writeFileSync(join(dir, path), text);
@@ -174,7 +177,7 @@ describe("wiring", () => {
         return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
           cwd: dir,
           env: {
-            ...process.env,
+            ...withoutGitEnv(),
             PR_TITLE: "P1.04k Add the server kit",
             PR_BODY: read(".github/pull_request_template.md"),
             PR_LABELS: '["kind/build"]',

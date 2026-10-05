@@ -8,4 +8,7 @@ if command -v gitleaks >/dev/null 2>&1; then
 else
   echo "pre-commit: gitleaks not installed; secret scan skipped locally (CI still runs it)." >&2
 fi
+# Git exports GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE to hooks (githooks(5)); the guards find the repository by
+# their working directory, as in CI, and their throwaway repositories must not inherit these (P0.09j).
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
 npm run --silent guards
