@@ -1,0 +1,27 @@
+# Obsidian Bases view of all AI notes (core feature, no plugin).
+filters:
+  and:
+    - file.inFolder("notes")
+properties:
+  note.summary:
+    displayName: Summary
+views:
+  - type: table
+    name: All notes
+    order: [file.name, type, areas, importance, status, checked, summary]
+    sort:
+      - property: checked
+        direction: DESC
+  - type: table
+    name: Must read
+    filters:
+      and:
+        - importance == "high"
+        - status == "current"
+    order: [file.name, type, areas, summary]
+  - type: table
+    name: Open handoffs
+    filters:
+      and:
+        - type == "handoff"
+    order: [file.name, areas, checked, summary]

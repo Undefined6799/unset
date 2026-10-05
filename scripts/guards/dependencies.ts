@@ -72,21 +72,23 @@ export function scanManifest(
 }
 
 /** Why one installed package's source is not allowed, or null when it is. */
-function entryProblem(path: string, entry: LockEntry | null, folders: ReadonlySet<string>): string | null {
+function entryProblem(path: string, entry: LockEntry | null, workspaces: ReadonlyMap<string, string>): string | null {
   if (typeof entry !== "object" || entry === null) return "not an object";
+  const name = path.split("node_modules/").at(-1) ?? "";
   if (entry.link === true) {
-    // A link fetches nothing, so a hash on one means the entry was hand-edited (ruling 2026-10-05, P0-A5).
+    // A link fetches nothing, so a hash on one means the entry was hand-edited; and a link must point a name at
+    // that workspace's own folder, never a trusted name at another folder (rulings 2026-10-05, P0-A5).
     if (entry.integrity !== undefined) return "link carries an integrity hash";
-    return folders.has(entry.resolved ?? "") ? null : `link to ${entry.resolved ?? "nowhere"}`;
+    return workspaces.get(name) === entry.resolved ? null : `link to ${entry.resolved ?? "nowhere"}`;
   }
-  if (path.split("node_modules/").at(-1)?.startsWith(INTERNAL_SCOPE)) return "internal name not linked locally";
+  if (name.startsWith(INTERNAL_SCOPE)) return "internal name not linked locally";
   if (!entry.resolved?.startsWith(REGISTRY)) return `resolved ${entry.resolved ?? "missing"}`;
   if (!entry.integrity?.startsWith("sha512-")) return `integrity ${entry.integrity ?? "missing"}`;
   return null;
 }
 
-/** Every installed package must be a link to a workspace folder or come from the npm registry with a sha512 hash. */
-export function scanLockfile(file: string, text: string, folders: ReadonlySet<string>): Finding[] {
+/** Every installed package must be a link to its own workspace folder or come from the npm registry with a sha512 hash. */
+export function scanLockfile(file: string, text: string, workspaces: ReadonlyMap<string, string>): Finding[] {
   const lock = JSON.parse(text) as Lock;
   if (lock.lockfileVersion !== 3 || typeof lock.packages !== "object" || lock.packages === null) {
     return [{ file, line: 1, rule: RULE, text: "not a lockfileVersion 3 lockfile with packages" }];
@@ -94,7 +96,7 @@ export function scanLockfile(file: string, text: string, folders: ReadonlySet<st
   const findings: Finding[] = [];
   for (const [path, entry] of Object.entries(lock.packages)) {
     if (!path.includes("node_modules/")) continue; // The root and workspace folders themselves.
-    const why = entryProblem(path, entry, folders);
+    const why = entryProblem(path, entry, workspaces);
     if (why) findings.push({ file, line: lineOf(text, `"${path}"`), rule: RULE, text: `${path}: ${why}` });
   }
   return findings;
@@ -146,7 +148,7 @@ export function scanAll(root: string): Finding[] {
   const manifests = ["package.json", ...[...workspaces.values()].map((dir) => `${dir}/package.json`)];
   return [
     ...manifests.flatMap((file) => scanManifest(file, read(root, file), workspaces, lock)),
-    ...scanLockfile("package-lock.json", lockText, new Set(workspaces.values())),
+    ...scanLockfile("package-lock.json", lockText, workspaces),
     ...scanNpmrc(".npmrc", read(root, ".npmrc")),
   ];
 }
