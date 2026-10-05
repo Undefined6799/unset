@@ -296,15 +296,58 @@ describe("startup checks", () => {
 
   test("route_table_lists_middleware", () => {
     const { server } = kit();
+    const get = { accepts: [], bodyLimit: undefined, mutates: false, deadlineMs: undefined };
     expect(server.routeTable()).toEqual([
-      { method: "GET", path: "/health", group: "static", middleware: ["requestId", "methodCheck"] },
-      { method: "GET", path: "/", group: "app", middleware: ["requestId", "hostCheck", "methodCheck"] },
+      {
+        method: "GET",
+        path: "/health",
+        group: "static",
+        ...get,
+        rateLimit: "exempt",
+        middleware: ["requestId", "methodCheck"],
+      },
+      {
+        method: "GET",
+        path: "/",
+        group: "app",
+        ...get,
+        rateLimit: "page",
+        middleware: ["requestId", "hostCheck", "methodCheck"],
+      },
       {
         method: "POST",
         path: "/form",
         group: "app",
+        accepts: ["application/x-www-form-urlencoded"],
+        bodyLimit: undefined,
+        rateLimit: "page",
+        mutates: true,
+        deadlineMs: undefined,
         middleware: ["requestId", "hostCheck", "methodCheck", "contentTypeCheck"],
       },
     ]);
+  });
+
+  test("route_table_lists_every_option", () => {
+    const route = page({
+      method: "POST",
+      path: "/upload",
+      accepts: ["multipart/form-data"],
+      bodyLimit: 1024,
+      deadlineMs: 60_000,
+      mutates: true,
+    });
+    const { server } = kit({ routes: [route] });
+    expect(server.routeTable().find((r) => r.path === "/upload")).toEqual({
+      method: "POST",
+      path: "/upload",
+      group: "app",
+      accepts: ["multipart/form-data"],
+      bodyLimit: 1024,
+      rateLimit: "page",
+      mutates: true,
+      deadlineMs: 60_000,
+      middleware: ["requestId", "hostCheck", "methodCheck", "contentTypeCheck"],
+    });
   });
 });

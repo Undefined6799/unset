@@ -17,7 +17,8 @@ import { type CloseHook, drain, exitOnSignals } from "./shutdown.ts";
 
 /** An interface's rate-limit policies by name (P1.06p fills the values); routes name one of its keys. */
 export type PolicyTable = Readonly<Record<string, unknown>>;
-export type RouteInfo = { method: string; path: string; group: RouteGroup; middleware: string[] };
+/** A route as P1.04's committed manifest records it: every `defineRoute` option except the handler, plus its checks. */
+export type RouteInfo = Omit<Route, "handler"> & { middleware: string[] };
 
 export type ServerOptions = {
   config: HttpKitConfig;
@@ -51,7 +52,7 @@ function checkRoutes(routes: readonly Route[], policies: PolicyTable): void {
 }
 
 /** The checks a route passes through, in order (P1.07's static test reads them). */
-function middlewareOf(route: Route): string[] {
+function middlewareOf(route: Pick<Route, "path" | "method">): string[] {
   return [
     "requestId",
     ...(route.path === "/health" ? [] : ["hostCheck"]),
@@ -215,7 +216,7 @@ export function createServer(options: ServerOptions) {
     /** Serves one request in-process (tests); the same checks run as for a socket request. */
     request: (request: Request): Promise<Response> => Promise.resolve(app.fetch(request)),
     routeTable: (): RouteInfo[] =>
-      routes.map((r) => ({ method: r.method, path: r.path, group: r.group, middleware: middlewareOf(r) })),
+      routes.map(({ handler: _handler, ...options }) => ({ ...options, middleware: middlewareOf(options) })),
     /** Listens on LISTEN_PORT and drains on SIGTERM or SIGINT; resolves with the bound port. Exits 1 if it cannot. */
     listen: (): Promise<number> =>
       new Promise((resolve) => {
