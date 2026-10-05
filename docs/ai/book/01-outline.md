@@ -118,7 +118,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 56 steps: 42 from `phase-1.md`, 14 from `phase-2.md` (including the
+Depth: **build-ready**. 58 steps: 44 from `phase-1.md`, 14 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -139,8 +139,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.04 | HTTP server skeleton per entrypoint | — | P1.04k, P1.04q, P1.04c, P1.04m, P0.13a | `phase-1.md` |
 | P1.05e | Trusted proxy keys in the entrypoint test envs (split from P1.05, SE-6) | — | P1.04 | `phase-1.md` |
 | P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04, P1.05e | `phase-1.md` |
-| P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05 | `phase-1.md` |
-| P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.04 | `phase-1.md` |
+| P1.06e | Name the rate limiter's log events (split from P1.06, SE-6) | — | P1.05e | `phase-1.md` |
+| P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05, P1.06e | `phase-1.md` |
+| P1.06q | Route policy guard (split from P1.06p, SE-6) | — | P0.09c | `phase-1.md` |
+| P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.06q, P1.04 | `phase-1.md` |
 | P1.07 | CSRF gate | [SEC] | P1.04 | `phase-1.md` |
 | P1.08 | CSP builder and security headers | [SEC] | P1.04 | `phase-1.md` |
 | P1.08i | `inline-style` guard (split from P1.08, SE-6) | — | P1.08 | `phase-1.md` |
@@ -204,7 +206,9 @@ flowchart TD
   P1_04m["P1.04m route table options"]
   P1_05["P1.05 Trusted proxy"]
   P1_05e["P1.05e proxy keys in test envs"]
+  P1_06e["P1.06e rate limiter log events"]
   P1_06["P1.06 Body limits and the rate-limit"]
+  P1_06q["P1.06q route policy guard"]
   P1_06p["P1.06p Per-interface rate-limit tables"]
   P1_07["P1.07 CSRF gate"]
   P1_08["P1.08 CSP builder and security headers"]
@@ -332,6 +336,9 @@ flowchart TD
   P1_12 --> P1_12p
   P1_12p --> P1_29
   P1_06 --> P1_06p
+  P1_06q --> P1_06p
+  P1_05e --> P1_06e
+  P1_06e --> P1_06
   P2_01k --> P2_01
 ```
 
