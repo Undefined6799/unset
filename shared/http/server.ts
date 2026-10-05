@@ -66,7 +66,7 @@ function checkRoutes(routes: readonly Route[], policies: PolicyTable): void {
       throw new Error(`${key}: rate-limit policy ${route.rateLimit} is not in this interface's table`);
     }
     if (Array.isArray(policy) && hasDidEntry(policy) && !route.requiresSession) {
-      throw new Error(`${key}: policy ${route.rateLimit} limits per DID, so the route must set requiresSession`);
+      throw new Error(`${key}: policy ${route.rateLimit} limits per DID, so the route must set session: "required"`);
     }
   }
 }
@@ -117,6 +117,7 @@ export function createServer(options: ServerOptions) {
     path: "/health",
     group: "static",
     rateLimit: "exempt",
+    session: "none",
     handler: () => health.respond(),
   });
   const routes = [healthRoute, ...options.routes];

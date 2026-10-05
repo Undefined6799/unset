@@ -27,8 +27,11 @@ export type RouteSpec = {
   /** A policy in the serving interface's own table (P1.06p), or `"exempt"`, allowed only for group `static`. */
   rateLimit: string;
   mutates?: boolean;
-  /** The route needs a signed-in session; a policy with a per-DID entry requires it (P1.06). */
-  requiresSession?: boolean;
+  /**
+   * Whether the route needs a signed-in session, stated on every route with no default (architecture, 2026-10-05);
+   * a policy with a per-DID entry needs `"required"` (P1.06).
+   */
+  session: "required" | "none";
   deadlineMs?: number;
   handler: Handler;
 };
@@ -41,7 +44,7 @@ export type Route = Readonly<{
   bodyLimit: number | undefined;
   rateLimit: string;
   mutates: boolean;
-  /** `true`, or absent (like the other unset options) so a route without it keeps its committed manifest entry. */
+  /** `true` for `session: "required"`, else absent, so a route that needs none keeps its committed manifest entry. */
   requiresSession: true | undefined;
   deadlineMs: number | undefined;
   handler: Handler;
@@ -68,9 +71,12 @@ function checkPath(path: string): void {
   if (!valid) throw new Error(`route path is not a template: ${JSON.stringify(path)}`);
 }
 
-/** Startup checks of the identity options: method, path template, group and rate-limit policy. */
+/** Startup checks of the identity options: method, path template, group, session need and rate-limit policy. */
 function checkIdentity(spec: RouteSpec): void {
   if (!METHODS.includes(spec.method)) throw new Error(`route method is not GET, HEAD or POST: ${spec.method}`);
+  if (spec.session !== "required" && spec.session !== "none") {
+    throw new Error(`${spec.path}: session must be "required" or "none"`);
+  }
   checkPath(spec.path);
   if (!GROUPS.includes(spec.group)) throw new Error(`route group is unknown: ${spec.group}`);
   if (typeof spec.rateLimit !== "string" || spec.rateLimit === "") {
@@ -108,7 +114,7 @@ export function defineRoute(spec: RouteSpec): Route {
     bodyLimit: spec.bodyLimit,
     rateLimit: spec.rateLimit,
     mutates: spec.mutates ?? post,
-    requiresSession: spec.requiresSession === true ? true : undefined,
+    requiresSession: spec.session === "required" ? true : undefined,
     deadlineMs: spec.deadlineMs,
     handler: spec.handler,
   });

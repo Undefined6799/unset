@@ -31,7 +31,7 @@ const POLICIES = {
 
 const ok = () => new Response("ok");
 const page = (spec: Partial<RouteSpec> & Pick<RouteSpec, "method" | "path">) =>
-  defineRoute({ group: "app", rateLimit: "page", handler: ok, ...spec });
+  defineRoute({ group: "app", rateLimit: "page", session: "none", handler: ok, ...spec });
 
 function kit(options: Partial<ServerOptions> = {}) {
   const lines: string[] = [];
@@ -180,6 +180,7 @@ describe("request checks", () => {
           path: "/api/x",
           group: "api",
           rateLimit: "page",
+          session: "none",
           handler: () => {
             throw new AppError("http.not_found");
           },
@@ -189,6 +190,7 @@ describe("request checks", () => {
           path: "/media/x",
           group: "media",
           rateLimit: "page",
+          session: "none",
           handler: () => {
             throw new AppError("http.not_found");
           },
@@ -347,6 +349,26 @@ describe("startup checks", () => {
     ]);
   });
 
+  test("route_must_declare_session", () => {
+    // Every route states its session need; there is no default (architecture ruling 2026-10-05). The type rejects a
+    // route without it (tsc fails if the expect-error below goes unused), and so does defineRoute at startup.
+    const spec = { method: "GET", path: "/x", group: "app", rateLimit: "page", handler: ok } as const;
+    // @ts-expect-error session is required
+    expect(() => defineRoute(spec)).toThrow(/session/);
+    expect(() => defineRoute({ ...spec, session: "maybe" as "none" })).toThrow(/session/);
+    // As the committed manifest stores it (JSON), where an unset option is absent.
+    const table = (session: "required" | "none") =>
+      JSON.parse(
+        JSON.stringify(
+          kit({ routes: [page({ method: "GET", path: "/x", session })] })
+            .server.routeTable()
+            .find((r) => r.path === "/x"),
+        ),
+      );
+    expect(table("none")).not.toHaveProperty("requiresSession");
+    expect(table("required")).toMatchObject({ requiresSession: true });
+  });
+
   test("route_table_lists_every_option", () => {
     const route = page({
       method: "POST",
@@ -355,7 +377,7 @@ describe("startup checks", () => {
       bodyLimit: 1024,
       deadlineMs: 60_000,
       mutates: true,
-      requiresSession: true,
+      session: "required",
     });
     const { server } = kit({ routes: [route] });
     expect(server.routeTable().find((r) => r.path === "/upload")).toEqual({
@@ -388,7 +410,14 @@ describe("startup checks", () => {
       page({ method: "GET", path: "/" }),
       page({ method: "POST", path: "/form" }),
       page({ method: "GET", path: "/@:handle", group: "profile" }),
-      defineRoute({ method: "GET", path: "/assets/*", group: "static", rateLimit: "exempt", handler: ok }),
+      defineRoute({
+        method: "GET",
+        path: "/assets/*",
+        group: "static",
+        rateLimit: "exempt",
+        session: "none",
+        handler: ok,
+      }),
     ];
     const { server } = kit({ routes });
     const skipping = server.routeTable().filter((r) => !r.middleware.includes("trustedProxy"));
@@ -545,7 +574,7 @@ describe("limits", () => {
   });
 
   test("did_limit_at_route_level", async () => {
-    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", requiresSession: true });
+    const follow = page({ method: "POST", path: "/follow", rateLimit: "follow", session: "required" });
     const session = async () => ({ did: "did:plc:alice" });
     const { request } = kit({ routes: [follow], policies: LIMITED, session });
     const statuses: number[] = [];
@@ -559,7 +588,7 @@ describe("limits", () => {
 
   test("did_policy_requires_session", () => {
     const follow = page({ method: "POST", path: "/follow", rateLimit: "follow" });
-    expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/requiresSession/);
+    expect(() => kit({ routes: [follow], policies: LIMITED })).toThrow(/session: "required"/);
   });
 
   test("session_route_without_session_denies", async () => {
@@ -568,7 +597,7 @@ describe("limits", () => {
       method: "POST",
       path: "/follow",
       rateLimit: "follow",
-      requiresSession: true,
+      session: "required",
       handler: () => {
         called = true;
         return new Response();

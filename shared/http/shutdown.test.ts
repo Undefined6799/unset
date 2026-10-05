@@ -26,7 +26,7 @@ async function serve(
     import { createServer } from ${JSON.stringify(SERVER)};
     import { defineRoute } from ${JSON.stringify(ROUTES)};
     import { createLogger } from ${JSON.stringify(LOG)};
-    const route = (path, handler) => defineRoute({ method: "GET", path, group: "app", rateLimit: "p", handler });
+    const route = (path, handler) => defineRoute({ method: "GET", path, group: "app", rateLimit: "p", session: "none", handler });
     const server = createServer({
       config: { UNSET_ENV: "test", UNSET_SERVICE: "http", UNSET_COMMIT: "${"c".repeat(40)}", LISTEN_PORT: ${free},
         PUBLIC_ORIGIN: "http://127.0.0.1:${free}", HTTP_ALLOWED_HOSTS: ["127.0.0.1"], SHUTDOWN_GRACE_MS: ${graceMs},
