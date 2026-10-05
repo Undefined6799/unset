@@ -2371,6 +2371,22 @@ Reuse: `license-checker-rseidelsohn` via `npx` → REJECT (F20). Provisional —
 Not in this step: the pre-launch re-check (L.05); CodeQL on publication day (plan §6.1).
 Diagram: none.
 
+As built (2026-10-05):
+  - ADR 0012 records the licence; the `"license"` fields were already set (bootstrap and P1.01), so the PR adds the
+    five `shared/*/LICENSE` files (config, errors, http, log, ui; byte copies of `LICENSE-MIT`) and touches no
+    `package.json`. A package-root LICENSE file counts as documentation in both SE-6 checks (ruling 2026-10-05
+    01:31Z, built in P0.09c), so the check path `scripts/licence/` and the `shared/*/LICENSE` files ride in one PR.
+  - `scripts/licence/check.ts` reuses `findWorkspaces` from `scripts/workspace/references.ts` and also checks the root
+    package (`npm ls --workspaces=false`); the allowed lists are in the ADR and the code. `npm ls --long` puts each
+    package's manifest fields, `license` included, on its JSON node; a deduped copy carries them but not its children
+    (npm 11.19.1, `lib/commands/ls.js` `getJsonOutputItem` and `augmentNodesWithMetadata`, bundled with Node
+    26.10.0), so every copy is walked. An optional dependency that is not installed (`{}`) is skipped.
+  - No separate CI job: the Vitest test `repository_has_no_conflicts` runs the real check over the installed tree,
+    so CI's `check` job already runs it, and `scripts/licence/` is on the CODEOWNERS `# checks:` line.
+  - Extra tests from the adversarial review: `spdx_expressions` (AND, OR, parentheses, `WITH` only for a listed
+    exception, fail-closed parsing), `deduped_subtree_still_checked`, `optional_peer_not_installed_skipped`.
+  - Visibility checked at build time: `gh api repos/Undefined6799/unset --jq .visibility` = private.
+
 ---
 
 ### P0.14 — Phase 0 exit: planted faults are blocked, and only Alex's approval merges
