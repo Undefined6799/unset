@@ -2624,7 +2624,7 @@ Diagram: none.
 ---
 
 ### P1.18 — `net-guard` core: classify addresses, resolve once, pin the connection
-Tags: [SEC]            Depends on: P1.02            Plan: §2 rule 13, §7 (`net-guard` "ported with its 23 tests"); CLAUDE.md protocol-notes table (never a fifth copy)
+Tags: [SEC]            Depends on: P1.02            Plan: §2 rule 13, §7 (`net-guard` "ported with its 23 tests"); net-guard ruling (book-edits/2026-10-04-net-guard-ruling.md: `infrastructure/net-guard` is the only place with the IP class table)
 Where: `infrastructure/net-guard/src/{ranges.ts,classify.ts,resolve.ts,index.ts}` + tests
 Size: ~150 source lines, ~280 test lines (the prototype's 23 tests ported plus the new ranges)
 

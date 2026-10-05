@@ -141,9 +141,11 @@ How to read an entry:
     exception (`NETGUARD_INTERNAL_HOSTS`). Errors `NetGuardError.code` `egress.*`.
   - Helpers: `classifyAddress(ip)`, `isInternalName(host)`, `RANGES` (the one table of non-public ranges; the proxy's
     deny list is generated from it).
-- **Never:** call `fetch` with a non-constant URL, or import `node:http(s)`, `http2`, `net`, `tls`, `dgram`,
-  `undici`, `axios`, `got`, `node-fetch` or `ws` outside `infrastructure/net-guard` (P0.06 `egress` guard; the only listed
-  file exemption is `interfaces/pds-admin/pds.mjs`, P2.09); write a fifth copy of private-address classification; follow a
+- **Never:** call `fetch` with a non-constant URL, or import `node:http(s)`, `http2`, `net`, `tls`, `dgram`, `undici`,
+  `axios`, `got`, `node-fetch` or `ws` outside `infrastructure/net-guard` (P0.06 `egress` guard; the only listed file
+  exemption is `interfaces/pds-admin/pds.mjs`, P2.09; plus `shared/http` importing exactly
+  `{ BlockList, isIPv4, isIPv6 }` from `node:net` for address matching, which opens no sockets (P1.05, line-level
+  `guard-allow egress`)); classify private or reserved addresses anywhere but `infrastructure/net-guard`; follow a
   redirect; let a non-TypeScript process reach the internet except through the generated egress proxy.
 - **Tests:** P1.18 beside the source (the prototype's 23 tests ported); P1.18a `public_with_internal_exception`,
   `internal_host_required_in_prod`, `pinned_connection`, `no_redirects`, `gzip_bomb_request`; P1.18b
