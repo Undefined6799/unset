@@ -206,8 +206,17 @@ module.exports = {
     forbidden(
       "net-guard-leaf",
       "net-guard imports only node:*, undici and its own files (plan §5.4).",
-      { path: "^infrastructure/net-guard/" },
+      { path: "^infrastructure/net-guard/", pathNot: "\\.test\\.ts$" },
       { pathNot: ["^infrastructure/net-guard/", npmPackage("undici")], dependencyTypesNot: ["core"] },
+    ),
+    forbidden(
+      "net-guard-leaf",
+      "net-guard tests never ship, so they may also import fast-check and vitest (ruling 2026-10-04, rule TE-6).",
+      { path: "^infrastructure/net-guard/.*\\.test\\.ts$" },
+      {
+        pathNot: ["^infrastructure/net-guard/", npmPackage("undici"), npmPackage("fast-check"), npmPackage("vitest")],
+        dependencyTypesNot: ["core"],
+      },
     ),
     forbidden(
       "web-not-admin",
