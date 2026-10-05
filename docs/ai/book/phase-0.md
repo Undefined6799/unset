@@ -2043,6 +2043,36 @@ Not in this step: P0.09h (pure renames count once in the size guard), which foll
 
 ---
 
+### P0.09j — Guard fixtures isolate git from the caller's environment (Phase 0 finding, 2026-10-05)
+Tags: —            Depends on: P0.09g            Plan: SE-6, DO-3
+Where: one check PR. New `scripts/guards/git-env.ts` and its test; the throwaway-repository git calls in
+  `change-shape-wiring.test.ts`, `notes.test.ts` and `notes.ts`; `scripts/githooks/pre-commit`; the pitfall note
+  `git-hooks-export-git-dir`.
+
+Why: `pre-commit` runs `npm run guards`, and git runs hooks with `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE`
+exported (githooks(5), git v2.43.0 `Documentation/githooks.txt:30-35`). Those variables beat `cwd` and `-C`, so the
+guard tests' `git init` fixtures wrote into the real repository: a hooked commit in Phase 0's worktree moved HEAD to the
+fixture branch `broken`, added fixture commits to the working branch and created `broken`, `deps`, `licence` and
+`scripts`. Nothing was pushed.
+
+Fix, two layers:
+  1. `withoutGitEnv()` returns the environment without any `GIT_*` variable. Every git spawn on a throwaway
+     repository, and every child process that runs git there (the `change-shape.ts` runs in the wiring test), uses it,
+     so `cwd` or `-C` alone picks the repository. `notes.ts` uses it too: the notes guard reads git in a temp vault in
+     its tests and in the caller's folder otherwise.
+  2. `pre-commit` unsets `GIT_DIR`, `GIT_INDEX_FILE` and `GIT_WORK_TREE` before `npm run guards`; the guards find the
+     repository by their working directory, as in CI.
+
+Done when (tests, `scripts/guards/git-env.test.ts`):
+  - `fixtures_ignore_hook_git_env`: the guard test files that run `git init` run in a child Vitest with `GIT_DIR` and
+    `GIT_INDEX_FILE` aimed at a scratch repository; its HEAD, branches, index and object count are unchanged. Before the
+    fix it reproduced the incident exactly (HEAD `broken`, the four branches, 67 objects).
+  - `fixture_helper_strips_git_env`: `withoutGitEnv` drops every `GIT_*` key, and every guard test file that runs
+    `git init` uses it.
+  - `pre_commit_unsets_git_env`: the hook unsets the three variables before `npm run guards`.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),

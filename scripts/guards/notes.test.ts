@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type Finding, report } from "./files.ts";
+import { withoutGitEnv } from "./git-env.ts";
 import { buildIndex, changedPaths, checkNotes, loadNotes, parseNote, VAULT } from "./notes.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -190,6 +191,7 @@ describe("code moved", () => {
       execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args], {
         cwd: root,
         encoding: "utf8",
+        env: withoutGitEnv(),
       });
     git("init", "-q", "-b", "main");
     git("add", "-A");
