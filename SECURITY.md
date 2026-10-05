@@ -2,18 +2,18 @@
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately through GitHub's
-[private vulnerability reporting](../../security/advisories/new) for this repository.
-Do not open a public issue.
+Please report vulnerabilities privately by email to **security@unset.sh**. Do not open a
+public issue. (GitHub's private vulnerability reporting is not available while the repository is
+private.)
 
 We aim to acknowledge reports within 3 working days and to agree a fix and disclosure
 timeline with you within 10 working days.
 
 ## Scope
 
-The code in this repository and the services it deploys (app, indexer, media proxy,
-PDS administration). Issues in upstream projects (the reference PDS, Tap, Matrix
-components) should go to those projects; tell us too if they affect unset.sh.
+The code in this repository and every process it deploys: `web`, `api`, `indexer`, `media`,
+`review`, `admin`, `pds-admin` and `chat-admin`. The PDS, Tap and Matrix components are upstream
+projects: report issues in them to those projects, and tell us too if they affect unset.sh.
 
 ## How we build
 
