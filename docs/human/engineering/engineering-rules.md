@@ -356,7 +356,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - what I am unsure about.
 
 **The agent self-reviews against the template before asking Alex.**
-- Enforced by: `.github/pull_request_template.md`. A CI check that the headings are present.
+- Enforced by: `.github/pull_request_template.md`. A CI check that the headings are present. One exception: a PR whose author login is `renovate[bot]` and whose author type is `Bot` skips the heading check only; every other pr-shape check still runs, and Renovate's own `labels` config sets its kind label (ruling 2026-10-05 12:00Z).
 - Source: SE@Google — ch. 8–9; Code Complete 2nd ed. — ch. 21; Pragmatic Programmer — Topic 38.
 - Status: NEW (no PR template exists yet).
 - Priority: P1
