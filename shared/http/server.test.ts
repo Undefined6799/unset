@@ -22,6 +22,9 @@ const CONFIG: HttpKitConfig = {
   TRUSTED_PROXY_HOPS: 1,
   HTTP_BODY_LIMIT_BYTES: 65_536,
   RATE_LIMIT_MAX_KEYS: 100_000,
+  MEDIA_ORIGIN: "https://unset-media.test",
+  ASSETS_BASE: "",
+  DEV_VITE_ORIGIN: "",
 };
 /** Room for every test's requests; the limits tests below set their own. */
 const POLICIES = {

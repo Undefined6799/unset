@@ -9,6 +9,7 @@ const ENV = {
   TRUSTED_PROXY_MODE: "header",
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8,fd00::/8",
+  MEDIA_ORIGIN: "https://unsetcdn.net",
 };
 const load = (env: Record<string, string>) =>
   loadConfig(defineConfig({ ...httpKitConfig }), env, { onUnknownKeys: () => undefined });
@@ -42,6 +43,9 @@ describe("httpKitConfig", () => {
       TRUSTED_PROXY_HOPS: 1,
       HTTP_BODY_LIMIT_BYTES: 65_536,
       RATE_LIMIT_MAX_KEYS: 100_000,
+      MEDIA_ORIGIN: "https://unsetcdn.net",
+      ASSETS_BASE: "",
+      DEV_VITE_ORIGIN: "",
     });
   });
 
@@ -55,6 +59,53 @@ describe("httpKitConfig", () => {
     expect(problems({ ...ENV, RATE_LIMIT_MAX_KEYS: "0" }, load)).toEqual([
       { key: "RATE_LIMIT_MAX_KEYS", reason: "invalid" },
     ]);
+  });
+
+  test("media_same_site_refused", () => {
+    // Plan §5.2: the media origin is another site, so an uploaded file opened directly never runs in ours.
+    for (const media of ["https://media.unset.sh", "https://unset.sh", "https://a.b.unset.sh"]) {
+      expect(problems({ ...ENV, MEDIA_ORIGIN: media })).toEqual([{ key: "MEDIA_ORIGIN", reason: "invalid" }]);
+    }
+    // A TLD outside KNOWN_TLDS cannot be compared, so it is refused rather than guessed.
+    expect(problems({ ...ENV, MEDIA_ORIGIN: "https://media.example.co.uk" })).toEqual([
+      { key: "MEDIA_ORIGIN", reason: "invalid" },
+    ]);
+    expect(problems({ ...ENV, MEDIA_ORIGIN: "http://unsetcdn.net" })).toEqual([
+      { key: "MEDIA_ORIGIN", reason: "invalid" },
+    ]);
+    // The media process serves the media origin itself.
+    const media = defineConfig({
+      ...httpKitConfig,
+      UNSET_ENV: oneOf(["dev", "test", "prod"]),
+      UNSET_SERVICE: oneOf(["http", "media"]),
+    });
+    const env = { ...ENV, UNSET_SERVICE: "media", MEDIA_ORIGIN: "https://unset.sh" };
+    expect(loadConfig(media, env, { onUnknownKeys: () => undefined }).MEDIA_ORIGIN).toBe("https://unset.sh");
+    expect(() => loadConfig(media, { ...env, UNSET_SERVICE: "http" }, { onUnknownKeys: () => undefined })).toThrow(
+      "MEDIA_ORIGIN invalid",
+    );
+  });
+
+  test("dev_origin_refused_in_prod", () => {
+    // bootOrExit turns this ConfigError into exit 78 (shared/config/load.ts).
+    const vite = { ...ENV, DEV_VITE_ORIGIN: "http://localhost:5173" };
+    expect(problems(vite)).toEqual([{ key: "DEV_VITE_ORIGIN", reason: "invalid" }]);
+    expect(problems({ ...vite, UNSET_ENV: "test" })).toEqual([{ key: "DEV_VITE_ORIGIN", reason: "invalid" }]);
+    expect(problems({ ...vite, UNSET_ENV: "dev" })).toEqual([]);
+    expect(problems({ ...vite, UNSET_ENV: "dev", DEV_VITE_ORIGIN: "http://localhost:5173/" })).toEqual([
+      { key: "DEV_VITE_ORIGIN", reason: "invalid" },
+    ]);
+  });
+
+  test("assets_base_is_an_assets_folder", () => {
+    expect(problems({ ...ENV, ASSETS_BASE: "https://static.unset.sh/assets/" })).toEqual([]);
+    for (const bad of [
+      "https://static.unset.sh/",
+      "https://static.unset.sh/assets",
+      "http://static.unset.sh/assets/",
+    ]) {
+      expect(problems({ ...ENV, ASSETS_BASE: bad })).toEqual([{ key: "ASSETS_BASE", reason: "invalid" }]);
+    }
   });
 
   test("plain_http_only_in_dev", () => {
