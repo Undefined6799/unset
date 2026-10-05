@@ -1,13 +1,14 @@
 # The shape of a pull request (P0.09c): title, commits, size, template headings, trusted base (SE-6) and
 # performance evidence (PF-1). Its own workflow so that editing the title, body or labels re-runs only this check:
 # the title becomes the squash subject on main, so an edit after a green run must be checked again.
-# The rules of ci.yml's header hold here too (scripts/guards/workflow-pins.test.ts checks every workflow).
+# Like ci.yml it skips drafts and runs when a PR is marked ready. The rules of ci.yml's header hold here too
+# (scripts/guards/workflow-pins.test.ts checks every workflow).
 
 name: pr-shape
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review, edited, labeled, unlabeled]
 
 permissions: {}
 
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   pr-shape:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

@@ -1,4 +1,5 @@
-# CI gate for every pull request and every push to main (P0.07).
+# CI gate for every ready pull request and every push to main (P0.07). A draft runs nothing here: it is checked
+# locally with `npm run check`, and marking it ready (ready_for_review) runs the full set (Alex 2026-10-05 20:34Z).
 #
 # Secrets and OIDC rule (enforced by scripts/guards/workflow-pins.test.ts):
 # - No repository-level secrets, ever. A secret lives in a GitHub Environment whose deployment
@@ -16,6 +17,7 @@ name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -27,6 +29,7 @@ concurrency:
 
 jobs:
   check:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -59,6 +62,7 @@ jobs:
           --strict --no-global .github/renovate.json
 
   audit:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -80,6 +84,7 @@ jobs:
       - run: npm audit signatures --@unset:registry=https://registry.npmjs.org/
 
   secrets:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -97,6 +102,7 @@ jobs:
         run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" dir --redact --no-banner --config .github/.gitleaks.toml .
 
   actionlint:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -110,6 +116,7 @@ jobs:
       - run: docker run --rm -v "$PWD:/repo" -w /repo "$ACTIONLINT_IMAGE" -color
 
   semgrep:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -146,6 +153,7 @@ jobs:
           if-no-files-found: error
 
   sbom:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -167,6 +175,7 @@ jobs:
           if-no-files-found: error
 
   duplicates:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     continue-on-error: true
