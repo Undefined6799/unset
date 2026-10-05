@@ -2806,10 +2806,15 @@ As built (Phase 1 thread, relayed 2026-10-05 00:11Z):
 ---
 
 ### P1.19 — i18n runtime and EN/FR catalogs; missing-key and unused-key checks
+
+Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): CI runs the
+catalog check to pass or fail, so it moves to `scripts/lint/i18n.ts` and lands first as **P1.19q** (the check, its
+allow-list, its tests and the `check` job entry); this step brings `shared/i18n/` and the conversion.
+
 **Built in the i18n slice, after P2.13a (Alex, 2026-10-04 12:58Z, "English first"); its text stays here so ids hold.**
-Tags: —            Depends on: P1.01, P1.03, P2.13a (slice 1 merged)            Plan: §8 Phase 1 ("i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls)"), global invariant 8, §6.1 (WCAG language of page)
+Tags: —            Depends on: P1.19q, P1.01, P1.03, P2.13a (slice 1 merged)            Plan: §8 Phase 1 ("i18n catalogs (EN/FR; these replace 1,076 inline `choose()` calls)"), global invariant 8, §6.1 (WCAG language of page)
 Where: `shared/i18n/{runtime.ts,locale.ts,catalog.ts}`, `shared/i18n/catalogs/{en,fr}.json`,
-  `scripts/i18n/check.ts` + tests; every slice-1 `messages.ts` (converted, then deleted) and its importers
+  `scripts/lint/i18n.ts` + tests; every slice-1 `messages.ts` (converted, then deleted) and its importers
 Size: ~160 source lines plus the mechanical conversion of the slice-1 messages modules, ~220 test lines. If the
   conversion pushes the PR past P0.09c's 800-line fail, the runtime and checks land first and the conversion follows as
   a second PR of this step (`large-pr` is not used for it).
@@ -2827,7 +2832,7 @@ Outputs:
     Placeholders `{name}` with `name` `^[a-z][a-zA-Z0-9]*$`. No HTML: values must not contain `<` or `>` (formatting is
     done by components, never by catalog markup).
   - `type Locale = "en" | "fr"`; `type MessageKey` generated from `en.json` into `catalog.generated.ts` by
-    `scripts/i18n/check.ts --write` (checked in; CI fails if stale).
+    `scripts/lint/i18n.ts --write` (checked in; CI fails if stale).
   - `t(locale: Locale, key: MessageKey, params?: Record<string, string | number>): string`.
   - `tPlural(locale, keyBase, count: number, params?)` → picks `keyBase + "." + rules(locale).select(count)`, falling back
     to `.other`; `rules(locale)` is one cached `Intl.PluralRules` per locale; `count` is also available as `{count}`
@@ -2836,7 +2841,7 @@ Outputs:
     Accept-Language tag whose primary subtag is `en` or `fr` by q-order; else `en`. Public pages pass no cookie (plan-issue
     21: public pages carry no cookie variation); only signed-in pages read the locale cookie.
   - `htmlLang(locale)` → `"en"` / `"fr"` for `<html lang>`.
-  - `scripts/i18n/check.ts`: `npm run i18n:check` (added to the `check` job) implementing the checks below.
+  - `scripts/lint/i18n.ts`: `npm run i18n:check` (added to the `check` job) implementing the checks below.
 
 Algorithm:
   First task, conversion of the slice-1 messages modules (Alex's English-first answer; the i18n slice lists it first):
@@ -2867,7 +2872,7 @@ Algorithm:
      union declared with its suffix list in `catalog.ts` (`error.` + every code from P1.03's `ERROR_CODES`, and later
      ones such as `reason.`), which the checker expands.
   8. Missing: used keys not in EN → fail. Unused: EN keys not used and not covered by a declared prefix expansion → fail
-     (with an allow-list file `scripts/i18n/allow-unused.txt` for keys used only from non-TS sources such as email
+     (with an allow-list file `scripts/lint/i18n-allow-unused.txt` for keys used only from non-TS sources such as email
      templates; each line needs a comment).
   9. Error codes: for every public code in `ERROR_CODES`, `error.<code>` exists in both catalogs → else fail.
   10. Stale generated types: regenerate `MessageKey` in memory; differs from the file → fail.
@@ -3094,13 +3099,17 @@ route.
 
 ### P1.21 — Token pipeline
 
-**Tags:** — · **Depends on:** P1.20 · **Plan:** §8 Phase 1 (styling paragraph), §6.1 (CSS and font budgets), §7 (Biome CSS rules, GritQL plugin), §11 Q11
+Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the CSS
+budget moves to `scripts/budgets/css.ts` and lands first as **P1.21q** with `budget.css.json` and its tests; this step
+brings `shared/ui/` and the rest.
+
+**Tags:** — · **Depends on:** P1.21q, P1.20 · **Plan:** §8 Phase 1 (styling paragraph), §6.1 (CSS and font budgets), §7 (Biome CSS rules, GritQL plugin), §11 Q11
 
 **Where:** `shared/ui/sheet/` (read-only copies of the sheet's `tokens.json`, fonts, component READMEs and
 `index.d.ts`, plus `source.json`); `shared/ui/tokens/{contrast-pairs.json, font-metrics.json}`;
 `shared/ui/scripts/build-tokens.ts`; generated and checked in: `shared/ui/styles/tokens.css`;
 `shared/ui/styles/layers.css`; `shared/ui/fonts/` (the two woff2 files and their OFL licence texts);
-`tools/biome/token-only.grit`; `biome.json` CSS section; `scripts/css-budget.ts`; `budget.css.json`; tests.
+`tools/biome/token-only.grit`; `biome.json` CSS section; `scripts/budgets/css.ts`; `budget.css.json`; tests.
 
 **Size:** ~250 source lines, ~300 test lines.
 
@@ -3418,10 +3427,14 @@ public-page rule must be applied there; see Notes).
 
 ### P1.23 — Island runtime
 
-**Tags:** [SEC] · **Depends on:** P1.20, P1.08 · **Plan:** §5.1 (islands, props, script and CSP rules), §6.1 JS budgets, §2 rule 15
+Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths): the island
+budget moves to `scripts/budgets/island.ts` and lands first as **P1.23q** with the dependency-cruiser rule and their
+tests; this step brings `apps/web/` and the Vite config.
+
+**Tags:** [SEC] · **Depends on:** P1.23q, P1.20, P1.08 · **Plan:** §5.1 (islands, props, script and CSP rules), §6.1 JS budgets, §2 rule 15
 
 **Where:** `apps/web/src/islands/runtime/{registry.ts, island.tsx, bootstrap.ts, manifest.ts, assets-route.ts}`;
-`apps/web/vite.config.ts`; `scripts/island-budget.ts`; a dependency-cruiser rule; tests.
+`apps/web/vite.config.ts`; `scripts/budgets/island.ts`; a dependency-cruiser rule; tests.
 
 **Size:** ~300 source lines (re-measured with `count-glue-lines`, warning above the number the P1.20 ADR
 accepted), ~350 test lines.
@@ -4058,19 +4071,20 @@ Any step fails → job fails; required check on main.
 
 ### P1.27 — Container images, mirrored upstreams, SBOM, provenance and signatures
 
-Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.github/workflows/{images.yml,mirror.yml}`
-and `required-checks.json` land first as **P1.27q**; this step brings `deployment/images/node-app.Dockerfile`,
-`.dockerignore`, `scripts/verify-images.ts` and the ADR. P1.27q also adds the `images` entry to `required-checks.json`
-(ruling 2026-10-05 01:25Z; no follow-up step). While the Dockerfile does not exist, the `images` job prints
-`::notice title=images::skipped, no Dockerfile yet (lands in P1.27)` and exits 0; the static test
-`images_skip_only_without_dockerfile` pins the skip condition to exactly "the Dockerfile path is absent", so P1.27's
-PR is built and verified by the same job. P1.27 itself then touches only product paths, tooling and docs.
+Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `.github/workflows/{images.yml,mirror.yml}` and
+`required-checks.json` land first as **P1.27q**, with `scripts/ci/verify-images.ts` (moved under a check folder,
+ruling 2026-10-05 01:43Z); this step brings `deployment/images/node-app.Dockerfile`, `.dockerignore` and the ADR.
+P1.27q also adds the `images` entry to `required-checks.json` (ruling 2026-10-05 01:25Z; no follow-up step). While the
+Dockerfile does not exist, the `images` job prints `::notice title=images::skipped, no Dockerfile yet (lands in
+P1.27)` and exits 0; the static test `images_skip_only_without_dockerfile` pins the skip condition to exactly "the
+Dockerfile path is absent", so P1.27's PR is built and verified by the same job. P1.27 itself then touches only
+product paths, tooling and docs.
 
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
 `deployment/images.lock.json`; `deployment/mirror.list.json`; `deployment/cosign.pub`; `.trivyignore.yaml`; `.hadolint.yaml`;
-`scripts/verify-images.ts`; `docs/human/decisions/NNNN-image-signing-private-repo.md`; `.github/required-checks.json` (appends the
+`scripts/ci/verify-images.ts` (lands in P1.27q); `docs/human/decisions/NNNN-image-signing-private-repo.md`; `.github/required-checks.json` (appends the
 image build and scan jobs, with P0.07's Alex tail; phase-0 note 1). This is the repository's first job with a secret
 (the `signing` environment below), so it follows P0.07's environment rule; Alex creates the environment.
 
@@ -4401,6 +4415,9 @@ on the PDS (P1.30 C12).
 ---
 
 ### P1.29 — Development stack (`compose.dev.yaml`)
+
+One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
+from `dev:up`, not from CI), so this stays one step.
 
 **Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11, P1.12p, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
@@ -5143,6 +5160,10 @@ flowchart LR
 ---
 
 ### P1.18b — `net-guard` forward-proxy mode and the egress proxy for processes that are not ours
+
+One step (SE-6 recount, 2026-10-05 01:43Z): `scripts/egress/` is a generator, not a check path, so this stays one
+step.
+
 Tags: [SEC]            Depends on: P1.18a            Plan: §2 rule 13; plan-issue 20 (Tap and indexer egress through net-guard); plan-issue 3 (`review-egress` limited to fixed hosts)
 Where: `infrastructure/net-guard/src/proxy.ts` + tests; `deployment/egress-proxy/` (generated config, one instance per policy);
   `scripts/egress/generate-proxy-config.ts` + test
@@ -5680,12 +5701,17 @@ another key); `probe_gap_not_counted_as_up`; `backup_script_encrypts_and_leaves_
 
 ### P1.35 — Lexicon authority on the dev PDS; schemas and permission set published (Alex)
 
-**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.31 (its PR approved by Alex: fields and consent text), P1.34,
+Split (SE-6 `q` rule, ruled 2026-10-05 01:47Z): all of `.github/` is a check path, because even a workflow that only
+schedules a monitor holds the repository token, its permissions and a runner. **P1.35q** holds
+`.github/workflows/lexicon-monitor.yml` and `scripts/ci/lexicon-monitor.ts` (moved under a check folder); this step
+holds `shared/lexicons/` and the runbooks.
+
+**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.34,
 P0.12 (rows K1 and K1b), P0.13 (licence ADR: the lexicons are MIT), P1.18 · **Plan:** §3, §5.2, §5.3 ("published never from CI or agents"), §10 (nightly PLC log check); decision 20
 
 **Where:** `docs/human/runbooks/{lexicon-authority.md, plc-nullification.md, permission-set-changed.md,
 permission-set-update.md}`; `shared/lexicons/published.lock.json` and `published/*.json`;
-`.github/workflows/lexicon-monitor.yml`; `scripts/lexicon-monitor.ts`.
+`.github/workflows/lexicon-monitor.yml`; `scripts/ci/lexicon-monitor.ts`.
 
 **Size:** ~180 lines of runbooks, ~250 script lines, ~200 test lines.
 
