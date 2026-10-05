@@ -85,12 +85,21 @@ function copyArray(value: unknown[], depth: number, ancestors: WeakSet<object>, 
   return Array.from({ length }, (_, i) => copyPlain(dataValue(value, String(i)), depth + 1, ancestors, budget));
 }
 
+/**
+ * A key reaches the page only if it needs no escape: JSON.stringify writes it unchanged (no quote, backslash, control
+ * character or lone surrogate) and it holds none of the five HTML breakers. An escaped key cannot be trusted to
+ * round-trip: V8's JSON.parse (Node 26.10 / V8 14.6, Chrome 141) can return the previous object's key for an escaped
+ * one-character key (test v8_escaped_key_mixup_is_real). Values are unaffected.
+ */
+const KEY_BREAKERS = new RegExp(HTML_BREAKERS.source);
+const isPlainKey = (key: string): boolean => JSON.stringify(key) === `"${key}"` && !KEY_BREAKERS.test(key);
+
 function copyObject(value: object, depth: number, ancestors: WeakSet<object>, budget: Budget): JsonValue {
   if (!isPlainObject(value)) invalid();
   // Null prototype, so a `__proto__` key stays an own property of the copy.
   const copy: Record<string, JsonValue> = Object.create(null);
   for (const key of Reflect.ownKeys(value)) {
-    if (typeof key !== "string") invalid();
+    if (typeof key !== "string" || !isPlainKey(key)) invalid();
     spend(budget, (key as string).length + 3);
     copy[key as string] = copyPlain(dataValue(value, key as string), depth + 1, ancestors, budget);
   }
