@@ -1,0 +1,8 @@
+{
+  "colorGroups": [
+    { "query": "path:notes/pitfall", "color": { "a": 1, "rgb": 15026253 } },
+    { "query": "path:notes/reference", "color": { "a": 1, "rgb": 4088797 } },
+    { "query": "path:notes/handoff", "color": { "a": 1, "rgb": 16757284 } },
+    { "query": "path:notes/how-to", "color": { "a": 1, "rgb": 3187820 } }
+  ]
+}
