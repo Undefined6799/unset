@@ -150,7 +150,12 @@ describe("route-registration", () => {
 
 describe("composition-root", () => {
   test("composition_root_split", () => expectFixtures("composition-root", "bad", ["infra-import.fixture"]));
+  test("composition_root_compose_present", () => expectFixtures("composition-root", "bad", ["no-compose.fixture"]));
   test("composition_root_good_fixture", () => expectFixtures("composition-root", "good"));
+  test("composition_root_empty_tree_passes", () => {
+    expect(compositionRoot.scanAll(tempRepo({ "shared/x/index.ts": "export {};" }))).toEqual([]);
+    expect(compositionRoot.scanAll(join(import.meta.dirname, "..", ".."))).toEqual([]);
+  });
 
   test("composition_root_needs_one_compose_import", () => {
     const compose = "export async function compose() {}";
