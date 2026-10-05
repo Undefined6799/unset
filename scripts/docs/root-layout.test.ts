@@ -28,7 +28,7 @@ const namesOldPath = (line: string): boolean =>
   [...line.matchAll(NAME)].some((m) => !NEW_HOMES.some((home) => line.slice(0, m.index).endsWith(home)));
 
 /**
- * Every tracked file that runs or documents the repository. Left out: ADRs (never edited once accepted), the AI working
+ * Every tracked file that runs or documents the repository (CODEOWNERS' "# checks:" line too, since P0.09h). Left out: ADRs (never edited once accepted), the AI working
  * notes and book (history), engineering-rules.md (a byte copy the architecture thread owns; its text follows in that
  * thread's next re-copy), the lockfile, fixtures, and test files, whose example paths are data and which fail on their
  * own if they read a moved file.
@@ -56,8 +56,7 @@ test("no_old_root_paths_referenced", () => {
     read(file)
       .split("\n")
       .map((line, i) => ({ line, at: `${file}:${i + 1}` }))
-      // The base's "# checks:" entries stay until this step merges: the guard reads base and head together.
-      .filter(({ line }) => !line.startsWith("# checks:") && namesOldPath(line))
+      .filter(({ line }) => namesOldPath(line))
       .map(({ at, line }) => `${at}: ${line.trim()}`),
   );
   expect(hits).toEqual([]);

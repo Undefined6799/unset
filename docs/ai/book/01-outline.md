@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 23 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09i, P0.09j and P0.13a added 2026-10-05).
+Depth: **build-ready**. 24 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j and P0.13a added 2026-10-05).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -41,6 +41,7 @@ Depth: **build-ready**. 23 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b, P0.09e | `phase-0.md` |
 | P0.09f | Let the root lockfile ride with a trusted package's dependency change (SE-6 ruling 2026-10-05 02:50Z) | [SEC] | P0.09c | `phase-0.md` |
 | P0.09g | Repo-root tidy (config files out of the root) | — | P0.09f, P0.13 | `phase-0.md` |
+| P0.09h | Size guard counts a pure rename once | — | P0.09g, P0.09i | `phase-0.md` |
 | P0.09i | pr-shape skips template headings for Renovate only | — | P0.09g | `phase-0.md` |
 | P0.09j | Guard fixtures isolate git from the caller's environment | — | P0.09g | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
@@ -68,6 +69,7 @@ flowchart TD
   P0_09d["P0.09d AI notes vault and guard"]
   P0_09f["P0.09f Lockfile rides with trusted deps"]
   P0_09g["P0.09g Repo-root tidy"]
+  P0_09h["P0.09h Renames count once"]
   P0_09i["P0.09i Renovate skips template headings"]
   P0_09j["P0.09j Fixture git ignores hook env"]
   P0_10["P0.10 Secret scanning"]
@@ -95,6 +97,7 @@ flowchart TD
   P0_13 --> P0_09g
   P0_09g --> P0_09i
   P0_09g --> P0_09j
+  P0_09i --> P0_09h
   P0_07 --> P0_10
   P0_07 --> P0_11
   P0_10 --> P0_12
@@ -106,7 +109,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 55 steps: 41 from `phase-1.md`, 14 from `phase-2.md` (including the
+Depth: **build-ready**. 56 steps: 42 from `phase-1.md`, 14 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -125,7 +128,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.04c | Composition root guard (split from P1.04, SE-6) | — | P0.09c | `phase-1.md` |
 | P1.04m | Route table lists every route option (split from P1.04, SE-6) | — | P1.04k | `phase-1.md` |
 | P1.04 | HTTP server skeleton per entrypoint | — | P1.04k, P1.04q, P1.04c, P1.04m, P0.13a | `phase-1.md` |
-| P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04 | `phase-1.md` |
+| P1.05e | Trusted proxy keys in the entrypoint test envs (split from P1.05, SE-6) | — | P1.04 | `phase-1.md` |
+| P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04, P1.05e | `phase-1.md` |
 | P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05 | `phase-1.md` |
 | P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.04 | `phase-1.md` |
 | P1.07 | CSRF gate | [SEC] | P1.04 | `phase-1.md` |
@@ -190,6 +194,7 @@ flowchart TD
   P1_04c["P1.04c composition root guard"]
   P1_04m["P1.04m route table options"]
   P1_05["P1.05 Trusted proxy"]
+  P1_05e["P1.05e proxy keys in test envs"]
   P1_06["P1.06 Body limits and the rate-limit"]
   P1_06p["P1.06p Per-interface rate-limit tables"]
   P1_07["P1.07 CSRF gate"]
@@ -239,7 +244,8 @@ flowchart TD
   P2_13a["P2.13a Slice 1 exit"]
   P1_01 --> P1_02
   P1_02 --> P1_03
-  P1_04 --> P1_05
+  P1_04 --> P1_05e
+  P1_05e --> P1_05
   P1_05 --> P1_06
   P1_04 --> P1_07
   P1_04 --> P1_08

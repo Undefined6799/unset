@@ -2043,6 +2043,36 @@ Not in this step: P0.09h (pure renames count once in the size guard), which foll
 
 ---
 
+### P0.09h — Size guard counts a pure rename once (architecture ruling 2026-10-05 03:47Z)
+Tags: —            Depends on: P0.09g, P0.09i            Plan: D3 / DL-1 (PR size), SE-6
+Where: one check PR. `scripts/guards/pr-size.ts` and `change-shape.ts`, new `pr-size.test.ts`; CODEOWNERS
+  `# checks:` line and the tests that list it.
+
+Why: the counter diffed with `--no-renames`, so a moved 300-line file counted 600 (its old content deleted plus its new
+content added). The size signal measures review effort, and a pure move costs almost none; P0.09g needed the
+`large-pr` label for that reason alone.
+
+As built:
+  - The count runs `git diff -z --numstat --find-renames` at git's default 50% similarity, never lowered, so a heavy
+    rewrite stays a delete plus an add (git v2.43.0 `Documentation/diff-options.txt`, `-M`). `numstatLines` reads the
+    `-z` rename form `added TAB deleted TAB NUL old NUL new NUL` (`Documentation/diff-format.txt:165-179`).
+  - A pure rename counts 1; a rename with edits counts its changed lines, like an edit in place; a renamed row counts when either path is source
+    (architecture ruling 13:10Z), so edited source cannot hide by moving into an excluded path. Path classification for SE-6 (`git diff --raw --no-renames`) is unchanged: a move
+    still shows both paths there.
+  - CODEOWNERS: the old root entries `/.githooks/`, `/.semgrep/` and `/.dependency-cruiser.cjs` leave the
+    `# checks:` line (P0.09g kept them while the guard read base and head together), and `no_old_root_paths_referenced`
+    now scans that line too.
+
+Done when (tests, `scripts/guards/pr-size.test.ts`, each on a real throwaway repository):
+  - `pure_rename_counts_once`: a 300-line file moved unchanged → 1 (600 before).
+  - `rename_with_edit_counts_changed_lines`: the same move with two lines replaced → 4.
+  - `delete_and_unrelated_add_still_count`: a 300-line file deleted and a different 200-line file added → 500.
+  - `rewrite_is_not_a_rename`: the move with 200 of 300 lines rewritten → 600.
+  - `rename_counts_by_stricter_path`, `rename_with_edit_into_excluded_path_counts_changed_lines`,
+    `numstat_lines_refuses_newline_paths`; the existing size tests pass unchanged.
+
+---
+
 ### P0.09j — Guard fixtures isolate git from the caller's environment (Phase 0 finding, 2026-10-05)
 Tags: —            Depends on: P0.09g            Plan: SE-6, DO-3
 Where: one check PR. New `scripts/guards/git-env.ts` and its test; the throwaway-repository git calls in
