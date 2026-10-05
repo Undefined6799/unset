@@ -24,6 +24,8 @@ const EVENTS = [
   "ratelimit.error",
   // P1.07, the CSRF gate: a request other than GET or HEAD it denied, with a fixed reason word.
   "csrf.denied",
+  // P1.08, the security headers: a handler set its own Content-Security-Policy, which the route group's policy replaced.
+  "csp.handler_override",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
