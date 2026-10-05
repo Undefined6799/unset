@@ -149,7 +149,9 @@ export function flatten(node: LsNode, index: Map<string, LsNode> = indexByPath(n
     if (onWalk.has(self) || done.has(self)) return;
     onWalk.add(self);
     for (const [name, child] of Object.entries(expand(listed).dependencies ?? {})) {
-      if (child.version === undefined && child.missing !== true) continue;
+      // An optional dependency that is not installed prints as `{}`, with no path (npm 11.19.1 ls.js skips the --long
+      // fields for missing nodes); an installed package always has a path, even without a `version` field.
+      if (child.version === undefined && child.path === undefined && child.missing !== true) continue;
       const copy = installedCopy(name, child, !hasChildren(expand(child)) && declaresDependencies(child));
       const key = JSON.stringify(copy);
       if (!found.has(key)) found.set(key, copy);
@@ -194,6 +196,18 @@ export function productionTree(): LsNode & { name?: string } {
   return JSON.parse(run.stdout) as LsNode & { name?: string };
 }
 
+/**
+ * The root's declared dependencies that the tree does not list. With `--workspaces`, npm 11.19.1 leaves a root
+ * dependency that is not installed out of the JSON entirely (`lib/commands/ls.js` `filterBySelectedWorkspaces` keeps
+ * only edges with a target), so the manifest is compared with the tree. An optional one that is missing ships nothing.
+ */
+export function rootDependenciesNotListed(manifest: Record<string, unknown>, tree: LsNode): string[] {
+  const declared = Object.keys((manifest.dependencies ?? {}) as Record<string, string>);
+  return declared
+    .filter((name) => tree.dependencies?.[name] === undefined)
+    .map((name) => `${String(manifest.name)}: ${name} is not installed, so its licence is unknown`);
+}
+
 /** Conflicts across the root package and every workspace package in the repository, from one listed tree. */
 export function checkRepository(list: () => LsNode & { name?: string } = productionTree): string[] {
   const root = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as Record<string, unknown>;
@@ -204,10 +218,9 @@ export function checkRepository(list: () => LsNode & { name?: string } = product
   const names = new Set(workspaces.map(({ pkg }) => String(pkg.name)));
   // The root's own dependencies: its entries that are not workspaces.
   const own = Object.entries(tree.dependencies ?? {}).filter(([name]) => !names.has(name));
-  const conflicts = checkPackage(
-    String(root.name),
-    root.license,
-    flatten({ dependencies: Object.fromEntries(own) }, index),
+  const conflicts = rootDependenciesNotListed(root, tree);
+  conflicts.push(
+    ...checkPackage(String(root.name), root.license, flatten({ dependencies: Object.fromEntries(own) }, index)),
   );
   for (const { dir, pkg } of workspaces) {
     const name = String(pkg.name);

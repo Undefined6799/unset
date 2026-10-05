@@ -11,6 +11,7 @@ import {
   type LsNode,
   PERMISSIVE,
   productionTree,
+  rootDependenciesNotListed,
   satisfies,
 } from "./check.ts";
 
@@ -106,6 +107,31 @@ describe("licence", () => {
     expect(flatten({ dependencies: { fsevents: {} } })).toEqual([]);
     // A required one that is missing is still a conflict.
     expect(flatten({ dependencies: { x: { missing: true } } })).toHaveLength(1);
+  });
+
+  test("package_without_version_checked", () => {
+    // npm prints `version` only when it is set; an installed package without one still ships, and so does its tree.
+    const tree: LsNode = {
+      dependencies: {
+        nover: {
+          license: "GPL-3.0-only",
+          path: "/n/nover",
+          dependencies: { evil: { version: "1.0.0", license: "GPL-3.0-only", path: "/n/evil" } },
+        },
+      },
+    };
+    expect(checkPackage("p", "MIT", flatten(tree))).toEqual([
+      "p (MIT): nover@? is GPL-3.0-only",
+      "p (MIT): evil@1.0.0 is GPL-3.0-only",
+    ]);
+  });
+
+  test("root_dependency_not_listed_fails", () => {
+    // With --workspaces, npm 11.19.1 leaves an uninstalled root dependency out of the JSON entirely (ls.js
+    // filterBySelectedWorkspaces), so the manifest is compared with the tree. A missing optional one ships nothing.
+    const manifest = { name: "r", dependencies: { gone: "1.0.0", here: "1.0.0" }, optionalDependencies: { opt: "1" } };
+    const tree: LsNode = { dependencies: { here: { version: "1.0.0", license: "MIT", path: "/n/here" } } };
+    expect(rootDependenciesNotListed(manifest, tree)).toEqual(["r: gone is not installed, so its licence is unknown"]);
   });
 
   test("nested_copy_different_licence_fails", () => {

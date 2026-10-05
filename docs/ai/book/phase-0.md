@@ -2557,7 +2557,11 @@ Done when (tests):
   - `repository_has_no_conflicts` asserts one `npm ls` call under a 1.5 s timeout.
 
 As built (2026-10-05): `node scripts/licence/check.ts` takes 0.44 s (2.4 s before) on main. The four new tests and the
-timed real-tree test fail on the old code.
+timed real-tree test fail on the old code. From the adversarial review: `root_dependency_not_listed_fails` (with
+`--workspaces`, npm leaves an uninstalled root dependency out of the JSON, so the root manifest is compared with the
+tree) and `package_without_version_checked` (an installed package without a `version` field was skipped with its
+whole subtree; only a pathless `{}` is now skipped). `invalid` nodes are still checked as installed, so no licence
+escapes; failing on npm's other tree problems is not this step's.
 
 ---
 
