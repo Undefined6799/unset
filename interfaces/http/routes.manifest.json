@@ -1,0 +1,11 @@
+[
+  {
+    "method": "GET",
+    "path": "/health",
+    "group": "static",
+    "accepts": [],
+    "rateLimit": "exempt",
+    "mutates": false,
+    "middleware": ["requestId", "methodCheck"]
+  }
+]
