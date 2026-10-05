@@ -1,0 +1,46 @@
+# Handle labels no account may take under a handle domain (plan §5.2). One lowercase label per line; `#` starts a
+# comment. `_*` reserves every label starting with an underscore, `xn--*` every punycode label. pds-admin enforces
+# this list at P2.09; deployment/reserved-labels.test.ts checks its format.
+
+# Plan §5.2 minimum
+www
+api
+admin
+account
+mail
+mta-sts
+autoconfig
+status
+_*
+
+# Proposed in P0.11 for Alex to accept or strike in review
+autodiscover
+smtp
+imap
+pop
+ns1
+ns2
+chat
+login
+auth
+oauth
+support
+help
+security
+abuse
+postmaster
+hostmaster
+webmaster
+root
+pds
+media
+cdn
+static
+assets
+unset
+0x40
+bsky
+atproto
+localhost
+int
+xn--*  # punycode labels: homograph handles

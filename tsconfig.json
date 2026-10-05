@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "scripts" },
+    { "path": "deployment" },
     { "path": "infrastructure/net-guard" },
     { "path": "interfaces/admin" },
     { "path": "interfaces/api" },
