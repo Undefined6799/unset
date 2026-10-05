@@ -100,6 +100,14 @@ describe("logger", () => {
     expect(String(record?.kind)).not.toContain("did:plc");
   });
 
+  test("logger_http_kit_events", () => {
+    // P1.04k's server kit logs these; each must keep its own name rather than read as log.unknown_event.
+    const { log, records } = capture();
+    const events = ["http.request", "http.deadline", "http.late_result", "http.listen_failed", "http.drain"] as const;
+    for (const event of events) log.info(event, { route: "/@:handle", method: "GET", status: 200, ms: 3 });
+    expect(records().map((r) => r.event)).toEqual([...events]);
+  });
+
   test("logger_no_stack_message_in_prod", () => {
     const { log, lines } = capture("prod");
     log.logError(new Error("secret value"));
