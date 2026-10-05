@@ -1,4 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" }
+  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" },
+  "references": [{ "path": "../config" }, { "path": "../errors" }, { "path": "../log" }]
 }
