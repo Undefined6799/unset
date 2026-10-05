@@ -1041,8 +1041,27 @@ address at a fingerprint match (P4.07).
 
 ---
 
+### P1.06e — Name the rate limiter's log events (split from P1.06, SE-6)
+Tags: —            Depends on: P1.05e            Plan: rule SE-6 (trusted base alone), the P1.04l/P1.05e prelude pattern
+Where: one product PR. `shared/log/logger.ts` and `logger.test.ts`; `interfaces/http/routes.manifest.test.ts`.
+
+Why: P1.06 is trusted base (`shared/http` only) and logs two events; a typed `EVENTS` entry must exist on main before
+the trusted PR that logs it.
+
+Outputs:
+  - `ratelimit.no_session` and `ratelimit.error` join `EVENTS` in `shared/log/logger.ts`, with one known-event line each
+    in `logger.test.ts`. If P1.06 as built logs any other event, it joins this step.
+  - The manifest test's extra route declares `session: "none"`, set through a variable so it type-checks both before
+    and after P1.06 makes `session` required.
+
+Done when (tests): the two known-event lines pass; the six manifest tests stay green.
+
+As built (Phase 1, 2026-10-05 20:48Z): the files above, green locally.
+
+---
+
 ### P1.06 — Body limits and the rate-limit primitive
-Tags: [SEC]            Depends on: P1.05            Plan: §2 rule 16, §5.2 (salted IP hash in memory, 60 s TTL, global ceiling), §6 (never written); admin design §8.1 (key changes daily)
+Tags: [SEC]            Depends on: P1.05, P1.06e            Plan: §2 rule 16, §5.2 (salted IP hash in memory, 60 s TTL, global ceiling), §6 (never written); admin design §8.1 (key changes daily)
 Where: `shared/http/limits/{bodyLimit.ts,rateLimit.ts,policy.ts}` + tests (the mechanism and the policy type only; the
   policy tables live with the interfaces that own the routes, P1.06p, rule SE-6 as updated 2026-10-04, plan §9 at
   `6275827`)
@@ -1074,9 +1093,12 @@ Outputs:
     known after `session`):
       `rateLimitIp` (before `csrf`) consumes the policy's `ip` and `global` entries with `{ ip }`;
       `rateLimitDid` (after `session`) consumes the policy's `did` entries with `{ did: session.did }`.
-    A route whose policy has a `did` entry must also declare `requiresSession: true`; `defineRoute` throws at startup
-    otherwise. `requiresSession` also joins `RouteInfo` and the `route_table_lists_middleware` assertion (P1.04m), in
-    this kit step. If `rateLimitDid` still finds no session at run time, it denies (500 `internal.error`, logged as
+    A route whose policy has a `did` entry must also declare `session: "required"`; `createServer` throws at startup
+    otherwise (only `createServer` sees the policy table). Every route states `session: "required" | "none"`, a
+    required field with no default, so a new route cannot go public by omission (architecture ruling 2026-10-05
+    20:40Z). `RouteInfo` and the F-27 manifest carry `requiresSession: true` only for `"required"`; absent means
+    `"none"`, so today's six manifests stay unchanged and any route that later sets it shows in its PR's manifest diff.
+    `route_table_lists_middleware` (P1.04m) gains that case, in this kit step. If `rateLimitDid` still finds no session at run time, it denies (500 `internal.error`, logged as
     `ratelimit.no_session`): fail closed, never "no DID, no limit". Both answer 429 `http.rate_limited` with
     `Retry-After` when a bucket is empty.
   - Process-held secret `salt`: 32 random bytes from `crypto.randomBytes`, created at start and replaced every 24 h;
@@ -1091,9 +1113,11 @@ Algorithm:
   3. `Content-Length` not a valid integer, or both `Content-Length` and `Transfer-Encoding` present → 400 (request
      smuggling shape; Node rejects most of these already; test it).
   Rate limit (`consume`):
-  1. Compute bucket keys for each policy entry: `ip` scope → if `subject.ip` is null → key `"ip:unknown"` (one shared,
-     strict bucket with capacity = policy capacity ÷ 10, min 1); else `key = "ip:" + base64url(HMAC-SHA256(salt,
-     ip.rateKey()))[0..22]`. `did` scope → `"did:" + HMAC(salt, did)` (pseudonymous in memory too). `global` → `"g:" + policy`.
+  1. Compute bucket keys for each policy entry, prefixed by the policy name and the entry's index so two policies with
+     the same scope never share a bucket: `ip` scope → if `subject.ip` is null → key `<policy>#<entryIndex>:ip:unknown`
+     (one shared, strict bucket with capacity = policy capacity ÷ 10, min 1); else
+     `<policy>#<entryIndex>:ip:` + `base64url(HMAC-SHA256(salt, ip.rateKey()))[0..22]`. `did` scope →
+     `<policy>#<entryIndex>:did:` + `HMAC(salt, did)` (pseudonymous in memory too). `global` → `<policy>#<entryIndex>:g`.
   2. For each key: `bucket = map.get(key)`; if absent → new full bucket. Refill:
      `tokens = min(capacity, tokens + (now - lastRefill) × refillPerSec)`. An idle bucket is never recreated full
      early: a drained bucket keeps its state until refill alone would have filled it (editor pass: a 60 s idle reset
@@ -1144,7 +1168,10 @@ Done when (tests):
   - did_and_ip_both_apply: `search` with ip under limit and did over limit → denied.
   - did_limit_at_route_level: a test route with the `follow` policy and a stub session layer; 121 POSTs as one DID, each
     from a different IP → the 121st is 429 (proves `rateLimitDid` runs after `session` with the real middleware order).
-  - did_policy_requires_session: `defineRoute` with the `follow` policy and no `requiresSession` → throws.
+  - did_policy_requires_session: `createServer` with a route on the `follow` policy and `session: "none"` → throws.
+  - route_must_declare_session: a type-level failure fixture in which a route without `session` does not compile.
+  - route_table_lists_middleware (P1.04m) gains a case: `requiresSession: true` appears for `"required"`; the default
+    is absent.
   - global_ceiling: many distinct IPs exceed the global entry → denied.
   - keys_not_reversible: inspect the map keys after a request from `198.51.100.7` → no key contains `198.51.100.7` or
     its hex/base64 forms; after salt rotation the same IP yields a different key.
@@ -1162,12 +1189,46 @@ Not in this step: edge (Caddy) rate limits (P1.28); per-DID daily caps stored in
 (P3.20, admin design §7.5); the interfaces' policy tables (P1.06p).
 Diagram: none.
 
+As built (Phase 1, relayed 2026-10-05 20:48Z, confirmed 20:51Z; no rule changes):
+  - `ClientIp.rateKey()` exists; IP buckets key on `HMAC(salt, ip.rateKey())`. `rateLimitIp` reads the kit's internal
+    client-IP value, the one behind `RouteContext.clientIp`.
+  - Bucket keys carry the policy name and entry index (Algorithm step 1); `keys_not_reversible` is unchanged.
+  - `did_policy_requires_session` is checked in `createServer`. A session-required route with no session reader denies
+    with 500 `internal.error` and logs `ratelimit.no_session` (fail closed).
+  - `createServer` builds the limiter only when some route is rate-limited, so the six composes' empty `policies: {}`
+    still start until P1.06p. A non-exempt route naming a policy absent from the table still throws at startup
+    (`checkRoutes`, `rate_limit_required_and_known`), and once any route is limited `createRateLimiter` runs
+    `definePolicies`, so a bad table throws (`policy_table_validated`).
+  - `session` landed in one PR: no real routes exist under `interfaces/` (P1.06e moved the manifest test's route).
+  - Files: `shared/http/limits/{bodyLimit.ts,policy.ts,rateLimit.ts}` and their tests; `config`, `index`, `routes`,
+    `server` and the shutdown test change (about 290 source lines).
+
+---
+
+### P1.06q — Route policy guard (split from P1.06p, SE-6)
+Tags: —            Depends on: P0.09c            Plan: rule SE-6 (check paths alone; architecture ruling 2026-10-05 20:40Z)
+Where: one check PR. `scripts/guards/route-policy.ts` and its test, fixtures under `scripts/guards/fixtures/route-policy/`,
+  registered in `guards.test.ts` and `repo.test.ts` like `route-registration`. Lands before P1.06p.
+
+Why: `every_route_has_policy` is a repo scan with fixtures, so it is a check path and cannot ride with P1.06p's tables.
+
+Algorithm: for every `interfaces/*` with a `routes.manifest.json`, each route's `rateLimit` must be a policy name in that
+interface's `limits.ts`, or `"exempt"` on a `static` route. It never skips an interface without `limits.ts`: one whose
+manifest holds only `"exempt"` routes in group `static` (such as `/health`) needs none; any other route there fails,
+naming the route. If today's manifests hold only `/health`, the real tree passes; if not, Phase 1 reports it and P1.06q
+lands with P1.06p's tables in the order that keeps main green.
+
+Done when (tests):
+  - every_route_has_policy: passes on the real tree; fixtures with a route lacking `rateLimit`, naming `nope`, or
+    `"exempt"` on an `app` route → each fails naming the route.
+  - non_static_route_without_limits_fails: an interface with a non-static route and no `limits.ts` → fails.
+
 ---
 
 ### P1.06p — Per-interface rate-limit policy tables and the every-route-has-a-policy check
-Tags: [SEC]            Depends on: P1.06, P1.04            Plan: §2 rule 16, §5.2 (rate limits); rule SE-6 as updated 2026-10-04 (plan §9 at `6275827`: route rate-limit policies live with their interface)
+Tags: [SEC]            Depends on: P1.06, P1.06q, P1.04            Plan: §2 rule 16, §5.2 (rate limits); rule SE-6 as updated 2026-10-04 (plan §9 at `6275827`: route rate-limit policies live with their interface)
 Where: `interfaces/{http,api,media,admin}/limits.ts`, each of those interfaces' `compose.ts` (passes its table to
-  `createServer` and `createRateLimiter`), `tests/integration/routes/route-policy.test.ts`
+  `createServer` and `createRateLimiter`). The `every_route_has_policy` guard moved to P1.06q.
 Size: ~60 source lines, ~70 test lines
 
 Why a separate step (letter suffix): P1.06 is trusted base (`shared/http/`) and builds only the mechanism; the tables
@@ -1180,17 +1241,12 @@ Outputs:
     values P1.06 lists. `interfaces/api/limits.ts`: `default`, `search`. `interfaces/media/limits.ts` and
     `interfaces/admin/limits.ts`: `default`. Each built with `definePolicies`. A later interface (chat, review's HTTP
     side) adds its own file with its first route.
-  - Test `every_route_has_policy`: for every `interfaces/*` with a `routes.manifest.json`, each route's `rateLimit`
-    is a policy name present in that interface's `limits.ts`, or `"exempt"` on a `static` route; a missing `limits.ts`,
-    a route without `rateLimit`, an unknown name or `"exempt"` on another group → fails, naming the route. It runs in
-    the `check` job, so a missing policy fails CI.
+  - `every_route_has_policy` (P1.06q) passes once the tables exist.
 Algorithm: build each table; wire it in `compose.ts`; the test reads the manifests and tables.
 Edge cases and failures: a policy defined but used by no route → warning line only (left for the step that uses it).
 Threats: request rates on every route.
   - D A route shipped with no limit → required option, startup check and `every_route_has_policy`.
 Done when (tests):
-  - every_route_has_policy: passes on the real tree; fixtures with a route lacking `rateLimit`, naming `nope`, or
-    `"exempt"` on an `app` route → each fails naming the route.
   - tables_valid: each `limits.ts` passes `definePolicies`.
 Reuse: none.
 Not in this step: the mechanism (P1.06); policies of later routes (their feature steps).

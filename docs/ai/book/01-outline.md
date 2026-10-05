@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 26 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l and P0.13a added 2026-10-05).
+Depth: **build-ready**. 27 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -48,7 +48,8 @@ Depth: **build-ready**. 26 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09k | Case-collision guard | — | P0.09j | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
-| P0.11 | Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list | [ALEX] | Alex part: —; agent PR: P0.04, P0.07 | `phase-0.md` |
+| P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
+| P0.11 | Domains: registration, DNSSEC, CAA and parked records, HSTS plan, reserved-label list | [ALEX] | Alex part: —; agent PR: P0.04, P0.07, P0.11a | `phase-0.md` |
 | P0.12 | Offline key ceremony and the key inventory | [ALEX] [SEC] | ceremony: P0.10; agent PR: P0.04, P0.07 | `phase-0.md` |
 | P0.13 | Licence decision gates the first public commit (answered: AGPL-3.0 apps, MIT building blocks and lexicons; per-package licence files) | [STOP] (answered) | the question: —; ADR PR: P0.04, P0.07 | `phase-0.md` |
 | P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
@@ -77,6 +78,7 @@ flowchart TD
   P0_09j["P0.09j Fixture git ignores hook env"]
   P0_09k["P0.09k Case-collision guard"]
   P0_10["P0.10 Secret scanning"]
+  P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
   P0_12["P0.12 Offline key ceremony and the key"]
   P0_13["P0.13 Licence decision gates the first"]
@@ -105,7 +107,8 @@ flowchart TD
   P0_09j --> P0_09k
   P0_09i --> P0_09l
   P0_07 --> P0_10
-  P0_07 --> P0_11
+  P0_07 --> P0_11a
+  P0_11a --> P0_11
   P0_10 --> P0_12
   P0_07 --> P0_13
   P0_13 --> P0_13a
@@ -115,7 +118,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 56 steps: 42 from `phase-1.md`, 14 from `phase-2.md` (including the
+Depth: **build-ready**. 58 steps: 44 from `phase-1.md`, 14 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -136,8 +139,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.04 | HTTP server skeleton per entrypoint | — | P1.04k, P1.04q, P1.04c, P1.04m, P0.13a | `phase-1.md` |
 | P1.05e | Trusted proxy keys in the entrypoint test envs (split from P1.05, SE-6) | — | P1.04 | `phase-1.md` |
 | P1.05 | Trusted proxy: the client IP from one configured header only | [SEC] | P1.04, P1.05e | `phase-1.md` |
-| P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05 | `phase-1.md` |
-| P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.04 | `phase-1.md` |
+| P1.06e | Name the rate limiter's log events (split from P1.06, SE-6) | — | P1.05e | `phase-1.md` |
+| P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05, P1.06e | `phase-1.md` |
+| P1.06q | Route policy guard (split from P1.06p, SE-6) | — | P0.09c | `phase-1.md` |
+| P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.06q, P1.04 | `phase-1.md` |
 | P1.07 | CSRF gate | [SEC] | P1.04 | `phase-1.md` |
 | P1.08 | CSP builder and security headers | [SEC] | P1.04 | `phase-1.md` |
 | P1.08i | `inline-style` guard (split from P1.08, SE-6) | — | P1.08 | `phase-1.md` |
@@ -201,7 +206,9 @@ flowchart TD
   P1_04m["P1.04m route table options"]
   P1_05["P1.05 Trusted proxy"]
   P1_05e["P1.05e proxy keys in test envs"]
+  P1_06e["P1.06e rate limiter log events"]
   P1_06["P1.06 Body limits and the rate-limit"]
+  P1_06q["P1.06q route policy guard"]
   P1_06p["P1.06p Per-interface rate-limit tables"]
   P1_07["P1.07 CSRF gate"]
   P1_08["P1.08 CSP builder and security headers"]
@@ -329,6 +336,9 @@ flowchart TD
   P1_12 --> P1_12p
   P1_12p --> P1_29
   P1_06 --> P1_06p
+  P1_06q --> P1_06p
+  P1_05e --> P1_06e
+  P1_06e --> P1_06
   P2_01k --> P2_01
 ```
 
@@ -1013,7 +1023,7 @@ flowchart LR
 | P2.16a | Retired. The Arachnid Shield API spike moved to **P5.07b** with the real check (decision 23, global resolution 2). |
 | L.01 part A | Now **P1.33a** in Phase 1, before P1.34 (global resolution 8). L.01 keeps part B. |
 | L.02's severity definitions | Now **P0.09b**; L.02 keeps only the gate. |
-| P0.11b, P0.12b | Not used: P0.11–P0.13 are split inline into an Alex part and an agent PR part. |
+| P0.11b, P0.12b | Not used. P0.11's agent part that needs no input from Alex is P0.11a. The rest of P0.11, and P0.12 and P0.13, stay split inline. |
 | P0.09a | Retired (editor pass 2026-10-04 evening): the plan no longer carries old notes wholesale in Phase 0; each `.00` step ports what its phase needs. The vault and its guard are **P0.09d**. |
 | P1.36a | Not used: the severity step is P0.09b. |
 | P4.07a | Not used: the preserve verbs are **P3.16c**. |
