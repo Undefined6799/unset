@@ -1,0 +1,37 @@
+[
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Something does not work as docs/human/severity.md or the plan says it should."
+  },
+  {
+    "name": "sev-1",
+    "color": "b60205",
+    "description": "Severity 1 (docs/human/severity.md): blocks launch; Alex confirms."
+  },
+  {
+    "name": "sev-2",
+    "color": "d93f0b",
+    "description": "Severity 2 (docs/human/severity.md): blocks launch; Alex confirms."
+  },
+  {
+    "name": "sev-3",
+    "color": "fbca04",
+    "description": "Severity 3 (docs/human/severity.md): needs a triage decision before launch."
+  },
+  {
+    "name": "triaged",
+    "color": "0e8a16",
+    "description": "Has a triage comment in the fixed form from docs/human/severity.md."
+  },
+  {
+    "name": "upstream",
+    "color": "5319e7",
+    "description": "The cause is in Synapse, the PDS, Tap or Ozone, not in this repository."
+  },
+  {
+    "name": "security-review",
+    "color": "1d76db",
+    "description": "Touches auth, identity, crypto, egress or personal data: needs a security review."
+  }
+]

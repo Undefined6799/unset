@@ -1503,6 +1503,21 @@ Reuse: launch-gate L.02 draft definitions → USE as text. Provisional — for r
 Not in this step: the gate itself (L.02); the incident runbook (P1.37); private security advisories (P0.10 settings);
 the `large-pr` and `kind/*` labels (P0.09c appends them).
 Diagram: none.
+
+As built (2026-10-05):
+  - YAML parser: `yaml` 2.9.1 (eemeli/yaml, ISC, no dependencies), an exact devDependency. It is the parser P0.09d's
+    Reuse line names, and it is there for Phase 1's YAML parse tests (P1.29 and the workflow checks).
+  - The triage parser is `scripts/docs/triage.ts` (`parseTriage`). It reads the fields in their fixed order and stops
+    at the first order error. A downgrade needs `Mitigation test` and `Confirmed-by` at any severity, and a
+    `Confirmed-by` date must be a real day. Extra tests: `sev_3_needs_no_confirmation`, `sev_1_and_sev_2_need_alex`,
+    `downgrade_needs_test_and_alex`, `fixed_order_and_known_fields_only`, `confirmation_date_is_a_real_day`,
+    `surrounding_blank_lines_and_crlf_are_accepted`.
+  - `labels.json` entries also carry a `color`, so re-creating a label is reproducible. The labels were created through
+    the REST labels API (the same effect as `gh label create --force`). The repository's other labels (GitHub's
+    defaults, plus `accessibility`, `dependencies`, `github_actions` and `javascript` from Renovate and Dependabot)
+    were left alone.
+  - "definition line" is a one-line `input`, not a `textarea`.
+
 ---
 
 ### P0.09c — Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35)
