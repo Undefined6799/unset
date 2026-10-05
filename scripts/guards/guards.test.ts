@@ -1,7 +1,7 @@
 // Each guard against planted fixtures (fixtures/<rule>/{bad,good}/*.fixture). The first line of a fixture names the
 // path it is copied to and the number of findings expected there; the .fixture suffix keeps it out of the real scan.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -13,6 +13,7 @@ import type { Finding } from "./files.ts";
 import { withoutGitEnv } from "./git-env.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as routePolicy from "./route-policy.ts";
 import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 
@@ -159,6 +160,65 @@ describe("route-registration", () => {
 
   test("route_registration_exemptions_exact", () => {
     expect(routeRegistration.KIT_FILES).toEqual(["shared/http/server.ts", "shared/http/routes.ts"]);
+  });
+});
+
+/**
+ * route-policy fixtures are whole trees (fixtures/route-policy/{bad,good}/<case>/), because the guard reads a manifest
+ * and imports a limits.ts beside it. Every file ends in .fixture, which the copy strips, so nothing in the fixture tree
+ * is typechecked, linted or scanned as real code.
+ */
+function routePolicyRepo(kind: "bad" | "good", name: string): string {
+  const root = tempRepo({});
+  cpSync(join(FIXTURES, "route-policy", kind, name), root, { recursive: true });
+  const strip = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) strip(path);
+      else if (entry.name.endsWith(".fixture")) renameSync(path, path.slice(0, -".fixture".length));
+    }
+  };
+  strip(root);
+  return root;
+}
+
+const routePolicyFindings = async (kind: "bad" | "good", name: string) =>
+  (await routePolicy.scanAll(routePolicyRepo(kind, name))).map((f) => `${f.file}: ${f.text}`);
+
+describe("route-policy", () => {
+  const manifest = "interfaces/http/routes.manifest.json";
+  test.each([
+    ["route_without_rate_limit_fails", [`${manifest}: GET /feed: no rateLimit`]],
+    ["unknown_policy_name_fails", [`${manifest}: POST /login: "nope" is not a policy in interfaces/http/limits.ts`]],
+    ["exempt_on_app_route_fails", [`${manifest}: GET /profile: "exempt" outside static`]],
+    [
+      "non_static_route_without_limits_fails",
+      [
+        'interfaces/media/routes.manifest.json: GET /blob: names "default" but interfaces/media/limits.ts does not exist',
+      ],
+    ],
+    ["limits_without_policies_export_fails", ["interfaces/http/limits.ts: limits.ts has no `policies` export"]],
+    ["limits_import_throws_fails", ["interfaces/http/limits.ts: limits.ts could not be imported"]],
+    ["no_manifests_fails", ["interfaces: no routes.manifest.json found"]],
+  ])("%s", async (name, expected) => {
+    expect(await routePolicyFindings("bad", name)).toEqual(expected);
+  });
+
+  test.each(readdirSync(join(FIXTURES, "route-policy", "good")))("route_policy_good_%s", async (name) => {
+    expect(await routePolicyFindings("good", name)).toEqual([]);
+  });
+
+  test("route_policy_fixtures_all_run", () => {
+    expect(readdirSync(join(FIXTURES, "route-policy", "bad")).sort()).toEqual([
+      "exempt_on_app_route_fails",
+      "limits_import_throws_fails",
+      "limits_without_policies_export_fails",
+      "no_manifests_fails",
+      "non_static_route_without_limits_fails",
+      "route_without_rate_limit_fails",
+      "unknown_policy_name_fails",
+    ]);
+    expect(readdirSync(join(FIXTURES, "route-policy", "good")).length).toBeGreaterThan(0);
   });
 });
 

@@ -1206,22 +1206,29 @@ As built (Phase 1, relayed 2026-10-05 20:48Z, confirmed 20:51Z; no rule changes)
 ---
 
 ### P1.06q — Route policy guard (split from P1.06p, SE-6)
-Tags: —            Depends on: P0.09c            Plan: rule SE-6 (check paths alone; architecture ruling 2026-10-05 20:40Z)
-Where: one check PR. `scripts/guards/route-policy.ts` and its test, fixtures under `scripts/guards/fixtures/route-policy/`,
-  registered in `guards.test.ts` and `repo.test.ts` like `route-registration`. Lands before P1.06p.
+Tags: —            Depends on: P0.09c            Plan: rule SE-6 (check paths alone; architecture ruling 2026-10-05 20:40Z and 22:01Z)
+Where: one check PR. `scripts/guards/route-policy.ts`, its test `scripts/guards/route-policy.test.ts` beside it, fixtures
+  under `scripts/guards/fixtures/route-policy/`, registered in `guards.test.ts` only, like `route-registration`. Docs ride
+  along: the SE-4 row in `docs/human/architecture.md`. No product path, `package.json`, lockfile, `.github/` or
+  CODEOWNERS change, and no `guard-allow`. Independent of P1.06; lands before P1.06p.
 
 Why: `every_route_has_policy` is a repo scan with fixtures, so it is a check path and cannot ride with P1.06p's tables.
 
-Algorithm: for every `interfaces/*` with a `routes.manifest.json`, each route's `rateLimit` must be a policy name in that
-interface's `limits.ts`, or `"exempt"` on a `static` route. It never skips an interface without `limits.ts`: one whose
-manifest holds only `"exempt"` routes in group `static` (such as `/health`) needs none; any other route there fails,
-naming the route. If today's manifests hold only `/health`, the real tree passes; if not, Phase 1 reports it and P1.06q
-lands with P1.06p's tables in the order that keeps main green.
+Algorithm: for every folder directly under `interfaces/` with a `routes.manifest.json` (none found → fail, AB-4; an
+unparsable manifest → fail naming the file), each route needs a string `rateLimit` and a `group`. `"exempt"` is allowed
+only in group `static`; any other `rateLimit` must name a policy in that interface's own `limits.ts` (another
+interface's table or `shared/http` does not count). An interface without `limits.ts` is never skipped: it passes only if
+every route in it is `"exempt"` and `static`. `limits.ts` is read by importing it and taking the keys of its named export
+`policies`, a plain object, never by text or regex; an import that throws, a missing `policies` or a non-object fails,
+naming the file. A policy no route uses is a warning only. Manifest freshness stays with each `routes.manifest.test.ts`
+(F-27); table validity stays with P1.06p's `tables_valid` and `createServer`'s startup checks.
 
 Done when (tests):
-  - every_route_has_policy: passes on the real tree; fixtures with a route lacking `rateLimit`, naming `nope`, or
-    `"exempt"` on an `app` route → each fails naming the route.
-  - non_static_route_without_limits_fails: an interface with a non-static route and no `limits.ts` → fails.
+  - every_route_has_policy: passes on the real tree (six `/health`-only manifests today).
+  - Fixtures, each shown failing first and naming the route or file: `route_without_rate_limit_fails`,
+    `unknown_policy_name_fails` (names `nope`), `exempt_on_app_route_fails`, `non_static_route_without_limits_fails`,
+    `limits_without_policies_export_fails`, `limits_import_throws_fails`, `no_manifests_fails`. Two pass: an
+    exempt-only interface with no `limits.ts`, and an interface whose `limits.ts` policies every route uses.
 
 ---
 
@@ -1241,13 +1248,15 @@ Outputs:
     values P1.06 lists. `interfaces/api/limits.ts`: `default`, `search`. `interfaces/media/limits.ts` and
     `interfaces/admin/limits.ts`: `default`. Each built with `definePolicies`. A later interface (chat, review's HTTP
     side) adds its own file with its first route.
-  - `every_route_has_policy` (P1.06q) passes once the tables exist.
+  - Each `interfaces/<name>/limits.ts` exports `export const policies = definePolicies({...})`, the named export the
+    P1.06q guard imports.
 Algorithm: build each table; wire it in `compose.ts`; the test reads the manifests and tables.
 Edge cases and failures: a policy defined but used by no route → warning line only (left for the step that uses it).
 Threats: request rates on every route.
   - D A route shipped with no limit → required option, startup check and `every_route_has_policy`.
 Done when (tests):
   - tables_valid: each `limits.ts` passes `definePolicies`.
+  - every_route_has_policy: passes on the real tree with the new tables (guard from P1.06q).
 Reuse: none.
 Not in this step: the mechanism (P1.06); policies of later routes (their feature steps).
 Diagram: none.

@@ -1,0 +1,1 @@
+[{ "method": "GET", "path": "/health", "group": "static", "rateLimit": "exempt" }, { "method": "POST", "path": "/login", "group": "app", "rateLimit": "nope" }]
