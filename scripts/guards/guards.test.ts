@@ -221,14 +221,11 @@ describe("case-collision", () => {
   test("distinct_names_pass", () => expectCaseFixtures("good"));
   test("case_pair_dir_fails", () => expect(flagged(["a/x.ts", "A/x.ts"])).toEqual(["A", "a"]));
   test("case_pair_dir_different_files_fails", () => expect(flagged(["a/x.ts", "A/y.ts"])).toEqual(["A", "a"]));
-  test("case_file_against_dir_fails", () => expect(flagged(["foo", "Foo/bar.ts"])).toEqual(["Foo", "foo"]));
+  test("file_beside_same_name_folder_fails", () => expect(flagged(["docs", "Docs/x.md"])).toEqual(["Docs", "docs"]));
   test("case_pair_reported_once_at_top", () => expect(flagged(["a/b/x.ts", "A/B/X.ts"])).toEqual(["A", "a"]));
 
-  test("case_unicode_forms_fail", () => {
-    const files = (paths: string[]) => caseCollision.findCaseCollisions(paths).map((f) => f.file);
-    expect(files(["caf\u00e9.ts", "cafe\u0301.ts"])).toHaveLength(2); // NFC and NFD
-    expect(files(["\u03c3.ts", "\u03c2.ts"])).toHaveLength(2); // sigma and final sigma fold together
-  });
+  test("nfc_nfd_pair_fails", () => expect(flagged(["caf\u00e9.md", "cafe\u0301.md"])).toHaveLength(2));
+  test("final_sigma_pair_fails", () => expect(flagged(["\u03c3.ts", "\u03c2.ts"])).toHaveLength(2));
 
   test("case_pair_names_the_other_path", () => {
     expect(caseCollision.findCaseCollisions(["b.ts", "Foo.ts", "foo.ts"])).toEqual([
@@ -247,7 +244,7 @@ describe("case-collision", () => {
     ]);
   });
 
-  test("case_guard_fails_closed_outside_git", () => {
+  test("git_error_fails_closed", () => {
     expect(() => caseCollision.scanAll(tempRepo({ "a.ts": "" }))).toThrow(/not a git repository/);
   });
 

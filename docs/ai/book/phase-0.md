@@ -2103,7 +2103,7 @@ Done when (tests, `scripts/guards/git-env.test.ts`):
 
 ---
 
-### P0.09k — Case-collision guard (architecture ruling, 2026-10-05 13:28Z)
+### P0.09k — Case-collision guard (architecture rulings, 2026-10-05 13:28Z and 13:41Z)
 Tags: —            Depends on: P0.09j            Plan: guideline 34, "Folder responsibilities"
 Where: one check PR. New `scripts/guards/case-collision.ts`, its fixtures under
   `scripts/guards/fixtures/case-collision/`, registered in `guards.test.ts` and `repo.test.ts` like
@@ -2112,8 +2112,9 @@ Where: one check PR. New `scripts/guards/case-collision.ts`, its fixtures under
   `scripts/guards/case-collision.ts` and its two failing-pair tests, since `architecture_rule_table_matches_depcruise`
   accepts only a real file, test or dependency-cruiser rule name.
 
-Why: on a case-insensitive file system (macOS, Windows) two tracked paths that differ only in letter case check out as
-one file, and one silently replaces the other. P1.05 nearly shipped `clientIp.ts` beside `ClientIp.ts`.
+Rule (guideline bullet): no two tracked paths may collide on a case-insensitive or normalising file system, whether by
+letter case, by Unicode normalisation (NFC/NFD, final sigma), or as a file beside a folder of the same name. On macOS or
+Windows such a pair checks out as one entry, and one silently replaces or merges into the other. P1.05 nearly shipped `clientIp.ts` beside `ClientIp.ts`.
 
 Algorithm: take `git ls-files -z` (with `withoutGitEnv`, P0.09j) and add every folder above each path, so `a/x.ts`
 beside `A/y.ts` and a file `foo` beside a folder `Foo/` collide too. Group the entries by name after Unicode NFC and an
@@ -2130,10 +2131,13 @@ case-insensitive file system `Foo.ts` written after `foo.ts` overwrites it, and 
 Done when (tests, `scripts/guards/guards.test.ts` and `repo.test.ts`):
   - `case_pair_file_fails`: `foo.ts` plus `Foo.ts` fails, one finding on each.
   - `case_pair_dir_fails`: `a/x.ts` plus `A/x.ts` fails, reported once on `a` and `A`.
+  - `file_beside_same_name_folder_fails`: a file `docs` plus `Docs/x.md` fails.
+  - `nfc_nfd_pair_fails`: `café.md` in NFC plus the same name in NFD fails.
+  - `final_sigma_pair_fails`: names differing only by σ against ς fail.
   - `distinct_names_pass`: `foo.ts`, `food.ts` and `a/foo.ts` pass.
-  - `case_pair_dir_different_files_fails`, `case_file_against_dir_fails`, `case_pair_reported_once_at_top`,
-    `case_unicode_forms_fail`, `case_pair_names_the_other_path`.
-  - `case_guard_fails_closed_outside_git` and `case_guard_fails_closed_on_empty_index`.
+  - `git_error_fails_closed`: outside a git repository the guard throws; `case_guard_fails_closed_on_empty_index` covers
+    an empty index.
+  - Also `case_pair_dir_different_files_fails`, `case_pair_reported_once_at_top` and `case_pair_names_the_other_path`.
   - `repo_clean > case-collision`: the real tree passes.
 
 ---
