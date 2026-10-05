@@ -8,7 +8,6 @@ import { report } from "./files.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WORKSPACES = new Map([["@unset/core", "shared/core"]]);
-const FOLDERS = new Set(WORKSPACES.values());
 const LINKED = { packages: { "node_modules/@unset/core": { resolved: "shared/core", link: true } } };
 const FROM_REGISTRY = {
   packages: {
@@ -25,7 +24,7 @@ const lockfile = (entry: unknown, key = "node_modules/x") =>
   scanLockfile(
     "package-lock.json",
     JSON.stringify({ lockfileVersion: 3, packages: { "": {}, [key]: entry } }, null, 2),
-    FOLDERS,
+    WORKSPACES,
   );
 
 describe("manifest pins", () => {
@@ -113,16 +112,29 @@ describe("lockfile sources", () => {
       expect(lockfile(entry, key), JSON.stringify(entry)).toHaveLength(1);
     }
     expect(lockfile({ resolved: "shared/core", link: true }, key)).toEqual([]);
+    // A link may not point a trusted name at another workspace's folder (architecture, 2026-10-05).
+    const two = new Map([...WORKSPACES, ["@unset/other", "shared/other"]]);
+    const linkAs = (name: string, folder: string) =>
+      scanLockfile(
+        "package-lock.json",
+        JSON.stringify({
+          lockfileVersion: 3,
+          packages: { [`node_modules/${name}`]: { resolved: folder, link: true } },
+        }),
+        two,
+      );
+    expect(linkAs("@unset/core", "shared/other")).toHaveLength(1);
+    expect(linkAs("@unset/other", "shared/other")).toEqual([]);
   });
 
   test("lockfile_rejects_malformed", () => {
     expect(lockfile(null)).toHaveLength(1);
-    expect(scanLockfile("package-lock.json", JSON.stringify({ lockfileVersion: 1 }), FOLDERS)).toHaveLength(1);
+    expect(scanLockfile("package-lock.json", JSON.stringify({ lockfileVersion: 1 }), WORKSPACES)).toHaveLength(1);
   });
 
   test("lockfile_accepts_registry_and_links", () => {
     expect(lockfile({ resolved: "https://registry.npmjs.org/x/-/x-1.0.0.tgz", integrity })).toEqual([]);
-    expect(lockfile({ resolved: "shared/core", link: true })).toEqual([]);
+    expect(lockfile({ resolved: "shared/core", link: true }, "node_modules/@unset/core")).toEqual([]);
   });
 });
 

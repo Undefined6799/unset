@@ -179,7 +179,7 @@ These come from plan §2, §6 and §6.1. A step that would break one is wrong ev
 11. Tests are Vitest; the "discovered equals executed" guard stays green. Unit tests sit next to the file they test
     (`*.test.ts`); integration tests go in `tests/integration/`, end-to-end tests (Playwright) in `tests/e2e/`
     (decision 34, guideline §5).
-12. Matrix work follows the repository's chat rule: read Element/cinny and the spec first, cite them.
+12. Matrix work follows the repository's chat rule: read Element/cinny and the spec first, cite them (DO-3).
 13. The decision-34 layout and its boundary rules hold (plan §7, guideline §1, P0.05): `domains/` never import
     `infrastructure/`, `interfaces/` or `apps/`; `apps/` import only `shared/`, and only the interface serving an app
     imports its render entry; interfaces never import each other; `pds-admin` and `chat-admin` import only their own
@@ -221,7 +221,9 @@ Every step is designed so its code follows these rules, and its tests or CI guar
 6. Each exported function has a short doc comment: purpose, inputs, output, the errors it returns. It matches the
    interface shape written in its step.
 7. Comments explain **why**, not what, and cite their source: the plan section, the spec URL, the reference
-   client file:line, or the step id (`// P1.07: exact Origin match, never by suffix (plan §2 rule 14)`).
+   client file:line, or the step id (`// P1.07: exact Origin match, never by suffix (plan §2 rule 14)`). Before
+   relying on how a library, API, tool, protocol or service behaves, read its current official documentation for
+   the pinned version and cite it; until a test proves it, the behaviour is unverified (DO-3).
 
 **Errors**
 8. Expected failures are returned as typed results (`{ ok: false, error: "state_mismatch" }`) with a code from the
