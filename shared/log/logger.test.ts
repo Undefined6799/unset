@@ -115,6 +115,14 @@ describe("logger", () => {
     expect(records().map((r) => r.event)).toEqual(["proxy.untrusted_peer"]);
   });
 
+  test("logger_rate_limit_events", () => {
+    // P1.06's rate limiter logs these when it denies by failing closed: no session for a per-DID limit, or an error.
+    const { log, records } = capture();
+    log.error("ratelimit.no_session", { route: "/follow" });
+    log.error("ratelimit.error", { reason: "bucket" });
+    expect(records().map((r) => r.event)).toEqual(["ratelimit.no_session", "ratelimit.error"]);
+  });
+
   test("logger_no_stack_message_in_prod", () => {
     const { log, lines } = capture("prod");
     log.logError(new Error("secret value"));

@@ -19,6 +19,9 @@ const EVENTS = [
   "http.drain",
   // P1.05, the trusted proxy: a header-mode request that did not come from the edge (logged without its address).
   "proxy.untrusted_peer",
+  // P1.06, the rate limiter: a session-only limit reached without a session, and a limiter error (both deny).
+  "ratelimit.no_session",
+  "ratelimit.error",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
