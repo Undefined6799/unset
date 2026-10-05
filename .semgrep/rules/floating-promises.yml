@@ -20,7 +20,10 @@ rules:
         - "scripts/"
         - "tests/"
         - "**/*.test.ts"
-        - ".semgrep/rules/fixtures/"
+        - "/.semgrep/rules/fixtures/"
+    # Semgrep does not enforce the async modifier in an arrow-function pattern (semgrep 1.178.0: the pattern
+    # `const $F = async (...) => { ... }` also matches a plain arrow), so arrows and forEach callbacks are
+    # matched by their source text instead. Function declarations do enforce it.
     pattern-either:
       - patterns:
           - pattern-either:
@@ -36,12 +39,6 @@ rules:
               - pattern-inside: |
                   ...
                   export async function $F(...) { ... }
-              - pattern-inside: |
-                  const $F = async (...) => $BODY;
-                  ...
-              - pattern-inside: |
-                  const $F = async (...) => { ... };
-                  ...
           - pattern: $F(...);
           - pattern-not: await $F(...);
           - pattern-not: void $F(...);
@@ -50,9 +47,29 @@ rules:
           - pattern-not-inside: const $V = $F(...);
           - pattern-not-inside: let $V = $F(...);
       - patterns:
+          - pattern-inside: |
+              const $F = $INIT;
+              ...
+          - metavariable-regex:
+              metavariable: $INIT
+              regex: ^async\b
+          - pattern: $F(...);
+          - pattern-not: await $F(...);
+          - pattern-not: void $F(...);
+          - pattern-not: return $F(...);
+          - pattern-not-inside: const $V = $F(...);
+          - pattern-not-inside: let $V = $F(...);
+      - patterns:
           - pattern: $P.then($A);
           - pattern-not: await $P.then($A);
           - pattern-not: void $P.then($A);
           - pattern-not: return $P.then($A);
-      - pattern: $P.forEach(async (...) => $BODY)
-      - pattern: $P.forEach(async function (...) { ... })
+          # A chain that ends in .catch handles the rejection; a bound result is kept.
+          - pattern-not-inside: $X.catch(...)
+          - pattern-not-inside: const $V = $E;
+          - pattern-not-inside: let $V = $E;
+      - patterns:
+          - pattern: $P.forEach($CB)
+          - metavariable-regex:
+              metavariable: $CB
+              regex: ^async\b

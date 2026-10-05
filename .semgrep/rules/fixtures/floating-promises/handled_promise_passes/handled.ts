@@ -18,3 +18,8 @@ p.then(f, g);
 p.catch(h);
 p.then(f).catch(h);
 export const kept = doAsync();
+export const answer = Promise.resolve()
+  .then(() => doAsync())
+  .catch(() => {
+    throw new Error("failed");
+  });

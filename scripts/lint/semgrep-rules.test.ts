@@ -11,7 +11,7 @@ const RULES_DIR = join(ROOT, ".semgrep", "rules");
 const CI = readFileSync(join(ROOT, ".github", "workflows", "ci.yml"), "utf8");
 const ruleFiles = readdirSync(RULES_DIR).filter((f) => f.endsWith(".yml"));
 const text = (file: string): string => readFileSync(join(RULES_DIR, file), "utf8");
-const EXCLUDES = ["scripts/", "tests/", "**/*.test.ts", ".semgrep/rules/fixtures/"];
+const EXCLUDES = ["scripts/", "tests/", "**/*.test.ts", "/.semgrep/rules/fixtures/"];
 
 /** The text of each `- id:` entry in a rule file, keyed by id. */
 function rulesIn(yaml: string): Map<string, string> {

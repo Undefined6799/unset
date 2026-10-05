@@ -14,7 +14,7 @@ rules:
         - "scripts/"
         - "tests/"
         - "**/*.test.ts"
-        - ".semgrep/rules/fixtures/"
+        - "/.semgrep/rules/fixtures/"
     pattern-either:
       - patterns:
           - pattern-either:
