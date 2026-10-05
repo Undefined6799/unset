@@ -906,8 +906,8 @@ Diagram: none.
 
 ### P1.05e — Trusted proxy keys in the entrypoint test envs (split from P1.05, SE-6)
 Tags: —            Depends on: P1.04            Plan: as P1.05; §5.7; §9 (rule SE-6)
-Where: the six `interfaces/{http,api,media,admin,indexer,review}/routes.manifest.test.ts`, in their fixed envs only
-  (product paths)
+Where: the six `interfaces/{http,api,media,admin,indexer,review}/routes.manifest.test.ts`, in their fixed envs only;
+  one line each in `shared/log/logger.ts` (`EVENTS`) and `logger.test.ts` (all product paths)
 
 Why a separate step (relayed 2026-10-05 13:09Z): P1.05 makes `TRUSTED_PROXY_MODE` required with no default, and the six
 manifest tests load the kit config from a fixed env, so the key added in `shared/http` alone would turn them red. The
@@ -918,8 +918,14 @@ Change (plan §5.7): `http`, `api`, `media`, `indexer` and `review` get `TRUSTED
 `TRUSTED_PROXY_HEADER` and test `TRUSTED_PROXY_CIDRS` (never `0.0.0.0/0` or `::/0`, which P1.05 rejects); `admin` gets
 `TRUSTED_PROXY_MODE=socket`. Each env spells the keys as its existing kit keys.
 
+Log event (13:12Z, the P1.04l pattern): P1.05 logs `proxy.untrusted_peer` (step 3a: once per minute, no address), and
+the typed `EVENTS` allowlist in `shared/log/logger.ts` must list it or P1.05 will not typecheck. `shared/log` is
+product, not trusted base, so P1.05e adds the event to `EVENTS` and one line to `logger.test.ts` that logs it as a
+known event. Neither line changes anything on main.
+
 Done when (tests): the six manifest tests stay green on main with the new keys; P1.05's branch, rebased on P1.05e,
-keeps them green.
+keeps them green; `logger.test.ts` logs `proxy.untrusted_peer` as a known event.
+Opening order: P1.05e first; P1.05 opens only after P1.05e merges, so it reaches Alex green.
 Diagram: none.
 
 ---
