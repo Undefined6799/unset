@@ -10,6 +10,12 @@ architecture optimises for, in order, and which rules a machine checks are in
 changing it. Before touching an area, read its `importance: high` notes in `docs/ai` (see
 [`docs/ai/README.md`](docs/ai/README.md)); capture durable learnings there when done.
 
+**Work like a professional: current docs, not memory.** Before relying on how any library, API, tool, protocol or
+service behaves, read its current official documentation (or its source) for the version we pin, using WebFetch or
+node_modules, and cite what you read (URL or path, plus version) in the comment, commit, PR or reply. When the docs
+and your memory disagree, the docs win. When the docs are silent or unreachable, say the behaviour is unverified until
+a test proves it. (Rule DO-3.)
+
 ## Engineering principles (Alex, 2026-10-03/04; read before designing or changing code)
 @docs/human/engineering/architecture-instructions.md
 @docs/human/engineering/engineering-practices-addendum.md
@@ -17,7 +23,7 @@ changing it. Before touching an area, read its `importance: high` notes in `docs
 @docs/human/engineering/architecture-and-development-guideline.md
 @docs/human/engineering/engineering-rules-top-15.md
 
-The Top 15 above is an excerpt; all 48 rules with their sources, checks and triggers are in
+The Top 15 above is an excerpt; all 49 rules with their sources, checks and triggers are in
 [`docs/human/engineering/engineering-rules.md`](docs/human/engineering/engineering-rules.md) (decision 35). Read the
 rule for the area you touch. Where a rule and the plan disagree, the plan wins; on structure, the architecture
 guideline wins.
