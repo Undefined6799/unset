@@ -1,0 +1,2 @@
+// "nope" is defined here, in another interface's table, which does not count for interfaces/http.
+export const policies = { default: [], search: [], nope: [] };
