@@ -1534,7 +1534,7 @@ As built (2026-10-05):
 ---
 
 ### P0.09c — Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35)
-Tags: [ALEX] (tail: required check) [SEC]            Depends on: P0.07, P0.08, P0.09, P0.09b, P0.03 (the trusted-base section)           Plan: §8 Phase 0 CI list (commit-message and PR-title check, PR size guard, PR template heading check; decision 35, rules DL-1, DL-3, DL-6, D2, D3); §9 trusted base (rule SE-6); §6.1 Data access (rule PF-1)
+Tags: [ALEX] (tail: required check) [SEC]            Depends on: P0.07, P0.08, P0.09, P0.09b, P0.09e, P0.03 (the trusted-base section)           Plan: §8 Phase 0 CI list (commit-message and PR-title check, PR size guard, PR template heading check; decision 35, rules DL-1, DL-3, DL-6, D2, D3); §9 trusted base (rule SE-6); §6.1 Data access (rule PF-1)
 Where: new `scripts/guards/commit-msg.ts`, `scripts/guards/pr-size.ts`, `scripts/guards/pr-template.ts`,
   `scripts/guards/trusted-base.ts`, `scripts/guards/grant-parse.ts`, `scripts/guards/perf-evidence.ts`,
   `scripts/guards/change-shape.test.ts`, `scripts/guards/grant-parse.test.ts` + SQL and JSON fixtures, new `.githooks/commit-msg`; `.github/workflows/ci.yml` (new job `pr-shape`);
@@ -1806,6 +1806,32 @@ Not in this step: the red-first CI job for bug-fix PRs (rule TE-5, P2, when bug-
 section requirement when `expect(` lines are removed (rule DL-1; lands with its trigger, the first loosened assertion);
 the review-queue cap (D4 is a CLAUDE.md instruction, P0.09).
 Diagram: none.
+
+---
+
+### P0.09e — Grant classifier for the trusted base (split from P0.09c, architecture ruling 2026-10-05)
+Tags: [SEC]            Depends on: P0.03 (the trusted-base section)            Plan: §9 trusted base (rule SE-6)
+Split out of P0.09c so each PR stays near DL-1's size: `classifyGrantChanges` and its `grant_parse_*` tests exactly as
+P0.09c's Outputs (rules 1 to 6) and "Done when" specify them; P0.09c keeps everything else and depends on this step.
+The classifier has no caller until P0.09c's `change-shape.ts`; its tests are its only importer.
+As built (2026-10-05): three files, each one job: `scripts/guards/grant-sql.ts` (tokenizer, statements, the objects a
+  migration creates), `grant-json.ts` (rule 6, the two JSON files) and `grant-parse.ts` (rules 3 to 5 and
+  `classifyGrantChanges`). Its cases are inline SQL and JSON in `grant-parse.test.ts`, not fixture files.
+  - The input also takes `trustedFunctions` (the CODEOWNERS `# trusted functions:` line), so the classifier stays pure.
+  - Fail-closed choices beyond the spec, from the adversarial review (`grant_parse_*` tests named after each):
+    - a new migration with a byte Postgres reads differently from JavaScript (anything but printable ASCII, tab, LF
+      and CRLF: a lone CR ends a `--` comment, U+00A0 is an identifier byte) or a `U&` escape is `unclassified` as a
+      whole;
+    - an unqualified name is never resolved (search_path is unknown), so whatever depends on it is trusted;
+    - `SET LOCAL` is neutral only for `role`, `lock_timeout` and `statement_timeout`; `search_path`, its alias
+      `SCHEMA`, and `standard_conforming_strings` change how the SQL is read;
+    - `CREATE … IF NOT EXISTS` and `ADD COLUMN IF NOT EXISTS` never count as created (they may be no-ops on an
+      object the parser did not see);
+    - a column-list grant with one privilege lacking a column list (`SELECT (c), UPDATE`) is table-wide;
+    - `CREATE SCHEMA` is neutral only bare; `ALTER FUNCTION … RENAME | SET SCHEMA` is `unclassified`;
+    - matrix and registry findings always name the fixed paths, so a decoy file of the same name cannot take them.
+  - Any file under `migrations/` is read as SQL, a README included (it comes out `unclassified`).
+  - `no_runtime_caller_yet`: only tests import `grant-parse.ts` until P0.09c flips it.
 
 ---
 
