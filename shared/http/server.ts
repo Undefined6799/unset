@@ -14,6 +14,7 @@ import { errorResponse, groupForPath } from "./errors.ts";
 import { createHealth, type Readiness } from "./health.ts";
 import { compileRoute, defineRoute, type Route, type RouteGroup } from "./routes.ts";
 import { type CloseHook, drain, exitOnSignals } from "./shutdown.ts";
+import { createClientIpResolver } from "./trustedProxy.ts";
 
 /** An interface's rate-limit policies by name (P1.06p fills the values); routes name one of its keys. */
 export type PolicyTable = Readonly<Record<string, unknown>>;
@@ -36,6 +37,10 @@ export type ServerOptions = {
 /** Node's HTTP/1.1 server, which `createAdaptorServer` returns when given no other `createServer`. */
 type NodeServer = Extract<ServerType, { closeIdleConnections: unknown }>;
 type Matched = { route: Route; params: Record<string, string> };
+/** The bindings `@hono/node-server` 2.1.1 passes to `fetch`: `{ incoming, outgoing }` (its dist/conninfo.mjs). */
+type NodeBindings = { incoming?: { socket?: { remoteAddress?: string } } };
+/** `proxy.untrusted_peer` is logged at most once per this window, so a misrouted flood cannot flood the log. */
+const UNTRUSTED_PEER_LOG_MS = 60_000;
 
 const LOGGED_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
@@ -55,7 +60,7 @@ function checkRoutes(routes: readonly Route[], policies: PolicyTable): void {
 function middlewareOf(route: Pick<Route, "path" | "method">): string[] {
   return [
     "requestId",
-    ...(route.path === "/health" ? [] : ["hostCheck"]),
+    ...(route.path === "/health" ? [] : ["hostCheck", "trustedProxy"]),
     "methodCheck",
     ...(route.method === "POST" ? ["contentTypeCheck"] : []),
   ];
@@ -100,6 +105,13 @@ export function createServer(options: ServerOptions) {
   const routes = [healthRoute, ...options.routes];
   checkRoutes(routes, options.policies);
   const compiled = routes.map(compileRoute);
+
+  let untrustedLoggedAt = Number.NEGATIVE_INFINITY;
+  const clientIpOf = createClientIpResolver(config, () => {
+    if (now() - untrustedLoggedAt < UNTRUSTED_PEER_LOG_MS) return;
+    untrustedLoggedAt = now();
+    log.warn("proxy.untrusted_peer", {});
+  });
 
   const errorGroup = (path: string) => options.errorGroup ?? groupForPath(path);
   const fail = (code: ErrorCode, group: RouteGroup, headers?: Record<string, string>) =>
@@ -149,9 +161,11 @@ export function createServer(options: ServerOptions) {
   }
 
   /** Step 1 and 6: the handler under the route's deadline; `AppError` by code, anything else as `internal.error`. */
-  async function run({ route, params }: Matched, request: Request, reqId: string): Promise<Response> {
+  async function run({ route, params }: Matched, request: Request, reqId: string, peer?: string): Promise<Response> {
     const deadline = AbortSignal.timeout(route.deadlineMs ?? config.REQUEST_DEADLINE_MS);
-    const result = Promise.resolve().then(() => route.handler({ request, params, deadline, reqId }));
+    // Step 2b, trustedProxy: every route but /health, which needs no client identity (architecture ruling 2026-10-05).
+    const clientIp = route.path === "/health" ? null : clientIpOf(request.headers, peer);
+    const result = Promise.resolve().then(() => route.handler({ request, clientIp, params, deadline, reqId }));
     const timedOut = new Promise<"deadline">((resolve) => {
       deadline.addEventListener("abort", () => resolve("deadline"), { once: true });
     });
@@ -171,12 +185,12 @@ export function createServer(options: ServerOptions) {
     }
   }
 
-  async function handle(request: Request): Promise<Response> {
+  async function handle(request: Request, peer: string | undefined): Promise<Response> {
     const started = now();
     const reqId = randomUUID();
     const checked = check(request);
     const matched = checked instanceof Response ? undefined : checked;
-    let response = matched ? await run(matched, request, reqId) : (checked as Response);
+    let response = matched ? await run(matched, request, reqId, peer) : (checked as Response);
     if (health.state === "draining") {
       response = new Response(response.body, response);
       response.headers.set("connection", "close");
@@ -192,8 +206,8 @@ export function createServer(options: ServerOptions) {
   }
 
   // Hono answers HEAD by running the GET path and dropping the body; every other method reaches `handle`.
-  const app = new Hono();
-  app.all("*", (c) => handle(c.req.raw));
+  const app = new Hono<{ Bindings: NodeBindings }>();
+  app.all("*", (c) => handle(c.req.raw, c.env?.incoming?.socket?.remoteAddress));
 
   let inFlight = 0;
   let server: NodeServer | undefined;
@@ -213,8 +227,9 @@ export function createServer(options: ServerOptions) {
   };
 
   return {
-    /** Serves one request in-process (tests); the same checks run as for a socket request. */
-    request: (request: Request): Promise<Response> => Promise.resolve(app.fetch(request)),
+    /** Serves one request in-process (tests) from socket peer `peer`; the same checks run as for a socket request. */
+    request: (request: Request, peer?: string): Promise<Response> =>
+      Promise.resolve(app.fetch(request, peer === undefined ? {} : { incoming: { socket: { remoteAddress: peer } } })),
     routeTable: (): RouteInfo[] =>
       routes.map(({ handler: _handler, ...options }) => ({ ...options, middleware: middlewareOf(options) })),
     /** Listens on LISTEN_PORT and drains on SIGTERM or SIGINT; resolves with the bound port. Exits 1 if it cannot. */

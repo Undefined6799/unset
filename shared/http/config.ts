@@ -1,6 +1,7 @@
 // The server kit's config fragment (P1.04k). Each entrypoint's schema spreads `httpKitConfig`, so a kit key never
 // arrives without its cross-field rule, and later kit steps (P1.05–P1.09) add their keys here, never in an interface.
-import { int, list, origin, str, withRule } from "@unset/shared-config";
+import { int, list, oneOf, origin, str, withRule } from "@unset/shared-config";
+import { parseCidr } from "./trustedProxy.ts";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 /** An exact lowercase host, or a leading-dot suffix entry (`.0x40.me`) matching exactly one label below it. */
@@ -27,6 +28,22 @@ export const httpKitConfig = {
   ),
   SHUTDOWN_GRACE_MS: int({ min: 1000, max: 30000, default: 10000 }),
   REQUEST_DEADLINE_MS: int({ min: 1000, max: 60000, default: 30000 }),
+  /** Where the client address comes from (P1.05): the edge's header, or the socket where there is no edge (admin). */
+  TRUSTED_PROXY_MODE: oneOf(["header", "socket"]),
+  /** The one header the edge sets, lowercase (`x-forwarded-for`). Required in header mode. */
+  TRUSTED_PROXY_HEADER: withRule(
+    str({ pattern: /[a-z0-9-]+/, default: "" }),
+    (config) => config.TRUSTED_PROXY_MODE !== "header" || config.TRUSTED_PROXY_HEADER !== "",
+  ),
+  /** The edge's internal addresses as CIDRs. Required in header mode; a zero-length prefix (`0.0.0.0/0`) is invalid. */
+  TRUSTED_PROXY_CIDRS: withRule(list(str(), { default: [] }), (config) => {
+    const cidrs = config.TRUSTED_PROXY_CIDRS as readonly string[];
+    return (
+      cidrs.every((c) => parseCidr(c) !== undefined) && (config.TRUSTED_PROXY_MODE !== "header" || cidrs.length > 0)
+    );
+  }),
+  /** How many trusted proxies append to the header; the hop count is explicit, never inferred from the CIDRs. */
+  TRUSTED_PROXY_HOPS: int({ min: 1, max: 3, default: 1 }),
 };
 
 /** What the kit reads from an entrypoint's loaded config: the common keys (P1.02) and its own fragment. */
@@ -39,4 +56,8 @@ export type HttpKitConfig = Readonly<{
   HTTP_ALLOWED_HOSTS: readonly string[];
   SHUTDOWN_GRACE_MS: number;
   REQUEST_DEADLINE_MS: number;
+  TRUSTED_PROXY_MODE: "header" | "socket";
+  TRUSTED_PROXY_HEADER: string;
+  TRUSTED_PROXY_CIDRS: readonly string[];
+  TRUSTED_PROXY_HOPS: number;
 }>;

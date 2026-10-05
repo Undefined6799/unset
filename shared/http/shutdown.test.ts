@@ -30,7 +30,8 @@ async function serve(
     const server = createServer({
       config: { UNSET_ENV: "test", UNSET_SERVICE: "http", UNSET_COMMIT: "${"c".repeat(40)}", LISTEN_PORT: ${free},
         PUBLIC_ORIGIN: "http://127.0.0.1:${free}", HTTP_ALLOWED_HOSTS: ["127.0.0.1"], SHUTDOWN_GRACE_MS: ${graceMs},
-        REQUEST_DEADLINE_MS: 30000 },
+        REQUEST_DEADLINE_MS: 30000, TRUSTED_PROXY_MODE: "socket", TRUSTED_PROXY_HEADER: "",
+        TRUSTED_PROXY_CIDRS: [], TRUSTED_PROXY_HOPS: 1 },
       routes: [
         route("/slow", () => new Promise((resolve) => setTimeout(() => resolve(new Response("done")), 300))),
         route("/never", () => new Promise(() => {})),

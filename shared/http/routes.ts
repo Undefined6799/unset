@@ -1,5 +1,6 @@
 // Route definitions (P1.04k). `defineRoute` is the only way to register a route: it checks every option at startup,
 // so a route can never run without a rate-limit policy or a request deadline.
+import type { ClientIp } from "./clientIp.ts";
 
 export type RouteGroup = "app" | "profile" | "static" | "media" | "admin" | "api";
 export type RouteMethod = "GET" | "HEAD" | "POST";
@@ -7,6 +8,8 @@ export type RouteMethod = "GET" | "HEAD" | "POST";
 /** What a handler sees: the request, the decoded path parameters, the request deadline and the request id. */
 export type RouteContext = Readonly<{
   request: Request;
+  /** The client's address from the trusted proxy (P1.05), or null when unknown; it prints as `[ip]`. */
+  clientIp: ClientIp | null;
   params: Readonly<Record<string, string>>;
   /** Fires at the route's deadline. Pass it as the `signal` of every outbound call. */
   deadline: AbortSignal;
