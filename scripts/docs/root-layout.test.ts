@@ -1,4 +1,4 @@
-// P0.09g: the repository root holds only what must live there. Eight config and check files moved to .github/ and
+// P0.09g: the repository root holds only what must live there. Seven config and check files moved to .github/ and
 // scripts/ (Alex, "Move the nine", 2026-10-05); nothing that runs or documents the repository may name the old place.
 // .semgrepignore stays: Semgrep 1.178.0 scanned 211 files with it and 208 with the same --exclude flags, because
 // without an ignore file Semgrep applies its own default ignores (it dropped scripts/test/).
@@ -19,31 +19,31 @@ const MOVED = [
   ".semgrep",
   ".githooks",
 ];
-/** An old root path: one of MOVED not preceded by a path segment (".github/renovate.json" is the new place). */
-const OLD_PATH = new RegExp(`(?<![\\w./-])(${MOVED.map((p) => p.replaceAll(".", "\\.")).join("|")})(?![\\w-])`);
+const NAME = new RegExp(`(?<![\\w-])(${MOVED.map((p) => p.replaceAll(".", "\\.")).join("|")})(?![\\w-])`, "g");
+/** Where the moved files live now: a name right after one of these is the new path, anywhere else the old one. */
+const NEW_HOMES = [".github/", "scripts/lint/"];
 
-/** Tracked files only: build output under dist/ is not the repository. */
-const filesUnder = (dir: string): string[] =>
-  execFileSync("git", ["ls-files", "-z", "--", dir], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean);
+/** Whether `line` names a moved file at its old root place (`./renovate.json`, `$PWD/.gitleaks.toml` included). */
+const namesOldPath = (line: string): boolean =>
+  [...line.matchAll(NAME)].some((m) => !NEW_HOMES.some((home) => line.slice(0, m.index).endsWith(home)));
 
 /**
- * What runs or documents the repository. Left out: ADRs (never edited once accepted), the AI working notes and book
- * (history), engineering-rules.md (a byte copy the architecture thread owns; its text follows in that thread's next
- * re-copy), and test files, whose example paths are data and which fail on their own if they read a moved file.
+ * Every tracked file that runs or documents the repository. Left out: ADRs (never edited once accepted), the AI working
+ * notes and book (history), engineering-rules.md (a byte copy the architecture thread owns; its text follows in that
+ * thread's next re-copy), the lockfile, fixtures, and test files, whose example paths are data and which fail on their
+ * own if they read a moved file.
  */
 function referencing(): string[] {
-  return [
-    "package.json",
-    "README.md",
-    "CLAUDE.md",
-    "AGENTS.md",
-    ".semgrepignore",
-    ...filesUnder(".github"),
-    ...filesUnder("scripts").filter((f) => !f.endsWith(".test.ts") && !f.includes("/fixtures/")),
-    ...filesUnder("docs/human").filter(
-      (f) => !f.startsWith("docs/human/decisions/") && f !== "docs/human/engineering/engineering-rules.md",
-    ),
-  ];
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: ROOT, encoding: "utf8" }).split("\0").filter(Boolean);
+  return tracked.filter(
+    (f) =>
+      !f.startsWith("docs/ai/") &&
+      !f.startsWith("docs/human/decisions/") &&
+      f !== "docs/human/engineering/engineering-rules.md" &&
+      f !== "package-lock.json" &&
+      !f.includes("/fixtures/") &&
+      !f.endsWith(".test.ts"),
+  );
 }
 
 test("moved_files_left_the_root", () => {
@@ -57,19 +57,32 @@ test("no_old_root_paths_referenced", () => {
       .split("\n")
       .map((line, i) => ({ line, at: `${file}:${i + 1}` }))
       // The base's "# checks:" entries stay until this step merges: the guard reads base and head together.
-      .filter(({ line }) => !line.startsWith("# checks:") && OLD_PATH.test(line))
+      .filter(({ line }) => !line.startsWith("# checks:") && namesOldPath(line))
       .map(({ at, line }) => `${at}: ${line.trim()}`),
   );
   expect(hits).toEqual([]);
 });
 
 test("old_path_pattern_tells_old_from_new", () => {
-  expect(OLD_PATH.test("npx jscpd --config .jscpd.json .")).toBe(true);
-  expect(OLD_PATH.test("git config core.hooksPath .githooks")).toBe(true);
-  expect(OLD_PATH.test("see SECURITY.md")).toBe(true);
-  expect(OLD_PATH.test("npx jscpd --config .github/.jscpd.json .")).toBe(false);
-  expect(OLD_PATH.test("depcruise --config scripts/lint/.dependency-cruiser.cjs .")).toBe(false);
-  expect(OLD_PATH.test("[policy](../../.github/SECURITY.md)")).toBe(false);
+  for (const old of [
+    "npx jscpd --config .jscpd.json .",
+    "git config core.hooksPath .githooks",
+    "see SECURITY.md",
+    "gitleaks dir --config ./.gitleaks.toml .",
+    'docker run -v "$PWD:/repo" x $PWD/renovate.json',
+    'exec "$(dirname "$0")/../.githooks/commit-msg"',
+    "[policy](../../SECURITY.md)",
+    "ok .github/.jscpd.json, but not .jscpd.json",
+  ])
+    expect(namesOldPath(old), old).toBe(true);
+  for (const moved of [
+    "npx jscpd --config .github/.jscpd.json .",
+    "depcruise --config scripts/lint/.dependency-cruiser.cjs .",
+    "[policy](../../.github/SECURITY.md)",
+    "semgrep scan --config scripts/lint/semgrep/ and .semgrepignore",
+    "check_id scripts.lint.semgrep.computed-import",
+  ])
+    expect(namesOldPath(moved), moved).toBe(false);
 });
 
 test("hooks_path_documented", () => {
@@ -85,7 +98,9 @@ test("tools_read_their_moved_config", () => {
   expect(ci).toContain("--config .github/.jscpd.json");
   // Named, so a missing file fails the validator instead of it finding nothing to check (Renovate 44.115.13
   // dist/config-validator.js validates the named files, else whichever default names exist).
-  expect(ci).toMatch(/renovate-config-validator "\$RENOVATE_IMAGE"\n\s+--strict \.github\/renovate\.json/);
+  // --no-global: a named file is otherwise validated as global self-hosted config, which allows options a repository
+  // config may not set (same file, `.option("--no-global", ...)`).
+  expect(ci).toMatch(/renovate-config-validator "\$RENOVATE_IMAGE"\n\s+--strict --no-global \.github\/renovate\.json/);
   expect(JSON.parse(read("package.json")).scripts.lint).toContain("--config scripts/lint/.dependency-cruiser.cjs");
   // gitleaks 8.30.1 falls back to its default rules, silently, when no --config is given and the root has none.
   expect(read("scripts/githooks/pre-commit")).toContain("--config .github/.gitleaks.toml");

@@ -8,7 +8,8 @@
     "**/coverage/**",
     "**/.worktrees/**",
     "**/graphify-out/**",
-    "**/scripts/guards/fixtures/**"
+    "**/scripts/guards/fixtures/**",
+    "**/scripts/lint/semgrep/fixtures/**"
   ],
   "reporters": ["markdown"],
   "output": "jscpd-report",

@@ -17,6 +17,6 @@ projects: report issues in them to those projects, and tell us too if they affec
 
 ## How we build
 
-Security rules every change follows are in [`CLAUDE.md`](CLAUDE.md) and
-[`docs/ai/PLAN.md`](docs/ai/PLAN.md) §2. Changes to auth, identity, crypto, egress or personal
+Security rules every change follows are in [`CLAUDE.md`](../CLAUDE.md) and
+[`docs/ai/PLAN.md`](../docs/ai/PLAN.md) §2. Changes to auth, identity, crypto, egress or personal
 data need a security review before merge.

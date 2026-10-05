@@ -56,7 +56,7 @@ jobs:
       - name: Validate .github/renovate.json
         run: >-
           docker run --rm -v "$PWD:/repo" -w /repo --entrypoint renovate-config-validator "$RENOVATE_IMAGE"
-          --strict .github/renovate.json
+          --strict --no-global .github/renovate.json
 
   audit:
     runs-on: ubuntu-24.04
