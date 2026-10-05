@@ -30,6 +30,11 @@ const drift = (table: readonly Entry[], committed: readonly Entry[]): string[] =
   const [a, b] = [byRoute(table), byRoute(committed)];
   return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((key) => !isDeepStrictEqual(a[key], b[key]));
 };
+/** A valid policy table (P1.06's shape: every entry passes), so the extra route's policy resolves at startup. */
+const POLICIES = {
+  default: [{ capacity: 60, refillPerSec: 5, scope: "ip" }],
+  page: [{ capacity: 60, refillPerSec: 5, scope: "ip" }],
+} as const;
 const manifest: Entry[] = JSON.parse(readFileSync(new URL("./routes.manifest.json", import.meta.url), "utf8"));
 
 test("route_manifest_matches", async () => {
@@ -40,13 +45,16 @@ test("route_manifest_matches", async () => {
 test("route_manifest_names_an_extra_route", async () => {
   const cfg = loadConfig(config, ENV);
   const log = createLogger({ service: "http", commit: COMMIT, env: "test", write: () => undefined });
-  const extra = defineRoute({
+  // Every route states its session need (P1.06); a variable keeps it valid before and after that field is required.
+  const spec = {
     method: "GET",
     path: "/extra",
     group: "app",
     rateLimit: "page",
+    session: "none",
     handler: () => new Response(),
-  });
-  const server = createServer({ config: cfg, routes: [extra], policies: { page: {} }, log });
+  } as const;
+  const extra = defineRoute(spec);
+  const server = createServer({ config: cfg, routes: [extra], policies: POLICIES, log });
   expect(drift(server.routeTable(), manifest)).toEqual(["GET /extra"]);
 });
