@@ -2527,6 +2527,44 @@ As built (2026-10-05):
 
 ---
 
+### P0.13a — Licence check stays inside the test timeout (architecture ruling 2026-10-05 12:17Z)
+Tags: —            Depends on: P0.13            Plan: P0.13 licence ruling, DO-3
+Where: `scripts/licence/` only (one check PR). It lands before P1.04, whose dependency line gains P0.13a.
+
+Why: `repository_has_no_conflicts` ran 2.4 s on main and 4.1 s with the six `interfaces/*` workspaces simulated
+(4.3 s with hono added), against Vitest's 5 s default. The check spawned 1 + N `npm ls -w X` calls at about 0.30 s
+each; the in-memory walk costs almost nothing, so memoising it would not help.
+
+Algorithm:
+  1. One `npm ls --all --json --long --omit=dev --workspaces --include-workspace-root` call (0.34 s). The workspaces
+     are the root's top-level entries; the root's own dependencies are its entries that are not workspaces.
+  2. The combined tree is not self-contained per workspace: npm prints a package in full once and every other copy at
+     the same path as a childless stub (npm 11.19.1 `lib/commands/ls.js`: `seenNodes` is keyed by `node.path`;
+     `--long` sets `item.path`). In the simulation a workspace's `@unset/shared-http` was a stub while the top-level
+     node carried `hono`. So every node with children is indexed by its install path.
+  3. Each workspace is walked from that tree. A childless copy is expanded through the index entry with the same
+     path; each path is walked once per workspace; a path already on the current walk ends it (no cycle). A copy that
+     declares dependencies (`_dependencies`, or a peer not marked optional) but has no index entry fails closed:
+     "has children not listed by npm ls".
+  4. `flatten()` kept one entry per name@version, so a second copy with another licence was never checked. Every copy
+     is now recorded unless an identical record exists.
+  5. An explicit test timeout of about 3x the measured run, as a bound only.
+
+Done when (tests):
+  - `deduped_subtree_still_checked`: kept, and still passes.
+  - `nested_copy_different_licence_fails`, `deduped_stub_expanded_by_path`, `missing_expansion_fails` (including an
+    optional peer that need not be installed) and `one_npm_ls_call` (every workspace split from one listed tree).
+  - `repository_has_no_conflicts` asserts one `npm ls` call under a 1.5 s timeout.
+
+As built (2026-10-05): `node scripts/licence/check.ts` takes 0.44 s (2.4 s before) on main. The four new tests and the
+timed real-tree test fail on the old code. From the adversarial review: `root_dependency_not_listed_fails` (with
+`--workspaces`, npm leaves an uninstalled root dependency out of the JSON, so the root manifest is compared with the
+tree) and `package_without_version_checked` (an installed package without a `version` field was skipped with its
+whole subtree; only a pathless `{}` is now skipped). `invalid` nodes are still checked as installed, so no licence
+escapes; failing on npm's other tree problems is not this step's.
+
+---
+
 ### P0.14 — Phase 0 exit: planted faults are blocked, and only Alex's approval merges
 Tags: [ALEX] (tail: drill D approval and merge)            Depends on: P0.03, P0.07, P0.08, P0.10            Plan: §8 Phase 0 exit
 Where: four throwaway branches and PRs; `docs/human/drills/phase-0-exit.md` (agent, by PR)
