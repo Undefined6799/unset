@@ -123,6 +123,13 @@ describe("logger", () => {
     expect(records().map((r) => r.event)).toEqual(["ratelimit.no_session", "ratelimit.error"]);
   });
 
+  test("logger_csrf_event", () => {
+    // P1.07's CSRF gate logs each denial with its reason (a fixed word such as "origin_mismatch"), never a header value.
+    const { log, records } = capture();
+    log.warn("csrf.denied", { route: "/follow", reason: "origin_mismatch" });
+    expect(records().map((r) => [r.event, r.reason])).toEqual([["csrf.denied", "origin_mismatch"]]);
+  });
+
   test("logger_no_stack_message_in_prod", () => {
     const { log, lines } = capture("prod");
     log.logError(new Error("secret value"));

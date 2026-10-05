@@ -22,6 +22,8 @@ const EVENTS = [
   // P1.06, the rate limiter: a session-only limit reached without a session, and a limiter error (both deny).
   "ratelimit.no_session",
   "ratelimit.error",
+  // P1.07, the CSRF gate: a request other than GET or HEAD it denied, with a fixed reason word.
+  "csrf.denied",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
