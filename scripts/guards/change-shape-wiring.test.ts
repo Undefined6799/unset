@@ -133,4 +133,61 @@ describe("wiring", () => {
       "::error::[SE-6] a PR that changes a check path changes no product path: shared/http/LICENSE\n",
     );
   });
+
+  test("lockfile_rides_end_to_end", () => {
+    // Ruling 2026-10-05 02:50Z through real git: the root lockfile rides only when a trusted package.json's dependency
+    // fields change; a scripts-only or unreadable manifest change leaves it outside the trusted base.
+    const dir = mkdtempSync(join(tmpdir(), "pr-shape-lock-"));
+    temps.push(dir);
+    const sh = (...args: string[]) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim();
+    const put = (path: string, text: string) => {
+      execFileSync("mkdir", ["-p", join(dir, path, "..")]);
+      writeFileSync(join(dir, path), text);
+    };
+    const manifest = (fields: object) => `${JSON.stringify({ name: "@unset/shared-http", ...fields }, null, 2)}\n`;
+    sh("init", "-q", "-b", "main");
+    sh("config", "user.email", "test@example.org");
+    sh("config", "user.name", "test");
+    put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
+    put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
+    put("shared/http/package.json", manifest({ dependencies: { a: "1.0.0" } }));
+    const lockfile = (dependencies: object, extra: object = {}) => {
+      const workspace = { name: "@unset/shared-http", dependencies };
+      const packages = { "shared/http": workspace, "node_modules/a": { version: "1.0.0" }, ...extra };
+      return `${JSON.stringify({ lockfileVersion: 3, packages })}\n`;
+    };
+    put("package-lock.json", lockfile({ a: "1.0.0" }));
+    sh("add", "-A");
+    sh("commit", "-q", "-m", "P0.01 Start");
+    const base = sh("rev-parse", "HEAD");
+    const prWith = (branch: string, manifestText: string) => {
+      sh("checkout", "-q", "-b", branch, base);
+      put("shared/http/package.json", manifestText);
+      put("shared/http/server.ts", "export {};\n");
+      const hono = { "node_modules/hono": { version: "4.0.0" } };
+      put("package-lock.json", lockfile({ a: "1.0.0", hono: "4.0.0" }, hono));
+      sh("add", "-A");
+      sh("commit", "-q", "-m", "P1.04k Add the server kit");
+      try {
+        return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
+          cwd: dir,
+          env: {
+            ...process.env,
+            PR_TITLE: "P1.04k Add the server kit",
+            PR_BODY: read(".github/pull_request_template.md"),
+            PR_LABELS: '["kind/build"]',
+            BASE_SHA: base,
+            HEAD_SHA: sh("rev-parse", "HEAD"),
+          },
+          encoding: "utf8",
+        });
+      } catch (error) {
+        return (error as { stdout: string }).stdout;
+      }
+    };
+    const outside = "::error::[SE-6] outside the trusted base in a trusted-base PR: package-lock.json";
+    expect(prWith("deps", manifest({ dependencies: { a: "1.0.0", hono: "4.0.0" } }))).not.toContain("[SE-6]");
+    expect(prWith("scripts", manifest({ dependencies: { a: "1.0.0" }, scripts: { x: "y" } }))).toContain(outside);
+    expect(prWith("broken", "{ not json")).toContain(outside);
+  });
 });

@@ -671,8 +671,42 @@ As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:23Z; all fail cl
 
 ---
 
+### P1.04l — Name the HTTP server kit's log events (split from P1.04k, SE-6)
+Tags: —            Depends on: P1.03            Plan: as P1.03; §9 trusted base (rule SE-6)
+Where: `shared/log/logger.ts` and `shared/log/logger.test.ts`
+Size: ~13 source lines
+
+Why a separate step (letter suffix, relayed 2026-10-05 02:51Z): the kit's log events (`http.request`, `http.deadline`,
+`http.late_result`, `http.listen_failed`, `http.drain`) must be known to `shared/log/logger.ts`. `shared/log/` is not
+trusted base, so that edit cannot ride in the trusted P1.04k PR; the same pattern as P1.03 listing `http.deadline` ahead
+(see P1.03's event list).
+
+Done when (tests): logger_http_kit_events, shown failing first.
+Diagram: none.
+
+---
+
+### P1.04q — Route registration guard (split from P1.04k, SE-6)
+Tags: —            Depends on: P0.09c            Plan: as P1.04; §9 (rule SE-6, check paths)
+Where: `scripts/guards/` (the guard and its test); the fixture standing in for `apps/web/src/x.ts` (it calls
+  `app.post(`) lives under `scripts/guards/fixtures/`, never under `apps/`, because this is a check-path PR
+Size: ~40 source lines, ~40 test lines
+
+Why a separate step (relayed 2026-10-05 02:43Z): `route_registration_guard` forbids `app.get(` and `app.post(` outside
+`shared/http/server.ts` and `shared/http/routes.ts`. It lives in `scripts/guards/`, a check path, and P1.04k is a
+trusted-base product PR, so the guard gets its own `q` step. It depends on P0.09c only (amended 2026-10-05 02:59Z): on
+`main` it passes with no Hono anywhere, and on the P1.04k tree with Hono only in `server.ts` and `routes.ts`, so landing
+it first also guards P1.04k itself.
+
+Done when (tests): route_registration_guard: the fixture fails the guard, and the real tree passes.
+As built (#39): it flags `app.<hono verb>(` calls and any import of `hono` or `@hono/*` outside `shared/http/server.ts`
+  and `routes.ts`, with four fixtures under `scripts/guards/fixtures/route-registration/`.
+Diagram: none.
+
+---
+
 ### P1.04k — HTTP server kit in `shared/http/` (split from P1.04, SE-6)
-Tags: —            Depends on: P1.03            Plan: as P1.04; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
+Tags: —            Depends on: P1.03, P1.04l            Plan: as P1.04; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
 Where: `shared/http/{server.ts,routes.ts,health.ts,shutdown.ts,errors.ts,config.ts}` + tests
 Size: ~200 source lines, ~230 test lines
 
@@ -682,7 +716,8 @@ Why a separate step (letter suffix): `shared/http/` is trusted base, and a PR th
 Goal: the server kit exists and is tested against an in-test server, before any entrypoint uses it.
 
 Inputs: P1.02 (`defineConfig`), P1.03 (errors, including `http.deadline`; logger). Dependencies added (exact pins,
-  justified in the PR): `hono`, `@hono/node-server`.
+  justified in the PR): `hono`, `@hono/node-server`. The root `package-lock.json` rides in this PR (SE-6 lockfile
+  ruling 2026-10-05 02:50Z, built in P0.09f): every entry it changes must be in `shared/http`'s dependency closure.
 Outputs: everything P1.04's Outputs list except the composition roots and the route manifests: `defineRoute`,
   `createServer` and `routeTable()`, the request deadline, the fixed middleware order with its empty slots, `/health`,
   the request log line. Plus `httpKitConfig` in `shared/http/config.ts`, the kit's config fragment: P1.04's config keys
@@ -692,7 +727,7 @@ Outputs: everything P1.04's Outputs list except the composition roots and the ro
 Algorithm: P1.04's "Algorithm (per request)", shutdown and startup, unchanged.
 Edge cases and failures: all of P1.04's (they are the kit's).
 Done when (tests): every P1.04 test except `composition_root_split` and `route_manifest_matches`, which need real
-  entrypoints and stay with P1.04; plus
+  entrypoints and stay with P1.04, and `route_registration_guard`, which P1.04q owns; plus
   - kit_config_fragment: `loadConfig(defineConfig({ ...httpKitConfig }))` with `REQUEST_DEADLINE_MS=500` → `invalid`;
     with valid values → the four keys typed.
 Reuse: as P1.04.
@@ -702,7 +737,7 @@ Diagram: none.
 ---
 
 ### P1.04 — HTTP server skeleton per entrypoint
-Tags: —            Depends on: P1.04k            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
+Tags: —            Depends on: P1.04k, P1.04q            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
 Where: each `interfaces/<x>/main.ts`, `interfaces/<x>/compose.ts` and `interfaces/<x>/config.ts` (spreading P1.04k's
   `httpKitConfig`), together the composition root of its process (R1-14, rule TE-1; `interfaces/http` for `web`, then `api`, `media`, `admin` start an HTTP server;
   `indexer` and `review` start a health-only server); `interfaces/<x>/routes.manifest.json`; their tests
@@ -807,7 +842,7 @@ Done when (tests): (Hono's `app.request()` in-process, plus one real-socket test
   - not_found_404_no_reflection: GET `/x<script>` → 404, body does not contain `<script>`.
   - error_hides_exception: handler throws `new Error("db password xyz")` → 500, body and log lines do not contain `xyz`.
   - bad_percent_encoding_400: GET `/%E0%A4%A` → 400.
-  - route_registration_guard: a fixture file `apps/web/src/x.ts` calling `app.post(` → the guard test fails.
+  - ~~route_registration_guard~~: moved to P1.04q (2026-10-05).
   - graceful_shutdown: real server, start a request that takes 300 ms, send SIGTERM at 50 ms → that request completes
     with 200; `/health` during drain → 503; a new connection after drain start is refused; process exits 0.
   - shutdown_deadline: request that never ends, grace 200 ms → process exits 1 after ~200 ms.

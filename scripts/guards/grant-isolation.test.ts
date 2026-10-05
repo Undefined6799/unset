@@ -45,7 +45,16 @@ function verdict(pr: Pr) {
   return checkTrustedBaseIsolation(
     changed.map((c) => c.path),
     patterns,
-    { parsedPaths, findings, docs: { regular: new Set(changed.map((c) => c.path)), licenceOnly: new Set() } },
+    {
+      parsedPaths,
+      findings,
+      docs: {
+        regular: new Set(changed.map((c) => c.path)),
+        licenceOnly: new Set(),
+        dependencyChanges: new Set(),
+        lockfiles: null,
+      },
+    },
   );
 }
 
