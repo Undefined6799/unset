@@ -9,6 +9,7 @@ import * as egress from "./egress.ts";
 import { type Finding, report } from "./files.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
+import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -18,6 +19,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["inner-html", innerHtml.scanAll],
   ["web-no-moderator", webNoModerator.scanAll],
   ["ip-columns", ipColumns.scanAll],
+  ["route-registration", routeRegistration.scanAll],
 ];
 
 describe("repo_clean", () => {
