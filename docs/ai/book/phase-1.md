@@ -436,6 +436,32 @@ Editor note (2026-10-04 late, step book thread): new step, so P0.05's two moved 
 lands. Placed right after P1.01 rather than inside P1.11, because a computed import is a boundary bypass and P1.02 to
 P1.10 add code first.
 
+
+As ruled (architecture thread, 2026-10-05 00:13Z): the Semgrep fixture assertions move to CI. This replaces algorithm
+step 3 and the `semgrep-rules.test.ts` description above.
+  - `scripts/lint/semgrep-fixtures.ts`, a small node script, runs in the existing CI `semgrep` job with the pinned
+    image. It runs Semgrep over `.semgrep/rules/fixtures/` with `--config .semgrep/rules/ --metrics=off --json` and
+    asserts:
+    - every must-fail fixture yields at least one finding from the rule id it names;
+    - every must-pass fixture yields none.
+  - The script fails closed (TE-4), reusing P0.07's `semgrep-rules-ran` pattern, when:
+    - the image is missing;
+    - it ran zero fixtures;
+    - the count of rule ids seen firing differs from the count declared in `.semgrep/rules/`.
+  - `scripts/lint/semgrep-rules.test.ts` (Vitest, part of `npm run check`) checks static parts only:
+    - `ci.yml` passes `--config .semgrep/rules/`;
+    - `ci.yml` has the step that calls `semgrep-fixtures.ts`, so removing that step fails locally;
+    - every rule file has fixtures;
+    - every rule id appears in at least one must-fail fixture.
+  - `npm run semgrep:fixtures` is optional and outside `npm run check`. It runs the same script through Docker when
+    Docker is present. There is no local pip install of Semgrep.
+  - Done-when changes:
+    - `computed_import_fails`, `literal_import_passes`, `floating_promise_fails` and `handled_promise_passes` are
+      proven by the CI script, and their run URL goes in the PR.
+    - New static tests: `ci_calls_fixture_script`, `every_rule_has_fixtures`, `every_rule_id_in_must_fail`.
+    - New CI-script tests: `zero_fixtures_fails`, `rule_count_mismatch_fails`.
+  - P1.11's `transactions.yml` follows the same pattern: its fixtures run in the CI script, not inside Vitest.
+
 ---
 
 ### P1.02 — Typed config loader per entrypoint
@@ -533,6 +559,7 @@ As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:23Z; all fail cl
   - (d) `list` has no separator option: comma only; empty or padded items → invalid.
   - (e) `bootOrExit` writes its `config.invalid` lines to stderr as JSON itself, because the logger (P1.03) depends on
     config, not the other way round.
+  - Later extension made by P1.18a: `defineConfig` collects per-field `holds` rules (see P1.18a's as-built block).
 
 ---
 
@@ -2536,8 +2563,9 @@ As built and ruled (architecture thread, 2026-10-04 23:33Z):
   - Tests: one row per range in the class table, plus mapped and NAT64 forms of `169.254.169.254` and `10.0.0.1`
     classifying the same as the bare IPv4 address.
   - net-guard keeps its 400-line warning for real code; its `*.fake.ts` test servers no longer count (architecture
-    ruling 2026-10-04 23:53Z). If P1.18b's proxy pushes real code past 400, treat that as a signal to review the
-    module's depth, not as a reason to raise the number.
+    ruling 2026-10-04 23:53Z). If P1.18b's proxy takes net-guard's real code past 400, the reviewer checks the
+    module's depth first. If splitting would hurt readability, the budget goes up with a one-line reason in
+    budgets.json. That is allowed, not a failure (Alex via architecture, 2026-10-05).
 
 ---
 
@@ -2703,8 +2731,9 @@ As built and ruled (architecture thread, 2026-10-04 23:33Z):
     It has no `kind` and no bare `bytes`. The callback never receives the host, URL or IP.
     Test: `log_callback_never_sees_target`.
   - net-guard keeps its 400-line warning for real code; its `*.fake.ts` test servers no longer count (architecture
-    ruling 2026-10-04 23:53Z). If P1.18b's proxy pushes real code past 400, treat that as a signal to review the
-    module's depth, not as a reason to raise the number.
+    ruling 2026-10-04 23:53Z). If P1.18b's proxy takes net-guard's real code past 400, the reviewer checks the
+    module's depth first. If splitting would hurt readability, the budget goes up with a one-line reason in
+    budgets.json. That is allowed, not a failure (Alex via architecture, 2026-10-05).
 
 As ruled (architecture thread, 2026-10-04 23:53Z):
   - TE-6 needs a real fast-check property test, and the deterministic 65 536-address sweep stays alongside it. The
@@ -2730,6 +2759,19 @@ As ruled (architecture thread, 2026-10-04 23:53Z):
   - Outputs gain (architecture ruling 2026-10-05 00:00Z): the PR flips docs/human/architecture.md's `net-guard-leaf`
     row, following the table convention. Its "What it says" becomes exactly: "net-guard imports only Node built-ins,
     undici and its own files; its *.test.ts may also import fast-check and vitest". The check name is unchanged.
+
+As built (Phase 1 thread, relayed 2026-10-05 00:11Z):
+  - `request()` caps request bodies at 1 MiB. The cap moved there from `guardedFetch`.
+  - The egress event has a code `egress.invalid` for programming-error refusals.
+  - Review finding S6: `shared/config` fields gained an optional per-field cross-field rule (`holds`, plus a
+    `withRule()` helper), which `defineConfig` collects automatically. `netGuardRules` was removed, and the
+    `netGuardFields` export now carries its rules on the fields themselves. No ADR is needed (architecture ruling,
+    2026-10-05 00:13Z): DO-1 asks for one only when a decision is costly to reverse or crosses a boundary. Two
+    requirements:
+    - `holds` and `withRule()` carry DC-2 doc comments stating the invariant: every field's rule runs whenever the
+      field is merged, so a schema cannot take a field without its rule.
+    - The S6 regression test stays: an interface that merges only `netGuardFields` still refuses the bad prod
+      settings.
 
 ---
 

@@ -670,7 +670,9 @@ Outputs:
         `domains/` (it doubles an unmanaged dependency, so it lives beside that dependency's adapter).
       `no-circular` — no cycles.
       `no-orphans` at warn.
-  - `scripts/budgets/budgets.json`: `{ "<path or glob>": maxLines }` from §4, as warnings: the former core
+  - `scripts/budgets/budgets.json`: `{ "<path or glob>": maxLines | { "max": maxLines, "reason": "<one line>" } }` from
+    §4, as warnings (a raised number carries a reason; the check prints the reason beside any notice, and a number
+    above the plan §4 default with no reason prints a `::warning` naming the entry, never a failure): the former core
     (`domains/**`, `infrastructure/**` except `net-guard` and `audit`, `shared/{config,errors,i18n,log,http,admin-envelope}`) 9000 combined,
     `apps/web` + `interfaces/http` 7000 combined, `interfaces/api` 1200, `interfaces/indexer` 1500, `interfaces/media` 600,
     `interfaces/review` 2500, `apps/admin` + `interfaces/admin` + `interfaces/pds-admin` + `infrastructure/audit`
@@ -718,6 +720,10 @@ Done when (tests): (`scripts/budgets/check.test.ts`, `scripts/lint/depcruise.tes
   fixtures in temp directories)
   - count_skips_comments_and_blanks: 3 code lines, 2 comment lines, 2 blank → 3.
   - count_excludes_tests_and_generated: `a.test.ts`, `x.generated.ts` → 0.
+  - budget_reason_field: an entry with a reason parses and its notice shows the reason; an entry above the plan §4
+    default with no reason prints a `::warning` naming the entry; exit 0 (decision 15). Budgets prompt a reviewer to
+    look and are never a target: a module may grow past its budget when splitting would hurt readability, with the
+    reason recorded next to the raised number (Alex via architecture, 2026-10-05).
   - budgets_skip_fakes: a package with 50 lines of `x.ts` and 500 lines of `x.fake.ts` against a budget of 100 → no
     warning.
   - budget_overrun_warns_not_fails: fixture package of 12 lines, max 10 → one `::warning` line, exit 0.
@@ -1201,7 +1207,8 @@ As built and ruled (Phase 0 thread, PR 25 and its follow-up; architecture thread
     (the folder whose `package.json` declares the name), so a trusted name can never point at another folder.
   - `resolved` may hold only the relative path of a declared workspace (confirmed by the architecture thread).
   - Test `lockfile_unset_links`: a registry URL, `"link": false`, `../outside`, an `integrity` field, `file:`, a link
-    with no `resolved`, and `@unset/core` linked to `@unset/other`'s folder each fail;
+    with no `resolved`, and `@unset/core` linked to `@unset/other`'s folder (the book's `@unset/identity` linked to
+    `@unset/content`'s folder, same check) each fail;
     `{ "resolved": "shared/core", "link": true }` under `@unset/core` passes.
 
 ---
