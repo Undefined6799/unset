@@ -77,7 +77,7 @@ const kindOf = (s: Scenario) => only(s).kind;
 const NEW_X = `
 CREATE TABLE app.x (id bigint GENERATED ALWAYS AS IDENTITY, did text NOT NULL);
 GRANT SELECT, INSERT ON app.x TO web;
-CREATE FUNCTION app.f() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+CREATE FUNCTION app.f() RETURNS void LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$;
 GRANT EXECUTE ON FUNCTION app.f() TO web;
 ALTER TABLE app.x ENABLE ROW LEVEL SECURITY;
 CREATE VIEW app.v2 AS SELECT id FROM app.x;
@@ -183,12 +183,19 @@ describe("classifyGrantChanges", () => {
     const baseSql = "CREATE TABLE app.account (id bigint, did text);";
     const created =
       "CREATE FUNCTION app.g() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;\nCREATE VIEW app.v AS SELECT 1;\n";
-    for (const sql of five) {
+    // On objects the PR creates (ruling 2026-10-05): a new body or search_path rides; a view over an existing table
+    // without security_invoker, a switch to SECURITY DEFINER and a new owner do not.
+    const onCreated = [
+      "neutral",
+      "definer_view_over_existing",
+      "neutral",
+      "owner_or_security_changed",
+      "owner_or_security_changed",
+    ];
+    for (const [i, sql] of five.entries()) {
       const findings = classify({ baseSql, sql: `${created}${sql};` });
-      expect(
-        findings.map((f) => f.kind),
-        sql,
-      ).toEqual(["neutral", "neutral", "neutral"]);
+      expect(findings.at(-1)?.reason === "neutral" ? "neutral" : findings.at(-1)?.reason, sql).toBe(onCreated[i]);
+      expect(findings.slice(0, 2).map((f) => f.kind)).toEqual(["neutral", "neutral"]);
     }
   });
 
@@ -310,11 +317,13 @@ describe("classifyGrantChanges", () => {
       "trusted_family_unnamed",
     );
     expect(kindOf({ sql: fn("app.hold", "SECURITY INVOKER"), file: `${MIG}/0050_legal_hold.sql` })).toBe("neutral");
-    expect(kindOf({ sql: fn("app.hold") })).toBe("neutral");
+    // Any new SECURITY DEFINER function is trusted base (ruling 2026-10-05); the invoker default rides.
+    expect(only({ sql: fn("app.hold") }).reason).toBe("security_definer");
+    expect(kindOf({ sql: fn("app.hold", "") })).toBe("neutral");
     for (const name of ["core.is_erased", "CORE.ERASE_did", "mod.erase_foreign_did"]) {
       expect(only({ sql: fn(name) }).reason, name).toBe("trusted_function");
     }
-    expect(kindOf({ sql: fn("core.erased") })).toBe("neutral");
+    expect(kindOf({ sql: fn("core.erased", "") })).toBe("neutral");
     const grantOnTrusted =
       "CREATE FUNCTION core.is_held() RETURNS bool AS $$ $$;\nGRANT EXECUTE ON FUNCTION core.is_held() TO web;";
     expect(trusted(classify({ sql: grantOnTrusted })).map((f) => f.reason)).toEqual([
@@ -373,6 +382,40 @@ describe("SQL this tokenizer must not read differently from Postgres (review, 20
       ],
     });
     expect(findings.map((f) => f.path)).toEqual([MATRIX]);
+  });
+});
+
+describe("what reads or watches existing data (ruling 2026-10-05)", () => {
+  const last = (sql: string) => classify({ sql }).at(-1) as GrantFinding;
+  const NEW_T = "CREATE TABLE app.t (id bigint);\n";
+
+  test("grant_parse_watchers_and_copies", () => {
+    const trigger = "CREATE TRIGGER tr AFTER INSERT ON app.account FOR EACH ROW EXECUTE FUNCTION app.h();";
+    expect(last(trigger)).toMatchObject({ kind: "trusted", reason: "existing_object_trigger_or_rule" });
+    expect(last(`${NEW_T}${trigger.replace("app.account", "app.t")}`).kind).toBe("feature");
+    expect(last("CREATE RULE r AS ON INSERT TO app.account DO ALSO NOTHING;").kind).toBe("trusted");
+    for (const copy of [
+      "CREATE TABLE app.c AS SELECT * FROM app.account;",
+      "CREATE TABLE app.c PARTITION OF app.account FOR VALUES IN (1);",
+      "CREATE TABLE app.c (LIKE app.account);",
+      "CREATE TABLE app.c (x int) INHERITS (app.account);",
+    ]) {
+      expect(last(copy), copy).toMatchObject({ kind: "trusted", reason: "table_from_existing" });
+    }
+  });
+
+  test("grant_parse_views_and_functions_by_rights", () => {
+    const over = "AS SELECT id FROM app.account;";
+    expect(last(`CREATE VIEW app.w ${over}`).reason).toBe("definer_view_over_existing");
+    expect(last(`CREATE VIEW app.w WITH (security_invoker = true) ${over}`).kind).toBe("neutral");
+    expect(last(`CREATE VIEW app.w WITH (security_invoker) ${over}`).kind).toBe("neutral");
+    expect(last(`CREATE VIEW app.w WITH (security_invoker = false) ${over}`).kind).toBe("trusted");
+    expect(last(`CREATE MATERIALIZED VIEW app.w ${over}`).kind).toBe("trusted");
+    expect(last(`${NEW_T}CREATE VIEW app.w AS SELECT id FROM app.t;`).kind).toBe("neutral");
+    const fn = (security: string) => `CREATE FUNCTION app.k() RETURNS int LANGUAGE sql ${security} AS $$ SELECT 1 $$;`;
+    expect(last(fn("SECURITY DEFINER")).reason).toBe("security_definer");
+    expect(last(fn("SECURITY INVOKER")).kind).toBe("neutral");
+    expect(last(fn("")).kind).toBe("neutral");
   });
 });
 

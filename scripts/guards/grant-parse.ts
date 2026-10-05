@@ -69,6 +69,11 @@ const DEFAULT_PRIVILEGES: Verdict = { kind: "trusted", reason: "default_privileg
 const EXISTING_CHANGED: Verdict = { kind: "trusted", reason: "existing_function_or_view_changed" };
 const TRUSTED_FUNCTION: Verdict = { kind: "trusted", reason: "trusted_function" };
 const TRUSTED_FAMILY: Verdict = { kind: "trusted", reason: "trusted_family_unnamed" };
+// Ruling 2026-10-05 (SE-6): what runs with its owner's rights, or copies or watches an existing table, is trusted.
+const NEW_DEFINER: Verdict = { kind: "trusted", reason: "security_definer" };
+const OWNER_CHANGED: Verdict = { kind: "trusted", reason: "owner_or_security_changed" };
+const DEFINER_VIEW: Verdict = { kind: "trusted", reason: "definer_view_over_existing" };
+const TABLE_FROM_EXISTING: Verdict = { kind: "trusted", reason: "table_from_existing" };
 const ADD_COLUMN_EXISTING: Verdict = { kind: "trusted", reason: "existing_table_add_column" };
 const onObject = (created: boolean, what: string): Verdict =>
   created
@@ -77,7 +82,7 @@ const onObject = (created: boolean, what: string): Verdict =>
 
 const ROLE_WORDS = ["role", "user", "group"];
 const FUNCTION_WORDS = ["function", "procedure", "routine"];
-const NEUTRAL_CREATES = [["table"], ["unique", "index"], ["index"], ["trigger"], ["type"], ["domain"], ["sequence"]];
+const NEUTRAL_CREATES = [["unique", "index"], ["index"], ["type"], ["domain"], ["sequence"]];
 const NEUTRAL_VERBS = [["begin"], ["commit"], ["insert"], ["update"], ["delete"], ["comment", "on"], ["set", "role"]];
 const OTHER_GRANT_TARGETS = ["database", "domain", "foreign", "language", "large", "parameter", "tablespace", "type"];
 const RLS_ACTIONS = ["enable", "disable", "force", "no force"].map((w) => [
@@ -94,23 +99,69 @@ function strongest(verdicts: Verdict[]): Verdict {
   return verdicts.find((v) => v.kind === "trusted") ?? verdicts.find((v) => v.kind === "feature") ?? NEUTRAL;
 }
 
-/** 3e and 3f: functions on the trusted list, the unnamed families, then any not created by the PR. */
-function classifyFunction(c: Cursor, stmt: Statement, ctx: Context): Verdict {
+/** 3e and 3f: functions on the trusted list, the unnamed families, then any not created by the PR. A new function rides
+ * with its feature only as SECURITY INVOKER (the default), and an ALTER of its owner or SECURITY never rides. */
+function classifyFunction(c: Cursor, stmt: Statement, ctx: Context, alter: boolean): Verdict {
   const name = c.name();
   if (name === null || hasWords(stmt.tokens, "rename") || hasWords(stmt.tokens, "set", "schema")) return UNCLASSIFIED;
   if (ctx.isTrustedFunction(name)) return TRUSTED_FUNCTION;
   if (name.schema === "audit") return TRUSTED_FAMILY;
   const legalHold = ctx.legalHoldFile || LEGAL_HOLD.test(stmt.text);
-  if (legalHold && hasWords(stmt.tokens, "security", "definer")) return TRUSTED_FAMILY;
-  return ctx.created.has(key("fn", name)) ? NEUTRAL : EXISTING_CHANGED;
+  const definer = hasWords(stmt.tokens, "security", "definer");
+  if (legalHold && definer) return TRUSTED_FAMILY;
+  if (!ctx.created.has(key("fn", name))) return EXISTING_CHANGED;
+  if (alter && (definer || hasWords(stmt.tokens, "owner"))) return OWNER_CHANGED;
+  return definer ? NEW_DEFINER : NEUTRAL;
 }
 
-function classifyView(c: Cursor, ctx: Context): Verdict {
+/** `WITH (security_invoker)`, `= true` or `= on`: the view reads with its caller's rights. */
+function isInvokerView(tokens: readonly Token[]): boolean {
+  const at = tokens.findIndex((t) => t.text === "security_invoker");
+  if (at < 0) return false;
+  if (tokens[at + 1]?.text !== "=") return tokens[at + 1]?.text === "," || tokens[at + 1]?.text === ")";
+  return ["true", "on", "'true'", "'on'"].includes(tokens[at + 2]?.text.toLowerCase() ?? "");
+}
+
+/** Every `schema.name` the view's query names is a relation the PR creates (an alias reference fails closed). */
+function readsOnlyCreated(tokens: readonly Token[], ctx: Context): boolean {
+  const as = topLevelWord(tokens, ["as"]);
+  const query = tokens.slice(as + 1);
+  return query.every((t, i) => {
+    if (query[i + 1]?.text !== "." || !isName(t) || !isName(query[i + 2] ?? t)) return true;
+    return ctx.created.has(key("rel", { schema: t.text, name: (query[i + 2] as Token).text }));
+  });
+}
+
+function classifyView(c: Cursor, stmt: Statement, ctx: Context, alter: boolean): Verdict {
+  const materialized = stmt.tokens.slice(0, 4).some((t) => t.text === "materialized");
   c.accept("if", "not", "exists");
   c.accept("if", "exists");
   const name = c.name();
   if (name === null) return UNCLASSIFIED;
-  return ctx.created.has(key("rel", name)) ? NEUTRAL : EXISTING_CHANGED;
+  if (!ctx.created.has(key("rel", name))) return EXISTING_CHANGED;
+  if (alter)
+    return hasWords(stmt.tokens, "owner") || isInvokerView(stmt.tokens) || hasWords(stmt.tokens, "reset")
+      ? OWNER_CHANGED
+      : NEUTRAL;
+  // A materialized view stores what its owner could read, so it never runs with the caller's rights.
+  const invoker = !materialized && isInvokerView(stmt.tokens);
+  return invoker || readsOnlyCreated(stmt.tokens, ctx) ? NEUTRAL : DEFINER_VIEW;
+}
+
+/** CREATE TRIGGER or RULE watches a table: it rides only on a table the PR creates. */
+function classifyWatcher(stmt: Statement, ctx: Context): Verdict {
+  const on = topLevelWord(stmt.tokens, ["on"]);
+  const table = on < 0 ? null : new Cursor(stmt.tokens.slice(on + 1)).name();
+  return table === null ? UNCLASSIFIED : onObject(ctx.created.has(key("rel", table)), "trigger_or_rule");
+}
+
+/** CREATE TABLE … AS, PARTITION OF, LIKE or INHERITS copies or shares an existing table's rows or shape. */
+function classifyCreateTable(stmt: Statement): Verdict {
+  const copies =
+    topLevelWord(stmt.tokens, ["as", "inherits"]) >= 0 ||
+    hasWords(stmt.tokens, "partition", "of") ||
+    hasWords(stmt.tokens, "like");
+  return copies ? TABLE_FROM_EXISTING : NEUTRAL;
 }
 
 function classifyPolicy(c: Cursor, ctx: Context): Verdict {
@@ -128,10 +179,12 @@ function classifyCreateSchema(c: Cursor): Verdict {
 function classifyCreate(c: Cursor, stmt: Statement, ctx: Context): Verdict {
   const orReplace = c.accept("or", "replace");
   if (ROLE_WORDS.some((w) => c.accept(w))) return ROLE;
-  if (c.accept("function") || c.accept("procedure")) return classifyFunction(c, stmt, ctx);
+  if (c.accept("function") || c.accept("procedure")) return classifyFunction(c, stmt, ctx, false);
   if (c.accept("view") || c.accept("materialized", "view") || c.accept("recursive", "view"))
-    return classifyView(c, ctx);
+    return classifyView(c, stmt, ctx, false);
   if (orReplace) return UNCLASSIFIED;
+  if (c.isWord("table")) return classifyCreateTable(stmt);
+  if (c.isWord("trigger") || c.isWord("constraint", "trigger") || c.isWord("rule")) return classifyWatcher(stmt, ctx);
   if (c.accept("policy")) return classifyPolicy(c, ctx);
   // A bare CREATE SCHEMA only: AUTHORIZATION and embedded elements (which may GRANT) are not plain creates.
   if (c.accept("schema")) return classifyCreateSchema(c);
@@ -176,8 +229,8 @@ function classifyAlterTable(c: Cursor, ctx: Context): Verdict {
 function classifyAlter(c: Cursor, stmt: Statement, ctx: Context): Verdict {
   if (ROLE_WORDS.some((w) => c.accept(w))) return ROLE;
   if (c.accept("default", "privileges")) return DEFAULT_PRIVILEGES;
-  if (FUNCTION_WORDS.some((w) => c.accept(w))) return classifyFunction(c, stmt, ctx);
-  if (c.accept("view") || c.accept("materialized", "view")) return classifyView(c, ctx);
+  if (FUNCTION_WORDS.some((w) => c.accept(w))) return classifyFunction(c, stmt, ctx, true);
+  if (c.accept("view") || c.accept("materialized", "view")) return classifyView(c, stmt, ctx, true);
   if (c.accept("policy")) return classifyPolicy(c, ctx);
   return c.accept("table") ? classifyAlterTable(c, ctx) : UNCLASSIFIED;
 }

@@ -1830,6 +1830,14 @@ As built (2026-10-05): three files, each one job: `scripts/guards/grant-sql.ts` 
     - a column-list grant with one privilege lacking a column list (`SELECT (c), UPDATE`) is table-wide;
     - `CREATE SCHEMA` is neutral only bare; `ALTER FUNCTION … RENAME | SET SCHEMA` is `unclassified`;
     - matrix and registry findings always name the fixed paths, so a decoy file of the same name cannot take them.
+  - SE-6 ruling of 2026-10-05 (engineering-rules.md, SE-6 "Enforced by"), folded in here: `CREATE TRIGGER` or `CREATE
+    RULE` on a table the PR does not create, `CREATE TABLE` with `AS`, `PARTITION OF`, `LIKE` or `INHERITS`, any new
+    `SECURITY DEFINER` function, an `ALTER` of a new function's or view's owner or security, and a new view without
+    `security_invoker = true` (or any materialized view) that names a relation the PR does not create, are trusted
+    (`grant_parse_watchers_and_copies`, `grant_parse_views_and_functions_by_rights`). A view's alias reference
+    (`a.id`) reads as a relation name and fails closed; `security_invoker` avoids it.
+  - `grant-parse.ts` (348 non-blank lines) and its test file are over Biome's 300-line warning: the classifier is one
+    ordered sequence of rules, and splitting it further would scatter the verdict constants it shares.
   - Any file under `migrations/` is read as SQL, a README included (it comes out `unclassified`).
   - `no_runtime_caller_yet`: only tests import `grant-parse.ts` until P0.09c flips it.
 
