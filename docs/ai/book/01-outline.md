@@ -126,9 +126,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
 | P1.20 | Framework-glue spike | [SPIKE] | P1.04, P1.10 | `phase-1.md` |
-| P1.21 | Token pipeline | — | P1.20 | `phase-1.md` |
+| P1.21q | CSS budget in `scripts/budgets/` (check part of P1.21; SE-6 `q`) | — | P1.20 | `phase-1.md` |
+| P1.21 | Token pipeline | — | P1.21q, P1.20 | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.07, P1.09 | `phase-1.md` |
-| P1.23 | Island runtime | [SEC] | P1.20, P1.08 | `phase-1.md` |
+| P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
+| P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08 | `phase-1.md` |
 | P1.24 | UI kit, part 1: the "is it on the sheet?" gate and the static and form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.22 | `phase-1.md` |
 | P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.23 | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
@@ -300,7 +302,8 @@ this slice lands.
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
-| P1.19 | i18n runtime and EN/FR catalogs; missing-key and unused-key checks; first, convert the slice-1 messages modules | — | P1.01, P1.03, P2.13a | `phase-1.md` |
+| P1.19q | i18n catalog check in `scripts/lint/` (check part of P1.19; SE-6 `q`) | — | P1.01, P1.03, P2.13a | `phase-1.md` |
+| P1.19 | i18n runtime and EN/FR catalogs; missing-key and unused-key checks; first, convert the slice-1 messages modules | — | P1.19q, P1.01, P1.03, P2.13a | `phase-1.md` |
 | P1.22b | Locale: negotiation, `?lang`, the locale cookie and language links (moved out of P1.22; added) | [SEC] | P1.19, P1.22, P1.25, P1.26 | `phase-1.md` |
 
 ```mermaid
@@ -328,7 +331,8 @@ Arachnid application, and the Phase 1 exit.
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.33, P1.33a, P0.12, P0.11, P1.29 | `phase-1.md` |
-| P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
+| P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
+| P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.36 | Compliance skeletons | — | P0.07 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
@@ -376,7 +380,8 @@ Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.23 | Publish and unpublish | [SEC] | P2.21, P2.22, P1.31, P2.07 | `phase-2.md` |
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34 | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26, P1.27, P1.30, P1.11, P1.33 | `phase-2.md` |
+| P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.30, P1.11, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid

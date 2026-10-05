@@ -259,7 +259,9 @@ Every step is designed so its code follows these rules, and its tests or CI guar
     with no caller yet (P0.09e) is a valid cut (ruling 2026-10-05). A step that changes a check path and a product path
     together splits: its check part lands first as `<id>q`, and the step depends on it (rule SE-6, ruling 2026-10-05
     01:15Z; beside `<id>k` for a trusted-base change and `<id>g` for a grants change). A step whose guard, CI or hook
-    work touches only check paths, tooling, scripts, tests and docs stays one step.
+    work touches only check paths, tooling, scripts, tests and docs stays one step. Only the `scripts/` folders whose
+    code decides pass or fail are check paths; a script CI runs to pass or fail moves under one (ruling 01:43Z), while
+    generators and developer tools stay outside.
     The checks are P0.09c's. Its description follows the one PR template (P0.09; rule DL-3) and links the step. A
     human can go from any file to the step that explains it, and back.
 
