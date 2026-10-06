@@ -1,0 +1,6 @@
+# hadolint v2.15.1 configuration (P1.27q; README "Configure"). Warnings fail the build as errors do, and every
+# FROM outside a build stage must come from our GHCR mirror (DL3026), so no base image is pulled from a public
+# registry at build time. No rule is ignored; an exception needs an inline `# hadolint ignore=` with a reason.
+failure-threshold: warning
+trustedRegistries:
+  - ghcr.io

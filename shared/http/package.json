@@ -12,6 +12,6 @@
     "@unset/shared-config": "*",
     "@unset/shared-errors": "*",
     "@unset/shared-log": "*",
-    "hono": "4.13.10"
+    "hono": "4.13.11"
   }
 }

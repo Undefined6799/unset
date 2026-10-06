@@ -1,0 +1,46 @@
+# Upstream images we run (P1.27q): every `source` in deployment/mirror.list.json is scanned by digest with Trivy, on
+# a change to main and weekly, so a newly published CVE in an image we already pinned turns this red. Copying into
+# the private GHCR mirror and signing it need `packages: write` and the `signing` environment, which wait on Alex
+# (see the P1.27q PR); until P1.27 adds the list the job prints a notice and passes. This workflow is not a required
+# pull-request check; the list's own rules (digest only) are unit tests that run in `check`.
+
+name: mirror
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions: {}
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      MIRROR_LIST: deployment/mirror.list.json
+      TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan every upstream source by digest
+        run: |
+          if [ ! -e "$MIRROR_LIST" ]; then
+            echo "::notice title=mirror::skipped, no mirror list yet (lands in P1.27)"
+            exit 0
+          fi
+          jq -r '.[].source' "$MIRROR_LIST" > "$RUNNER_TEMP/sources"
+          test -s "$RUNNER_TEMP/sources"
+          while read -r source; do
+            case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
+            docker run --rm -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" image --exit-code 1 --severity HIGH,CRITICAL \
+              --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source"
+          done < "$RUNNER_TEMP/sources"
