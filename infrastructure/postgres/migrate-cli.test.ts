@@ -40,9 +40,7 @@ describe("migrate CLI config", () => {
   test("migrate_config_plain_tcp_only_inside_compose", () => {
     expect(() => load({ PG_HOST: "db.example.org" })).toThrow(ConfigError);
     expect(connectionOf(load({ PG_HOST: "db.example.org", PG_SSLMODE: "verify-full" })).ssl).toBe(true);
-    expect(connectionOf(load({ PG_HOST: "db.example.org", PG_SSLMODE: "require" })).ssl).toEqual({
-      rejectUnauthorized: false,
-    });
+    expect(() => load({ PG_HOST: "db.example.org", PG_SSLMODE: "require" })).toThrow(ConfigError);
   });
 
   test("migrate_config_refuses_bad_values", () => {
