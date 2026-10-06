@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15m, P1.15, P1.16, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15, P1.16, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37; then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -113,7 +113,9 @@ flowchart TD
   P112 --> P113["P1.13 DID-column registry"]
   P112 --> P114["P1.14 seal [SEC]"]
   P114 --> P114a["P1.14a sealTo (age) [SEC]"]
+  P111 --> P115x["P1.15x lint: TRUNCATE trigger event [ALEX]"]
   P113 --> P115m["P1.15m audit SQL [SEC]"]
+  P115x --> P115m
   P115m --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P113 --> P116["P1.16 single-use store [SEC]"]
@@ -2806,15 +2808,31 @@ Diagram: none.
 Tags: [SEC]            Depends on: P1.15m, P1.14q            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
 Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` is a new trusted workspace, so its root
   `tsconfig.json` reference and lockfile entries wait for P1.14q, while the SQL needs neither (the P1.14 / P1.14m
-  precedent: `m` is the migration part). Two trusted-base steps, in order; this section's text specifies both:
-  1. **P1.15m** (trusted; depends on P1.12, P1.13, and on #126's 0005 and P1.16's 0006 for migration order only):
+  precedent: `m` is the migration part). Three steps, in order; this section's text specifies the last two:
+  0. **P1.15x** (product, non-trusted, [ALEX]; depends on P1.11; architecture record
+     2026-10-06-p115x-truncate-trigger-event-lint): P1.11's `sqlLint` rejects the word `TRUNCATE` anywhere in an expand
+     file, and the trigger below names it as an event. In `sqlLint.ts` and `sqlLint.test.ts` only, one exported
+     regex `TRIGGER_EVENTS` matches a whole `CREATE [OR REPLACE] [CONSTRAINT] TRIGGER name {BEFORE|AFTER|INSTEAD OF}
+     event [OR event]... ON` clause (events INSERT, UPDATE, DELETE, TRUNCATE; no `UPDATE OF` list); the lint blanks
+     the TRUNCATE words inside each match to spaces and runs the unchanged rules, so any clause that does not match
+     still fails. A bare lookbehind, dropping the TRUNCATE trigger, and a false phase label are refused. Tests:
+     `trigger_event_list_allowed` (also `AFTER TRUNCATE ON`, `CREATE OR REPLACE TRIGGER`, newlines between tokens)
+     and `truncate_statement_still_refused`, which reports rule `truncate` on the right line for `TRUNCATE t;`,
+     `TRUNCATE TABLE ONLY t;`, a TRUNCATE in a `$$` body, `EXECUTE 'TRUNCATE t'`, `'a OR TRUNCATE b'` outside a
+     trigger, a `-- do this BEFORE` line then `TRUNCATE t;`, `CREATE TRIGGER x BEFORE UPDATE OF c OR TRUNCATE ON t`,
+     and `CREATE TRIGGER x AFTER INSERT ON t EXECUTE FUNCTION f('TRUNCATE')`. A loosening: it opens only with
+     Alex's typed word naming the change and the branch, quoted in the PR body.
+  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, never stacked on P1.15x; and on #126's 0005 and P1.16's
+     0006 for migration order only):
      `infrastructure/postgres/migrations/0007_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
      with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `event_pii`, `audit.row_hash`,
      `audit.append`, the triggers, auditor SELECT and the default-privileges line; the `grant-matrix.json` and
      `erasure-registry.json` rows. Tests in `tests/integration/postgres/audit.test.ts`: `append_as_admin`,
      `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `pii_only_admin`,
      `concurrent_appends`, `audit_flood_does_not_block`, `registry_rows`, and `row_hash_known_answer` (SQL) against a
-     vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged.
+     vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged. No `REVOKE TRUNCATE`:
+     only the owner holds it, and the grants test proves no role does (a default-privileges path that grants it goes
+     back to architecture). The append-only trigger is statement-level (see Triggers below).
   2. **P1.15** (trusted; depends on P1.15m, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
      `append.ts` (with the TS validation), `rowHash.ts`, `verify.ts`, plus the root `tsconfig.json` reference and the
      package's own lockfile entries as P1.14q permits. Tests: `reason_union_matches_table`,
@@ -2882,7 +2900,9 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
     row_hash bytea)` — `SECURITY DEFINER`, `SET search_path = pg_catalog, audit`, EXECUTE granted to `web`, `indexer`,
     `admin`. `p_actor_did` / `p_actor_key` (a WebAuthn credential id) mean "asserted by the writing process": the
     database cannot verify a session, and says so.
-  - Triggers: `audit.chain` `BEFORE UPDATE OR DELETE OR TRUNCATE` → raise `audit is append-only`, except inside the
+  - Triggers: `audit.chain` `BEFORE UPDATE OR DELETE OR TRUNCATE ... FOR EACH STATEMENT` (PostgreSQL 18 allows TRUNCATE
+    triggers only per statement; one statement-level trigger also raises on a zero-row update, architecture record
+    2026-10-06-p115x point 3) → raise `audit is append-only`, except inside the
     P1.15a definer functions (they set `audit.maintenance = 'on'` locally and the trigger checks it). Side tables: UPDATE
     always refused; DELETE only inside P1.15a functions.
   - `auditor` (P1.12 roster): SELECT on `audit.chain` and (P1.15a) `audit.segment` and `audit.redaction_log` only.
