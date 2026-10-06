@@ -160,6 +160,20 @@ describe("logger", () => {
     ]);
   });
 
+  test("logger_single_use_events", () => {
+    // P1.16 logs a refused token with its reason word and its purpose as `kind` (dots become underscores, since
+    // `kind` holds a name); a token, a DID or free text in either field is replaced.
+    const { log, records } = capture();
+    log.info("single_use.rejected", { reason: "reused", kind: "login_nonce" });
+    log.warn("single_use.claim_clamped", { kind: "service_auth_jti" });
+    log.info("single_use.rejected", { reason: "did:plc:abc", kind: "q2Vt-9x_Zk0aB1c2D3e4F5g6H7i8J9k0L1m2N3o4P5q" });
+    expect(records().map((r) => [r.event, r.reason, r.kind])).toEqual([
+      ["single_use.rejected", "reused", "login_nonce"],
+      ["single_use.claim_clamped", undefined, "service_auth_jti"],
+      ["single_use.rejected", "[reason]", "[kind]"],
+    ]);
+  });
+
   test("logger_sqlstate_is_a_code_only", () => {
     // A message or anything else in the sqlstate field is replaced, so error text cannot leak through it.
     const { log, records } = capture();
