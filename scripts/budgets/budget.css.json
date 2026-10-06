@@ -1,0 +1,4 @@
+{
+  "perBundle": { "unminifiedBytes": 40960, "minGzipBytes": 12288 },
+  "perPage": { "unminifiedBytes": 40960, "minGzipBytes": 12288 }
+}
