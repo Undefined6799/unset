@@ -224,6 +224,8 @@ describe("trusted base (SE-6)", () => {
       "/scripts/githooks/",
       "/.github/",
       "/.semgrepignore",
+      "/vitest.config.ts",
+      "/biome.json",
     ]);
     expect(broken(`${CODEOWNERS}# trusted base (SE-6)\n/x/ @Undefined6799\n`)).toBe(false);
   });
@@ -241,6 +243,10 @@ describe("trusted base (SE-6)", () => {
     const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
     expect(unlisted([...workflows, ...Object.values(pkg.scripts)].join("\n"), real.section.checks)).toEqual([]);
     expect(unlisted("run: node scripts/dev/seed.ts", real.section.checks)).toEqual(["/scripts/dev/"]);
+    // Ruling 2026-10-06 03:15Z: the root configs that decide pass or fail (Vitest's retry, allowOnly, include and
+    // globalSetup; Biome's lint and format rules) are check paths too.
+    const configs = ["/vitest.config.ts", "/biome.json"];
+    expect(configs.filter((path) => !real.section.checks.includes(path))).toEqual([]);
   });
 
   // SE-6 ruling 2026-10-05 (refined 01:15Z): CI runs the PR's own checks, so a PR that changes a check path changes no
