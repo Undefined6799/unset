@@ -265,6 +265,27 @@ describe("grants", () => {
     );
   });
 
+  // Architecture ruling 2026-10-06 (P1.13): the gate on the types domains is USAGE on the schema, and every domain keeps
+  // PostgreSQL's default ACL (PUBLIC USAGE, docs 18 ddl-priv Table 5.2). A later explicit grant or revoke on either
+  // shows up here as a deliberate change.
+  test("types_schema_usage_exact", () => {
+    const usage =
+      "SELECT string_agg(g, ',' ORDER BY g) FROM (SELECT CASE a.grantee WHEN 0 THEN 'PUBLIC' " +
+      "ELSE a.grantee::regrole::text END AS g FROM pg_namespace n, aclexplode(n.nspacl) a " +
+      "WHERE n.nspname = 'types' AND a.privilege_type = 'USAGE' AND a.grantee <> n.nspowner) s";
+    expect(postgres.sql("unset", usage)).toBe("admin,api,indexer,web");
+  });
+
+  test("types_domains_typacl_null", async () => {
+    const domains = "SELECT t.typname FROM pg_type t WHERE t.typnamespace = 'types'::regnamespace AND t.typtype = 'd'";
+    const explicit = `${domains} AND t.typacl IS NOT NULL ORDER BY 1`;
+    expect(postgres.sql("unset", `${domains} ORDER BY 1`).split("\n")).toEqual(["at_uri", "did"]);
+    expect(postgres.sql("unset", explicit)).toBe("");
+    const { name, pool } = await freshDatabase();
+    await run(pool, "REVOKE USAGE ON DOMAIN types.did FROM PUBLIC");
+    expect(postgres.sql(name, explicit)).toBe("did");
+  });
+
   test("no_public_execute_on_routines", async () => {
     // Whoever created it (architecture ruling 2026-10-06, point 3): no routine outside the catalogs and extensions may
     // be executed by PUBLIC. migrator's routines get the global default; audit_owner has no default until the step that
