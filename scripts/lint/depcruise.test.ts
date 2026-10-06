@@ -50,6 +50,14 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
   "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
+  "interface-http-render-build": [
+    {
+      from: config.RENDER_BUILD_IMPORT.from,
+      spec: config.RENDER_BUILD_IMPORT.module,
+      kind: "dynamic",
+      unresolved: true,
+    },
+  ],
   "interface-admin-render": [edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`)],
   "admin-service": [
     edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/index.ts"),
@@ -369,6 +377,17 @@ describe("allowlist matrix", () => {
       edge("infrastructure/storage/a.ts", "../audit/index.ts"),
       edge("shared/ui/a.ts", "../config/index.ts"),
     );
+  });
+
+  test("render_build_import_is_exact", async () => {
+    // P1.23w: the one unresolvable edge is this file's import of this specifier; nothing near it passes.
+    const { from, module } = config.RENDER_BUILD_IMPORT;
+    expect({ from, module }).toEqual({ from: "interfaces/http/web/render-entry.ts", module: "@unset/apps-web/server" });
+    const unresolved = (file: string, spec: string): Edge => ({ from: file, spec, kind: "dynamic", unresolved: true });
+    await expectPass(unresolved(from, module));
+    await expectFail("not-in-allowed", unresolved("interfaces/http/web/page.ts", module));
+    await expectFail("not-in-allowed", unresolved(from, "@unset/apps-web/other"), unresolved(from, `${module}x`));
+    await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
   });
 
   test("depcruise_matrix_rows_have_fixtures", async () => {

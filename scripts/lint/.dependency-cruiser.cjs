@@ -29,6 +29,14 @@ const anyOf = (paths) => `^(${paths.map(escapeRegex).join("|")})`;
 const oneOfFiles = (paths) => `${anyOf(paths)}$`;
 const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
+/**
+ * The one unresolvable edge allowed (P1.23w; architecture Amendment 2026-10-06 21:45Z; Alex 21:49Z): the web render
+ * loader imports apps/web's server build through the package export `@unset/apps-web/server`. dependency-cruiser does
+ * not follow that exports subpath into the excluded dist/, so it reports the edge as unresolved. Only this file, only
+ * this exact specifier.
+ */
+const RENDER_BUILD_IMPORT = { from: "interfaces/http/web/render-entry.ts", module: "@unset/apps-web/server" };
+
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
 // An app's Vite build config (P1.23v; architecture record 2026-10-06-p116-retention-usage-and-p124-icon-source.md,
@@ -68,6 +76,11 @@ const MATRIX = [
     name: "interface-http-render",
     from: { path: "^interfaces/http/" },
     to: [{ path: oneOfFiles([RENDER_ENTRIES.http]) }],
+  },
+  {
+    name: "interface-http-render-build",
+    from: { path: oneOfFiles([RENDER_BUILD_IMPORT.from]) },
+    to: [{ path: oneOfFiles([RENDER_BUILD_IMPORT.module]), couldNotResolve: true }],
   },
   {
     name: "interface-admin-render",
@@ -292,6 +305,7 @@ module.exports = {
 Object.defineProperties(module.exports, {
   ZERO_DEP_ALLOWLIST: { value: ZERO_DEP_ALLOWLIST },
   RENDER_ENTRIES: { value: RENDER_ENTRIES },
+  RENDER_BUILD_IMPORT: { value: RENDER_BUILD_IMPORT },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
 });

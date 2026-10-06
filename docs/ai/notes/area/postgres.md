@@ -3,7 +3,7 @@ id: postgres
 type: area
 status: current
 areas: ["[[postgres]]"]
-summary: "Hub for infrastructure/postgres: migrations, roles and grants, the pool and transactions."
+summary: "Hub for infrastructure/postgres: migrations, roles and grants, the pool, transactions and the single-use store."
 code: [infrastructure/postgres/index.ts]
 sources: []
 importance: normal
@@ -23,6 +23,8 @@ checked: 2026-10-06
 - `grant-matrix.json`: every grant, checked against the live catalog by `tests/integration/postgres/grants.test.ts`.
 - `erasure-registry.json` and `didColumns.ts`: every DID-bearing column, found from the catalog.
 - `pool.ts`: the only place a pooled client is taken. `tx.ts`: the only place a transaction opens.
+- `singleUse/store.ts`: the single-use token store (P1.16, migration 0006). Consuming a token is one UPDATE whose row
+  lock lets exactly one caller through; only a SHA-256 of the token is stored, and the retention role sweeps expired rows.
 
 **Rules worth knowing.**
 - Each process connects as its own role (web, api, indexer, retention and others), never as a superuser.
