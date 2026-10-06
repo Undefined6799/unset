@@ -42,6 +42,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1, ADR 0015 | An app's `vite.config.ts` is build-time tooling: it may import Node built-ins, npm, its own app, `shared/` and `scripts/ui/css-scope.ts`, nothing else | checked: `app-build-config-imports`, `app_build_config_is_tooling` |
 | ADG §1, ADR 0015 | Nothing imports an app's `vite.config.ts` | checked: `app-build-config-not-imported`, `app_build_config_is_tooling` |
 | ADG §1 | Only the serving interface imports its app's render entry | checked: `app-render-entry-only` |
+| ADG §1, P1.23w | The one unresolvable edge: `interfaces/http/web/render-entry.ts` imports `@unset/apps-web/server`, the package export for apps/web's server build, which dependency-cruiser cannot follow into the excluded `dist/` (Alex 2026-10-06 21:49Z) | checked: `MATRIX` (its interface-http-render-build row), `render_build_import_is_exact` |
 | ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
 | ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |
 | ADG §1, plan §5.1 | An island (`*.island.tsx`) imports only `shared/ui`, type-only modules and the npm modules named in the rule (today React's JSX runtime) | checked: `island-import-boundary`, `island_import_boundary`, `island_imports_jsx_runtime_passes` |
