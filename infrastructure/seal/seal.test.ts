@@ -65,6 +65,17 @@ describe("seal", () => {
     const sealer = createSealer(K1);
     // @ts-expect-error A free string is not a SealContext; only sealContext makes one.
     expect(codeOf(() => sealer.seal(Buffer.from("x"), "app.t.c|1"))).toBe("ok");
+    // A cast past the type is still checked at run time, so an empty or malformed context never seals or opens.
+    for (const bad of ["", "app.t.c", "app.t.c|", "x|1", "app.t.c|a|b"]) {
+      expect(
+        codeOf(() => sealer.seal(Buffer.from("x"), bad as SealContext)),
+        bad,
+      ).toBe("seal.format");
+      expect(
+        codeOf(() => sealer.unseal(sealer.seal(Buffer.from("x"), A1), bad as SealContext)),
+        bad,
+      ).toBe("seal.format");
+    }
     const typed: SealContext = sealContext("app.t.c", "1");
     expect(typed).toBe("app.t.c|1");
   });
