@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 95 steps: 77 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 97 steps: 79 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -176,7 +176,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.14q | New trusted workspace may carry its root reference and lockfile entries (check part of P1.14; SE-6 `q`) | [SEC] | P0.09 | `phase-1.md` |
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.14q, P1.02, P1.12 | `phase-1.md` |
 | P1.14d | Sealed type and column registry (split from P1.14; P1.14m first if pr-shape classes the migration trusted) | [SEC] | P1.14, P1.13 | `phase-1.md` |
-| P1.15 | Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier | [SEC] | P1.12, P1.13 | `phase-1.md` |
+| P1.15x | Migration lint: allow TRUNCATE as a trigger event only (product; loosening) | [ALEX] | P1.11 | `phase-1.md` |
+| P1.15m | Audit SQL: tables, `append()`, `row_hash`, triggers, grants (split from P1.15; trusted) | [SEC] | P1.12, P1.13, P1.15x | `phase-1.md` |
+| P1.15 | Audit TS workspace: actions, append, rowHash, verify (trusted; SQL in P1.15m) | [SEC] | P1.15m, P1.14q | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p | `phase-1.md` |
@@ -273,7 +275,9 @@ flowchart TD
   P1_14q["P1.14q Trusted workspace guard"]
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
   P1_14d["P1.14d Sealed type and registry"]
-  P1_15["P1.15 Audit: append-only audit.append"]
+  P1_15x["P1.15x Lint: TRUNCATE trigger event"]
+  P1_15m["P1.15m Audit SQL"]
+  P1_15["P1.15 Audit TS workspace"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17["P1.17 Per-DID Postgres advisory lock"]
@@ -352,7 +356,11 @@ flowchart TD
   P1_14q --> P1_14
   P1_14 --> P1_14d
   P1_13 --> P1_14d
-  P1_13 --> P1_15
+  P1_13 --> P1_15m
+  P1_11 --> P1_15x
+  P1_15x --> P1_15m
+  P1_15m --> P1_15
+  P1_14q --> P1_15
   P1_13 --> P1_16
   P1_16g --> P1_16
   P1_11p --> P1_17
