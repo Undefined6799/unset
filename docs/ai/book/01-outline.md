@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 82 steps: 64 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 83 steps: 65 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -186,8 +186,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
-| P1.24 | UI kit, part 1: the "is it on the sheet?" gate and the static and form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.22 | `phase-1.md` |
-| P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.23 | `phase-1.md` |
+| P1.23r | Style-prop lint and island CI wiring (check part of P1.23, after it) | [SEC] | P1.23 | `phase-1.md` |
+| P1.24 | UI kit, part 1: the "is it on the sheet?" gate and the static and form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.22, P1.23r | `phase-1.md` |
+| P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.23, P1.23r | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
@@ -268,6 +269,7 @@ flowchart TD
   P1_21m["P1.21m Font metrics"]
   P1_22["P1.22 Base styles"]
   P1_23["P1.23 Island runtime"]
+  P1_23r["P1.23r Style lint and island CI"]
   P1_24["P1.24 UI kit"]
   P1_24a["P1.24a UI kit"]
   P1_25["P1.25 App shell and error pages"]
@@ -344,6 +346,9 @@ flowchart TD
   P1_22 --> P1_24
   P1_24 --> P1_24a
   P1_23 --> P1_24a
+  P1_23 --> P1_23r
+  P1_23r --> P1_24
+  P1_23r --> P1_24a
   P1_24a --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
