@@ -3,8 +3,8 @@
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { sealContext } from "./context.ts";
+import { SealError } from "./error.ts";
 import { type Keyring, parseKeyring } from "./keyring.ts";
-import { SealError } from "./seal.ts";
 import { createSealer } from "./sealer.ts";
 import { CHUNK_BYTES } from "./sealStream.ts";
 

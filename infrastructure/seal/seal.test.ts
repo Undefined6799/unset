@@ -8,8 +8,8 @@ import { inspect } from "node:util";
 import { ConfigError, defineConfig, loadConfig } from "@unset/shared-config";
 import { describe, expect, test, vi } from "vitest";
 import { type SealContext, sealContext } from "./context.ts";
+import { SealError } from "./error.ts";
 import { type Keyring, parseKeyring, sealFields } from "./keyring.ts";
-import { SealError } from "./seal.ts";
 import { createSealer } from "./sealer.ts";
 
 const key = (fill: number): string => Buffer.alloc(32, fill).toString("base64");

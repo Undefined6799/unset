@@ -8,20 +8,8 @@
 // wrap count lets rotation happen long before that.
 import { createCipheriv, createDecipheriv } from "node:crypto";
 import type { SealContext } from "./context.ts";
+import { SealError } from "./error.ts";
 import { type Keyring, KID } from "./keyring.ts";
-
-export type SealCode = "seal.format" | "seal.unknown_kid" | "seal.auth_failed" | "seal.too_large";
-
-/** A refused seal or unseal. Carries the code only: never the value, its parts or the context. */
-export class SealError extends Error {
-  readonly code: SealCode;
-
-  constructor(code: SealCode) {
-    super(code);
-    this.name = "SealError";
-    this.code = code;
-  }
-}
 
 /** What every seal operation needs: the keys, a source of random bytes (fixed in the known-answer tests), and the
  * per-kid count of wraps (the `seal.count_by_kid` metric). */

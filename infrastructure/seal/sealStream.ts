@@ -4,7 +4,8 @@
 // Rogaway and Vizár, "Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance", CRYPTO 2015; as in age
 // and Tink): a reordered or dropped chunk fails its index, and a stream that ends on a chunk not flagged final is cut.
 import type { SealContext } from "./context.ts";
-import { b64, decrypt, encrypt, type Keys, newDek, SealError, TAG_BYTES, unb64, unwrapDek } from "./seal.ts";
+import { SealError } from "./error.ts";
+import { b64, decrypt, encrypt, type Keys, newDek, TAG_BYTES, unb64, unwrapDek } from "./seal.ts";
 
 export const CHUNK_BYTES = 64 * 1024;
 const PREFIX_BYTES = 7;

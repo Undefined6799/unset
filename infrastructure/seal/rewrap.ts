@@ -1,6 +1,7 @@
 // Key rotation without downtime (P1.14): a value or a stream header sealed under an old KEK gets its DEK re-wrapped by
 // the active one. The data part is untouched, so no plaintext is ever produced and the value stays bound to its context.
-import { type Keys, SealError, unwrapDek, wrapDek } from "./seal.ts";
+import { SealError } from "./error.ts";
+import { type Keys, unwrapDek, wrapDek } from "./seal.ts";
 
 /**
  * `sealed` (an `s1` value, or an `s1c` header line without its newline) with its DEK wrapped by the active key.

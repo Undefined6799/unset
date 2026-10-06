@@ -2,7 +2,7 @@
 // value moved to another row or column fails to open. A context is never a free string: only `sealContext` makes one,
 // and the column ids come from the registry the database side keeps (P1.14d types them as its keys).
 
-import { SealError } from "./seal.ts";
+import { SealError } from "./error.ts";
 
 declare const sealContextBrand: unique symbol;
 /** `"<schema>.<table>.<column>|<rowKey>"`, made only by `sealContext`. */
