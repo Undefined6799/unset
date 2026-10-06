@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 97 steps: 79 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 99 steps: 81 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -181,7 +181,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.15 | Audit TS workspace: actions, append, rowHash, verify (trusted; SQL in P1.15m) | [SEC] | P1.15m, P1.14q | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
-| P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p | `phase-1.md` |
+| P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
+| P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p, P1.17e | `phase-1.md` |
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
 | P1.20 | Framework-glue spike | [SPIKE] | P1.04, P1.10 | `phase-1.md` |
@@ -213,6 +214,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
+| P1.36 | Compliance skeletons (pulled forward from slice 2, Alex 23:08Z; test in `scripts/docs/`, check class) | — | P0.07 | `phase-1.md` |
 | P2.01k | `resolveTxt` in `net-guard` (split from P2.01, SE-6) | [SEC] | P1.18 | `phase-2.md` |
 | P2.01q | `alsoKnownAs` guard (split from P2.01, SE-6) | — | P0.09c | `phase-2.md` |
 | P2.01m | `resolveVetted` on c-ares for public names | [SEC] | P2.01k | `phase-2.md` |
@@ -280,6 +282,7 @@ flowchart TD
   P1_15["P1.15 Audit TS workspace"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
+  P1_17e["P1.17e Lock log events"]
   P1_17["P1.17 Per-DID Postgres advisory lock"]
   P1_18["P1.18 net-guard core"]
   P1_18a["P1.18a net-guard requests"]
@@ -309,6 +312,7 @@ flowchart TD
   P1_32["P1.32 Permanent choices"]
   P1_31["P1.31 Lexicons package"]
   P1_37["P1.37 Legal paperwork"]
+  P1_36["P1.36 Compliance skeletons"]
   P2_01["P2.01 DID and handle resolution"]
   P2_01k["P2.01k resolveTxt in net-guard"]
   P2_01q["P2.01q alsoKnownAs guard"]
@@ -364,6 +368,8 @@ flowchart TD
   P1_13 --> P1_16
   P1_16g --> P1_16
   P1_11p --> P1_17
+  P1_17e --> P1_17
+  P1_03 --> P1_17e
   P1_02 --> P1_18
   P1_18 --> P1_18a
   P1_04 --> P1_20
@@ -500,8 +506,8 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
-and signing (P1.27s, contingent on Alex's guard approval), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority, compliance skeletons, the
+Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+and signing (P1.27s, contingent on Alex's guard approval), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
 | Id | Step | Tags | Deps | Owner file |
@@ -518,7 +524,6 @@ Arachnid application, and the Phase 1 exit.
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
 | P1.24b | Remaining islands, after the budget ruling (added step) | — | P1.24a, plus an architecture ruling (runtime share or budget raise) | `phase-1.md` |
-| P1.36 | Compliance skeletons | — | P0.07 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
 
@@ -532,14 +537,12 @@ flowchart TD
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
   P1_27s["P1.27s publish and sign images"]
-  P1_36["P1.36 Compliance skeletons"]
   P1_37a["P1.37a Apply for Arachnid Shield access"]
   P1_38["P1.38 Phase 1 exit"]
   P1_33 --> P1_33a
   P1_33a --> P1_34
   P1_34 --> P1_35
   P1_35 --> P1_38
-  P1_36 --> P1_38
   P1_37a --> P1_38
 ```
 
