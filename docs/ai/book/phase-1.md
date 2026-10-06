@@ -4568,8 +4568,9 @@ reduced default below and the push, sign and attest work is **P1.27s**:
   No push job and no sign job. Permissions `contents: read`.
 - `mirror.yml` runs when `deployment/mirror.list.json` changes and weekly, scan only, with no copy to GHCR; while the
   list is absent it exits 0 with a notice.
-- `required-checks.json` gains `images`; the pin in `scripts/guards/workflow-pins.test.ts` moves in the same PR (a
-  tightening, cleared).
+- P1.27q opened (about 11:45Z) without the `"images"` entry in `.github/required-checks.json` and without its pin line
+  in `scripts/guards/workflow-pins.test.ts`: the building thread's harness refused the guard-file edit until Alex's
+  own words reach that thread. Both land in **P1.27r** (book edit 2026-10-06-p127r-images-required-check).
 - `.github/hadolint.yaml` and `.github/trivyignore.yaml` sit under `.github/` after the root tidy, not at the root
   paths named in the Where line below.
 - Tests: `verify_images_rejects_unsigned`, `verify_images_rejects_wrong_key`,
@@ -4577,7 +4578,7 @@ reduced default below and the push, sign and attest work is **P1.27s**:
   (`scripts/ci/verify-images.test.ts`, cosign through an injected runner; nothing calls it until P1.27s);
   `images_skip_only_without_dockerfile`, `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`);
   `trivyignore_expiry_enforced` (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts`
-  gains `images`. `no_tlog_upload_flag_present` and the sign job's `workflow_permissions_minimal` move to P1.27s.
+  gains `images` unless that also waits for P1.27r. `no_tlog_upload_flag_present` and the sign job's `workflow_permissions_minimal` move to P1.27s.
 - Until P1.27s lands nothing is published to GHCR, so no unsigned image exists anywhere a deploy could pull it (fail
   closed). P1.30's preflight and P2.26a deploy only images `verify-images` accepts.
 - If Actions minutes run short once the Dockerfile lands, the fix is change detection inside the job, so the required
@@ -4744,6 +4745,28 @@ nothing written to the lock).
 
 **Not in this step:** deploy (P1.30, P5.03); patching upstream images (the PDS image is used unmodified — the
 prototype's `deploy/pds/Dockerfile` sed patch is REJECTED).
+
+---
+
+### P1.27r — Make `images` a required check (split from P1.27q)
+Tags: [SEC] [ALEX]            Depends on: P1.27q, Alex's typed words in the building thread allowing the guard-file
+  edit            Plan: §7 (CI); rule SE-6
+Where: check paths only, kind/build: `"images"` in `.github/required-checks.json`, the matching line in
+  `scripts/guards/workflow-pins.test.ts`, and the `images` entry in `scripts/docs/change-shape-config.test.ts` if
+  P1.27q left it out. Nothing else rides with it.
+Size: under 20 lines.
+
+Why a step of its own: the required check is a tightening, independent of the `packages: write` question (P1.27s), so
+it lands as soon as Alex says the word, whichever way he answers that question. If his word comes before P1.27q merges,
+the two lines ride P1.27q and this step lapses.
+
+Binding: merges before P1.30 and before the slice 1 exit (P2.13a). P1.27 (the Dockerfile) does not wait for it.
+Interim rule until it merges: every hand-off of a PR that touches `deployment/images/` or the Dockerfile lists
+`images` among the checks that must be a completed success on the latest commit, next to check, audit, secrets,
+actionlint, semgrep and pr-shape. A skipped run is not green.
+
+Done when (tests): the existing `workflow-pins` test, updated; `required_checks_include_images` (the required list and
+the workflow job name agree).
 
 ---
 
@@ -5106,7 +5129,7 @@ dev-seed:
 
 ### P1.30 — Deploy preflight
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+**Tags:** [SEC] · **Depends on:** P1.27, P1.27r · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
 **Where:** `scripts/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`;
 `docs/human/runbooks/pds-debug-logging.md`; tests.

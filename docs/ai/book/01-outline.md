@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 76 steps: 58 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 77 steps: 59 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -183,9 +183,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
+| P1.27r | Make `images` a required check (split from P1.27q) | [SEC] [ALEX] | P1.27q | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11p, P1.27, P1.28 | `phase-1.md` |
-| P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
+| P1.30 | Deploy preflight | [SEC] | P1.27, P1.27r | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -258,6 +259,7 @@ flowchart TD
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
+  P1_27r["P1.27r images required check"]
   P1_28["P1.28 Edge Caddy"]
   P1_29["P1.29 Development stack"]
   P1_30["P1.30 Deploy preflight"]
@@ -325,6 +327,7 @@ flowchart TD
   P1_11p --> P1_29
   P1_28 --> P1_29
   P1_27 --> P1_30
+  P1_27r --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
   P1_18 --> P2_01
