@@ -278,6 +278,39 @@ describe("boundary rules", () => {
     await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx/x.ts"));
   });
 
+  const ISLANDS = ["apps/web/src/islands/demo.island.tsx", "shared/ui/islands/menu.island.tsx"];
+  const up = (island: string) => "../".repeat(island.split("/").length - 1);
+
+  test("island_import_boundary", async () => {
+    for (const island of ISLANDS) {
+      await expectFail("island-import-boundary", edge(island, `${up(island)}domains/identity/index.ts`));
+      await expectFail("island-import-boundary", edge(island, `${up(island)}infrastructure/postgres/index.ts`));
+      await expectFail("island-import-boundary", edge(island, `${up(island)}interfaces/http/compose.ts`));
+      await expectFail("island-import-boundary", edge(island, `${up(island)}shared/config/index.ts`));
+      await expectPass(edge(island, `${up(island)}shared/ui/index.ts`));
+    }
+    await expectFail("island-import-boundary", edge(ISLANDS[0] as string, "../server/session.ts"));
+    await expectPass(edge(ISLANDS[0] as string, "../../../../shared/config/index.ts", "type"));
+  });
+
+  test("island_imports_jsx_runtime_passes", async () => {
+    for (const island of ISLANDS) await expectPass(edge(island, "react/jsx-runtime"));
+  });
+
+  test("island_imports_other_subpath_fails", async () => {
+    for (const island of ISLANDS) {
+      await expectFail("island-import-boundary", edge(island, "react/jsx-dev-runtime"), edge(island, "react"));
+    }
+  });
+
+  test("island_imports_unrelated_package_fails", async () => {
+    for (const island of ISLANDS) await expectFail("island-import-boundary", edge(island, "left-pad"));
+  });
+
+  test("island_imports_node_builtin_fails", async () => {
+    for (const island of ISLANDS) await expectFail("island-import-boundary", edge(island, "node:fs"));
+  });
+
   test("depcruise_scans_every_source_file", () => {
     // dependency-cruiser reads .mts/.cts only with the TypeScript parser, which TypeScript 7 no longer
     // provides, so such a file would skip every boundary. None may exist until that changes.

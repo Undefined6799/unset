@@ -1,5 +1,5 @@
-// Postgres behind small contracts: the migration runner (P1.11), the pool and transactions (P1.11p), the DID-column
-// catalog query (P1.13).
+// Postgres behind small contracts: the migration runner (P1.11), the pool and transactions (P1.11p), role password
+// sync (P1.12p), the DID-column catalog query (P1.13).
 export { connectionOf, type PostgresConfig, poolFields, postgresFields } from "./config.ts";
 export { type DidColumn, type DidColumnKind, didColumns } from "./didColumns.ts";
 export { MIGRATE_LOCK_ID, type MigrateFailure, type MigrateOptions, type MigrateResult, migrate } from "./migrate.ts";
@@ -12,4 +12,10 @@ export {
   type PoolOptions,
   withClient,
 } from "./pool.ts";
+export {
+  type PasswordSyncOptions,
+  type PasswordSyncResult,
+  type RosterEntry,
+  syncRolePasswords,
+} from "./roles.ts";
 export { type Isolation, withTransaction } from "./tx.ts";
