@@ -38,6 +38,10 @@ const EVENTS = [
   // an externally minted id whose expiry was past its purpose's maximum and was cut to it.
   "single_use.rejected",
   "single_use.claim_clamped",
+  // P1.17, the advisory lock: work still running past its hold time, and a session lost while holding a lock (both
+  // with the namespace as kind, never the key, which is usually a DID).
+  "lock.hold_exceeded",
+  "lock.lost",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
