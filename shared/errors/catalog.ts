@@ -18,6 +18,8 @@ export const ERROR_CODES = {
   "csrf.denied": { status: 403, public: true },
   "internal.error": { status: 500, public: true },
   "service.unavailable": { status: 503, public: true },
+  // P1.11: no Postgres client freed up within PG_CONNECT_TIMEOUT_MS, so the request fails fast instead of queueing.
+  "db.busy": { status: 503, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 
