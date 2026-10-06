@@ -42,6 +42,36 @@ describe("expand lint", () => {
     expect(expand(`DROP INDEX x_idx;\n${own}`)).toEqual([{ line: 2, rule: "drop" }]);
   });
 
+  // P1.15x (architecture ruling 2026-10-06 23:10Z): TRUNCATE as a trigger event is protective, not a statement.
+  test("trigger_event_list_allowed", () => {
+    const trigger =
+      "CREATE TRIGGER chain_append_only BEFORE UPDATE OR DELETE OR TRUNCATE ON audit.chain " +
+      "FOR EACH STATEMENT EXECUTE FUNCTION audit.refuse_change();";
+    expect(expand(trigger)).toEqual([]);
+    expect(expand("CREATE TRIGGER t_x AFTER TRUNCATE ON t FOR EACH STATEMENT EXECUTE FUNCTION f();")).toEqual([]);
+    expect(
+      expand("CREATE OR REPLACE TRIGGER t_x\n  BEFORE DELETE\n  OR TRUNCATE\n  ON t\n  EXECUTE FUNCTION f();"),
+    ).toEqual([]);
+  });
+
+  test("truncate_statement_still_refused", () => {
+    const refused = { rule: "truncate" };
+    expect(expand("TRUNCATE t;")).toEqual([{ line: 2, ...refused }]);
+    expect(expand("SELECT 1;\nTRUNCATE TABLE ONLY t;")).toEqual([{ line: 3, ...refused }]);
+    expect(expand("CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $$\n  TRUNCATE t;\n$$;")).toEqual([
+      { line: 3, ...refused },
+    ]);
+    expect(expand("DO $$ BEGIN EXECUTE 'TRUNCATE t'; END $$;")).toEqual([{ line: 2, ...refused }]);
+    expect(expand("SELECT 'a OR TRUNCATE b';")).toEqual([{ line: 2, ...refused }]);
+    expect(expand("-- do this BEFORE\nTRUNCATE t;")).toEqual([{ line: 3, ...refused }]);
+    expect(expand("CREATE TRIGGER x BEFORE UPDATE OF c OR TRUNCATE ON t EXECUTE FUNCTION f();")).toEqual([
+      { line: 2, ...refused },
+    ]);
+    expect(expand("CREATE TRIGGER x AFTER INSERT ON t EXECUTE FUNCTION f('TRUNCATE');")).toEqual([
+      { line: 2, ...refused },
+    ]);
+  });
+
   test("contract_may_remove", () => {
     expect(contract("ALTER TABLE x DROP COLUMN y;\nDROP TABLE z;\nALTER TABLE x RENAME TO w;")).toEqual([]);
   });
