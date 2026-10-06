@@ -412,3 +412,5 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 ## Notes appended after acceptance
 - **Decision 33, as-built note (architecture follow-up 2026-10-06 20:10Z):** as built (P1.24): Iconoir v7.12.1 files
   copied byte for byte, checked against the sheet's ICONS data (bundle sha256 in shared/ui/sheet/source.json).
+- **Decision 41 superseded (2026-10-06):** Alex applied the decision 40 ruleset on `main` after the GitHub Pro
+  upgrade (12:44Z) and making the repository public (22:06Z); read back 22:35Z. ADR 0017 supersedes ADR 0009.

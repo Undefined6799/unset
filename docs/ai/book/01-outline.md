@@ -28,7 +28,7 @@ Depth: **build-ready**. 29 steps (P0.09a retired, P0.09d added; editor pass 2026
 |---|---|---|---|---|
 | P0.01 | Create the empty private repository and grant the Claude GitHub app access | [ALEX] | — | `phase-0.md` |
 | P0.02 | Push the bootstrap bundle tip and reconcile it with the revised plan | — | P0.01 | `phase-0.md` |
-| P0.03 | Ruleset on `main` (unblocked by GitHub Pro 2026-10-06, awaiting Alex; deferred before that, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
+| P0.03 | Ruleset on `main` (applied 2026-10-06, ADR 0017; deferred before that, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
 | P0.04 | Toolchain: TypeScript 7, Node 26, Vitest only, `.npmrc`, "discovered equals executed" | — | P0.03 | `phase-0.md` |
 | P0.05 | Lint stack: Biome CSS rules, dependency-cruiser on the swc parser, file-size and line-budget warnings | — | P0.04 | `phase-0.md` |
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
@@ -1317,7 +1317,7 @@ does not create is isolated trusted base).
 
 Editor pass A: P0.09d added (AI notes vault and guard; parallel-safe; depends on P0.06); P0.09a retired; P2.13b added
 (graphify in CI, first row of slice 2, after P2.13a); P0.03 and P0.14 titles note decision 41 (updated 2026-10-06 for
-GitHub Pro: unblocked, awaiting Alex's ruleset).
+GitHub Pro; the ruleset was applied 2026-10-06, ADR 0017).
 
 ## Dependency check (2026-10-04 evening)
 

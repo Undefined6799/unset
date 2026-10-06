@@ -92,8 +92,8 @@ Every change:
   boundary, runtime dependency, new pattern or top-level folder, security mechanism) gets its own ADR in
   `docs/human/decisions/`, in the first PR that depends on it. Never edit an accepted ADR except to mark it
   superseded; ADR 0001 is an append-only log. A change that would contradict an accepted ADR: stop and ask.
-- **Merging (decisions 40, 41; ADR 0009):** agents open PRs, **never merge them and never push to
-  `main`**; Alex alone merges. The free private plan cannot enforce it, so this rule is the gate.
+- **Merging (decision 40; ADR 0008; ADR 0017 superseding ADR 0009):** agents open PRs, **never merge them and never push to
+  `main`**; Alex alone merges. The ruleset requires no approval, so this rule is the review gate.
 - **D1 Functions:** one job at one level of abstraction, usually fitting on a screen; never split to meet a line
   count. Security code reads as an ordered sequence of checks.
 

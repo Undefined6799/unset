@@ -2,8 +2,8 @@
 #
 # One owner today; a second owner is added to these lines when one exists.
 # Nothing enforces code-owner review: agent pull requests carry the owner's
-# own identity (decision 40), and the free plan has no ruleset for a private
-# repository (decision 41). These lines route review and record the
+# own identity, and an author cannot approve their own pull request
+# (decision 40, ADR 0008). These lines route review and record the
 # security-review paths; the owner reads the diff of any path below before
 # merging.
 #

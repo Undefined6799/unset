@@ -16,7 +16,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0006](0006-private-likes-shown-to-target.md) | Private likes, comments and follows are shown to their target (decision 39) | Accepted 2026-10-04 |
 | [0007](0007-bootstrap-reconciliation.md) | Bootstrap reconciliation: which Phase 0 step changes each bootstrap file | Proposed (awaiting Alex) |
 | [0008](0008-ruleset-without-required-approvals.md) | Main-branch ruleset without required approvals (decision 40) | Accepted 2026-10-04 |
-| [0009](0009-no-branch-protection-on-free-private-repo.md) | No branch protection while the repository is private on the free plan (decision 41) | Accepted 2026-10-04 |
+| [0009](0009-no-branch-protection-on-free-private-repo.md) | No branch protection while the repository is private on the free plan (decision 41) | Superseded by 0017 |
 | [0010](0010-opaque-chat-ids.md) | Opaque chat ids close the key-query membership leak (decision 42) | Accepted 2026-10-04 |
 | [0011](0011-no-orchestrator-until-measured-need.md) | No orchestrator until a measured need beyond one host (rule AB-3) | Accepted 2026-10-04 |
 | [0012](0012-licence.md) | AGPL-3.0-only for the product, MIT for `shared/` (decision 27) | Accepted 2026-10-03 |
@@ -24,3 +24,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0014](0014-node-postgres.md) | node-postgres as the Postgres driver | Proposed (awaiting Alex) |
 | [0015](0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Accepted (pending merge) |
 | [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |
+| [0017](0017-main-ruleset-applied.md) | Main ruleset applied; supersedes 0009 | Accepted 2026-10-06 |

@@ -1,6 +1,6 @@
 # 0009 — No branch protection while the repository is private on the free plan
 
-Status: accepted (Alex, 2026-10-04 20:45Z, "Go without" on the build thread's card). Decision 41 in the plan.
+Status: Superseded by 0017.
 
 ## Context
 Decision 40 (ADR 0008) set the `main` ruleset to PR required, checks required, no force-push, no

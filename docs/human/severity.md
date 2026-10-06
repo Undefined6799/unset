@@ -76,8 +76,7 @@ Confirmed-by: Alex 2026-10-05
 
 Then add the `triaged` label and the severity label. A downgrade also carries the `upstream` label.
 
-The bug form marks every field as required, but GitHub enforces that only on public repositories. While this
-repository is private, triage asks the reporter for any field left empty.
+The bug form marks every field as required, and GitHub enforces that on this public repository.
 
 ## Changing a definition
 
