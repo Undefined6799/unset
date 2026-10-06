@@ -21,3 +21,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0011](0011-no-orchestrator-until-measured-need.md) | No orchestrator until a measured need beyond one host (rule AB-3) | Accepted 2026-10-04 |
 | [0012](0012-licence.md) | AGPL-3.0-only for the product, MIT for `shared/` (decision 27) | Accepted 2026-10-03 |
 | [0013](0013-identity-network-port.md) | Identity resolution behind a network port, DNS on c-ares | Proposed (awaiting Alex) |
+| [0014](0014-node-postgres.md) | node-postgres as the Postgres driver | Proposed (awaiting Alex) |

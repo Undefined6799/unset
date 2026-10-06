@@ -1,0 +1,21 @@
+{
+  "name": "@unset/infrastructure-postgres",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "bin": {
+    "unset-migrate": "./migrate-cli.ts"
+  },
+  "dependencies": {
+    "@unset/shared-config": "*",
+    "@unset/shared-log": "*",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1"
+  }
+}
