@@ -3,6 +3,7 @@
   "references": [
     { "path": "scripts" },
     { "path": "deployment" },
+    { "path": "domains/identity" },
     { "path": "infrastructure/net-guard" },
     { "path": "interfaces/admin" },
     { "path": "interfaces/api" },
