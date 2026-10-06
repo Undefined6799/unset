@@ -3358,8 +3358,10 @@ branch only; nothing under `spikes/` merges, so main has no `spikes/` folder and
 (architecture ruling 2026-10-06-p120-spike-artefacts-layout). The spike's npm dependencies live only in the branch's
 `package.json`; main's lockfile is untouched. What merges, in one check-path PR (docs never change a PR's class, SE-6;
 no P1.20q):
-- `docs/human/decisions/NNNN-web-framework-glue.md`, the ADR, which names the evidence folder in one line;
-- `docs/human/decisions/evidence/NNNN-web-framework-glue/`: `MEASUREMENTS.json` per candidate and only the raw
+- `docs/human/decisions/NNNN-web-framework-glue.md`, the ADR and its README row; the ADR links to its evidence folder;
+- `docs/human/evidence/NNNN-web-framework-glue/` (amended 02:50Z: `adr_index_complete` allows only `NNNN-title.md` under
+  `docs/human/decisions/`, so ADR evidence lives at `docs/human/evidence/NNNN-title/` from now on, one folder per ADR,
+  named exactly like it, and the check stays unchanged): `MEASUREMENTS.json` per candidate and only the raw
   Playwright reports `hono_verdict_consistent` reads (no screenshots or traces, about 200 KB at most, fixture data
   only); larger Playwright output stays a CI artefact linked from the ADR;
 - `scripts/budgets/count-glue-lines.ts` with `count_glue_lines_rule` and `glue_count_includes_config_plugin` (kept,
@@ -3370,6 +3372,17 @@ The spike code itself stays on the branch, tagged `spike/p1-20`, as the referenc
 output joins the raw reports.
 
 **Size:** ~450–700 spike lines (not merged), ~150 measurement-script lines, ~250 test lines; ADR ~120 lines.
+
+**As built (2026-10-06, relayed 02:46Z):** Hono PASS (glue 150 lines; CSS identical in dev and prod; 0 hydration
+errors; 0 CSP violations; React runtime 58,886 B gzipped, headroom 16,680 B), so ADR **0015** is "Accepted (pending
+merge)" with no stop. Astro FAIL: its inline island runtime is blocked by the CSP unless hashed. Files:
+`docs/human/decisions/0015-web-framework-glue.md` and its README row; `scripts/budgets/count-glue-lines.ts` and its
+test; `scripts/docs/glue-spike.ts` and its test (`hono_verdict_consistent`, `verdict_rule`,
+`css_map_diff_detects_mismatch`, `astro_measurements_recorded`, `adr_has_required_sections`); the evidence under
+`docs/human/evidence/0015-web-framework-glue/`. One PR with the `large-pr` label: pr-size counts 1424 lines, about 960
+of them generated evidence JSON, and splitting the evidence out would land data without the test that checks it. The PR
+body's "Large PR:" line names the evidence and its line count; reviewers read the ADR, the two scripts and the tests,
+and `hono_verdict_consistent` checks the JSON (book edit 2026-10-06-p120-split-and-browsers).
 
 **Goal:** Decide, with measured numbers, whether Hono plus server-rendered React plus islands can be glued
 together in about 600 lines with CSS Modules identical on server and client, and record the answer and what it
