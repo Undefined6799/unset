@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 62 steps: 48 from `phase-1.md`, 14 from `phase-2.md` (including the
+Depth: **build-ready**. 65 steps: 48 from `phase-1.md`, 17 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -187,7 +187,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
 | P2.01k | `resolveTxt` in `net-guard` (split from P2.01, SE-6) | [SEC] | P1.18 | `phase-2.md` |
-| P2.01 | DID and handle resolution | [SEC] | P2.01k, P1.18 | `phase-2.md` |
+| P2.01q | `alsoKnownAs` guard (split from P2.01, SE-6) | — | P0.09c | `phase-2.md` |
+| P2.01m | `resolveVetted` on c-ares for public names | [SEC] | P2.01k | `phase-2.md` |
+| P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18 | `phase-2.md` |
+| P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.03 | Session store and lifecycle | [SEC] | P1.12 | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.17, P1.31, P2.01 | `phase-2.md` |
@@ -199,7 +202,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30 | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P2.01a, P2.01m | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -256,6 +259,9 @@ flowchart TD
   P1_37["P1.37 Legal paperwork"]
   P2_01["P2.01 DID and handle resolution"]
   P2_01k["P2.01k resolveTxt in net-guard"]
+  P2_01q["P2.01q alsoKnownAs guard"]
+  P2_01m["P2.01m resolveVetted on c-ares"]
+  P2_01a["P2.01a Identity network adapter"]
   P2_02["P2.02 verifyHandledid"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_04["P2.04 OAuth client"]
@@ -359,6 +365,11 @@ flowchart TD
   P1_05e --> P1_06e
   P1_06e --> P1_06
   P2_01k --> P2_01
+  P2_01q --> P2_01
+  P2_01k --> P2_01m
+  P2_01 --> P2_01a
+  P2_01m --> P2_13a
+  P2_01a --> P2_13a
 ```
 
 ## i18n slice — EN/FR catalogs and the locale preference (English first, Alex 2026-10-04 12:58Z)

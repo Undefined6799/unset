@@ -330,16 +330,59 @@ Reuse: none. Not in this step: handle resolution itself (P2.01). Diagram: none.
 
 ---
 
+### P2.01q — `alsoKnownAs` guard (split from P2.01, SE-6)
+Tags: —            Depends on: P0.09c            Plan: §2 rule 1; SE-6 (q rule); AB-4. Architecture ruling 2026-10-06 00:10Z (p201-identity-port-guard-resolver, item 2)
+Status: built (#69).
+Where: `scripts/guards/also-known-as.ts`, its test beside it, fixtures under `scripts/guards/fixtures/also-known-as/`,
+  registered in `guards.test.ts`.
+Why a separate step: a repo-wide scan that decides CI is a check path, and a domain may not use `fs`
+  (`domain-no-io-builtins`), so P2.01's static guard test moves here and lands just before P2.01. It joins the q list.
+Rule: every tracked `.ts`, `.tsx`, `.js`, `.mjs` and `.cjs` file under the product paths is scanned for the text
+  `alsoKnownAs` or `rawAlsoKnownAs` (identifier, string key or bracket access). Allowed only in
+  `domains/identity/{did-doc,resolve-did,verify-handle}.ts` and their own tests, plus the OAuth adapter
+  `infrastructure/pds/oauth/identity-resolvers.ts` (P2.04), listed now so a product PR never edits this check path.
+  The allowlist lives in the guard; no guard-allow. AB-4: it proves it scanned more than zero files, and a planted
+  fixture fails.
+
+---
+
+### P2.01m — `resolveVetted` on c-ares for public names (trusted base)
+Tags: [SEC]            Depends on: P2.01k            Plan: §2 rule 13 (one egress); Node.js v26.10.0 `node:dns` docs ("Implementation considerations", `dns.lookup()`, `dns.resolve()`), read 2026-10-05; ruling 2026-10-06 00:10Z item 3
+Status: built (#74).
+Where: `infrastructure/net-guard` (`resolveVetted` and its tests); lands alone.
+Why: `dns.lookup()` runs on libuv's threadpool, so slow names can starve fs, crypto and zlib, and P1.18's
+  `resolveVetted` reported NXDOMAIN as `dns_failed`, which contradicts P2.01 B.3.
+Rule:
+  - `allow: "public"`: a `Resolver` with the call's timeout, `tries = 2` and system servers, running `resolve4` and
+    `resolve6` in parallel. Records from either → the union is vetted exactly as before (all public, or the call
+    fails). `ENOTFOUND` or `ENODATA` on both families (mixed included) → new code `egress.dns_no_record`. Any other
+    error on either family → `egress.dns_failed`, even if the other answered: a partial answer set is never vetted.
+  - `allow: "private"` keeps `dns.lookup` (deployment-set internal names may rely on `/etc/hosts`, which c-ares skips).
+  - Unchanged: the outer `timeoutMs` race, IP literals skipping DNS, `isInternalName` routing, `pinnedLookup` (no
+    second resolution). `UV_THREADPOOL_SIZE` is not the fix; it may be set later on measured need (P5).
+  - Stop rule: a change to what `allow: "private"` accepts, or to `ranges.ts` or `classify.ts`, goes back to
+    architecture.
+Done when (tests): `no_record_on_nxdomain`, `no_record_on_nodata_both`, `one_family_error_fails_closed`,
+  `private_mode_uses_lookup`, `mixed_answers_refused`. Its real `Resolver` path carries the threadpool claim that
+  P2.01's `slow_dns_does_not_starve_threadpool` used to. Recorded in ADR 0013 with the port.
+
+---
+
 ### P2.01 — DID and handle resolution
-Tags: [SEC]            Depends on: P2.01k, P1.18            Plan: §2 rules 1, 13; §3 "PLC read replicas"; §5.2; Q1
-Where: `domains/identity/{did-doc.ts, resolve-did.ts, resolve-handle.ts, syntax.ts, index.ts}` (`resolveTxt` in
-  `net-guard` is **P2.01k**, trusted base, SE-6)
+Tags: [SEC]            Depends on: P2.01k, P2.01q, P1.18            Plan: §2 rules 1, 13; §3 "PLC read replicas"; §5.2; Q1
+Status: built (#72). Rulings folded in: architecture 2026-10-06 00:10Z (p201-identity-port-guard-resolver) and the
+  step book's 2026-10-05 p201-build-corrections; merge order P2.01q, P2.01, then P2.01a and P2.01m in either order.
+Where: `domains/identity/{contract.ts, did-doc.ts, resolve-did.ts, resolve-handle.ts, syntax.ts, index.ts}` and ADR
+  0013 (`resolveTxt` in `net-guard` is **P2.01k**; the `IdentityNetwork` adapter is **P2.01a**; the OAuth adapters are
+  **P2.04**)
 Size: ~280 source lines, ~380 test lines
 
 Goal: Turn a DID into a parsed, validated DID document and a handle into a DID, through `net-guard` only, with
 outcomes that separate "does not exist" from "could not tell right now".
 
-Inputs: P1.18 `guardedFetch`, `resolveTxt`; config keys `PLC_URL` (required, `https://plc.directory` in every
+Inputs: the domain port `IdentityNetwork` (`domains/identity/contract.ts`; implemented in `infrastructure/pds` with
+  `guardedFetch` and `resolveTxt` by P2.01a, and wired in `interfaces/http/compose.ts` by P2.04), in place of direct
+  `guardedFetch` and `resolveTxt` calls (ADG §2: a domain imports no infrastructure); config keys `PLC_URL` (required, `https://plc.directory` in every
   environment in Phase 2), `IDENTITY_HTTP_TIMEOUT_MS` (default 3000), `IDENTITY_DNS_TIMEOUT_MS` (default 2000),
   `DID_DOC_CACHE_TTL_S` (default 300), `DID_DOC_CACHE_MAX` (default 10000).
 Outputs:
@@ -353,15 +396,22 @@ Outputs:
   - `resolveDid(did: Did, opts: {consistency: 'fresh' | 'cached'}) -> ResolvedDid` throws
     `IdentityError{kind: 'not_found' | 'invalid_doc' | 'unavailable'}`.
   - `resolveHandle(handle: Handle) -> {status: 'found', did: Did, via: 'dns' | 'https'} | {status: 'not_found'} | {status: 'unavailable'}`.
-  - `didResolverForOAuth` and `handleResolverForOAuth`: adapters with the shapes the pinned
-    `@atproto/oauth-client-node` accepts (`resolve(handle) -> Did | null`, throw on transient), used by P2.04.
-  - Static test file `identity/also-known-as.guard.test.ts`: the identifiers `alsoKnownAs` / `rawAlsoKnownAs` appear
-    only in `did-doc.ts`, `resolve-did.ts` and `verify-handle.ts` (P2.02) across the whole repo.
+  - `IdentityNetwork` (`contract.ts`), with no net-guard or `@atproto/*` types in it:
+    - `get(url, { target: "plc" | "public", accept, maxBytes })` fails with exactly `unavailable` (timeout, connect,
+      tls, any DNS failure other than "name does not exist"), `refused` (blocked, private address, redirect,
+      too_large) or `no_such_host` (NXDOMAIN, `egress.dns_no_record` from P2.01m). `plc` is bound to the PLC host the
+      adapter was built with; any other origin is `refused` before any network use. `public` takes only `https:`
+      URLs with no userinfo, `GET` only. The domain passes no policy, host list or headers beyond `accept`.
+      `maxBytes` is also capped at 64 KiB in the adapter.
+    - `txt(name)` returns `records`, `no_record` (`ENOTFOUND`, `ENODATA`) or `unavailable` (every other code).
+    The tables in A.4 and B.3 below read against these outcomes, unchanged in meaning. Domain tests use small inline
+    stand-ins of the port inside their test files (TE-1; `fake_files_outside_domains` forbids a `*.fake.ts` under
+    `domains/`).
+  - The OAuth adapters (`didResolverForOAuth`, `handleResolverForOAuth`) moved to P2.04 (corrections item 1).
+  - The `alsoKnownAs` static scan is P2.01q's guard; no static test file here.
 
 Algorithm:
-  A0. Use `resolveTxt` from `net-guard`, built by P2.01k (SE-6: this PR does not touch `net-guard`). Its shape, for
-      reference: a `node:dns` `Resolver` with `timeout = IDENTITY_DNS_TIMEOUT_MS`, `tries = 2`, servers from the
-      system; it returns the TXT records or throws `NetGuardError{kind:'dns', code}`. Record the addition in the PR.
+  A0. All network use goes through `IdentityNetwork` (implemented with `guardedFetch` and `resolveTxt`, P2.01k).
   A. `resolveDid(did, {consistency})`
     1. If `parseDid(did)` is null → throw `IdentityError('invalid_doc')`.
     2. If `consistency == 'cached'` and the LRU cache holds an entry younger than `DID_DOC_CACHE_TTL_S` → return it.
@@ -385,9 +435,12 @@ Algorithm:
           This module never interprets them; P2.02 does.
        c. PDS: the first `service` entry whose `id` is `#atproto_pds` or `<did>#atproto_pds` and `type` is
           `AtprotoPersonalDataServer`; its `serviceEndpoint` must be a string URL with scheme `https`, no userinfo,
-          no query, no fragment, path empty or `/`. Otherwise `pds = null` (not an error: the caller decides).
-       d. Signing key: the `verificationMethod` with id `#atproto` or `<did>#atproto`, `publicKeyMultibase` string,
-          else null.
+          no query, no fragment, path empty or `/`; it may carry an optional port (unlike the did:web hostname rule).
+          Otherwise `pds = null` (not an error: the caller decides).
+       d. Signing key: the `verificationMethod` with id `#atproto` or `<did>#atproto`, `type` equal to `Multikey`,
+          `controller` equal to the DID, and a `publicKeyMultibase` string; a present `#atproto` method failing any
+          of these → `invalid_doc` (atproto DID spec, github.com/bluesky-social/atproto-website commit `7937e9c`,
+          `specs/did`); absent → null.
     6. Store in the LRU (evict least recently used beyond `DID_DOC_CACHE_MAX`) and return.
   B. `resolveHandle(handle)`
     1. Precondition: `handle` came from `parseHandle` (type enforces it).
@@ -403,12 +456,13 @@ Algorithm:
        - 200 → body trimmed of ASCII whitespace; if `parseDid(body)` → httpsResult = `found(did)`; else `none`.
        - 404 or 410 → `none`.
        - 5xx, 429, `timeout`, `dns` (non-NXDOMAIN), `connect`, `tls` → `unavailable`.
-       - `dns` with NXDOMAIN → `none`. `blocked`, `redirect`, `too_large`, other status → `none`.
+       - the port's `no_such_host` → `none`. `blocked`, `redirect`, `too_large`, other status → `none`. (Until P2.01m
+         lands, a missing domain reads as `unavailable`, never `not_found`: fail closed.)
     4. Combine:
        - httpsResult `found` → return `{found, did, via: 'https'}` (also when DNS was `unavailable`: either method is valid per spec, and P2.02 verifies the reverse direction).
        - both `none`/`invalid` → `{not_found}`.
        - otherwise (one side `unavailable`, the other `none`) → `{unavailable}`. Fail closed: callers never treat this as "no such handle".
-  C. OAuth adapters: `handleResolverForOAuth.resolve(h)` → `parseHandle` null → return null; `found` → did;
+  C. (Moved to P2.04.) OAuth adapters: `handleResolverForOAuth.resolve(h)` → `parseHandle` null → return null; `found` → did;
      `not_found` → null; `unavailable` → throw `IdentityError('unavailable')`. `didResolverForOAuth` wraps
      `resolveDid(did, {consistency: 'fresh'})` and returns the raw document shape the library expects (the library
      re-reads `alsoKnownAs` itself; that is the one accepted exception, listed in the guard test with a comment).
@@ -432,7 +486,8 @@ Edge cases and failures:
   - A timed-out `dns.lookup` keeps a libuv threadpool thread busy (4 by default), so a stream of slow names can starve
     fs, crypto and zlib (Phase 1 thread finding 4, parked here 2026-10-04 23:49Z). This step picks one option and
     records it in an ADR: raise `UV_THREADPOOL_SIZE`, or resolve through `dns.Resolver` (c-ares, off the threadpool)
-    with a per-query timeout. net-guard's `resolveTxt` (P2.01k) follows the same choice.
+    with a per-query timeout. net-guard's `resolveTxt` (P2.01k) follows the same choice. Decided: c-ares for public
+    names (P2.01m), recorded in ADR 0013.
 
 Threats: identity data fetched from PLC, `did:web` hosts, DNS and handle domains, all controlled by others.
   - S A DID document served for another DID → `id` must equal the requested DID (`resolveDid.id_mismatch`).
@@ -462,10 +517,10 @@ Done when (tests):
   - `resolveHandle.not_found`: NXDOMAIN + 404 → `not_found`.
   - `resolveHandle.unavailable_cases`: SERVFAIL+404, NXDOMAIN+timeout, SERVFAIL+timeout → `unavailable`.
   - `resolveHandle.https_body_rules`: trailing newline accepted; two lines, HTML, empty → `none`.
-  - `oauthAdapter.throws_on_unavailable`: adapter throws for `unavailable`, returns null for `not_found`.
-  - `alsoKnownAs.guard`: static scan of the repo source passes; a planted fixture file referencing `alsoKnownAs` fails it.
-  - `slow_dns_does_not_starve_threadpool`: with a fake resolver delaying 20 names past the deadline, a concurrent
-    `crypto.pbkdf2` still completes within its normal time.
+  - (`oauthAdapter.throws_on_unavailable` moved to P2.04; the `alsoKnownAs` guard is P2.01q's;
+    `slow_dns_does_not_starve_threadpool` left this step, since a fake resolver proves nothing: P2.01m's real
+    `Resolver` path carries the claim.)
+  - `resolveDid.signing_key_rules`: an `#atproto` method with the wrong `type` or `controller` → `invalid_doc`.
 
 Reuse (provisional — for reuse review):
   - `appview/src/identity.ts:25-30` (`didWebUrl` hostname rule) → LESSON: the regex and its SSRF rationale are right;
@@ -480,6 +535,18 @@ Reuse (provisional — for reuse review):
 Not in this step: the bidirectional check and its cache (P2.02); the handle-registry rule for `*.0x40.me` (P3.08); any
   PLC write; a PLC replica (Phase 3 if needed).
 Diagram: none.
+
+### P2.01a — The identity network adapter (size split from P2.01)
+Tags: [SEC]            Depends on: P2.01            Plan: §2 rule 13; ruling 2026-10-06 00:10Z item 1; step book 2026-10-05 p201-build-corrections (additions 00:09Z, wiring 00:15Z)
+Where: `infrastructure/pds/identity-network.ts`, its mapping test, and the package's `package.json` and `tsconfig.json`.
+Rule: implements P2.01's `IdentityNetwork` with `guardedFetch` and `resolveTxt`, under architecture's conditions:
+  `plc` bound to `PLC_URL`; `public` https `GET` only, no userinfo; `maxBytes` capped at 64 KiB; one test case per
+  `egress.*` code mapped to `unavailable`, `refused` or `no_such_host`. A construction-time check that `PLC_URL` is
+  https and on the host net-guard's `plc` policy allows fails closed at startup. Timeouts and `PLC_URL` come as
+  adapter options from the interface's config (no `shared/config` change). It adds no wiring: P2.04 builds it into
+  `interfaces/http/compose.ts`. A shared `*.fake.ts` for composition roots, if ever needed, lives here beside it.
+
+---
 
 ### P2.02 — `verifyHandle(did)`
 Tags: [SEC]            Depends on: P2.01            Plan: §2 rule 1; §5.2 "handles in events are hints only"
@@ -677,7 +744,12 @@ Decision 34 (slice 1): this step needs P1.31's set JSON and NSID, not the public
   builds in slice 1, before the set is published. Until P1.35, no authorization server can resolve `include:` for the set,
   so every login takes P2.05's tested fallback (`SCOPE_FALLBACK`: the same permissions written out); no scope is added
   or widened. P1.38's exit check ("the permission set resolves from outside") and P2.26 confirm the primary string.
-Where: `infrastructure/pds/oauth/{oauth-client.ts, oauth-stores.ts, scopes.ts, client-metadata.ts}`, `interfaces/http/routes/oauth-metadata.ts`,
+Where: `infrastructure/pds/oauth/{oauth-client.ts, oauth-stores.ts, scopes.ts, client-metadata.ts}`,
+  `infrastructure/pds/oauth/identity-resolvers.ts` + its test (P2.01's OAuth adapters and algorithm step C, moved here
+  with their mapping unchanged: `parseHandle` null → null; `found` → did; `not_found` → null; `unavailable` → throw;
+  test `oauthAdapter.throws_on_unavailable`; the one `alsoKnownAs` exception P2.01q's guard allows),
+  `interfaces/http/compose.ts` (the first step that consumes the `IdentityNetwork` port: it wires P2.01a's adapter),
+  `interfaces/http/routes/oauth-metadata.ts`,
   migration `0202_app_oauth.sql`, coverage and grants lines (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling)
 Size: ~260 source lines, ~320 test lines
 
@@ -1720,7 +1792,7 @@ Not in this step: the profile editor (P2.21); privacy switch actions (P2.22); ex
 Diagram: none.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
-Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29, P1.30            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
+Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P2.01a, P2.01m            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
 Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` dev stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation

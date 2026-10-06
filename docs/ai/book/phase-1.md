@@ -2839,6 +2839,7 @@ Outputs:
   - `classifyAddress(ip: string): "public" | "private" | "loopback" | "reserved"`, built on `net.BlockList`.
   - `isInternalName(host)`: `.internal`, `.local`, `.localhost`, `.home.arpa`, `localhost`, single-label names, and the
     metadata names (`metadata.google.internal`, `instance-data`) → true; trailing dot and zone ids normalised first.
+  - (Since P2.01m: public names resolved on c-ares; see phase-2.md, P2.01m.)
   - `resolveVetted(host, { allow: "public" | "private" }, { timeoutMs = 3000 }): Promise<string[]>` — `dns.lookup(host,
     { all: true, verbatim: true })` raced with the timer; IP literals skip DNS. Errors: `egress.dns_timeout`,
     `egress.dns_failed` (error or empty answer), `egress.private_address` (for `allow: "public"`, **any** answer not
