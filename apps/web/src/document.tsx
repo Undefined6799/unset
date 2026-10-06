@@ -1,5 +1,6 @@
 // The page shell (P1.23; plan §5.1): every page is server-rendered, and a page loads JavaScript only when an island on
-// it will hydrate. There is no inline script or style; the bootstrap is one external module.
+// it will hydrate. There is no inline script or style; the bootstrap is one external module, and every page links the
+// CSS Modules' stylesheets the manifest names (P1.23c), so the CSP's style-src needs nothing new.
 import type { ReactNode } from "react";
 import { type IslandRun, IslandRunContext } from "./islands/runtime/island.tsx";
 import { type BuildManifest, preloadsFor } from "./islands/runtime/manifest.ts";
@@ -45,6 +46,9 @@ export function Document(props: {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content={prefs.colorScheme} />
         <title>{props.title}</title>
+        {props.assets.manifest.styles.map((file) => (
+          <link key={file} rel="stylesheet" href={`${props.assets.origin}/${file}`} />
+        ))}
       </head>
       <body>
         <IslandRunContext value={run}>{props.children}</IslandRunContext>

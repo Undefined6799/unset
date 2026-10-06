@@ -21,7 +21,10 @@ checked: 2026-10-06
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build
   manifest in as props.
 - `src/islands/runtime/bootstrap.ts` is the one browser entry, loaded only on pages that have an island.
-- `vite.config.ts` builds the browser side; each `*.island.tsx` becomes its own lazy chunk.
+- `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
+  chunk, plus the `src/styles.ts` entry that gathers every CSS Module into the stylesheets each page links). The
+  `--ssr render.tsx` build writes `dist/server/render.js`, which production runs. Both, and Vitest, name classes
+  with `scripts/ui/css-scope.ts`, so server markup matches the client selectors.
 
 **How data flows.** Request → `interfaces/http` → `render.tsx` props → server-rendered HTML. An island's props
 travel as a JSON script (`shared/ui/islands/props.ts`) and are checked again in the browser before hydration. A

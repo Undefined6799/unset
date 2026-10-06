@@ -22,6 +22,11 @@ the manifest), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme cooki
 `web/` (reads Vite's manifest once at startup and renders pages through apps/web). `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 
+**Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
+once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only
+from tests, which pass `import * as web from "@unset/apps-web"`; a new test that composes the server must pass it too,
+or startup fails on the missing build. `main.test.ts` fails if `main.ts` statically reaches anything under apps/.
+
 **shared/http owns** what every request passes through. `server.ts` fixes the middleware order: requestId,
 hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLimit, rateLimitIp, csrf. Also:
 - `routes.ts`: `defineRoute`, the only way to register a route; it refuses a route without limits or a deadline.

@@ -79,12 +79,14 @@ describe("query budget", () => {
       expect(manifest.map((r) => `${r.method} ${r.path}`).filter((key) => !covered.has(key))).toEqual([]);
 
       const { compose } = (await import(join(INTERFACES, name, "compose.ts"))) as {
-        compose: (cfg: unknown) => Promise<{ server: Server }>;
+        compose: (cfg: unknown, ...wiring: unknown[]) => Promise<{ server: Server }>;
       };
       const { config } = (await import(join(INTERFACES, name, "config.ts"))) as {
         config: Parameters<typeof loadConfig>[0];
       };
-      const { server } = await compose(loadConfig(config, fixture.env));
+      // The web server's composition takes apps/web's render; tests pass the source (P1.23c), never the build.
+      const wiring = name === "http" ? [await import(join(REPOSITORY, "apps", "web", "render.tsx"))] : [];
+      const { server } = await compose(loadConfig(config, fixture.env), ...wiring);
       for (const request of fixture.requests) {
         const route = `${name} ${request.method} ${request.path}`;
         const result = await measure(server, request);

@@ -1,6 +1,7 @@
 // POST /prefs/theme through the composed web server, so the kit's real checks (method, media type, body limit, CSRF
 // gate) run in front of the handler exactly as in production.
 import { fileURLToPath } from "node:url";
+import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
@@ -27,7 +28,7 @@ const YEAR = "Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=31536000";
 type Send = { body?: string; type?: string; site?: "same-origin" | "cross-site"; method?: string };
 
 async function send({ body = "", type = FORM, site = "same-origin", method = "POST" }: Send = {}) {
-  const { server } = await compose(loadConfig(config, ENV));
+  const { server } = await compose(loadConfig(config, ENV), web);
   const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
   if (method === "POST") {
     headers.set("content-type", type);
