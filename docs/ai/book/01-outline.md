@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 81 steps: 63 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 82 steps: 64 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -170,6 +170,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11p, P1.11w | `phase-1.md` |
 | P1.12t | Tests connect as the process roles (split from P1.12) | — | P1.12 | `phase-1.md` |
 | P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12, P0.09 (`roles.ts` in the trusted base) | `phase-1.md` |
+| P1.12x | Export `syncRolePasswords` and test role logins (split from P1.12p) | [SEC] | P1.12p, P1.12t | `phase-1.md` |
 | P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12t | `phase-1.md` |
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.02, P1.12 | `phase-1.md` |
 | P1.15 | Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier | [SEC] | P1.12, P1.13 | `phase-1.md` |
@@ -184,7 +185,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.21m | Font metrics for the fallback faces (split from P1.21) | — | P1.21 | `phase-1.md` |
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
-| P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08 | `phase-1.md` |
+| P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
 | P1.24 | UI kit, part 1: the "is it on the sheet?" gate and the static and form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.22 | `phase-1.md` |
 | P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.23 | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
@@ -192,7 +193,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11p, P1.27, P1.28 | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
@@ -253,6 +254,7 @@ flowchart TD
   P1_12["P1.12 Roles and grants"]
   P1_12t["P1.12t Tests on the process roles"]
   P1_12p["P1.12p Role password sync"]
+  P1_12x["P1.12x Password export and login test"]
   P1_13["P1.13 DID-column registry test reading"]
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
   P1_15["P1.15 Audit: append-only audit.append"]
@@ -338,6 +340,7 @@ flowchart TD
   P1_09 --> P1_22
   P1_20 --> P1_23
   P1_08 --> P1_23
+  P1_22 --> P1_23
   P1_22 --> P1_24
   P1_24 --> P1_24a
   P1_23 --> P1_24a
@@ -393,7 +396,10 @@ flowchart TD
   P1_04m --> P1_04
   P1_08 --> P1_08i
   P1_12 --> P1_12p
+  P1_12p --> P1_12x
+  P1_12t --> P1_12x
   P1_12p --> P1_29
+  P1_12x --> P1_29
   P1_06 --> P1_06p
   P1_06q --> P1_06p
   P1_05e --> P1_06e

@@ -2313,10 +2313,12 @@ Outputs:
     column-level entry may carry `"rowPrivileges": ["DELETE"]`, the one table-level privilege allowed on a
     personal-data table (it reveals no column; a `WHERE` still needs SELECT on the columns it names). `TRUNCATE` and
     `TRIGGER` are never granted to a service or job role.
-  - `syncRolePasswords(cfg)` (built by P1.12p, specified there): run by the `migrate` service after migrations on the
-    `migrator` connection, one `ALTER ROLE <ident> PASSWORD '<SCRAM verifier>'` per roster role with a non-null
-    `passwordFrom`; the verifier is computed client-side, so the cleartext never reaches the server. Rotation = change
-    the secret file and re-run `migrate` (review 07 lesson 27).
+  - `syncRolePasswords(cfg)` (built by P1.12p, exported and integration-tested by P1.12x): run by the `migrate`
+    service after migrations, on the `migrator` connection, `ALTER ROLE <format('%I', role)> PASSWORD '<verifier>'`
+    per roster role with a non-null `passwordFrom`, where `<verifier>` is a SCRAM-SHA-256 verifier computed
+    client-side (salt from a CSPRNG, 4096 iterations). The plaintext password never reaches the server or any log,
+    and the verifier is a quoted literal built only from its fixed alphabet (validated by regex before use).
+    Rotation = change the secret file and re-run `migrate` (review 07 lesson 27).
 
 Algorithm:
   The role migration (`0003`, or the combined `0002`; idempotent, because roles are cluster-global while P1.11 gives each test file its own database):
@@ -2462,30 +2464,52 @@ Algorithm (architecture 12:55Z; PG 18: "a password string already in … SCRAM-e
      shape and quote it as an identifier; any other name fails closed.
   2. Read every secret from its file under `/run/secrets/`, never from argv or an env var; all read first, and any
      missing or empty → exit 1 before any `ALTER ROLE`.
-  3. For each role, compute a SCRAM-SHA-256 verifier client-side with `node:crypto` (PBKDF2 with a random salt and at
-     least 4096 iterations, then HMAC and SHA-256), in the stored form
-     `SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`, and issue `ALTER ROLE <ident> PASSWORD '<verifier>'`. The
-     cleartext never reaches the server, a log or `pg_stat_activity`.
+  3. For each role, compute a SCRAM-SHA-256 verifier client-side with `node:crypto` (PBKDF2 with a salt from a CSPRNG
+     and 4096 iterations, then HMAC and SHA-256), in the stored form
+     `SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`, validate it by regex against that fixed alphabet, and
+     issue `ALTER ROLE <format('%I', role)> PASSWORD '<verifier>'` as a quoted literal. The plaintext never reaches
+     the server, a log or `pg_stat_activity`.
 Edge cases and failures: missing or empty file → exit 1, no role altered; a role in the roster but absent from the
   cluster → exit 1 (P1.12's migration creates every roster role); errors are logged by name as kind, never with a
   secret (SE-7).
 Threats: the role passwords.
   - I A password reaches a log, an error or `pg_stat_activity` → only a verifier is ever sent
     (`password_never_sent_cleartext`, `password_never_logged`).
-  - E A role name used to inject SQL, or a password set on a role outside the roster → name checked and quoted
+  - E A role name or value used to inject SQL, or a password set on a role outside the roster → identifier quoted; only
+    a regex-validated SCRAM verifier is sent; role names only from `roles.json` entries with a non-null `passwordFrom`
     (`unknown_role_refused`).
-Done when (tests):
+Done when (tests; unit tests in `roles.test.ts`):
   - scram_verifier_matches_vector: the verifier for a known password, salt and iteration count equals the reference.
   - password_never_sent_cleartext: the statement holds a `SCRAM-SHA-256$` value, never the secret.
   - unknown_role_refused: a name outside the roster, or not of the role-name shape → refused, nothing altered.
-  - password_sync (moved from P1.12): write a new secret file, run `syncRolePasswords`, log in as `web` with the new
-    password → ok; old → fails.
-  - password_sync_missing_file (moved from P1.12): missing `pg_api_password` → exit 1, no role altered.
-  - password_never_logged: captured logs across the tests hold no password.
+  - Quoting, all secrets read first, a missing or empty file → exit 1 before any `ALTER ROLE`, and no password in
+    any error.
+  - (`password_sync`, `password_sync_missing_file` and `password_never_logged` moved to P1.12x.)
+As built (pushed, not yet opened): `roles.ts`, `roles.test.ts` and a paragraph in `docs/human/db/migrations.md`.
+  Order: P1.12t after P1.12, P1.12p after this carrier's predecessor #106, then P1.12x.
 Reuse: none.
 Not in this step: setting a role's `passwordFrom` (a role attribute: the owning step's `<id>g` grants step); the
-`migrate` service (P1.29).
+`migrate` service (P1.29); the index re-export and the login integration test (P1.12x).
 Diagram: none.
+
+---
+
+### P1.12x — Export `syncRolePasswords` and test role logins (split from P1.12p)
+Tags: [SEC]            Depends on: P1.12p, P1.12t            Plan: §5.2 (roles map to processes); review 07 lesson 27
+Where: product: the `syncRolePasswords` re-export from `infrastructure/postgres/index.ts`, and
+  `tests/integration/postgres/role-passwords.test.ts` on a container of its own. The `x` letter follows the book's
+  convention for a non-trusted part split out of a trusted-base PR.
+Why its own step (book edit 2026-10-06-p112-split): a trusted-base file and the index re-exporting it land in two PRs;
+  the depcruise rule `infra-shared-via-index` forbids `tests/` from importing `infrastructure/postgres/roles.ts`
+  directly; and a test inside `infrastructure/postgres` cannot import `tests/support` because of the composite
+  tsconfig `rootDir`.
+Binding: merges before anything wires `syncRolePasswords` into the `migrate` service (P1.29's dev stack at the
+  latest), so no unexported or untested path ships.
+Done when (tests, moved from P1.12p):
+  - password_sync: log in as `web`, `api` and `indexer` with the new secret → ok; the old one fails. Rotation too.
+  - password_sync_missing_file: no role is altered.
+  - A failure partway alters nothing.
+  - password_never_logged: captured logs across all of it hold no password.
 
 ---
 
@@ -3938,11 +3962,42 @@ fallbacks the font swap shifts layout, which the CLS budget would catch late.
 `Accept-Language` parts of `public_page_ignores_pref_cookies` and `public_page_no_vary_cookie`. Everything else below is
 built here unchanged. The P1.19 dependency moved to P1.22b.
 
+**Shape as built (book edit 2026-10-06-p122-shape; opened as #107):**
+- **No `document.tsx` here.** P1.22 ships the pure function in `interfaces/http/prefs/` that takes the route group and
+  the request and returns `html lang`, `data-theme`, the `color-scheme` meta, `Vary` and `Cache-Control`. **P1.23**
+  wires it into the document and takes `document_no_inline_script_or_style` and the rendered
+  `public_page_ignores_pref_cookies` byte-equality. P1.26's harness takes `checkbox_forced_colors_native` and
+  `prefs_forms_work_without_js`; `PrefsForms` markup is P1.25's.
+- **Files:** `shared/ui/src/base.css`; `shared/errors/catalog.ts` and `messages.ts` (`prefs.invalid`, which rides
+  here: `shared/errors` is neither trusted base nor a check path, and an error code carries no personal data);
+  `interfaces/http/prefs/theme.ts`; `interfaces/http/routes/prefs.ts`; `interfaces/http/compose.ts`;
+  `interfaces/http/limits.ts` (a product path, so no trusted-base split); `routes.manifest.json`; tests beside each.
+- **Two new tests:** `theme_function_ignores_cookies_for_public_group` (public group with pref cookies → output
+  byte-identical to the same request without them, no `Vary: Cookie`, identical `Cache-Control`) and
+  `theme_function_varies_on_cookie_for_app_group` (app group → `Cache-Control: private` and `Vary: Cookie`).
+
+**Theme cookie conditions** (architecture, [SEC]; book edit 2026-10-06-p121-token-pipeline-structure point 8 as
+corrected 13:33Z). The cookies are the book's two single-purpose ones, `__Host-theme` here and `__Host-locale` in
+P1.22b (`__Host-prefs` in the ruling was a generic label). Each binds as follows:
+- **Allowlist parse.** The theme is exactly `light`, `dark` or `system`; the locale comes from the supported list
+  (English only at launch). Anything else, an absent cookie or a duplicate means the default: the page never errors
+  and the raw value is never echoed. `Accept-Language` is not used before i18n.
+- **`prefs.invalid` is for the write path only.** A bad cookie on a read is not an error and is not logged; the cookie
+  value is never logged (SE-7).
+- **Attributes.** `Secure`, `Path=/`, no `Domain`, `SameSite=Lax`, `Max-Age` one year, `HttpOnly`. Set only when the
+  person chooses; choosing `system` deletes it. It carries no identifier, so it stays a strictly functional cookie
+  with no consent banner.
+- **The write goes through the CSRF gate and Origin check** like every state-changing POST. No exceptions.
+- **Caching.** A response that varies on the cookie sends `Cache-Control: private` (or the route's stricter value)
+  with `Vary: Cookie`, never `public`.
+- **No inline script** applies the theme. The server renders `data-theme` and the `color-scheme` meta, and `system`
+  resolves in CSS through `prefers-color-scheme`.
+
 **Tags:** [SEC] (cookies and state-changing POSTs; proposed in round 1, accepted) · **Depends on:** P1.21, P1.21l, P1.21m, P1.07, P1.09 · **Plan:** §5.1 (theme applied by the server, no inline pre-paint script), §5.4 (caching: public pages carry no cookie variation), §8 Phase 1, §2 rule 4, §6.1 WCAG row; review 08 §5
 
-**Where:** `shared/ui/src/base.css`; `interfaces/http/prefs/{theme.ts, locale.ts}`;
-`interfaces/http/routes/prefs.ts`; the document renderer from P1.20/P1.23 (`apps/web/src/document.tsx`); catalog
-keys in the P1.19 EN/FR catalogs; tests.
+**Where:** see "Shape as built" above (in slice 1: no `locale.ts`, and the document renderer is P1.23's). Originally:
+`shared/ui/src/base.css`; `interfaces/http/prefs/{theme.ts, locale.ts}`; `interfaces/http/routes/prefs.ts`; the
+document renderer from P1.20/P1.23 (`apps/web/src/document.tsx`); catalog keys in the P1.19 EN/FR catalogs; tests.
 
 **Size:** ~140 TS source lines plus ~170 lines of CSS, ~280 test lines.
 
@@ -4040,21 +4095,22 @@ Document render (every HTML response; the route's group is known from the route 
 **Done when (tests):**
 - `base_has_no_classes_except_visually_hidden` (layer placement is covered by P1.21's layer guard).
 - `checkbox_drawn_as_text`: rendered checkbox has `appearance: none` and `::before` content `[ ]`, checked `[x]`;
-  `checkbox_forced_colors_native` (Playwright `forcedColors: active` → `appearance: auto`).
+  `checkbox_forced_colors_native` (Playwright `forcedColors: active` → `appearance: auto`; runs in P1.26's harness).
 - `prefs_theme_sets_cookie`: same-origin POST `theme=light` → 303 to `/`, Set-Cookie exactly as specified.
 - `prefs_theme_system_deletes_cookie` → `Max-Age=0`.
 - `prefs_theme_invalid_value_400` → 400, no Set-Cookie; `prefs_body_too_large_413`.
 - `prefs_return_path_rejects_offsite`: `return=//evil.example` → `Location: /`.
 - `prefs_csrf_denied`: cross-site Origin → 403, no Set-Cookie.
 - `prefs_get_405`; `prefs_json_415`; `prefs_locale_sets_cookie`; `prefs_locale_invalid_400`.
-- `public_page_ignores_pref_cookies`: a public page with and without `__Host-theme=light; __Host-locale=fr` →
+- `public_page_ignores_pref_cookies` (the rendered byte-equality moves to P1.23): a public page with and without `__Host-theme=light; __Host-locale=fr` →
   identical HTML and identical headers.
 - `public_page_no_vary_cookie`: `Vary` contains `Accept-Language` and not `Cookie`.
 - `public_lang_query_override`: `?lang=fr` with `Accept-Language: en` → `lang="fr"`; `?lang=de` → negotiation.
 - `app_page_vary_cookie`: an app page has `Vary: Cookie` and `Cache-Control: private, no-store`.
 - `app_document_theme_attr`: cookie light → `data-theme="light"`; no cookie or garbage → no attribute.
 - `color_scheme_meta_matches`: light → `light`; system → `dark light`.
-- `document_no_inline_script_or_style`: no `<script>` without `src`, no `<style>`, no `style=` attribute.
+- `document_no_inline_script_or_style` (moves to P1.23): no `<script>` without `src`, no `<style>`, no `style=` attribute.
+- `theme_function_ignores_cookies_for_public_group` and `theme_function_varies_on_cookie_for_app_group` (above).
 - `prefs_forms_work_without_js` (Playwright, JS disabled; runs in P1.26's harness, app group test page): switch
   to light, then to French, through the footer forms → the reloaded page is light and French.
 - `public_language_links_work_without_js`: click "Français" on a public page → `lang="fr"`.
@@ -4081,7 +4137,10 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 budget moves to `scripts/budgets/island.ts` and lands first as **P1.23q** with the dependency-cruiser rule and their
 tests; this step brings `apps/web/` and the Vite config.
 
-**Tags:** [SEC] · **Depends on:** P1.23q, P1.20, P1.08 · **Plan:** §5.1 (islands, props, script and CSP rules), §6.1 JS budgets, §2 rule 15
+**Tags:** [SEC] · **Depends on:** P1.23q, P1.20, P1.08, P1.22 · **Plan:** §5.1 (islands, props, script and CSP rules), §6.1 JS budgets, §2 rule 15
+
+From P1.22 (book edit 2026-10-06-p122-shape): this step wires P1.22's pure prefs function into the document and carries
+`document_no_inline_script_or_style` and the rendered `public_page_ignores_pref_cookies` byte-equality.
 
 **Where:** `apps/web/src/islands/runtime/{registry.ts, island.tsx, bootstrap.ts, manifest.ts, assets-route.ts}`;
 `apps/web/vite.config.ts`; `scripts/budgets/island.ts`; a dependency-cruiser rule; tests.
@@ -5167,7 +5226,7 @@ on the PDS (P1.30 C12).
 One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
 from `dev:up`, not from CI), so this stays one step.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.12x, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/compose.dev.yaml`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
 `scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests.
