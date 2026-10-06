@@ -1,0 +1,41 @@
+/* Input and the shared field parts (P1.24; sheet components/Input/README.md, v45). base.css draws the bare control:
+   40px, 1px `line-strong` border, `radius-xs`, mono 14px, hover and disabled; this adds the label, the messages and
+   the error border. Textarea and Select use these classes too. */
+@layer components {
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+  }
+
+  .label {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+  }
+
+  .control[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+
+  .hint,
+  .error {
+    margin: 0;
+    font-size: var(--type-body-small-size);
+    line-height: var(--type-body-small-line);
+  }
+
+  .hint {
+    color: var(--color-ink-muted);
+  }
+
+  .error {
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+  }
+}

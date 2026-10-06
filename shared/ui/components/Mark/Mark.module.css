@@ -1,0 +1,7 @@
+/* Mark (P1.24; sheet components/Mark/README.md, v45): `ink` by default, never an accent. */
+@layer components {
+  .root {
+    display: block;
+    color: var(--color-ink);
+  }
+}

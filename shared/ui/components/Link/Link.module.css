@@ -1,0 +1,26 @@
+/* Link (P1.24; sheet components/Link/README.md, v45). base.css already draws the inline link on every <a>. */
+@layer components {
+  .inline {
+    color: var(--color-link);
+  }
+
+  .standalone {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .standalone:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+}
