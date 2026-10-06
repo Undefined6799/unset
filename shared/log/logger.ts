@@ -31,6 +31,9 @@ const EVENTS = [
   "migrate.database_ahead",
   "migrate.failed",
   "migrate.done",
+  // P1.23, the island renderer: in production an island's props were over its byte limit, so it rendered static
+  // (logged with the island name only).
+  "island.props_too_large",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
@@ -54,6 +57,8 @@ export type LogFields = Partial<{
   version: number;
   /** A Postgres SQLSTATE such as `42P01`: five characters, no message text (P1.11). */
   sqlstate: string;
+  /** An island name: the file stem of a `*.island.tsx`, such as `header-menu` (P1.23). */
+  island: string;
 }>;
 
 export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
@@ -75,6 +80,7 @@ const ALLOWED: ReadonlySet<string> = new Set([
   "attempt",
   "version",
   "sqlstate",
+  "island",
 ]);
 const ROUTE_TEMPLATE = /^\/[A-Za-z0-9_\-/:@.*]*$/;
 /** A route segment a template may hold: a parameter, a wildcard or a word literal. A handle, id or token is none. */
@@ -97,6 +103,8 @@ const WORD_FIELDS: Readonly<Record<string, RegExp>> = {
   kind: /^[A-Za-z][A-Za-z0-9_]{0,39}$/,
   /** A configuration key name, such as `PG_HOST`. */
   key: /^[A-Z][A-Z0-9_]{0,63}$/,
+  /** An island name, in the shape of P1.10's props id, so user text never passes. */
+  island: /^[a-z][a-z0-9-]{0,40}$/,
 };
 
 /**

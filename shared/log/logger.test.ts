@@ -147,6 +147,19 @@ describe("logger", () => {
     ]);
   });
 
+  test("logger_island_event", () => {
+    // P1.23's island renderer logs this with the island name only; anything not shaped like a name is replaced.
+    const { log, records } = capture();
+    log.warn("island.props_too_large", { island: "header-menu" });
+    for (const island of ["Header", "did:plc:abc", "a b", "@alice.example", `x${"y".repeat(41)}`]) {
+      log.warn("island.props_too_large", { island });
+    }
+    expect(records().map((r) => [r.event, r.island])).toEqual([
+      ["island.props_too_large", "header-menu"],
+      ...Array(5).fill(["island.props_too_large", "[island]"]),
+    ]);
+  });
+
   test("logger_sqlstate_is_a_code_only", () => {
     // A message or anything else in the sqlstate field is replaced, so error text cannot leak through it.
     const { log, records } = capture();
