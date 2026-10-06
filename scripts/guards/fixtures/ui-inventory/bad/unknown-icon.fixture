@@ -1,0 +1,4 @@
+// fixture: apps/web/src/Launch.tsx findings=2
+import { Icon } from "@unset/shared-ui";
+export const Launch = () => <Icon name="rocket" />;
+export const Maybe = (on: boolean) => <Icon name={on ? "next" : "warp"} />;
