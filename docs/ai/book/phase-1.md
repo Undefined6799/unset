@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15, P1.16, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
-  P1.29, P1.30, P1.32, P1.31, P1.37; then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -70,7 +70,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   stays where it is below so ids and links hold; P1.22b sits after P1.37. No French page ships before this slice lands.
   It may run before, beside or after slice 2's steps; P1.38 waits for it, because the Phase 1 exit needs both languages.
 - **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode), P1.33
-  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.36, P1.37a, then the Phase 1 exit P1.38.
+  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.37a, then the Phase 1 exit P1.38.
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
 
 Why some pieces the plan lists for later stay in slice 1 (each is a security or dependency reason; none adds scope):
@@ -7040,7 +7040,16 @@ replaces it).
 
 **Tags:** — · **Depends on:** P0.07 · **Plan:** §6 (ASVS 5.0 L2, AI system record, RoPA), §7; launch gate L.03
 
-**Where:** `docs/human/compliance/{asvs-5-l2.md, asvs-5.0.csv, ai-system-record.md, ropa.md}`; `tests/compliance.test.ts`.
+**Where:** `docs/human/compliance/{asvs-5-l2.md, asvs-5.0.csv, ai-system-record.md, ropa.md}`; `scripts/docs/compliance.test.ts`
+(any parser beside it in `scripts/docs/`).
+
+**Placement and order (book edit 2026-10-06-p136-pull-forward-and-placement, final 23:09Z):** pulled forward into slice 1
+on Alex's "Yes p136" (2026-10-06 23:08Z). The test sits in `scripts/docs/` like P0.09's `docs.test.ts`, because no Vitest
+project selects `tests/compliance.test.ts` and `tests/integration/` would put it behind the Postgres setup. It is a CI
+gate, so the PR is check class and the `docs/human/compliance/` files ride with it; the id stays P1.36 (nothing is
+split off, so no `q`). `asvs-5.0.csv` is pinned with its source URL and sha256, the fetch is recorded in the PR body,
+and nothing touches the network at test time. The controller contact (P2.15) and the SMTP provider (Alex answer 21)
+stay `open` rows with evidence `step:P2.15`.
 
 **Size:** ~400 lines of docs (tables), ~150 test lines.
 
