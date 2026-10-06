@@ -11,7 +11,9 @@
     "unset-migrate": "./migrate-cli.ts"
   },
   "dependencies": {
+    "@unset/infrastructure-net-guard": "*",
     "@unset/shared-config": "*",
+    "@unset/shared-errors": "*",
     "@unset/shared-log": "*",
     "pg": "8.23.0"
   },
