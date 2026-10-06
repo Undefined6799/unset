@@ -358,6 +358,34 @@ describe("SQL this tokenizer must not read differently from Postgres (review, 20
     expect(last("CREATE TABLE x (id int);\nGRANT SELECT ON x TO api;").kind).toBe("trusted");
   });
 
+  // P0.09m: a schema name is one part; it never resolves through search_path, so a bare CREATE SCHEMA is neutral.
+  test("create_schema_bare_is_neutral", () => {
+    expect(last("CREATE SCHEMA app;").kind).toBe("neutral");
+    expect(last("CREATE SCHEMA IF NOT EXISTS app;").kind).toBe("neutral");
+  });
+
+  test("create_schema_quoted_is_neutral", () => {
+    expect(last('CREATE SCHEMA "App";').kind).toBe("neutral");
+  });
+
+  test("create_schema_authorization_is_trusted", () => {
+    // Ownership is a grant, and so are embedded elements; a dotted or keyword name is not a plain create either.
+    for (const sql of [
+      "CREATE SCHEMA app AUTHORIZATION web;",
+      "CREATE SCHEMA AUTHORIZATION web;",
+      "CREATE SCHEMA authorization;",
+      "CREATE SCHEMA app GRANT USAGE ON SCHEMA app TO web;",
+      "CREATE SCHEMA a.b;",
+    ]) {
+      expect(last(sql).kind, sql).toBe("trusted");
+    }
+  });
+
+  test("name_two_part_unchanged", () => {
+    expect(last("CREATE TABLE app.n (id int);\nGRANT SELECT ON app.n TO api;").kind).toBe("feature");
+    expect(last("CREATE TABLE n (id int);\nGRANT SELECT ON n TO api;").kind).toBe("trusted");
+  });
+
   test("grant_parse_column_grant_with_table_wide_privilege", () => {
     const add = "ALTER TABLE app.account ADD COLUMN c2 text;\n";
     expect(last(`${add}GRANT SELECT (c2), UPDATE ON app.account TO api;`).kind).toBe("trusted");
