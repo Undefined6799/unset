@@ -60,6 +60,11 @@
           "routines": {
             "migrator": ["EXECUTE"]
           }
+        },
+        "audit_owner": {
+          "routines": {
+            "audit_owner": ["EXECUTE"]
+          }
         }
       }
     },
@@ -102,12 +107,21 @@
       "grants": {
         "admin": ["USAGE"],
         "api": ["USAGE"],
+        "audit_owner": ["USAGE"],
         "indexer": ["USAGE"],
         "web": ["USAGE"]
       }
     }
   },
   "tables": {
+    "audit.append": {
+      "admin": ["EXECUTE"],
+      "indexer": ["EXECUTE"],
+      "web": ["EXECUTE"]
+    },
+    "audit.chain": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
     "app.single_use": {
       "retention": {
         "columns": {

@@ -217,10 +217,10 @@ describe("grants", () => {
 
   test("class_assertions", async () => {
     const { name, pool } = await freshDatabase();
-    // The audit tables arrive with P1.15; a stand-in shows what the auditor rule refuses.
+    // auditor reads the chain only; a stand-in audit table shows what the auditor rule refuses.
     postgres.sql(
       name,
-      "SET ROLE audit_owner; CREATE TABLE audit.event_body (id int); GRANT SELECT ON audit.event_body TO auditor",
+      "SET ROLE audit_owner; CREATE TABLE audit.probe (id int); GRANT SELECT ON audit.probe TO auditor",
     );
     await run(pool, "CREATE TABLE app.transmission_buffer (id int); GRANT SELECT ON app.transmission_buffer TO backup");
     postgres.sql(
@@ -232,7 +232,7 @@ describe("grants", () => {
       const violations = classViolations(await readState(pool), matrix, roster);
       expect(violations).toEqual(
         expect.arrayContaining([
-          "auditor holds SELECT on audit.event_body",
+          "auditor holds SELECT on audit.probe",
           "backup holds SELECT on app.transmission_buffer",
           "backup reads app.transmission_buffer",
           "backup is a member of pg_read_all_data",
@@ -277,7 +277,8 @@ describe("grants", () => {
     `WHERE n.nspname = '${schema}' AND a.privilege_type = 'USAGE' AND a.grantee <> n.nspowner) s`;
 
   test("types_schema_usage_exact", () => {
-    expect(postgres.sql("unset", schemaUsage("types"))).toBe("admin,api,indexer,web");
+    // audit_owner (P1.15m) creates the audit tables, whose subject columns are types.did.
+    expect(postgres.sql("unset", schemaUsage("types"))).toBe("admin,api,audit_owner,indexer,web");
   });
 
   test("retention_has_app_usage", () => {
@@ -319,8 +320,8 @@ describe("grants", () => {
 
   test("no_public_execute_on_routines", async () => {
     // Whoever created it (architecture ruling 2026-10-06, point 3): no routine outside the catalogs and extensions may
-    // be executed by PUBLIC. migrator's routines get the global default; audit_owner has no default until the step that
-    // first creates routines as it (P1.15) adds one, so a stand-in routine shows the check catches it.
+    // be executed by PUBLIC. migrator's and audit_owner's (P1.15m) routines get a global default that withholds it, so
+    // a stand-in routine granted to PUBLIC by hand shows the check catches it.
     const query =
       "SELECT n.nspname || '.' || p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace, " +
       "aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0 " +
@@ -330,6 +331,8 @@ describe("grants", () => {
     const { name, pool } = await freshDatabase();
     await run(pool, "CREATE FUNCTION app.f() RETURNS int LANGUAGE sql AS 'SELECT 1'");
     postgres.sql(name, "SET ROLE audit_owner; CREATE FUNCTION audit.g() RETURNS int LANGUAGE sql AS 'SELECT 1'");
+    expect(postgres.sql(name, query)).toBe("");
+    postgres.sql(name, "SET ROLE audit_owner; GRANT EXECUTE ON FUNCTION audit.g() TO PUBLIC");
     expect(postgres.sql(name, query)).toBe("audit.g");
   });
 

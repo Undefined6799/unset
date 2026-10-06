@@ -1,0 +1,13 @@
+{
+  "comment": "Computed independently with Python 3 hashlib (P1.15m); audit.row_hash (SQL) and rowHash (TS, P1.15) must both return rowHash.",
+  "lane": "mod",
+  "seq": 7,
+  "ts": "2026-10-06T12:34:56.789012Z",
+  "action": "mod.takedown",
+  "writer": "admin",
+  "retentionClass": "mod_action",
+  "prevHash": "1111111111111111111111111111111111111111111111111111111111111111",
+  "bodyMac": "2222222222222222222222222222222222222222222222222222222222222222",
+  "piiMac": "3333333333333333333333333333333333333333333333333333333333333333",
+  "rowHash": "b5fcafc0dfd95f7decc530fdd7cb8c459724167600ad3babb88b7d5b10c8f751"
+}
