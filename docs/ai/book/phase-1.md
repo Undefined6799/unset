@@ -2155,6 +2155,22 @@ Where: `tests/integration/setup/pg.setup.ts` (the globalSetup) and `tests/integr
 Spec: P1.11's "Test databases" bullet (the TE-2 conditions) and its tests `query_budget_per_route`,
   `test_files_never_superuser` and `teardown_after_failure`. If a later architecture ruling places the setup
   elsewhere, this step follows it.
+Ruling 2026-10-06 03:15Z (architecture, p111t-test-db-roles-budget-vitest):
+  - Before P1.12, test files may use per-file clones with `migrator` credentials, never the superuser. `migrator` owns
+    the schemas, so until P1.12 no test may assert a permission outcome. P1.12 switches to `web`, `api` and `indexer`
+    in the PR that creates them and adds `test_files_connect_as_process_role`.
+  - `migrate.test.ts` and `postgres-helper.test.ts` use `tests/support/postgres.ts` directly. `pool.test.ts` creates
+    throwaway roles as `migrator`, each with a random `t_` prefix, dropped in teardown, never granted `SUPERUSER`,
+    `CREATEROLE` or `BYPASSRLS`.
+  - The query budget counts at pool level through an `onStatement` hook on `createPool` and a harness running one
+    request at a time, with no `RouteContext` change. The hook also sees checked-out clients, so statements inside
+    `tx.ts` count (`query_budget_counts_tx_statements`); transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`,
+    `SAVEPOINT`/`RELEASE`) does not, stated in the test's comment. Production composes do not set the hook; a later
+    metrics step that wants it asks first.
+  - `vitest.config.ts` and `biome.json` are check paths (CODEOWNERS' `# checks:` line, P0.09). P1.11t may still carry
+    its one `vitest.config.ts` change, `globalSetup` on the `tests/integration` project only, with no change to
+    `retry`, `allowOnly`, `passWithNoTests`, `include`/`exclude` or any other project; the reviewer checks that diff
+    line by line. Once the checks line lists the file, any later change to it is a `q` step of its own.
 
 ---
 
@@ -2302,6 +2318,8 @@ Threats: each process's database role: what a compromised process can read or ch
     (`roster_complete`).
 
 Done when (tests):
+  - test_files_connect_as_process_role (ruling 2026-10-06 03:15Z): `current_user` in a test file is never `migrator`
+    or the superuser; this PR switches test connections to `web`, `api` and `indexer`.
   - matrix_matches: steps 4–5 pass on a fresh database.
   - matrix_detects_extra_grant: a temp migration granting `api` SELECT on an `app` table → diff fails naming it.
   - personal_data_by_column_list (plan §5.2 at `9c54e52`; SE-6): the test also diffs `information_schema.
@@ -4540,28 +4558,32 @@ P1.27)` and exits 0; the static test `images_skip_only_without_dockerfile` pins 
 Dockerfile path is absent", so P1.27's PR is built and verified by the same job. P1.27 itself then touches only
 product paths, tooling and docs.
 
-P1.27q as built (Phase 2, branch `claude/phase-2-blocks-p201k-p127q`, kind/build, check paths only; book edit
-2026-10-06-p127q-as-proposed):
-- `images.yml` runs on every PR and every push to `main` with no path filter, so the required check always reports.
-  With the Dockerfile present: hadolint, a Buildx build, Trivy and syft on PRs; on `main` only, push by digest, then
-  sign and attest in the environment `signing` with `--tlog-upload=false`, then verify-images. The sign jobs are
-  skipped until Alex creates `signing` and its key. Permissions `contents: read`, `packages: write` on the sign job only.
-- `mirror.yml` runs when `deployment/mirror.list.json` changes and weekly; while the list is absent it exits 0 with a
-  notice.
+P1.27q as built (Phase 2, branch `claude/phase-2-blocks-p201k-p127q`, kind/build, check paths only; book edits
+2026-10-06-p127q-as-proposed and 2026-10-06-p127s-contingent-split). `scripts/guards/workflows.ts` (P0.07,
+`lineProblems`) refuses every write permission except `id-token`, and pushing to a private GHCR needs `packages: write`;
+allowing it loosens a CI guard, so it needs Alex's typed words. Unless he approves before P1.27q opens, P1.27q is the
+reduced default below and the push, sign and attest work is **P1.27s**:
+- `images.yml` runs on every PR and every push to `main` with no path filter, so the required check `images` always
+  reports. With the Dockerfile present: Buildx build, hadolint, Trivy, syft, the non-root check and the health check.
+  No push job and no sign job. Permissions `contents: read`.
+- `mirror.yml` runs when `deployment/mirror.list.json` changes and weekly, scan only, with no copy to GHCR; while the
+  list is absent it exits 0 with a notice.
+- `required-checks.json` gains `images`; the pin in `scripts/guards/workflow-pins.test.ts` moves in the same PR (a
+  tightening, cleared).
 - `.github/hadolint.yaml` and `.github/trivyignore.yaml` sit under `.github/` after the root tidy, not at the root
   paths named in the Where line below.
 - Tests: `verify_images_rejects_unsigned`, `verify_images_rejects_wrong_key`,
   `verify_images_rejects_provenance_from_other_workflow`, `verify_images_rejects_provenance_from_other_branch`
-  (`scripts/ci/verify-images.test.ts`, cosign through an injected runner); `workflow_permissions_minimal`,
-  `no_tlog_upload_flag_present` (every cosign sign or attest call carries `--tlog-upload=false`, so no
-  private-repository metadata reaches the public Rekor log; its description says so), `images_skip_only_without_dockerfile`,
-  `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`); `trivyignore_expiry_enforced`
-  (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts` gains `images`.
-- Until `signing` exists, images built on `main` are unsigned; P1.30's deploy preflight and P2.26a deploy only images
-  `verify-images` accepts, so they fail closed meanwhile. Alex's tick list gains "create the `signing` environment and
-  key".
+  (`scripts/ci/verify-images.test.ts`, cosign through an injected runner; nothing calls it until P1.27s);
+  `images_skip_only_without_dockerfile`, `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`);
+  `trivyignore_expiry_enforced` (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts`
+  gains `images`. `no_tlog_upload_flag_present` and the sign job's `workflow_permissions_minimal` move to P1.27s.
+- Until P1.27s lands nothing is published to GHCR, so no unsigned image exists anywhere a deploy could pull it (fail
+  closed). P1.30's preflight and P2.26a deploy only images `verify-images` accepts.
 - If Actions minutes run short once the Dockerfile lands, the fix is change detection inside the job, so the required
   check still reports, never a workflow path filter.
+- If Alex approves the guard change before P1.27q opens, P1.27s's shape (below) lands in P1.27q instead and P1.27s
+  lapses.
 
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
@@ -4722,6 +4744,44 @@ nothing written to the lock).
 
 **Not in this step:** deploy (P1.30, P5.03); patching upstream images (the PDS image is used unmodified — the
 prototype's `deploy/pds/Dockerfile` sed patch is REJECTED).
+
+---
+
+### P1.27s — Publish, sign and attest images (contingent split from P1.27q)
+Tags: [SEC] [ALEX]            Depends on: P1.27q, P1.27, Alex's typed approval of the guard change, the `signing`
+  environment and key ([ALEX] tick-list item)            Plan: §8 ("images signed with cosign"); decision 41
+Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy job in
+  `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests, and
+  `scripts/ci/image-workflows.test.ts`. No product file rides with it.
+Size: about 250 lines.
+
+Lapses if Alex approves the guard change before P1.27q opens; the same shape then lands in P1.27q.
+
+Shape (architecture ruling 2026-10-06-p127q-packages-write-shape, amended 03:15Z for the separate file):
+  - `publish-images.yml` is triggered by `push` to `main` and `workflow_dispatch` only, and has one job, `publish`. A
+    `pull_request` trigger anywhere in that file fails the guard. It is not a required check, since it never runs on a
+    PR. `images.yml` stays the unprivileged required check `images` on PRs.
+  - The gate: `publish` declares `environment: signing` and its job-level `if:` is exactly `GATE_IF` (push to
+    `refs/heads/main`). `packages: write` joins `id-token: write` in `ungated()`'s privileged test. On the free plan
+    environment protection rules are unavailable (decision 41), so the `if` gate is what binds.
+  - `lineProblems` accepts `packages: write` only in `publish-images.yml`, inside the job `publish`, at job level
+    (top-level permissions stay `{}`). Any other file or job wanting it is a guard change, a check-path PR and a
+    reviewed decision. Every other write scope is still refused, and `contents: write` is never paired with it.
+  - Build what you sign: `publish` builds the image from the checked-out `main` commit, then pushes by digest and signs
+    and attests that digest with `--tlog-upload=false`, then runs `verify-images`. It never pushes or signs an artifact
+    from another job or run.
+  - No cache from untrusted runs: no `actions/cache`, no `setup-*` cache option, no `cache-from`.
+  - SHA-pinned actions and the image-variable rules are unchanged.
+
+Done when (tests):
+  - guard fixtures: `packages_write_ungated_fails`, `packages_write_other_job_fails`, `packages_write_other_file_fails`,
+    `publish_images_pull_request_trigger_fails`, `publish_job_cache_fails`, `packages_write_gated_publish_passes`;
+  - `image-workflows.test.ts`: `no_tlog_upload_flag_present` (every cosign sign or attest call carries the flag, so no
+    private-repository metadata reaches the public Rekor log) and `workflow_permissions_minimal` for `publish`.
+
+Order: after P1.27, before P2.26a, which depends on it (a deploy by verified digest needs signed images). P1.30 does not
+depend on it: the preflight is tested against an injected verifier and fails closed on unsigned images. The slice 1 exit
+(P2.13a) is unchanged: nothing in slice 1 pushes or deploys an image, and P1.29 builds locally.
 
 ---
 
