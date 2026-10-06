@@ -92,6 +92,15 @@ export function createHandleVerifier(options: HandleVerifierOptions) {
     return remember(did, { status: "verified", handle, checkedAt: now() }, options.verifyTtlS);
   }
 
+  /** A reporter that throws must not turn the verdict into a throw (architecture ruling 2026-10-06, SE-7). */
+  const report = (error: unknown): void => {
+    try {
+      options.onUnexpected?.(error);
+    } catch {
+      // The error was already handed over once; a failing reporter has nowhere left to report to.
+    }
+  };
+
   return {
     /** Never throws: an unexpected error is reported through onUnexpected and reads as `unavailable`. */
     async verifyHandle(did: Did, opts: Partial<Consistency> = {}): Promise<HandleVerdict> {
@@ -101,7 +110,7 @@ export function createHandleVerifier(options: HandleVerifierOptions) {
       try {
         return await check(did, { consistency });
       } catch (error) {
-        options.onUnexpected?.(error);
+        report(error);
         return { status: "unavailable" };
       }
     },

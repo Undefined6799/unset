@@ -229,4 +229,25 @@ describe("verifyHandle", () => {
     expect(reported[0]).toBeInstanceOf(TypeError);
     expect(await w.verifier({ resolveDid }).verifyHandle(A)).toEqual({ status: "unavailable" });
   });
+
+  test("unexpected_error_reported_once", async () => {
+    const w = world();
+    const broken: IdentityNetwork = {
+      ...w.network,
+      get: async () => {
+        throw new TypeError("boom");
+      },
+    };
+    const resolveDid = createDidResolver({ network: broken, plcUrl: PLC_URL, cacheTtlS: 0, cacheMax: 1 });
+    let reports = 0;
+    const verify = w.verifier({
+      resolveDid,
+      onUnexpected: () => {
+        reports += 1;
+        throw new Error("the reporter itself failed");
+      },
+    });
+    expect(await verify.verifyHandle(A)).toEqual({ status: "unavailable" });
+    expect(reports).toBe(1);
+  });
 });
