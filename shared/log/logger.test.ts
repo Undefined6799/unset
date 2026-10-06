@@ -137,6 +137,61 @@ describe("logger", () => {
     expect(records().map((r) => [r.event, r.route])).toEqual([["csp.handler_override", "/@:handle"]]);
   });
 
+  test("logger_migrate_events", () => {
+    // P1.11's migration runner logs these: versions and a SQLSTATE, never a Postgres message.
+    const { log, records } = capture();
+    log.warn("migrate.database_ahead", { count: 1, version: 3 });
+    log.error("migrate.failed", { version: 2, sqlstate: "42P01" });
+    log.info("migrate.done", { count: 2 });
+    expect(records().map((r) => [r.event, r.version, r.sqlstate, r.count])).toEqual([
+      ["migrate.database_ahead", 3, undefined, 1],
+      ["migrate.failed", 2, "42P01", undefined],
+      ["migrate.done", undefined, undefined, 2],
+    ]);
+  });
+
+  test("logger_sqlstate_is_a_code_only", () => {
+    // A message or anything else in the sqlstate field is replaced, so error text cannot leak through it.
+    const { log, records } = capture();
+    for (const sqlstate of ['relation "users" does not exist', "42p01", "42P0", "42P011", "did:plc:abc"]) {
+      log.error("migrate.failed", { version: 2, sqlstate });
+    }
+    expect(records().map((r) => r.sqlstate)).toEqual(Array(5).fill("[sqlstate]"));
+  });
+
+  test("logger_version_is_a_non_negative_integer", () => {
+    // Anything but a non-negative safe integer is dropped, not coerced.
+    const { log, records } = capture();
+    for (const version of [-1, 1.5, Number.NaN, 2 ** 53, "2"]) {
+      log.error("migrate.failed", { version } as unknown as LogFields);
+    }
+    log.error("migrate.failed", { version: 0 });
+    expect(records().map((r) => [r.version, r.dropped])).toEqual([...Array(5).fill([undefined, 1]), [0, undefined]]);
+  });
+
+  test("logger_migrate_failure_keeps_no_row_values", () => {
+    // A failing statement's driver error echoes row values in message, detail, hint, where and constraint. Logged
+    // the way the runner logs it (version, SQLSTATE, then logError), none of that text reaches the line.
+    const did = "did:plc:ewvi7nxzyoun6zhxrhs64oiz";
+    const handle = "alice.example.com";
+    const failure = Object.assign(new Error(`duplicate key value violates unique constraint "accounts_${handle}"`), {
+      code: "23505",
+      detail: `Key (did, handle)=(${did}, ${handle}) already exists.`,
+      hint: `Remove ${handle} first.`,
+      where: `SQL statement "INSERT INTO accounts VALUES ('${did}')"`,
+      constraint: `accounts_${handle}`,
+    });
+    const { log, lines } = capture("prod");
+    log.error("migrate.failed", { version: 2, sqlstate: failure.code });
+    log.error("migrate.failed", { version: 2, sqlstate: failure.detail });
+    log.logError(failure);
+    const text = lines.join("");
+    expect(text).toContain('"sqlstate":"23505"');
+    expect(text).not.toContain(did);
+    expect(text).not.toContain(handle);
+    expect(text).not.toContain("ewvi7n");
+  });
+
   test("logger_no_stack_message_in_prod", () => {
     const { log, lines } = capture("prod");
     log.logError(new Error("secret value"));

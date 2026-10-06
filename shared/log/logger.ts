@@ -26,6 +26,11 @@ const EVENTS = [
   "csrf.denied",
   // P1.08, the security headers: a handler set its own Content-Security-Policy, which the route group's policy replaced.
   "csp.handler_override",
+  // P1.11, the migration runner: the database is ahead of this code (a rollback deploy), a migration failed (its
+  // version and Postgres SQLSTATE, never the error message, which can carry data), and the run finished.
+  "migrate.database_ahead",
+  "migrate.failed",
+  "migrate.done",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
@@ -45,6 +50,10 @@ export type LogFields = Partial<{
   kind: string;
   job: string;
   attempt: number;
+  /** A migration's version number (P1.11). */
+  version: number;
+  /** A Postgres SQLSTATE such as `42P01`: five characters, no message text (P1.11). */
+  sqlstate: string;
 }>;
 
 export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
@@ -64,12 +73,16 @@ const ALLOWED: ReadonlySet<string> = new Set([
   "kind",
   "job",
   "attempt",
+  "version",
+  "sqlstate",
 ]);
 const ROUTE_TEMPLATE = /^\/[A-Za-z0-9_\-/:@.*]*$/;
 /** A route segment a template may hold: a parameter, a wildcard or a word literal. A handle, id or token is none. */
 const ROUTE_SEGMENT = /^(?:@?:[A-Za-z][A-Za-z0-9_]*|\*|[a-z]{1,32}(?:[-_][a-z]{1,32}){0,3}|\.well-known|)$/;
 /** A random per-request id: a UUID or 16 to 64 base64url characters. Anything else is not a request id. */
 const REQUEST_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{16,64})$/;
+/** A SQLSTATE is five digits or uppercase letters (postgresql.org/docs/18/errcodes-appendix.html). */
+const SQLSTATE = /^[0-9A-Z]{5}$/;
 const MAX_FRAMES = 10;
 
 /**
@@ -84,10 +97,11 @@ const isRouteTemplate = (value: string): boolean =>
     .split("/")
     .every((s) => ROUTE_SEGMENT.test(s));
 
-/** A string field's logged value: routes and request ids are checked whole, everything else is scrubbed. */
+/** A string field's logged value: routes, request ids and SQLSTATEs are checked whole, everything else is scrubbed. */
 function cleanString(key: string, value: string): string {
   if (key === "route") return isRouteTemplate(value) ? value : "[route]";
   if (key === "reqId") return REQUEST_ID.test(value) ? value : "[reqId]";
+  if (key === "sqlstate") return SQLSTATE.test(value) ? value : "[sqlstate]";
   return scrub(value);
 }
 
@@ -111,6 +125,9 @@ export type LoggerOptions = {
   now?: () => Date;
 };
 
+/** A migration version: a non-negative safe integer. Anything else is dropped, never coerced (ruling 2026-10-06). */
+const isVersion = (value: unknown): boolean => Number.isSafeInteger(value) && (value as number) >= 0;
+
 const isPrimitive = (value: unknown): value is Primitive =>
   value === null || ["string", "number", "boolean"].includes(typeof value);
 
@@ -119,7 +136,7 @@ function cleanFields(fields: Record<string, unknown>): { clean: Record<string, P
   const clean: Record<string, Primitive> = {};
   let dropped = 0;
   for (const [key, value] of Object.entries(fields)) {
-    if (!ALLOWED.has(key) || !isPrimitive(value)) {
+    if (!ALLOWED.has(key) || !isPrimitive(value) || (key === "version" && !isVersion(value))) {
       dropped += 1;
       continue;
     }

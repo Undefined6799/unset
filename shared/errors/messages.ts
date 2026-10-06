@@ -18,4 +18,5 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "csrf.denied": "The form expired or came from another site. Reload the page and try again.",
   "internal.error": "Something went wrong on our side.",
   "service.unavailable": "This is unavailable right now. Try again soon.",
+  "db.busy": "We're busy right now. Try again in a moment.",
 };

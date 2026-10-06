@@ -18,6 +18,12 @@ describe("error catalog", () => {
     expect(Object.keys(ERROR_MESSAGES).sort()).toEqual(publicCodes.sort());
   });
 
+  test("db_busy_is_public_503", () => {
+    // P1.11's pool rejects with this when no client frees up in time; it reads as a retryable 503, not a 500.
+    expect(ERROR_CODES["db.busy"]).toEqual({ status: 503, public: true });
+    expect(ERROR_MESSAGES["db.busy"]).toBeTruthy();
+  });
+
   test("error_param_roundtrip", () => {
     expect(withErrorParam("/login", "csrf.denied")).toBe("/login?error=csrf.denied");
     expect(withErrorParam("/login?next=1", "csrf.denied")).toBe("/login?next=1&error=csrf.denied");
