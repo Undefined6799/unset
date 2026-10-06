@@ -7,11 +7,35 @@
     font-display: swap;
   }
   @font-face {
+    font-family: "Space Grotesk Fallback";
+    src: local("Arial");
+    size-adjust: 109.4659%;
+    ascent-override: 89.891%;
+    descent-override: 26.675%;
+    line-gap-override: 0%;
+  }
+  @font-face {
+    font-family: "Space Grotesk Fallback Android";
+    src: local("Roboto");
+    size-adjust: 109.7063%;
+    ascent-override: 89.6941%;
+    descent-override: 26.6165%;
+    line-gap-override: 0%;
+  }
+  @font-face {
     font-family: "JetBrains Mono";
     src: url("../fonts/JetBrainsMono-Variable.woff2") format("woff2");
     font-weight: 100 800;
     font-style: normal;
     font-display: swap;
+  }
+  @font-face {
+    font-family: "JetBrains Mono Fallback";
+    src: local("Courier New");
+    size-adjust: 99.9837%;
+    ascent-override: 102.0166%;
+    descent-override: 30.0049%;
+    line-gap-override: 0%;
   }
   :root {
     color-scheme: dark;
@@ -35,8 +59,9 @@
     --color-link: var(--color-cyan);
     --color-success: var(--color-emerald);
     --color-danger: var(--color-plum);
-    --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-display:
+      "Space Grotesk", "Space Grotesk Fallback", "Space Grotesk Fallback Android", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
     --type-display-size: 64px;
     --type-display-line: 60px;
     --type-display-weight: 700;
