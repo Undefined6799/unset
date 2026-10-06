@@ -142,8 +142,9 @@ describe("buildTokens", () => {
     expect(css).toContain('font-family: "Space Grotesk Fallback";\n    src: local("Arial");');
     expect(css).toContain('font-family: "Space Grotesk Fallback Android";\n    src: local("Roboto");');
     expect(css).toContain('font-family: "JetBrains Mono Fallback Android";\n    src: local("Droid Sans Mono");');
+    // Wider than Biome's 120 columns, so broken after the colon as Biome formats it.
     expect(block(css, ":root")).toContain(
-      '--font-display: "Space Grotesk", "Space Grotesk Fallback", "Space Grotesk Fallback Android", ui-sans-serif, system-ui, sans-serif;',
+      '--font-display:\n      "Space Grotesk", "Space Grotesk Fallback", "Space Grotesk Fallback Android", ui-sans-serif, system-ui, sans-serif;',
     );
     expect(css).toContain(
       'src: url("../fonts/SpaceGrotesk-Variable.woff2") format("woff2");\n    font-weight: 300 700;',

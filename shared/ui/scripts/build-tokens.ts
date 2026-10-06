@@ -258,9 +258,19 @@ function fontFaces(type: TypeFamily, metrics: FontMetrics): string[] {
   });
 }
 
+/** The repository's Biome line width (biome.json formatter.lineWidth); tokens.css must already be formatted. */
+const LINE_WIDTH = 120;
+
+/** A declaration as Biome 2.5.15 formats it: on one line, or broken after the colon when wider than the limit. */
+function declaration(pad: string, line: string): string {
+  const colon = line.indexOf(": ");
+  if (`${pad}${line}`.length <= LINE_WIDTH || colon === -1) return `${pad}${line}`;
+  return `${pad}${line.slice(0, colon + 1)}\n${pad}  ${line.slice(colon + 2)}`;
+}
+
 function rule(selector: string, lines: string[], depth: number): string {
   const pad = "  ".repeat(depth);
-  return [`${pad}${selector} {`, ...lines.map((l) => `${pad}  ${l}`), `${pad}}`].join("\n");
+  return [`${pad}${selector} {`, ...lines.map((l) => declaration(`${pad}  `, l)), `${pad}}`].join("\n");
 }
 
 /** Step 8: the tokens.css text and the set of custom property names it declares. */
