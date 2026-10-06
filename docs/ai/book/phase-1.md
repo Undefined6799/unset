@@ -4540,6 +4540,29 @@ P1.27)` and exits 0; the static test `images_skip_only_without_dockerfile` pins 
 Dockerfile path is absent", so P1.27's PR is built and verified by the same job. P1.27 itself then touches only
 product paths, tooling and docs.
 
+P1.27q as built (Phase 2, branch `claude/phase-2-blocks-p201k-p127q`, kind/build, check paths only; book edit
+2026-10-06-p127q-as-proposed):
+- `images.yml` runs on every PR and every push to `main` with no path filter, so the required check always reports.
+  With the Dockerfile present: hadolint, a Buildx build, Trivy and syft on PRs; on `main` only, push by digest, then
+  sign and attest in the environment `signing` with `--tlog-upload=false`, then verify-images. The sign jobs are
+  skipped until Alex creates `signing` and its key. Permissions `contents: read`, `packages: write` on the sign job only.
+- `mirror.yml` runs when `deployment/mirror.list.json` changes and weekly; while the list is absent it exits 0 with a
+  notice.
+- `.github/hadolint.yaml` and `.github/trivyignore.yaml` sit under `.github/` after the root tidy, not at the root
+  paths named in the Where line below.
+- Tests: `verify_images_rejects_unsigned`, `verify_images_rejects_wrong_key`,
+  `verify_images_rejects_provenance_from_other_workflow`, `verify_images_rejects_provenance_from_other_branch`
+  (`scripts/ci/verify-images.test.ts`, cosign through an injected runner); `workflow_permissions_minimal`,
+  `no_tlog_upload_flag_present` (every cosign sign or attest call carries `--tlog-upload=false`, so no
+  private-repository metadata reaches the public Rekor log; its description says so), `images_skip_only_without_dockerfile`,
+  `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`); `trivyignore_expiry_enforced`
+  (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts` gains `images`.
+- Until `signing` exists, images built on `main` are unsigned; P1.30's deploy preflight and P2.26a deploy only images
+  `verify-images` accepts, so they fail closed meanwhile. Alex's tick list gains "create the `signing` environment and
+  key".
+- If Actions minutes run short once the Dockerfile lands, the fix is change detection inside the job, so the required
+  check still reports, never a workflow path filter.
+
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
