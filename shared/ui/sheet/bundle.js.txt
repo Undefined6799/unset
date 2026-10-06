@@ -1,0 +1,702 @@
+/* @ds-bundle: {"format":4,"namespace":"Unset","components":[{"name":"Button"},{"name":"CommandBlock"},{"name":"Input"},{"name":"Link"},{"name":"Tag"},{"name":"Callout"},{"name":"Card"},{"name":"Header"},{"name":"SectionHeading"},{"name":"Tabs"},{"name":"CodeBlock"},{"name":"Table"},{"name":"Checkbox"},{"name":"RadioGroup"},{"name":"Textarea"},{"name":"Select"},{"name":"Kbd"},{"name":"Progress"},{"name":"Spinner"},{"name":"AsciiBackground"},{"name":"Footer"},{"name":"Modal"},{"name":"Mark"},{"name":"Icon"},{"name":"Avatar"},{"name":"Switch"},{"name":"Toast"},{"name":"SkipLink"},{"name":"MediaFrame"},{"name":"Pagination"},{"name":"DescriptionList"},{"name":"NewPosts"},{"name":"FeedMore"}]} */
+(function () {
+  var R = window.React;
+  var h = R.createElement;
+  var uid = 0;
+
+  function omit(props, keys) {
+    var out = {};
+    for (var k in props) if (keys.indexOf(k) < 0) out[k] = props[k];
+    return out;
+  }
+  function cx() {
+    var out = [];
+    for (var i = 0; i < arguments.length; i++) if (arguments[i]) out.push(arguments[i]);
+    return out.join(" ");
+  }
+
+  function Button(props) {
+    var rest = omit(props, ["children", "className"]);
+    var cls = cx("us-button", props.className);
+    if (props.href) {
+      if (props.disabled) {
+        rest["aria-disabled"] = "true";
+        rest.tabIndex = -1;
+        delete rest.href;
+      }
+      delete rest.disabled;
+      rest.className = cls;
+      return h("a", rest, props.children);
+    }
+    rest.type = props.type || "button";
+    rest.className = cls;
+    return h("button", rest, props.children);
+  }
+
+  var MARK_D = "M126 540a110 110 0 1 0 220 0a110 110 0 1 0 -220 0ZM152 540a84 84 0 1 0 168 0a84 84 0 1 0 -168 0ZM182 540a54 54 0 1 0 108 0a54 54 0 1 0 -108 0ZM430 540a110 110 0 1 0 220 0a110 110 0 1 0 -220 0ZM456 540a84 84 0 1 0 168 0a84 84 0 1 0 -168 0ZM486 540a54 54 0 1 0 108 0a54 54 0 1 0 -108 0ZM734 540a110 110 0 1 0 220 0a110 110 0 1 0 -220 0ZM760 540a84 84 0 1 0 168 0a84 84 0 1 0 -168 0ZM790 540a54 54 0 1 0 108 0a54 54 0 1 0 -108 0Z";
+  function Mark(props) {
+    var w = props.width || 72;
+    return h("svg", {
+      className: cx("us-mark", props.className),
+      viewBox: "126 430 828 220",
+      width: w,
+      height: Math.round((w * 220) / 828),
+      role: "img",
+      "aria-label": props.title || "unset.sh"
+    }, h("path", { fill: "currentColor", fillRule: "evenodd", d: MARK_D }));
+  }
+
+  function copyText(text) {
+    return new Promise(function (resolve) {
+      function fallback() {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.top = "-1000px";
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = !!(document.execCommand && document.execCommand("copy"));
+          document.body.removeChild(ta);
+          resolve(ok);
+        } catch (e) { resolve(false); }
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { resolve(true); }, fallback);
+        else fallback();
+      } catch (e) { fallback(); }
+    });
+  }
+  function selectNode(el) {
+    try {
+      var r = document.createRange();
+      r.selectNodeContents(el);
+      var s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+    } catch (e) {}
+  }
+  function useCopy(getText, targetRef) {
+    var st = R.useState("idle"), state = st[0], setState = st[1];
+    var timer = R.useRef(null);
+    R.useEffect(function () { return function () { clearTimeout(timer.current); }; }, []);
+    function copy() {
+      copyText(getText()).then(function (ok) {
+        if (!ok && targetRef.current) selectNode(targetRef.current);
+        setState(ok ? "copied" : "failed");
+        clearTimeout(timer.current);
+        timer.current = setTimeout(function () { setState("idle"); }, ok ? 1400 : 2400);
+      });
+    }
+    return [state, copy];
+  }
+  function copyButton(state, copy, what) {
+    return h("button", {
+      type: "button",
+      className: cx("us-command__copy", state === "copied" && "is-copied", state === "failed" && "is-failed"),
+      onClick: copy,
+      "aria-label": state === "copied" ? "Copied" : state === "failed" ? "Copy failed; the " + what + " is selected, press Ctrl+C or Cmd+C" : "Copy " + what
+    }, state === "copied" ? "copied" : state === "failed" ? "failed" : "copy");
+  }
+
+  function CommandBlock(props) {
+    var codeRef = R.useRef(null);
+    var prompt = props.prompt == null ? "$" : props.prompt;
+    var lines = props.output || [];
+    var cp = useCopy(function () { return props.command; }, codeRef);
+    return h("div", { className: cx("us-command", props.className) },
+      h("div", { className: "us-command__line" },
+        h("code", { className: "us-command__code" },
+          prompt ? h("span", { className: "us-command__prompt", "aria-hidden": "true" }, prompt + " ") : null,
+          h("span", { ref: codeRef }, props.command)),
+        props.copyable === false ? null : copyButton(cp[0], cp[1], "command")
+      ),
+      lines.length ? h("pre", { className: "us-command__output" }, lines.map(function (l, i) {
+        var m = /^\[(ok|err|info)\]\s?(.*)$/.exec(l);
+        if (m) return h("div", { key: i }, h("span", { className: "us-tag us-tag--" + m[1] }, "[" + m[1] + "]"), " " + m[2]);
+        if (/^#/.test(l)) return h("div", { key: i, className: "us-command__comment" }, l);
+        return h("div", { key: i }, l);
+      })) : null
+    );
+  }
+
+  function Input(props) {
+    var ref = R.useRef(null);
+    if (!ref.current) ref.current = props.id || "us-input-" + (++uid);
+    var id = ref.current;
+    var rest = omit(props, ["label", "hint", "error", "className", "id"]);
+    rest.id = id;
+    rest.className = cx("us-input__field", props.error && "is-error");
+    if (props.error) rest["aria-invalid"] = "true";
+    if (props.error || props.hint) rest["aria-describedby"] = id + "-msg";
+    return h("div", { className: cx("us-input", props.className) },
+      props.label ? h("label", { className: "us-input__label", htmlFor: id }, props.label) : null,
+      h("input", rest),
+      props.error ? h("div", { id: id + "-msg", className: "us-input__msg is-error" }, h("span", { className: "us-tag us-tag--err" }, "[err]"), " " + props.error)
+        : props.hint ? h("div", { id: id + "-msg", className: "us-input__msg" }, props.hint) : null
+    );
+  }
+
+  function Link(props) {
+    var rest = omit(props, ["variant", "className", "children"]);
+    rest.className = cx("us-link", props.variant === "standalone" ? "us-link--standalone" : "us-link--inline", props.className);
+    return h("a", rest, props.children);
+  }
+
+  var TAG = { ok: 1, err: 1, info: 1, plain: 1 };
+  function Tag(props) {
+    var status = TAG[props.status] ? props.status : "plain";
+    var text = props.children != null ? props.children : status;
+    return h("span", { className: cx("us-tag", "us-tag--" + status, props.className) }, "[", text, "]");
+  }
+
+  var GLYPH = { info: "i", danger: "!", success: "+", note: "*" };
+  function Callout(props) {
+    var tone = GLYPH[props.tone] ? props.tone : "info";
+    var glyph = props.glyph || GLYPH[tone];
+    return h("div", { className: cx("us-callout", "us-callout--" + tone, props.className), role: tone === "danger" ? "alert" : "note" },
+      h("span", { className: "us-callout__glyph", "aria-hidden": "true" }, glyph),
+      h("div", { className: "us-callout__body" },
+        props.title ? h("div", { className: "us-callout__title" }, props.title) : null,
+        props.children ? h("div", { className: "us-callout__text" }, props.children) : null
+      )
+    );
+  }
+
+
+  function Card(props) {
+    return h("div", { className: cx("us-card", props.className) },
+      props.eyebrow ? h("div", { className: "us-card__eyebrow" }, props.eyebrow) : null,
+      props.title ? h("h3", { className: "us-card__title" }, props.title) : null,
+      props.children ? h("div", { className: "us-card__body" }, props.children) : null,
+      props.action ? h("a", { className: "us-link us-link--standalone us-card__action", href: props.action.href }, props.action.label) : null
+    );
+  }
+
+  function Header(props) {
+    var items = props.nav || [];
+    var st = R.useState(false), open = st[0], setOpen = st[1];
+    var root = R.useRef(null), toggle = R.useRef(null);
+    var navId = R.useRef("us-nav-" + (++uid)).current;
+    R.useEffect(function () {
+      if (!open) return undefined;
+      function away(e) { if (root.current && !root.current.contains(e.target)) setOpen(false); }
+      function esc(e) { if (e.key === "Escape") { setOpen(false); if (toggle.current) toggle.current.focus(); } }
+      document.addEventListener("mousedown", away);
+      document.addEventListener("keydown", esc);
+      return function () { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+    }, [open]);
+    function close() { setOpen(false); }
+    return h("header", { className: cx("us-header", open && "is-open", props.className), ref: root },
+      h("a", { className: "us-header__home", href: props.homeHref || "/", "aria-label": "unset.sh home" }, h(Mark, { width: 72 })),
+      h("button", {
+        type: "button", ref: toggle, className: "us-header__toggle",
+        "aria-expanded": open ? "true" : "false", "aria-controls": navId,
+        onClick: function () { setOpen(!open); }
+      }, open ? "close" : "menu", h("span", { "aria-hidden": "true", className: "us-header__caret" }, open ? "\u25B4" : "\u25BE")),
+      h("nav", { id: navId, className: "us-header__nav", "aria-label": "Main" },
+        items.map(function (it, i) {
+          return h("a", { key: i, href: it.href, onClick: close, className: cx("us-header__item", it.current && "is-current"), "aria-current": it.current ? "page" : undefined }, it.label);
+        }),
+        props.action ? h(Button, { href: props.action.href, onClick: function (e) { close(); if (props.action.onClick) props.action.onClick(e); } }, props.action.label) : null
+      )
+    );
+  }
+
+
+
+  function SectionHeading(props) {
+    return h("div", { className: cx("us-section", props.className) },
+      props.index != null ? h("span", { className: "us-section__index" }, props.index + " —") : null,
+      h("h2", { className: "us-section__title" }, props.title));
+  }
+
+  function Tabs(props) {
+    var tabs = props.tabs || [];
+    var st = R.useState(props.defaultId || (tabs[0] && tabs[0].id)), cur = st[0], setCur = st[1];
+    var active = props.value != null ? props.value : cur;
+    var base = R.useRef("us-tabs-" + (++uid)).current;
+    function pick(id) { if (props.value == null) setCur(id); if (props.onChange) props.onChange(id); }
+    function key(e, i) {
+      var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var n = (i + d + tabs.length) % tabs.length;
+      pick(tabs[n].id);
+      var el = document.getElementById(base + "-tab-" + tabs[n].id);
+      if (el) el.focus();
+    }
+    var panel = null;
+    for (var i = 0; i < tabs.length; i++) if (tabs[i].id === active) panel = tabs[i];
+    return h("div", { className: cx("us-tabs", props.className) },
+      h("div", { className: "us-tabs__list", role: "tablist" }, tabs.map(function (t, i) {
+        var on = t.id === active;
+        return h("button", {
+          key: t.id, id: base + "-tab-" + t.id, type: "button", role: "tab",
+          "aria-selected": on ? "true" : "false", "aria-controls": base + "-panel",
+          tabIndex: on ? 0 : -1, className: cx("us-tabs__tab", on && "is-current"),
+          onClick: function () { pick(t.id); }, onKeyDown: function (e) { key(e, i); }
+        }, t.label);
+      })),
+      panel ? h("div", { id: base + "-panel", role: "tabpanel", "aria-labelledby": base + "-tab-" + panel.id, className: "us-tabs__panel" }, panel.content) : null
+    );
+  }
+
+  var TOKEN_RE = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b(?:true|false|null|nil|yes|no)\b|\b-?\d+(?:\.\d+)?\b)/g;
+  function highlight(line, i) {
+    var t = line.replace(/^\s+/, "");
+    if (/^(#|\/\/|;)/.test(t)) return h("span", { key: i, className: "us-code__c" }, line);
+    if (/^\[[^\]]+\]\s*$/.test(t)) return h("span", { key: i, className: "us-code__k" }, line);
+    var out = [], last = 0, m, n = 0;
+    TOKEN_RE.lastIndex = 0;
+    while ((m = TOKEN_RE.exec(line))) {
+      if (m.index > last) out.push(line.slice(last, m.index));
+      out.push(h("span", { key: n++, className: m[1] ? "us-code__s" : "us-code__n" }, m[0]));
+      last = m.index + m[0].length;
+    }
+    if (last < line.length) out.push(line.slice(last));
+    return h("span", { key: i }, out);
+  }
+  function CodeBlock(props) {
+    var codeRef = R.useRef(null);
+    var code = String(props.code || "").replace(/\n$/, "");
+    var lines = code.split("\n");
+    var plain = props.language === "plain";
+    var cp = useCopy(function () { return code; }, codeRef);
+    return h("div", { className: cx("us-code", props.className) },
+      h("div", { className: "us-code__bar" },
+        h("span", { className: "us-code__file" }, props.filename || props.language || ""),
+        copyButton(cp[0], cp[1], "code")),
+      h("pre", { className: "us-code__pre" }, h("code", { ref: codeRef }, lines.map(function (l, i) {
+        return h(R.Fragment, { key: i }, plain ? l : highlight(l, i), i < lines.length - 1 ? "\n" : null);
+      })))
+    );
+  }
+
+  function Table(props) {
+    var cols = props.columns || [], rows = props.rows || [];
+    return h("div", { className: cx("us-table-wrap", props.className) },
+      h("table", { className: "us-table" },
+        props.caption ? h("caption", { className: "us-table__caption" }, props.caption) : null,
+        h("thead", null, h("tr", null, cols.map(function (c) {
+          return h("th", { key: c.key, scope: "col", className: c.align === "right" ? "is-right" : null }, c.label);
+        }))),
+        h("tbody", null, rows.map(function (r, i) {
+          return h("tr", { key: r.id != null ? r.id : i }, cols.map(function (c) {
+            var v = r[c.key];
+            return h("td", { key: c.key, className: cx(c.mono !== false && "is-mono", c.muted && "is-muted", c.align === "right" && "is-right") }, v == null || v === "" ? "—" : v);
+          }));
+        }))
+      )
+    );
+  }
+
+  function Checkbox(props) {
+    var st = R.useState(!!props.defaultChecked), own = st[0], setOwn = st[1];
+    var on = props.checked != null ? props.checked : own;
+    return h("label", { className: cx("us-check", props.disabled && "is-disabled", props.className) },
+      h("input", { type: "checkbox", className: "us-visually-hidden", name: props.name, value: props.value, checked: on, disabled: props.disabled,
+        onChange: function (e) { if (props.checked == null) setOwn(e.target.checked); if (props.onChange) props.onChange(e); } }),
+      h("span", { className: cx("us-check__box", on && "is-on"), "aria-hidden": "true" }, on ? "[x]" : "[ ]"),
+      h("span", { className: "us-check__label" }, props.label));
+  }
+
+  function RadioGroup(props) {
+    var opts = props.options || [];
+    var st = R.useState(props.defaultValue != null ? props.defaultValue : (opts[0] && opts[0].value)), own = st[0], setOwn = st[1];
+    var val = props.value != null ? props.value : own;
+    var name = R.useRef(props.name || "us-radio-" + (++uid)).current;
+    return h("fieldset", { className: cx("us-radio", props.className), disabled: props.disabled },
+      props.label ? h("legend", { className: "us-input__label" }, props.label) : null,
+      opts.map(function (o) {
+        var on = o.value === val;
+        return h("label", { key: o.value, className: "us-check" },
+          h("input", { type: "radio", className: "us-visually-hidden", name: name, value: o.value, checked: on,
+            onChange: function () { if (props.value == null) setOwn(o.value); if (props.onChange) props.onChange(o.value); } }),
+          h("span", { className: cx("us-check__box", on && "is-on"), "aria-hidden": "true" }, on ? "(•)" : "( )"),
+          h("span", { className: "us-check__label" }, o.label));
+      }));
+  }
+
+  function fieldShell(props, control, id) {
+    return h("div", { className: cx("us-input", props.className) },
+      props.label ? h("label", { className: "us-input__label", htmlFor: id }, props.label) : null,
+      control,
+      props.error ? h("div", { id: id + "-msg", className: "us-input__msg is-error" }, h("span", { className: "us-tag us-tag--err" }, "[err]"), " " + props.error)
+        : props.hint ? h("div", { id: id + "-msg", className: "us-input__msg" }, props.hint) : null);
+  }
+  function Textarea(props) {
+    var id = R.useRef(props.id || "us-input-" + (++uid)).current;
+    var rest = omit(props, ["label", "hint", "error", "className", "id"]);
+    rest.id = id;
+    rest.rows = props.rows || 4;
+    rest.className = cx("us-input__field", "us-input__field--area", props.error && "is-error");
+    if (props.error) rest["aria-invalid"] = "true";
+    if (props.error || props.hint) rest["aria-describedby"] = id + "-msg";
+    return fieldShell(props, h("textarea", rest), id);
+  }
+  function Select(props) {
+    var id = R.useRef(props.id || "us-input-" + (++uid)).current;
+    var opts = props.options || [];
+    var st = R.useState(props.defaultValue != null ? props.defaultValue : (opts[0] && opts[0].value)), own = st[0], setOwn = st[1];
+    var val = props.value != null ? props.value : own;
+    var o = R.useState(false), open = o[0], setOpen = o[1];
+    var a = R.useState(0), active = a[0], setActive = a[1];
+    var u = R.useState(false), up = u[0], setUp = u[1];
+    var root = R.useRef(null), btn = R.useRef(null);
+    var typed = R.useRef(""), typedTimer = R.useRef(null);
+    var idx = 0;
+    for (var i = 0; i < opts.length; i++) if (opts[i].value === val) idx = i;
+    var current = opts[idx];
+    R.useEffect(function () {
+      if (!open) return undefined;
+      function away(e) { if (root.current && !root.current.contains(e.target)) setOpen(false); }
+      document.addEventListener("mousedown", away);
+      return function () { document.removeEventListener("mousedown", away); };
+    }, [open]);
+    function choose(i, keepClosed) {
+      var v = opts[i].value;
+      if (props.value == null) setOwn(v);
+      if (props.onChange) props.onChange(v);
+      if (!keepClosed) {
+        setOpen(false);
+        if (btn.current) btn.current.focus();
+      }
+    }
+    var listId = id + "-list";
+    R.useEffect(function () {
+      if (!open) return;
+      var el = document.getElementById(listId + "-" + active);
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }, [open, active]);
+    function show() {
+      if (root.current) {
+        var rc = root.current.getBoundingClientRect();
+        var need = Math.min(240, opts.length * 38 + 10);
+        var below = window.innerHeight - rc.bottom, above = rc.top;
+        setUp(below < need && above > below);
+      }
+      setActive(idx);
+      setOpen(true);
+    }
+    function typeahead(ch) {
+      clearTimeout(typedTimer.current);
+      typed.current += ch.toLowerCase();
+      typedTimer.current = setTimeout(function () { typed.current = ""; }, 600);
+      var q = typed.current, start = open ? active : idx;
+      var same = q.length > 1 && q.split("").every(function (c) { return c === q[0]; });
+      if (same) q = q[0];
+      for (var n = 1; n <= opts.length; n++) {
+        var j = (start + (q.length === 1 ? n : n - 1)) % opts.length;
+        if (String(opts[j].label).toLowerCase().indexOf(q) === 0) {
+          if (open) setActive(j);
+          else choose(j, true);
+          return;
+        }
+      }
+    }
+    function key(e) {
+      if (props.disabled) return;
+      var k = e.key;
+      if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && (k !== " " || typed.current)) {
+        e.preventDefault();
+        typeahead(k);
+        return;
+      }
+      if (!open) {
+        if (k === "ArrowDown" || k === "ArrowUp" || k === "Enter" || k === " ") { e.preventDefault(); show(); }
+        return;
+      }
+      if (k === "Escape" || k === "Tab") { if (k === "Escape") e.preventDefault(); setOpen(false); }
+      else if (k === "ArrowDown") { e.preventDefault(); setActive(Math.min(opts.length - 1, active + 1)); }
+      else if (k === "ArrowUp") { e.preventDefault(); setActive(Math.max(0, active - 1)); }
+      else if (k === "Home") { e.preventDefault(); setActive(0); }
+      else if (k === "End") { e.preventDefault(); setActive(opts.length - 1); }
+      else if (k === "Enter" || k === " ") { e.preventDefault(); choose(active); }
+    }
+    var control = h("div", { className: cx("us-select", open && "is-open", open && up && "is-up"), ref: root },
+      props.name ? h("input", { type: "hidden", name: props.name, value: val == null ? "" : val }) : null,
+      h("button", {
+        id: id, ref: btn, type: "button", disabled: props.disabled,
+        className: cx("us-input__field", "us-select__field", props.error && "is-error"),
+        "aria-haspopup": "listbox", "aria-expanded": open ? "true" : "false", "aria-controls": listId,
+        "aria-activedescendant": open ? listId + "-" + active : undefined,
+        "aria-invalid": props.error ? "true" : undefined,
+        "aria-describedby": props.error || props.hint ? id + "-msg" : undefined,
+        onClick: function () { if (open) setOpen(false); else show(); },
+        onKeyDown: key
+      },
+        h("span", { className: "us-select__value" }, current ? current.label : (props.placeholder || "")),
+        h("span", { className: "us-select__caret", "aria-hidden": "true" }, open ? "▴" : "▾")),
+      open ? h("ul", { id: listId, role: "listbox", className: "us-select__list", "aria-labelledby": id }, opts.map(function (op, i) {
+        var sel = i === idx;
+        return h("li", {
+          key: op.value, id: listId + "-" + i, role: "option", "aria-selected": sel ? "true" : "false",
+          className: cx("us-select__option", i === active && "is-active", sel && "is-selected"),
+          onMouseEnter: function () { setActive(i); },
+          onMouseDown: function (e) { e.preventDefault(); },
+          onClick: function () { choose(i); }
+        }, h("span", { className: "us-select__mark", "aria-hidden": "true" }, sel ? "→" : ""), op.label);
+      })) : null);
+    return fieldShell(props, control, id);
+  }
+
+  function Kbd(props) {
+    return h("kbd", { className: cx("us-kbd", props.className) }, props.children);
+  }
+
+  function Progress(props) {
+    var max = props.max || 100, v = Math.max(0, Math.min(max, props.value || 0));
+    var w = props.width || 20, n = Math.round((v / max) * w), pct = Math.round((v / max) * 100);
+    return h("div", { className: cx("us-progress", props.className), role: "progressbar", "aria-valuemin": 0, "aria-valuemax": max, "aria-valuenow": v, "aria-label": props.label || "Progress" },
+      h("span", { className: "us-progress__bracket", "aria-hidden": "true" }, "["),
+      h("span", { className: "us-progress__done", "aria-hidden": "true" }, new Array(n + 1).join("#")),
+      h("span", { className: "us-progress__todo", "aria-hidden": "true" }, new Array(w - n + 1).join("-")),
+      h("span", { className: "us-progress__bracket", "aria-hidden": "true" }, "]"),
+      h("span", { className: "us-progress__pct" }, " " + pct + "%"),
+      props.label ? h("span", { className: "us-progress__label" }, " " + props.label) : null);
+  }
+
+  var SPIN = ["|", "/", "-", "\\"];
+  function Spinner(props) {
+    var st = R.useState(0), f = st[0], setF = st[1];
+    R.useEffect(function () {
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduce) return undefined;
+      var t = setInterval(function () { setF(function (x) { return (x + 1) % 4; }); }, 140);
+      return function () { clearInterval(t); };
+    }, []);
+    return h("span", { className: cx("us-spinner", props.className), role: "status" },
+      h("span", { className: "us-spinner__glyph", "aria-hidden": "true" }, SPIN[f]),
+      props.label ? h("span", { className: "us-spinner__label" }, " " + props.label) : null);
+  }
+
+  var RAMP = " .:-=+*#%@";
+  function AsciiBackground(props) {
+    var cols = props.cols || 160, rows = props.rows || 32;
+    var dens = props.density == null ? 0.6 : props.density;
+    var accents = props.accents !== false;
+    var seed = props.seed || 0;
+    var fx = props.fadeFrom;
+    var lines = R.useMemo(function () {
+      var out = [];
+      for (var y = 0; y < rows; y++) {
+        var row = [], cur = null, buf = "";
+        for (var x = 0; x < cols; x++) {
+          var v = (Math.sin(x * 0.16 + seed + Math.sin(y * 0.33 + seed) * 2.2) + Math.sin(y * 0.45 - x * 0.06) + Math.cos(Math.hypot(x - cols * 0.55, (y - rows / 2) * 2.1) * 0.22)) / 3;
+          v = ((v + 1) / 2) * (0.4 + dens);
+          if (fx === "left") v *= Math.min(1, x / (cols * 0.45));
+          var i = Math.max(0, Math.min(9, Math.floor(v * 10)));
+          var cls = i <= 2 ? "a" : i <= 5 || !accents ? "b" : y < rows / 3 ? "p" : y < (rows * 2) / 3 ? "c" : "e";
+          if (cls !== cur) { if (buf) row.push(h("span", { key: row.length, className: "us-ascii__" + cur }, buf)); cur = cls; buf = RAMP[i]; }
+          else buf += RAMP[i];
+        }
+        row.push(h("span", { key: row.length, className: "us-ascii__" + cur }, buf));
+        out.push(h("div", { key: y }, row));
+      }
+      return out;
+    }, [cols, rows, dens, accents, seed, fx]);
+    return h("div", { className: cx("us-ascii", props.className), style: props.height ? { minHeight: props.height } : null },
+      h("pre", { className: "us-ascii__field", "aria-hidden": "true" }, lines),
+      props.children ? h("div", { className: "us-ascii__content" }, props.children) : null);
+  }
+
+  function Footer(props) {
+    var cols = props.columns || [];
+    return h("footer", { className: cx("us-footer", props.className) },
+      h("div", { className: "us-footer__top" },
+        h("div", { className: "us-footer__brand" }, h(Mark, { width: 72 }), h("div", { className: "us-footer__code" }, "U+25C9")),
+        h("div", { className: "us-footer__cols" }, cols.map(function (c, i) {
+          return h("nav", { key: i, className: "us-footer__col", "aria-label": c.title },
+            h("div", { className: "us-footer__title" }, c.title),
+            (c.links || []).map(function (l, j) {
+              return h("a", { key: j, className: "us-footer__link", href: l.href, target: l.external ? "_blank" : undefined, rel: l.external ? "noopener noreferrer" : undefined }, l.label + (l.external ? " ↗" : ""));
+            }));
+        }))),
+      h("div", { className: "us-footer__bottom" },
+        h("span", null, props.note || "© " + new Date().getFullYear() + " unset.sh"),
+        props.meta ? h("span", null, props.meta) : null));
+  }
+
+
+  function Modal(props) {
+    var box = R.useRef(null), prev = R.useRef(null);
+    var tid = R.useRef("us-modal-" + (++uid)).current;
+    var open = !!props.open;
+    R.useEffect(function () {
+      if (!open) return undefined;
+      prev.current = document.activeElement;
+      var el = box.current;
+      var sel = 'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
+      if (el) el.focus();
+      function onKey(e) {
+        if (e.key === "Escape") { e.stopPropagation(); if (props.onClose) props.onClose(); return; }
+        if (e.key !== "Tab" || !el) return;
+        var f = el.querySelectorAll(sel);
+        if (!f.length) { e.preventDefault(); return; }
+        var a = f[0], z = f[f.length - 1];
+        if (e.shiftKey && (document.activeElement === a || document.activeElement === el)) { e.preventDefault(); z.focus(); }
+        else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+      }
+      document.addEventListener("keydown", onKey, true);
+      var body = document.body, docEl = document.documentElement;
+      var prevOverflow = body.style.overflow, prevPad = body.style.paddingRight;
+      var bar = window.innerWidth - docEl.clientWidth;
+      body.style.overflow = "hidden";
+      if (bar > 0) body.style.paddingRight = bar + "px";
+      return function () {
+        body.style.overflow = prevOverflow;
+        body.style.paddingRight = prevPad;
+        document.removeEventListener("keydown", onKey, true);
+        if (prev.current && prev.current.focus) prev.current.focus();
+      };
+    }, [open]);
+    if (!open) return null;
+    var node = h("div", { className: cx("us-modal", props.className), onMouseDown: function (e) { if (e.target === e.currentTarget && props.onClose && props.dismissable !== false) props.onClose(); } },
+      h("div", { className: "us-modal__frame" },
+        h("div", { ref: box, className: "us-modal__box", role: props.tone === "danger" ? "alertdialog" : "dialog", "aria-modal": "true", "aria-labelledby": tid, tabIndex: -1 },
+          h("h2", { id: tid, className: "us-modal__title" }, props.title),
+          props.children ? h("div", { className: "us-modal__body" }, props.children) : null,
+          props.actions ? h("div", { className: "us-modal__actions" }, props.actions) : null)));
+    var RD = window.ReactDOM;
+    return RD && RD.createPortal && document.body ? RD.createPortal(node, document.body) : node;
+  }
+
+  /* Drafts for approval (2026-10-03). */
+  /* Icons: Iconoir 7.12.1 (MIT, (c) 2021 Luca Burgio), regular set, copied as data. */
+  var ICONS = {"next":[["path",{"d":"M3 12L21 12M21 12L12.5 3.5M21 12L12.5 20.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"back":[["path",{"d":"M21 12L3 12M3 12L11.5 3.5M3 12L11.5 20.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"up":[["path",{"d":"M12 21L12 3M12 3L20.5 11.5M12 3L3.5 11.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"down":[["path",{"d":"M12 3L12 21M12 21L20.5 12.5M12 21L3.5 12.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"external":[["path",{"d":"M21 3L15 3M21 3L12 12M21 3V9","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M21 13V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H11","stroke":"currentColor","strokeLinecap":"round"}]],"open":[["path",{"d":"M6 9L12 15L18 9","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"collapse":[["path",{"d":"M6 15L12 9L18 15","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"close":[["path",{"d":"M6.75827 17.2426L12.0009 12M17.2435 6.75736L12.0009 12M12.0009 12L6.75827 6.75736M12.0009 12L17.2435 17.2426","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"add":[["path",{"d":"M6 12H12M18 12H12M12 12V6M12 12V18","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"remove":[["path",{"d":"M6 12H18","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"done":[["path",{"d":"M5 13L9 17L19 7","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"warning":[["path",{"d":"M20.0429 21H3.95705C2.41902 21 1.45658 19.3364 2.22324 18.0031L10.2662 4.01533C11.0352 2.67792 12.9648 2.67791 13.7338 4.01532L21.7768 18.0031C22.5434 19.3364 21.581 21 20.0429 21Z","stroke":"currentColor","strokeLinecap":"round"}],["path",{"d":"M12 9V13","stroke":"currentColor","strokeLinecap":"round"}],["path",{"d":"M12 17.01L12.01 16.9989","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"info":[["path",{"d":"M12 11.5V16.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 7.51L12.01 7.49889","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"more":[["path",{"d":"M20 12.5C20.2761 12.5 20.5 12.2761 20.5 12C20.5 11.7239 20.2761 11.5 20 11.5C19.7239 11.5 19.5 11.7239 19.5 12C19.5 12.2761 19.7239 12.5 20 12.5Z","fill":"currentColor","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 12.5C12.2761 12.5 12.5 12.2761 12.5 12C12.5 11.7239 12.2761 11.5 12 11.5C11.7239 11.5 11.5 11.7239 11.5 12C11.5 12.2761 11.7239 12.5 12 12.5Z","fill":"currentColor","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M4 12.5C4.27614 12.5 4.5 12.2761 4.5 12C4.5 11.7239 4.27614 11.5 4 11.5C3.72386 11.5 3.5 11.7239 3.5 12C3.5 12.2761 3.72386 12.5 4 12.5Z","fill":"currentColor","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"menu":[["path",{"d":"M3 5H21","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M3 12H21","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M3 19H21","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"home":[["path",{"d":"M2 8L11.7317 3.13416C11.9006 3.04971 12.0994 3.0497 12.2683 3.13416L22 8","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M20 11V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V11","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"profile":[["path",{"d":"M5 20V19C5 15.134 8.13401 12 12 12V12C15.866 12 19 15.134 19 19V20","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"search":[["path",{"d":"M17 17L21 21","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M3 11C3 15.4183 6.58172 19 11 19C13.213 19 15.2161 18.1015 16.6644 16.6493C18.1077 15.2022 19 13.2053 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"notifications":[["path",{"d":"M18 8.4C18 6.70261 17.3679 5.07475 16.2426 3.87452C15.1174 2.67428 13.5913 2 12 2C10.4087 2 8.88258 2.67428 7.75736 3.87452C6.63214 5.07475 6 6.70261 6 8.4C6 15.8667 3 18 3 18H21C21 18 18 15.8667 18 8.4Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"settings":[["path",{"d":"M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M19.6224 10.3954L18.5247 7.7448L20 6L18 4L16.2647 5.48295L13.5578 4.36974L12.9353 2H10.981L10.3491 4.40113L7.70441 5.51596L6 4L4 6L5.45337 7.78885L4.3725 10.4463L2 11V13L4.40111 13.6555L5.51575 16.2997L4 18L6 20L7.79116 18.5403L10.397 19.6123L11 22H13L13.6045 19.6132L16.2551 18.5155C16.6969 18.8313 18 20 18 20L20 18L18.5159 16.2494L19.6139 13.598L21.9999 12.9772L22 11L19.6224 10.3954Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"like":[["path",{"d":"M22 8.86222C22 10.4087 21.4062 11.8941 20.3458 12.9929C17.9049 15.523 15.5374 18.1613 13.0053 20.5997C12.4249 21.1505 11.5042 21.1304 10.9488 20.5547L3.65376 12.9929C1.44875 10.7072 1.44875 7.01723 3.65376 4.73157C5.88044 2.42345 9.50794 2.42345 11.7346 4.73157L11.9998 5.00642L12.2648 4.73173C13.3324 3.6245 14.7864 3 16.3053 3C17.8242 3 19.2781 3.62444 20.3458 4.73157C21.4063 5.83045 22 7.31577 22 8.86222Z","stroke":"currentColor","strokeLinejoin":"round"}]],"comment":[["path",{"d":"M17 12.5C17.2761 12.5 17.5 12.2761 17.5 12C17.5 11.7239 17.2761 11.5 17 11.5C16.7239 11.5 16.5 11.7239 16.5 12C16.5 12.2761 16.7239 12.5 17 12.5Z","fill":"currentColor","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 12.5C12.2761 12.5 12.5 12.2761 12.5 12C12.5 11.7239 12.2761 11.5 12 11.5C11.7239 11.5 11.5 11.7239 11.5 12C11.5 12.2761 11.7239 12.5 12 12.5Z","fill":"currentColor","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M7 12.5C7.27614 12.5 7.5 12.2761 7.5 12C7.5 11.7239 7.27614 11.5 7 11.5C6.72386 11.5 6.5 11.7239 6.5 12C6.5 12.2761 6.72386 12.5 7 12.5Z","fill":"currentColor","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 13.8214 2.48697 15.5291 3.33782 17L2.5 21.5L7 20.6622C8.47087 21.513 10.1786 22 12 22Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"repost":[["path",{"d":"M17 17H8C6.33333 17 3 16 3 12C3 8 6.33333 7 8 7H16C17.6667 7 21 8 21 12C21 13.4943 20.5348 14.57 19.865 15.3312","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M14.5 14.5L17 17L14.5 19.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"share":[["path",{"d":"M18 22C19.6569 22 21 20.6569 21 19C21 17.3431 19.6569 16 18 16C16.3431 16 15 17.3431 15 19C15 20.6569 16.3431 22 18 22Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M18 8C19.6569 8 21 6.65685 21 5C21 3.34315 19.6569 2 18 2C16.3431 2 15 3.34315 15 5C15 6.65685 16.3431 8 18 8Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M6 15C7.65685 15 9 13.6569 9 12C9 10.3431 7.65685 9 6 9C4.34315 9 3 10.3431 3 12C3 13.6569 4.34315 15 6 15Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M15.5 6.5L8.5 10.5","stroke":"currentColor","strokeWidth":"1.5"}],["path",{"d":"M8.5 13.5L15.5 17.5","stroke":"currentColor","strokeWidth":"1.5"}]],"reply":[["path",{"d":"M2 10C2 10 13 10 16 10C24 10 24 21 16 21M2 10L9 3M2 10L9 17","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"edit":[["path",{"d":"M14.3632 5.65156L15.8431 4.17157C16.6242 3.39052 17.8905 3.39052 18.6716 4.17157L20.0858 5.58579C20.8668 6.36683 20.8668 7.63316 20.0858 8.41421L18.6058 9.8942M14.3632 5.65156L4.74749 15.2672C4.41542 15.5993 4.21079 16.0376 4.16947 16.5054L3.92738 19.2459C3.87261 19.8659 4.39148 20.3848 5.0115 20.33L7.75191 20.0879C8.21972 20.0466 8.65806 19.8419 8.99013 19.5099L18.6058 9.8942M14.3632 5.65156L18.6058 9.8942","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"copy":[["path",{"d":"M19.4 20H9.6C9.26863 20 9 19.7314 9 19.4V9.6C9 9.26863 9.26863 9 9.6 9H19.4C19.7314 9 20 9.26863 20 9.6V19.4C20 19.7314 19.7314 20 19.4 20Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M15 9V4.6C15 4.26863 14.7314 4 14.4 4H4.6C4.26863 4 4 4.26863 4 4.6V14.4C4 14.7314 4.26863 15 4.6 15H9","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"delete":[["path",{"d":"M20 9L18.005 20.3463C17.8369 21.3026 17.0062 22 16.0353 22H7.96474C6.99379 22 6.1631 21.3026 5.99496 20.3463L4 9","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M21 6L15.375 6M3 6L8.625 6M8.625 6V4C8.625 2.89543 9.52043 2 10.625 2H13.375C14.4796 2 15.375 2.89543 15.375 4V6M8.625 6L15.375 6","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"upload":[["path",{"d":"M6 20L18 20","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 16V4M12 4L15.5 7.5M12 4L8.5 7.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"download":[["path",{"d":"M6 20L18 20","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 4V16M12 16L15.5 12.5M12 16L8.5 12.5","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"play":[["path",{"d":"M6.90588 4.53682C6.50592 4.2998 6 4.58808 6 5.05299V18.947C6 19.4119 6.50592 19.7002 6.90588 19.4632L18.629 12.5162C19.0211 12.2838 19.0211 11.7162 18.629 11.4838L6.90588 4.53682Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"pause":[["path",{"d":"M6 18.4V5.6C6 5.26863 6.26863 5 6.6 5H9.4C9.73137 5 10 5.26863 10 5.6V18.4C10 18.7314 9.73137 19 9.4 19H6.6C6.26863 19 6 18.7314 6 18.4Z","stroke":"currentColor","strokeWidth":"1.5"}],["path",{"d":"M14 18.4V5.6C14 5.26863 14.2686 5 14.6 5H17.4C17.7314 5 18 5.26863 18 5.6V18.4C18 18.7314 17.7314 19 17.4 19H14.6C14.2686 19 14 18.7314 14 18.4Z","stroke":"currentColor","strokeWidth":"1.5"}]],"show":[["path",{"d":"M3 13C6.6 5 17.4 5 21 13","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 17C10.3431 17 9 15.6569 9 14C9 12.3431 10.3431 11 12 11C13.6569 11 15 12.3431 15 14C15 15.6569 13.6569 17 12 17Z","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"hide":[["path",{"d":"M19.5 16L17.0248 12.6038","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M12 17.5V14","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M4.5 16L6.96895 12.6124","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M3 8C6.6 16 17.4 16 21 8","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"private":[["path",{"d":"M16 12H17.4C17.7314 12 18 12.2686 18 12.6V19.4C18 19.7314 17.7314 20 17.4 20H6.6C6.26863 20 6 19.7314 6 19.4V12.6C6 12.2686 6.26863 12 6.6 12H8M16 12V8C16 6.66667 15.2 4 12 4C8.8 4 8 6.66667 8 8V12M16 12H8","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]],"signout":[["path",{"d":"M12 12H19M19 12L16 15M19 12L16 9","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}],["path",{"d":"M19 6V5C19 3.89543 18.1046 3 17 3H7C5.89543 3 5 3.89543 5 5V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V18","stroke":"currentColor","strokeLinecap":"round","strokeLinejoin":"round"}]]};
+  function Icon(props) {
+    var kids = ICONS[props.name];
+    if (!kids) return null;
+    var size = [16, 20, 24].indexOf(props.size) >= 0 ? props.size : 20;
+    return h(R.Fragment, null,
+      h("svg", { className: cx("us-icon", props.className), width: size, height: size, viewBox: "0 0 24 24", fill: "none", strokeWidth: 1.5, "aria-hidden": "true", focusable: "false" },
+        kids.map(function (k, i) { return h(k[0], Object.assign({ key: i }, k[1])); })),
+      props.label ? h("span", { className: "us-visually-hidden" }, props.label) : null);
+  }
+
+  function firstChar(name) {
+    var s = String(name || "").replace(/^@/, "").trim();
+    if (!s) return "?";
+    var cp = s.codePointAt(0);
+    return String.fromCodePoint(cp);
+  }
+  function Avatar(props) {
+    var size = [24, 40, 64, 128].indexOf(props.size) >= 0 ? props.size : 40;
+    var cls = cx("us-avatar", "us-avatar--" + size, props.className);
+    var alt = props.alt != null ? props.alt : "";
+    if (props.src) return h("span", { className: cls }, h("img", { className: "us-avatar__img", src: props.src, alt: alt, width: size, height: size, loading: "lazy", decoding: "async" }));
+    return h("span", alt ? { className: cls, role: "img", "aria-label": alt } : { className: cls, "aria-hidden": "true" }, firstChar(props.name));
+  }
+
+  function Switch(props) {
+    var st = R.useState(!!props.defaultChecked), own = st[0], setOwn = st[1];
+    var on = props.checked != null ? props.checked : own;
+    return h("label", { className: cx("us-switch", props.disabled && "is-disabled", props.className) },
+      h("span", { className: "us-switch__label" }, props.label),
+      h("input", { type: "checkbox", role: "switch", className: "us-visually-hidden", name: props.name, value: props.value, checked: on, disabled: props.disabled,
+        onChange: function (e) { if (props.checked == null) setOwn(e.target.checked); if (props.onChange) props.onChange(e); } }),
+      h("span", { className: "us-switch__track", "aria-hidden": "true" },
+        h("span", { className: "is-on" }, "[──◉] on "),
+        h("span", { className: "is-off" }, "[○──] off")));
+  }
+
+  function Toast(props) {
+    var tone = props.tone || "ok";
+    var word = { ok: "ok", err: "err", info: "info" }[tone] || "ok";
+    var box = props.children ? h("div", { className: "us-toast" },
+      h(Tag, { status: word }),
+      h("span", { className: "us-toast__text" }, props.children),
+      props.onClose ? h("button", { type: "button", className: "us-toast__close", onClick: props.onClose },
+        h(Icon, { name: "close", size: 16 }), h("span", { className: "us-visually-hidden" }, props.closeLabel || "Dismiss")) : null) : null;
+    return h("div", { className: cx("us-toast-region", props.inline && "us-toast-region--inline", props.className),
+      role: tone === "err" ? "alert" : "status", "aria-live": tone === "err" ? "assertive" : "polite" }, box);
+  }
+
+  function SkipLink(props) {
+    return h("a", { className: cx("us-skip", props.shown && "is-shown", props.className), href: props.href || "#main" }, props.children || "Skip to content");
+  }
+
+  var RATIOS = { "1:1": "1 / 1", "4:5": "4 / 5", "9:16": "9 / 16", "16:9": "16 / 9", "3:1": "3 / 1" };
+  function MediaFrame(props) {
+    var ratio = RATIOS[props.ratio] || RATIOS["1:1"];
+    var box = h("div", { className: "us-frame__box", style: { aspectRatio: ratio } },
+      props.src ? h("img", { className: "us-frame__img", src: props.src, alt: props.alt, loading: "lazy", decoding: "async" })
+                : h("span", { className: "us-frame__empty" }, props.emptyText || "[no image]"));
+    return h("figure", { className: cx("us-frame", props.className), style: props.width ? { width: props.width } : null },
+      box,
+      props.caption ? h("figcaption", { className: "us-frame__caption" }, props.caption) : null);
+  }
+
+  function pageList(page, pages) {
+    var out = [], want = {}, i;
+    [1, pages, page - 1, page, page + 1].forEach(function (n) { if (n >= 1 && n <= pages) want[n] = true; });
+    var prev = 0;
+    for (i = 1; i <= pages; i++) {
+      if (!want[i]) continue;
+      if (prev && i - prev > 1) out.push("gap" + i);
+      out.push(i); prev = i;
+    }
+    return out;
+  }
+  function Pagination(props) {
+    var label = props.label || "Pages";
+    function arrow(name) { return h(Icon, { name: name, size: 16 }); }
+    function item(href, text, extra, key) {
+      var inner = h("span", null, text);
+      if (!href) return h("li", { key: key }, h("span", { className: cx("us-pages__item", "is-off", extra) }, inner));
+      return h("li", { key: key }, h("a", { className: cx("us-pages__item", extra), href: href }, inner));
+    }
+    if (props.pages == null) {
+      return h("nav", { className: cx("us-pages", props.className), "aria-label": label },
+        h("ul", { className: "us-pages__list us-pages__list--cursor" },
+          item(props.newer, h(R.Fragment, null, arrow("back"), "newer"), null, "newer"),
+          item(props.older, h(R.Fragment, null, "older", arrow("next")), null, "older")));
+    }
+    var page = props.page, pages = props.pages, hrefFor = props.hrefFor || function (n) { return "?page=" + n; };
+    return h("nav", { className: cx("us-pages", props.className), "aria-label": label },
+      h("ul", { className: "us-pages__list" },
+        item(page > 1 ? hrefFor(page - 1) : null, h(R.Fragment, null, arrow("back"), "prev"), null, "prev"),
+        pageList(page, pages).map(function (n) {
+          if (typeof n === "string") return h("li", { key: n, className: "us-pages__gap", "aria-hidden": "true" }, "…");
+          if (n === page) return h("li", { key: n }, h("a", { className: "us-pages__item us-pages__num is-current", href: hrefFor(n), "aria-current": "page" }, h("span", null, String(n))));
+          return item(hrefFor(n), String(n), "us-pages__num", n);
+        }),
+        h("li", { key: "count", className: "us-pages__count" }, page + " / " + pages),
+        item(page < pages ? hrefFor(page + 1) : null, h(R.Fragment, null, "next", arrow("next")), null, "next")));
+  }
+
+  function DescriptionList(props) {
+    return h("dl", { className: cx("us-dl", props.className) },
+      (props.items || []).map(function (it, i) {
+        var empty = it.value == null || it.value === "";
+        return h("div", { key: it.key || i, className: "us-dl__row" },
+          h("dt", { className: "us-dl__label" }, it.label),
+          h("dd", { className: cx("us-dl__value", it.mono && "is-mono") }, empty ? "—" : it.value));
+      }));
+  }
+
+  function NewPosts(props) {
+    var n = props.count || 0;
+    var text = props.children || (n === 1 ? "1 new post" : (n > 99 ? "99+ new posts" : (n > 0 ? n + " new posts" : "new posts")));
+    return h("div", { className: cx("us-newposts", props.inline && "us-newposts--inline", props.hidden && "is-hidden", props.className) },
+      h("span", { className: "us-newposts__text" }, h(Tag, { status: "info" }), " " + text),
+      h("a", { className: "us-newposts__show", href: props.href || "?", onClick: props.onClick },
+        h("span", null, "show"), h(Icon, { name: "up", size: 16 })));
+  }
+
+  function FeedMore(props) {
+    var state = props.state || "idle";
+    var body;
+    if (state === "loading") body = h(Spinner, { label: props.loadingText || "loading older posts" });
+    else if (state === "end") body = h("span", { className: "us-feedmore__end" }, h(Tag, { status: "plain" }, "end"), " " + (props.endText || "you're all caught up"));
+    else if (state === "error") body = h("span", { className: "us-feedmore__err" }, h(Tag, { status: "err" }),
+      " " + (props.errorText || "couldn't load more") + " ",
+      h("a", { className: "us-feedmore__link", href: props.older || "?", onClick: props.onRetry }, "try again"));
+    else body = h("a", { className: "us-feedmore__link", href: props.older }, h("span", null, "older posts"), h(Icon, { name: "down", size: 16 }));
+    return h("div", { className: cx("us-feedmore", props.className), "aria-live": "polite" }, body);
+  }
+
+  window.Unset = { Button: Button, CommandBlock: CommandBlock, Input: Input, Link: Link, Tag: Tag, Callout: Callout, Card: Card, Header: Header, Mark: Mark, SectionHeading: SectionHeading, Tabs: Tabs, CodeBlock: CodeBlock, Table: Table, Checkbox: Checkbox, RadioGroup: RadioGroup, Textarea: Textarea, Select: Select, Kbd: Kbd, Progress: Progress, Spinner: Spinner, AsciiBackground: AsciiBackground, Footer: Footer, Modal: Modal, Icon: Icon, Avatar: Avatar, Switch: Switch, Toast: Toast, SkipLink: SkipLink, MediaFrame: MediaFrame, Pagination: Pagination, DescriptionList: DescriptionList, NewPosts: NewPosts, FeedMore: FeedMore };
+})();
