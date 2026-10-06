@@ -1,0 +1,11 @@
+/* fixture: shared/ui/components/Tag/Tag.module.css findings=1 */
+@layer components {
+  .tag {
+    color: var(--color-ink);
+  }
+}
+@media (min-width: 40rem) {
+  .tag {
+    padding: var(--space-2);
+  }
+}
