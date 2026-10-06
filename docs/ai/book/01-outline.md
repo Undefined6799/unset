@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 77 steps: 59 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 78 steps: 60 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -161,8 +161,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11q | Transactions and pool-access Semgrep rules (split from P1.11, SE-6) | — | P1.01s | `phase-1.md` |
 | P1.11 | Postgres and the migration runner as the `migrator` role | — | P1.11e, P1.11g, P1.11q, P1.02 | `phase-1.md` |
 | P1.11p | Pool, transactions and the connection budget (split from P1.11) | — | P1.11 | `phase-1.md` |
-| P1.11t | Postgres integration setup and the query budget test (split from P1.11) | — | P1.11p | `phase-1.md` |
-| P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11p | `phase-1.md` |
+| P1.11t | Postgres integration setup and the query budget test (split from P1.11) | — | P1.11p, P1.11v | `phase-1.md` |
+| P1.11v | Gated integration `globalSetup` in `vitest.config.ts` (split from P1.11t, SE-6) | — | P1.11p | `phase-1.md` |
+| P1.11w | Make the integration `globalSetup` unconditional | — | P1.11t, P1.11v | `phase-1.md` |
+| P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11p, P1.11w | `phase-1.md` |
 | P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12 | `phase-1.md` |
 | P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12 | `phase-1.md` |
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.02, P1.12 | `phase-1.md` |
@@ -183,10 +185,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
-| P1.27r | Make `images` a required check (split from P1.27q) | [SEC] [ALEX] | P1.27q | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11p, P1.27, P1.28 | `phase-1.md` |
-| P1.30 | Deploy preflight | [SEC] | P1.27, P1.27r | `phase-1.md` |
+| P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -241,6 +242,8 @@ flowchart TD
   P1_11q["P1.11q Transactions and pool rules"]
   P1_11p["P1.11p Pool and transactions"]
   P1_11t["P1.11t Postgres integration setup"]
+  P1_11v["P1.11v Gated integration globalSetup"]
+  P1_11w["P1.11w Unconditional globalSetup"]
   P1_12["P1.12 Roles and grants"]
   P1_12p["P1.12p Role password sync"]
   P1_13["P1.13 DID-column registry test reading"]
@@ -259,7 +262,6 @@ flowchart TD
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
-  P1_27r["P1.27r images required check"]
   P1_28["P1.28 Edge Caddy"]
   P1_29["P1.29 Development stack"]
   P1_30["P1.30 Deploy preflight"]
@@ -301,6 +303,11 @@ flowchart TD
   P1_11q --> P1_11
   P1_11 --> P1_11p
   P1_11p --> P1_11t
+  P1_11p --> P1_11v
+  P1_11v --> P1_11t
+  P1_11t --> P1_11w
+  P1_11v --> P1_11w
+  P1_11w --> P1_12
   P1_11p --> P1_12
   P1_12 --> P1_13
   P1_12 --> P1_14
@@ -327,7 +334,6 @@ flowchart TD
   P1_11p --> P1_29
   P1_28 --> P1_29
   P1_27 --> P1_30
-  P1_27r --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
   P1_18 --> P2_01
@@ -1050,6 +1056,14 @@ flowchart TD
   L_04 --> L_06
   L_05 --> L_06
 ```
+
+After launch (not a gate; L.00 keeps the list in `launch-gate.md`, "Post-launch follow-ups"). Deferred by Alex
+2026-10-06 12:08Z ("we can look into it after launch"); no step before launch depends on these.
+
+| Id | Step | Tags | Deps | Owner file |
+|---|---|---|---|---|
+| P1.27r | Make `images` a required check (split from P1.27q; deferred until after launch) | [SEC] [ALEX] | P1.27q, L.06 | `phase-1.md` |
+
 ## Phase order
 
 ```mermaid

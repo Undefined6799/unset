@@ -63,7 +63,9 @@ Following Alex's architecture principles 13–15 (progressive refinement; revers
 ## Step ids
 
 `P<phase>.<nn>`, for example `P1.07`. Ids are fixed once `01-outline.md` is reviewed; a step added later
-takes a letter suffix (`P1.07a`) so references never shift.
+takes a letter suffix (`P1.07a`) so references never shift. Exactly one suffix letter: the commit-msg guard
+(`scripts/guards/commit-msg.ts:17`) accepts `P[0-6].nn` or `L.nn` plus at most one letter (D2). A split of a lettered step takes a fresh single letter on the base number, one not
+yet used for it, never two letters (P1.11t's config split is P1.11v, first recorded as P1.11tq).
 
 ## Tags
 

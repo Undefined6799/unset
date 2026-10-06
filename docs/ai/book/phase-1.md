@@ -2149,7 +2149,7 @@ Spec: P1.11's Outputs bullets for `createPool`, `acquire`/`withClient`, `tx.ts` 
 ---
 
 ### P1.11t — Postgres integration setup and the query budget test (split from P1.11)
-Tags: —            Depends on: P1.11p            Plan: TE-2; README invariant 14; ruling 2026-10-06 01:25Z (1)
+Tags: —            Depends on: P1.11p, P1.11v            Plan: TE-2; README invariant 14; ruling 2026-10-06 01:25Z (1)
 Where: `tests/integration/setup/pg.setup.ts` (the globalSetup) and `tests/integration/query-budget.test.ts` with
   `tests/integration/query-budget/fixtures/`. A product step: `tests/` cannot ride the trusted P1.11 or P1.11p.
 Spec: P1.11's "Test databases" bullet (the TE-2 conditions) and its tests `query_budget_per_route`,
@@ -2167,15 +2167,44 @@ Ruling 2026-10-06 03:15Z (architecture, p111t-test-db-roles-budget-vitest):
     `tx.ts` count (`query_budget_counts_tx_statements`); transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`,
     `SAVEPOINT`/`RELEASE`) does not, stated in the test's comment. Production composes do not set the hook; a later
     metrics step that wants it asks first.
-  - `vitest.config.ts` and `biome.json` are check paths (CODEOWNERS' `# checks:` line, P0.09). P1.11t may still carry
-    its one `vitest.config.ts` change, `globalSetup` on the `tests/integration` project only, with no change to
-    `retry`, `allowOnly`, `passWithNoTests`, `include`/`exclude` or any other project; the reviewer checks that diff
-    line by line. Once the checks line lists the file, any later change to it is a `q` step of its own.
+  - `vitest.config.ts` and `biome.json` are check paths (CODEOWNERS' `# checks:` line, since #93). P1.11t therefore
+    carries no `vitest.config.ts` change: its `globalSetup` line is **P1.11v**, and P1.11w later makes it
+    unconditional (book edit 2026-10-06-p111tq-vitest-split).
+
+Split rule (2026-10-06, from P1.11t): any step that changes `vitest.config.ts` or `biome.json` together with product
+code splits. The config change is a check-path step of its own that merges first, then the product PR follows. A
+config change that bridges a file that does not exist yet may gate on that file only temporarily, and the step that
+removes the gate is named when the bridge is recorded.
+
+---
+
+### P1.11v — Gated integration `globalSetup` in `vitest.config.ts` (split from P1.11t, SE-6)
+Tags: —            Depends on: P1.11p            Plan: TE-2; rule SE-6
+Where: check paths only, kind/build: `vitest.config.ts`. Opened as #95 (first recorded as P1.11tq; renamed because a
+  step id takes one suffix letter).
+Spec: adds `globalSetup` on the `tests/integration` project only, gated on
+  `existsSync("tests/integration/setup/pg.setup.ts")`; no change to `retry`, `allowOnly`, `passWithNoTests`,
+  `include`/`exclude` or any other project. Until P1.11t lands the file is absent and the gate does nothing. It merges
+  before P1.11t, which then carries no config change and stays a product PR.
+Bridge: the `existsSync` gate is temporary; **P1.11w** removes it. If the setup file were renamed or removed meanwhile,
+  the database tests would run without a container and fail (no Docker means fail, TE-2), so nothing passes silently.
+
+### P1.11w — Make the integration `globalSetup` unconditional
+Tags: —            Depends on: P1.11t (#94), P1.11v            Plan: TE-2; rule SE-6
+Where: check paths only, kind/build: `vitest.config.ts`, and the test below in `scripts/docs/` or `scripts/test/`,
+  whichever already holds the config tests.
+Size: under 30 lines.
+Spec: drop the `existsSync` gate and point the `tests/integration` project's `globalSetup` at
+  `tests/integration/setup/pg.setup.ts` directly. Why (architecture): a config whose behaviour depends on whether a
+  file exists is a quiet switch, and a check path keeps none. If another `vitest.config.ts` check-path change is queued
+  when P1.11t merges, this step folds into it. It lands before P1.12, the next step that adds database tests.
+Done when (tests): `integration_global_setup_file_exists`: every `globalSetup` path in the config resolves to an
+  existing file.
 
 ---
 
 ### P1.12 — Roles and grants, the role roster, default privileges, grant-matrix test
-Tags: [SEC]            Depends on: P1.11p            Plan: §5.2 (roles map to processes; grant-matrix test), §5.7 (`admin`, `retention` roles), §6.1 (CIS Postgres)
+Tags: [SEC]            Depends on: P1.11p, P1.11w            Plan: §5.2 (roles map to processes; grant-matrix test), §5.7 (`admin`, `retention` roles), §6.1 (CIS Postgres)
 Where: `infrastructure/postgres/migrations/0002_roles_and_schemas.sql`, `infrastructure/postgres/roles.json`,
   `infrastructure/postgres/grant-matrix.json`, `tests/integration/postgres/grants.test.ts` (password sync is **P1.12p**:
   this PR is all role and grant statements, so it is trusted base and carries nothing else; SE-6 as ruled 2026-10-04)
@@ -4563,7 +4592,7 @@ P1.27q as built (Phase 2, branch `claude/phase-2-blocks-p201k-p127q`, kind/build
 `lineProblems`) refuses every write permission except `id-token`, and pushing to a private GHCR needs `packages: write`;
 allowing it loosens a CI guard, so it needs Alex's typed words. Unless he approves before P1.27q opens, P1.27q is the
 reduced default below and the push, sign and attest work is **P1.27s**:
-- `images.yml` runs on every PR and every push to `main` with no path filter, so the required check `images` always
+- `images.yml` runs on every PR and every push to `main` with no path filter, so the `images` check always
   reports. With the Dockerfile present: Buildx build, hadolint, Trivy, syft, the non-root check and the health check.
   No push job and no sign job. Permissions `contents: read`.
 - `mirror.yml` runs when `deployment/mirror.list.json` changes and weekly, scan only, with no copy to GHCR; while the
@@ -4748,8 +4777,8 @@ prototype's `deploy/pds/Dockerfile` sed patch is REJECTED).
 
 ---
 
-### P1.27r — Make `images` a required check (split from P1.27q)
-Tags: [SEC] [ALEX]            Depends on: P1.27q, Alex's typed words in the building thread allowing the guard-file
+### P1.27r — Make `images` a required check (split from P1.27q; deferred until after launch)
+Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, Alex's typed words in the building thread allowing the guard-file
   edit            Plan: §7 (CI); rule SE-6
 Where: check paths only, kind/build: `"images"` in `.github/required-checks.json`, the matching line in
   `scripts/guards/workflow-pins.test.ts`, and the `images` entry in `scripts/docs/change-shape-config.test.ts` if
@@ -4757,13 +4786,16 @@ Where: check paths only, kind/build: `"images"` in `.github/required-checks.json
 Size: under 20 lines.
 
 Why a step of its own: the required check is a tightening, independent of the `packages: write` question (P1.27s), so
-it lands as soon as Alex says the word, whichever way he answers that question. If his word comes before P1.27q merges,
-the two lines ride P1.27q and this step lapses.
+it lands on Alex's word, whichever way he answers that question.
 
-Binding: merges before P1.30 and before the slice 1 exit (P2.13a). P1.27 (the Dockerfile) does not wait for it.
-Interim rule until it merges: every hand-off of a PR that touches `deployment/images/` or the Dockerfile lists
-`images` among the checks that must be a completed success on the latest commit, next to check, audit, secrets,
-actionlint, semgrep and pr-shape. A skipped run is not green.
+Deferred until after launch (Alex, 2026-10-06 12:08Z in the Phase 2 thread: "Wait before making image check mandatory,
+we can look into it after launch"). No step before launch depends on it, P1.30 and P2.13a included; it is the first
+entry of L.00's post-launch follow-up list in `launch-gate.md`, and L.00 does not gate launch on it. P1.27 (the
+Dockerfile) does not wait for it.
+Interim rule until it merges: a hand-off of a PR that touches `deployment/images/` reports the `images` result. If that
+PR itself turns `images` red (a Trivy finding, a hadolint error, a failed build), it is fixed like any other failure
+the PR causes, since a known-vulnerable image is still a security finding. A skipped `images` run, or one that has not
+reported, does not block the hand-off.
 
 Done when (tests): the existing `workflow-pins` test, updated; `required_checks_include_images` (the required list and
 the workflow job name agree).
@@ -5129,7 +5161,7 @@ dev-seed:
 
 ### P1.30 — Deploy preflight
 
-**Tags:** [SEC] · **Depends on:** P1.27, P1.27r · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+**Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
 **Where:** `scripts/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`;
 `docs/human/runbooks/pds-debug-logging.md`; tests.
