@@ -3607,13 +3607,40 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 budget moves to `scripts/budgets/css.ts` and lands first as **P1.21q** with `budget.css.json` and its tests; this step
 brings `shared/ui/` and the rest.
 
+Split again 2026-10-06 (book edits `2026-10-06-p121-split` and `2026-10-06-p121-token-pipeline-structure`; SE-6, since
+`biome.json` is a check path from #93) into three PRs:
+- **P1.21** (this step, product; opened as #99): the sheet copy, fonts, `contrast-pairs.json`, `font-metrics.json`
+  committed empty, the pure token build and contrast check with their tests, the generated `tokens.css` and
+  `layers.css`, the thin entry `scripts/ui/tokens.ts`, and ADR 0016 with its README row.
+- **P1.21l** (check paths, kind/build): the `biome.json` CSS section, `scripts/lint/biome/token-only.grit` and the
+  `scripts/guards/css-layers.ts` layer guard, each with fixtures. See its section below.
+- **P1.21m** (product): `scripts/ui/font-metrics.ts`, its exact-pinned dev dependency with the lockfile, and the filled
+  `font-metrics.json`. See its section below.
+P1.22 depends on both P1.21l and P1.21m. Letters used on P1.21: l, m, q.
+
+As built (#99): Node built-ins are forbidden in `shared/ui` (the depcruise shared-ui row), so the build, the contrast
+check and the run are pure functions with file access and sha256 injected, and the tests bind `node:fs`. The sheet's
+`components/index.d.ts` is stored as `shared/ui/sheet/components-index.d.ts.txt`, because Biome would reformat a
+`.d.ts` and break its hash; `source.json` records the original path under `copiedFrom`. `font-metrics.json` is
+committed empty, so `buildTokens` emits no fallback faces until P1.21m fills it. `scripts/tsconfig.json` gains a
+reference to `../shared/ui`, and the entry imports through the `shared/ui` index (DC-2).
+
+Node-side entries (architecture 12:23Z and 12:33Z): `scripts/ui/` is a generator folder, not a check path (SE-6 lists
+only the check folders). `scripts/ui/tokens.ts` and `scripts/ui/font-metrics.ts` are thin bindings of `node:fs` and
+sha256 to the pure functions in `shared/ui`; each writes only its own output, nothing imports them, and neither
+`ci.yml` nor the `check` script runs them. There is **no `tokens` npm line**: `checks_list_complete` requires every
+`scripts/` folder the root `package.json` runs to be on CODEOWNERS' checks line, and loosening that test is not worth
+a convenience alias. The documented invocation is `node scripts/ui/tokens.ts [--check]`. Freshness (the committed
+output equals what the pure function builds) is a product test in `shared/ui`.
+
 **Tags:** — · **Depends on:** P1.21q, P1.20 · **Plan:** §8 Phase 1 (styling paragraph), §6.1 (CSS and font budgets), §7 (Biome CSS rules, GritQL plugin), §11 Q11
 
 **Where:** `shared/ui/sheet/` (read-only copies of the sheet's `tokens.json`, fonts, component READMEs and
-`index.d.ts`, plus `source.json`); `shared/ui/tokens/{contrast-pairs.json, font-metrics.json}`;
-`shared/ui/scripts/build-tokens.ts`; generated and checked in: `shared/ui/styles/tokens.css`;
-`shared/ui/styles/layers.css`; `shared/ui/fonts/` (the two woff2 files and their OFL licence texts);
-`tools/biome/token-only.grit`; `biome.json` CSS section; `scripts/budgets/css.ts`; `budget.css.json`; tests.
+`components-index.d.ts.txt`, plus `source.json`); `shared/ui/tokens/{contrast-pairs.json, font-metrics.json}`;
+`shared/ui/scripts/{build-tokens.ts, contrast.ts, tokens.ts}` (pure); `scripts/ui/tokens.ts` (the thin entry);
+generated and checked in: `shared/ui/src/tokens.css`; `shared/ui/src/layers.css`; `shared/ui/fonts/` (the two woff2
+files and their OFL licence texts); tests. In P1.21l: `scripts/lint/biome/token-only.grit`, the `biome.json` CSS
+section and `scripts/guards/css-layers.ts`. In P1.21q: `scripts/budgets/css.ts` and `budget.css.json`.
 
 **Size:** ~250 source lines, ~300 test lines.
 
@@ -3629,8 +3656,8 @@ CI reject any CSS that bypasses the tokens, the layer order or the size budget.
 
 **Outputs:**
 - `shared/ui/sheet/source.json`: `{ sheetUrl, sheetVersion, copiedAt, sha256: { "<path>": "<hex>" } }`.
-- `buildTokens(tokensJson, fontMetrics) → { css: string, names: Set<string> }`; CLI `npm run tokens` writes
-  `tokens.css`; `npm run tokens -- --check` exits 1 when the file on disk differs.
+- `buildTokens(tokensJson, fontMetrics) → { css: string, names: Set<string> }`; `node scripts/ui/tokens.ts` writes
+  `tokens.css`; `node scripts/ui/tokens.ts --check` exits 1 when the file on disk differs. No npm line.
 - Custom property naming (one rule, no exceptions): colour → `--color-<name>`; spacing → `--<name>` (names are
   already `space-N`); radius → `--<name>` when it starts with `radius-`, else `--radius-<name>` (so `cut` →
   `--radius-cut`); shadow → `--<name>`; zIndex → `--<name>`; mark → `--<name>` (unitless numbers); type
@@ -3647,9 +3674,11 @@ CI reject any CSS that bypasses the tokens, the layer order or the size budget.
   "Per-theme token" means any token, in any family, whose value is an object keyed by theme id — colours and,
   on the current sheet, shadows. The Light block is emitted twice, which counts toward the CSS budget.)
 - `layers.css`: the single statement `@layer tokens, base, components, screens;`, imported first by every bundle.
-- Biome: CSS linting on with the rules plan §7 names (`noHexColors`, `noMissingVarFunction`, `useLayeredStyles`);
-  the agent confirms each rule id against the pinned Biome 2.5.x documentation and stops and reports if one does
-  not exist (never substitutes silently). Plus the GritQL plugin `token-only.grit`.
+- Biome (P1.21l): CSS linting on with the rules plan §7 names (`noHexColors`, `noMissingVarFunction`,
+  `useLayeredStyles`); the agent confirms each rule id against the pinned Biome 2.5.x documentation and stops and
+  reports if one does not exist (never substitutes silently). `useLayeredStyles` is nursery-only in Biome 2.5.15
+  (reported by P1.21): Alex chose "Turn on" (2026-10-06 12:38Z), so it is enabled at its nursery id at error level,
+  and the `css-layers` guard stays as the backstop. Plus the GritQL plugin `token-only.grit`.
 - `budget.css.json`: `{ "perBundle": { "unminifiedBytes": 40960, "minGzipBytes": 12288 }, "perPage":
   { "unminifiedBytes": 40960, "minGzipBytes": 12288 } }`. Limits are KiB (40 KiB = 40,960 bytes; 12 KiB =
   12,288 bytes). Plan §8 Phase 1 speaks of the total shipped CSS, §6.1 of bundles: both are checked.
@@ -3713,7 +3742,7 @@ css-budget:
    rendered HTML of the production build); sum both measures over them; tokens.css counts.
 4. Any bundle or page over budget → exit 1 listing it and both numbers; always print the numbers.
 
-token-only.grit (applies to every .css file except shared/ui/styles/tokens.css):
+token-only.grit (P1.21l; applies to every .css file except shared/ui/src/tokens.css, exempted by exact path):
 1. Declarations of color, background, background-color, border-color (and sides), outline-color, fill,
    stroke, box-shadow, text-shadow, padding*, margin*, gap, row-gap, column-gap, inset*, top, right, bottom,
    left, border-radius (and corners), font-size, font-family, font-weight, line-height, letter-spacing,
@@ -3723,8 +3752,10 @@ token-only.grit (applies to every .css file except shared/ui/styles/tokens.css):
    text-underline-offset, text-decoration-thickness, translate and transform (the sheet: hairlines, focus
    offsets and the 3px hover lift are not spacing).
 
-Layer guard (a Vitest repo test, because the rule depends on the path):
-1. tokens.css: only @layer tokens. shared/ui/styles/base.css: only @layer base.
+Layer guard (P1.21l: scripts/guards/css-layers.ts with fixtures, repo-wide, AB-4; it reads the layer names from
+the one declaration in shared/ui/src/layers.css, proves it scanned more than zero CSS files and fails on a planted
+unlayered rule):
+1. tokens.css: only @layer tokens. shared/ui/src/base.css: only @layer base.
    shared/ui/components/**/*.module.css: only @layer components.
    apps/*/screens/**/*.module.css (and apps/*/src/screens/**): only @layer screens.
 2. Any other .css file in apps/, interfaces/ or shared/ → fail (no unplanned global CSS).
@@ -3752,18 +3783,20 @@ Layer guard (a Vitest repo test, because the rule depends on the path):
 - `tokens_theme_blocks`: Dark values in `:root`, Light values in `[data-theme="light"]` and in the media block
   under `:root:not([data-theme])`.
 - `tokens_contrast_fails_low`: fixture with `ink-muted` lowered to 3:1 → exit `tokens.contrast`.
-- `font_metrics_current`: metrics file records the font hashes it was computed from, equal to `source.json`.
+- In P1.21m: `font_metrics_current`: metrics file records the font hashes it was computed from, equal to `source.json`.
 - `fonts_budget`: sum of shipped font bytes ≤ 122,880.
-- `lint_hex_rejected`: fixture module with `color: #fff` → Biome diagnostic.
+- In P1.21l: `lint_hex_rejected`: fixture module with `color: #fff` → Biome diagnostic.
 - `lint_raw_spacing_rejected`: `padding: 12px` → diagnostic; `border-width: 1px` and `outline-offset: 2px` → none.
-- `layer_guard_wrong_layer`: a screens file declaring `@layer base` → fails with the path.
+- In P1.21l: `layered_styles_known_bad`: a fixture with an unlayered rule → `useLayeredStyles` diagnostic (the
+  nursery rule must fire).
+- In P1.21l: `layer_guard_wrong_layer`: a screens file declaring `@layer base` → fails with the path.
 - `undeclared_var_detected`: `var(--color-nope)` → fails with file:line.
-- `css_budget_over`: fixture bundle of 41 KiB → exit 1 with both numbers; `css_budget_current`: real bundles pass.
+- In P1.21q: `css_budget_over`: fixture bundle of 41 KiB → exit 1 with both numbers; `css_budget_current`: real bundles pass.
 - `css_budget_per_page_over`: three fixture bundles of 15 KiB each linked by one page → exit 1 naming the page.
 - `tokens_shadow_per_theme`: a shadow with `{dark, light}` values → Dark value in `:root`, Light value in both
   Light blocks; `tokens_bad_shadow_rejected`.
 - `tokens_mark_string_parsed`: `"220"` → `--mark-x: 220`.
-- `tokens_android_fallback_faces`: both fallback faces per family exist and appear in `--font-*` order.
+- In P1.21m: `tokens_android_fallback_faces`: both fallback faces per family exist and appear in `--font-*` order.
 - `tokens_contrast_ascii_field_pairs_present`: the pairs file contains the five `over` field colours.
 
 **Reuse** (all provisional — for reuse review):
@@ -3781,6 +3814,42 @@ preload links (P1.25).
 
 ---
 
+### P1.21l — CSS lint rules and the layer guard (split from P1.21, SE-6)
+
+**Tags:** — · **Depends on:** P1.21 · **Plan:** §7 (Biome CSS rules, GritQL plugin), decision 16; rule SE-6
+
+**Where:** check paths only, kind/build: the `biome.json` CSS section; `scripts/lint/biome/token-only.grit` with
+fixtures under `scripts/lint/`; `scripts/guards/css-layers.ts` with fixtures (architecture ruling 2026-10-06 12:15Z
+and 12:20Z: a rule file `biome.json` loads is check configuration wherever it sits, and a repo scan that decides CI
+is a guard, so neither may live in `shared/ui/` where a product PR could weaken the rule and the CSS it judges at
+once).
+
+**Spec:** P1.21's Biome bullet, its `token-only.grit` and layer-guard algorithms, and the tests marked "In P1.21l".
+`useLayeredStyles` is enabled at its Biome 2.5.15 nursery id at error level with a known-bad fixture that must fail;
+the `css-layers` guard stays as the backstop. Biome is pinned exactly, so a Renovate bump that renames or graduates
+the rule is handled in that bump's check-path PR, and `biome.test.ts` fails loudly on a rename. `tokens.css` is the
+one file allowed literal values, exempted by exact path. Its CI run lints P1.21's CSS, so the generated tokens must
+pass the rules when it merges. Until it merges, nothing checks CSS beyond P1.21's own tests, which is why P1.22 waits
+for it.
+
+---
+
+### P1.21m — Font metrics for the fallback faces (split from P1.21)
+
+**Tags:** — · **Depends on:** P1.21 · **Plan:** §6.1 (CSS and font budgets; CLS)
+
+**Where:** product: `scripts/ui/font-metrics.ts` (thin entry, run as `node scripts/ui/font-metrics.ts`, no npm line,
+never run by CI), its exact-pinned dev dependency with the lockfile change (the lockfile rides only with its own
+dependency, justified in the PR), and the filled `shared/ui/tokens/font-metrics.json`.
+
+**Spec:** P1.21's font-metrics paragraph and its algorithm step 7. Once the file is filled, `buildTokens` emits the
+fallback faces and `tokens.css` is regenerated. Tests: those marked "In P1.21m", and a test that regenerating
+`font-metrics.json` reproduces the committed file. It does not depend on P1.21l (depcruise's tooling row already lets
+`scripts/ui` import `shared/ui`). P1.22 depends on it: base styles set the font stacks, and without metric-matched
+fallbacks the font swap shifts layout, which the CLS budget would catch late.
+
+---
+
 ### P1.22 — Base styles, theme and locale (server-applied, no cookie variation on public pages)
 
 **English first (Alex, 2026-10-04 12:58Z):** this step is built in slice 1 **without its locale half**, which moves to
@@ -3792,9 +3861,9 @@ preload links (P1.25).
 `Accept-Language` parts of `public_page_ignores_pref_cookies` and `public_page_no_vary_cookie`. Everything else below is
 built here unchanged. The P1.19 dependency moved to P1.22b.
 
-**Tags:** [SEC] (cookies and state-changing POSTs; proposed in round 1, accepted) · **Depends on:** P1.21, P1.07, P1.09 · **Plan:** §5.1 (theme applied by the server, no inline pre-paint script), §5.4 (caching: public pages carry no cookie variation), §8 Phase 1, §2 rule 4, §6.1 WCAG row; review 08 §5
+**Tags:** [SEC] (cookies and state-changing POSTs; proposed in round 1, accepted) · **Depends on:** P1.21, P1.21l, P1.21m, P1.07, P1.09 · **Plan:** §5.1 (theme applied by the server, no inline pre-paint script), §5.4 (caching: public pages carry no cookie variation), §8 Phase 1, §2 rule 4, §6.1 WCAG row; review 08 §5
 
-**Where:** `shared/ui/styles/base.css`; `interfaces/http/prefs/{theme.ts, locale.ts}`;
+**Where:** `shared/ui/src/base.css`; `interfaces/http/prefs/{theme.ts, locale.ts}`;
 `interfaces/http/routes/prefs.ts`; the document renderer from P1.20/P1.23 (`apps/web/src/document.tsx`); catalog
 keys in the P1.19 EN/FR catalogs; tests.
 
