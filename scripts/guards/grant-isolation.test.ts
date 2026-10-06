@@ -83,6 +83,15 @@ ALTER TABLE app.x ENABLE ROW LEVEL SECURITY;`;
     });
   });
 
+  test("create_schema_with_grant_in_same_file_is_mixed", () => {
+    // P0.09m: the bare schema is neutral and its USAGE grant trusted, so one migration holding both is mixed.
+    expect(verdict({ sql: "CREATE SCHEMA plugin_x;", others: [FEATURE] })).toEqual({ ok: true, touched: false });
+    expect(verdict({ sql: "CREATE SCHEMA plugin_x;\nGRANT USAGE ON SCHEMA plugin_x TO web;", others: [] })).toEqual({
+      ok: false,
+      outside: [`${NEW_SQL} (mixed_grant_change)`],
+    });
+  });
+
   test("grant_parse_unparseable_fails", () => {
     const sql = "DO $$ BEGIN EXECUTE 'GR' || 'ANT SELECT ON app.account TO api'; END $$;";
     expect(verdict({ sql, others: [FEATURE] })).toEqual({ ok: false, outside: [FEATURE] });
