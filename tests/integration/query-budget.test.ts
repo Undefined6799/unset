@@ -35,7 +35,7 @@ afterAll(() => Promise.all(pools.map((pool) => pool.close())));
 
 function countingPool(): Pool {
   const pool = createPool({
-    connection: { ...provided, database, ssl: false },
+    connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
     service: "query-budget",
     max: 1,
     connectTimeoutMs: 2000,
