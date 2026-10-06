@@ -49,6 +49,15 @@ export const poolFields = {
   PG_MAX_REPLICAS: int({ min: 1, max: 4, default: 3 }),
 };
 
+/**
+ * The advisory lock pool (P1.17), for processes that serialise work per DID (the OAuth client's token refresh). Its
+ * own small pool, so callers waiting on a lock cannot starve normal queries; `checkConnectionBudget` counts it with
+ * PG_POOL_MAX.
+ */
+export const lockPoolFields = {
+  LOCK_POOL_MAX: int({ min: 1, max: 20, default: 8 }),
+};
+
 /** What a client or pool needs to reach Postgres. */
 export type Connection = Pick<pg.ClientConfig, "host" | "port" | "database" | "user" | "password" | "ssl">;
 
