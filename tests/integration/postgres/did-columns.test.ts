@@ -158,6 +158,18 @@ async function asWeb(sql: string): Promise<string> {
 
 const PLC = "did:plc:abcdefghijklmnopqrstuvwx";
 
+/** What one expression makes of `uri` as migrator: the DID it extracts, "null", or the SQLSTATE it fails with. */
+async function authority(expression: string, uri: string): Promise<string> {
+  try {
+    const result = await withClient(poolFor("unset"), null, (client) =>
+      client.query<{ did: string | null }>(`SELECT ${expression} AS did`, [uri]),
+    );
+    return result.rows[0]?.did ?? "null";
+  } catch (error) {
+    return String((error as { code?: unknown }).code);
+  }
+}
+
 describe("DID columns", () => {
   test("registry_complete", async () => {
     expect(await registryProblems(poolFor("unset"))).toEqual([]);
@@ -254,6 +266,34 @@ describe("DID columns", () => {
       `https://${PLC}/sh.unset.video/3k`,
     ]) {
       expect(await asWeb(`SELECT '${bad}'::types.at_uri`), bad).toBe("23514");
+    }
+  });
+
+  test("at_uri_check_matches_helper", async () => {
+    // Architecture ruling 2026-10-06 (P1.13): the at_uri check casts the authority to types.did inline, and
+    // types.at_uri_did (kept for P3.07) says the same thing as a routine. One fixture set runs through both, so the
+    // two cannot drift. The cast is copied from migration 0004's CHECK.
+    const cast = "substring($1::text FROM '^at://([^/]+)')::types.did";
+    const fixtures: [string, string][] = [
+      [`at://${PLC}/sh.unset.video/3k`, PLC],
+      [`at://${PLC}`, PLC],
+      ["at://did:web:example.com/sh.unset.video/3k", "did:web:example.com"],
+      ["at://alice.example/sh.unset.video/3k", "23514"],
+      ["at://did:plc:abc/sh.unset.video/3k", "23514"],
+      ["at://", "null"],
+      ["at:///sh.unset.video/3k", "null"],
+      [`at://${PLC.replaceAll(":", "%3A")}/sh.unset.video/3k`, "23514"],
+      ["at://did:web:example.com%3A8443/sh.unset.video/3k", "23514"],
+      [`at://${PLC.toUpperCase()}/sh.unset.video/3k`, "23514"],
+      ["at://did:web:Example.com/sh.unset.video/3k", "23514"],
+      [`at://${PLC}?x=1`, "23514"],
+      [`at://${PLC}#frag`, "23514"],
+    ];
+    for (const [uri, expected] of fixtures) {
+      expect([await authority(cast, uri), await authority("types.at_uri_did($1)", uri)], uri).toEqual([
+        expected,
+        expected,
+      ]);
     }
   });
 });
