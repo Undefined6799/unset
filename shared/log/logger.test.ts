@@ -1,6 +1,6 @@
 import { AppError } from "@unset/shared-errors";
 import { describe, expect, test } from "vitest";
-import { createLogger, type LogFields } from "./index.ts";
+import { createLogger, type LogFields, scrub } from "./index.ts";
 
 /** A logger writing into an array, with a fixed clock. */
 function capture(env: "dev" | "test" | "prod" = "test") {
@@ -62,18 +62,15 @@ describe("logger", () => {
     ["base64url run", "Ab-_".repeat(10)],
     ["did:key", `did:key:z${"6Mk".repeat(15)}`],
   ])("logger_scrubs_values %s", (_kind, value) => {
-    const { log, lines } = capture();
-    log.info("config.unknown_keys", { reason: value });
-    expect(lines[0]).toContain("[redacted]");
+    // scrub guards stack frame paths and free string fields; the word fields refuse these values whole (P1.03w).
+    const out = scrub(value);
+    expect(out).toContain("[redacted]");
     const secretPart = value.replace(/^(from|peer|mail|Bearer) /, "").replace(/ (today|now)$/, "");
-    expect(lines[0]).not.toContain(secretPart);
+    expect(out).not.toContain(secretPart);
   });
 
   test("logger_truncates_and_strips_control_characters", () => {
-    const { log, lines, records } = capture();
-    log.info("config.unknown_keys", { reason: `a\nb\u0000c\u0085d${"x ".repeat(200)}` });
-    expect(lines[0]?.split("\n")).toHaveLength(2); // the line and the empty string after its final newline
-    const reason = String(records()[0]?.reason);
+    const reason = scrub(`a\nb\u0000c\u0085d${"x ".repeat(200)}`);
     expect(reason.startsWith("a?b?c?d")).toBe(true);
     expect(reason.length).toBe(200);
   });
@@ -190,6 +187,53 @@ describe("logger", () => {
     expect(text).not.toContain(did);
     expect(text).not.toContain(handle);
     expect(text).not.toContain("ewvi7n");
+  });
+
+  test("unknown_event_kind_placeholder", () => {
+    const { log, records } = capture();
+    log.info("user.alice.0x40.me signed in" as never, { kind: "TypeError" });
+    expect(records()[0]).toMatchObject({ event: "log.unknown_event", kind: "[event]" });
+  });
+
+  test("word_fields_refuse_identifiers", () => {
+    const identifiers = [
+      "alice.0x40.me",
+      "did:plc:ewvi7nxzyoun6zhxrhs64oiz",
+      "alice@example.com",
+      "203.0.113.7",
+      "2001:db8::1",
+      "https://example.com/a?b=c",
+    ];
+    for (const field of ["reason", "phase", "job", "kind", "key"] as const) {
+      const { log, records } = capture();
+      for (const value of identifiers) log.info("config.unknown_keys", { [field]: value });
+      expect(records().map((r) => r[field])).toEqual(identifiers.map(() => `[${field}]`));
+    }
+    const { log, records } = capture();
+    log.info("config.invalid", { key: "pg_host", reason: "Invalid", phase: "a".repeat(33) });
+    expect(records()[0]).toMatchObject({ key: "[key]", reason: "[reason]", phase: "[phase]" });
+  });
+
+  test("word_fields_keep_words", () => {
+    // Every value logged in these fields on main, plus the migrate runner's reasons (P1.11, #80).
+    const words: Record<"reason" | "phase" | "job" | "kind" | "key", string[]> = {
+      reason: [
+        ...["sfs_cross_site", "sfs_same_site", "origin_mismatch", "origin_null", "referer_mismatch", "no_signal"],
+        ...["error", "missing", "invalid", "unreadable", "forbidden_in_env"],
+        ...["bad_file_name", "duplicate_version", "gap", "no_phase_header", "connect_failed", "not_migrator"],
+        ...["lock_timeout", "checksum_mismatch", "sql_error", "sql_error_partial", "lint_drop", "lint_index_comment"],
+        "lint_index_query_file",
+      ],
+      phase: ["start", "done", "timeout", "expand", "contract"],
+      job: ["retention-sweep", "erase_storage"],
+      kind: ["listen", "TypeError", "Error", "AppError", "AggregateError", "string", "undefined"],
+      key: ["PG_HOST", "UNSET_COMMIT", "NETGUARD_INTERNAL_HOSTS", "LISTEN_PORT"],
+    };
+    for (const [field, values] of Object.entries(words)) {
+      const { log, records } = capture();
+      for (const value of values) log.info("config.unknown_keys", { [field]: value });
+      expect(records().map((r) => r[field])).toEqual(values);
+    }
   });
 
   test("logger_no_stack_message_in_prod", () => {

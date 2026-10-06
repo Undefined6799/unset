@@ -84,6 +84,20 @@ const REQUEST_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 /** A SQLSTATE is five digits or uppercase letters (postgresql.org/docs/18/errcodes-appendix.html). */
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 const MAX_FRAMES = 10;
+/**
+ * Fields that hold one fixed word (SE-7 ruling 2026-10-06, P1.03w). Callers type them as literal unions where they
+ * can (`CsrfReason`); this is the runtime backstop, so a handle, DID, email, IP or URL never passes. A string of up to
+ * 32 lowercase letters and digits can still pass the word shape; tokens never reach these fields by type.
+ */
+const WORD_FIELDS: Readonly<Record<string, RegExp>> = {
+  reason: /^[a-z][a-z0-9_-]{0,31}$/,
+  phase: /^[a-z][a-z0-9_-]{0,31}$/,
+  job: /^[a-z][a-z0-9_-]{0,31}$/,
+  /** An error class name, such as `TypeError`. */
+  kind: /^[A-Za-z][A-Za-z0-9_]{0,39}$/,
+  /** A configuration key name, such as `PG_HOST`. */
+  key: /^[A-Z][A-Z0-9_]{0,63}$/,
+};
 
 /**
  * Until the route table exists (P1.04k) a template is judged by its segments: every one must be a parameter, `*` or a
@@ -97,11 +111,13 @@ const isRouteTemplate = (value: string): boolean =>
     .split("/")
     .every((s) => ROUTE_SEGMENT.test(s));
 
-/** A string field's logged value: routes, request ids and SQLSTATEs are checked whole, everything else is scrubbed. */
+/** A string field's logged value: routes, request ids, SQLSTATEs and word fields are checked whole; others scrubbed. */
 function cleanString(key: string, value: string): string {
   if (key === "route") return isRouteTemplate(value) ? value : "[route]";
   if (key === "reqId") return REQUEST_ID.test(value) ? value : "[reqId]";
   if (key === "sqlstate") return SQLSTATE.test(value) ? value : "[sqlstate]";
+  const word = WORD_FIELDS[key];
+  if (word !== undefined) return word.test(value) ? value : `[${key}]`;
   return scrub(value);
 }
 
@@ -209,8 +225,7 @@ export function createLogger(options: LoggerOptions): Logger {
 
   const record = (level: Level, event: string, fields: Record<string, unknown>, extra: Record<string, string>) => {
     const known = (EVENTS as readonly string[]).includes(event);
-    const given = known ? fields : { ...fields, kind: scrub(String(event), 40) };
-    const { clean, dropped } = cleanFields(given);
+    const { clean, dropped } = cleanFields(fields);
     return {
       ts: now().toISOString(),
       level,
@@ -218,6 +233,8 @@ export function createLogger(options: LoggerOptions): Logger {
       commit: options.commit,
       event: known ? event : "log.unknown_event",
       ...clean,
+      // An unknown event's text could be anything a caller built, so only a placeholder is kept (P1.03w).
+      ...(known ? {} : { kind: "[event]" }),
       ...extra,
       ...(dropped > 0 ? { dropped } : {}),
     };
