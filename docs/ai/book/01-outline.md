@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 75 steps: 58 from `phase-1.md`, 17 from `phase-2.md` (including the
+Depth: **build-ready**. 76 steps: 58 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -195,10 +195,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18 | `phase-2.md` |
 | P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
+| P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03 | Session store and lifecycle | [SEC] | P1.12 | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.17, P1.31, P2.01 | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
-| P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P1.07, P1.16 | `phase-2.md` |
+| P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04 | `phase-2.md` |
 | P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06 | `phase-2.md` |
 | P2.11 | Email-verify gate | [SEC] | P2.06, P2.07 | `phase-2.md` |
@@ -269,6 +270,7 @@ flowchart TD
   P2_01m["P2.01m resolveVetted on c-ares"]
   P2_01a["P2.01a Identity network adapter"]
   P2_02["P2.02 verifyHandledid"]
+  P2_02x["P2.02x verifyHandle export"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_04["P2.04 OAuth client"]
   P2_05["P2.05 Login"]
@@ -337,6 +339,8 @@ flowchart TD
   P2_05 --> P2_06
   P2_03 --> P2_06
   P2_02 --> P2_06
+  P2_02 --> P2_02x
+  P2_02x --> P2_06
   P1_07 --> P2_06
   P1_16 --> P2_06
   P2_04 --> P2_07
