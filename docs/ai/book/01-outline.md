@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 93 steps: 75 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 94 steps: 76 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -192,7 +192,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.23r | Style-prop lint and island CI wiring (check part of P1.23, after it) | [SEC] | P1.23 | `phase-1.md` |
 | P1.23f | CSS scope function (product split of P1.23v) | — | — | `phase-1.md` |
 | P1.23v | CSS Modules check config: Vitest scoped names, TOOLING widened to app Vite configs | [SEC] [ALEX] | P1.23f | `phase-1.md` |
-| P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v | `phase-1.md` |
+| P1.23w | Allow the render-entry subpath import (one depcruise row; check step) | [SEC] [ALEX] | P1.23v | `phase-1.md` |
+| P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v, P1.23w | `phase-1.md` |
 | P1.24i | Icons and inventory (split from P1.24) | [SEC] | P1.22, P1.23r | `phase-1.md` |
 | P1.24h | `safeHref` (trusted base, split from P1.24) | [SEC] | P1.22 | `phase-1.md` |
 | P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
@@ -285,6 +286,7 @@ flowchart TD
   P1_23r["P1.23r Style lint and island CI"]
   P1_23f["P1.23f CSS scope function"]
   P1_23v["P1.23v CSS Modules check config"]
+  P1_23w["P1.23w Render-entry import row"]
   P1_23c["P1.23c CSS Modules glue"]
   P1_24i["P1.24i Icons and inventory"]
   P1_24h["P1.24h safeHref"]
@@ -374,7 +376,8 @@ flowchart TD
   P1_23 --> P1_23c
   P1_23r --> P1_23c
   P1_23f --> P1_23v
-  P1_23v --> P1_23c
+  P1_23v --> P1_23w
+  P1_23w --> P1_23c
   P1_23c --> P1_24
   P1_23c --> P1_24s
   P1_24h --> P1_24
