@@ -3672,7 +3672,7 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.30, P1.11, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.30, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`

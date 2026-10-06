@@ -222,6 +222,8 @@ flowchart LR
 ---
 
 ### P1.01 — Workspace skeleton
+Paths (2026-10-06 sweep): built before the root tidy (P0.09g, #42); the root `.dependency-cruiser.cjs` named below is
+now `scripts/lint/.dependency-cruiser.cjs`.
 Tags: —            Depends on: P0.05            Plan: §7 (layout, tooling, boundary rules; decision 34), §5.5 (boundaries), §9
 Where: root `package.json` (`workspaces`: `apps/*`, `interfaces/*`, `domains/*`, `infrastructure/*`, `shared/*`),
   `package-lock.json`, `tsconfig.json`, `tsconfig.base.json`, `vitest.config.ts`, `.dependency-cruiser.cjs`,
@@ -373,6 +375,9 @@ Diagram: none.
 ---
 
 ### P1.01s — Semgrep custom rules: computed imports and floating promises
+Paths (2026-10-06 sweep): built before the root tidy (P0.09g, #42). Read `.semgrep/rules/` below as
+`scripts/lint/semgrep/` (fixtures `scripts/lint/semgrep/fixtures/`) and the root `.dependency-cruiser.cjs` as
+`scripts/lint/.dependency-cruiser.cjs`; the mapping is in phase-0.md, P0.09g.
 Tags: [SEC]            Depends on: P1.01, P0.07            Plan: §2 (boundaries enforced by CI), rules DC-4 and AB-1 (fallbacks owed by P0.05)
 Where: `.semgrep/rules/{computed-import.yml,floating-promises.yml}` + `.semgrep/rules/fixtures/`, `.github/workflows/ci.yml` (one flag), `scripts/lint/semgrep-rules.test.ts`
 Size: ~60 rule lines, ~120 test and fixture lines. Touches `.semgrep/` and five Phase 0 files (listed in the
@@ -1705,9 +1710,36 @@ As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:49Z):
 
 ---
 
+### P1.11h — Postgres test helper (prelude to P1.11g, SE-6)
+Tags: [SEC]            Depends on: P1.02            Plan: TE-2 (real Postgres from the production image); architecture ruling 2026-10-06 00:10Z (p111g-postgres-test-mechanism, corrected 00:14Z)
+Status: built (#70).
+Where: `tests/support/postgres.ts`, `tests/tsconfig.json`, the root `tsconfig.json` reference to it, the
+  `deployment/tsconfig.json` reference to `../tests`, the README line saying `npm run check` needs Docker, and
+  `tests/integration/postgres-helper.test.ts`.
+
+Why a separate step: the ruling let the helper ride in P1.11g, but change-shape refuses these files in a trusted-base
+PR under SE-6 (they are outside the trusted base), so the e-step prelude pattern applies.
+Rule recorded (one mechanism): every test that needs Postgres starts it with `docker run` from the test process
+  through this one helper. No CI service container, no Testcontainers, no PGlite (banned by TE-2). The local gate and
+  CI run the same tests the same way. A step proposing a second mechanism stops and asks architecture.
+  - `postgres:18` is pinned by index digest in one place, a constant the helper exports. The first Compose step with
+    Postgres adds `compose_postgres_digest_matches_tests`.
+  - Each container: `--rm`; its port published only on `127.0.0.1`, to a random host port; no `--privileged`, no host
+    network, no extra capabilities; the init script mounted read-only and no other volumes; a random superuser
+    password per run, never logged. Teardown removes it, including after a failure.
+  - Tests that use it run in every `npm run check` and in CI's `check` job. Without Docker they fail, never skip. No
+    slow tag; if integration tests slow the local gate, an `integration` Vitest project is added as its own step (it
+    changes the root `vitest.config.ts`, so never in a trusted-base PR).
+Done when (tests, as built): `postgres_helper_is_hardened` (loopback-only port, no privileged mode or host network,
+  auto-remove, read-only mounts), `postgres_helper_reports_init_failure`, `postgres_helper_leaves_nothing_behind`.
+Not in this step: the bootstrap script (P1.11g). No ADR (a test helper is cheap to reverse).
+
+---
+
 ### P1.11g — Postgres bootstrap script: `migrator`, `tap` and the `PUBLIC` revokes (split from P1.11, SE-6)
-Tags: [SEC]            Depends on: P1.02            Plan: §5.2 (database); §6.1 (CIS Postgres); §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
-Where: `deployment/postgres/init/00-bootstrap.sh` + its test
+Tags: [SEC]            Depends on: P1.02, P1.11h            Plan: §5.2 (database); §6.1 (CIS Postgres); §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
+Where: `deployment/postgres/init/00-bootstrap.sh` + its test only; the container comes from P1.11h's
+  `tests/support/postgres.ts`
 Size: ~60 lines shell/SQL, ~30 test lines
 
 Why a separate step (letter suffix): the script creates roles and revokes privileges, which is trusted base. It cannot
@@ -1725,33 +1757,92 @@ Threats: the cluster's first roles.
     SCRAM only (P1.11 `scram_only`).
 Done when (tests):
   - bootstrap_script_fails_closed (moved from P1.11): run `00-bootstrap.sh` in a fresh container without the secret
-    file → container exits non-zero (tagged `slow`, run in CI).
+    file → container exits non-zero. It runs in every `npm run check` and in CI's `check` job and needs Docker;
+    without Docker it fails, never skips (ruling 2026-10-06 00:10Z).
   - bootstrap_revokes_public: after the script, `PUBLIC` has no privilege on databases `unset` and `tap` or on schema
     `public` in `unset`; the only login roles are `migrator`, `tap` and the bootstrap superuser.
 Reuse: none. Not in this step: the runner and `0001_init.sql` (P1.11); every other role (P1.12). Diagram: none.
 
 ---
 
+### P1.11e — Name the migration log events and the busy error (prelude to P1.11, SE-6)
+Tags: —            Depends on: P1.03            Plan: §6.1; SE-6 (step book 2026-10-06, p111-shape (a), (b))
+Status: built (#77).
+Where: `shared/log/` (EVENTS entries `migrate.database_ahead`, `migrate.failed`, `migrate.done`, plus the logger test)
+  and `shared/errors/` (catalog entry `db.busy`, 503, public, plus the catalog test). About 20 lines. Label kind/feature.
+Why: `/infrastructure/postgres/` is a security-review path in CODEOWNERS, so P1.11 is a trusted-base PR; a shared/log
+  EVENTS entry precedes the trusted-base PR that logs it (the P1.04l, P1.05e, P1.06e pattern), and `shared/errors` is
+  outside the trusted base, so `db.busy` cannot ride P1.11 or P1.11p.
+Fields (SE-7, amended 2026-10-06 by architecture's P1.11e ruling): the events log only `migration version` and
+  `sqlstate` beyond the usual fields.
+  - `version` must be a non-negative safe integer; anything else (a non-integer, a negative number, a string) is
+    dropped, not coerced.
+  - `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. It never carries the
+    driver's `message`, `detail`, `hint`, `where` or `constraint` text, which can echo row values.
+  - `db.busy` carries the generic public message only; no pool or Postgres detail reaches the response.
+  - A further field needs an architecture ruling and a line under SE-7.
+Done when: the logger test lists the three events and drops a bad `version` and a malformed `sqlstate`; a planted
+  failing statement whose error detail holds a DID and a handle yields a log line with neither; the catalog test has
+  `db.busy` as 503 and public, with the generic message.
+
+---
+
+### P1.11q — Transactions and pool-access Semgrep rules (split from P1.11, SE-6)
+Tags: —            Depends on: P1.01s            Plan: rule DM-2; SE-6 (step book 2026-10-06, p111q-reshaped, p111-shape (e))
+Status: built (#75).
+Where: `scripts/lint/semgrep/transactions.yml` and the pool-access rule beside it, their must-fail and must-pass
+  fixtures under `scripts/lint/semgrep/fixtures/`, the matching cases in `semgrep-rules.test.ts`, and the DM-2 row of
+  `docs/human/architecture.md`. No `ci.yml` change (its semgrep step already runs `--config scripts/lint/semgrep/`) and
+  no `required-checks.json` change.
+Why: both rules decide CI, so they are check paths and cannot ride P1.11 or P1.11p. The Postgres service and the
+  required-check entry this step once carried are dropped: Postgres in tests runs through P1.11h's helper inside the
+  existing `check` job (ruling 2026-10-06 00:10Z).
+Rules (text from P1.11's Outputs):
+  - `BEGIN`, `COMMIT`, `START TRANSACTION`, `ROLLBACK` as a SQL string, and `.transaction(`, are allowed in TypeScript
+    only in `infrastructure/postgres/tx.ts`. Fixtures: one in `domains/identity/x.ts` (finding), one in
+    `infrastructure/postgres/tx.ts` (no finding).
+  - `pool.connect(` and `pool.query(` are allowed only in `infrastructure/postgres/pool.ts`.
+  Both land before `tx.ts` and `pool.ts` exist, which is harmless: nothing opens a transaction or a pool yet.
+Done when: `transactions_only_in_tx` and `pool_access_single_file` (P1.11's Done when) pass on the fixtures, the real
+  tree passes, and the DM-2 row reads `checked: transactions-only-in-tx` (P0.09's table convention; docs never change a
+  PR's class).
+
+---
+
 ### P1.11 — Postgres and the migration runner as the `migrator` role
-Split (SE-6 `q` rule, ruling 2026-10-05 01:15Z): `scripts/lint/semgrep/transactions.yml` and its fixtures, the
-Postgres service in `ci.yml` and `required-checks.json` land first as **P1.11q** (same tags, deps P1.11g, P1.02); this
-step brings `infrastructure/postgres/**` and the rest. The rule lands before `tx.ts` exists, which is harmless because
-nothing opens a transaction yet.
-Tags: —            Depends on: P1.11q, P1.11g, P1.02            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
-Where: `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`, `scripts/lint/semgrep/transactions.yml` (+ its fixtures), `infrastructure/postgres/migrations/0001_init.sql`,
-  (`deployment/postgres/init/00-bootstrap.sh` is **P1.11g**, trusted base, SE-6), `docs/human/db/migrations.md`, `.github/workflows/ci.yml` (Postgres service for the
-  `check` job), `vitest` global setup `tests/integration/setup/pg.setup.ts` (the first `tests/` TypeScript, so this PR
-  adds `tests/integration/tsconfig.json` and its root reference, P1.01's `every_ts_file_in_a_project`), `.github/required-checks.json` (appends any new
-  required job, with P0.07's Alex tail: Alex updates the ruleset to match; phase-0 note 1)
+Split (SE-6 and size; step book 2026-10-06, p111-shape and p111q-reshaped; architecture rulings 2026-10-06
+p111-test-db-and-pg-config and p111g-postgres-test-mechanism). This text stays the specification for all five parts:
+  - **P1.11e** (prelude): the `migrate.*` log events and `AppError('db.busy')`.
+  - **P1.11q** (check): the transactions and pool-access Semgrep rules; it flips the DM-2 row.
+  - **P1.11** (this step, trusted base): `migrate.ts`, `migrate-cli.ts`, `sqlLint.ts`, `migrations/0001_init.sql`,
+    `docs/human/db/migrations.md` and ADR 0014 "node-postgres as the Postgres driver", with tests beside them under
+    `infrastructure/postgres/`. Tests: `applies_in_order`, `idempotent_rerun`, `checksum_mismatch_exit_2`,
+    `gap_exit_3`, `database_ahead_exit_0`, `failing_migration_rolls_back`, `concurrent_runners`, `expand_lint`,
+    `must_be_migrator`, `index_needs_query_comment`, `scram_only`.
+  - **P1.11p** (trusted base): `pool.ts` (`createPool`, `acquire`, `withClient`), `tx.ts`, `checkConnectionBudget` and
+    the use of `db.busy`. Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
+    `tx_commit_and_rollback`, `connection_budget`.
+  - **P1.11t** (product): the `tests/integration/setup/pg.setup.ts` globalSetup and `query_budget_per_route`.
+  Until P1.11t lands, P1.11 and P1.11p tests that need a database use `tests/support/postgres.ts` (P1.11h) directly
+  from their own `*.test.ts`.
+Tags: —            Depends on: P1.11e, P1.11g, P1.11q, P1.02 (P1.11h comes in through P1.11g)            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
+Where (all five parts, per the split above): `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`
+  and `infrastructure/postgres/package.json` (`pg` pinned exactly, never `pg-native`), `infrastructure/postgres/migrations/0001_init.sql`,
+  `docs/human/db/migrations.md`, `docs/human/decisions/0014-*.md`, the globalSetup `tests/integration/setup/pg.setup.ts`
+  (through `tests/support/postgres.ts`; P1.11h's `tests/tsconfig.json` already covers `tests/integration`). The Semgrep
+  rules are P1.11q; `deployment/postgres/init/00-bootstrap.sh` is **P1.11g**. No `ci.yml` service, no
+  `required-checks.json` change (ruling 2026-10-06 00:10Z).
 Size: ~260 source lines, ~260 test lines, ~60 lines shell/SQL
 
 Goal: schema changes are SQL files applied once, in order, by a one-shot process holding only the `migrator`
 credentials, safely under concurrency, with checksums that stop edited history, and written so old and new code can
 run against the same schema during a deploy.
 
-Inputs: P1.02 (config). Dependencies (exact pins): `pg` (node-postgres). Postgres image: **18, latest minor**, pinned by
-  index digest (not a fresh x.0 major for a from-scratch security-sensitive stack; 18 is supported to 2030). The same
-  digest is used by CI here and by P1.29. Check the image documentation for the PG 18 data path (the official image is
+Inputs: P1.02 (config). Dependencies (exact pins): `pg` (node-postgres), never the optional `pg-native` binding (ADR
+  0014; architecture 2026-10-06). Postgres image: **18, latest minor**, pinned by
+  index digest (not a fresh x.0 major for a from-scratch security-sensitive stack; 18 is supported to 2030). The digest
+  lives once, as the constant in `tests/support/postgres.ts` (P1.11h); P1.29's Compose asserts the same digest
+  (`compose_postgres_digest_matches_tests`). Check the image documentation for the PG 18 data path (the official image is
   believed to use `PGDATA=/var/lib/postgresql/18/docker` with the volume at `/var/lib/postgresql`; unverified) and
   record the confirmed path in `docs/human/db/migrations.md` for P1.29's volume mount.
 Outputs:
@@ -1775,36 +1866,46 @@ Outputs:
     and `application_name = <service>` set on connect; `max` from config; `connectionTimeoutMillis =
     PG_CONNECT_TIMEOUT_MS`, so an exhausted pool fails fast instead of queueing forever (node-postgres waits without
     limit by default; findings F-09); an acquire timeout becomes `AppError('db.busy')` (503, public, added to P1.03's
-    catalog in this PR); registers a close hook with the P1.04 shutdown.
+    catalog by P1.11e); registers a close hook with the P1.04 shutdown. The pool is lazy: nothing connects until first
+    `acquire`, and no `compose.ts` connects at startup.
   - `acquire(pool, deadline: AbortSignal | null) -> Promise<PoolClient>` and `withClient(pool, deadline, fn)`, the only
     ways code takes a client (plan §6.1 Deadlines: pool acquire nests inside the request deadline). The wait is
     `min(PG_CONNECT_TIMEOUT_MS, time left on deadline)`; a deadline already fired → `AppError('http.deadline')` without
     asking the pool; the deadline firing while waiting → the same error, and a client the pool hands over afterwards
     is released at once, never leaked. Request handlers pass `ctx.deadline` (P1.04); jobs and scripts pass their own
     budget's signal, or `null` for `PG_CONNECT_TIMEOUT_MS` alone. The role's `statement_timeout` (2 s on `web`) and
-    `idle_in_transaction_session_timeout` are already far below any request deadline. A repo scan forbids
-    `pool.connect(` and `pool.query(` outside `infrastructure/postgres/pool.ts`.
+    `idle_in_transaction_session_timeout` are already far below any request deadline. A Semgrep rule (P1.11q)
+    forbids `pool.connect(` and `pool.query(` outside `infrastructure/postgres/pool.ts`.
   - `infrastructure/postgres/tx.ts` (rule DM-2; architecture table "planned: P1.11"): `withTransaction(pool, deadline,
     fn: (client) => Promise<T>) -> Promise<T>`, the only place a transaction is opened: `BEGIN` (with the isolation
     level the caller names, default `READ COMMITTED`), `COMMIT` on success, `ROLLBACK` on any throw or deadline, the
-    client always released; built on `withClient`. A Semgrep rule (`scripts/lint/semgrep/transactions.yml`, run by P0.07's
-    `semgrep` job with `--config scripts/lint/semgrep/` added beside the registry packs; folder created by P1.01s) allows `BEGIN`, `COMMIT` and `.transaction(` in TypeScript only in `tx.ts`: a SQL string starting
+    client always released; built on `withClient`. A Semgrep rule (P1.11q: `scripts/lint/semgrep/transactions.yml`, run by P0.07's
+    `semgrep` job with `--config scripts/lint/semgrep/` beside the registry packs; folder created by P1.01s) allows `BEGIN`, `COMMIT` and `.transaction(` in TypeScript only in `tx.ts`: a SQL string starting
     with `BEGIN`, `COMMIT`, `START TRANSACTION` or `ROLLBACK`, or a `.transaction(` call, anywhere else fails
-    (migrations are `.sql` files run by `migrate.ts` inside `tx.ts`, so they are not TypeScript and not scanned). This
-    step's PR flips the DM-2 row of `docs/human/architecture.md` to `checked: transactions-only-in-tx` (P0.09's
+    (migrations are `.sql` files run by `migrate.ts` inside `tx.ts`, so they are not TypeScript and not scanned). P1.11q
+    flips the DM-2 row of `docs/human/architecture.md` to `checked: transactions-only-in-tx` (P0.09's
     table convention).
   - `checkConnectionBudget(client, pools: number[], maxReplicas)`: at boot, after every pool of the process exists (the
     P1.17 lock pool included), reads `rolconnlimit` for `current_user` from `pg_roles`; if `sum(pools) >
     floor(limit / maxReplicas)` → `ConfigError` (exit 78). This stops a `docker-rollout` with three replicas from
     running into connection refusals mid-deploy. `rolconnlimit = -1` (no limit) → pass.
   - `docs/human/db/migrations.md`: the expand/contract convention and the index rule (below).
-  - CI: the `check` job gets a `services: postgres` container (same pinned digest) and `TEST_DATABASE_URL`; DB tests use
-    a fresh database per test file (`CREATE DATABASE t_<random>` from a template).
+  - Test databases (P1.11t; TE-2; ruling 2026-10-06 01:25Z): the globalSetup `tests/integration/setup/pg.setup.ts`
+    starts Postgres only through `tests/support/postgres.ts`. The container boots with `00-bootstrap.sh`; the setup
+    runs the real migrations once, as `migrator`, into a template database; each test file gets `CREATE DATABASE
+    t_<random> TEMPLATE <template>`; test files connect as `web`, `api` or `indexer`, never as the superuser, whose
+    password only the setup holds and which never reaches a test file or a log; connection details pass through Vitest
+    `provide`/`inject`; teardown removes the container, including after a failure; without Docker the run fails, never
+    skips. No `services:` container and no `TEST_DATABASE_URL`. Known cost: with no Vitest projects the setup runs on
+    every `vitest` run.
   - Config keys: `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` (`secretFile`), `PG_POOL_MAX`
     (`int 1..50`), `PG_CONNECT_TIMEOUT_MS` (`int 100..10000`, default 2000; 0, which node-postgres reads as "wait
     forever", is outside the range), `PG_MAX_REPLICAS` (`int 1..4`, default 3: the most replicas of one service alive at once during a
     rollout), `PG_SSLMODE` (`oneOf(["disable","require","verify-full"])`, `disable` allowed only on the internal
-    Docker network: cross-field rule `PG_HOST` must not contain a dot when `disable`).
+    Docker network: cross-field rule `PG_HOST` must not contain a dot when `disable`). No prelude seeds these keys
+    while no `compose.ts` wires a pool (ruling 2026-10-06 01:25Z (2)): they are parsed only by the migrate CLI and the
+    test setup. The step that first wires a pool into a compose adds the `PG_*` keys to that interface's manifest test
+    env in the same PR, with a prelude only if that PR is trusted base.
 
 Algorithm (`migrate`):
   1. `files = list(dir)` filtered by `^\d{4}_[a-z0-9_]+\.sql$`, sorted. Any other `.sql` file → error (exit 1). Versions
@@ -1849,7 +1950,8 @@ Edge cases and failures:
     `SELECT current_user = 'migrator'` first and exits 1 otherwise.
   - Superuser password is never in any service's environment except the Postgres container itself.
 
-Done when (tests): (real Postgres from the CI service; each test in its own database)
+Done when (tests): (real Postgres through `tests/support/postgres.ts`; each test file in its own database cloned
+  from the migrated template; the part that owns each test is in the split above)
   - applies_in_order: two migrations → both applied; `schema_migrations` has versions 1, 2 with checksums.
   - idempotent_rerun: second run applies nothing, exit 0.
   - checksum_mismatch_exit_2: edit file 1 after applying → exit 2, nothing else applied.
@@ -1885,6 +1987,9 @@ Done when (tests): (real Postgres from the CI service; each test in its own data
   - scram_only: `SHOW password_encryption` = `scram-sha-256`; `pg_authid.rolpassword` for `migrator` starts with
     `SCRAM-SHA-256$` (read as the test superuser).
   - connection_budget: role limit 40, pools 20 + 8, `PG_MAX_REPLICAS=3` → `ConfigError` (28 > 13); pools 8 + 4 → passes.
+  - test_files_never_superuser (P1.11t): a test file's connection details name a process role, never the superuser,
+    and no test file or log line carries the superuser password.
+  - teardown_after_failure (P1.11t): a setup that fails after starting the container still removes it.
   - (`bootstrap_script_fails_closed` moved to P1.11g.)
 
 Reuse: prototype `/home/claude/0x40/app/src/lib/crm/migrate.ts:59-89` → LESSON (good: advisory lock and one transaction;
@@ -1917,8 +2022,29 @@ sequenceDiagram
 
 ---
 
+### P1.11p — Pool, transactions and the connection budget (split from P1.11)
+Tags: —            Depends on: P1.11            Plan: as P1.11 (§6.1 Deadlines, Data access); step book 2026-10-06 p111-shape (d)
+Where: `infrastructure/postgres/{pool.ts,tx.ts}` and `checkConnectionBudget`, with tests beside them under
+  `infrastructure/postgres/`. Trusted base (`/infrastructure/postgres/` is a security-review path), so no `tests/` file
+  rides it.
+Spec: P1.11's Outputs bullets for `createPool`, `acquire`/`withClient`, `tx.ts` and `checkConnectionBudget`, and its
+  tests `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`, `tx_commit_and_rollback`,
+  `connection_budget`. The pool is lazy: nothing connects until first `acquire`. It uses `db.busy` from P1.11e.
+
+---
+
+### P1.11t — Postgres integration setup and the query budget test (split from P1.11)
+Tags: —            Depends on: P1.11p            Plan: TE-2; README invariant 14; ruling 2026-10-06 01:25Z (1)
+Where: `tests/integration/setup/pg.setup.ts` (the globalSetup) and `tests/integration/query-budget.test.ts` with
+  `tests/integration/query-budget/fixtures/`. A product step: `tests/` cannot ride the trusted P1.11 or P1.11p.
+Spec: P1.11's "Test databases" bullet (the TE-2 conditions) and its tests `query_budget_per_route`,
+  `test_files_never_superuser` and `teardown_after_failure`. If a later architecture ruling places the setup
+  elsewhere, this step follows it.
+
+---
+
 ### P1.12 — Roles and grants, the role roster, default privileges, grant-matrix test
-Tags: [SEC]            Depends on: P1.11            Plan: §5.2 (roles map to processes; grant-matrix test), §5.7 (`admin`, `retention` roles), §6.1 (CIS Postgres)
+Tags: [SEC]            Depends on: P1.11p            Plan: §5.2 (roles map to processes; grant-matrix test), §5.7 (`admin`, `retention` roles), §6.1 (CIS Postgres)
 Where: `infrastructure/postgres/migrations/0002_roles_and_schemas.sql`, `infrastructure/postgres/roles.json`,
   `infrastructure/postgres/grant-matrix.json`, `tests/integration/postgres/grants.test.ts` (password sync is **P1.12p**:
   this PR is all role and grant statements, so it is trusted base and carries nothing else; SE-6 as ruled 2026-10-04)
@@ -2616,7 +2742,7 @@ Diagram: none.
 ---
 
 ### P1.17 — Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`)
-Tags: —            Depends on: P1.11            Plan: §5.2 (`pg_advisory_xact_lock(hashtext(did))`, ~40 lines, two `web` replicas); review 02 SERIOUS-5
+Tags: —            Depends on: P1.11p            Plan: §5.2 (`pg_advisory_xact_lock(hashtext(did))`, ~40 lines, two `web` replicas); review 02 SERIOUS-5
 Where: `infrastructure/postgres/lock.ts` + `lock.test.ts`
 Size: ~80 source lines, ~160 test lines
 
@@ -4605,7 +4731,7 @@ on the PDS (P1.30 C12).
 One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
 from `dev:up`, not from CI), so this stays one step.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11, P1.12p, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/compose.dev.yaml`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
 `scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests.
