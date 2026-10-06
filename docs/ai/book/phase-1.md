@@ -781,6 +781,49 @@ Diagram: none.
 
 ---
 
+### P1.03w — Fixed-word string fields in `shared/log` (added, SE-7 ruling 2026-10-06)
+Tags: [SEC]            Depends on: P1.03            Plan: §6 logging (SE-7: no DID, handle or user-derived message in logs)
+Where: `shared/log/logger.ts`, `shared/log/logger.test.ts` (product PR; `shared/log` is not trusted base)
+Size: ~40 source lines, ~80 test lines
+
+Goal: a string field in a log line can hold only a fixed word, so a handle, DID, email, IP or URL can never be logged
+through it, whatever a caller passes.
+
+Inputs: P1.03's logger (`scrub()`, `EVENTS`, the `route` and `reqId` placeholders).
+Outputs: shape checks applied in the logger before a line is written.
+
+Algorithm:
+  1. Check each field's shape:
+     - `reason`, `phase` and `job` must match `^[a-z][a-z0-9_-]{0,31}$`;
+     - `kind` must match `^[A-Za-z][A-Za-z0-9_]{0,39}$`;
+     - `key` must match `^[A-Z][A-Z0-9_]{0,63}$`.
+  2. A value that fails its shape becomes `[<field>]`, as `route` and `reqId` already do. The line is still written.
+  3. An unknown event logs `kind: "[event]"` instead of the scrubbed event text.
+  4. The logger's comment states what is accepted: a string of 32 or fewer lowercase alphanumeric characters can pass
+     the word shape. SE-7 bans tokens in logs, and token-bearing values never reach these fields by type.
+  5. Callers type their reasons as literal unions where the type allows, as `CsrfReason` does. The shape check is the
+     runtime backstop.
+
+Edge cases: `reason: "alice.0x40.me"` → `[reason]`; `kind: "TypeError"` → kept; `key: "PG_HOST"` → kept;
+  `key: "pg_host"` → `[key]`.
+
+Threats:
+  - I An identifier logged through a free string field → shape rule (`word_fields_refuse_identifiers`).
+
+Done when (tests):
+  - `word_fields_refuse_identifiers`: a handle, a DID, an email, an IPv4 address, an IPv6 address and a URL, in each of
+    the five fields → each is replaced by its placeholder.
+  - `word_fields_keep_words`: every reason, phase, job, kind and key value in use on main still passes. The test lists
+    them.
+  - `unknown_event_kind_placeholder`.
+
+Order: lands before the first PR that logs a value from outside a fixed union, and at the latest before the
+composition PR that wires P2.02's `onUnexpected` (P2.04 or P2.06), which gains P1.03w in its Depends-on line.
+Rule text: SE-7's "Amended 2026-10-06" line (architecture ruling 2026-10-06-se7-verify-error-and-word-fields).
+Diagram: none.
+
+---
+
 ### P1.04 — HTTP server skeleton per entrypoint
 Tags: —            Depends on: P1.04k, P1.04q, P1.04c, P1.04m, P0.13a            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
 Where: each `interfaces/<x>/main.ts`, `interfaces/<x>/compose.ts` and `interfaces/<x>/config.ts` (spreading P1.04k's
@@ -1857,21 +1900,29 @@ Split (SE-6 and size; step book 2026-10-06, p111-shape and p111q-reshaped; archi
 p111-test-db-and-pg-config and p111g-postgres-test-mechanism). This text stays the specification for all five parts:
   - **P1.11e** (prelude): the `migrate.*` log events and `AppError('db.busy')`.
   - **P1.11q** (check): the transactions and pool-access Semgrep rules; it flips the DM-2 row.
-  - **P1.11** (this step, trusted base): `migrate.ts`, `migrate-cli.ts`, `sqlLint.ts`, `migrations/0001_init.sql`,
-    `docs/human/db/migrations.md` and ADR 0014 "node-postgres as the Postgres driver", with tests beside them under
-    `infrastructure/postgres/`. Tests: `applies_in_order`, `idempotent_rerun`, `checksum_mismatch_exit_2`,
+  - **P1.11** (this step, a product PR: CODEOWNERS' trusted-base section lists `roles.json`, not
+    `infrastructure/postgres/*.ts`, and `0001_init.sql` holds comments only): `migrate.ts`, `migrate-cli.ts`,
+    `sqlLint.ts`, `tx.ts` with only `inTransaction(client, fn)` (the runner's one transaction per file),
+    `migrations/0001_init.sql`, `docs/human/db/migrations.md` and ADR 0014 "node-postgres as the Postgres driver"
+    (`pg` 8.23.0, `@types/pg` 8.23.1). Database tests sit in `tests/integration/postgres/migrate.test.ts` (a workspace
+    may not reference the tests project, and `pg` stays out of `tests/`, so the lock test uses a slow migration);
+    unit tests for `sqlLint` and the CLI config sit beside their files. Tests: `applies_in_order`, `idempotent_rerun`, `checksum_mismatch_exit_2`,
     `gap_exit_3`, `database_ahead_exit_0`, `failing_migration_rolls_back`, `concurrent_runners`, `expand_lint`,
     `must_be_migrator`, `index_needs_query_comment`, `scram_only`.
-  - **P1.11p** (trusted base): `pool.ts` (`createPool`, `acquire`, `withClient`), `tx.ts`, `checkConnectionBudget` and
-    the use of `db.busy`. Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
+  - **P1.11p** (product): `pool.ts` (`createPool`, `acquire`, `withClient`), `withTransaction(pool, deadline, fn)` in
+    `tx.ts` on top of `inTransaction`, `checkConnectionBudget` and the use of `db.busy`; database tests under
+    `tests/integration/postgres/`, as P1.11. Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
     `tx_commit_and_rollback`, `connection_budget`.
-  - **P1.11t** (product): the `tests/integration/setup/pg.setup.ts` globalSetup and `query_budget_per_route`.
+  - **P1.11t** (product): the `tests/integration/setup/pg.setup.ts` globalSetup and `query_budget_per_route`. It folds
+    into P1.11p if P1.11p stays near 400 source lines, else stays its own step after P1.11p; P1.11p's PR says which
+    (book edit 2026-10-06-p111-as-built).
   Until P1.11t lands, P1.11 and P1.11p tests that need a database use `tests/support/postgres.ts` (P1.11h) directly
-  from their own `*.test.ts`.
+  from their own test files under `tests/integration/postgres/`.
 Tags: —            Depends on: P1.11e, P1.11g, P1.11q, P1.02 (P1.11h comes in through P1.11g)            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
 Where (all five parts, per the split above): `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`
   and `infrastructure/postgres/package.json` (`pg` pinned exactly, never `pg-native`), `infrastructure/postgres/migrations/0001_init.sql`,
-  `docs/human/db/migrations.md`, `docs/human/decisions/0014-*.md`, the globalSetup `tests/integration/setup/pg.setup.ts`
+  `docs/human/db/migrations.md`, `docs/human/decisions/0014-*.md`, the database tests in `tests/integration/postgres/`,
+  the globalSetup `tests/integration/setup/pg.setup.ts`
   (through `tests/support/postgres.ts`; P1.11h's `tests/tsconfig.json` already covers `tests/integration`). The Semgrep
   rules are P1.11q; `deployment/postgres/init/00-bootstrap.sh` is **P1.11g**. No `ci.yml` service, no
   `required-checks.json` change (ruling 2026-10-06 00:10Z).
@@ -1957,10 +2008,12 @@ Algorithm (`migrate`):
   3. Lint expand files (`sqlLint`): reject `DROP TABLE|COLUMN|SCHEMA|INDEX` (without `CONCURRENTLY IF EXISTS` on an index
      created in the same file), `RENAME`, `ALTER COLUMN … TYPE`, `ALTER COLUMN … SET NOT NULL`, `TRUNCATE` → exit 1 naming
      the file and line. Contract files may contain them.
-  4. Connect as `migrator` (`SET lock_timeout = '5s'; SET statement_timeout = '15min'`). Connection error → retry with
-     backoff 1, 2, 4, 8, 16 s (Postgres may still be starting); after 5 failures → exit 1.
-  5. `SELECT pg_advisory_lock(<MIGRATE_LOCK_ID>)` (session lock, constant `0x756e7365`); a second runner waits (lock_timeout
-     does not apply to advisory locks; wrap the call with a 60 s client-side timeout → exit 1 "another migrate is running").
+  4. Connect as `migrator` (`SET lock_timeout = '5s'; SET statement_timeout = '15min'`). Connecting is tried six times,
+     with waits of 1, 2, 4, 8 and 16 s between tries (Postgres may still be starting); when the tries run out → log
+     `migrate.failed`, exit 1.
+  5. Poll `SELECT pg_try_advisory_lock(<MIGRATE_LOCK_ID>)` (session lock, constant `0x756e7365`) every 250 ms, up to
+     60 s; a second runner keeps polling. When the 60 s run out → log `migrate.failed`, exit 1 "another migrate is
+     running". The runner never proceeds without the lock.
   6. Create `schema_migrations` if absent. `applied = SELECT version, checksum FROM schema_migrations`.
   7. For each applied version that has a file: if checksums differ → release lock, exit 2 ("migration NNNN was edited
      after it was applied; write a new migration instead").
@@ -2041,7 +2094,11 @@ directories, which this step replaces with one fixed path). `node-pg-migrate` 9.
 (reviewer may prefer it; our runner is ~150 lines and keeps the checksum and ahead rules exact). `pg` → USE. Provisional —
 for reuse review.
 Not in this step: roles other than `migrator` and `tap` and all grants (P1.12); the Compose `migrate` service itself
-(P1.29); backups (P5.04).
+(P1.29); backups (P5.04); `pool.ts` and `withTransaction` (P1.11p).
+Migrations are trusted base: `migrations/` is a parsed path in CODEOWNERS' trusted-base section, and the grant parser
+treats any statement there as unclassified, so even `SELECT 1` makes a PR trusted base. A later step adding a migration
+with a statement plus non-trusted code splits the migration out, or puts the code in a prelude (the e/p pattern).
+Builders check this when sizing P1.12 onward.
 Diagram:
 ```mermaid
 sequenceDiagram
@@ -3281,11 +3338,21 @@ Diagram: none.
 
 **Tags:** [SPIKE] · **Depends on:** P1.04, P1.10 · **Plan:** §5.1, §6.1 (budgets), §10 row 4, §11 Q3; review fable 02 SERIOUS-4
 
-**Where:** branch `claude/p1-20-glue-spike`. Throwaway code in `spikes/p1-20-hono/` and `spikes/p1-20-astro/`
-(a dependency-cruiser rule forbids any import of `spikes/` from `apps/`, `interfaces/`, `domains/`, `infrastructure/` or `shared/`). What merges:
-`docs/human/decisions/NNNN-web-framework-glue.md`, `spikes/p1-20-*/MEASUREMENTS.json`, and `scripts/count-glue-lines`
-(kept, because P1.23 and P1.38 re-measure with the same rule). The spike code itself stays on the branch, tagged
-`spike/p1-20`, as the reference P1.23 starts from.
+**Where:** branch `claude/p1-20-glue-spike`. Throwaway code in `spikes/p1-20-hono/` and `spikes/p1-20-astro/` on that
+branch only; nothing under `spikes/` merges, so main has no `spikes/` folder and no dependency-cruiser rule for it
+(architecture ruling 2026-10-06-p120-spike-artefacts-layout). The spike's npm dependencies live only in the branch's
+`package.json`; main's lockfile is untouched. What merges, in one check-path PR (docs never change a PR's class, SE-6;
+no P1.20q):
+- `docs/human/decisions/NNNN-web-framework-glue.md`, the ADR, which names the evidence folder in one line;
+- `docs/human/decisions/evidence/NNNN-web-framework-glue/`: `MEASUREMENTS.json` per candidate and only the raw
+  Playwright reports `hono_verdict_consistent` reads (no screenshots or traces, about 200 KB at most, fixture data
+  only); larger Playwright output stays a CI artefact linked from the ADR;
+- `scripts/budgets/count-glue-lines.ts` with `count_glue_lines_rule` and `glue_count_includes_config_plugin` (kept,
+  because P1.23 and P1.38 re-measure with the same rule; the npm script name stays `count-glue-lines`);
+- in `scripts/docs/`: `hono_verdict_consistent`, `astro_measurements_recorded` and `adr_has_required_sections`.
+The spike code itself stays on the branch, tagged `spike/p1-20`, as the reference P1.23 starts from. Its other tests
+(`css_map_diff_detects_mismatch`, `neg_route_style_attr_blocked`, `zero_js_route_check`) run on the branch, and their
+output joins the raw reports.
 
 **Size:** ~450–700 spike lines (not merged), ~150 measurement-script lines, ~250 test lines; ADR ~120 lines.
 
@@ -3306,7 +3373,8 @@ changes in an ADR.
 - `MEASUREMENTS.json` per candidate:
   `{ candidate, versions{}, ssrRenderer, glueLines{ devSsr, manifest, css, islands, serialiser, config, total },
   declarativeConfigLines,
-  cssIdentical{ dev: bool, prod: bool, mismatches: string[] }, hydrationErrors: int, cspViolations: int,
+  cssIdentical{ dev: bool, prod: bool, mismatches: string[] }, hydrationErrors: int (Chromium's),
+  hydrationErrorsByEngine{ chromium: int, firefox: int|null, webkit: int|null }, cspViolations: int,
   styleAttrViolations: int, zeroJsRoute{ scriptTags: int, modulePreloads: int, jsBytes: int },
   jsGzipBytes{ reactRuntime, bootstrap, perIsland{}, total, headroomFor75KB }, rawReports: string[],
   buildSecondsMedian, deps{ direct, transitive }, verdict: "PASS"|"BORDERLINE"|"FAIL"|"INCOMPLETE" }`.
@@ -3356,8 +3424,12 @@ changes in an ADR.
    b. CSS identical:
       i.   build both bundles; extract every CSS Module's exported class map from the server bundle and from
            the client bundle; diff; each difference is a mismatch.
-      ii.  Playwright (Chromium, Firefox and WebKit) on the prod build and on the dev server: load /, use both
-           islands; collect console errors and page errors; every React hydration-mismatch message is counted.
+      ii.  Playwright on Chromium (Firefox and WebKit where available; where not, record
+           `hydrationErrorsByEngine: { chromium: n, firefox: null, webkit: null }`, `null` meaning not measured) on
+           the prod build and on the dev server: load /, use both islands; collect console errors and page errors;
+           every React hydration-mismatch message is counted. The verdict uses Chromium's count and the ADR states
+           the gap in one line; P1.26's `hydration_errors_all_engines` re-checks all three engines on the real app
+           (waiting for P1.26 would deadlock: it depends on P1.20 through P1.25, P1.24, P1.22 and P1.21).
            Each run's raw Playwright JSON report is saved and listed in rawReports.
       iii. Box's computed style on / differs from an unstyled <div> (proves the CSS was linked for SSR).
    c. CSP: on the prod build (Chromium; Trusted Types is Chromium-only), count console messages containing
@@ -3401,7 +3473,8 @@ changes in an ADR.
    rule; the verdict; the consequences table below; which spike files P1.23 carries over; the dev-only
    deviations, each marked dev-only (for example a dev CSP that adds connect-src ws: for HMR, or a dev-only
    flash of unstyled content); and the re-measure rule (P1.23's CI warns when its glue exceeds the accepted
-   number).
+   number); and a "Re-checks" line: P1.26's `hydration_errors_all_engines` re-checks the hydration count on all
+   three engines, and a failure there reopens this ADR, never silenced.
 ```
 
 Outcome → later steps that change:
@@ -3905,12 +3978,12 @@ GET /assets/<file>:
 - `csp_no_violations` (Playwright Chromium, production build): interacting with a demo island → zero console
   messages about CSP or Trusted Types.
 - `island_budget_check`: fixture chunk of 16 KB gzipped → exit 1.
-- `glue_line_warning`: `count-glue-lines apps/web/src/islands/runtime` reported; above the ADR number → CI warning.
+- `glue_line_warning`: `count-glue-lines apps/web/src/islands/runtime` (`scripts/budgets/count-glue-lines.ts`, P1.20) reported; above the ADR number → CI warning.
 - `island_import_boundary`: fixture island importing `infrastructure/postgres` → dependency-cruiser violation.
 - `jsx_style_prop_rejected`: fixture component with `style={{ color: "red" }}` → lint error.
 
 **Reuse** (all provisional — for reuse review):
-- Spike glue `spikes/p1-20-hono/src/glue/*` → SALVAGE candidate only if the reuse reviewer confirms it meets this
+- Spike glue `spikes/p1-20-hono/src/glue/*` (on the `spike/p1-20` tag, never on main) → SALVAGE candidate only if the reuse reviewer confirms it meets this
   step; expected changes: registry from the file convention, the `SPIKE_INSTRUMENT` flag removed, tests added.
 - Prototype: no island runtime (Next.js) → none.
 - `app/src/lib/csp.ts:1-49` → LESSON: `wasm-unsafe-eval` and Matrix `connect-src` on every route is the
@@ -4416,6 +4489,9 @@ Any step fails → job fails; required check on main.
 - `assert_tests_ran_skip_fails`: report with one skipped test without reason → exit 1.
 - `lhci_no_public_upload`: config test asserts `upload.target === "filesystem"`.
 - `reflow_320`: real pages have `scrollWidth ≤ clientWidth` at 320 px.
+- `hydration_errors_all_engines`: on the real app, Chromium, Firefox and WebKit load a page with islands, and the
+  count of hydration errors is 0 in each. A failure reopens the P1.20 ADR; it is never silenced (book edit
+  2026-10-06-p120-split-and-browsers).
 
 **Reuse** (all provisional — for reuse review):
 - Prototype Playwright setup (`app/e2e/` if present) → LESSON at most; its pages and selectors are Next.js-specific.
@@ -6350,7 +6426,7 @@ its fake (P2.16); storing the API key (P5.06).
    kit showcase in both themes; the Android fallback-font check of P1.26; records results.
 5. Record the open Alex answers (P1a-A1, P1a-A2, P1b-A1–P1b-A5; plan issue 19 for P1.33a is settled by decision 24) and their status; a provisional default still in force is listed as such.
 6. phase-metrics: LOC per package (non-test, non-generated), direct and transitive dependency counts, glue
-   lines (count-glue-lines with its config rule), JS and CSS budgets (per bundle and per page) → compared with §4
+   lines (count-glue-lines, `scripts/budgets/count-glue-lines.ts`, with its config rule), JS and CSS budgets (per bundle and per page) → compared with §4
    targets; over target → listed, not failing.
 7. Write docs/human/phase-exits/phase-1.md: each criterion → evidence link; open items carried to Phase 2.
 ```

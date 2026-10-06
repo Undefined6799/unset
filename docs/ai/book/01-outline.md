@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 74 steps: 57 from `phase-1.md`, 17 from `phase-2.md` (including the
+Depth: **build-ready**. 75 steps: 58 from `phase-1.md`, 17 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -135,6 +135,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.01s | Semgrep custom rules: computed imports and floating promises (parallel-safe) | [SEC] | P1.01, P0.07 | `phase-1.md` |
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
+| P1.03w | Fixed-word string fields in `shared/log` (SE-7 ruling) | [SEC] | P1.03 | `phase-1.md` |
 | P1.04l | Name the HTTP server kit's log events (split from P1.04k, SE-6) | — | P1.03 | `phase-1.md` |
 | P1.04q | Route registration guard (split from P1.04k, SE-6) | — | P0.09c | `phase-1.md` |
 | P1.04k | HTTP server kit in `shared/http/` (split from P1.04, SE-6) | — | P1.03, P1.04l | `phase-1.md` |
@@ -213,6 +214,7 @@ flowchart TD
   P1_03["P1.03 Error model"]
   P1_04["P1.04 HTTP server skeleton per"]
   P1_04k["P1.04k HTTP server kit in shared/http/"]
+  P1_03w["P1.03w fixed-word log fields"]
   P1_04l["P1.04l HTTP kit log events"]
   P1_04q["P1.04q route registration guard"]
   P1_04c["P1.04c composition root guard"]
@@ -355,6 +357,7 @@ flowchart TD
   P1_29 --> P2_13a
   P1_30 --> P2_13a
   P1_03 --> P1_04k
+  P1_03 --> P1_03w
   P1_03 --> P1_04l
   P1_04l --> P1_04k
   P1_04q --> P1_04
