@@ -20,7 +20,9 @@ function rulesIn(yaml: string): Map<string, string> {
 }
 
 test("rule_files_exist", () => {
-  expect(ruleFiles.sort()).toEqual(expect.arrayContaining(["computed-import.yml", "floating-promises.yml"]));
+  expect(ruleFiles.sort()).toEqual(
+    expect.arrayContaining(["computed-import.yml", "floating-promises.yml", "pool-access.yml", "transactions.yml"]),
+  );
 });
 
 describe.each(ruleFiles)("%s", (file) => {
@@ -55,6 +57,10 @@ test("spec_fixture_sets_exist", () => {
     "literal_import_passes",
     "floating_promise_fails",
     "handled_promise_passes",
+    "transaction_control_fails",
+    "plain_queries_passes",
+    "pool_access_fails",
+    "client_access_passes",
   ])
     expect(sets, name).toContain(name);
 });
@@ -63,6 +69,31 @@ test("computed_import_fixtures_cover_apps_and_domains", () => {
   const files = fixturesUnder(join(RULES_DIR, "fixtures")).filter((f) => f.set === "computed_import_fails");
   expect(files.some((f) => f.file.includes("/apps/web/"))).toBe(true);
   expect(files.some((f) => f.file.includes("/domains/identity/"))).toBe(true);
+});
+
+/** The `paths.exclude` entries of one rule file's only rule. */
+const excludesOf = (file: string): string[] => {
+  const block = text(file).match(/^\s+paths:\s*\n\s+exclude:\s*\n((?:\s+- .*\n)+)/m)?.[1] ?? "";
+  return [...block.matchAll(/- "?([^"\n]+)"?/g)].map((m) => m[1] ?? "");
+};
+
+// DM-2 (P1.11q): the fixture runner strips `paths`, so the one file allowed to open a transaction is read here.
+test("transactions_only_in_tx", () => {
+  expect(declaredRuleIds(text("transactions.yml"))).toEqual(["transactions-only-in-tx"]);
+  expect(excludesOf("transactions.yml").filter((p) => !EXCLUDES.includes(p))).toEqual([
+    "/infrastructure/postgres/tx.ts",
+  ]);
+  const fails = fixturesUnder(join(RULES_DIR, "fixtures")).filter((f) => f.set === "transaction_control_fails");
+  expect(fails.some((f) => f.file.includes("/domains/x/"))).toBe(true);
+  expect(fails.some((f) => f.file.includes("/infrastructure/postgres/other.ts"))).toBe(true);
+});
+
+// P1.11 Outputs: pool.connect( and pool.query( live only in pool.ts; the same exclusion check as above.
+test("pool_access_single_file", () => {
+  expect(declaredRuleIds(text("pool-access.yml"))).toEqual(["pool-access-single-file"]);
+  expect(excludesOf("pool-access.yml").filter((p) => !EXCLUDES.includes(p))).toEqual([
+    "/infrastructure/postgres/pool.ts",
+  ]);
 });
 
 test("floating_promises_message_says_not_type_aware", () => {
