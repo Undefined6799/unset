@@ -46,11 +46,12 @@ export type ResolveOptions = {
   timeoutMs?: number;
   /** The caller's deadline (RE-1): aborting it ends the lookup with `egress.dns_timeout`. */
   signal?: AbortSignal;
-  /**
-   * A stub for the whole resolver, both modes (DNS is an unmanaged dependency). Its answers are vetted the same way.
-   */
+};
+/** Test seams (DNS is an unmanaged dependency), never exported from the package: product code cannot set them. */
+export type ResolveSeams = {
+  /** A stub for the whole resolver, both modes. Its answers are vetted the same way. */
   lookup?: (host: string) => Promise<LookupAnswer>;
-  /** The c-ares resolver for public names; tests pass a stub. Unused when `lookup` is given. */
+  /** The c-ares resolver for public names. Unused when `lookup` is given. */
   createResolver?: (options: ResolverOptions) => AddressResolver;
 };
 
@@ -87,7 +88,7 @@ const caresLookup =
   };
 
 /** The stub when given; otherwise c-ares for public names and `dns.lookup` for private ones. */
-function lookupFor(policy: { allow: "public" | "private" }, options: ResolveOptions): Lookup {
+function lookupFor(policy: { allow: "public" | "private" }, options: ResolveOptions & ResolveSeams): Lookup {
   if (options.lookup) return options.lookup;
   if (policy.allow === "private") return systemLookup;
   const create = options.createResolver ?? ((o: ResolverOptions) => new Resolver(o));
@@ -138,10 +139,23 @@ const isLookupName = (name: string): boolean => name !== "" && ![...name].some((
  * Errors (NetGuardError): `egress.dns_timeout`, `egress.dns_no_record` (a public name with no address, P2.01m),
  * `egress.dns_failed` (error, empty or malformed answer, unusable name), `egress.private_address`.
  */
-export async function resolveVetted(
+export function resolveVetted(
   host: string,
   policy: { allow: "public" | "private" },
   options: ResolveOptions = {},
+): Promise<string[]> {
+  const { timeoutMs, signal } = options; // only these: a seam never arrives through the public entry
+  return resolveVettedWith(host, policy, {
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+}
+
+/** `resolveVetted` with its test seams; not exported from the package. */
+export async function resolveVettedWith(
+  host: string,
+  policy: { allow: "public" | "private" },
+  options: ResolveOptions & ResolveSeams = {},
 ): Promise<string[]> {
   if (options.signal?.aborted) throw new NetGuardError("egress.dns_timeout");
   const name = normaliseHost(host);

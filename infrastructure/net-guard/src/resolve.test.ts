@@ -1,5 +1,8 @@
+import { Resolver } from "node:dns/promises";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { type AddressResolver, NetGuardError, pinnedLookup, resolveVetted } from "../index.ts";
+import { NetGuardError, pinnedLookup, resolveVetted as resolvePublicEntry } from "../index.ts";
+// The seamed entry: most cases stub the resolver, which the package entry does not accept (P2.01m).
+import { type AddressResolver, resolveVettedWith as resolveVetted } from "./resolve.ts";
 
 type Answer = { address: string; family: number }[];
 const answering = (...addresses: string[]) => {
@@ -23,6 +26,7 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("resolveVetted", () => {
@@ -283,5 +287,36 @@ describe("resolveVetted on c-ares (public names, P2.01m)", () => {
     const { createResolver, seen } = caresAnswering(["1.1.1.1"], []);
     expect(await resolveVetted("93.184.215.14", { allow: "public" }, { createResolver })).toEqual(["93.184.215.14"]);
     expect(seen.built).toEqual([]);
+  });
+});
+
+describe("default resolvers, no seam (P2.01m)", () => {
+  // The seams above could hide a regression to the threadpool path, so these use the package entry with nothing
+  // stubbed but the c-ares Resolver's own methods: no network, and dns.lookup still runs for real.
+  test("public_mode_calls_only_cares", async () => {
+    const v4 = vi.spyOn(Resolver.prototype, "resolve4").mockResolvedValue(["93.184.215.14"]);
+    const v6 = vi.spyOn(Resolver.prototype, "resolve6").mockResolvedValue([]);
+    // `.invalid` never resolves through dns.lookup, so this answer can only have come from c-ares.
+    expect(await resolvePublicEntry("only-cares.invalid", { allow: "public" })).toEqual(["93.184.215.14"]);
+    expect(v4).toHaveBeenCalledWith("only-cares.invalid");
+    expect(v6).toHaveBeenCalledWith("only-cares.invalid");
+  });
+
+  test("private_mode_calls_only_lookup", async () => {
+    const v4 = vi.spyOn(Resolver.prototype, "resolve4");
+    const v6 = vi.spyOn(Resolver.prototype, "resolve6");
+    // localhost comes from /etc/hosts through dns.lookup; c-ares is never asked.
+    expect(await resolvePublicEntry("localhost", { allow: "private" })).toContain("127.0.0.1");
+    expect(v4).not.toHaveBeenCalled();
+    expect(v6).not.toHaveBeenCalled();
+  });
+
+  test("package_entry_ignores_seams", async () => {
+    const v4 = vi.spyOn(Resolver.prototype, "resolve4").mockResolvedValue(["93.184.215.14"]);
+    vi.spyOn(Resolver.prototype, "resolve6").mockResolvedValue([]);
+    const lookup = async () => [{ address: "10.0.0.1", family: 4 }];
+    const options = { lookup } as Parameters<typeof resolvePublicEntry>[2];
+    expect(await resolvePublicEntry("a.example.com", { allow: "public" }, options)).toEqual(["93.184.215.14"]);
+    expect(v4).toHaveBeenCalled();
   });
 });
