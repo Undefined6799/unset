@@ -11,7 +11,7 @@
     "sheetSha256": "d1a59b6575b3b68fb1ce1d50bbebf6a4ab58cd85f27f8c15f02923438e2da998",
     "props": "AvatarProps",
     "variants": ["size=24", "size=40", "size=64", "size=128"],
-    "status": "p1.24s"
+    "status": "built"
   },
   "Button": {
     "sheet": "sheet/components/Button/README.md",
@@ -60,7 +60,7 @@
     "sheetSha256": "eded74473ca72d6c5597d268fff7d7fa0c86ff706c7de9165866856387f3b122",
     "props": "DescriptionListProps",
     "variants": [],
-    "status": "p1.24s"
+    "status": "built"
   },
   "FeedMore": {
     "sheet": "sheet/components/FeedMore/README.md",
@@ -123,7 +123,7 @@
     "sheetSha256": "1622d0491fb303471c3867b6e1dcd92810c8b623c82478de4d13acce6d244401",
     "props": "MediaFrameProps",
     "variants": ["ratio=1:1", "ratio=4:5", "ratio=9:16", "ratio=16:9", "ratio=3:1"],
-    "status": "p1.24s"
+    "status": "built"
   },
   "Modal": {
     "sheet": "sheet/components/Modal/README.md",
@@ -144,7 +144,7 @@
     "sheetSha256": "3a2a06bce8d46cdc14deeb413bda0900ecf3656a537d61bef53a2db1b42c750d",
     "props": "PaginationProps",
     "variants": [],
-    "status": "p1.24s"
+    "status": "built"
   },
   "Progress": {
     "sheet": "sheet/components/Progress/README.md",
@@ -179,7 +179,7 @@
     "sheetSha256": "08d187737a974cf026c2e4606c302b8a8c6a630931951bb0b4e004d7ad403faf",
     "props": "SkipLinkProps",
     "variants": [],
-    "status": "p1.24s"
+    "status": "built"
   },
   "Spinner": {
     "sheet": "sheet/components/Spinner/README.md",
@@ -193,7 +193,7 @@
     "sheetSha256": "27922fb253951cb32fa480959a60558d66fed300ff2fc84994af486f56275929",
     "props": "SwitchProps",
     "variants": [],
-    "status": "p1.24s"
+    "status": "built"
   },
   "Table": {
     "sheet": "sheet/components/Table/README.md",
