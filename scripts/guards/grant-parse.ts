@@ -171,9 +171,13 @@ function classifyPolicy(c: Cursor, ctx: Context): Verdict {
   return table === null ? UNCLASSIFIED : onObject(ctx.created.has(key("rel", table)), "policy");
 }
 
+/** A schema name is one identifier and never resolves through search_path, so it is read with `ident()`, not the
+ * qualified `name()` (P0.09m). Anything after it (AUTHORIZATION, an element) is not a plain create, and neither is a
+ * bare AUTHORIZATION read as the name. */
 function classifyCreateSchema(c: Cursor): Verdict {
   c.accept("if", "not", "exists");
-  return c.name() !== null && c.done ? NEUTRAL : UNCLASSIFIED;
+  const keyword = c.isWord("authorization");
+  return c.ident() !== null && !keyword && c.done ? NEUTRAL : UNCLASSIFIED;
 }
 
 function classifyCreate(c: Cursor, stmt: Statement, ctx: Context): Verdict {
