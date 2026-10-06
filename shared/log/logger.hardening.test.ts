@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { createLogger, type LogFields } from "./index.ts";
+import { createLogger, type LogFields, scrub } from "./index.ts";
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -18,11 +18,9 @@ function capture(env: "dev" | "test" | "prod" = "test") {
   return { log, lines, records };
 }
 
-const reasonOf = (value: string): string => {
-  const { log, records } = capture();
-  log.info("config.unknown_keys", { reason: value });
-  return String(records()[0]?.reason);
-};
+// Since P1.03w the word fields refuse any non-word outright; scrub still guards stack frame paths and any free
+// string field, so its cases are checked on scrub itself.
+const reasonOf = (value: string): string => scrub(value);
 
 describe("logger hardening", () => {
   test("logger_survives_closed_pipe", () => {
