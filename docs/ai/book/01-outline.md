@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 94 steps: 76 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 95 steps: 77 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -136,6 +136,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 |---|---|---|---|---|
 | P1.01 | Workspace skeleton | — | P0.05 | `phase-1.md` |
 | P1.01s | Semgrep custom rules: computed imports and floating promises (parallel-safe) | [SEC] | P1.01, P0.07 | `phase-1.md` |
+| P1.01q | References test robust under the full suite (check step; 20 s per-test timeout) | — | — | `phase-1.md` |
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
 | P1.03w | Fixed-word string fields in `shared/log` (SE-7 ruling) | [SEC] | P1.03 | `phase-1.md` |
@@ -232,6 +233,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 ```mermaid
 flowchart TD
   P1_01["P1.01 Workspace skeleton"]
+  P1_01q["P1.01q References test timeout"]
   P1_02["P1.02 Typed config loader per entrypoint"]
   P1_03["P1.03 Error model"]
   P1_04["P1.04 HTTP server skeleton per"]

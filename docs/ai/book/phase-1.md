@@ -485,6 +485,22 @@ the Phase 0 thread:
 
 ---
 
+### P1.01q — References test robust under the full suite (check paths, kind/build)
+Tags: —            Depends on: —            Plan: book edit 2026-10-06-p101q-references-test-timeout
+Why: `scripts/workspace/references.test.ts` › `every_ts_file_is_typechecked` runs two real typecheck passes and timed
+  out at vitest's 5 s default under the full push-to-main suite, turning main red at 6d19089 and e4c33f1 (2026-10-06).
+Where: `scripts/workspace/references.test.ts` only (check path, SE-6; neutral, cleared by the coordinator). A per-test
+  timeout sized from a measurement with about 3× headroom, stated in the PR body; never unbounded. Not allowed: skipping,
+  weakening, retrying or moving the test, changing an assertion, or a global `testTimeout` in the root
+  `vitest.config.ts`.
+As built (#353, merged 2026-10-06): option (b), a 20 s per-test timeout; measured 3.5 s alone and up to 5.7 s inside the
+  full suite.
+Done when: the test passes in the full suite locally; the PR's CI is green; the first push-to-main run after merge is
+  green on that test.
+Diagram: none.
+
+---
+
 ### P1.02 — Typed config loader per entrypoint
 Tags: [SEC]            Depends on: P1.01            Plan: §2 rule 24, §4 platform row, §9 ("one config"); review 07 §4 (no `required:false` secrets)
 Where: `shared/config/{schema.ts,load.ts,secret.ts,index.ts}` + tests; each `interfaces/<x>/config.ts` declaring
