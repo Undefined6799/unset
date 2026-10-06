@@ -1,0 +1,26 @@
+{
+  "name": "spike-p1-20-hono",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/dev.ts",
+    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/server",
+    "start": "node dist/server/entry-server.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.1.1",
+    "hono": "4.13.10",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@hono/vite-dev-server": "0.26.1",
+    "@types/node": "^26.6.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.2",
+    "playwright-core": "1.56.1",
+    "vite": "8.3.1"
+  }
+}
