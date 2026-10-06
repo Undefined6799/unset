@@ -4419,7 +4419,8 @@ Diagram: none.
 ---
 
 ### P1.23v — CSS Modules check config (check paths, kind/build)
-Tags: [SEC] [ALEX]            Depends on: P1.23f            Plan: ADR 0015; architecture Amendment 20:20Z
+Tags: [SEC] [ALEX]            Depends on: P1.23f            Plan: ADR 0015; architecture Amendments 20:20Z, 20:55Z,
+  21:05Z
 Why: Vitest 5.0.2 replaces `generateScopedName` unless `test.css.modules.classNameStrategy` is `"scoped"`, and proxies
   `.module.css` without `test.css.include`; the depcruise app row allows no core modules and TOOLING covered only root
   `*.config.ts`.
@@ -4427,16 +4428,27 @@ Where:
   - Root `vitest.config.ts` gains `css.modules.generateScopedName` imported from `scripts/ui/css-scope.ts`, and
     `test.css` with `include: [/\.module\.css$/]` and `modules.classNameStrategy: "scoped"`. This weakens no check;
     the coordinator cleared it as a tightening.
-  - `scripts/lint/.dependency-cruiser.cjs`: TOOLING widens to exactly `^apps/[^/]+/vite\.config\.ts$` (a Vite config is
-    Node build tooling that never reaches the browser). Only the root `vitest.config.ts` and `apps/<app>/vite.config.ts`
-    may import `css-scope.ts`. Rejected: moving the web config to the root (against the root tidy, #42) and a pure-JS
-    sha256 in `shared/` (a second hash implementation).
+  - `scripts/lint/.dependency-cruiser.cjs`: TOOLING widens to exactly `^apps/[^/]+/vite\.config\.ts$`
+    (`APP_BUILD_CONFIG`; a Vite config is Node build tooling that never reaches the browser). Only the root
+    `vitest.config.ts` and `apps/<app>/vite.config.ts` may import `css-scope.ts`. Rejected: moving the web config to
+    the root (against the root tidy, #42) and a pure-JS sha256 in `shared/` (a second hash implementation).
+  - **Three rule lines implement the one approved allowance (Amendment 20:55Z):** (a) `app-only-shared` gains
+    `pathNot: APP_BUILD_CONFIG`; (b) new `app-build-config-not-imported`: nothing imports a `vite.config.ts`; (c) new
+    `app-build-config-imports`: an `APP_BUILD_CONFIG` file may import only Node built-ins, npm packages, its own app,
+    `shared/` and exactly `scripts/ui/css-scope.ts`. (a) alone would open the config to every folder; (c) closes it
+    back down, so the net effect is exactly the approved one. The PR body says "three rule lines implement the one
+    approved allowance".
+  - `scripts/tsconfig.json` references `scripts/ui` and includes exactly `../apps/*/vite.config.ts` (the configs are
+    tooling, so the tooling project typechecks them; `apps/web`'s own project keeps excluding `vite.config.ts`;
+    Amendment 21:05Z). `run.test.ts`'s fixture copy follows; `architecture.md` gains one rule-table row each for (b)
+    and (c).
   - `[ALEX]`: the TOOLING line is a loosening, so this step needs Alex's typed word naming the change and the branch,
-    verified first-hand before it opens.
+    verified first-hand before it opens (given 2026-10-06 20:39Z, "1 yes"; (a) to (c) sit inside it).
 Done when (fixtures in `depcruise.test.ts`): `apps/web/vite.config.ts` importing `node:crypto` and
   `scripts/ui/css-scope.ts` passes; an app source file importing `node:crypto` fails; an app source file importing
   `scripts/ui/css-scope.ts` fails; any file importing `apps/web/vite.config.ts` fails; `apps/web/src/vite.config.ts`
-  (not at the app root) is not tooling and fails on `node:crypto`.
+  (not at the app root) is not tooling and fails on `node:crypto`; the config importing `scripts/guards/<any>.ts`
+  fails; the config importing `domains/` fails; the config importing `apps/<other>/` fails.
 Diagram: none.
 
 ---
@@ -4450,8 +4462,13 @@ Where (product paths only): `apps/web/vite.config.ts` and the document glue.
   - **Scoped names.** One `generateScopedName` (`scripts/ui/css-scope.ts`, from P1.23f: sha256 of the
     repo-relative POSIX path and class name), shared by the client build, the SSR build and Vitest.
   - **Production server render.** A Vite SSR build (`build.ssr`) of `apps/web`'s render entry from the same config,
-    loaded by `interfaces/http` through one loader that fails startup if the output is missing. Vitest keeps importing
-    source. No Vite or dev server at runtime, and no hand-built class map.
+    loaded by `interfaces/http` through one loader that fails startup if the output is missing or malformed. Vitest
+    keeps importing source. No Vite or dev server at runtime, and no hand-built class map.
+  - **Fixed server-build path (Amendment 21:05Z).** The loader resolves the server build at a fixed path relative to
+    the built `interfaces/http` entry; no `WEB_RENDER_DIR` or other environment key (a configurable code-loading path
+    buys nothing). Production never reaches source: `interfaces/http` imports only the loader, which `import()`s the
+    fixed built file, and the production entry's static import graph holds no `apps/` module. The mode is decided by
+    which entry runs, never by an environment flag.
   - **Styles.** One styles entry imports every CSS Module. The document links the client manifest's css entries as
     `/assets/<hash>.css` through P1.23's exact-name route; no inline styles, so the CSP is unchanged.
   - **P1.27's image** runs both builds and ships only their outputs (`prod_image_has_ssr_build_only`).
@@ -4462,7 +4479,8 @@ Order: P1.23f, P1.23v, P1.23c, then P1.24 and P1.24s; P1.24i, P1.24h and P1.24q 
 Done when (tests): `ssr_class_equals_client_selector`, `scoped_name_deterministic` (client build, SSR build and Vitest
   agree), `ssr_loader_fails_startup_when_missing`, `document_links_manifest_css` (exact hashed names; nothing unknown
   served), `no_inline_style_in_document`, `scoped_names_unique` (eight hex digits is 32 bits, so a collision would
-  be silent: the build fails if two distinct path and class pairs share a scoped name); the SSR loader wired in `interfaces/http`; the glue count recorded; local
+  be silent: the build fails if two distinct path and class pairs share a scoped name), `prod_entry_imports_no_app_source`
+  (walks the production entry's import graph and fails on any `apps/` path); the SSR loader wired in `interfaces/http`; the glue count recorded; local
   pr-shape classes it as product.
 Diagram: none.
 
@@ -5222,7 +5240,8 @@ nothing written to the lock).
 - `prod_image_has_no_dev_server`: the image is built with production dependencies only, and no dev server package
   is present or imported by any production entry (book edit 2026-10-06-p123-shape).
 - `prod_image_has_ssr_build_only`: the image build runs both Vite builds (client and SSR, P1.23c) and ships only their
-  outputs.
+  outputs, with the server build copied to the fixed path relative to the built `interfaces/http` entry that P1.23c's
+  loader resolves (no environment key).
 - `image_health_ok`: container started with test env → `/health` 200 within 20 s.
 - `trivyignore_expiry_enforced`: expired entry → fails; missing reason → fails.
 - `lock_covers_compose_images`: every `image:` in compose files resolves to a lock entry that points at our
