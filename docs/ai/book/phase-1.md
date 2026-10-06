@@ -2157,8 +2157,9 @@ Spec: P1.11's "Test databases" bullet (the TE-2 conditions) and its tests `query
   elsewhere, this step follows it.
 Ruling 2026-10-06 03:15Z (architecture, p111t-test-db-roles-budget-vitest):
   - Before P1.12, test files may use per-file clones with `migrator` credentials, never the superuser. `migrator` owns
-    the schemas, so until P1.12 no test may assert a permission outcome. P1.12 switches to `web`, `api` and `indexer`
-    in the PR that creates them and adds `test_files_connect_as_process_role`.
+    the schemas, so until P1.12 no test may assert a permission outcome. P1.12 creates `web`, `api` and `indexer`, and
+    P1.12t, right after it, switches the test connections to them and adds `test_files_connect_as_process_role`
+    (book edit 2026-10-06-p112-split: tests outside a `postgres` path segment cannot ride P1.12's trusted-base PR).
   - `migrate.test.ts` and `postgres-helper.test.ts` use `tests/support/postgres.ts` directly. `pool.test.ts` creates
     throwaway roles as `migrator`, each with a random `t_` prefix, dropped in teardown, never granted `SUPERUSER`,
     `CREATEROLE` or `BYPASSRLS`.
@@ -2205,10 +2206,39 @@ Done when (tests): `integration_global_setup_file_exists`: every `globalSetup` p
 
 ### P1.12 — Roles and grants, the role roster, default privileges, grant-matrix test
 Tags: [SEC]            Depends on: P1.11p, P1.11w            Plan: §5.2 (roles map to processes; grant-matrix test), §5.7 (`admin`, `retention` roles), §6.1 (CIS Postgres)
-Where: `infrastructure/postgres/migrations/0002_roles_and_schemas.sql`, `infrastructure/postgres/roles.json`,
-  `infrastructure/postgres/grant-matrix.json`, `tests/integration/postgres/grants.test.ts` (password sync is **P1.12p**:
-  this PR is all role and grant statements, so it is trusted base and carries nothing else; SE-6 as ruled 2026-10-04)
+Where: `infrastructure/postgres/migrations/0002_schemas.sql` (the four schemas) and
+  `infrastructure/postgres/migrations/0003_roles_and_grants.sql` (one combined `0002` is equally fine, Phase 1's
+  choice, as long as the schemas exist before the grants that name them), `infrastructure/postgres/roles.json`,
+  `infrastructure/postgres/grant-matrix.json`, `tests/integration/postgres/grants.test.ts` on a container of its own
+  (password sync is **P1.12p**; switching the other tests to the process roles is **P1.12t**: this PR is all schema,
+  role and grant statements, so it is trusted base and carries nothing else; SE-6 as ruled 2026-10-04)
 Size: ~140 lines SQL, ~30 source lines, ~200 test lines
+
+Split (book edit 2026-10-06-p112-split, ruling 13:01Z): a bare `CREATE SCHEMA` reads as trusted to the grant guard
+(see P0.09m), so the schemas ride here and the short-lived prelude P1.12s is withdrawn; the id P1.12s is retired and
+not reused. Tests outside a `postgres` or `migrations` path segment cannot ride a trusted-base PR
+(`scripts/guards/trusted-base.ts`, `ridesAlong`), so `tests/integration/setup/pg.setup.ts` and
+`query-budget.test.ts` move to the process roles in **P1.12t**, right after this step. Order: P1.11w, P1.12, P1.12t,
+P1.13; P1.12p goes beside P1.12t.
+
+Architecture's rulings (2026-10-06 12:55Z and 13:10Z, book edit 2026-10-06-p112-roles-passwords-schema-owner; PG 18
+docs for ALTER ROLE, CREATE ROLE, createrole_self_grant, ALTER SCHEMA and ALTER DEFAULT PRIVILEGES, read 2026-10-06):
+  - **No password-setting function.** P1.12 creates no `set_role_password` or other definer helper and grants no
+    EXECUTE for one. `migrator` is `CREATEROLE` and created the login roles, so it already holds ADMIN OPTION on them;
+    a definer function would add a standing object that sets any role's password by name, and dynamic SQL whose error
+    CONTEXT line can carry the password into the server log. P1.12p is code.
+  - **`audit` schema:** created by `migrator`, USAGE granted, then `ALTER SCHEMA audit OWNER TO audit_owner`, all in
+    one migration (one transaction). The owner change needs SET on `audit_owner`, which the membership below gives.
+    `migrator` keeps SET, since P1.15, P1.15a and P3.07g create and grant audit objects under `SET ROLE audit_owner`;
+    a revoke would stop nobody, because `migrator` created `audit_owner` and holds ADMIN OPTION on it (PG 18,
+    createrole_self_grant). The real boundary is the custody of `migrator`'s credential, plus P1.15's accepted edge
+    case.
+  - **Global routine default:** `ALTER DEFAULT PRIVILEGES FOR ROLE migrator REVOKE EXECUTE ON ROUTINES FROM PUBLIC`
+    (global, because a per-schema default cannot revoke a global grant). Any other role that creates objects
+    (`audit_owner` through SET ROLE) gets the same line FOR ROLE itself, in the migration that first lets it create.
+  - **`passwordFrom`:** `pg_web_password`, `pg_api_password` and `pg_indexer_password`; every other role `null` until
+    its owning step. `null` means no password, and a LOGIN role with none cannot authenticate under SCRAM-only
+    `pg_hba` (fail closed).
 
 Goal: each process connects as its own role, which can do exactly what the plan says and nothing more; the whole role
 roster later phases need exists from the start with no privileges until its owning step grants them; and a test fails
@@ -2217,7 +2247,8 @@ the build the moment any grant drifts from the checked-in matrix.
 Inputs: P1.11 (`migrator` with CREATEROLE, database `unset`, runner, `checkConnectionBudget`).
 Outputs:
   - Schemas (owned by `migrator`): `app` (app tables), `idx` (index tables; the one name used everywhere, never
-    `index`), `audit` (owned by `audit_owner`, P1.15), `types` (shared domains, P1.13/P1.14). Later: `plugin_<id>`.
+    `index`), `audit` (created here, then owned by `audit_owner`; its objects are P1.15's), `types` (shared domains,
+    P1.13/P1.14). Later: `plugin_<id>`.
   - `roles.json`, the **role roster** (one entry per role: `name`, `class`, `login`, `connectionLimit`, `settings`,
     `createdBy`, `grantsBy`, `passwordFrom` or `null`). All roles below are created by this migration, so later steps
     only add grants; a login role whose `passwordFrom` is `null` has no password and cannot log in until its owning
@@ -2256,7 +2287,8 @@ Outputs:
   - Default privileges, **narrowed** (column-list ruling; SE-6; plan §5.2 at `9c54e52`: "`ALTER DEFAULT PRIVILEGES`
     covers only tables with no personal data … no role's default privileges reach" a table with a row in
     `erasure-registry.json`): `ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA app GRANT USAGE, SELECT ON
-    SEQUENCES TO web;` and `REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC` as a default in every schema. **No `ON TABLES`
+    SEQUENCES TO web;` and, globally, `ALTER DEFAULT PRIVILEGES FOR ROLE migrator REVOKE EXECUTE ON ROUTINES FROM
+    PUBLIC` (architecture 12:55Z: a per-schema default cannot revoke a global grant). **No `ON TABLES`
     default privilege for any role in `app` or `idx`.** A default cannot tell a personal-data table from another at
     creation, and nearly every `app` and `idx` table carries a DID column, so the earlier table defaults (`web` on
     `app`; `web`, `api`, `indexer` on `idx`) are dropped; each table's creating step grants explicitly in its own
@@ -2281,19 +2313,19 @@ Outputs:
     column-level entry may carry `"rowPrivileges": ["DELETE"]`, the one table-level privilege allowed on a
     personal-data table (it reveals no column; a `WHERE` still needs SELECT on the columns it names). `TRUNCATE` and
     `TRIGGER` are never granted to a service or job role.
-  - `syncRolePasswords(cfg)` (built by P1.12p, specified here): run by the `migrate` service after migrations: for each roster role with a non-null
-    `passwordFrom`, read `/run/secrets/pg_<role>_password`, then `ALTER ROLE <role> PASSWORD <value>` built with
-    `format('%I', role)` and the password passed as a bind parameter to a definer helper (never concatenated); a
-    missing or empty file → exit 1, no role altered. Rotation = change the secret file and re-run `migrate`
-    (review 07 lesson 27).
+  - `syncRolePasswords(cfg)` (built by P1.12p, specified there): run by the `migrate` service after migrations on the
+    `migrator` connection, one `ALTER ROLE <ident> PASSWORD '<SCRAM verifier>'` per roster role with a non-null
+    `passwordFrom`; the verifier is computed client-side, so the cleartext never reaches the server. Rotation = change
+    the secret file and re-run `migrate` (review 07 lesson 27).
 
 Algorithm:
-  Migration `0002` (idempotent, because roles are cluster-global while P1.11 gives each test file its own database):
+  The role migration (`0003`, or the combined `0002`; idempotent, because roles are cluster-global while P1.11 gives each test file its own database):
   1. For each roster role: `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '<r>') THEN CREATE ROLE
      … ; END IF; END $$;` then `ALTER ROLE` to the roster attributes and settings (so a role created by an earlier test
      database is brought to the same state).
   2. `GRANT CONNECT ON DATABASE` through dynamic SQL on `current_database()`, never the literal `unset`.
-  3. Schemas, default privileges, baseline grants, the `audit_owner` membership.
+  3. Schemas (first, or in the earlier `0002_schemas.sql`), default privileges, baseline grants, the `audit_owner`
+     membership, then `ALTER SCHEMA audit OWNER TO audit_owner`.
   `grants.test.ts` (on a database migrated from scratch):
   4. Query `information_schema.role_table_grants`, `role_routine_grants`, `has_schema_privilege(role, schema,
      'USAGE'|'CREATE')`, `pg_roles` attributes, `pg_auth_members`, and `pg_db_role_setting`.
@@ -2347,8 +2379,8 @@ Threats: each process's database role: what a compromised process can read or ch
     (`roster_complete`).
 
 Done when (tests):
-  - test_files_connect_as_process_role (ruling 2026-10-06 03:15Z): `current_user` in a test file is never `migrator`
-    or the superuser; this PR switches test connections to `web`, `api` and `indexer`.
+  - (`test_files_connect_as_process_role` moved to P1.12t.)
+  - schemas_exist: `app`, `idx`, `audit` and `types` exist after migrating from scratch.
   - matrix_matches: steps 4–5 pass on a fresh database.
   - matrix_detects_extra_grant: a temp migration granting `api` SELECT on an `app` table → diff fails naming it.
   - personal_data_by_column_list (plan §5.2 at `9c54e52`; SE-6): the test also diffs `information_schema.
@@ -2376,9 +2408,15 @@ Done when (tests):
   - no_ddl_for_services: every service and job role → `CREATE TABLE` in each schema fails `42501`.
   - role_settings: as `web`, `SHOW statement_timeout` = `2s`; `SHOW search_path` = `""`.
   - no_password_no_login: a login role with `passwordFrom = null` (e.g. `review` today) cannot authenticate.
-  - rerun_in_second_database: run `0002` in two databases of the same cluster → both succeed (idempotent).
+  - rerun_in_second_database: run the role migration in two databases of the same cluster → both succeed (idempotent).
   - audit_owner_membership: `pg_auth_members` shows `migrator` in `audit_owner` with `set_option = true`,
     `inherit_option = false`.
+  - audit_schema_end_state (architecture 12:55Z): the exact `nspowner` and `nspacl` of `audit`, so a PostgreSQL that
+    rewrote ACLs differently on owner change fails CI instead of silently changing access.
+  - no_public_execute_on_routines: no routine outside `pg_catalog`, `information_schema` and extension-owned objects
+    has EXECUTE for PUBLIC, whoever created it.
+  - null_password_roles_have_none: as the container's setup superuser, `rolpassword` is NULL for every role whose
+    `passwordFrom` is `null`. The test checks presence only and never reads or prints a verifier.
   - (`password_sync` and `password_sync_missing_file` moved to P1.12p.)
   - plugin_schema_rule (decision 25): a temp migration creating `plugin_x` plus a role `plugin_x` whose `search_path` is
     not `plugin_x`, or which holds any privilege outside `plugin_x`, or a second service or job role with privileges on
@@ -2392,30 +2430,58 @@ Diagram: none.
 
 ---
 
+### P1.12t — Tests connect as the process roles (split from P1.12)
+Tags: —            Depends on: P1.12            Plan: TE-2; ruling 2026-10-06 03:15Z (P1.11t)
+Where: product: `tests/integration/setup/pg.setup.ts` (provides only the `web`, `api` and `indexer` credentials),
+  `tests/integration/query-budget.test.ts` (connects as `web`), `tests/integration/postgres/pool.test.ts` (moves to
+  a container of its own; it still creates throwaway `t_` roles, per ruling (b) of P1.11t), and the new test below.
+Why its own step: these files have no `postgres` or `migrations` path segment, so they cannot ride P1.12's trusted-base
+  PR (`scripts/guards/trusted-base.ts`, `ridesAlong`). It goes right after P1.12; P1.13 and every later step that
+  adds database tests depend on it.
+Done when (tests): test_files_connect_as_process_role (moved from P1.12): `current_user` in a test file is never
+  `migrator` or the superuser.
+
+---
+
 ### P1.12p — Role password sync (split from P1.12, SE-6)
-Tags: [SEC]            Depends on: P1.12            Plan: §5.2 (roles map to processes), §6.1 (CIS Postgres); review 07 lesson 27
-Where: `infrastructure/postgres/roles.ts` + `roles.test.ts`
+Tags: [SEC]            Depends on: P1.12, P0.09 (the carrier that lists `infrastructure/postgres/roles.ts` in
+  CODEOWNERS' trusted-base section)            Plan: §5.2 (roles map to processes), §6.1 (CIS Postgres); review 07 lesson 27
+Where: `infrastructure/postgres/roles.ts` + `roles.test.ts`. No migration. The module is trusted base (architecture
+  12:55Z), so its PR carries only it, its test and docs; the re-export from `infrastructure/postgres/index.ts` (or the
+  wiring at the composition root) follows in its own small product PR.
 Size: ~60 source lines, ~60 test lines
 
-Why a separate step (letter suffix): P1.12 is all role and grant statements, which are trusted base; this TypeScript is
-not, so it lands as its own PR right after (SE-6 as ruled 2026-10-04).
+Why a separate step (letter suffix): P1.12 is all schema, role and grant statements; this TypeScript is a different
+trusted-base file, so it lands as its own PR beside P1.12t.
 
 Goal: each login role whose roster entry names a password file gets that password, set safely, every time `migrate` runs.
-Inputs: P1.12 `roles.json` (`passwordFrom`), the definer helper P1.12's migration creates for it; P1.02 config.
-Outputs: `syncRolePasswords(cfg)` exactly as P1.12's Outputs specify it.
-Algorithm: for each roster role with a non-null `passwordFrom`, in roster order: read the secret file; all read first,
-  and any missing or empty → exit 1 before any `ALTER ROLE`; then set each password through the definer helper with the
-  role name quoted by `format('%I', …)` and the password as a bind parameter.
+Inputs: P1.12 `roles.json` (`passwordFrom`); P1.02 config. The `migrator` connection.
+Outputs: `syncRolePasswords(cfg)`.
+Algorithm (architecture 12:55Z; PG 18: "a password string already in … SCRAM-encrypted format … is stored as-is"):
+  1. Take role names only from `roles.json` entries whose `passwordFrom` is non-null. Check each against the role-name
+     shape and quote it as an identifier; any other name fails closed.
+  2. Read every secret from its file under `/run/secrets/`, never from argv or an env var; all read first, and any
+     missing or empty → exit 1 before any `ALTER ROLE`.
+  3. For each role, compute a SCRAM-SHA-256 verifier client-side with `node:crypto` (PBKDF2 with a random salt and at
+     least 4096 iterations, then HMAC and SHA-256), in the stored form
+     `SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`, and issue `ALTER ROLE <ident> PASSWORD '<verifier>'`. The
+     cleartext never reaches the server, a log or `pg_stat_activity`.
 Edge cases and failures: missing or empty file → exit 1, no role altered; a role in the roster but absent from the
-  cluster → exit 1 (P1.12's migration creates every roster role); the password never appears in a log line or error.
+  cluster → exit 1 (P1.12's migration creates every roster role); errors are logged by name as kind, never with a
+  secret (SE-7).
 Threats: the role passwords.
-  - I A password printed in a log or an error → never logged (`password_never_logged`).
-  - E A role name or password used to inject SQL → identifier quoted, password bound (`password_sync`).
+  - I A password reaches a log, an error or `pg_stat_activity` → only a verifier is ever sent
+    (`password_never_sent_cleartext`, `password_never_logged`).
+  - E A role name used to inject SQL, or a password set on a role outside the roster → name checked and quoted
+    (`unknown_role_refused`).
 Done when (tests):
-  - password_sync (moved from P1.12): write a new secret file, run `syncRolePasswords`, connect as `web` with the new
+  - scram_verifier_matches_vector: the verifier for a known password, salt and iteration count equals the reference.
+  - password_never_sent_cleartext: the statement holds a `SCRAM-SHA-256$` value, never the secret.
+  - unknown_role_refused: a name outside the roster, or not of the role-name shape → refused, nothing altered.
+  - password_sync (moved from P1.12): write a new secret file, run `syncRolePasswords`, log in as `web` with the new
     password → ok; old → fails.
   - password_sync_missing_file (moved from P1.12): missing `pg_api_password` → exit 1, no role altered.
-  - password_never_logged: captured logs across both tests hold neither password.
+  - password_never_logged: captured logs across the tests hold no password.
 Reuse: none.
 Not in this step: setting a role's `passwordFrom` (a role attribute: the owning step's `<id>g` grants step); the
 `migrate` service (P1.29).
@@ -2424,8 +2490,8 @@ Diagram: none.
 ---
 
 ### P1.13 — DID-column registry test reading `pg_catalog`
-Tags: —            Depends on: P1.12            Plan: §2 rule 11 ("erasure covers every table with a DID column"), §5.2 (the test reads `pg_catalog`), §6 (`eraseDid`)
-Where: `infrastructure/postgres/migrations/0003_types.sql`, `infrastructure/postgres/erasure-registry.json`,
+Tags: —            Depends on: P1.12t (a database test, so it connects as a process role)            Plan: §2 rule 11 ("erasure covers every table with a DID column"), §5.2 (the test reads `pg_catalog`), §6 (`eraseDid`)
+Where: `infrastructure/postgres/migrations/<next>_types.sql` (the next free number after P1.12's migrations), `infrastructure/postgres/erasure-registry.json`,
   `infrastructure/postgres/didColumns.ts`, `tests/integration/postgres/did-columns.test.ts`, `docs/human/db/erasure.md`
 Size: ~30 lines SQL, ~40 source lines, ~160 test lines
 
@@ -3816,6 +3882,8 @@ preload links (P1.25).
 
 ### P1.21l — CSS lint rules and the layer guard (split from P1.21, SE-6)
 
+Merged as #103.
+
 **Tags:** — · **Depends on:** P1.21 · **Plan:** §7 (Biome CSS rules, GritQL plugin), decision 16; rule SE-6
 
 **Where:** check paths only, kind/build: the `biome.json` CSS section; `scripts/lint/biome/token-only.grit` with
@@ -3847,6 +3915,15 @@ fallback faces and `tokens.css` is regenerated. Tests: those marked "In P1.21m",
 `font-metrics.json` reproduces the committed file. It does not depend on P1.21l (depcruise's tooling row already lets
 `scripts/ui` import `shared/ui`). P1.22 depends on it: base styles set the font stacks, and without metric-matched
 fallbacks the font swap shifts layout, which the CLS budget would catch late.
+
+**As built (default, confirmed by architecture 13:09Z; book edit 2026-10-06-p121-split, 13:08Z notes):**
+- Dev dependencies `@capsizecss/unpack` 4.0.1 and `@capsizecss/metrics` 4.3.0, both exact-pinned and MIT, three
+  packages in the closure.
+- Three fallback faces are emitted: Arial and Roboto for Space Grotesk, Courier New for JetBrains Mono. The Android mono
+  fallback (`local("Droid Sans Mono")`) is left out: its metrics are not in `@capsizecss/metrics` 4.3.0 and the proxy
+  blocks fetching the font. On Android the mono face therefore has no metric-matched fallback until the webfont loads,
+  so mono text alone may shift slightly on the swap. `tokens_android_fallback_faces` checks the faces that exist.
+- **P1.26 adds the missing metrics** (below). The build never invents metrics for a face.
 
 ---
 
@@ -4594,7 +4671,11 @@ accessibility, CSP violations, headers and budgets — and a page that is added 
   ≥24×24 on all interactive elements; reflow at 320 CSS px width with no horizontal scroll.
 - Manual pass (recorded in `docs/human/phase-exits/phase-1.md` by P1.38, not CI): on a real Android phone, check
   the fallback font faces of P1.21 apply (no visible layout jump while fonts load) and record the local() names
-  that worked.
+  that worked. The same pass adds the Droid Sans Mono metrics that P1.21m left out to
+  `shared/ui/tokens/font-metrics.json` and regenerates `tokens.css` with `node scripts/ui/tokens.ts` (architecture
+  13:09Z): the metrics come only from the real font file, measured by `scripts/ui/font-metrics.ts`, with the file's
+  source URL or device path and its sha256 recorded next to the entry; typed-in or secondary-source numbers are never
+  accepted. Until then the face stays omitted.
 - `pa11y-ci` over the same URL list (second engine, catches different issues).
 - Lighthouse CI: `lighthouserc.json` with budgets from §6.1 (JS, CSS, fonts per page), accessibility score
   assertion = 1, upload target `filesystem` only (never `temporary-public-storage`, which publishes reports).

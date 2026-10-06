@@ -22,13 +22,13 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 28 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a added 2026-10-06).
+Depth: **build-ready**. 29 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
 | P0.01 | Create the empty private repository and grant the Claude GitHub app access | [ALEX] | — | `phase-0.md` |
 | P0.02 | Push the bootstrap bundle tip and reconcile it with the revised plan | — | P0.01 | `phase-0.md` |
-| P0.03 | Ruleset on `main` (deferred until protection exists, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
+| P0.03 | Ruleset on `main` (unblocked by GitHub Pro 2026-10-06, awaiting Alex; deferred before that, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
 | P0.04 | Toolchain: TypeScript 7, Node 26, Vitest only, `.npmrc`, "discovered equals executed" | — | P0.03 | `phase-0.md` |
 | P0.05 | Lint stack: Biome CSS rules, dependency-cruiser on the swc parser, file-size and line-budget warnings | — | P0.04 | `phase-0.md` |
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
@@ -47,6 +47,7 @@ Depth: **build-ready**. 28 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.07a | Secrets job: per-PR range, public-key exception | [SEC] [ALEX] | P0.07, P0.09l | `phase-0.md` |
 | P0.09j | Guard fixtures isolate git from the caller's environment | — | P0.09g | `phase-0.md` |
 | P0.09k | Case-collision guard | — | P0.09j | `phase-0.md` |
+| P0.09m | Grant parser classifies one-part schema names (waits for Alex's typed word: a loosening) | [SEC] [ALEX] | P0.09e | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -54,7 +55,7 @@ Depth: **build-ready**. 28 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.12 | Offline key ceremony and the key inventory | [ALEX] [SEC] | ceremony: P0.10; agent PR: P0.04, P0.07 | `phase-0.md` |
 | P0.13 | Licence decision gates the first public commit (answered: AGPL-3.0 apps, MIT building blocks and lexicons; per-package licence files) | [STOP] (answered) | the question: —; ADR PR: P0.04, P0.07 | `phase-0.md` |
 | P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
-| P0.14 | Phase 0 exit: planted faults are blocked; protection drills wait until protection exists (decision 41) | [ALEX] (tail: drill D approval and merge) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
+| P0.14 | Phase 0 exit: planted faults are blocked; protection drills run once the ruleset is applied (GitHub Pro, 2026-10-06; no merge attempts) | [ALEX] (tail: applies the ruleset) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
 
 ```mermaid
 flowchart TD
@@ -79,6 +80,7 @@ flowchart TD
   P0_07a["P0.07a Secrets scan scope"]
   P0_09j["P0.09j Fixture git ignores hook env"]
   P0_09k["P0.09k Case-collision guard"]
+  P0_09m["P0.09m One-part schema names"]
   P0_10["P0.10 Secret scanning"]
   P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
@@ -107,6 +109,7 @@ flowchart TD
   P0_09g --> P0_09j
   P0_09i --> P0_09h
   P0_09j --> P0_09k
+  P0_09e --> P0_09m
   P0_09i --> P0_09l
   P0_07 --> P0_10
   P0_07 --> P0_11a
@@ -122,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 80 steps: 62 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 81 steps: 63 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -165,8 +168,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11v | Gated integration `globalSetup` in `vitest.config.ts` (split from P1.11t, SE-6) | — | P1.11p | `phase-1.md` |
 | P1.11w | Make the integration `globalSetup` unconditional | — | P1.11t, P1.11v | `phase-1.md` |
 | P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11p, P1.11w | `phase-1.md` |
-| P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12 | `phase-1.md` |
-| P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12 | `phase-1.md` |
+| P1.12t | Tests connect as the process roles (split from P1.12) | — | P1.12 | `phase-1.md` |
+| P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12, P0.09 (`roles.ts` in the trusted base) | `phase-1.md` |
+| P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12t | `phase-1.md` |
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.02, P1.12 | `phase-1.md` |
 | P1.15 | Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier | [SEC] | P1.12, P1.13 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.12, P1.13 | `phase-1.md` |
@@ -247,6 +251,7 @@ flowchart TD
   P1_11v["P1.11v Gated integration globalSetup"]
   P1_11w["P1.11w Unconditional globalSetup"]
   P1_12["P1.12 Roles and grants"]
+  P1_12t["P1.12t Tests on the process roles"]
   P1_12p["P1.12p Role password sync"]
   P1_13["P1.13 DID-column registry test reading"]
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
@@ -313,7 +318,8 @@ flowchart TD
   P1_11v --> P1_11w
   P1_11w --> P1_12
   P1_11p --> P1_12
-  P1_12 --> P1_13
+  P1_12 --> P1_12t
+  P1_12t --> P1_13
   P1_12 --> P1_14
   P1_13 --> P1_15
   P1_13 --> P1_16
@@ -1256,7 +1262,8 @@ does not create is isolated trusted base).
 ## Editor pass (2026-10-04 evening)
 
 Editor pass A: P0.09d added (AI notes vault and guard; parallel-safe; depends on P0.06); P0.09a retired; P2.13b added
-(graphify in CI, first row of slice 2, after P2.13a); P0.03 and P0.14 titles note decision 41.
+(graphify in CI, first row of slice 2, after P2.13a); P0.03 and P0.14 titles note decision 41 (updated 2026-10-06 for
+GitHub Pro: unblocked, awaiting Alex's ruleset).
 
 ## Dependency check (2026-10-04 evening)
 

@@ -125,6 +125,8 @@
 /interfaces/media/headers.ts @Undefined6799
 # Roles and grants on existing objects (the role roster as a whole path)
 /infrastructure/postgres/roles.json @Undefined6799
+# Role password sync: ALTER ROLE with a client-side SCRAM verifier (P1.12p)
+/infrastructure/postgres/roles.ts @Undefined6799
 # Cluster bootstrap: creates migrator and tap, revokes PUBLIC (runs at initdb)
 /deployment/postgres/init/ @Undefined6799
 # audit/ append

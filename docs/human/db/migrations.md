@@ -59,6 +59,22 @@ p50, p95 and p99 for that query in the PR's Performance evidence.
    message (which can quote row values), and exits 1.
 8. Logs `migrate.done` with the count and exits 0.
 
+## Roles and grants (P1.12)
+
+Each process connects as its own role, listed with its class, connection limit and settings in
+`infrastructure/postgres/roles.json` and created by migration `0003`. A new role starts with no privilege on any table.
+
+- A migration that creates a table, view, sequence or routine grants what each role needs in the same file, by column
+  list on any table with a row in `erasure-registry.json`, and adds the object's row to
+  `infrastructure/postgres/grant-matrix.json`. No default privilege grants tables, so a table that lands without its
+  grants is unreachable, and a table whose grants and matrix row disagree fails `tests/integration/postgres/grants.test.ts`.
+- A table-level matrix entry says `{ "privileges": [...], "wholeTable": true }`: the role is meant to hold those
+  privileges on every column, including columns added later. A personal-data table may not carry the flag.
+- A new role, a role attribute, a membership, a default privilege, or a grant on an object that already exists is
+  trusted base: its own step and PR, ahead of the step that needs it (rule SE-6).
+- The test reads the catalog and prints each difference as one line, `+` for a privilege the database holds and the
+  matrix does not, `-` for the reverse: `+ api SELECT app.drafts`.
+
 ## Postgres 18 data path
 
 The pinned image (`postgres:18.6`, digest in `tests/support/postgres.ts`) sets `PGDATA=/var/lib/postgresql/18/docker`
