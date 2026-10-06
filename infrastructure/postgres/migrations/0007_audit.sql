@@ -169,25 +169,11 @@ BEGIN
     OR (p_receipt IS NOT NULL AND octet_length(p_receipt) <> 32) THEN
     RAISE EXCEPTION 'audit_bad_input' USING ERRCODE = 'UA003';
   END IF;
-  -- The one IP the audit holds: the acting admin's tailnet address, in a redactable side row (provisional, P1a-A1).
+  -- No PII yet: the one booked field, the acting admin's tailnet address (P1a-A1), waits for Alex's answer, then
+  -- comes back with its own ip-columns allow entry (architecture record 2026-10-06-p115m-tailnet-pii-deferred). The
+  -- side table and its insert path below stay, so that change only replaces this check.
   IF p_pii IS NOT NULL THEN
-    -- Checked in order: jsonb_object_keys raises on anything but an object.
-    IF w <> 'admin' OR p_actor_did IS NULL OR jsonb_typeof(p_pii) <> 'object' THEN
-      RAISE EXCEPTION 'audit_bad_input' USING ERRCODE = 'UA003';
-    END IF;
-    IF (SELECT array_agg(k) FROM jsonb_object_keys(p_pii) k) <> '{tailnet_ip}'
-      OR jsonb_typeof(p_pii -> 'tailnet_ip') <> 'string'
-      OR p_pii ->> 'tailnet_ip' !~ '^[0-9A-Fa-f.:]{2,39}$' THEN
-      RAISE EXCEPTION 'audit_bad_input' USING ERRCODE = 'UA003';
-    END IF;
-    BEGIN
-      IF NOT ((p_pii ->> 'tailnet_ip')::inet <<= '100.64.0.0/10'::inet
-        OR (p_pii ->> 'tailnet_ip')::inet <<= 'fd7a:115c:a1e0::/48'::inet) THEN
-        RAISE EXCEPTION 'audit_bad_input' USING ERRCODE = 'UA003';
-      END IF;
-    EXCEPTION WHEN invalid_text_representation THEN
-      RAISE EXCEPTION 'audit_bad_input' USING ERRCODE = 'UA003';
-    END;
+    RAISE EXCEPTION 'audit_bad_input' USING ERRCODE = 'UA003';
   END IF;
 
   -- 3. A cap per writer and rate class over the last minute, so one class's flood cannot block another. The bound

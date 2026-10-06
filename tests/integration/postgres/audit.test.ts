@@ -188,27 +188,18 @@ describe("audit lanes", () => {
       expect(() => asOwner(statement), statement).toThrow(/audit is append-only/);
   });
 
-  test("pii_only_admin", async () => {
+  test("pii_refused_until_exception_settled", async () => {
+    // The tailnet address waits for Alex's answer on P1a-A1 (architecture record 2026-10-06-p115m-tailnet-pii-deferred):
+    // until then every writer's PII is refused and nothing reaches the side table.
     const reveal = { action: "pii.email_reveal", actorDid: ACTOR, target: TARGET, reason: "support_request" };
+    const before = count("chain");
     await expect(
       append("web", { action: "report.submitted", pii: { tailnet_ip: "100.64.1.2" } }),
     ).rejects.toMatchObject({ code: "UA003" });
-    const { seq } = await append("admin", { ...reveal, pii: { tailnet_ip: "100.64.1.2" } });
-    expect(
-      postgres.sql("unset", `SELECT subject, pii_text FROM audit.event_pii WHERE lane = 'mod' AND seq = ${seq}`),
-    ).toBe(`${ACTOR}|{"tailnet_ip": "100.64.1.2"}`);
-    await expect(append("admin", { ...reveal, pii: { tailnet_ip: "fd7a:115c:a1e0::1" } })).resolves.toBeTruthy();
-    for (const pii of [
-      { tailnet_ip: "203.0.113.9" },
-      { ip: "100.64.1.2" },
-      { tailnet_ip: "not an address" },
-      ["100.64.1.2"],
-    ])
+    for (const pii of [{ tailnet_ip: "100.64.1.2" }, { tailnet_ip: "fd7a:115c:a1e0::1" }, { ip: "203.0.113.9" }, []])
       await expect(append("admin", { ...reveal, pii }), JSON.stringify(pii)).rejects.toMatchObject({ code: "UA003" });
-    // PII needs the actor it belongs to.
-    await expect(
-      append("admin", { ...reveal, actorDid: null, pii: { tailnet_ip: "100.64.1.2" } }),
-    ).rejects.toMatchObject({ code: "UA003" });
+    expect(count("chain")).toBe(before);
+    expect(count("event_pii")).toBe(0);
   });
 
   test("concurrent_appends", async () => {
