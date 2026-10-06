@@ -1,0 +1,93 @@
+/* Button (P1.24; sheet components/Button/README.md, v45). base.css styles a bare <button> the same way; this class
+   carries the look to <a> too and adds the hover lift. The fill and the hard shadow are painted on ::before and
+   ::after, so the corner cut never clips the focus outline. */
+@layer components {
+  .root {
+    --button-cut: var(--radius-cut);
+    --button-fill: var(--color-ink);
+    box-sizing: border-box;
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 40px;
+    margin: 0;
+    padding: var(--space-3) var(--space-6);
+    border: 0;
+    border-radius: var(--radius-xs);
+    background-color: transparent;
+    color: var(--color-on-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-decoration: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    appearance: none;
+    transition: translate 120ms ease-out;
+  }
+
+  .root::before,
+  .root::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-xs);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--button-cut)), calc(100% - var(--button-cut)) 100%, 0 100%);
+  }
+
+  .root::before {
+    z-index: calc(var(--z-base) - 1);
+    background-color: var(--button-fill);
+  }
+
+  /* The hard shadow: a copy of the shape 6px down-right of the lifted button, shown only on hover. */
+  .root::after {
+    z-index: calc(var(--z-base) - 2);
+    background-color: var(--color-shadow-hard);
+    opacity: 0;
+    translate: 6px 6px;
+    transition: opacity 120ms ease-out;
+  }
+
+  .root:hover:not(:disabled) {
+    translate: -3px -3px;
+  }
+
+  .root:hover:not(:disabled)::after {
+    opacity: 1;
+  }
+
+  .root:active:not(:disabled) {
+    translate: 0 0;
+  }
+
+  .root:active::after {
+    opacity: 0;
+  }
+
+  .root:disabled {
+    --button-fill: var(--color-line);
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+  }
+
+  /* base.css drops transitions under reduced motion, but this layer outranks base, so it says so again. */
+  @media (prefers-reduced-motion: reduce) {
+    .root,
+    .root::after {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: 1px solid currentColor;
+    }
+  }
+}

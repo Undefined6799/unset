@@ -1,0 +1,22 @@
+/* Tag (P1.24; sheet components/Tag/README.md, v45): no fill, no border. */
+@layer components {
+  .root {
+    font-family: var(--font-mono);
+  }
+
+  .ok {
+    color: var(--color-success);
+  }
+
+  .err {
+    color: var(--color-danger);
+  }
+
+  .info {
+    color: var(--color-link);
+  }
+
+  .plain {
+    color: var(--color-ink-muted);
+  }
+}

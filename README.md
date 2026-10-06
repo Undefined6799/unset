@@ -1,7 +1,10 @@
 <p align="center">
   <picture>
+    <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/human/assets/readme-banner-phone-dark.png">
+    <source media="(max-width: 600px)" srcset="docs/human/assets/readme-banner-phone-light.png">
     <source media="(prefers-color-scheme: dark)" srcset="docs/human/assets/readme-banner-dark.svg">
-    <img src="docs/human/assets/readme-banner-light.svg" width="1280" alt="unset.sh: your identity and profile on the AT Protocol. Open source, self-hosted, private by design.">
+    <source media="(prefers-color-scheme: light)" srcset="docs/human/assets/readme-banner-light.svg">
+    <img src="docs/human/assets/readme-banner-phone-dark.png" alt="unset.sh: your identity and profile on the AT Protocol. Open source, self-hosted, private by design.">
   </picture>
 </p>
 

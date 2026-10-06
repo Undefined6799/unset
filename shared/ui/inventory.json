@@ -18,7 +18,7 @@
     "sheetSha256": "4174670469d7468d133c3a9546c56a4e3e158c038f7977e1c8a73388aefd1620",
     "props": "ButtonProps",
     "variants": ["type=button", "type=submit", "type=reset"],
-    "status": "p1.24"
+    "status": "built"
   },
   "Callout": {
     "sheet": "sheet/components/Callout/README.md",
@@ -39,7 +39,7 @@
     "sheetSha256": "d923b1c7a895e92c21b02cb23681b6e64858c48411e393fa8e968606afa60dba",
     "props": "CheckboxProps",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "CodeBlock": {
     "sheet": "sheet/components/CodeBlock/README.md",
@@ -95,28 +95,28 @@
     "sheetSha256": "be5142a5a0c24b9ae417a5378f0df82a6f30ec6f648bf8f2b7f43e93477e8c58",
     "props": "InputProps",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "Kbd": {
     "sheet": "sheet/components/Kbd/README.md",
     "sheetSha256": "0e830063e303ab9757b27e0b7f7efbffc09592a616637ad2cee3a01e428ca6fe",
     "props": "inline",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "Link": {
     "sheet": "sheet/components/Link/README.md",
     "sheetSha256": "3a20da2a18bbe9e686a258239af30b2a19edb8429e7bf0aee4e3c8fe4cb6d27a",
     "props": "LinkProps",
     "variants": ["variant=inline", "variant=standalone"],
-    "status": "p1.24"
+    "status": "built"
   },
   "Mark": {
     "sheet": "sheet/components/Mark/README.md",
     "sheetSha256": "33c5b1594da646c188612860e30705dd04d2bbd94f5e90e679f1850a7fe0749d",
     "props": "MarkProps",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "MediaFrame": {
     "sheet": "sheet/components/MediaFrame/README.md",
@@ -158,21 +158,21 @@
     "sheetSha256": "4509e963285b49b8bfc17c8f89aafb4b91898fd3f2f41f49355d66c1b0f59979",
     "props": "RadioGroupProps",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "SectionHeading": {
     "sheet": "sheet/components/SectionHeading/README.md",
     "sheetSha256": "b4ff1aea3afe2360dad99ad4cffd031a03625dc495ed337a4db0ed8e9d9f747b",
     "props": "inline",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "Select": {
     "sheet": "sheet/components/Select/README.md",
     "sheetSha256": "76d96c8f235223c70e6d92d87c2e7a6c8de549213be3e78ea8703072511d074f",
     "props": "SelectProps",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "SkipLink": {
     "sheet": "sheet/components/SkipLink/README.md",
@@ -214,14 +214,14 @@
     "sheetSha256": "43677686d1f336a26fd3b6d50ef059429e56ee2169fd108878be08fe5e55487a",
     "props": "TagProps",
     "variants": ["status=ok", "status=err", "status=info", "status=plain"],
-    "status": "p1.24"
+    "status": "built"
   },
   "Textarea": {
     "sheet": "sheet/components/Textarea/README.md",
     "sheetSha256": "375232284cbcc781b8a62baa72049735f13eab007d4baf1d8184a39269714a9f",
     "props": "TextareaProps",
     "variants": [],
-    "status": "p1.24"
+    "status": "built"
   },
   "Toast": {
     "sheet": "sheet/components/Toast/README.md",
