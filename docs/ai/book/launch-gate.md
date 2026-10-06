@@ -437,7 +437,8 @@ Done when (tests):
   - `main_protection_enforced` (decision 41, ADR 0009; phase-0 threat row E must close before production): `gh api
     repos/Undefined6799/unset/rulesets` shows the decision-40 ruleset active on the default branch (PR required, green
     checks required with source GitHub Actions, no force-push, no deletion, admins included, empty bypass list), or
-    the repository is on a plan that allows it and the ruleset is applied; P0.03's `ruleset_*` and
+    the repository is on a plan that allows it and the ruleset is applied (GitHub Pro since 2026-10-06: row E closes
+    when Alex applies the ruleset, and this check re-confirms it); P0.03's `ruleset_*` and
     `direct_push_refused` and P0.14's waiting drills have been run and recorded. Otherwise the gate fails. (The
     threat is also revisited earlier, before the repository goes public or the first production account, P5.02,
     whichever comes first.)
@@ -709,4 +710,5 @@ Source: `architecture-handoff/step-book-findings.md`; verdicts in `reviews/step-
 ### Editor pass (2026-10-04 evening)
 
 - L.04: new check `main_protection_enforced` (decision 41, ADR 0009): the decision-40 ruleset must be active before
-  launch; phase-0 threat row E (anyone with Alex's credentials can push to `main`) closes here at the latest.
+  launch; phase-0 threat row E (anyone with Alex's credentials can push to `main`) closes here at the latest. GitHub Pro
+  (2026-10-06) lets it close as soon as Alex applies the ruleset; L.04 re-checks it.
