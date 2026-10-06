@@ -3138,6 +3138,7 @@ Diagram: none.
 
 ### P1.17e — Name the lock log events (prelude to P1.17)
 Tags: —            Depends on: P1.03            Plan: §6.1; book edit 2026-10-06-p117e-split (final 23:15Z)
+Status: built (#363).
 Where: `shared/log/` only: EVENTS entries `lock.hold_exceeded` and `lock.lost` plus their EVENTS test rows. Label
   kind/feature.
 Why: a shared/log EVENTS entry precedes the PR that logs it, trusted base or not (the P1.11e, P1.16e and P1.23e
