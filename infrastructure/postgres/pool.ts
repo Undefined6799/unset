@@ -18,6 +18,11 @@ export type PoolOptions = {
   /** The role's `statement_timeout` (2 s on `web`, plan §6.1). */
   readonly statementTimeoutMs: number;
   readonly idleInTransactionTimeoutMs: number;
+  /**
+   * Called once per statement sent on any of this pool's clients, transaction control excepted. Only the query budget
+   * test sets it (P1.11t); production composes do not.
+   */
+  readonly onStatement?: () => void;
 };
 
 export type Pool = {
@@ -41,7 +46,26 @@ export function createPool(options: PoolOptions): Pool {
   });
   // An idle client's dropped connection is reported here; the pool already discards that client.
   driver.on("error", () => undefined);
+  const { onStatement } = options;
+  if (onStatement !== undefined) driver.on("connect", (client) => countStatements(client, onStatement));
   return { driver, connectTimeoutMs: options.connectTimeoutMs, close: () => driver.end() };
+}
+
+/** Transaction control, which `tx.ts` adds on its own: not a data round trip, so not counted (ruling 2026-10-06). */
+const TRANSACTION_CONTROL = /^\s*(?:BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
+
+/**
+ * Wraps one new client's `query` so every statement it sends is counted, on every checked-out client, transactions
+ * included. pg-pool emits `connect` once per new client (pg-pool 3.14.0 index.js:337).
+ */
+function countStatements(client: pg.PoolClient, onStatement: () => void): void {
+  const query = client.query.bind(client) as (...args: unknown[]) => unknown;
+  (client as { query: unknown }).query = (...args: unknown[]) => {
+    const [first] = args;
+    const text = typeof first === "string" ? first : (first as { text?: unknown } | undefined)?.text;
+    if (typeof text !== "string" || !TRANSACTION_CONTROL.test(text)) onStatement();
+    return query(...args);
+  };
 }
 
 /**
