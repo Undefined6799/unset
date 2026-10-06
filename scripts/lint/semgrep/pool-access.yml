@@ -1,0 +1,28 @@
+# P1.11q (P1.11 Outputs, plan §6.1 Deadlines): code takes a Postgres client only through acquire or withClient
+# in infrastructure/postgres/pool.ts, so every wait for a connection nests inside the caller's deadline and every
+# client is released. Calling connect or query on a pool anywhere else is a finding. A receiver counts as a pool
+# when its name is pool or ends in Pool (pool, webPool, this.pool), the names pool.ts hands out. pool.ts is the one
+# exclusion; the fixture runner strips `paths`, so semgrep-rules.test.ts checks that exclusion by reading this file.
+# Fixtures: scripts/lint/semgrep/fixtures/pool-access-single-file/, checked by scripts/lint/semgrep-fixtures.ts in CI.
+rules:
+  - id: pool-access-single-file
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      Direct pool access outside infrastructure/postgres/pool.ts. Use withClient(pool, deadline, fn) or
+      acquire(pool, deadline): the wait for a client nests inside the request deadline and the client is always
+      released. There is no allow comment.
+    paths:
+      exclude:
+        - "scripts/"
+        - "tests/"
+        - "**/*.test.ts"
+        - "/scripts/lint/semgrep/fixtures/"
+        - "/infrastructure/postgres/pool.ts"
+    patterns:
+      - pattern-either:
+          - pattern: $POOL.connect(...)
+          - pattern: $POOL.query(...)
+      - metavariable-regex:
+          metavariable: $POOL
+          regex: ^(?:.*\.)?(?:pool|\w+Pool)$

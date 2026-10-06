@@ -62,7 +62,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | DC-1 | Modules are deep; functions do one job | review-only: no tool measures depth |
 | AB-3 | A new process, role or orchestrator needs an ADR naming its driver | review-only: the driver is a judgement; backed by the grant-matrix test for roles and ADR 0011 for orchestrators |
 | AB-4 | Every guard proves it examined more than zero items and fails on a known-bad fixture | checked: `scripts/guards/guards.test.ts`, `depcruise_cruised_nonzero` |
-| DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | planned: P1.11 |
+| DM-2 | Transactions are opened only in `infrastructure/postgres/tx.ts` | checked: `transactions_only_in_tx` (Semgrep rule transactions-only-in-tx, proven on fixtures by the CI semgrep job) |
 | DA-1 | `idx` can be dropped and rebuilt without losing a decision | planned: P3.03 |
 | SE-4 | Every route names a rate-limit policy in its own interface's `limits.ts`, or is "exempt" on a static route | checked: `scripts/guards/route-policy.ts`, `every_route_has_policy` |
 | SE-6 | A PR that touches the trusted base touches nothing else, and a PR that changes a check changes no product path | checked: `trusted_base_isolated`, `trusted_base_list_from_codeowners`, `check_plus_product_fails`, `lockfile_rides_with_trusted_dependency_change` |

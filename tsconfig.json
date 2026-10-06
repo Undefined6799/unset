@@ -5,6 +5,7 @@
     { "path": "deployment" },
     { "path": "domains/identity" },
     { "path": "infrastructure/net-guard" },
+    { "path": "infrastructure/pds" },
     { "path": "interfaces/admin" },
     { "path": "interfaces/api" },
     { "path": "interfaces/http" },
