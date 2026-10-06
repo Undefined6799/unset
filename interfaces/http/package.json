@@ -10,6 +10,6 @@
     "@unset/shared-http": "*",
     "@unset/shared-log": "*",
     "@unset/shared-ui": "*",
-    "react": "19.2.8"
+    "react": "19.3.0"
   }
 }
