@@ -9,6 +9,7 @@
     { "path": "infrastructure/net-guard" },
     { "path": "infrastructure/pds" },
     { "path": "infrastructure/postgres" },
+    { "path": "infrastructure/seal" },
     { "path": "interfaces/admin" },
     { "path": "interfaces/api" },
     { "path": "interfaces/http" },
