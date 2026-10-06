@@ -1,10 +1,11 @@
 // P1.11p (infrastructure/postgres/pool.ts, tx.ts): the pool, transactions and the connection budget against the real
-// image, in this file's database from the integration setup (P1.11t). The process roles arrive with P1.12, so each
-// case creates a throwaway LOGIN role as migrator (CREATEROLE), named t_<random>, granted only USAGE on this database's
-// public schema (never SUPERUSER, CREATEROLE or BYPASSRLS) and dropped in teardown (architecture ruling 2026-10-06 (b)).
+// image. Each case creates a throwaway LOGIN role as migrator (CREATEROLE), named t_<random>, granted only USAGE on
+// this database's public schema (never SUPERUSER, CREATEROLE or BYPASSRLS) and dropped in teardown (architecture
+// ruling 2026-10-06 (b)). Creating roles needs migrator, which the shared integration setup no longer hands to test
+// files (P1.12t), so this file starts its own container through the one test helper, as migrate.test.ts does.
 import { randomBytes } from "node:crypto";
-import { relative } from "node:path";
-import { afterAll, describe, expect, inject, test } from "vitest";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   acquire,
   checkConnectionBudget,
@@ -14,9 +15,13 @@ import {
   withClient,
   withTransaction,
 } from "../../../infrastructure/postgres/index.ts";
+import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
-const provided = inject("postgres");
-const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
+const migratorPassword = randomPassword();
+const database = "pool_test";
+let postgres: PostgresContainer;
+let connection: PoolOptions["connection"];
+let migrator: Pool;
 const pools: Pool[] = [];
 const roles: string[] = [];
 const poolOf = (connection: PoolOptions["connection"], options: { max?: number; connectTimeoutMs?: number }) => {
@@ -31,7 +36,22 @@ const poolOf = (connection: PoolOptions["connection"], options: { max?: number; 
   pools.push(pool);
   return pool;
 };
-const migrator = poolOf({ ...provided, database, ssl: false }, { max: 1 });
+beforeAll(async () => {
+  postgres = await startPostgres({
+    initDir: join(import.meta.dirname, "..", "..", "..", "deployment", "postgres", "init"),
+    secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
+  });
+  postgres.sql("postgres", `CREATE DATABASE ${database} OWNER migrator`);
+  connection = {
+    host: "127.0.0.1",
+    port: postgres.port,
+    database,
+    user: "migrator",
+    password: migratorPassword,
+    ssl: false,
+  };
+  migrator = poolOf(connection, { max: 1 });
+}, 120_000);
 afterAll(async () => {
   await Promise.all(pools.filter((pool) => pool !== migrator).map((pool) => pool.close()));
   await withClient(migrator, null, (client) => client.query("DROP TABLE IF EXISTS tx_rows"));
@@ -41,6 +61,7 @@ afterAll(async () => {
     );
   }
   await migrator.close();
+  stopAllPostgres();
 });
 
 /** A fresh role allowed into this database's public schema, and a pool for it. */
@@ -54,7 +75,7 @@ async function setup(options: { max?: number; connectTimeoutMs?: number; connect
         `GRANT USAGE ON SCHEMA public TO ${role}`,
     ),
   );
-  return poolOf({ ...provided, database, user: role, password, ssl: false }, options);
+  return poolOf({ ...connection, user: role, password }, options);
 }
 
 const codeOf = (promise: Promise<unknown>) =>

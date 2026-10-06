@@ -8,7 +8,7 @@ import { createPool, withClient } from "../../../infrastructure/postgres/index.t
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
 const pool = createPool({
-  connection: { ...provided, database, ssl: false },
+  connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
   service: "schemas-test",
   max: 1,
   connectTimeoutMs: 2000,
