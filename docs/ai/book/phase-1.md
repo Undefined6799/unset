@@ -1900,21 +1900,29 @@ Split (SE-6 and size; step book 2026-10-06, p111-shape and p111q-reshaped; archi
 p111-test-db-and-pg-config and p111g-postgres-test-mechanism). This text stays the specification for all five parts:
   - **P1.11e** (prelude): the `migrate.*` log events and `AppError('db.busy')`.
   - **P1.11q** (check): the transactions and pool-access Semgrep rules; it flips the DM-2 row.
-  - **P1.11** (this step, trusted base): `migrate.ts`, `migrate-cli.ts`, `sqlLint.ts`, `migrations/0001_init.sql`,
-    `docs/human/db/migrations.md` and ADR 0014 "node-postgres as the Postgres driver", with tests beside them under
-    `infrastructure/postgres/`. Tests: `applies_in_order`, `idempotent_rerun`, `checksum_mismatch_exit_2`,
+  - **P1.11** (this step, a product PR: CODEOWNERS' trusted-base section lists `roles.json`, not
+    `infrastructure/postgres/*.ts`, and `0001_init.sql` holds comments only): `migrate.ts`, `migrate-cli.ts`,
+    `sqlLint.ts`, `tx.ts` with only `inTransaction(client, fn)` (the runner's one transaction per file),
+    `migrations/0001_init.sql`, `docs/human/db/migrations.md` and ADR 0014 "node-postgres as the Postgres driver"
+    (`pg` 8.23.0, `@types/pg` 8.23.1). Database tests sit in `tests/integration/postgres/migrate.test.ts` (a workspace
+    may not reference the tests project, and `pg` stays out of `tests/`, so the lock test uses a slow migration);
+    unit tests for `sqlLint` and the CLI config sit beside their files. Tests: `applies_in_order`, `idempotent_rerun`, `checksum_mismatch_exit_2`,
     `gap_exit_3`, `database_ahead_exit_0`, `failing_migration_rolls_back`, `concurrent_runners`, `expand_lint`,
     `must_be_migrator`, `index_needs_query_comment`, `scram_only`.
-  - **P1.11p** (trusted base): `pool.ts` (`createPool`, `acquire`, `withClient`), `tx.ts`, `checkConnectionBudget` and
-    the use of `db.busy`. Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
+  - **P1.11p** (product): `pool.ts` (`createPool`, `acquire`, `withClient`), `withTransaction(pool, deadline, fn)` in
+    `tx.ts` on top of `inTransaction`, `checkConnectionBudget` and the use of `db.busy`; database tests under
+    `tests/integration/postgres/`, as P1.11. Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
     `tx_commit_and_rollback`, `connection_budget`.
-  - **P1.11t** (product): the `tests/integration/setup/pg.setup.ts` globalSetup and `query_budget_per_route`.
+  - **P1.11t** (product): the `tests/integration/setup/pg.setup.ts` globalSetup and `query_budget_per_route`. It folds
+    into P1.11p if P1.11p stays near 400 source lines, else stays its own step after P1.11p; P1.11p's PR says which
+    (book edit 2026-10-06-p111-as-built).
   Until P1.11t lands, P1.11 and P1.11p tests that need a database use `tests/support/postgres.ts` (P1.11h) directly
-  from their own `*.test.ts`.
+  from their own test files under `tests/integration/postgres/`.
 Tags: —            Depends on: P1.11e, P1.11g, P1.11q, P1.02 (P1.11h comes in through P1.11g)            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
 Where (all five parts, per the split above): `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`
   and `infrastructure/postgres/package.json` (`pg` pinned exactly, never `pg-native`), `infrastructure/postgres/migrations/0001_init.sql`,
-  `docs/human/db/migrations.md`, `docs/human/decisions/0014-*.md`, the globalSetup `tests/integration/setup/pg.setup.ts`
+  `docs/human/db/migrations.md`, `docs/human/decisions/0014-*.md`, the database tests in `tests/integration/postgres/`,
+  the globalSetup `tests/integration/setup/pg.setup.ts`
   (through `tests/support/postgres.ts`; P1.11h's `tests/tsconfig.json` already covers `tests/integration`). The Semgrep
   rules are P1.11q; `deployment/postgres/init/00-bootstrap.sh` is **P1.11g**. No `ci.yml` service, no
   `required-checks.json` change (ruling 2026-10-06 00:10Z).
@@ -2000,10 +2008,12 @@ Algorithm (`migrate`):
   3. Lint expand files (`sqlLint`): reject `DROP TABLE|COLUMN|SCHEMA|INDEX` (without `CONCURRENTLY IF EXISTS` on an index
      created in the same file), `RENAME`, `ALTER COLUMN … TYPE`, `ALTER COLUMN … SET NOT NULL`, `TRUNCATE` → exit 1 naming
      the file and line. Contract files may contain them.
-  4. Connect as `migrator` (`SET lock_timeout = '5s'; SET statement_timeout = '15min'`). Connection error → retry with
-     backoff 1, 2, 4, 8, 16 s (Postgres may still be starting); after 5 failures → exit 1.
-  5. `SELECT pg_advisory_lock(<MIGRATE_LOCK_ID>)` (session lock, constant `0x756e7365`); a second runner waits (lock_timeout
-     does not apply to advisory locks; wrap the call with a 60 s client-side timeout → exit 1 "another migrate is running").
+  4. Connect as `migrator` (`SET lock_timeout = '5s'; SET statement_timeout = '15min'`). Connecting is tried six times,
+     with waits of 1, 2, 4, 8 and 16 s between tries (Postgres may still be starting); when the tries run out → log
+     `migrate.failed`, exit 1.
+  5. Poll `SELECT pg_try_advisory_lock(<MIGRATE_LOCK_ID>)` (session lock, constant `0x756e7365`) every 250 ms, up to
+     60 s; a second runner keeps polling. When the 60 s run out → log `migrate.failed`, exit 1 "another migrate is
+     running". The runner never proceeds without the lock.
   6. Create `schema_migrations` if absent. `applied = SELECT version, checksum FROM schema_migrations`.
   7. For each applied version that has a file: if checksums differ → release lock, exit 2 ("migration NNNN was edited
      after it was applied; write a new migration instead").
@@ -2084,7 +2094,11 @@ directories, which this step replaces with one fixed path). `node-pg-migrate` 9.
 (reviewer may prefer it; our runner is ~150 lines and keeps the checksum and ahead rules exact). `pg` → USE. Provisional —
 for reuse review.
 Not in this step: roles other than `migrator` and `tap` and all grants (P1.12); the Compose `migrate` service itself
-(P1.29); backups (P5.04).
+(P1.29); backups (P5.04); `pool.ts` and `withTransaction` (P1.11p).
+Migrations are trusted base: `migrations/` is a parsed path in CODEOWNERS' trusted-base section, and the grant parser
+treats any statement there as unclassified, so even `SELECT 1` makes a PR trusted base. A later step adding a migration
+with a statement plus non-trusted code splits the migration out, or puts the code in a prelude (the e/p pattern).
+Builders check this when sizing P1.12 onward.
 Diagram:
 ```mermaid
 sequenceDiagram

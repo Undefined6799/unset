@@ -209,6 +209,9 @@ How to read an entry:
   column is a `<id>g` trusted-base step. This applies to `app`, `idx`, `mod`, `adm` and every other schema, and to
   grants-only `g` steps (e.g. P4.16g, P5.02g list columns). Tests: P1.12 `personal_data_by_column_list`,
   `no_default_privilege_reaches_personal_data`.
+  Every migration with a statement is trusted base (`migrations/` is a parsed path in CODEOWNERS' trusted-base
+  section): a step adding one plus non-trusted code splits the migration out or puts the code in a prelude (P1.11 as
+  built, book edit 2026-10-06-p111-as-built).
 
 ## 12. `profileHref`
 
