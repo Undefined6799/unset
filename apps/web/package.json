@@ -6,10 +6,14 @@
   "license": "AGPL-3.0-only",
   "main": "render.tsx",
   "exports": {
-    ".": "./render.tsx"
+    ".": "./render.tsx",
+    "./server": {
+      "types": "./render.tsx",
+      "default": "./dist/server/render.js"
+    }
   },
   "scripts": {
-    "build": "vite build --config vite.config.ts"
+    "build": "vite build --config vite.config.ts && vite build --config vite.config.ts --ssr render.tsx"
   },
   "dependencies": {
     "@unset/shared-ui": "*",

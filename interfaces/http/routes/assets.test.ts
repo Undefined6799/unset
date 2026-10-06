@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
@@ -34,7 +35,7 @@ const ENV = {
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
   WEB_BUILD_DIR: BUILD,
 };
-const { server } = await compose(loadConfig(config, ENV));
+const { server } = await compose(loadConfig(config, ENV), web);
 const get = (path: string, method = "GET") =>
   server.request(new Request(`https://unset.test${path}`, { method, headers: { host: "unset.test" } }), "10.0.0.1");
 

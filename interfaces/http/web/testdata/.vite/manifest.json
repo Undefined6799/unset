@@ -18,5 +18,13 @@
     "isDynamicEntry": true,
     "imports": ["_runtime-T3st0001.js", "src/islands/runtime/bootstrap.ts"],
     "assets": ["assets/notes-T3st0004.txt"]
+  },
+  "src/styles.ts": {
+    "file": "assets/styles-T3st0005.js",
+    "name": "styles",
+    "src": "src/styles.ts",
+    "isEntry": true,
+    "imports": ["_runtime-T3st0001.js"],
+    "css": ["assets/styles-T3st0006.css"]
   }
 }
