@@ -16,6 +16,11 @@
       "method": "GET",
       "path": "/health",
       "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/prefs/theme",
+      "status": 415
     }
   ]
 }
