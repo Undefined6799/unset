@@ -4181,8 +4181,14 @@ and the spike's glue; P1.08 `buildCsp(group)` with its typed allowlist; P1.10 se
   `trusted-types 'none'`. Zero-JS route groups get no `script-src`.
 - `island-budget`: after build, each island chunk ≤15 KB gzipped and bootstrap + shared runtime + all islands
   ≤75 KB gzipped; over → exit 1.
-- dependency-cruiser: `*.island.tsx` may import only `shared/ui` and type-only modules; never `domains/`, `infrastructure/`
-  or `interfaces/` modules (db, config, seal, net-guard, audit).
+- dependency-cruiser (lands in P1.23q): `*.island.tsx` may import only `shared/ui`, type-only modules, and the named
+  npm modules listed in the rule (initially only the pinned UI library's JSX runtime module, named exactly); never
+  `domains/`, `infrastructure/` or `interfaces/` modules (db, config, seal, net-guard, audit). Every other bare
+  specifier fails, including other subpaths of the same package and `node:` modules. The list grows only by a
+  check-path PR (SE-6) naming the module and why the island needs it, with an architecture ruling and Alex's typed
+  word naming the package. A vendor SDK never goes on the list; it gets its own adapter folder (ADG §1). Seeding the
+  list with the JSX runtime is not a loosening, since P1.23q creates the rule; every later entry is (book edit
+  2026-10-06-p123q-island-import-boundary).
 - Lint: a JSX `style` prop anywhere in `apps/`, `interfaces/` or `shared/` is an error (a GritQL rule next to P1.21's
   token-only rule). `style-src` has no `'unsafe-inline'`, so server-rendered `style=` attributes are blocked by
   the CSP (P1.20 measured it with `/neg`); the lint catches it before the browser does.
@@ -4260,6 +4266,9 @@ GET /assets/<file>:
 - `island_budget_check`: fixture chunk of 16 KB gzipped → exit 1.
 - `glue_line_warning`: `count-glue-lines apps/web/src/islands/runtime` (`scripts/budgets/count-glue-lines.ts`, P1.20) reported; above the ADR number → CI warning.
 - `island_import_boundary`: fixture island importing `infrastructure/postgres` → dependency-cruiser violation.
+- P1.23q's allowlist fixtures: `island_imports_jsx_runtime_passes` (the named JSX runtime module passes),
+  `island_imports_other_subpath_fails` (another subpath of the same package), `island_imports_unrelated_package_fails`
+  and `island_imports_node_builtin_fails` (`node:fs`).
 - `jsx_style_prop_rejected`: fixture component with `style={{ color: "red" }}` → lint error.
 
 **Reuse** (all provisional — for reuse review):
