@@ -4453,8 +4453,31 @@ Diagram: none.
 
 ---
 
+### P1.23w — Allow the render-entry subpath import (check paths, kind/build)
+Tags: [SEC] [ALEX]            Depends on: P1.23v            Plan: architecture Amendment 21:45Z; book edit
+  2026-10-06-p123w-render-entry-depcruise-row
+Why: P1.23c's loader imports the literal `@unset/apps-web/server` through an `apps/web` package.json subpath export
+  (Amendment 21:45Z). dependency-cruiser cannot resolve that exports subpath (couldNotResolve, dependencyTypes
+  unknown, target under the excluded `dist/`), so allowing it widens a guard: its own check step before the product
+  PR (SE-6), scoped to exactly the one import. Id `w` follows `v`, as P1.11v and P1.11w did.
+Where:
+  - `scripts/lint/.dependency-cruiser.cjs` gains one allowed row: from `^interfaces/http/web/render-entry\.ts$` to
+    exactly the module `@unset/apps-web/server` (anchored exact match, no wildcard), with `couldNotResolve`. Nothing
+    else: no other source, no other specifier, no general couldNotResolve allowance.
+  - `docs/human/architecture.md` gains a row recording the exception and its reason.
+  - `[ALEX]`: a loosening, so it opens only after Alex's typed word naming this change and the branch
+    (`claude/phase-2-blocks-p201k-p123w`), verified first-hand. Without it P1.23w does not open and P1.23c stays
+    blocked; there is no fallback that weakens the computed-import rule (architecture refused that option).
+Done when (fixtures in `depcruise.test.ts`): `render-entry.ts` importing `@unset/apps-web/server` passes; any other
+  file importing `@unset/apps-web/server` fails; `render-entry.ts` importing any other unresolvable module fails;
+  `render-entry.ts` importing `apps/web` source or `apps/web/dist/...` by relative path fails; local pr-shape classes
+  it as check.
+Diagram: none.
+
+---
+
 ### P1.23c — CSS Modules server-render glue (gap-fill for P1.23)
-Tags: —            Depends on: P1.23, P1.23r, P1.23v            Plan: §5.1; ADR 0015 ("Carried into P1.23")
+Tags: —            Depends on: P1.23, P1.23r, P1.23v, P1.23w            Plan: §5.1; ADR 0015 ("Carried into P1.23")
 Why (book edit 2026-10-06-p123c-css-modules-glue; architecture follow-up 20:10Z): ADR 0015 carries `css.ts`,
   `styles.ts` and `generateScopedName` into P1.23, and none of P1.23, P1.23q or P1.23r shipped them. P1.24's Button is
   the first `.module.css`. Owner: Phase 2. Unblocks P1.24 and P1.24s.
@@ -4469,18 +4492,32 @@ Where (product paths only): `apps/web/vite.config.ts` and the document glue.
     buys nothing). Production never reaches source: `interfaces/http` imports only the loader, which `import()`s the
     fixed built file, and the production entry's static import graph holds no `apps/` module. The mode is decided by
     which entry runs, never by an environment flag.
+  - **Literal package-subpath import (Amendment 21:45Z).** `apps/web/package.json` gains one subpath export,
+    `"./server": { "types": <the source module declaring the render entry's export shape>, "default":
+    "./dist/server/render.js" }`. The loader imports the literal `import("@unset/apps-web/server")`: Semgrep's
+    computed-import rule sees a literal, TypeScript resolves types through `types` (no TS2307, no `@ts-expect-error`),
+    and at run time Node resolves `default`, the built file at the fixed place set by the manifest, not the
+    environment. A computed-import exception and a relative literal into `dist/` were both refused.
+    - **Test seam.** The loader takes the importer as a parameter, defaulting to
+      `() => import("@unset/apps-web/server")`; tests inject a stub importer for the missing, malformed and good
+      cases, and one integration test runs the real build and the real default importer.
+    - **Workspace dependency.** `interfaces/http`'s `package.json` lists `@unset/apps-web` (with the tsconfig
+      reference if `references.test.ts` requires it); ADG §1 already lets the serving interface import its app's
+      render entry. Both manifests and the lockfile link are product paths.
+    - The depcruise row this import needs is P1.23w's; P1.23c merges main again after P1.23w lands.
   - **Styles.** One styles entry imports every CSS Module. The document links the client manifest's css entries as
     `/assets/<hash>.css` through P1.23's exact-name route; no inline styles, so the CSP is unchanged.
   - **P1.27's image** runs both builds and ships only their outputs (`prod_image_has_ssr_build_only`).
   - **Glue lines** re-measured with `count-glue-lines.ts` (warning above 150 as the ADR says); the result goes in the PR
     body and ADR 0015's evidence.
 Size: about 250 to 350 lines; above 400 the body gives the reason.
-Order: P1.23f, P1.23v, P1.23c, then P1.24 and P1.24s; P1.24i, P1.24h and P1.24q are unaffected.
+Order: P1.23f, P1.23v, P1.23w, P1.23c, then P1.24 and P1.24s; P1.24i, P1.24h and P1.24q are unaffected.
 Done when (tests): `ssr_class_equals_client_selector`, `scoped_name_deterministic` (client build, SSR build and Vitest
   agree), `ssr_loader_fails_startup_when_missing`, `document_links_manifest_css` (exact hashed names; nothing unknown
   served), `no_inline_style_in_document`, `scoped_names_unique` (eight hex digits is 32 bits, so a collision would
   be silent: the build fails if two distinct path and class pairs share a scoped name), `prod_entry_imports_no_app_source`
-  (walks the production entry's import graph and fails on any `apps/` path); the SSR loader wired in `interfaces/http`; the glue count recorded; local
+  (walks the production entry's import graph; the built file is allowed, any `apps/` source fails), the runtime
+  export-shape check failing startup; the SSR loader wired in `interfaces/http`; the glue count recorded; local
   pr-shape classes it as product.
 Diagram: none.
 
