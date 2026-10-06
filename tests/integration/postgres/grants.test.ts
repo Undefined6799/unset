@@ -268,12 +268,16 @@ describe("grants", () => {
   // Architecture ruling 2026-10-06 (P1.13): the gate on the types domains is USAGE on the schema, and every domain keeps
   // PostgreSQL's default ACL (PUBLIC USAGE, docs 18 ddl-priv Table 5.2). A later explicit grant or revoke on either
   // shows up here as a deliberate change.
-  test("types_schema_usage_exact", () => {
+  test.each([
+    ["types", "admin,api,indexer,web"],
+    // P1.16g: retention reaches app for the single-use sweep (P1.16); its table grants come with each table.
+    ["app", "admin,retention,web"],
+  ])("%s_schema_usage_exact", (schema, roles) => {
     const usage =
       "SELECT string_agg(g, ',' ORDER BY g) FROM (SELECT CASE a.grantee WHEN 0 THEN 'PUBLIC' " +
       "ELSE a.grantee::regrole::text END AS g FROM pg_namespace n, aclexplode(n.nspacl) a " +
-      "WHERE n.nspname = 'types' AND a.privilege_type = 'USAGE' AND a.grantee <> n.nspowner) s";
-    expect(postgres.sql("unset", usage)).toBe("admin,api,indexer,web");
+      `WHERE n.nspname = '${schema}' AND a.privilege_type = 'USAGE' AND a.grantee <> n.nspowner) s`;
+    expect(postgres.sql("unset", usage)).toBe(roles);
   });
 
   test("types_domains_typacl_null", async () => {
