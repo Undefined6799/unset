@@ -1,0 +1,23 @@
+{
+  "files": {
+    "boot.ts": 16,
+    "css.ts": 6,
+    "dev-ssr.ts": 16,
+    "document.tsx": 25,
+    "islands.tsx": 23,
+    "manifest.ts": 19,
+    "serialiser.ts": 2,
+    "serve.ts": 8,
+    "styles.ts": 1
+  },
+  "configs": {
+    "vite.config.ts": {
+      "functionLines": 22,
+      "declarativeLines": 7
+    },
+    "vite.measure.config.ts": {
+      "functionLines": 12,
+      "declarativeLines": 6
+    }
+  }
+}

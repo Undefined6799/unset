@@ -1,0 +1,76 @@
+{
+  "engine": "chromium",
+  "version": "141.0.7390.37",
+  "base": "http://localhost:5173",
+  "pages": [
+    {
+      "url": "http://localhost:5173/",
+      "status": 200,
+      "console": [
+        {
+          "type": "debug",
+          "text": "[vite] connecting..."
+        },
+        {
+          "type": "debug",
+          "text": "[vite] connected."
+        },
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "scriptTags": 3,
+      "modulePreloads": 0,
+      "scriptBytes": 3247106,
+      "hydrationErrors": 0,
+      "boxStyle": {
+        "border": "rgb(0, 128, 0) 2px",
+        "padding": "8px"
+      },
+      "plainDivStyle": {
+        "border": "rgb(0, 0, 0) 0px",
+        "padding": "0px"
+      },
+      "interactions": {
+        "counterAfterClick": "Count: 2",
+        "searchResults": ["hello"]
+      }
+    },
+    {
+      "url": "http://localhost:5173/@demo",
+      "status": 200,
+      "console": [
+        {
+          "type": "debug",
+          "text": "[vite] connecting..."
+        },
+        {
+          "type": "debug",
+          "text": "[vite] connected."
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "scriptTags": 1,
+      "modulePreloads": 0,
+      "scriptBytes": 0,
+      "hydrationErrors": null,
+      "boxStyle": {
+        "border": "rgb(0, 128, 0) 2px",
+        "padding": "8px"
+      },
+      "plainDivStyle": {
+        "border": "rgb(0, 0, 0) 0px",
+        "padding": "0px"
+      },
+      "interactions": null
+    }
+  ]
+}
