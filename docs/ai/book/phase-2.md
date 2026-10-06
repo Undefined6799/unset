@@ -572,6 +572,8 @@ Inputs: P2.01 `resolveDid`, `resolveHandle`, `parseHandle`; config `HANDLE_VERIF
   `HANDLE_INVALID_TTL_S` (default 60), `HANDLE_CACHE_MAX` (default 10000).
 Outputs:
   - `type HandleVerdict = {status: 'verified', handle: Handle, checkedAt} | {status: 'invalid', checkedAt} | {status: 'unavailable'}`.
+  - `createHandleVerifier({ ..., onUnexpected?: (error: unknown) => void })` returns `verifyHandle`. The composition root
+    passes `onUnexpected` once at construction, so no caller can forget it (as built, #79).
   - `verifyHandle(did: Did, opts?: {consistency?: 'fresh' | 'cached'}) -> HandleVerdict` (never throws; internal errors
     become `unavailable`).
   - `invalidateHandle(did: Did) -> void` (for P3 identity events and P2.06 after login).
@@ -583,18 +585,26 @@ Algorithm:
   2. `resolveDid(did, {consistency: opts.consistency ?? 'cached'})`:
      - throws `not_found` or `invalid_doc` → verdict `invalid`; cache for `HANDLE_INVALID_TTL_S`; return.
      - throws `unavailable` → return `unavailable` (not cached).
-  3. Claimed handle: the **first** entry of `rawAlsoKnownAs` that starts with `at://`; strip `at://`; `parseHandle`.
-     Per the handle spec only the first `at://` entry counts.
-     - none, or `parseHandle` null → `invalid` (cache short); return.
+  3. Claimed handle: the first *syntactically valid* `at://` entry in `rawAlsoKnownAs`: strip `at://`, then
+     `parseHandle`. An entry that starts with `at://` but fails `parseHandle` is skipped, not fatal. Later entries are
+     never consulted once a valid one is found (atproto DID spec, github.com/bluesky-social/atproto-website at
+     `7937e9c`, `specs/did`, cited in the code comment). This does not widen trust: whoever controls the DID document
+     controls every entry, and the claimed handle is still verified bidirectionally.
+     - none → `invalid` (cache short); return.
   4. `resolveHandle(claimed)`:
      - `found` with `did` equal to the input DID → `verified(claimed)`; cache for `HANDLE_VERIFY_TTL_S`; return.
      - `found` with another DID → `invalid` (a spoof or a stale doc); cache short; return.
      - `not_found` → `invalid`; cache short; return.
      - `unavailable` → return `unavailable` (not cached).
-  5. Any unexpected exception in steps 2–4 → log `identity.verify_error` (DID only) and return `unavailable`.
+  5. Any unexpected exception in steps 2–4 → report through `onUnexpected(error)`, with no identifiers, and return
+     `unavailable`. The callback is called inside `verifyHandle`'s own `try`; if it throws, the result is still
+     `unavailable`. P2.02 makes no log call and adds no EVENTS entry. The composition root logs `kind` (the error's
+     `name`) and a fixed `code` only, never `message`, `cause` or text built from inputs (ruling
+     2026-10-06-se7-verify-error-and-word-fields).
 
 Edge cases and failures:
-  - DID doc lists `at://mallory.example` first and `at://alice.0x40.me` second → only the first is checked.
+  - First valid `at://` entry `mallory.example`, second `alice.0x40.me` → only `mallory.example` is checked.
+  - First entry `at://not a handle`, second `at://alice.0x40.me` → the first is skipped, and `alice.0x40.me` is checked.
   - `alsoKnownAs` entry `at://ALICE.0x40.me` → normalised before resolution; verified if it resolves back.
   - Handle resolves to the right DID only over HTTPS while DNS is down → `verified` (P2.01 rule).
   - PLC down → `unavailable`; callers display `handle.invalid` and the DID, and never block a login on it.
@@ -613,7 +623,11 @@ Threats: the handle we display for a DID (plan §2: verified bidirectionally).
 Done when (tests):
   - `verifyHandle.bidirectional_ok`: doc claims `alice.test-pds.example`, handle resolves to the same DID → `verified`.
   - `verifyHandle.reverse_mismatch`: handle resolves to another DID → `invalid`, `displayHandle` = `handle.invalid`.
-  - `verifyHandle.first_aka_only`: second entry valid, first invalid → `invalid`.
+  - `verifyHandle.first_aka_only`: first valid entry fails the reverse check, second would pass → `invalid`.
+  - `malformed_first_aka_skipped`: first `at://` entry fails `parseHandle`, second resolves back → `verified`.
+  - `unexpected_error_reported_once`: a stand-in network throws → the callback receives that error once, and the
+    result is `unavailable`.
+  - `callback_throw_still_unavailable`.
   - `verifyHandle.no_aka`: empty list → `invalid`.
   - `verifyHandle.plc_unavailable_not_cached`: first call `unavailable`, second call (PLC healthy) → `verified` (two fetches).
   - `verifyHandle.cache_ttls`: verified cached 600 s, invalid 60 s (fake clock).
@@ -627,7 +641,9 @@ Reuse (provisional — for reuse review):
     for external handles). Rewrite as above; the registry rule is P3.08.
   - vault `pitfalls/self-asserted-did-doc-handle-must-be-bidirectionally-verified` → cite in the module comment.
 Not in this step: the `*.0x40.me` "our PDS confirms" rule (P3.08); handle display components (P2.13); identity-event
-  invalidation wiring (P3.05).
+  invalidation wiring (P3.05); passing `onUnexpected` (P2.04 or P2.06, whichever composes the verifier first: it
+  depends on P1.03w, and a `shared/log` prelude, its id the composing step's id plus `e`, adds the
+  `identity.verify_error` EVENTS entry before it, the P1.04l pattern).
 Diagram: none.
 
 ### P2.03 — Session store and lifecycle

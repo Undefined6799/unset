@@ -781,6 +781,49 @@ Diagram: none.
 
 ---
 
+### P1.03w — Fixed-word string fields in `shared/log` (added, SE-7 ruling 2026-10-06)
+Tags: [SEC]            Depends on: P1.03            Plan: §6 logging (SE-7: no DID, handle or user-derived message in logs)
+Where: `shared/log/logger.ts`, `shared/log/logger.test.ts` (product PR; `shared/log` is not trusted base)
+Size: ~40 source lines, ~80 test lines
+
+Goal: a string field in a log line can hold only a fixed word, so a handle, DID, email, IP or URL can never be logged
+through it, whatever a caller passes.
+
+Inputs: P1.03's logger (`scrub()`, `EVENTS`, the `route` and `reqId` placeholders).
+Outputs: shape checks applied in the logger before a line is written.
+
+Algorithm:
+  1. Check each field's shape:
+     - `reason`, `phase` and `job` must match `^[a-z][a-z0-9_-]{0,31}$`;
+     - `kind` must match `^[A-Za-z][A-Za-z0-9_]{0,39}$`;
+     - `key` must match `^[A-Z][A-Z0-9_]{0,63}$`.
+  2. A value that fails its shape becomes `[<field>]`, as `route` and `reqId` already do. The line is still written.
+  3. An unknown event logs `kind: "[event]"` instead of the scrubbed event text.
+  4. The logger's comment states what is accepted: a string of 32 or fewer lowercase alphanumeric characters can pass
+     the word shape. SE-7 bans tokens in logs, and token-bearing values never reach these fields by type.
+  5. Callers type their reasons as literal unions where the type allows, as `CsrfReason` does. The shape check is the
+     runtime backstop.
+
+Edge cases: `reason: "alice.0x40.me"` → `[reason]`; `kind: "TypeError"` → kept; `key: "PG_HOST"` → kept;
+  `key: "pg_host"` → `[key]`.
+
+Threats:
+  - I An identifier logged through a free string field → shape rule (`word_fields_refuse_identifiers`).
+
+Done when (tests):
+  - `word_fields_refuse_identifiers`: a handle, a DID, an email, an IPv4 address, an IPv6 address and a URL, in each of
+    the five fields → each is replaced by its placeholder.
+  - `word_fields_keep_words`: every reason, phase, job, kind and key value in use on main still passes. The test lists
+    them.
+  - `unknown_event_kind_placeholder`.
+
+Order: lands before the first PR that logs a value from outside a fixed union, and at the latest before the
+composition PR that wires P2.02's `onUnexpected` (P2.04 or P2.06), which gains P1.03w in its Depends-on line.
+Rule text: SE-7's "Amended 2026-10-06" line (architecture ruling 2026-10-06-se7-verify-error-and-word-fields).
+Diagram: none.
+
+---
+
 ### P1.04 — HTTP server skeleton per entrypoint
 Tags: —            Depends on: P1.04k, P1.04q, P1.04c, P1.04m, P0.13a            Plan: §5.1 (Hono), §5.2 (processes, `docker-rollout`), §6.1 (ASVS V4: deny unknown methods and content types), review 07 §4 (`/health` reports the commit)
 Where: each `interfaces/<x>/main.ts`, `interfaces/<x>/compose.ts` and `interfaces/<x>/config.ts` (spreading P1.04k's
