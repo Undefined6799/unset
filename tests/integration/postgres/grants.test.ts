@@ -268,16 +268,26 @@ describe("grants", () => {
   // Architecture ruling 2026-10-06 (P1.13): the gate on the types domains is USAGE on the schema, and every domain keeps
   // PostgreSQL's default ACL (PUBLIC USAGE, docs 18 ddl-priv Table 5.2). A later explicit grant or revoke on either
   // shows up here as a deliberate change.
-  test.each([
-    ["types", "admin,api,indexer,web"],
-    // P1.16g: retention reaches app for the single-use sweep (P1.16); its table grants come with each table.
-    ["app", "admin,retention,web"],
-  ])("%s_schema_usage_exact", (schema, roles) => {
-    const usage =
-      "SELECT string_agg(g, ',' ORDER BY g) FROM (SELECT CASE a.grantee WHEN 0 THEN 'PUBLIC' " +
-      "ELSE a.grantee::regrole::text END AS g FROM pg_namespace n, aclexplode(n.nspacl) a " +
-      `WHERE n.nspname = '${schema}' AND a.privilege_type = 'USAGE' AND a.grantee <> n.nspowner) s`;
-    expect(postgres.sql("unset", usage)).toBe(roles);
+  const schemaUsage = (schema: string) =>
+    "SELECT string_agg(g, ',' ORDER BY g) FROM (SELECT CASE a.grantee WHEN 0 THEN 'PUBLIC' " +
+    "ELSE a.grantee::regrole::text END AS g FROM pg_namespace n, aclexplode(n.nspacl) a " +
+    `WHERE n.nspname = '${schema}' AND a.privilege_type = 'USAGE' AND a.grantee <> n.nspowner) s`;
+
+  test("types_schema_usage_exact", () => {
+    expect(postgres.sql("unset", schemaUsage("types"))).toBe("admin,api,indexer,web");
+  });
+
+  test("retention_has_app_usage", () => {
+    // P1.16g: retention reaches app for the single-use sweep (P1.16), which grants its table rights by column list.
+    expect(postgres.sql("unset", schemaUsage("app"))).toBe("admin,retention,web");
+    // USAGE is all it holds on the schema, and no default privilege hands it anything on a future app object.
+    const onSchema =
+      "SELECT string_agg(a.privilege_type, ',') FROM pg_namespace n, aclexplode(n.nspacl) a " +
+      "WHERE n.nspname = 'app' AND a.grantee = 'retention'::regrole";
+    expect(postgres.sql("unset", onSchema)).toBe("USAGE");
+    const defaults =
+      "SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a WHERE a.grantee = 'retention'::regrole";
+    expect(postgres.sql("unset", defaults)).toBe("0");
   });
 
   test("types_domains_typacl_null", async () => {
