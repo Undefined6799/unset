@@ -3358,8 +3358,10 @@ branch only; nothing under `spikes/` merges, so main has no `spikes/` folder and
 (architecture ruling 2026-10-06-p120-spike-artefacts-layout). The spike's npm dependencies live only in the branch's
 `package.json`; main's lockfile is untouched. What merges, in one check-path PR (docs never change a PR's class, SE-6;
 no P1.20q):
-- `docs/human/decisions/NNNN-web-framework-glue.md`, the ADR, which names the evidence folder in one line;
-- `docs/human/decisions/evidence/NNNN-web-framework-glue/`: `MEASUREMENTS.json` per candidate and only the raw
+- `docs/human/decisions/NNNN-web-framework-glue.md`, the ADR and its README row; the ADR links to its evidence folder;
+- `docs/human/evidence/NNNN-web-framework-glue/` (amended 02:50Z: `adr_index_complete` allows only `NNNN-title.md` under
+  `docs/human/decisions/`, so ADR evidence lives at `docs/human/evidence/NNNN-title/` from now on, one folder per ADR,
+  named exactly like it, and the check stays unchanged): `MEASUREMENTS.json` per candidate and only the raw
   Playwright reports `hono_verdict_consistent` reads (no screenshots or traces, about 200 KB at most, fixture data
   only); larger Playwright output stays a CI artefact linked from the ADR;
 - `scripts/budgets/count-glue-lines.ts` with `count_glue_lines_rule` and `glue_count_includes_config_plugin` (kept,
@@ -3370,6 +3372,17 @@ The spike code itself stays on the branch, tagged `spike/p1-20`, as the referenc
 output joins the raw reports.
 
 **Size:** ~450–700 spike lines (not merged), ~150 measurement-script lines, ~250 test lines; ADR ~120 lines.
+
+**As built (2026-10-06, relayed 02:46Z):** Hono PASS (glue 150 lines; CSS identical in dev and prod; 0 hydration
+errors; 0 CSP violations; React runtime 58,886 B gzipped, headroom 16,680 B), so ADR **0015** is "Accepted (pending
+merge)" with no stop. Astro FAIL: its inline island runtime is blocked by the CSP unless hashed. Files:
+`docs/human/decisions/0015-web-framework-glue.md` and its README row; `scripts/budgets/count-glue-lines.ts` and its
+test; `scripts/docs/glue-spike.ts` and its test (`hono_verdict_consistent`, `verdict_rule`,
+`css_map_diff_detects_mismatch`, `astro_measurements_recorded`, `adr_has_required_sections`); the evidence under
+`docs/human/evidence/0015-web-framework-glue/`. One PR with the `large-pr` label: pr-size counts 1424 lines, about 960
+of them generated evidence JSON, and splitting the evidence out would land data without the test that checks it. The PR
+body's "Large PR:" line names the evidence and its line count; reviewers read the ADR, the two scripts and the tests,
+and `hono_verdict_consistent` checks the JSON (book edit 2026-10-06-p120-split-and-browsers).
 
 **Goal:** Decide, with measured numbers, whether Hono plus server-rendered React plus islands can be glued
 together in about 600 lines with CSS Modules identical on server and client, and record the answer and what it
@@ -4526,6 +4539,29 @@ Dockerfile does not exist, the `images` job prints `::notice title=images::skipp
 P1.27)` and exits 0; the static test `images_skip_only_without_dockerfile` pins the skip condition to exactly "the
 Dockerfile path is absent", so P1.27's PR is built and verified by the same job. P1.27 itself then touches only
 product paths, tooling and docs.
+
+P1.27q as built (Phase 2, branch `claude/phase-2-blocks-p201k-p127q`, kind/build, check paths only; book edit
+2026-10-06-p127q-as-proposed):
+- `images.yml` runs on every PR and every push to `main` with no path filter, so the required check always reports.
+  With the Dockerfile present: hadolint, a Buildx build, Trivy and syft on PRs; on `main` only, push by digest, then
+  sign and attest in the environment `signing` with `--tlog-upload=false`, then verify-images. The sign jobs are
+  skipped until Alex creates `signing` and its key. Permissions `contents: read`, `packages: write` on the sign job only.
+- `mirror.yml` runs when `deployment/mirror.list.json` changes and weekly; while the list is absent it exits 0 with a
+  notice.
+- `.github/hadolint.yaml` and `.github/trivyignore.yaml` sit under `.github/` after the root tidy, not at the root
+  paths named in the Where line below.
+- Tests: `verify_images_rejects_unsigned`, `verify_images_rejects_wrong_key`,
+  `verify_images_rejects_provenance_from_other_workflow`, `verify_images_rejects_provenance_from_other_branch`
+  (`scripts/ci/verify-images.test.ts`, cosign through an injected runner); `workflow_permissions_minimal`,
+  `no_tlog_upload_flag_present` (every cosign sign or attest call carries `--tlog-upload=false`, so no
+  private-repository metadata reaches the public Rekor log; its description says so), `images_skip_only_without_dockerfile`,
+  `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`); `trivyignore_expiry_enforced`
+  (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts` gains `images`.
+- Until `signing` exists, images built on `main` are unsigned; P1.30's deploy preflight and P2.26a deploy only images
+  `verify-images` accepts, so they fail closed meanwhile. Alex's tick list gains "create the `signing` environment and
+  key".
+- If Actions minutes run short once the Dockerfile lands, the fix is change detection inside the job, so the required
+  check still reports, never a workflow path filter.
 
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
