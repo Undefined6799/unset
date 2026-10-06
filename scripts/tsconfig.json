@@ -1,6 +1,16 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "composite": true, "rootDir": "..", "outDir": "dist" },
-  "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "../*.config.ts", "../*.config.mts", "../*.config.cts"],
-  "exclude": ["dist", "guards/fixtures", "lint/semgrep/fixtures", "ui"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.mts",
+    "**/*.cts",
+    "../*.config.ts",
+    "../*.config.mts",
+    "../*.config.cts",
+    "../apps/*/vite.config.ts"
+  ],
+  "exclude": ["dist", "guards/fixtures", "lint/semgrep/fixtures", "ui"],
+  "references": [{ "path": "ui" }]
 }
