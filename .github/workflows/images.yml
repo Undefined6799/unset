@@ -1,0 +1,107 @@
+# First-party container images (P1.27q). On every ready pull request and every push to main: hadolint, build, Trivy
+# scan, SPDX SBOM, and the runtime checks (non-root, no dev dependencies, healthy). Nothing is pushed or signed yet:
+# the push-and-sign job needs `packages: write` and the `signing` environment, which wait on Alex (see the P1.27q PR).
+#
+# Until P1.27 adds the Dockerfile the job prints a notice and passes; the skip is tied to exactly that file being
+# absent (images_skip_only_without_dockerfile in scripts/ci/image-workflows.test.ts), so P1.27's own PR is the first
+# one built here. Any later cost saving is change detection inside the job, never a `paths:` filter, because a
+# required check that never starts blocks the PR.
+#
+# Tool images are pinned by index digest (scripts/guards/workflows.ts). The image under test is referenced by the
+# content id `docker build --iidfile` wrote, so it too is pinned by digest.
+
+name: images
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  images:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      APP: web
+      DOCKERFILE: deployment/images/node-app.Dockerfile
+      HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+      TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+      SYFT_IMAGE: anchore/syft:v1.52.0@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Skip until the Dockerfile exists
+        id: dockerfile
+        run: |
+          if [ -e "$DOCKERFILE" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=images::skipped, no Dockerfile yet (lands in P1.27)"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      # hadolint v2.15.1 README: `--config` file, non-zero exit at or above failure-threshold.
+      - name: Lint the Dockerfile
+        if: steps.dockerfile.outputs.present == 'true'
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo "$HADOLINT_IMAGE" /bin/hadolint --config .github/hadolint.yaml "$DOCKERFILE"
+      - name: Build
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
+            --build-arg APP="$APP" --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" .
+      # Trivy v0.74.0: HIGH or CRITICAL with a fixed version fails (--ignore-unfixed), unless accepted in
+      # .github/trivyignore.yaml and not expired; a DB download failure or the timeout exits non-zero.
+      - name: Scan
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
+            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile .github/trivyignore.yaml \
+            --timeout 10m "$APP_IMAGE"
+      - name: SBOM
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$SYFT_IMAGE" "docker:$APP_IMAGE" -o spdx-json > "$RUNNER_TEMP/sbom.spdx.json"
+          test -s "$RUNNER_TEMP/sbom.spdx.json"
+      - name: Runs as 65532
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          test "$(docker run --rm --entrypoint id "$APP_IMAGE" -u)" = "65532"
+      - name: Holds no dev dependencies
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          docker run --rm --network none -v "$PWD/package.json:/check/package.json:ro" --entrypoint node "$APP_IMAGE" -e '
+            const fs = require("node:fs");
+            const dev = Object.keys(require("/check/package.json").devDependencies ?? {});
+            const found = dev.filter((name) => fs.existsSync(`/app/node_modules/${name}`));
+            if (found.length > 0) { console.error(`the image holds dev dependencies ${found.join(" ")}`); process.exit(1); }'
+      # The image's own HEALTHCHECK (GET /health) must report healthy within 20 s, started with the app's test env.
+      - name: Becomes healthy
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          id="$(docker run -d --read-only --tmpfs /tmp --env-file "deployment/images/$APP.test.env" "$APP_IMAGE")"
+          for _ in $(seq 20); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$id")"
+            if [ "$status" = "healthy" ]; then docker rm -f "$id" > /dev/null; exit 0; fi
+            sleep 1
+          done
+          docker logs "$id"
+          docker rm -f "$id" > /dev/null
+          echo "not healthy within 20 s (last status: $status)"
+          exit 1

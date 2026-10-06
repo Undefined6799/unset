@@ -1,0 +1,9 @@
+# Accepted Trivy findings (P1.27q). Format: Trivy v0.74.0 docs/guide/configuration/filtering.md (.trivyignore.yaml).
+# Every entry needs `id`, a `statement` saying why it is accepted, and `expired_at` (yyyy-mm-dd) at most 90 days
+# ahead; scripts/ci/trivyignore.test.ts fails on anything else, and on an entry once it has expired.
+#
+# vulnerabilities:
+#   - id: CVE-0000-00000
+#     statement: why the finding cannot reach us, and what removes it
+#     expired_at: yyyy-mm-dd
+vulnerabilities: []
