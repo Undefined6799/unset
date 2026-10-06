@@ -42,6 +42,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | Only the serving interface imports its app's render entry | checked: `app-render-entry-only` |
 | ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
 | ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |
+| ADG §1, plan §5.1 | An island (`*.island.tsx`) imports only `shared/ui`, type-only modules and the npm modules named in the rule (today React's JSX runtime) | checked: `island-import-boundary`, `island_import_boundary`, `island_imports_jsx_runtime_passes` |
 | ADG §2, AB-1 | Domains do not depend on infrastructure, interfaces or apps | checked: `domain-pure` |
 | ADG §1, DC-2 | A domain reaches another domain only through its `index.ts` | checked: `domain-cross-via-index` |
 | DC-2 | Modules under `infrastructure/` and `shared/` are reached only through their `index.ts` | checked: `infra-shared-via-index` |
