@@ -39,6 +39,15 @@ const LEAF_SHARED = "^shared/(ui|lexicons|admin-envelope)/";
 // A module under infrastructure/ or shared/ and the one file others may import from it (rule DC-2).
 const WORKSPACE_WITH_INDEX = "(?:infrastructure|shared)/[^/]+/";
 const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
+// A browser island (P1.23): one component per *.island.tsx under apps/web/src/islands/ or shared/ui/islands/.
+const ISLAND = "\\.island\\.tsx$";
+// The npm modules an island may import, each named exactly (architecture ruling 2026-10-06, P1.23q): today only
+// React's JSX runtime (ADR 0015). Adding an entry loosens a guard: a check-path PR naming the module and why the
+// island needs it, with an architecture ruling and Alex's typed word. A vendor SDK never goes here; it gets its own
+// adapter folder (SDK_ADAPTERS).
+const ISLAND_NPM_MODULES = ["react/jsx-runtime"];
+// A bare specifier resolved to exactly that module (a file, or a folder's index), never another subpath.
+const npmModule = (spec) => `^(node_modules/)?${escapeRegex(spec)}(\\.js|/index\\.js)?$`;
 // Non-TypeScript assets (a CSS Module) are imported directly; they export no code.
 const ASSET = "\\.css$";
 
@@ -222,6 +231,12 @@ module.exports = {
       "The public web surface imports nothing admin (§5.7).",
       { path: "^(apps/web|interfaces/http)/" },
       { path: "(^|/)admin/" },
+    ),
+    forbidden(
+      "island-import-boundary",
+      "An island ships to the browser: a *.island.tsx imports only shared/ui, the npm modules in ISLAND_NPM_MODULES and type-only modules, never server code (P1.23q; plan §5.1).",
+      { path: ISLAND },
+      { pathNot: ["^shared/ui/", ...ISLAND_NPM_MODULES.map(npmModule)], dependencyTypesNot: ["type-only"] },
     ),
     forbidden(
       "fake-only-in-composition-root",

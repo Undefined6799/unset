@@ -64,7 +64,13 @@ export function fixture(edges: Edge[]): string {
     write(root, `node_modules/${name}/package.json`, JSON.stringify({ name, main: "index.js" }));
     write(root, `node_modules/${name}/index.js`, "module.exports = {};\n");
   }
-  const dependencies = Object.fromEntries([...packages].map((name) => [name, "1.0.0"]));
+  // A subpath specifier (react/jsx-runtime) is declared by its package name, as a real package.json would.
+  const packageName = (spec: string) =>
+    spec
+      .split("/")
+      .slice(0, spec.startsWith("@") ? 2 : 1)
+      .join("/");
+  const dependencies = Object.fromEntries([...packages].map((name) => [packageName(name), "1.0.0"]));
   write(root, "package.json", JSON.stringify({ name: "fixture", private: true, dependencies }));
   return root;
 }
