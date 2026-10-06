@@ -47,12 +47,31 @@ function decodeToken(token: string): Buffer | null {
   return bytes.length === TOKEN_BYTES && bytes.toString("base64url") === token ? bytes : null;
 }
 
+/** DID syntax as atproto accepts it (https://atproto.com/specs/did, "DID Syntax"): method, then an identifier that
+ * may hold colons (a did:web path) and never ends in one. */
+const ISSUER = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;
+const ISSUER_MAX = 2048;
+/** A `jti` or other external id: printable ASCII without spaces, at most 256 characters. */
+const EXTERNAL_ID = /^[\x21-\x7e]{1,256}$/;
+
 /**
- * The key of an externally minted id. JSON keeps the three parts apart: issuers are DIDs, which hold colons, so a
- * plain `purpose:issuer:id` join could make two different ids collide.
+ * The key of an externally minted id: sha256 of the JSON array [purpose, issuer, externalId] (architecture record
+ * 2026-10-06 p116, Amendment 20:15Z). JSON keeps the parts apart: issuers are DIDs, which hold colons, so a plain
+ * `purpose:issuer:id` join could make two different ids one key. Each part is checked first and used exactly as given,
+ * never normalised. Changing this encoding orphans every stored key, so it needs its own migration step.
  */
-const claimKey = (purpose: Purpose, { issuer, externalId }: ExternalId): Buffer =>
-  sha256(JSON.stringify([purpose, issuer, externalId]));
+function claimKey(purpose: Purpose, id: ExternalId): Buffer {
+  const { issuer, externalId } = id as { issuer: unknown; externalId: unknown };
+  if (typeof purpose !== "string" || !Object.hasOwn(PURPOSES, purpose))
+    throw new RangeError("single-use: unknown purpose");
+  if (typeof issuer !== "string" || issuer.length > ISSUER_MAX || !ISSUER.test(issuer)) {
+    throw new RangeError("single-use: issuer is not a DID");
+  }
+  if (typeof externalId !== "string" || !EXTERNAL_ID.test(externalId)) {
+    throw new RangeError("single-use: external id is not 1..256 printable ASCII characters");
+  }
+  return sha256(JSON.stringify([purpose, issuer, externalId]));
+}
 
 export function createSingleUseStore(options: {
   readonly log: Logger;
@@ -109,12 +128,13 @@ export function createSingleUseStore(options: {
   }
 
   async function claim(db: Db, purpose: Purpose, id: ExternalId, expiresAt: Date) {
+    const key = claimKey(purpose, id);
     // Inserted already consumed: the insert is the check, and ON CONFLICT makes every later claim a no-op.
     const { rows } = await db.query<{ clamped: boolean }>(
       "INSERT INTO app.single_use (id, purpose, expires_at, consumed_at) " +
         "VALUES ($1, $2, LEAST($3::timestamptz, now() + make_interval(secs => $4)), now()) " +
         "ON CONFLICT (id) DO NOTHING RETURNING expires_at < $3::timestamptz AS clamped",
-      [claimKey(purpose, id), purpose, expiresAt, PURPOSES[purpose]],
+      [key, purpose, expiresAt, PURPOSES[purpose]],
     );
     const [row] = rows;
     if (row?.clamped) log.info("single_use.claim_clamped", { kind: kindOf(purpose) });

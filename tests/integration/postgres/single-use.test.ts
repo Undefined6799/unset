@@ -8,7 +8,9 @@ import {
   createPool,
   createSingleUseStore,
   type Db,
+  type ExternalId,
   type Pool,
+  type Purpose,
   withClient,
 } from "../../../infrastructure/postgres/index.ts";
 import type { ProcessRole } from "../setup/pg.setup.ts";
@@ -197,6 +199,48 @@ describe("single-use store", () => {
     expect(await claim("did:web:c.example", "x:y")).toBe(true);
   });
 
+  test("claim_key_vector", async () => {
+    // Architecture record p116, Amendment 20:15Z: the key is sha256 of the JSON array, pinned by a vector computed
+    // independently (Python hashlib and json.dumps with compact separators).
+    const { store, onWeb } = setup();
+    const id = { issuer: "did:web:issuer.example", externalId: "jti-1" };
+    await onWeb((db) => store.claim(db, "service_auth.jti", id, new Date(Date.now() + 60_000)));
+    const rows = await sql<{ hex: string }>(web, "SELECT encode(id, 'hex') AS hex FROM app.single_use WHERE id = $1", [
+      Buffer.from("cb21469d1aa86b10a4e302792f25a547ce390a9c5c6e4d749fec80d7f943413d", "hex"),
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+
+  test("claim_refuses_bad_parts", async () => {
+    // Each part is checked before any database call; nothing is normalised into a valid one.
+    const { store } = setup();
+    let queries = 0;
+    const counting = { query: () => queries++ } as unknown as Db;
+    const later = new Date(Date.now() + 60_000);
+    const good = { issuer: "did:web:issuer.example", externalId: "jti-1" };
+    const bad: [string, unknown][] = [
+      ["no.such", good],
+      ["service_auth.jti", { ...good, issuer: "https://issuer.example" }],
+      ["service_auth.jti", { ...good, issuer: "did:web:issuer.example:" }],
+      ["service_auth.jti", { ...good, issuer: "DID:web:issuer.example" }],
+      ["service_auth.jti", { ...good, issuer: ` ${good.issuer}` }],
+      ["service_auth.jti", { ...good, issuer: `did:web:${"a".repeat(2048)}` }],
+      ["service_auth.jti", { ...good, issuer: 42 }],
+      ["service_auth.jti", { ...good, externalId: "" }],
+      ["service_auth.jti", { ...good, externalId: "has space" }],
+      ["service_auth.jti", { ...good, externalId: "x".repeat(257) }],
+      ["service_auth.jti", { ...good, externalId: "jtï" }],
+      ["service_auth.jti", { ...good, externalId: ["jti-1"] }],
+    ];
+    for (const [purpose, id] of bad) {
+      await expect(
+        store.claim(counting, purpose as Purpose, id as ExternalId, later),
+        JSON.stringify(id),
+      ).rejects.toThrow(RangeError);
+    }
+    expect(queries).toBe(0);
+  });
+
   test("claim_clamped", async () => {
     const { store, logged, onWeb } = setup();
     const id = { issuer: "did:web:issuer.example", externalId: "far" };
@@ -237,7 +281,7 @@ describe("single-use store", () => {
     const token = Buffer.alloc(32, 1).toString("base64url");
     await expect(store.consume(failing, "login.nonce", token)).rejects.toThrow("connection lost");
     await expect(
-      store.claim(failing, "service_auth.jti", { issuer: "i", externalId: "j" }, new Date()),
+      store.claim(failing, "service_auth.jti", { issuer: "did:web:issuer.example", externalId: "j" }, new Date()),
     ).rejects.toThrow("connection lost");
   });
 });
