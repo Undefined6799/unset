@@ -164,15 +164,29 @@ function changesDependencies(base: string, head: string, change: RawChange): boo
   }
 }
 
-/** Both sides of a modified root lockfile, parsed; null when the PR does not modify it or a side is unreadable. */
-function lockfiles(base: string, head: string, changed: readonly RawChange[]): DocFacts["lockfiles"] {
-  if (!changed.some((c) => c.path === "package-lock.json" && c.status === "M")) return null;
+/** Both sides of a modified root JSON file (the lockfile, the root tsconfig.json), parsed; null when the PR does not
+ * modify it or a side is unreadable. */
+function bothSides(base: string, head: string, changed: readonly RawChange[], path: string): DocFacts["lockfiles"] {
+  if (!changed.some((c) => c.path === path && c.status === "M")) return null;
   try {
-    const [before, after] = [base, head].map((sha) => JSON.parse(git("show", `${sha}:package-lock.json`)) as unknown);
+    const [before, after] = [base, head].map((sha) => JSON.parse(git("show", `${sha}:${path}`)) as unknown);
     return { base: before, head: after };
   } catch {
     return null;
   }
+}
+
+/** Each package.json the PR adds, with the `name` it declares ("" when unreadable or not a string). */
+function addedManifests(head: string, manifests: readonly RawChange[]): Map<string, string> {
+  const nameOf = (path: string): string => {
+    try {
+      const { name } = JSON.parse(git("show", `${head}:${path}`)) as { name?: unknown };
+      return typeof name === "string" ? name : "";
+    } catch {
+      return "";
+    }
+  };
+  return new Map(manifests.filter((c) => c.status === "A").map((c) => [c.path, nameOf(c.path)]));
 }
 
 function docFacts(base: string, head: string, changed: readonly RawChange[]): DocFacts {
@@ -183,7 +197,9 @@ function docFacts(base: string, head: string, changed: readonly RawChange[]): Do
     regular: new Set(regular),
     licenceOnly: new Set(modified.filter((c) => changesOnlyLicence(base, head, c.path)).map((c) => c.path)),
     dependencyChanges: new Set(packageManifests.filter((c) => changesDependencies(base, head, c)).map((c) => c.path)),
-    lockfiles: lockfiles(base, head, changed),
+    lockfiles: bothSides(base, head, changed, "package-lock.json"),
+    addedManifests: addedManifests(head, packageManifests),
+    rootTsconfig: bothSides(base, head, changed, "tsconfig.json"),
   };
 }
 
