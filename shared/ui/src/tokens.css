@@ -1,0 +1,143 @@
+@layer tokens {
+  @font-face {
+    font-family: "Space Grotesk";
+    src: url("../fonts/SpaceGrotesk-Variable.woff2") format("woff2");
+    font-weight: 300 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: "JetBrains Mono";
+    src: url("../fonts/JetBrainsMono-Variable.woff2") format("woff2");
+    font-weight: 100 800;
+    font-style: normal;
+    font-display: swap;
+  }
+  :root {
+    color-scheme: dark;
+    --color-ground: #0a090c;
+    --color-surface-raised: #131216;
+    --color-surface-card: #161519;
+    --color-ink: #f0edee;
+    --color-on-ink: #0a090c;
+    --color-ink-muted: #a19ea2;
+    --color-line: #242228;
+    --color-line-strong: #6f6c71;
+    --color-focus: var(--color-ink);
+    --color-shadow-hard: var(--color-line-strong);
+    --color-scrim: rgba(10, 9, 12, 0.75);
+    --color-plum: #d7469b;
+    --color-on-plum: #0a090c;
+    --color-cyan: #048ba8;
+    --color-on-cyan: #0a090c;
+    --color-emerald: #16db93;
+    --color-on-emerald: #0a090c;
+    --color-link: var(--color-cyan);
+    --color-success: var(--color-emerald);
+    --color-danger: var(--color-plum);
+    --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --type-display-size: 64px;
+    --type-display-line: 60px;
+    --type-display-weight: 700;
+    --type-display-tracking: -0.03em;
+    --type-heading-1-size: 40px;
+    --type-heading-1-line: 44px;
+    --type-heading-1-weight: 700;
+    --type-heading-1-tracking: -0.02em;
+    --type-heading-2-size: 28px;
+    --type-heading-2-line: 32px;
+    --type-heading-2-weight: 600;
+    --type-heading-2-tracking: -0.01em;
+    --type-heading-3-size: 20px;
+    --type-heading-3-line: 26px;
+    --type-heading-3-weight: 600;
+    --type-heading-3-tracking: normal;
+    --type-body-size: 16px;
+    --type-body-line: 24px;
+    --type-body-weight: 400;
+    --type-body-tracking: normal;
+    --type-body-small-size: 14px;
+    --type-body-small-line: 22px;
+    --type-body-small-weight: 400;
+    --type-body-small-tracking: normal;
+    --type-code-size: 14px;
+    --type-code-line: 22px;
+    --type-code-weight: 400;
+    --type-code-tracking: normal;
+    --type-label-size: 12px;
+    --type-label-line: 16px;
+    --type-label-weight: 500;
+    --type-label-tracking: 0.06em;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
+    --space-24: 96px;
+    --radius-0: 0;
+    --radius-xs: 2px;
+    --radius-full: 9999px;
+    --radius-cut: 10px;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --z-base: 0;
+    --z-card: 1;
+    --z-sticky: 10;
+    --z-menu: 20;
+    --z-modal: 40;
+    --z-toast: 50;
+    --mark-ring-diameter: 220;
+    --mark-ring-width: 26;
+    --mark-hole-width: 30;
+    --mark-dot-diameter: 108;
+    --mark-gap: 84;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --color-ground: #f0edee;
+    --color-surface-raised: #f7f5f6;
+    --color-surface-card: #fbfafa;
+    --color-ink: #0a090c;
+    --color-on-ink: #f0edee;
+    --color-ink-muted: #5a575b;
+    --color-line: #d6d2d4;
+    --color-line-strong: #7e7b80;
+    --color-scrim: rgba(240, 237, 238, 0.75);
+    --color-plum: #a4036f;
+    --color-on-plum: #f0edee;
+    --color-cyan: #006f8b;
+    --color-on-cyan: #f0edee;
+    --color-emerald: #007544;
+    --color-on-emerald: #f0edee;
+    --shadow-1: 0 1px 2px rgba(10, 9, 12, 0.08), 0 1px 3px rgba(10, 9, 12, 0.06);
+    --shadow-2: 0 2px 6px rgba(10, 9, 12, 0.1), 0 1px 3px rgba(10, 9, 12, 0.06);
+    --shadow-menu: 0 4px 12px rgba(10, 9, 12, 0.08);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) {
+      color-scheme: light;
+      --color-ground: #f0edee;
+      --color-surface-raised: #f7f5f6;
+      --color-surface-card: #fbfafa;
+      --color-ink: #0a090c;
+      --color-on-ink: #f0edee;
+      --color-ink-muted: #5a575b;
+      --color-line: #d6d2d4;
+      --color-line-strong: #7e7b80;
+      --color-scrim: rgba(240, 237, 238, 0.75);
+      --color-plum: #a4036f;
+      --color-on-plum: #f0edee;
+      --color-cyan: #006f8b;
+      --color-on-cyan: #f0edee;
+      --color-emerald: #007544;
+      --color-on-emerald: #f0edee;
+      --shadow-1: 0 1px 2px rgba(10, 9, 12, 0.08), 0 1px 3px rgba(10, 9, 12, 0.06);
+      --shadow-2: 0 2px 6px rgba(10, 9, 12, 0.1), 0 1px 3px rgba(10, 9, 12, 0.06);
+      --shadow-menu: 0 4px 12px rgba(10, 9, 12, 0.08);
+    }
+  }
+}

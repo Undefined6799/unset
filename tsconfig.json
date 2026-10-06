@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "scripts" },
+    { "path": "scripts/ui" },
     { "path": "deployment" },
     { "path": "domains/identity" },
     { "path": "infrastructure/net-guard" },

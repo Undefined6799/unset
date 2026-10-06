@@ -1,0 +1,356 @@
+import type * as React from "react";
+import type { ReactNode, MouseEvent } from "react";
+
+export interface ButtonProps {
+  /** The label, set in the `label` style, uppercased by the component. One to three words. */
+  children: ReactNode;
+  /** Renders an <a> instead of a <button>. */
+  href?: string;
+  /** Native button type; defaults to "button". */
+  type?: "button" | "submit" | "reset";
+  disabled?: boolean;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
+  className?: string;
+}
+
+/** Solid `ink` button, no border, square with the bottom-right corner cut off at `cut`. */
+export declare function Button(props: ButtonProps): JSX.Element;
+
+export interface MarkProps {
+  /** Rendered width in px; height follows the mark's 828:220 ratio. Default 72. */
+  width?: number;
+  /** Accessible name. Default "unset.sh". */
+  title?: string;
+  className?: string;
+}
+/** The three-fisheye mark at its exact source geometry, filled with currentColor (`ink` by default). */
+export declare function Mark(props: MarkProps): JSX.Element;
+
+export interface CommandBlockProps {
+  /** The command exactly as the user should paste it. */
+  command: string;
+  /** Prompt glyph shown before the command, not copied. Default "$"; pass "" for none. */
+  prompt?: string;
+  /** Optional output lines. Lines starting "[ok]", "[err]" or "[info]" get a coloured tag; lines starting "#" are muted. */
+  output?: string[];
+  /** Show the copy control. Default true. */
+  copyable?: boolean;
+  className?: string;
+}
+/** A shell command on `surface-raised` with a copy control, and optional output below. */
+export declare function CommandBlock(props: CommandBlockProps): JSX.Element;
+
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "className"> {
+  /** Label above the field, uppercased. */
+  label?: string;
+  /** Helper text under the field. */
+  hint?: string;
+  /** Error text; turns the border `danger` and prints "[err] <error>" under the field. */
+  error?: string;
+  className?: string;
+}
+/** Single-line text field with the button's 2px corner. */
+export declare function Input(props: InputProps): JSX.Element;
+
+export interface LinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "className"> {
+  /** inline: underlined `link` text inside a sentence (default). standalone: an uppercase `label` link on its own line, usually ending in "→". */
+  variant?: "inline" | "standalone";
+  children: ReactNode;
+  className?: string;
+}
+export declare function Link(props: LinkProps): JSX.Element;
+
+export interface TagProps {
+  /** ok: `success`. err: `danger`. info: `link`. plain: `ink-muted` (default). */
+  status?: "ok" | "err" | "info" | "plain";
+  /** The word inside the brackets; defaults to the status name. */
+  children?: ReactNode;
+  className?: string;
+}
+/** Bracketed mono text, "[err]"; no fill, no border. */
+export declare function Tag(props: TagProps): JSX.Element;
+
+export interface CalloutProps {
+  /** info (default, glyph "i"), danger ("!"), success ("+"), note ("*"). */
+  tone?: "info" | "danger" | "success" | "note";
+  /** Override the glyph: one Unicode character that JetBrains Mono draws (never an emoji). */
+  glyph?: string;
+  title?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}
+/** A notice on `surface-raised` led by one coloured Unicode glyph. */
+export declare function Callout(props: CalloutProps): JSX.Element;
+
+export interface HeaderProps {
+  /** Nav links; mark one `current`. */
+  nav?: { label: string; href: string; current?: boolean }[];
+  /** One Button at the end of the nav. */
+  action?: { label: string; href?: string; onClick?: (event: MouseEvent<HTMLElement>) => void };
+  /** Where the mark links. Default "/". */
+  homeHref?: string;
+  className?: string;
+}
+/** Site header: the mark on the left, uppercase nav and one Button on the right, over a `line` rule. */
+export declare function Header(props: HeaderProps): JSX.Element;
+
+export interface CardProps {
+  /** Small mono line above the title: an index ("01"), a path or a date. */
+  eyebrow?: ReactNode;
+  title?: ReactNode;
+  /** One or two sentences in `ink-muted`. */
+  children?: ReactNode;
+  /** Optional standalone link at the bottom, e.g. { label: "Read more →", href }. */
+  action?: { label: string; href: string };
+  className?: string;
+}
+/** Level 2: solid `surface-card` with `shadow-2`, 2px corners, no border. Solid approved 2026-10-04. */
+export declare function Card(props: CardProps): JSX.Element;
+
+export declare function SectionHeading(props: { title: ReactNode; index?: string; className?: string }): JSX.Element;
+
+export interface TabsProps {
+  tabs: { id: string; label: string; content: ReactNode }[];
+  defaultId?: string;
+  value?: string;
+  onChange?: (id: string) => void;
+  className?: string;
+}
+export declare function Tabs(props: TabsProps): JSX.Element;
+
+export interface CodeBlockProps {
+  code: string;
+  filename?: string;
+  /** "plain" turns syntax colour off. */
+  language?: string;
+  className?: string;
+}
+export declare function CodeBlock(props: CodeBlockProps): JSX.Element;
+
+export interface TableColumn { key: string; label: string; align?: "left" | "right"; mono?: boolean; muted?: boolean }
+export interface TableProps { columns: TableColumn[]; rows: Record<string, ReactNode>[]; caption?: ReactNode; className?: string }
+export declare function Table(props: TableProps): JSX.Element;
+
+export interface CheckboxProps {
+  label: ReactNode;
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  name?: string;
+  value?: string;
+  disabled?: boolean;
+  className?: string;
+}
+/** Text checkbox: [x] / [ ]. */
+export declare function Checkbox(props: CheckboxProps): JSX.Element;
+
+export interface RadioGroupProps {
+  options: { value: string; label: ReactNode }[];
+  label?: ReactNode;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  name?: string;
+  disabled?: boolean;
+  className?: string;
+}
+/** Text radios: (•) / ( ). */
+export declare function RadioGroup(props: RadioGroupProps): JSX.Element;
+
+export interface TextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, "className"> {
+  label?: string; hint?: string; error?: string; className?: string;
+}
+export declare function Textarea(props: TextareaProps): JSX.Element;
+
+export interface SelectProps {
+  options: { value: string; label: string }[];
+  label?: string;
+  hint?: string;
+  error?: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  /** Adds a hidden input with this name so the value posts with a form. */
+  name?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  id?: string;
+  className?: string;
+}
+/** Custom dropdown (listbox) styled like Input; the open list is drawn by the system, not the browser. */
+export declare function Select(props: SelectProps): JSX.Element;
+
+export declare function Kbd(props: { children: ReactNode; className?: string }): JSX.Element;
+
+export interface ProgressProps { value: number; max?: number; width?: number; label?: string; className?: string }
+/** Text progress bar: [####----] 50%. */
+export declare function Progress(props: ProgressProps): JSX.Element;
+
+/** Text spinner: | / - \ */
+export declare function Spinner(props: { label?: string; className?: string }): JSX.Element;
+
+export interface AsciiBackgroundProps {
+  children?: ReactNode;
+  density?: number;
+  accents?: boolean;
+  seed?: number;
+  cols?: number;
+  rows?: number;
+  height?: number | string;
+  fadeFrom?: "left";
+  className?: string;
+}
+export declare function AsciiBackground(props: AsciiBackgroundProps): JSX.Element;
+
+export interface FooterProps {
+  columns?: { title: string; links: { label: string; href: string; external?: boolean }[] }[];
+  note?: ReactNode;
+  meta?: ReactNode;
+  className?: string;
+}
+export declare function Footer(props: FooterProps): JSX.Element;
+
+export interface ModalProps {
+  open: boolean;
+  onClose?: () => void;
+  title: ReactNode;
+  /** One or two sentences in `ink-muted`, or a small form. */
+  children?: ReactNode;
+  /** Usually a text Link/button to cancel and one Button to confirm, in that order. */
+  actions?: ReactNode;
+  /** "danger" announces it as an alert dialog. */
+  tone?: "default" | "danger";
+  /** Click on the backdrop closes it (default true). */
+  dismissable?: boolean;
+  className?: string;
+}
+/** Level 4: a dialog on `ground` with a 1px `ink` border over the `scrim`; no shadow. */
+export declare function Modal(props: ModalProps): JSX.Element | null;
+
+/* Added 2026-10-03 and 2026-10-04, each approved by Alex. */
+
+export type IconName = "next" | "back" | "up" | "down" | "external" | "open" | "collapse" | "close" | "add" | "remove" | "done" | "warning" | "info" | "more" | "menu" | "home" | "profile" | "search" | "notifications" | "settings" | "like" | "comment" | "repost" | "share" | "reply" | "edit" | "copy" | "delete" | "upload" | "download" | "play" | "pause" | "show" | "hide" | "private" | "signout";
+export interface IconProps {
+  name: IconName;
+  /** 20 (default), 16 or 24 px. */
+  size?: 16 | 20 | 24;
+  /** Hidden text read by screen readers; leave out only when a visible word beside it says the same. */
+  label?: string;
+  className?: string;
+}
+/** One Iconoir icon (regular, 1.5 stroke, currentColor) from the closed list, `aria-hidden`, with an optional visually hidden label. */
+export declare function Icon(props: IconProps): JSX.Element | null;
+
+export interface AvatarProps {
+  src?: string;
+  /** Display name or handle; its first letter is the fallback. */
+  name?: string;
+  size?: 24 | 40 | 64 | 128;
+  /** Only when no name is shown beside it; default "" (decorative). */
+  alt?: string;
+  className?: string;
+}
+/** Approved 2026-10-03. Profile picture in a disc with a `line` hairline; one mono letter on `surface-raised` when there is no picture. */
+export declare function Avatar(props: AvatarProps): JSX.Element;
+
+export interface SwitchProps {
+  label: ReactNode;
+  defaultChecked?: boolean;
+  checked?: boolean;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  name?: string;
+  value?: string;
+  disabled?: boolean;
+  className?: string;
+}
+/** Approved 2026-10-03. On/off drawn as text, "[──◉] on" / "[○──] off", over a real checkbox with role="switch". */
+export declare function Switch(props: SwitchProps): JSX.Element;
+
+export interface ToastProps {
+  tone?: "ok" | "err" | "info";
+  /** One short lowercase line; empty renders only the live region. */
+  children?: ReactNode;
+  /** Shows the ✕ dismiss button. */
+  onClose?: () => void;
+  closeLabel?: string;
+  /** Render in place instead of fixed at the bottom (for showcases). */
+  inline?: boolean;
+  className?: string;
+}
+/** Approved 2026-10-03. A status line at the bottom of the screen on a level 3 surface; never times out. */
+export declare function Toast(props: ToastProps): JSX.Element;
+
+export interface SkipLinkProps {
+  href?: string;
+  children?: ReactNode;
+  /** Force the focused look (for showcases). */
+  shown?: boolean;
+  className?: string;
+}
+/** Approved 2026-10-03. "Skip to content", off-screen until focused. */
+export declare function SkipLink(props: SkipLinkProps): JSX.Element;
+
+export interface MediaFrameProps {
+  src?: string;
+  alt: string;
+  ratio?: "1:1" | "4:5" | "9:16" | "16:9" | "3:1";
+  caption?: ReactNode;
+  emptyText?: string;
+  width?: number | string;
+  className?: string;
+}
+/** Approved 2026-10-04. A fixed-shape picture frame, cropped to fill, `radius-xs`, `line` hairline, optional caption. */
+export declare function MediaFrame(props: MediaFrameProps): JSX.Element;
+
+export interface PaginationProps {
+  /** Numbered form. */
+  page?: number;
+  pages?: number;
+  hrefFor?: (page: number) => string;
+  /** Feed form (cursor), used when `pages` is not given. */
+  newer?: string;
+  older?: string;
+  label?: string;
+  className?: string;
+}
+/** Approved 2026-10-04. Page links in the `label` style; the current page underlined like a Tab. */
+export declare function Pagination(props: PaginationProps): JSX.Element;
+
+export interface DescriptionListProps {
+  items: { label: ReactNode; value: ReactNode | null; mono?: boolean; key?: string }[];
+  className?: string;
+}
+/** Approved 2026-10-04. Label-and-value rows on `line` hairlines; stacks at 440px and narrower. */
+export declare function DescriptionList(props: DescriptionListProps): JSX.Element;
+
+/* The endless feed, approved 2026-10-04. */
+
+export interface NewPostsProps {
+  /** How many arrived; "[info] 3 new posts". */
+  count?: number;
+  children?: ReactNode;
+  /** The feed's own address, so SHOW works with no script (reloads at the top). */
+  href?: string;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
+  /** Slid away while the person scrolls up; the feed script sets it. */
+  hidden?: boolean;
+  /** Render in place instead of sticky (for showcases). */
+  inline?: boolean;
+  className?: string;
+}
+/** Approved 2026-10-04. A terminal-style status bar under the header, "[info] 3 new posts  SHOW ↑", when newer posts are waiting. Hides while scrolling up; reaching the top loads the new posts. */
+export declare function NewPosts(props: NewPostsProps): JSX.Element;
+
+export interface FeedMoreProps {
+  /** idle: the plain "older posts" link (the no-script fallback the feed script watches). loading, end, error: what the script shows. */
+  state?: "idle" | "loading" | "end" | "error";
+  /** The server's cursor link to the next batch. */
+  older?: string;
+  onRetry?: (event: MouseEvent<HTMLElement>) => void;
+  loadingText?: string;
+  endText?: string;
+  errorText?: string;
+  className?: string;
+}
+/** Approved 2026-10-04. The bottom of an endless feed: an "older posts" link that loads by itself as you scroll near it. */
+export declare function FeedMore(props: FeedMoreProps): JSX.Element;
