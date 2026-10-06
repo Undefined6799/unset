@@ -37,6 +37,19 @@ export interface InitExit {
 const STARTED = new Set<string>();
 const DIRS = new Set<string>();
 const INIT_COMPLETE = "PostgreSQL init process complete";
+const OWNER_LABEL = "sh.unset.test-owner";
+
+/** Names of the containers, running or stopped, that this process started and has not removed. */
+export function ownContainers(): string[] {
+  const listed = spawnSync(
+    "docker",
+    ["ps", "-a", "--filter", `label=${OWNER_LABEL}=${process.pid}`, "--format", "{{.Names}}"],
+    {
+      encoding: "utf8",
+    },
+  );
+  return listed.stdout.split("\n").filter((name) => name !== "");
+}
 
 /** A password for one run: 32 random bytes, URL-safe. */
 export const randomPassword = (): string => randomBytes(32).toString("base64url");
@@ -88,6 +101,9 @@ function runArgs(name: string, options: PostgresOptions): string[] {
     "--rm",
     "--name",
     name,
+    // Lets a test list the containers its own process started (teardown_after_failure).
+    "--label",
+    `${OWNER_LABEL}=${process.pid}`,
     "-p",
     "127.0.0.1::5432",
     "-e",

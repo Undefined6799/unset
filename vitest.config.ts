@@ -20,6 +20,11 @@ const PROJECTS = [
   "tests/e2e",
 ];
 
+// The integration project's one Postgres (P1.11t): started once per run, only when that project runs.
+const GLOBAL_SETUP: Record<string, { globalSetup: string }> = {
+  "tests/integration": { globalSetup: "tests/integration/setup/pg.setup.ts" },
+};
+
 export default defineConfig({
   test: {
     exclude,
@@ -28,7 +33,7 @@ export default defineConfig({
     retry: 0,
     projects: PROJECTS.map((name) => ({
       extends: true,
-      test: { name, include: [`${name}/**/*.test.{ts,tsx,mts,cts}`] },
+      test: { name, include: [`${name}/**/*.test.{ts,tsx,mts,cts}`], ...(GLOBAL_SETUP[name] ?? {}) },
     })),
   },
 });
