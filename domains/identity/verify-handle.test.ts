@@ -96,7 +96,7 @@ describe("verifyHandle", () => {
     }
   });
 
-  test("first_valid_handle_counts", async () => {
+  test("malformed_handles_are_not_claims", async () => {
     const malformed = [
       "at://alice.example.com/app.bsky.actor.profile",
       "at://@alice.example.com",
@@ -110,8 +110,11 @@ describe("verifyHandle", () => {
       expect((await w.verifier().verifyHandle(A)).status).toBe("invalid");
       expect(w.calls.txt).toEqual([]);
     }
+  });
+
+  test("malformed_first_aka_skipped", async () => {
     const w = world();
-    w.answers.plc = json(doc(A, [...malformed, "at://alice.example.com"]));
+    w.answers.plc = json(doc(A, ["at://not a handle", "at://@alice.example.com", "at://alice.example.com"]));
     w.answers.txt["_atproto.alice.example.com"] = records(`did=${A}`);
     expect((await w.verifier().verifyHandle(A)).status).toBe("verified");
     expect(w.calls.txt).toEqual(["_atproto.alice.example.com"]);
@@ -222,15 +225,26 @@ describe("verifyHandle", () => {
       },
     };
     const resolveDid = createDidResolver({ network: broken, plcUrl: PLC_URL, cacheTtlS: 0, cacheMax: 1 });
-    const reported: unknown[] = [];
-    const verify = w.verifier({ resolveDid, onUnexpected: (error) => reported.push(error) });
-    expect(await verify.verifyHandle(A)).toEqual({ status: "unavailable" });
-    expect(reported).toHaveLength(1);
-    expect(reported[0]).toBeInstanceOf(TypeError);
     expect(await w.verifier({ resolveDid }).verifyHandle(A)).toEqual({ status: "unavailable" });
   });
 
   test("unexpected_error_reported_once", async () => {
+    const w = world();
+    const boom = new TypeError("boom");
+    const broken: IdentityNetwork = {
+      ...w.network,
+      get: async () => {
+        throw boom;
+      },
+    };
+    const resolveDid = createDidResolver({ network: broken, plcUrl: PLC_URL, cacheTtlS: 0, cacheMax: 1 });
+    const reported: unknown[] = [];
+    const verify = w.verifier({ resolveDid, onUnexpected: (error) => reported.push(error) });
+    expect(await verify.verifyHandle(A)).toEqual({ status: "unavailable" });
+    expect(reported).toEqual([boom]);
+  });
+
+  test("callback_throw_still_unavailable", async () => {
     const w = world();
     const broken: IdentityNetwork = {
       ...w.network,
