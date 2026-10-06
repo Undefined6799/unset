@@ -1,0 +1,10 @@
+/* fixture: shared/ui/components/Button/Button.module.css findings=0 */
+@layer components {
+  .button {
+    --lift: 3px;
+    color: var(--color-ink);
+    padding: var(--space-2);
+    content: "} not a brace {";
+    translate: 0 calc(-1 * var(--lift));
+  }
+}

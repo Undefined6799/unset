@@ -9,6 +9,7 @@ import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
+import * as cssLayers from "./css-layers.ts";
 import * as egress from "./egress.ts";
 import type { Finding } from "./files.ts";
 import { withoutGitEnv } from "./git-env.ts";
@@ -20,12 +21,13 @@ import * as routeRegistration from "./route-registration.ts";
 import * as webNoModerator from "./web-no-moderator.ts";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
-const HEADER = /^(?:\/\/|--)\s*fixture:\s*(\S+)\s+findings=(\d+)\s*$/;
+const HEADER = /^(?:\/\/|--|\/\*)\s*fixture:\s*(\S+)\s+findings=(\d+)\s*(?:\*\/)?\s*$/;
 const SCANNERS: Record<string, (root: string) => Finding[]> = {
   egress: egress.scanAll,
   "cookie-domain": cookieDomain.scanAll,
   "inner-html": innerHtml.scanAll,
   "inline-style": inlineStyle.scanAll,
+  "css-layers": cssLayers.scanAll,
   "web-no-moderator": webNoModerator.scanAll,
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
@@ -108,6 +110,38 @@ describe("egress", () => {
 describe("cookie-domain", () => {
   test("cookie_bad_fixture", () => expectFixtures("cookie-domain", "bad"));
   test("cookie_good_fixture", () => expectFixtures("cookie-domain", "good"));
+});
+
+describe("css-layers", () => {
+  // Each bad fixture is scanned beside the good layers.css and tokens.css, so it fails for its own reason only.
+  const base = () => readFixtures("css-layers", "good", ["layers.fixture", "tokens.fixture"]).files;
+  const expectBad = (name: string): void => {
+    const { files, expected } = readFixtures("css-layers", "bad", [name]);
+    const findings = cssLayers.scanAll(tempRepo({ ...base(), ...files }));
+    expect(countFindings(Object.keys(files), findings)).toEqual(expected);
+  };
+  test("css_layers_good_fixture", () => expectFixtures("css-layers", "good"));
+  test("css_layers_planted_unlayered_rule", () => expectBad("unlayered.fixture"));
+  test("css_layers_wrong_layer", () => expectBad("wrong-layer.fixture"));
+  test("css_layers_rule_after_the_layer", () => expectBad("second-block.fixture"));
+  test("css_layers_unplanned_file", () => expectBad("stray-file.fixture"));
+  test("css_layers_unknown_var", () => expectBad("unknown-var.fixture"));
+
+  test("css_layers_reads_names_from_layers_css", () => {
+    expect(cssLayers.declaredLayers("/* order */\n@layer tokens, base;\n")).toEqual(["tokens", "base"]);
+    expect(cssLayers.declaredLayers("@layer tokens;\n.a {\n}\n")).toBeUndefined();
+    const { files } = readFixtures("css-layers", "good", ["screen.fixture"]);
+    const findings = cssLayers.scanAll(
+      tempRepo({ ...base(), ...files, [cssLayers.LAYERS_FILE]: "@layer tokens, base, components;\n" }),
+    );
+    expect(findings.map((f) => f.text)).toEqual([`layer screens is not declared in ${cssLayers.LAYERS_FILE}`]);
+  });
+
+  test("css_layers_unbalanced_fails_closed", () => {
+    const ctx = { layers: ["screens"], tokens: new Set<string>() };
+    expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {\n.a {\n", ctx)).toHaveLength(1);
+    expect(cssLayers.scanCss("apps/web/screens/A.module.css", "@layer screens {}\n.a", ctx)).toHaveLength(1);
+  });
 });
 
 describe("inline-style", () => {

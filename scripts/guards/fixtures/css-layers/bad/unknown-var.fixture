@@ -1,0 +1,6 @@
+/* fixture: apps/web/screens/Feed.module.css findings=1 */
+@layer screens {
+  .feed {
+    color: var(--color-renamed);
+  }
+}

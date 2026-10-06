@@ -23,3 +23,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0013](0013-identity-network-port.md) | Identity resolution behind a network port, DNS on c-ares | Proposed (awaiting Alex) |
 | [0014](0014-node-postgres.md) | node-postgres as the Postgres driver | Proposed (awaiting Alex) |
 | [0015](0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Accepted (pending merge) |
+| [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |

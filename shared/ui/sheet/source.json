@@ -1,0 +1,27 @@
+{
+  "sheetUrl": "https://claude.ai/artifact/78Sh5q9HGz74d5AQyMbQVt",
+  "sheetVersion": "1791232530-a028",
+  "copiedAt": "2026-10-06",
+  "files": [
+    {
+      "path": "sheet/tokens.json",
+      "from": "project/tokens.json",
+      "sha256": "6948b1e22e1b664e61b90e550cbb300ec7e370e544871a947d94d937453cc683"
+    },
+    {
+      "path": "sheet/components-index.d.ts.txt",
+      "from": "project/components/index.d.ts",
+      "sha256": "cc767cdb98c71b3251a501feafc905d6ec5a1119e097a0f3882270e97d7bdd2b"
+    },
+    {
+      "path": "fonts/SpaceGrotesk-Variable.woff2",
+      "from": "project/fonts/SpaceGrotesk-Variable.woff2",
+      "sha256": "0640890476fc1198ab4de571fb658de443c4d85b66466ec09534a8737ab1ce9d"
+    },
+    {
+      "path": "fonts/JetBrainsMono-Variable.woff2",
+      "from": "project/fonts/JetBrainsMono-Variable.woff2",
+      "sha256": "7fd1f69642aa7f2bd41d917bf0e434c4f21911749f6d89455d5b9114547a8c9c"
+    }
+  ]
+}

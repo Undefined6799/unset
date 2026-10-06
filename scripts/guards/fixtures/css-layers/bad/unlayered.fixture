@@ -1,0 +1,4 @@
+/* fixture: apps/web/src/screens/Home.module.css findings=1 */
+.planted {
+  color: var(--color-ink);
+}

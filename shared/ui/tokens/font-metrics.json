@@ -1,0 +1,5 @@
+{
+  "$comment": "Metric-adjusted local fallback faces per web font (P1.21 step 7). Empty until P1.21m adds the dev script that computes them from the two woff2 files; `sources` then records the font hashes they were computed from.",
+  "sources": {},
+  "families": {}
+}
