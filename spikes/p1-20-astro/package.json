@@ -1,0 +1,18 @@
+{
+  "name": "p1-20-astro-spike",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "astro build" },
+  "dependencies": {
+    "@astrojs/node": "11.1.6",
+    "@astrojs/react": "7.0.0",
+    "astro": "7.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "playwright-core": "1.56.1"
+  }
+}

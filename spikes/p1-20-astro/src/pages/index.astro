@@ -1,0 +1,15 @@
+---
+import { Box } from "../components/Box.tsx";
+import Counter from "../islands/Counter.tsx";
+import Search from "../islands/Search.tsx";
+---
+<html lang="en">
+  <head><meta charset="utf-8" /><title>P1.20 spike</title></head>
+  <body>
+    <main>
+      <Box>Server box</Box>
+      <Counter client:load start={1} />
+      <Search client:load placeholder="search" />
+    </main>
+  </body>
+</html>

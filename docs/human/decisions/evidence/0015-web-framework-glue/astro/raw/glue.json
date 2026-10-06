@@ -1,0 +1,11 @@
+{
+  "files": {
+    "src/middleware.ts": 24
+  },
+  "configs": {
+    "astro.config.mjs": {
+      "functionLines": 6,
+      "declarativeLines": 23
+    }
+  }
+}

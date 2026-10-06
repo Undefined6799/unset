@@ -51,7 +51,12 @@ export function configLineSplit(file: string, source: string): { functionLines: 
   for (const [start, end] of functionSpans(program)) {
     for (let line = lineOf(start); line <= lineOf(Math.max(start, end - 1)); line++) inFunction.add(line);
   }
-  const functionLines = countLines([...inFunction].sort((a, b) => a - b).map((i) => lines[i]).join("\n"));
+  const functionLines = countLines(
+    [...inFunction]
+      .sort((a, b) => a - b)
+      .map((i) => lines[i])
+      .join("\n"),
+  );
   return { functionLines, declarativeLines: countLines(source) - functionLines };
 }
 

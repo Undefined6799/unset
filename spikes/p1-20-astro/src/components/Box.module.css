@@ -1,0 +1,5 @@
+.box {
+  border: 2px solid rgb(0, 128, 0);
+  padding: 8px;
+  color: rgb(10, 20, 30);
+}

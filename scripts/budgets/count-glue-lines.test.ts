@@ -21,7 +21,9 @@ function tree(files: Record<string, string>): string {
 
 test("count_glue_lines_rule", () => {
   const root = tree({
-    "glue/a.ts": ["// header", "", "export const a = 1;", "/* block", "   comment */", "export const b = 2;"].join("\n"),
+    "glue/a.ts": ["// header", "", "export const a = 1;", "/* block", "   comment */", "export const b = 2;"].join(
+      "\n",
+    ),
     "glue/nested/b.tsx": ["export function B() {", "  return <div />; // tail", "}", ""].join("\n"),
     "glue/a.test.ts": "export const ignored = 1;\nexport const alsoIgnored = 2;\n",
     "glue/notes.md": "not code\n",
@@ -56,7 +58,7 @@ test("config_arrow_callbacks_count_as_functions", () => {
     "  css: {",
     "    modules: {",
     "      generateScopedName: (name: string, file: string) =>",
-    "        `${name}_${file.length}`,",
+    "        name + file.length,",
     "    },",
     "  },",
     "};",
