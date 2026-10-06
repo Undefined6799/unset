@@ -1,6 +1,6 @@
 # gitleaks configuration (P0.07). Default rules plus the key formats this project uses that the
-# defaults do not know. No allowlist entries: a test that needs one of these strings builds it at
-# run time and never commits it.
+# defaults do not know. A test that needs a secret-shaped string builds it at run time and never
+# commits it.
 
 [extend]
 useDefault = true
@@ -28,3 +28,19 @@ id = "age-plugin-identity"
 description = "age plugin identity (for example a YubiKey identity)"
 regex = '''AGE-PLUGIN-[A-Z0-9-]+-1[02-9AC-HJ-NP-Z]+'''
 keywords = ["age-plugin-"]
+
+# One exception: public-key identifiers, which are public by construction (ruling 2026-10-06). No other
+# entry without an architecture ruling. P0.07a. It targets the default generic-api-key rule only, and
+# matches the finding's secret (regexTarget "secret", config/config.go in gitleaks v8.30.1), never the
+# line or path, so a real key on the same line still fails. The secret must be wholly one of:
+# - a K-256 (zQ3s) or P-256 (zDn) public key in base58btc multibase, at the exact length a 33-byte
+#   compressed key gives (49 characters), with or without did:key:;
+# - did:plc: followed by exactly 24 base32 characters.
+[[allowlists]]
+description = "Public did:key and did:plc identifiers (ruling 2026-10-06, P0.07a)"
+targetRules = ["generic-api-key"]
+regexTarget = "secret"
+regexes = [
+  '''^(?:did:key:)?z(?:Q3s[1-9A-HJ-NP-Za-km-z]{45}|Dn[1-9A-HJ-NP-Za-km-z]{46})$''',
+  '''^did:plc:[a-z2-7]{24}$''',
+]

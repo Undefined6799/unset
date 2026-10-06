@@ -91,15 +91,36 @@ jobs:
       contents: read
     env:
       GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+      # P0.07a: a pull request is judged on its own commits; the SHAs reach the script through env only.
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Fails closed before the scan: gitleaks v8.30.1 (sources/git.go) carries on past a git log error, so a missing
+      # commit or an empty range would otherwise read as a clean scan.
+      - name: Scan this pull request's commits
+        if: github.event_name == 'pull_request'
+        run: |
+          git rev-parse --verify --quiet "$BASE_SHA^{commit}" > /dev/null
+          git rev-parse --verify --quiet "$HEAD_SHA^{commit}" > /dev/null
+          test "$(git rev-list --count "$BASE_SHA..$HEAD_SHA")" -gt 0
+          docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --redact --no-banner --config .github/.gitleaks.toml --log-opts="$BASE_SHA..$HEAD_SHA" .
+      # Every other event (push to main) scans every ref's full history: a secret pushed to any branch is exposed and
+      # must be rotated, but it no longer turns unrelated pull requests red (ruling 2026-10-06).
       - name: Scan full history
+        if: github.event_name != 'pull_request'
         run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --redact --no-banner --config .github/.gitleaks.toml .
       - name: Scan working tree
         run: docker run --rm -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" dir --redact --no-banner --config .github/.gitleaks.toml .
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      # The scope and the one public-key exception, proven on fixtures built at run time (scripts/ci/secrets-fixtures.ts).
+      - name: Prove the scan on planted fixtures
+        run: node scripts/ci/secrets-fixtures.ts
 
   actionlint:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
