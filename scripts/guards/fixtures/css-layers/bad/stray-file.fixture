@@ -1,0 +1,6 @@
+/* fixture: apps/web/src/global.css findings=1 */
+@layer screens {
+  .x {
+    color: var(--color-ink);
+  }
+}

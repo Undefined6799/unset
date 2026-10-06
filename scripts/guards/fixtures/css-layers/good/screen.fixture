@@ -1,0 +1,6 @@
+/* fixture: apps/web/src/screens/Profile.module.css findings=0 */
+@layer screens {
+  .page {
+    padding: var(--space-2);
+  }
+}

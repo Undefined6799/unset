@@ -1,6 +1,6 @@
-// The Biome rules switched on in P0.05, each shown biting on a known-bad fixture.
+// The Biome rules switched on in P0.05 and P1.21l, each shown biting on a known-bad fixture.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,12 +18,17 @@ afterAll(() => {
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 });
 
-/** Runs `biome ci` with the repo's rules on one fixture file; formatting is off so only lint speaks. */
+const PLUGIN = "scripts/lint/biome/token-only.grit";
+
+/** Runs `biome ci` with the repo's rules (and its GritQL plugin) on one fixture file; formatting is off so only lint
+ * speaks. */
 function biome(file: string, text: string): Outcome {
   const root = mkdtempSync(join(tmpdir(), "biome-"));
   temps.push(root);
   const { vcs: _vcs, $schema: _schema, ...rules } = config;
   writeFileSync(join(root, "biome.json"), JSON.stringify(rules));
+  mkdirSync(dirname(join(root, PLUGIN)), { recursive: true });
+  cpSync(join(ROOT, PLUGIN), join(root, PLUGIN));
   mkdirSync(dirname(join(root, file)), { recursive: true });
   writeFileSync(join(root, file), text);
   const run = spawnSync(BIOME, ["ci", "--formatter-enabled=false", "--colors=off", "--reporter=json", file], {
@@ -41,6 +46,7 @@ const BITES: [rule: string, level: "error" | "warning", file: string, text: stri
   ["style/noHexColors", "error", "apps/web/x.module.css", ".a {\n  color: #fff;\n}\n"],
   ["correctness/noMissingVarFunction", "error", "apps/web/x.module.css", ".a {\n  --c: red;\n  color: --c;\n}\n"],
   ["complexity/noImportantStyles", "error", "apps/web/x.module.css", ".a {\n  color: var(--c) !important;\n}\n"],
+  ["nursery/useLayeredStyles", "error", "apps/web/x.module.css", ".a {\n  color: var(--c);\n}\n"],
   ["style/useConst", "error", "domains/x/a.ts", "let a = 1;\nexport const b = a;\n"],
   ["style/noParameterAssign", "error", "domains/x/a.ts", "export function f(x: number) {\n  x = 2;\n  return x;\n}\n"],
   ["suspicious/noEmptyBlockStatements", "error", "domains/x/a.ts", "export function f(): void {}\n"],
@@ -89,8 +95,42 @@ describe("biome", () => {
   });
 
   test("biome_allows_hex_in_tokens", () => {
-    const out = biome("shared/ui/src/tokens.css", ":root {\n  --c: #fff;\n}\n");
+    const out = biome("shared/ui/src/tokens.css", "@layer tokens {\n  :root {\n    --c: #fff;\n  }\n}\n");
     expect(out).toEqual({ exitCode: 0, diagnostics: [] });
+  });
+
+  // token-only.grit (plan §7, decision 16): literal values only in tokens.css.
+  const layered = (body: string): string => `@layer screens {\n  .a {\n    ${body}\n  }\n}\n`;
+  test.each([
+    ["color: red;"],
+    ["padding: 4px;"],
+    ["margin: calc(10px + var(--space-2));"],
+    ["font-size: 12px;"],
+    ["z-index: 10;"],
+    ["border: 1px solid red;"],
+    ["border-width: 4px;"],
+    ["color: var(--c, red);"],
+  ])("token_only_rejects %s", (body) => {
+    const out = biome("apps/web/x.module.css", layered(body));
+    expect(categories(out)).toEqual(["error plugin"]);
+    expect(out.exitCode).not.toBe(0);
+  });
+
+  test.each([
+    ["color: var(--color-ink);"],
+    ["padding: var(--space-2) var(--space-4);"],
+    ["margin: calc(-1 * var(--space-2)) 0;"],
+    ["background: transparent;"],
+    ["border: 1px solid var(--color-line);"],
+    ["outline-offset: 2px;"],
+    ["translate: 0 -3px;"],
+  ])("token_only_allows %s", (body) => {
+    expect(biome("apps/web/x.module.css", layered(body))).toEqual({ exitCode: 0, diagnostics: [] });
+  });
+
+  test("token_only_skips_tokens_css", () => {
+    const text = "@layer tokens {\n  :root {\n    font-size: 16px;\n  }\n}\n";
+    expect(biome("shared/ui/src/tokens.css", text)).toEqual({ exitCode: 0, diagnostics: [] });
   });
 
   test("biome_allows_long_generated_files", () => {

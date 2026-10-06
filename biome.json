@@ -11,6 +11,7 @@
         "noImportantStyles": "error"
       },
       "correctness": { "noMissingVarFunction": "error" },
+      "nursery": { "useLayeredStyles": "error" },
       "style": {
         "noHexColors": "error",
         "noNonNullAssertion": "error",
@@ -42,6 +43,10 @@
     {
       "includes": ["**/*.generated.*"],
       "linter": { "rules": { "style": { "noExcessiveLinesPerFile": "off" } } }
+    },
+    {
+      "includes": ["**/*.css", "!shared/ui/src/tokens.css"],
+      "plugins": ["./scripts/lint/biome/token-only.grit"]
     },
     {
       "includes": ["shared/ui/src/tokens.css"],

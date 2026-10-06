@@ -1,0 +1,24 @@
+// Token-only CSS (P1.21l; plan §7, decision 16; step book P1.21 "token-only.grit"). Loaded by biome.json for every
+// .css file except shared/ui/src/tokens.css, the one file that holds literal values.
+//
+// GritQL as Biome 2.5.15 runs it (biomejs.dev/linter/plugins, read 2026-10-06; behaviour checked against the pinned
+// binary): r"…" matches the whole node text, and groups must be non-capturing (?:…), since a capturing group fails to
+// compile.
+language css
+
+or {
+  // 1. Colour, spacing, radius, shadow, type and stacking properties take tokens only: var(--…), calc() over vars and
+  // unitless numbers, 0, or a CSS-wide or empty keyword.
+  CssGenericProperty(name=$name, value=$value) as $decl where {
+    $name <: r"(?:color|background|background-color|border(?:-(?:top|right|bottom|left|block|inline|block-start|block-end|inline-start|inline-end))?-color|outline-color|fill|stroke|box-shadow|text-shadow|padding(?:-[a-z-]+)?|margin(?:-[a-z-]+)?|gap|row-gap|column-gap|inset(?:-[a-z-]+)?|top|right|bottom|left|border-radius|border-(?:top|bottom|start|end)-(?:left|right|start|end)-radius|font-size|font-family|font-weight|line-height|letter-spacing|z-index)",
+    not $value <: r"(?:var\(--[A-Za-z0-9_-]+\)|calc\((?:var\(--[A-Za-z0-9_-]+\)|-?[0-9]*\.?[0-9]+|[\s*/+()-])+\)|0|auto|inherit|initial|unset|none|currentColor|currentcolor|transparent)(?:[\s,]+(?:var\(--[A-Za-z0-9_-]+\)|calc\((?:var\(--[A-Za-z0-9_-]+\)|-?[0-9]*\.?[0-9]+|[\s*/+()-])+\)|0|auto|inherit|initial|unset|none|currentColor|currentcolor|transparent))*",
+    register_diagnostic(span=$decl, message="use a token: this property takes var(--…), calc() over tokens, 0 or a keyword")
+  },
+  // 2. Hairlines and focus offsets: tokens, or a literal 1px, 2px or 3px (the sheet's hairlines and focus rings are
+  // not spacing). Borders and outlines also take a line style; their colour must still be a token.
+  CssGenericProperty(name=$name, value=$value) as $decl where {
+    $name <: r"(?:border(?:-(?:top|right|bottom|left|block|inline|block-start|block-end|inline-start|inline-end))?(?:-width)?|outline(?:-width|-offset)?|text-underline-offset|text-decoration-thickness)",
+    not $value <: r"(?:var\(--[A-Za-z0-9_-]+\)|-?[123]px|0|inherit|initial|unset|none|currentColor|currentcolor|transparent|solid|dashed|dotted|double)(?:[\s,]+(?:var\(--[A-Za-z0-9_-]+\)|-?[123]px|0|none|currentColor|currentcolor|transparent|solid|dashed|dotted|double))*",
+    register_diagnostic(span=$decl, message="use a token: widths and offsets take var(--…), 1px, 2px or 3px")
+  }
+}

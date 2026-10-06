@@ -1,0 +1,6 @@
+/* fixture: shared/ui/components/Card/Card.module.css findings=1 */
+@layer screens {
+  .card {
+    color: var(--color-ink);
+  }
+}

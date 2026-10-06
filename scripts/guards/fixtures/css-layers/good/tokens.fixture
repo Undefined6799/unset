@@ -1,0 +1,7 @@
+/* fixture: shared/ui/src/tokens.css findings=0 */
+@layer tokens {
+  :root {
+    --color-ink: #f4f2f6;
+    --space-2: 8px;
+  }
+}
