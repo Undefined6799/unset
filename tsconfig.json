@@ -14,6 +14,7 @@
     { "path": "shared/errors" },
     { "path": "shared/http" },
     { "path": "shared/log" },
-    { "path": "shared/ui" }
+    { "path": "shared/ui" },
+    { "path": "tests" }
   ]
 }

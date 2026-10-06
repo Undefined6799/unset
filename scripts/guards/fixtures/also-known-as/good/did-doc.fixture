@@ -1,0 +1,3 @@
+// fixture: domains/identity/did-doc.ts findings=0
+const aka = Array.isArray(doc.alsoKnownAs) ? doc.alsoKnownAs : [];
+export const rawAlsoKnownAs = aka;
