@@ -2,7 +2,8 @@
 //   - every non-blank, non-comment line of a .ts or .tsx file under <dir> counts, test files excluded;
 //   - a config file passed with --config counts every line inside a function (a plugin, a hook, a callback);
 //   - its remaining, declarative lines (option literals) are free up to 80; each line beyond 80 counts.
-// Usage: node scripts/budgets/count-glue-lines.ts <dir> [--config <file>]...   prints one integer.
+// Usage: node scripts/budgets/count-glue-lines.ts <dir> [--config <file>]... [--warn-above <MEASUREMENTS.json>]
+//   prints one integer; with --warn-above, also a CI warning when it exceeds that file's glueLines.total (P1.23r).
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseSync } from "vite";
@@ -71,15 +72,32 @@ export function countGlueLines(dir: string, configs: readonly string[] = []): nu
   return configs.reduce((sum, file) => sum + configGlueLines(file, readFileSync(file, "utf8")), code);
 }
 
-function main(args: readonly string[]): void {
-  const [dir, ...rest] = args;
-  const configs: string[] = [];
-  for (let i = 0; i < rest.length; i += 2) {
-    if (rest[i] !== "--config" || rest[i + 1] === undefined) throw new Error("usage: <dir> [--config <file>]...");
-    configs.push(rest[i + 1] as string);
-  }
-  if (dir === undefined) throw new Error("usage: <dir> [--config <file>]...");
-  process.stdout.write(`${countGlueLines(dir, configs)}\n`);
+/** The CI warning when count exceeds the glueLines.total a MEASUREMENTS.json records (ADR 0015's number). */
+export function glueWarning(count: number, measurements: string): string | undefined {
+  const total = (JSON.parse(measurements) as { glueLines?: { total?: unknown } }).glueLines?.total;
+  if (typeof total !== "number") throw new Error("MEASUREMENTS.json has no numeric glueLines.total");
+  if (count <= total) return undefined;
+  return `::warning title=glue-lines::${count} glue lines, above the ${total} ADR 0015 accepted; re-measure and record why`;
 }
 
-if (import.meta.main) main(process.argv.slice(2));
+const USAGE = "usage: <dir> [--config <file>]... [--warn-above <MEASUREMENTS.json>]";
+
+export function main(args: readonly string[], print: (line: string) => void): void {
+  const [dir, ...rest] = args;
+  const configs: string[] = [];
+  let measurements: string | undefined;
+  for (let i = 0; i < rest.length; i += 2) {
+    const value = rest[i + 1];
+    if (value === undefined) throw new Error(USAGE);
+    if (rest[i] === "--config") configs.push(value);
+    else if (rest[i] === "--warn-above") measurements = value;
+    else throw new Error(USAGE);
+  }
+  if (dir === undefined) throw new Error(USAGE);
+  const count = countGlueLines(dir, configs);
+  print(`${count}`);
+  const warning = measurements === undefined ? undefined : glueWarning(count, readFileSync(measurements, "utf8"));
+  if (warning !== undefined) print(warning);
+}
+
+if (import.meta.main) main(process.argv.slice(2), (line) => process.stdout.write(`${line}\n`));

@@ -1,0 +1,56 @@
+/* Avatar (P1.24s; sheet components/Avatar/README.md, v45): a disc, the hairline drawn inside the edge. */
+@layer components {
+  .root {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: var(--radius-full);
+    background-color: var(--color-surface-raised);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-weight: var(--type-label-weight);
+    text-transform: uppercase;
+  }
+
+  .root::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-full);
+  }
+
+  .image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .size24 {
+    width: 24px;
+    height: 24px;
+    font-size: var(--type-label-size);
+  }
+
+  .size40 {
+    width: 40px;
+    height: 40px;
+    font-size: var(--type-body-small-size);
+  }
+
+  .size64 {
+    width: 64px;
+    height: 64px;
+    font-size: var(--type-heading-3-size);
+  }
+
+  .size128 {
+    width: 128px;
+    height: 128px;
+    font-size: var(--type-heading-1-size);
+  }
+}

@@ -1,0 +1,70 @@
+/* Pagination (P1.24s; sheet components/Pagination/README.md, v45): the `label` style; each link at least 40×40px;
+   the current page in `ink` with the Tabs' 2px underline; at 440px or narrower the numbers fold to "5 / 12". */
+@layer components {
+  .root {
+    container-type: inline-size;
+  }
+
+  .list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+  }
+
+  .item {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0 var(--space-2);
+    color: var(--color-ink-muted);
+    text-decoration: none;
+  }
+
+  a.item:hover {
+    color: var(--color-ink);
+  }
+
+  .current {
+    border-bottom: 2px solid var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  .off {
+    color: var(--color-line-strong);
+  }
+
+  .gap {
+    color: var(--color-ink-muted);
+  }
+
+  .count {
+    display: none;
+    padding: 0 var(--space-2);
+    color: var(--color-ink);
+  }
+
+  @container (max-width: 440px) {
+    .number,
+    .gap {
+      display: none;
+    }
+
+    .count {
+      display: block;
+    }
+  }
+}

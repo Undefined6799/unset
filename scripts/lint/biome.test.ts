@@ -1,4 +1,4 @@
-// The Biome rules switched on in P0.05 and P1.21l, each shown biting on a known-bad fixture.
+// The Biome rules switched on in P0.05, P1.21l and P1.23r, each shown biting on a known-bad fixture.
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,17 +18,16 @@ afterAll(() => {
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 });
 
-const PLUGIN = "scripts/lint/biome/token-only.grit";
+const PLUGINS = "scripts/lint/biome";
 
-/** Runs `biome ci` with the repo's rules (and its GritQL plugin) on one fixture file; formatting is off so only lint
+/** Runs `biome ci` with the repo's rules (and its GritQL plugins) on one fixture file; formatting is off so only lint
  * speaks. */
 function biome(file: string, text: string): Outcome {
   const root = mkdtempSync(join(tmpdir(), "biome-"));
   temps.push(root);
   const { vcs: _vcs, $schema: _schema, ...rules } = config;
   writeFileSync(join(root, "biome.json"), JSON.stringify(rules));
-  mkdirSync(dirname(join(root, PLUGIN)), { recursive: true });
-  cpSync(join(ROOT, PLUGIN), join(root, PLUGIN));
+  cpSync(join(ROOT, PLUGINS), join(root, PLUGINS), { recursive: true });
   mkdirSync(dirname(join(root, file)), { recursive: true });
   writeFileSync(join(root, file), text);
   const run = spawnSync(BIOME, ["ci", "--formatter-enabled=false", "--colors=off", "--reporter=json", file], {
@@ -131,6 +130,22 @@ describe("biome", () => {
   test("token_only_skips_tokens_css", () => {
     const text = "@layer tokens {\n  :root {\n    font-size: 16px;\n  }\n}\n";
     expect(biome("shared/ui/src/tokens.css", text)).toEqual({ exitCode: 0, diagnostics: [] });
+  });
+
+  // no-style-prop.grit (plan §5.1): the app CSP blocks inline styles, so JSX never sets one.
+  test.each([
+    ["apps/web/src/x.tsx", 'export const X = () => <div style={{ color: "red" }} />;\n'],
+    ["interfaces/http/web/x.tsx", 'export const X = () => <p style="color: red" />;\n'],
+    ["shared/ui/islands/x.island.tsx", "export const X = (p: object) => <Box style={p} />;\n"],
+  ])("jsx_style_prop_rejected %s", (file, text) => {
+    const out = biome(file, text);
+    expect(categories(out)).toEqual(["error plugin"]);
+    expect(out.exitCode).not.toBe(0);
+  });
+
+  test("jsx_style_prop_allows_other_attributes", () => {
+    const text = 'export const X = () => <div className="a" data-style="b" styleName="c" />;\n';
+    expect(biome("apps/web/src/x.tsx", text)).toEqual({ exitCode: 0, diagnostics: [] });
   });
 
   test("biome_allows_long_generated_files", () => {

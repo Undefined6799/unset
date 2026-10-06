@@ -19,11 +19,15 @@ type Config = {
   MATRIX: Row[];
   ZERO_DEP_ALLOWLIST: string[];
   RENDER_ENTRIES: { http: string; admin: string };
+  RENDER_BUILD_IMPORT: { from: string; module: string };
 };
 export const config: Config = createRequire(import.meta.url)(CONFIG_PATH);
 
-/** One import in a fixture: `from` (repo-relative) imports `spec`, statically unless `kind` says otherwise. */
-export type Edge = { from: string; spec: string; kind?: "type" | "dynamic" };
+/**
+ * One import in a fixture: `from` (repo-relative) imports `spec`, statically unless `kind` says otherwise. An
+ * `unresolved` bare specifier gets no stub package, so dependency-cruiser cannot resolve it.
+ */
+export type Edge = { from: string; spec: string; kind?: "type" | "dynamic"; unresolved?: true };
 export type Outcome = { exitCode: number; rules: string[] };
 
 const temps: string[] = [];
@@ -56,7 +60,7 @@ export function fixture(edges: Edge[]): string {
     write(root, edge.from, importLine(edge, n));
     if (edge.spec.startsWith(".")) {
       write(root, posix.join(posix.dirname(edge.from), edge.spec), "export const x = 1;\n");
-    } else if (!edge.spec.startsWith("node:")) {
+    } else if (!edge.spec.startsWith("node:") && !edge.unresolved) {
       packages.add(edge.spec);
     }
   });

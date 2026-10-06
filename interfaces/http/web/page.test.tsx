@@ -1,5 +1,5 @@
 // Page responses with P1.22's preferences wired in (P1.23 carries the two document tests P1.22 moved here).
-import { Island } from "@unset/apps-web";
+import { Island, renderPage } from "@unset/apps-web";
 import { createLogger } from "@unset/shared-log";
 import { defineIsland, type IslandDefinition } from "@unset/shared-ui";
 import { expect, test } from "vitest";
@@ -12,9 +12,10 @@ const echo = defineIsland(({ text }: { text: string }) => <p>{text}</p>, {
 });
 const deps = (env: PageDeps["env"]): PageDeps => ({
   build: {
-    manifest: { boot: "assets/boot-1.js", islands: new Map([["echo", ["assets/echo-2.js"]]]) },
+    manifest: { boot: "assets/boot-1.js", styles: [], islands: new Map([["echo", ["assets/echo-2.js"]]]) },
     files: new Map(),
   },
+  render: renderPage,
   assetsOrigin: "https://unset.test",
   env,
   log: createLogger({

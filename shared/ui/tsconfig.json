@@ -1,4 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist", "lib": ["es2025", "dom"] }
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["es2025", "dom"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  },
+  "include": ["**/*.ts", "**/*.tsx", "icons/icons.json"]
 }

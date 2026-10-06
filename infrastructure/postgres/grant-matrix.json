@@ -67,6 +67,7 @@
       "owner": "migrator",
       "grants": {
         "admin": ["USAGE"],
+        "retention": ["USAGE"],
         "web": ["USAGE"]
       },
       "defaults": {
@@ -106,5 +107,24 @@
       }
     }
   },
-  "tables": {}
+  "tables": {
+    "app.single_use": {
+      "retention": {
+        "columns": {
+          "expires_at": ["SELECT"]
+        },
+        "rowPrivileges": ["DELETE"]
+      },
+      "web": {
+        "columns": {
+          "id": ["SELECT", "INSERT"],
+          "purpose": ["SELECT", "INSERT"],
+          "bind_did": ["SELECT", "INSERT"],
+          "bind_extra": ["SELECT", "INSERT"],
+          "expires_at": ["SELECT", "INSERT"],
+          "consumed_at": ["SELECT", "INSERT", "UPDATE"]
+        }
+      }
+    }
+  }
 }

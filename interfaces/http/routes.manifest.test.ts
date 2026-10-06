@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
+import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
@@ -43,7 +44,7 @@ const POLICIES = {
 const manifest: Entry[] = JSON.parse(readFileSync(new URL("./routes.manifest.json", import.meta.url), "utf8"));
 
 test("route_manifest_matches", async () => {
-  const { server } = await compose(loadConfig(config, ENV));
+  const { server } = await compose(loadConfig(config, ENV), web);
   expect(drift(server.routeTable(), manifest)).toEqual([]);
 });
 

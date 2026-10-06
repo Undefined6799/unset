@@ -5,7 +5,7 @@
 // islands.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type BuildManifest, islandName } from "@unset/apps-web";
+import type { BuildManifest } from "@unset/apps-web";
 
 /** The parsed build: what render.tsx needs, and every servable file by its name under /assets/. */
 export type WebBuild = Readonly<{ manifest: BuildManifest; files: ReadonlyMap<string, string> }>;
@@ -14,6 +14,7 @@ type Chunk = { file: string; src?: string; isEntry?: boolean; imports?: string[]
 
 const MANIFEST = ".vite/manifest.json";
 const BOOT_SOURCE = "src/islands/runtime/bootstrap.ts";
+const STYLES_SOURCE = "src/styles.ts";
 /** A built file name: `assets/` and one segment, so no `..`, no leading `/` and no nested path. */
 const FILE = /^assets\/[A-Za-z0-9._-]+$/;
 const ISLAND = /\.island\.tsx$/;
@@ -50,8 +51,11 @@ function islandFiles(chunks: Map<string, Chunk>, chunk: Chunk): string[] {
   return files;
 }
 
+/** apps/web's island naming rule (its `islandName`), passed in so this file imports no app code at run time. */
+export type IslandNamer = (source: string) => string;
+
 /** Parses a manifest's JSON text, relative to `dir`, into a WebBuild. */
-export function parseWebBuild(text: string, dir: string): WebBuild {
+export function parseWebBuild(text: string, dir: string, islandName: IslandNamer): WebBuild {
   const raw: unknown = JSON.parse(text);
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return fail("not an object");
   const chunks = new Map(Object.entries(raw).map(([key, value]) => [key, chunkOf(key, value)] as const));
@@ -63,10 +67,12 @@ export function parseWebBuild(text: string, dir: string): WebBuild {
   }
   const boot = chunks.get(BOOT_SOURCE);
   if (boot?.isEntry !== true) return fail(`${BOOT_SOURCE} is not an entry`);
-  return { manifest: { boot: boot.file, islands }, files };
+  const styles = chunks.get(STYLES_SOURCE);
+  if (styles?.isEntry !== true) return fail(`${STYLES_SOURCE} is not an entry`);
+  return { manifest: { boot: boot.file, styles: styles.css ?? [], islands }, files };
 }
 
 /** Reads `<dir>/.vite/manifest.json`; throws when it is missing or malformed, so startup fails closed. */
-export function loadWebBuild(dir: string): WebBuild {
-  return parseWebBuild(readFileSync(join(dir, MANIFEST), "utf8"), dir);
+export function loadWebBuild(dir: string, islandName: IslandNamer): WebBuild {
+  return parseWebBuild(readFileSync(join(dir, MANIFEST), "utf8"), dir, islandName);
 }

@@ -1,0 +1,233 @@
+{
+  "AsciiBackground": {
+    "sheet": "sheet/components/AsciiBackground/README.md",
+    "sheetSha256": "b30832fa9591d44d454cc1aadcdf09462a7404a6e8ce71f18cd612af6cbb5432",
+    "props": "AsciiBackgroundProps",
+    "variants": ["fadeFrom=left"],
+    "status": "p1.24a"
+  },
+  "Avatar": {
+    "sheet": "sheet/components/Avatar/README.md",
+    "sheetSha256": "d1a59b6575b3b68fb1ce1d50bbebf6a4ab58cd85f27f8c15f02923438e2da998",
+    "props": "AvatarProps",
+    "variants": ["size=24", "size=40", "size=64", "size=128"],
+    "status": "built"
+  },
+  "Button": {
+    "sheet": "sheet/components/Button/README.md",
+    "sheetSha256": "4174670469d7468d133c3a9546c56a4e3e158c038f7977e1c8a73388aefd1620",
+    "props": "ButtonProps",
+    "variants": ["type=button", "type=submit", "type=reset"],
+    "status": "built"
+  },
+  "Callout": {
+    "sheet": "sheet/components/Callout/README.md",
+    "sheetSha256": "4d13b1095e99a137f92023ac958c16a236d477449d4eb1664d1687faba564600",
+    "props": "CalloutProps",
+    "variants": ["tone=info", "tone=danger", "tone=success", "tone=note"],
+    "status": "p1.24a"
+  },
+  "Card": {
+    "sheet": "sheet/components/Card/README.md",
+    "sheetSha256": "e92607c0cd202c6f634ab049b0e166e2dfb3515d4b3dd8ebcf15838e479102ba",
+    "props": "CardProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Checkbox": {
+    "sheet": "sheet/components/Checkbox/README.md",
+    "sheetSha256": "d923b1c7a895e92c21b02cb23681b6e64858c48411e393fa8e968606afa60dba",
+    "props": "CheckboxProps",
+    "variants": [],
+    "status": "built"
+  },
+  "CodeBlock": {
+    "sheet": "sheet/components/CodeBlock/README.md",
+    "sheetSha256": "ba613c6fd56eff6685e15ffb53cb487b605df30dcf349459ee38ff81f0fad14f",
+    "props": "CodeBlockProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "CommandBlock": {
+    "sheet": "sheet/components/CommandBlock/README.md",
+    "sheetSha256": "ffa951b13f0d174a9afb72b8fd170ba4b971406043396586584cd2e8f380ab6f",
+    "props": "CommandBlockProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "DescriptionList": {
+    "sheet": "sheet/components/DescriptionList/README.md",
+    "sheetSha256": "eded74473ca72d6c5597d268fff7d7fa0c86ff706c7de9165866856387f3b122",
+    "props": "DescriptionListProps",
+    "variants": [],
+    "status": "built"
+  },
+  "FeedMore": {
+    "sheet": "sheet/components/FeedMore/README.md",
+    "sheetSha256": "1cdd6724fada302ea35e50c902e5db28740f358f9ad8bca518c79fe06e0d8646",
+    "props": "FeedMoreProps",
+    "variants": ["state=idle", "state=loading", "state=end", "state=error"],
+    "status": "p1.24a"
+  },
+  "Footer": {
+    "sheet": "sheet/components/Footer/README.md",
+    "sheetSha256": "488688b6f7018bf7fb2437673d216f48d7ecc27d4e05db7bbc38134b62256fe5",
+    "props": "FooterProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Header": {
+    "sheet": "sheet/components/Header/README.md",
+    "sheetSha256": "b0e61c678fbab72bc1331c456084fc0158b9fd90282625e475627cd81e933c3c",
+    "props": "HeaderProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Icon": {
+    "sheet": "sheet/components/Icon/README.md",
+    "sheetSha256": "191cecaaee60c6557b2c479874ca87f1f2b6515919397ee123f3bd9d31ddc2b4",
+    "props": "IconProps",
+    "variants": ["size=16", "size=20", "size=24"],
+    "status": "built"
+  },
+  "Input": {
+    "sheet": "sheet/components/Input/README.md",
+    "sheetSha256": "be5142a5a0c24b9ae417a5378f0df82a6f30ec6f648bf8f2b7f43e93477e8c58",
+    "props": "InputProps",
+    "variants": [],
+    "status": "built"
+  },
+  "Kbd": {
+    "sheet": "sheet/components/Kbd/README.md",
+    "sheetSha256": "0e830063e303ab9757b27e0b7f7efbffc09592a616637ad2cee3a01e428ca6fe",
+    "props": "inline",
+    "variants": [],
+    "status": "built"
+  },
+  "Link": {
+    "sheet": "sheet/components/Link/README.md",
+    "sheetSha256": "3a20da2a18bbe9e686a258239af30b2a19edb8429e7bf0aee4e3c8fe4cb6d27a",
+    "props": "LinkProps",
+    "variants": ["variant=inline", "variant=standalone"],
+    "status": "built"
+  },
+  "Mark": {
+    "sheet": "sheet/components/Mark/README.md",
+    "sheetSha256": "33c5b1594da646c188612860e30705dd04d2bbd94f5e90e679f1850a7fe0749d",
+    "props": "MarkProps",
+    "variants": [],
+    "status": "built"
+  },
+  "MediaFrame": {
+    "sheet": "sheet/components/MediaFrame/README.md",
+    "sheetSha256": "1622d0491fb303471c3867b6e1dcd92810c8b623c82478de4d13acce6d244401",
+    "props": "MediaFrameProps",
+    "variants": ["ratio=1:1", "ratio=4:5", "ratio=9:16", "ratio=16:9", "ratio=3:1"],
+    "status": "built"
+  },
+  "Modal": {
+    "sheet": "sheet/components/Modal/README.md",
+    "sheetSha256": "6312b931d23af94708582d25cb04fa6991cfee570f7bffa602b8e872abcfc8d2",
+    "props": "ModalProps",
+    "variants": ["tone=default", "tone=danger"],
+    "status": "p1.24a"
+  },
+  "NewPosts": {
+    "sheet": "sheet/components/NewPosts/README.md",
+    "sheetSha256": "5495a0162714dd03509584768e5d3329c24ae8c84ee00b68e8f28c3790d5c7c3",
+    "props": "NewPostsProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Pagination": {
+    "sheet": "sheet/components/Pagination/README.md",
+    "sheetSha256": "3a2a06bce8d46cdc14deeb413bda0900ecf3656a537d61bef53a2db1b42c750d",
+    "props": "PaginationProps",
+    "variants": [],
+    "status": "built"
+  },
+  "Progress": {
+    "sheet": "sheet/components/Progress/README.md",
+    "sheetSha256": "01be03ec37c8f463e6481bba052d8feecceb67712aa7a1058c26a2700245d8a9",
+    "props": "ProgressProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "RadioGroup": {
+    "sheet": "sheet/components/RadioGroup/README.md",
+    "sheetSha256": "4509e963285b49b8bfc17c8f89aafb4b91898fd3f2f41f49355d66c1b0f59979",
+    "props": "RadioGroupProps",
+    "variants": [],
+    "status": "built"
+  },
+  "SectionHeading": {
+    "sheet": "sheet/components/SectionHeading/README.md",
+    "sheetSha256": "b4ff1aea3afe2360dad99ad4cffd031a03625dc495ed337a4db0ed8e9d9f747b",
+    "props": "inline",
+    "variants": [],
+    "status": "built"
+  },
+  "Select": {
+    "sheet": "sheet/components/Select/README.md",
+    "sheetSha256": "76d96c8f235223c70e6d92d87c2e7a6c8de549213be3e78ea8703072511d074f",
+    "props": "SelectProps",
+    "variants": [],
+    "status": "built"
+  },
+  "SkipLink": {
+    "sheet": "sheet/components/SkipLink/README.md",
+    "sheetSha256": "08d187737a974cf026c2e4606c302b8a8c6a630931951bb0b4e004d7ad403faf",
+    "props": "SkipLinkProps",
+    "variants": [],
+    "status": "built"
+  },
+  "Spinner": {
+    "sheet": "sheet/components/Spinner/README.md",
+    "sheetSha256": "e2f61565abc5fd4889a2a9d00b01f2598bea16eff363d49a61338f38cc590cb9",
+    "props": "inline",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Switch": {
+    "sheet": "sheet/components/Switch/README.md",
+    "sheetSha256": "27922fb253951cb32fa480959a60558d66fed300ff2fc84994af486f56275929",
+    "props": "SwitchProps",
+    "variants": [],
+    "status": "built"
+  },
+  "Table": {
+    "sheet": "sheet/components/Table/README.md",
+    "sheetSha256": "2d85dda81d6390cf68dd874ac971dd18457cb5129f8bb6018d4557b2f0638e8d",
+    "props": "TableProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Tabs": {
+    "sheet": "sheet/components/Tabs/README.md",
+    "sheetSha256": "fa5c269ab980876cb1523bf9eff692c1135ab91f5814d5091ef13bf28846460c",
+    "props": "TabsProps",
+    "variants": [],
+    "status": "p1.24a"
+  },
+  "Tag": {
+    "sheet": "sheet/components/Tag/README.md",
+    "sheetSha256": "43677686d1f336a26fd3b6d50ef059429e56ee2169fd108878be08fe5e55487a",
+    "props": "TagProps",
+    "variants": ["status=ok", "status=err", "status=info", "status=plain"],
+    "status": "built"
+  },
+  "Textarea": {
+    "sheet": "sheet/components/Textarea/README.md",
+    "sheetSha256": "375232284cbcc781b8a62baa72049735f13eab007d4baf1d8184a39269714a9f",
+    "props": "TextareaProps",
+    "variants": [],
+    "status": "built"
+  },
+  "Toast": {
+    "sheet": "sheet/components/Toast/README.md",
+    "sheetSha256": "cc5827000458a7892b58c48ebfbfcf22d99a049efb7f3530c503b265193b2f5c",
+    "props": "ToastProps",
+    "variants": ["tone=ok", "tone=err", "tone=info"],
+    "status": "p1.24a"
+  }
+}

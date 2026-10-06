@@ -28,6 +28,7 @@ const ASSETS: Assets = {
   origin: "https://unset.test",
   manifest: {
     boot: "assets/boot-1.js",
+    styles: ["assets/styles-1.css", "assets/styles-5.css"],
     islands: new Map([
       ["demo", ["assets/demo-2.js", "assets/boot-1.js"]],
       ["echo", ["assets/echo-3.js", "assets/shared-4.js"]],
@@ -73,6 +74,24 @@ describe("islands on the server", () => {
     // Every script is either external (src) or JSON data; nothing carries a style attribute or element.
     for (const tag of scripts(html)) expect(tag).toMatch(/ src="|type="application\/json"/);
     expect(html).not.toMatch(/<style|\sstyle=|\son[a-z]+=/i);
+  });
+
+  test("document_links_manifest_css", () => {
+    // Every page links exactly the styles entry's CSS, in manifest order, by its hashed name, island or not.
+    for (const body of [<p key="a">static</p>, <Island key="b" name="demo" props={{ n: 1 }} />]) {
+      const { html } = render(body);
+      expect(html.match(/<link rel="stylesheet"[^>]*>/g)).toEqual([
+        '<link rel="stylesheet" href="https://unset.test/assets/styles-1.css"/>',
+        '<link rel="stylesheet" href="https://unset.test/assets/styles-5.css"/>',
+      ]);
+      expect(html.indexOf("styles-1.css")).toBeLessThan(html.indexOf("</head>"));
+    }
+  });
+
+  test("no_inline_style_in_document", () => {
+    const { html } = render(<p>static</p>);
+    expect(html).toContain('rel="stylesheet"');
+    expect(html).not.toMatch(/<style|\sstyle=/i);
   });
 
   test("island_props_xss_escaped", () => {

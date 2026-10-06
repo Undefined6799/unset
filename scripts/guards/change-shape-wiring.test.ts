@@ -197,4 +197,74 @@ describe("wiring", () => {
     expect(prWith("scripts", manifest({ dependencies: { a: "1.0.0" }, scripts: { x: "y" } }))).toContain(outside);
     expect(prWith("broken", "{ not json")).toContain(outside);
   });
+
+  test("new_trusted_workspace_end_to_end", () => {
+    // P1.14q through real git: a PR that creates a trusted package may carry its root tsconfig.json reference and its
+    // own lockfile entries; any other root tsconfig.json change keeps the file outside the trusted base.
+    const dir = mkdtempSync(join(tmpdir(), "pr-shape-born-"));
+    temps.push(dir);
+    const sh = (...args: string[]) =>
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: withoutGitEnv() }).trim();
+    const put = (path: string, text: string) => {
+      execFileSync("mkdir", ["-p", join(dir, path, "..")]);
+      writeFileSync(join(dir, path), text);
+    };
+    const json = (value: object) => `${JSON.stringify(value, null, 2)}\n`;
+    const tsconfig = (paths: string[], extra: object = {}) =>
+      json({ files: [], references: paths.map((path) => ({ path })), ...extra });
+    const lockfile = (extra: object = {}) =>
+      json({
+        lockfileVersion: 3,
+        packages: { "": { name: "unset.sh" }, "node_modules/a": { version: "1.0.0" }, ...extra },
+      });
+    sh("init", "-q", "-b", "main");
+    sh("config", "user.email", "test@example.org");
+    sh("config", "user.name", "test");
+    put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
+    put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
+    put("tsconfig.json", tsconfig(["shared/http"]));
+    put("package-lock.json", lockfile());
+    sh("add", "-A");
+    sh("commit", "-q", "-m", "P0.01 Start");
+    const base = sh("rev-parse", "HEAD");
+    const prWith = (branch: string, rootTsconfig: string) => {
+      sh("checkout", "-q", "-b", branch, base);
+      put("infrastructure/seal/package.json", json({ name: "@unset/infrastructure-seal", version: "0.0.0" }));
+      put("infrastructure/seal/index.ts", "export {};\n");
+      put("infrastructure/seal/index.test.ts", "export {};\n");
+      put("tsconfig.json", rootTsconfig);
+      put(
+        "package-lock.json",
+        lockfile({
+          "infrastructure/seal": { name: "@unset/infrastructure-seal", version: "0.0.0" },
+          "node_modules/@unset/infrastructure-seal": { resolved: "infrastructure/seal", link: true },
+        }),
+      );
+      sh("add", "-A");
+      sh("commit", "-q", "-m", "P1.14 Add the seal package");
+      try {
+        return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
+          cwd: dir,
+          env: {
+            ...withoutGitEnv(),
+            PR_TITLE: "P1.14 Add the seal package",
+            PR_BODY: read(".github/pull_request_template.md"),
+            PR_LABELS: '["kind/feature"]',
+            PR_AUTHOR: "Undefined6799",
+            PR_AUTHOR_TYPE: "User",
+            BASE_SHA: base,
+            HEAD_SHA: sh("rev-parse", "HEAD"),
+          },
+          encoding: "utf8",
+        });
+      } catch (error) {
+        return (error as { stdout: string }).stdout;
+      }
+    };
+    expect(prWith("born", tsconfig(["infrastructure/seal", "shared/http"]))).not.toContain("[SE-6]");
+    const options = tsconfig(["infrastructure/seal", "shared/http"], { compilerOptions: { strict: false } });
+    expect(prWith("options", options)).toContain(
+      "::error::[SE-6] outside the trusted base in a trusted-base PR: tsconfig.json",
+    );
+  });
 });

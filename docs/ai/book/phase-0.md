@@ -23,8 +23,8 @@ P0.14 proves what exists on GitHub itself and marks the two protection checks "w
 
 **GitHub Pro (Alex, 2026-10-06 12:44Z; book edit 2026-10-06-github-pro-unblocks).** Alex upgraded the account to GitHub
 Pro, so rulesets on the private repository are available and decision 41's premise is gone. Every item below marked
-"deferred" or "waiting until protection exists" is **unblocked; awaiting Alex** until he applies the decision-40 ruleset
-(P0.03 steps 1–4), and becomes "applied" in the carrier that records it. Architecture's ruling
+"deferred" or "waiting until protection exists" is now **applied 2026-10-06**: Alex applied the decision-40 ruleset
+(P0.03 steps 1–4; read back 22:35Z, ADR 0017), after also making the repository public at 22:06Z. Architecture's ruling
 (2026-10-06-github-pro-protection) changes two details: "Require branches to be up to date" is **off** (reversing
 P0-A8), and code-owner review stays off (ADR 0008), with the separation of check paths from the trusted base enforced
 by `pr-shape` as a truly required check. A new ADR superseding 0009 lands with the record that the ruleset is applied;
@@ -337,7 +337,7 @@ Outputs:
     CODEOWNERS review; only the isolation rule is narrowed (plan §9 at `f9b48f8`).
 
 Algorithm (the runbook Alex follows, as soon as the agent reports P0.02 step 5):
-  Steps 1–4 are **unblocked; awaiting Alex** (GitHub Pro, 2026-10-06; before that, deferred under decision 41, since
+  Steps 1–4 are **applied 2026-10-06** (read back 22:35Z, ADR 0017) (GitHub Pro and the public repository, 2026-10-06; before that, deferred under decision 41, since
   GitHub refused rulesets on the private free-plan repository). They are the decision-40 ruleset, kept so it can be applied with one command the day the repository is
   on a plan that allows it or is public: `gh api -X POST repos/Undefined6799/unset/rulesets --input <the body below>`,
   then the agent runs the `ruleset_*` and `direct_push_refused` checks. When GitHub refuses, record the refusal text in
@@ -388,8 +388,10 @@ Edge cases and failures:
   - The agent's app identity appears as a possible bypass actor → never add it.
 
 Threats: who can change `main`: agents, Actions workflows, other GitHub apps and Alex.
-  - E Anyone holding Alex's credentials, agents included, pushes to `main` or merges a PR (decision 41: no ruleset is
-    possible on the private free plan). **Accepted for now**, with compensating controls: the read-only Actions token,
+  - E Anyone holding Alex's credentials, agents included, pushes to `main` or merges a PR. **Closed by the ruleset**
+    (applied 2026-10-06, ADR 0017): no direct push, force push or deletion, and no merge without the six required
+    checks; L.04 re-checks it. Merging a green PR with Alex's credentials stays possible (zero approvals, ADR 0008).
+    Before the ruleset (decision 41, history): accepted, with compensating controls: the read-only Actions token,
     Actions unable to approve PRs (`workflow_token_read_only`), checks on every PR, and GitHub's push and merge log as
     the record; the written rule in `CLAUDE.md` and ADR 0009. Revisit before the repository goes public or before the
     first production account (P5.02), whichever comes first; it must close before production: the launch gate's L.04
@@ -409,9 +411,9 @@ Threats: who can change `main`: agents, Actions workflows, other GitHub apps and
 
 Done when (tests): (agent verifies with `gh api`; outputs pasted in the CODEOWNERS PR)
   - ruleset_refusal_recorded (decision 41): the CODEOWNERS PR body quotes GitHub's refusal and names ADR 0009.
-  - ruleset_active (**unblocked; awaiting Alex**, GitHub Pro 2026-10-06): `gh api repos/Undefined6799/unset/rulesets` → one
+  - ruleset_active (**applied 2026-10-06**, read back 22:35Z, ADR 0017): `gh api repos/Undefined6799/unset/rulesets` → one
     active ruleset targeting `~DEFAULT_BRANCH`, `bypass_actors` empty.
-  - ruleset_rules (**unblocked; awaiting Alex**): `gh api repos/…/rulesets/<id>` contains rule types `deletion`,
+  - ruleset_rules (**applied 2026-10-06**, read back 22:35Z, ADR 0017): `gh api repos/…/rulesets/<id>` contains rule types `deletion`,
     `non_fast_forward`, `required_linear_history`, `required_signatures`, `pull_request`
     (`required_approving_review_count = 0`, `require_code_owner_review = false`, decision 40;
     `required_review_thread_resolution = true`, `allowed_merge_methods = ["squash"]`), and `required_status_checks`
@@ -423,7 +425,7 @@ Done when (tests): (agent verifies with `gh api`; outputs pasted in the CODEOWNE
   - workflow_token_read_only: `gh api repos/…/actions/permissions/workflow` → `default_workflow_permissions = "read"`,
     `can_approve_pull_request_reviews = false`.
   - no_repository_secrets: `gh api repos/…/actions/secrets` → `total_count = 0`.
-  - direct_push_refused (**unblocked; awaiting Alex**; book edit 2026-10-06-github-pro-unblocks): a ruleset read, not
+  - direct_push_refused (**applied 2026-10-06**, read back 22:35Z, ADR 0017; book edit 2026-10-06-github-pro-unblocks): a ruleset read, not
     a push. `gh api repos/…/rulesets/<id>` shows the `non_fast_forward`, `deletion` and `pull_request` rules on the
     default branch with an empty bypass list. No agent ever pushes to `main`.
   - codeowners_valid: after the CODEOWNERS PR merges, `gh api repos/…/codeowners/errors` → `errors = []`.
@@ -977,7 +979,7 @@ Inputs: P0.06 merged; bootstrap `ci.yml:1-44`; P0.03 Actions settings (GitHub-ow
 **As built (merged as PR #13; editor pass 2026-10-04 evening):**
   - gitleaks runs from `ghcr.io/gitleaks/gitleaks` pinned by index digest.
   - Algorithm step 5 (the planted faults) needs a scratch branch that Alex provides or approves.
-  - The Alex tail (steps 8–9, required checks in the ruleset) is **unblocked; awaiting Alex** (GitHub Pro, 2026-10-06;
+  - The Alex tail (steps 8–9, required checks in the ruleset) is **applied 2026-10-06** (read back 22:35Z, ADR 0017) (GitHub Pro, 2026-10-06;
     deferred before that under decision 41, ADR 0009); it is completed by applying the P0.03 ruleset; `.github/required-checks.json` is still written and tested, so the list is ready the day the ruleset is
     applied (P0.03 step 1).
   - Semgrep's first run flagged missing release-age cooldowns, so `.npmrc` also sets `min-release-age=7`, and
@@ -1046,7 +1048,7 @@ Algorithm (what the agent does):
      package in the lockfile does not match its registry signature).
   7. Semgrep CE cannot fetch its registry rules (network or licence change), or loads zero rules → the job fails; stop
      and ask; never drop the job.
-  8. Alex tail (**unblocked; awaiting Alex**, GitHub Pro 2026-10-06; done by the P0.03 ruleset): ask Alex to add `audit`, `actionlint`, `semgrep` to
+  8. Alex tail (**applied 2026-10-06**, read back 22:35Z, ADR 0017; done by the P0.03 ruleset): ask Alex to add `audit`, `actionlint`, `semgrep` to
      the P0.03 ruleset's required checks, each with source GitHub Actions (Settings → Rules → main protection → Require
      status checks → add).
   9. (Deferred with step 8.) Verify with `gh api repos/…/rulesets/<id>`: the required contexts equal `.github/required-checks.json` exactly, each
@@ -1092,7 +1094,7 @@ Done when (tests):
     random bytes, prefixed `z`) matches `multibase-private-key`; a P-256 one likewise; a `did:key:zQ3s…` value and a
     `sha256:<64 hex>` string do not; an age identity built at run time matches `age-secret-key`.
   - planted_canary_fails, planted_multibase_fails, planted_injection_fails, planted_eval_fails: the step 5 run URLs.
-  - required_checks_set (**unblocked; awaiting Alex**): step 9 output matches the file exactly.
+  - required_checks_set (**applied 2026-10-06**, read back 22:35Z, ADR 0017): step 9 output matches the file exactly.
 
 Reuse: bootstrap `ci.yml` → SALVAGE (keep checkout/setup-node pins and job shapes). Bootstrap gitleaks-action
 (`ff98106`, v2.3.9) → REJECT (needs `pull-requests: read` on private repos, posts review comments, downloads the binary
@@ -1656,7 +1658,7 @@ Algorithm (`change-shape.ts main`):
       characters of the statement>` so the author sees which statement to split out. `git diff -U0` of
       `infrastructure/postgres/migrations/**` → `checkPerfEvidence`.
   6. Print every finding as one line `[rule] text`; exit 1 if any error or size `fail`, else 0.
-  Alex tail (**unblocked; awaiting Alex**, GitHub Pro 2026-10-06; done by the P0.03 ruleset): add `pr-shape` to the ruleset's required checks
+  Alex tail (**applied 2026-10-06**, read back 22:35Z, ADR 0017; done by the P0.03 ruleset): add `pr-shape` to the ruleset's required checks
   (source GitHub Actions), as in P0.07 step 8; `required-checks.json` still gains it now.
 
 Edge cases and failures:
@@ -1775,8 +1777,8 @@ As built (2026-10-05):
     semantic prefix when semantic commits are on (docs.renovatebot.com/configuration-options, read 2026-10-05).
   - Planted check: no scratch branch (agents push only to their own branch). The PR was first opened titled
     `fix: thing`, `pr-shape` failed on it, and the title was then corrected.
-  - Alex tail: deferred with the ruleset (decision 41); `required-checks.json` lists `pr-shape` now. Unblocked by
-    GitHub Pro (2026-10-06); awaiting Alex's ruleset.
+  - Alex tail: deferred with the ruleset (decision 41); `required-checks.json` lists `pr-shape` now. Applied with the
+    ruleset 2026-10-06 (ADR 0017).
 
 ---
 
@@ -2096,7 +2098,8 @@ Done when (tests, `scripts/guards/workflow-pins.test.ts`):
   - DO-3: github/docs `workflow-syntax.md` (`jobs.<job_id>.if`) marks a job whose condition is false as skipped, and
     `events-that-trigger-workflows.md` says a `pull_request` workflow runs only for `opened`, `synchronize` and
     `reopened` unless `types` lists more. A skipped required check may count as passing under branch protection
-    (unverified until protection exists; unblocked by GitHub Pro, 2026-10-06, and checked once the ruleset is applied). That is harmless, because a draft cannot merge and marking it ready runs
+    (GitHub counts a skipped required job as passing; the ruleset was applied 2026-10-06, ADR 0017, so the hand-off rule
+    "skipped is not green" stays a human check). That is harmless, because a draft cannot merge and marking it ready runs
     everything again. The PR proves on itself that marking it ready starts a full, non-skipped run on the same head.
 
 ---
@@ -2894,7 +2897,7 @@ Done when (tests): (each with its run or PR URL in the record)
   - token_read_only_and_no_actions_approval: step 6 (a).
   - delivery_rule_written: step 6 (b) and (c).
   - direct_push_refused: P0.03's ruleset read (`non_fast_forward`, `deletion`, `pull_request`, empty bypass list);
-    unblocked, awaiting Alex's ruleset. `green_pr_cannot_merge_unprotected` is dropped (GitHub Pro amendment): A–C
+    applied 2026-10-06, read back 22:35Z (ADR 0017). `green_pr_cannot_merge_unprotected` is dropped (GitHub Pro amendment): A–C
     showing `BLOCKED` covers it without a merge attempt.
   - merged_commit_signed: the next squash merge Alex makes on any PR shows `verified: true`; otherwise he turns
     signed commits off, the record says why, and P0-A3 is asked.

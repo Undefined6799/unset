@@ -1,0 +1,22 @@
+/* Checkbox (P1.24; sheet components/Checkbox/README.md, v45): one per row, stacked, never side by side. */
+@layer components {
+  .root {
+    margin: 0 0 var(--space-2);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 24px;
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    cursor: pointer;
+  }
+
+  .row:has(:disabled) {
+    color: var(--color-ink-muted);
+    cursor: not-allowed;
+  }
+}

@@ -2,9 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately by email to **security@unset.sh**. Do not open a
-public issue. (GitHub's private vulnerability reporting is not available while the repository is
-private.)
+Please report vulnerabilities privately, either through GitHub's private vulnerability reporting
+(the "Report a vulnerability" button on this repository's Security tab) or by email to
+**security@unset.sh**. Do not open a public issue.
 
 We aim to acknowledge reports within 3 working days and to agree a fix and disclosure
 timeline with you within 10 working days.

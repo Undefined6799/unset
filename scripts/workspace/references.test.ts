@@ -246,6 +246,7 @@ describe("workspace references", () => {
     expect(matrix.flatMap((row) => row.to).filter((to) => "pathNot" in to)).toEqual([]);
   });
 
+  // Two real typecheck passes: 3.5 s alone and up to 5.7 s inside the full suite, past vitest's 5 s default (P1.01q).
   test("every_ts_file_is_typechecked", () => {
     expect(untypecheckedFiles(ROOT)).toEqual([]);
     const root = tree({});
@@ -259,7 +260,7 @@ describe("workspace references", () => {
       writeFileSync(join(root, file), "export {};\n");
     }
     expect(untypecheckedFiles(root)).toEqual(["domains/stray/d.ts", "tests/integration/x.test.ts"]);
-  });
+  }, 20_000);
 
   test("no_workspace_yet_passes", () => {
     expect(workspaceProblems(tree({}))).toEqual([]);

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, expect, test } from "vitest";
-import { configGlueLines, countGlueLines, FREE_DECLARATIVE_LINES } from "./count-glue-lines.ts";
+import { configGlueLines, countGlueLines, FREE_DECLARATIVE_LINES, glueWarning, main } from "./count-glue-lines.ts";
 
 const temps: string[] = [];
 afterAll(() => {
@@ -69,4 +69,25 @@ test("config_arrow_callbacks_count_as_functions", () => {
 test("count_adds_config_files", () => {
   const root = tree({ "glue/a.ts": "export const a = 1;\n", "vite.config.ts": "export default { f: () => 1 };\n" });
   expect(countGlueLines(join(root, "glue"), [join(root, "vite.config.ts")])).toBe(2);
+});
+
+// P1.23r: CI reports the runtime's glue and warns above the number ADR 0015 accepted (hono/MEASUREMENTS.json).
+test("glue_line_warning", () => {
+  const adr = JSON.stringify({ glueLines: { total: 150 } });
+  expect(glueWarning(150, adr)).toBeUndefined();
+  expect(glueWarning(151, adr)).toBe(
+    "::warning title=glue-lines::151 glue lines, above the 150 ADR 0015 accepted; re-measure and record why",
+  );
+  expect(() => glueWarning(1, JSON.stringify({ glueLines: {} }))).toThrow(/glueLines.total/);
+
+  const root = tree({
+    "glue/a.ts": "export const a = 1;\nexport const b = 2;\n",
+    "m.json": JSON.stringify({ glueLines: { total: 1 } }),
+  });
+  const printed: string[] = [];
+  main([join(root, "glue"), "--warn-above", join(root, "m.json")], (line) => printed.push(line));
+  expect(printed).toEqual([
+    "2",
+    "::warning title=glue-lines::2 glue lines, above the 1 ADR 0015 accepted; re-measure and record why",
+  ]);
 });

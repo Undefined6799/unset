@@ -50,6 +50,14 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("interfaces/http/compose.ts", `../../${FAKE}`, "dynamic"),
   ],
   "interface-http-render": [edge("interfaces/http/a.ts", `../../${config.RENDER_ENTRIES.http}`)],
+  "interface-http-render-build": [
+    {
+      from: config.RENDER_BUILD_IMPORT.from,
+      spec: config.RENDER_BUILD_IMPORT.module,
+      kind: "dynamic",
+      unresolved: true,
+    },
+  ],
   "interface-admin-render": [edge("interfaces/admin/a.ts", `../../${config.RENDER_ENTRIES.admin}`)],
   "admin-service": [
     edge("interfaces/pds-admin/a.ts", "../../shared/admin-envelope/index.ts"),
@@ -273,6 +281,34 @@ describe("boundary rules", () => {
     await expectPass(edge("vitest.config.ts", "./scripts/guards/files.ts"));
   });
 
+  test("app_build_config_is_tooling", async () => {
+    // P1.23v: an app's vite.config.ts may use Node and the shared class-name hash; app source may not, and nothing
+    // imports the config.
+    await expectPass(
+      edge("apps/web/vite.config.ts", "node:crypto"),
+      edge("apps/web/vite.config.ts", "../../scripts/ui/css-scope.ts"),
+    );
+    await expectFail(null, edge("apps/web/src/a.ts", "node:crypto"));
+    await expectFail("app-only-shared", edge("apps/web/src/a.ts", "../../../scripts/ui/css-scope.ts"));
+    await expectFail(
+      "app-build-config-not-imported",
+      edge("apps/web/render.tsx", "./vite.config.ts"),
+      edge("scripts/budgets/a.ts", "../../apps/web/vite.config.ts"),
+    );
+    await expectFail(null, edge("apps/web/src/vite.config.ts", "node:crypto"));
+    await expectFail(
+      "app-build-config-imports",
+      edge("apps/web/vite.config.ts", "../../scripts/guards/x.ts"),
+      edge("apps/web/vite.config.ts", "../../domains/identity/index.ts"),
+      edge("apps/web/vite.config.ts", "../admin/b.ts"),
+    );
+    await expectPass(
+      edge("apps/web/vite.config.ts", "./src/a.ts"),
+      edge("apps/web/vite.config.ts", "../../shared/ui/index.ts"),
+      edge("apps/web/vite.config.ts", "vite"),
+    );
+  });
+
   test("depcruise_fake_tsx_and_render_prefix", async () => {
     await expectFail("fake-only-in-composition-root", edge("interfaces/http/routes/a.ts", "../x.fake.tsx"));
     await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx/x.ts"));
@@ -341,6 +377,17 @@ describe("allowlist matrix", () => {
       edge("infrastructure/storage/a.ts", "../audit/index.ts"),
       edge("shared/ui/a.ts", "../config/index.ts"),
     );
+  });
+
+  test("render_build_import_is_exact", async () => {
+    // P1.23w: the one unresolvable edge is this file's import of this specifier; nothing near it passes.
+    const { from, module } = config.RENDER_BUILD_IMPORT;
+    expect({ from, module }).toEqual({ from: "interfaces/http/web/render-entry.ts", module: "@unset/apps-web/server" });
+    const unresolved = (file: string, spec: string): Edge => ({ from: file, spec, kind: "dynamic", unresolved: true });
+    await expectPass(unresolved(from, module));
+    await expectFail("not-in-allowed", unresolved("interfaces/http/web/page.ts", module));
+    await expectFail("not-in-allowed", unresolved(from, "@unset/apps-web/other"), unresolved(from, `${module}x`));
+    await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
   });
 
   test("depcruise_matrix_rows_have_fixtures", async () => {

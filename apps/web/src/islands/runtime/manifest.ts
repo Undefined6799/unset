@@ -6,6 +6,8 @@
 export type BuildManifest = Readonly<{
   /** The bootstrap module. */
   boot: string;
+  /** The CSS the styles entry emitted (every CSS Module, P1.23c), linked by every page in this order. */
+  styles: readonly string[];
   /** Per island name: its chunk and the chunks it imports statically, the chunk first. */
   islands: ReadonlyMap<string, readonly string[]>;
 }>;
