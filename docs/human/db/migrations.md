@@ -75,6 +75,16 @@ Each process connects as its own role, listed with its class, connection limit a
 - The test reads the catalog and prints each difference as one line, `+` for a privilege the database holds and the
   matrix does not, `-` for the reverse: `+ api SELECT app.drafts`.
 
+### Role passwords (P1.12p)
+
+A migration never sets a password. `syncRolePasswords` in `infrastructure/postgres/roles.ts` runs as `migrator` after
+the migrations: for each `roles.json` entry with a `passwordFrom`, it reads that file from the secrets folder, computes
+the SCRAM-SHA-256 verifier itself and sends `ALTER ROLE "<role>" PASSWORD '<verifier>'`, so the password never reaches
+the server or its log. It is all or none: a bad roster entry, a missing, short or non-ASCII password file, or a roster
+role missing from the cluster stops it before the first `ALTER ROLE`, and the statements run in one transaction. To
+rotate a password, change its file and run it again. A login role with no `passwordFrom` has no password and cannot
+log in.
+
 ## Postgres 18 data path
 
 The pinned image (`postgres:18.6`, digest in `tests/support/postgres.ts`) sets `PGDATA=/var/lib/postgresql/18/docker`
