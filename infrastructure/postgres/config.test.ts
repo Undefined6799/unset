@@ -1,10 +1,11 @@
-// P1.11: the migrate CLI's configuration and how it maps sslmode onto the driver.
+// P1.11: the Postgres connection settings, read through the migrate CLI schema, and the sslmode mapping.
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigError, loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
-import { connectionOf, migrateConfig } from "./migrate-cli.ts";
+import { connectionOf } from "./config.ts";
+import { migrateConfig } from "./migrate-cli.ts";
 
 const passwordFile = join(mkdtempSync(join(tmpdir(), "unset-migrate-cli-")), "pg_migrator_password");
 writeFileSync(passwordFile, "a-test-password-of-enough-bytes\n");

@@ -7,13 +7,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Logger } from "@unset/shared-log";
 import pg from "pg";
+import type { Connection } from "./config.ts";
 import { type LintProblem, lintMigration, type Phase } from "./sqlLint.ts";
 import { inTransaction } from "./tx.ts";
 
 /** The advisory lock key every runner takes: "unse" in ASCII. */
 export const MIGRATE_LOCK_ID = 0x756e7365;
-
-export type Connection = Pick<pg.ClientConfig, "host" | "port" | "database" | "user" | "password" | "ssl">;
 
 export type MigrateOptions = {
   readonly connection: Connection;
