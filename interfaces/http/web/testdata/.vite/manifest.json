@@ -1,0 +1,22 @@
+{
+  "_runtime-T3st0001.js": {
+    "file": "assets/runtime-T3st0001.js",
+    "name": "runtime"
+  },
+  "src/islands/runtime/bootstrap.ts": {
+    "file": "assets/boot-T3st0002.js",
+    "name": "boot",
+    "src": "src/islands/runtime/bootstrap.ts",
+    "isEntry": true,
+    "imports": ["_runtime-T3st0001.js"],
+    "dynamicImports": ["src/islands/demo.island.tsx"]
+  },
+  "src/islands/demo.island.tsx": {
+    "file": "assets/demo.island-T3st0003.js",
+    "name": "demo.island",
+    "src": "src/islands/demo.island.tsx",
+    "isDynamicEntry": true,
+    "imports": ["_runtime-T3st0001.js", "src/islands/runtime/bootstrap.ts"],
+    "assets": ["assets/notes-T3st0004.txt"]
+  }
+}

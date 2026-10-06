@@ -26,5 +26,14 @@
       "rateLimitIp",
       "csrf"
     ]
+  },
+  {
+    "method": "GET",
+    "path": "/assets/:file",
+    "group": "static",
+    "accepts": [],
+    "rateLimit": "exempt",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck"]
   }
 ]

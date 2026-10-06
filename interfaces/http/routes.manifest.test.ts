@@ -1,6 +1,7 @@
 // The committed route manifest is the route table (P1.04, findings F-27): a new route or a changed option shows in
 // the PR diff, where CODEOWNERS sends it to security review.
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute } from "@unset/shared-http";
@@ -8,6 +9,7 @@ import { createLogger } from "@unset/shared-log";
 import { expect, test } from "vitest";
 import { compose } from "./compose.ts";
 import { config } from "./config.ts";
+import { assetsRoutes } from "./routes/assets.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 
 const COMMIT = "c".repeat(40);
@@ -22,6 +24,7 @@ const ENV = {
   TRUSTED_PROXY_MODE: "header",
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+  WEB_BUILD_DIR: fileURLToPath(new URL("./web/testdata/", import.meta.url)),
 };
 type Entry = { method: string; path: string };
 /** Each route keyed by "METHOD path", as JSON keeps it: an unset option is absent, as in the committed file. */
@@ -57,6 +60,11 @@ test("route_manifest_names_an_extra_route", async () => {
     handler: () => new Response(),
   } as const;
   const extra = defineRoute(spec);
-  const server = createServer({ config: cfg, routes: [...prefsRoutes(), extra], policies: POLICIES, log });
+  const server = createServer({
+    config: cfg,
+    routes: [...prefsRoutes(), ...assetsRoutes(new Map()), extra],
+    policies: POLICIES,
+    log,
+  });
   expect(drift(server.routeTable(), manifest)).toEqual(["GET /extra"]);
 });

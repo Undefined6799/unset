@@ -1,5 +1,6 @@
 // POST /prefs/theme through the composed web server, so the kit's real checks (method, media type, body limit, CSRF
 // gate) run in front of the handler exactly as in production.
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
@@ -18,6 +19,7 @@ const ENV = {
   TRUSTED_PROXY_MODE: "header",
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+  WEB_BUILD_DIR: fileURLToPath(new URL("../web/testdata/", import.meta.url)),
 };
 const FORM = "application/x-www-form-urlencoded";
 const YEAR = "Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=31536000";
