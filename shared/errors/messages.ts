@@ -19,4 +19,5 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "internal.error": "Something went wrong on our side.",
   "service.unavailable": "This is unavailable right now. Try again soon.",
   "db.busy": "We're busy right now. Try again in a moment.",
+  "prefs.invalid": "That choice is not one of the options.",
 };

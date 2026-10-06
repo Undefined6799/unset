@@ -8,6 +8,7 @@ import { createLogger } from "@unset/shared-log";
 import { expect, test } from "vitest";
 import { compose } from "./compose.ts";
 import { config } from "./config.ts";
+import { prefsRoutes } from "./routes/prefs.ts";
 
 const COMMIT = "c".repeat(40);
 const ENV = {
@@ -56,6 +57,6 @@ test("route_manifest_names_an_extra_route", async () => {
     handler: () => new Response(),
   } as const;
   const extra = defineRoute(spec);
-  const server = createServer({ config: cfg, routes: [extra], policies: POLICIES, log });
+  const server = createServer({ config: cfg, routes: [...prefsRoutes(), extra], policies: POLICIES, log });
   expect(drift(server.routeTable(), manifest)).toEqual(["GET /extra"]);
 });

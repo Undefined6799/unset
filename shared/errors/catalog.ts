@@ -20,6 +20,8 @@ export const ERROR_CODES = {
   "service.unavailable": { status: 503, public: true },
   // P1.11: no Postgres client freed up within PG_CONNECT_TIMEOUT_MS, so the request fails fast instead of queueing.
   "db.busy": { status: 503, public: true },
+  // P1.22: a preference form sent a value outside its allowlist; only the write path uses it, never a cookie read.
+  "prefs.invalid": { status: 400, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 

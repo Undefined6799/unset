@@ -7,5 +7,24 @@
     "rateLimit": "exempt",
     "mutates": false,
     "middleware": ["requestId", "methodCheck"]
+  },
+  {
+    "method": "POST",
+    "path": "/prefs/theme",
+    "group": "app",
+    "accepts": ["application/x-www-form-urlencoded"],
+    "bodyLimit": 2048,
+    "rateLimit": "default",
+    "mutates": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf"
+    ]
   }
 ]
