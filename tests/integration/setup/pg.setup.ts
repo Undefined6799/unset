@@ -15,8 +15,9 @@ import { randomPassword, startPostgres, stopAllPostgres } from "../../support/po
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 const INTEGRATION = join(REPOSITORY, "tests", "integration");
 
-/** The roles a test file connects as: the processes' own (ruling 2026-10-06 03:15Z (a)). */
-export const PROCESS_ROLES = ["web", "api", "indexer"] as const;
+/** The roles a test file connects as: the processes' own (ruling 2026-10-06 03:15Z (a)). `retention` is the jobs
+ * process's role, which P1.16's sweep test connects as (architecture record 2026-10-06 p116-retention-usage). */
+export const PROCESS_ROLES = ["web", "api", "indexer", "retention"] as const;
 export type ProcessRole = (typeof PROCESS_ROLES)[number];
 
 /** What a test file may know: the process roles and the database cloned for that file. */

@@ -123,7 +123,7 @@ describe("grants", () => {
     let state = await readState(pool);
     const tableLevel = {
       ...matrix,
-      tables: { "app.t": { web: { privileges: ["SELECT"], wholeTable: true as const } } },
+      tables: { ...matrix.tables, "app.t": { web: { privileges: ["SELECT"], wholeTable: true as const } } },
     };
     expect(diff(tableLevel, state)).toEqual([]);
     expect(matrixShapeViolations(tableLevel, state, rows)).toEqual([
@@ -138,7 +138,10 @@ describe("grants", () => {
     state = await readState(pool);
     const byColumn = {
       ...matrix,
-      tables: { "app.t": { web: { columns: { did: ["SELECT"], x: ["SELECT"] }, rowPrivileges: ["DELETE"] } } },
+      tables: {
+        ...matrix.tables,
+        "app.t": { web: { columns: { did: ["SELECT"], x: ["SELECT"] }, rowPrivileges: ["DELETE"] } },
+      },
     };
     expect(diff(byColumn, state)).toEqual([]);
     expect(matrixShapeViolations(byColumn, state, rows)).toEqual([]);
@@ -155,14 +158,14 @@ describe("grants", () => {
     const { pool } = await freshDatabase();
     await run(pool, "CREATE TABLE app.plain (id int); GRANT SELECT ON app.plain TO admin");
     let state = await readState(pool);
-    const unflagged = { ...matrix, tables: { "app.plain": { admin: ["SELECT"] } } };
+    const unflagged = { ...matrix, tables: { ...matrix.tables, "app.plain": { admin: ["SELECT"] } } };
     expect(diff(unflagged, state)).toEqual([]);
     expect(matrixShapeViolations(unflagged, state, {})).toEqual([
       "app.plain admin: a table-level entry needs wholeTable: true",
     ]);
     const flagged = {
       ...matrix,
-      tables: { "app.plain": { admin: { privileges: ["SELECT"], wholeTable: true as const } } },
+      tables: { ...matrix.tables, "app.plain": { admin: { privileges: ["SELECT"], wholeTable: true as const } } },
     };
     expect(matrixShapeViolations(flagged, state, {})).toEqual([]);
 
@@ -288,6 +291,20 @@ describe("grants", () => {
     const defaults =
       "SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a WHERE a.grantee = 'retention'::regrole";
     expect(postgres.sql("unset", defaults)).toBe("0");
+  });
+
+  test("retention_single_use_exact", () => {
+    // P1.16 (architecture record 2026-10-06 p116-retention-usage, amended 20:05Z): retention may DELETE rows of
+    // app.single_use and read expires_at, and nothing else in app: no other column, no INSERT, UPDATE or TRUNCATE.
+    const tablePrivileges =
+      "SELECT string_agg(a.privilege_type, ',' ORDER BY a.privilege_type) FROM pg_class c, aclexplode(c.relacl) a " +
+      "WHERE c.relnamespace = 'app'::regnamespace AND a.grantee = 'retention'::regrole";
+    expect(postgres.sql("unset", tablePrivileges)).toBe("DELETE");
+    const columnPrivileges =
+      "SELECT string_agg(c.relname || '.' || t.attname || ' ' || a.privilege_type, ',') FROM pg_class c " +
+      "JOIN pg_attribute t ON t.attrelid = c.oid, aclexplode(t.attacl) a " +
+      "WHERE c.relnamespace = 'app'::regnamespace AND a.grantee = 'retention'::regrole";
+    expect(postgres.sql("unset", columnPrivileges)).toBe("single_use.expires_at SELECT");
   });
 
   test("types_domains_typacl_null", async () => {
