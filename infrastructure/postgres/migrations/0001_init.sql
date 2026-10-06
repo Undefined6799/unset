@@ -1,0 +1,3 @@
+-- phase: expand
+-- The baseline (P1.11): no statement. The runner creates public.schema_migrations itself, inside its lock, and
+-- records this file as version 1, so the sequence starts at 1. Schemas, roles and grants start at 0002 (P1.12).
