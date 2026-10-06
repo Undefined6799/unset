@@ -1,0 +1,25 @@
+# P1.11q (rule DM-2): a transaction is opened only by withTransaction in infrastructure/postgres/tx.ts, which
+# commits, rolls back and releases the client in every case. Anywhere else, a SQL string that starts a, ends or
+# aborts a transaction, or an ORM-style `.transaction(` call, is a finding. tx.ts is the one exclusion; the
+# fixture runner strips `paths`, so semgrep-rules.test.ts checks that exclusion by reading this file.
+# Postgres keywords are case-insensitive (docs.postgresql.org/18/sql-begin.html), so the match is too.
+# Fixtures: scripts/lint/semgrep/fixtures/transactions-only-in-tx/, checked by scripts/lint/semgrep-fixtures.ts in CI.
+rules:
+  - id: transactions-only-in-tx
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      Transaction control outside infrastructure/postgres/tx.ts (rule DM-2). Use withTransaction(pool,
+      deadline, fn): it opens the transaction, commits on success, rolls back on any throw or deadline and
+      always releases the client. There is no allow comment.
+    paths:
+      exclude:
+        - "scripts/"
+        - "tests/"
+        - "**/*.test.ts"
+        - "/scripts/lint/semgrep/fixtures/"
+        - "/infrastructure/postgres/tx.ts"
+    pattern-either:
+      - pattern: |
+          "=~/^\s*(?i:begin|commit|rollback|start\s+transaction)(?:\s|;|$)/"
+      - pattern: $DB.transaction(...)
