@@ -83,7 +83,8 @@ Inputs:
 - the plan's open issues.
 
 Outputs: a revised `launch-gate.md`, with every assumed name replaced by its real name (file:line); a review report; a
-list of gate items that changed.
+list of gate items that changed; the post-launch follow-up list below, reviewed and kept current. L.00 does not gate
+launch on any entry in that list.
 
 Algorithm:
   1. For each script and interface named here, find the real one. Then cite it, update this file, or add the missing
@@ -109,6 +110,11 @@ Feature ownership (decision 34, guideline §4; added 2026-10-04): the revision c
   or an unexplained entry blocks L.00.
 Not in this step: running any gate.
 Diagram: none.
+
+Post-launch follow-ups (added 2026-10-06, book edit 2026-10-06-p127r-images-required-check). Work Alex deferred until
+after launch; no step before launch depends on it. Each entry names its step and where it is specified.
+  1. **P1.27r** — make `images` a required check (`phase-1.md`). Alex, 2026-10-06 12:08Z: "Wait before making image
+     check mandatory, we can look into it after launch." Until then the interim rule in P1.27r applies.
 
 ### L.01 — Placeholders and the final retirement check (part B; part A is P1.33a)
 Tags: [ALEX] [SEC]            Depends on: L.00, P5.13, P1.33a (the retirement, in Phase 1)            Plan: §11 Q2a, §11 Q1 (`0x40.me` collision), §5.2 (reserved labels held by placeholder accounts), decision 20, decision 24 (plan issue 19 settled)
