@@ -408,8 +408,3 @@ since old `*.0x40.me` handles would collide with new ones. The evening decisions
 inputs (TypeScript 7, Node 26, the Matrix `server_name`, the Tailnet Lock recovery choice, the
 legal paperwork) and remove one process (the account app) while adding three (`api`, `review`,
 `chat-admin`); the plan's §4 size table and §8 phases were restated to match.
-
-## Notes appended after acceptance
-- **Decision 33, as-built note (architecture ruling 2026-10-06 20:00Z):** as built (P1.24): generated from the sheet's
-  ICONS data; bundle sha256 recorded in `shared/ui/sheet/source.json`. The icons are still the approved sheet's own
-  drawings; only the carrier changed, from files to the sheet's data.
