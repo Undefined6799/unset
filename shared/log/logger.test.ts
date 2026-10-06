@@ -174,6 +174,19 @@ describe("logger", () => {
     ]);
   });
 
+  test("logger_lock_events", () => {
+    // P1.17 logs the lock's namespace as `kind`, never its key; a DID in `kind` is replaced.
+    const { log, records } = capture();
+    log.warn("lock.hold_exceeded", { kind: "oauth", ms: 30000 });
+    log.warn("lock.lost", { kind: "oauth" });
+    log.warn("lock.lost", { kind: "did:plc:abc" });
+    expect(records().map((r) => [r.event, r.kind, r.ms])).toEqual([
+      ["lock.hold_exceeded", "oauth", 30000],
+      ["lock.lost", "oauth", undefined],
+      ["lock.lost", "[kind]", undefined],
+    ]);
+  });
+
   test("logger_sqlstate_is_a_code_only", () => {
     // A message or anything else in the sqlstate field is replaced, so error text cannot leak through it.
     const { log, records } = capture();

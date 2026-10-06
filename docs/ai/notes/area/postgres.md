@@ -3,7 +3,7 @@ id: postgres
 type: area
 status: current
 areas: ["[[postgres]]"]
-summary: "Hub for infrastructure/postgres: migrations, roles and grants, the pool, transactions and the single-use store."
+summary: "Hub for infrastructure/postgres: migrations, roles, grants, pool, transactions, single-use store, advisory lock."
 code: [infrastructure/postgres/index.ts]
 sources: []
 importance: normal
@@ -25,6 +25,10 @@ checked: 2026-10-06
 - `pool.ts`: the only place a pooled client is taken. `tx.ts`: the only place a transaction opens.
 - `singleUse/store.ts`: the single-use token store (P1.16, migration 0006). Consuming a token is one UPDATE whose row
   lock lets exactly one caller through; only a SHA-256 of the token is stored, and the retention role sweeps expired rows.
+- `lock.ts`: the per-key advisory lock (P1.17) on its own small pool (`LOCK_POOL_MAX`). A transaction-level lock in the
+  two-int4 key space (`LockNamespace`, `hashtext(key)`), apart from the migration runner's bigint lock. The wait raises
+  the role's 2 s `statement_timeout` for itself, or Postgres cancels it first with 57014. Never log the key: it is
+  usually a DID. A new use adds a `LockNamespace` line with a new number.
 
 **Rules worth knowing.**
 - Each process connects as its own role (web, api, indexer, retention and others), never as a superuser.
