@@ -2516,7 +2516,13 @@ Done when (tests, moved from P1.12p):
 ### P1.13 — DID-column registry test reading `pg_catalog`
 Tags: —            Depends on: P1.12t (a database test, so it connects as a process role)            Plan: §2 rule 11 ("erasure covers every table with a DID column"), §5.2 (the test reads `pg_catalog`), §6 (`eraseDid`)
 Where: `infrastructure/postgres/migrations/<next>_types.sql` (the next free number after P1.12's migrations), `infrastructure/postgres/erasure-registry.json`,
-  `infrastructure/postgres/didColumns.ts`, `tests/integration/postgres/did-columns.test.ts`, `docs/human/db/erasure.md`
+  `infrastructure/postgres/didColumns.ts`, `tests/integration/postgres/did-columns.test.ts`,
+  `tests/integration/postgres/grants.test.ts` (two assertions; rides under the postgres-segment rule),
+  `docs/human/db/erasure.md`
+Ruling (architecture 2026-10-06, record 2026-10-06-p113-domain-usage-and-at-uri-check; PostgreSQL 18 ddl-priv, Table
+  5.2: domains default to USAGE for PUBLIC): no `GRANT … ON DOMAIN`, and the `at_uri` check casts inline rather than
+  calling a routine, because the P1.12 global revoke of routine EXECUTE from PUBLIC makes a routine call in a check
+  fail for writers (42501). There is no P1.13x.
 Size: ~30 lines SQL, ~40 source lines, ~160 test lines
 
 Goal: every column that can hold a DID is found by querying the database itself, and the build fails while any such
@@ -2526,14 +2532,15 @@ Inputs: P1.12 (schemas, `types` schema, matrix). Schema names are `app` and `idx
   phase files are being aligned, see Notes).
 Outputs:
   - Domain `types.did AS text CHECK (VALUE ~ '^did:(plc:[a-z2-7]{24}|web:[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$')`
-    with `USAGE` granted to every login role (matrix updated). The `did:web` form is hostname only, lowercase, no port
+    with domain USAGE left to PUBLIC's default; schema USAGE on `types` is the gate (P1.12's 0003). The `did:web` form is hostname only, lowercase, no port
     and no path, as atproto uses it. Every DID column in every later migration uses `types.did` (or `types.did[]`).
-  - Domain `types.at_uri AS text CHECK (VALUE ~ '^at://did:(plc|web):[^/]+(/[^/]+(/[^/]+)?)?$' AND
-    types.at_uri_did(VALUE) IS NOT NULL)`, where `types.at_uri_did(text) RETURNS types.did` (IMMUTABLE, plain SQL)
-    returns the URI's authority. An AT-URI names a DID in its authority, so a column that stores one is a DID column
+  - Domain `types.at_uri AS text CHECK (VALUE ~ '^at://did:(plc|web):[^/]+(/[^/]+(/[^/]+)?)?$' AND <the authority
+    cast inline to types.did> IS NOT NULL)`: the check casts the authority inline to `types.did` and calls no routine.
+    `types.at_uri_did(text) RETURNS types.did` (IMMUTABLE, plain SQL) returns the URI's authority and is kept for
+    P3.07; its EXECUTE stays revoked as built. An AT-URI names a DID in its authority, so a column that stores one is a DID column
     for erasure (phase-3 request: these columns were outside the `types.did` scan and had to be listed by hand). Every
     AT-URI column in every later migration uses `types.at_uri` (or `types.at_uri[]`); a handle authority is resolved
-    and replaced by the DID before storage, never stored. USAGE granted like `types.did`.
+    and replaced by the DID before storage, never stored. Domain USAGE as for `types.did`.
   - `erasure-registry.json`: `{ "<schema>.<table>.<column>": { "strategy": "delete_row" | "set_null" | "retain" |
     "audit_redact" | "retain_legal_hold", "class"?: "<retention class>", "reason"?: "<why retained>" } }`.
     `retain` requires `class` and `reason`. `audit_redact` is the audit side tables' strategy (P1.15a): erasure calls
@@ -2578,6 +2585,14 @@ Done when (tests):
     `idx.r.record_uri`; a plain `text` column `record_uri` → fails as suspicious.
   - at_uri_domain_check: `at://did:plc:<24 chars>/sh.unset.video/3k` → ok, and `types.at_uri_did` returns the DID;
     `at://alice.example/sh.unset.video/3k` (handle authority) → `23514`.
+  - at_uri_check_matches_helper: over one fixture set (valid `did:plc:` and `did:web:` authorities, a handle
+    authority, a malformed DID, an empty authority, a percent-encoded authority, upper-case scheme or method
+    variants, an authority followed directly by `?` or `#`), the inline check and `types.at_uri_did` agree on accept
+    or reject and extract the same authority. A disagreement fails; P1.13 never ships with a known divergence.
+  - types_schema_usage_exact (`grants.test.ts`): the roles holding USAGE on schema `types` equal the matrix row
+    exactly.
+  - types_domains_typacl_null (`grants.test.ts`): `pg_type.typacl IS NULL` for every domain in `types`; a later
+    explicit grant or revoke on a domain fails this test and must be ruled.
   - allows_listed_non_did: same column listed in `NOT_A_DID` → passes.
   - retain_needs_reason: registry row `retain` (or `audit_redact`) without `class` and `reason` → fails.
   - domain_check: inserting `did:plc:abc` (too short) into a domain column → `23514`; a valid `did:plc` of 24 base32
@@ -4142,8 +4157,37 @@ tests; this step brings `apps/web/` and the Vite config.
 From P1.22 (book edit 2026-10-06-p122-shape): this step wires P1.22's pure prefs function into the document and carries
 `document_no_inline_script_or_style` and the rendered `public_page_ignores_pref_cookies` byte-equality.
 
-**Where:** `apps/web/src/islands/runtime/{registry.ts, island.tsx, bootstrap.ts, manifest.ts, assets-route.ts}`;
-`apps/web/vite.config.ts`; `scripts/budgets/island.ts`; a dependency-cruiser rule; tests.
+**Where:** `apps/web/src/islands/runtime/{registry.ts, island.tsx, bootstrap.ts}`; `apps/web/render.tsx` (takes the
+parsed manifest as a prop); `apps/web/vite.config.ts`; `interfaces/http/routes/` (the assets route) and the manifest
+loader in `interfaces/http/`, read once in `compose.ts`; tests. `apps/` never touches `node:fs`. The island budget
+(`scripts/budgets/island.ts`) and the dependency-cruiser rule landed in P1.23q.
+
+**Shape and placement (book edits 2026-10-06-p123-shape and -p123-islands-runtime-placement):**
+- **Splits.** P1.23q (merged before this step) carries the budget script, `island.test.ts`, `budget.island.json` and
+  the island import allowlist. **P1.23r** (check paths, kind/build) opens after this step merges and carries
+  `biome.json` with the `jsx_style_prop_rejected` GritQL rule in `scripts/lint/biome/` and its fixture, plus the CI
+  wiring: build web, run `scripts/budgets/island.ts` on the output, and `glue_line_warning`. Fallback if a slot sits
+  idle while this step is open: the lint rule opens alone as P1.23r and the CI wiring follows as P1.23s, with the
+  same bindings. P1.24 and P1.24a depend on P1.23r, and it lands before P1.26.
+- **Assets route [SEC].** At startup the route builds a map from the manifest's emitted file names to absolute paths
+  under the one build output directory; a request is looked up by exact name and anything else is 404. The request
+  path is never joined to a directory, so `..`, encoded slashes, absolute paths and symlinks have no effect. Fixed
+  content types by extension plus `X-Content-Type-Options: nosniff`; an unknown extension is not served. Hashed names
+  get `Cache-Control: public, max-age=31536000, immutable` (the one place `public` is right: the bytes carry no
+  personal data); nothing else gets a long cache. GET and HEAD only; security headers and CSP as the server kit sets
+  them.
+- **Manifest.** `compose.ts` reads and parses it once at startup and validates its shape (file names only, no `..`,
+  no leading `/`). A missing or malformed manifest fails startup. One parse feeds both the render prop and the route
+  map.
+- **Dependencies.** Exact pins `react` and `react-dom` 19.2.8; dev `@types/react` 19.2.18 and `@types/react-dom`
+  19.2.7. As built: JSX by Vite's built-in transform with the automatic runtime; plugin-react not used. The runtime
+  specifier `react/jsx-runtime` must equal the single P1.23q allowlist entry.
+- **No dev server here.** This step ships the production build only; dev SSR lands with the first step that needs
+  it, P1.29 at the latest. P1.08's dev-only CSP branch stays unused until then. When a dev server lands it is a dev
+  dependency only, never imported by `compose.ts` or any production entry and absent from the production image
+  (P1.27's `prod_image_has_no_dev_server`).
+- **Size.** Expect 400 to 550 source lines; the PR body gives the reason. `count-glue-lines` is still reported
+  against the ADR 0015 number.
 
 **Size:** ~300 source lines (re-measured with `count-glue-lines`, warning above the number the P1.20 ADR
 accepted), ~350 test lines.
@@ -4259,17 +4303,19 @@ GET /assets/<file>:
   `assets_rejects_bad_extension` → 404.
 - `csp_app_group_snapshot`: P1.08 snapshot contains `script-src https://<host>/assets/` and `trusted-types
   'none'`, and no `'unsafe-inline'`, nonce or hash.
-- `bootstrap_isolates_failure` (Playwright, production build): two islands, one whose chunk returns 404 → the
-  other is interactive; no uncaught error.
-- `csp_no_violations` (Playwright Chromium, production build): interacting with a demo island → zero console
-  messages about CSP or Trusted Types.
-- `island_budget_check`: fixture chunk of 16 KB gzipped → exit 1.
-- `glue_line_warning`: `count-glue-lines apps/web/src/islands/runtime` (`scripts/budgets/count-glue-lines.ts`, P1.20) reported; above the ADR number → CI warning.
+- `bootstrap_isolates_failure_unit` (DOM environment): one island's import rejects, the other still hydrates. A DOM
+  dev dependency (jsdom or happy-dom), if needed, is exact-pinned and its lockfile rides this step.
+- `bootstrap_isolates_failure` and `csp_no_violations` (Playwright, production build) move to P1.26's harness.
+- `traversal_refused`, `unlisted_file_404`, `content_type_fixed_with_nosniff`, `hashed_asset_immutable`,
+  `manifest_missing_fails_startup` (the placement ruling's conditions).
+- `jsx_runtime_matches_allowlist`: the build's JSX runtime specifier equals the single P1.23q allowlist entry.
+- `island_budget_check` is P1.23q's; `glue_line_warning` (`count-glue-lines apps/web/src/islands/runtime`, warning
+  above the ADR number) is P1.23r's CI wiring.
 - `island_import_boundary`: fixture island importing `infrastructure/postgres` → dependency-cruiser violation.
 - P1.23q's allowlist fixtures: `island_imports_jsx_runtime_passes` (the named JSX runtime module passes),
   `island_imports_other_subpath_fails` (another subpath of the same package), `island_imports_unrelated_package_fails`
   and `island_imports_node_builtin_fails` (`node:fs`).
-- `jsx_style_prop_rejected`: fixture component with `style={{ color: "red" }}` → lint error.
+- `jsx_style_prop_rejected` (P1.23r): fixture component with `style={{ color: "red" }}` → lint error.
 
 **Reuse** (all provisional — for reuse review):
 - Spike glue `spikes/p1-20-hono/src/glue/*` (on the `spike/p1-20` tag, never on main) → SALVAGE candidate only if the reuse reviewer confirms it meets this
@@ -4285,7 +4331,7 @@ the chat bundle (P6.06); the CSP builder itself (P1.08).
 
 ### P1.24 — UI kit, part 1: the "is it on the sheet?" gate and the static and form components
 
-**Tags:** — (every sheet piece is approved, final in sheet v45, 2026-10-04; no design stop remains) · **Depends on:** P1.22 · **Plan:** §8 Phase 1 (every UI piece is on the sheet; anything missing is a stop item for Alex), §7 (icon wrapper), §6.1 WCAG row; review 08
+**Tags:** — (every sheet piece is approved, final in sheet v45, 2026-10-04; no design stop remains) · **Depends on:** P1.22, P1.23r · **Plan:** §8 Phase 1 (every UI piece is on the sheet; anything missing is a stop item for Alex), §7 (icon wrapper), §6.1 WCAG row; review 08
 
 **Answered by Alex 2026-10-03 (#12 P1b-A5 at 11:53Z; #13 at 11:53Z; icons superseded by #12b at 18:00Z):** icons are
 **Iconoir** (7.12.1, regular, MIT): the design session's Icon draft on the sheet lists 36 Iconoir icons whose SVG files are
@@ -4484,7 +4530,7 @@ Modal, the Select listbox island, AsciiBackground, Toast, NewPosts, FeedMore (P1
 **Added because:** P1.24 holding all 23 components plus the gate exceeds one PR, and the interactive components
 need the island runtime (P1.23), which P1.24 does not depend on.
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04) · **Depends on:** P1.24, P1.23 · **Plan:** §8 Phase 1, §5.1 (islands; zero-JS pages), §6.1
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04) · **Depends on:** P1.24, P1.23, P1.23r · **Plan:** §8 Phase 1, §5.1 (islands; zero-JS pages), §6.1
 
 **Where:** `shared/ui/components/<Name>/…` as P1.24; islands under `shared/ui/islands/*.island.tsx`.
 
@@ -4775,6 +4821,9 @@ Any step fails → job fails; required check on main.
 **Done when (tests):**
 - `pages_cover_routes`: fixture route added to the router without `pages.ts` entry → fails.
 - `axe_matrix_green`: all cells pass on the real pages.
+- `bootstrap_isolates_failure` and `csp_no_violations` (moved from P1.23, production build): two islands, one whose
+  chunk returns 404 → the other is interactive with no uncaught error; interacting with a demo island → zero console
+  messages about CSP or Trusted Types.
 - `axe_detects_violation`: fixture test page with an unlabeled input → the a11y spec fails (proves the harness
   bites).
 - `csp_violation_detected`: fixture page with an inline script → csp spec fails.
@@ -4972,6 +5021,8 @@ nothing written to the lock).
   `@sha256:` required).
 - `image_runs_non_root`: `docker run --rm <img> id -u` → 65532 (CI job step).
 - `image_has_no_dev_deps`: no `devDependencies` present in the runtime image.
+- `prod_image_has_no_dev_server`: the image is built with production dependencies only, and no dev server package
+  is present or imported by any production entry (book edit 2026-10-06-p123-shape).
 - `image_health_ok`: container started with test env → `/health` 200 within 20 s.
 - `trivyignore_expiry_enforced`: expired entry → fails; missing reason → fails.
 - `lock_covers_compose_images`: every `image:` in compose files resolves to a lock entry that points at our

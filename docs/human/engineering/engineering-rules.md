@@ -250,11 +250,11 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Status: PARTLY — `02-shared-blocks.md`, Plan §9. NEW: isolated PRs.
 - Priority: P1
 
-**SE-7. Log and measure only through a typed field allowlist (event, service, commit, reqId, route template, method, status, ms, code, dep, attempt, counts, migration version, sqlstate). Never log a DID, handle, IP, user agent, email, token, raw URL, record content or user-derived message. Correlate by `reqId` only. This governs logs and metrics; the plan's accountability records (the audit lanes, `pds-admin`'s hash-linked log and the sealed C-16 buffer) are records with their own rules and keep the fields the plan gives them.**
+**SE-7. Log and measure only through a typed field allowlist (event, service, commit, reqId, route template, method, status, ms, code, dep, attempt, counts, migration version, sqlstate, island). Never log a DID, handle, IP, user agent, email, token, raw URL, record content or user-derived message. Correlate by `reqId` only. This governs logs and metrics; the plan's accountability records (the audit lanes, `pds-admin`'s hash-linked log and the sealed C-16 buffer) are records with their own rules and keep the fields the plan gives them.**
 - Enforced by: the logger's type. Biome `noConsole` *(unverified)* or Semgrep outside the logger. A Vitest that sends PII-shaped values through every route group and greps the captured logs.
 - Source: SRE — ch. 6, ch. 12; DevOps Handbook — ch. 14 (Create Telemetry to Enable Seeing and Solving Problems).
 - Status: PARTLY — Plan §6 logging, P1.04 `request_log_uses_template`. NEW: the enforced schema.
-- Amended 2026-10-06 (P1.11e): `version` is a non-negative safe integer (anything else is dropped); `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. Neither can carry a DID, handle, IP or token. A new field needs an architecture ruling and a line here. String fields other than `route` and `reqId` are fixed words by shape, so a handle, DID, email, IP or URL cannot pass (P1.03w, ruling 2026-10-06).
+- Amended 2026-10-06 (P1.11e): `version` is a non-negative safe integer (anything else is dropped); `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. Neither can carry a DID, handle, IP or token. A new field needs an architecture ruling and a line here. String fields other than `route` and `reqId` are fixed words by shape, so a handle, DID, email, IP or URL cannot pass (P1.03w, ruling 2026-10-06). Amended 2026-10-06 (P1.23e): `island` is an island id from the server's own island registry, matching `^[a-z][a-z0-9-]{0,40}$`, else written as `[island]`; it is never taken from a request.
 - Priority: P1
 
 ## 7. Testing
