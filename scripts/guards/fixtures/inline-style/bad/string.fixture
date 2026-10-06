@@ -1,0 +1,3 @@
+// fixture: shared/ui/src/Box.tsx findings=2
+export const Box = () => <div style="width: 1px" />;
+export const Other = () => <div style='width: 1px' />;
