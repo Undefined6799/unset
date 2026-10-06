@@ -18,7 +18,7 @@ function copy(): string {
   for (const dir of ["sheet", "fonts", "tokens", "src"]) cpSync(join(UI, dir), join(root, dir), { recursive: true });
   return root;
 }
-/** node:fs bound to one shared/ui root, as the `npm run tokens` entry binds it. */
+/** node:fs bound to one shared/ui root, as scripts/ui/tokens.ts binds it. */
 const fileIo = (root: string): TokensIo => ({
   readText: (path) => readFileSync(join(root, path), "utf8"),
   sha256: (path) =>
@@ -49,7 +49,7 @@ test("tokens_check_detects_stale_output", () => {
   );
   expect(run(root, ["--check"])).toMatchObject({
     code: 1,
-    lines: expect.arrayContaining(["tokens.stale: src/tokens.css differs; run npm run tokens"]),
+    lines: expect.arrayContaining(["tokens.stale: src/tokens.css differs; run node scripts/ui/tokens.ts"]),
   });
   expect(run(root, []).code).toBe(0);
   expect(run(root, ["--check"]).code).toBe(0);

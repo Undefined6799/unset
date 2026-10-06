@@ -3,7 +3,7 @@
 // the Biome override that allows hex colours names that path (biome.json, P0.05).
 //
 // shared/ui imports no Node built-in (dependency-cruiser, shared-ui row), so file access and hashing arrive as `io`;
-// the binding to node:fs lives with the tooling that runs it (tokens.test.ts, and the `npm run tokens` entry).
+// the binding to node:fs lives with the tooling that runs it (tokens.test.ts, and scripts/ui/tokens.ts).
 import { buildTokens, type FontMetrics, TokenError } from "./build-tokens.ts";
 import { type ContrastPair, checkContrast } from "./contrast.ts";
 
@@ -55,7 +55,8 @@ export function runTokens(args: string[], io: TokensIo, print: (line: string) =>
     for (const line of contrastTable(tokens, pairs)) print(line);
     const { css } = buildTokens(tokens, metrics);
     if (!args.includes("--check")) io.writeText(OUTPUT, css);
-    else if (io.readText(OUTPUT) !== css) throw new TokenError("tokens.stale", `${OUTPUT} differs; run npm run tokens`);
+    else if (io.readText(OUTPUT) !== css)
+      throw new TokenError("tokens.stale", `${OUTPUT} differs; run node scripts/ui/tokens.ts`);
     return 0;
   } catch (error) {
     print(error instanceof TokenError ? error.message : `tokens.error: ${String(error)}`);
