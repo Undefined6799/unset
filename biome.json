@@ -49,6 +49,17 @@
       "plugins": ["./scripts/lint/biome/token-only.grit"]
     },
     {
+      "includes": [
+        "apps/**/*.tsx",
+        "apps/**/*.jsx",
+        "interfaces/**/*.tsx",
+        "interfaces/**/*.jsx",
+        "shared/**/*.tsx",
+        "shared/**/*.jsx"
+      ],
+      "plugins": ["./scripts/lint/biome/no-style-prop.grit"]
+    },
+    {
       "includes": ["shared/ui/src/tokens.css"],
       "linter": { "rules": { "style": { "noHexColors": "off" } } }
     },
