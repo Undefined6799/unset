@@ -92,7 +92,10 @@ test("hooks_path_documented", () => {
 
 test("tools_read_their_moved_config", () => {
   const ci = read(".github/workflows/ci.yml");
-  expect(ci.match(/--config \.github\/\.gitleaks\.toml/g)).toHaveLength(2);
+  // Every gitleaks run passes the config (P0.07a: PR range, full history, working tree).
+  const scans = ci.match(/"\$GITLEAKS_IMAGE" (?:git|dir) /g) ?? [];
+  expect(scans).toHaveLength(3);
+  expect(ci.match(/--config \.github\/\.gitleaks\.toml/g)).toHaveLength(scans.length);
   expect(ci).toContain("--config scripts/lint/semgrep/");
   expect(ci).toContain("--config .github/.jscpd.json");
   // Named, so a missing file fails the validator instead of it finding nothing to check (Renovate 44.115.13
