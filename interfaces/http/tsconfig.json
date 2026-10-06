@@ -1,5 +1,26 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" },
-  "references": [{ "path": "../../shared/config" }, { "path": "../../shared/http" }, { "path": "../../shared/log" }]
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "jsx": "react-jsx"
+  },
+  "references": [
+    {
+      "path": "../../apps/web"
+    },
+    {
+      "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/http"
+    },
+    {
+      "path": "../../shared/log"
+    },
+    {
+      "path": "../../shared/ui"
+    }
+  ]
 }

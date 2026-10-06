@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "lib": ["es2025", "dom", "dom.iterable"],
+    "types": ["vite/client", "node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  },
+  "references": [
+    {
+      "path": "../../shared/ui"
+    }
+  ]
+}

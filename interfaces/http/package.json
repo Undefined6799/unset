@@ -5,8 +5,11 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "dependencies": {
+    "@unset/apps-web": "*",
     "@unset/shared-config": "*",
     "@unset/shared-http": "*",
-    "@unset/shared-log": "*"
+    "@unset/shared-log": "*",
+    "@unset/shared-ui": "*",
+    "react": "19.2.8"
   }
 }

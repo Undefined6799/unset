@@ -1,4 +1,12 @@
 // Shared UI (MIT). P1.10: the island props serialiser (server) and reader (client).
+// P1.23: what an island file exports.
+export {
+  defineIsland,
+  ISLAND_MAX_PROPS_BYTES,
+  type IslandDefinition,
+  type IslandProps,
+  type PropsSchema,
+} from "./islands/define.ts";
 export { type JsonValue, renderPropsTag, SerializeError, serializeProps } from "./islands/props.ts";
 export type { FallbackFace, FontMetrics } from "./scripts/build-tokens.ts";
 // P1.21m: the fallback-face metrics, computed by scripts/ui/font-metrics.ts.
