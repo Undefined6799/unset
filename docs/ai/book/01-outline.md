@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 89 steps: 71 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 93 steps: 75 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -176,7 +176,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.14q, P1.02, P1.12 | `phase-1.md` |
 | P1.14d | Sealed type and column registry (split from P1.14; P1.14m first if pr-shape classes the migration trusted) | [SEC] | P1.14, P1.13 | `phase-1.md` |
 | P1.15 | Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier | [SEC] | P1.12, P1.13 | `phase-1.md` |
-| P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.12, P1.13 | `phase-1.md` |
+| P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
+| P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p | `phase-1.md` |
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
@@ -189,11 +190,14 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
 | P1.23r | Style-prop lint and island CI wiring (check part of P1.23, after it) | [SEC] | P1.23 | `phase-1.md` |
+| P1.23f | CSS scope function (product split of P1.23v) | — | — | `phase-1.md` |
+| P1.23v | CSS Modules check config: Vitest scoped names, TOOLING widened to app Vite configs | [SEC] [ALEX] | P1.23f | `phase-1.md` |
+| P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v | `phase-1.md` |
 | P1.24i | Icons and inventory (split from P1.24) | [SEC] | P1.22, P1.23r | `phase-1.md` |
 | P1.24h | `safeHref` (trusted base, split from P1.24) | [SEC] | P1.22 | `phase-1.md` |
 | P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
-| P1.24 | UI kit, part 1a: Button, Link, Tag, Mark, SectionHeading, Kbd and the form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.24i, P1.24h | `phase-1.md` |
-| P1.24s | UI kit, part 1b: Avatar, Switch, SkipLink, MediaFrame, DescriptionList, Pagination | — | P1.24i, P1.24h | `phase-1.md` |
+| P1.24 | UI kit, part 1a: Button, Link, Tag, Mark, SectionHeading, Kbd and the form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.24i, P1.24h, P1.23c | `phase-1.md` |
+| P1.24s | UI kit, part 1b: Avatar, Switch, SkipLink, MediaFrame, DescriptionList, Pagination | — | P1.24i, P1.24h, P1.23c | `phase-1.md` |
 | P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.24s, P1.24q, P1.23, P1.23r | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
@@ -267,6 +271,7 @@ flowchart TD
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
   P1_14d["P1.14d Sealed type and registry"]
   P1_15["P1.15 Audit: append-only audit.append"]
+  P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17["P1.17 Per-DID Postgres advisory lock"]
   P1_18["P1.18 net-guard core"]
@@ -278,6 +283,9 @@ flowchart TD
   P1_22["P1.22 Base styles"]
   P1_23["P1.23 Island runtime"]
   P1_23r["P1.23r Style lint and island CI"]
+  P1_23f["P1.23f CSS scope function"]
+  P1_23v["P1.23v CSS Modules check config"]
+  P1_23c["P1.23c CSS Modules glue"]
   P1_24i["P1.24i Icons and inventory"]
   P1_24h["P1.24h safeHref"]
   P1_24q["P1.24q UI inventory guard"]
@@ -342,6 +350,7 @@ flowchart TD
   P1_13 --> P1_14d
   P1_13 --> P1_15
   P1_13 --> P1_16
+  P1_16g --> P1_16
   P1_11p --> P1_17
   P1_02 --> P1_18
   P1_18 --> P1_18a
@@ -362,6 +371,12 @@ flowchart TD
   P1_22 --> P1_24h
   P1_24 --> P1_24a
   P1_24i --> P1_24
+  P1_23 --> P1_23c
+  P1_23r --> P1_23c
+  P1_23f --> P1_23v
+  P1_23v --> P1_23c
+  P1_23c --> P1_24
+  P1_23c --> P1_24s
   P1_24h --> P1_24
   P1_24i --> P1_24q
   P1_24i --> P1_24s
