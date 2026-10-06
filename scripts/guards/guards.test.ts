@@ -5,6 +5,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
@@ -29,6 +30,7 @@ const SCANNERS: Record<string, (root: string) => Finding[]> = {
   "ip-columns": (root) => ipColumns.scanAll(root, []),
   "route-registration": routeRegistration.scanAll,
   "composition-root": compositionRoot.scanAll,
+  "also-known-as": alsoKnownAs.scanAll,
 };
 
 const temps: string[] = [];
@@ -133,6 +135,24 @@ describe("web-no-moderator", () => {
   test("web_moderator_preserve_verb", () => expectFixtures("web-no-moderator", "bad", ["preserve.fixture"]));
   test("web_moderator_relative_admin_import", () =>
     expectFixtures("web-no-moderator", "bad", ["relative-admin.fixture"]));
+});
+
+describe("also-known-as", () => {
+  test("also_known_as_bad_fixture", () => expectFixtures("also-known-as", "bad"));
+  test("also_known_as_good_fixture", () => expectFixtures("also-known-as", "good"));
+
+  test("also_known_as_no_guard_allow", () => {
+    const line = "const h = doc.alsoKnownAs; // guard-allow: also-known-as display only";
+    expect(alsoKnownAs.scanAlsoKnownAs("apps/web/a.ts", line)).toHaveLength(1);
+  });
+
+  test("also_known_as_allowlist_exact", () => {
+    // A file beside an allowed one, or the same name in another folder, is not allowed.
+    const line = "doc.alsoKnownAs";
+    expect(alsoKnownAs.scanAll(tempRepo({ "domains/identity/did-doc.ts": line }))).toEqual([]);
+    expect(alsoKnownAs.scanAll(tempRepo({ "domains/moderation/did-doc.ts": line }))).toHaveLength(1);
+    expect(alsoKnownAs.scanAll(tempRepo({ "domains/identity/did-doc.ts.bak.ts": line }))).toHaveLength(1);
+  });
 });
 
 describe("ip-columns", () => {

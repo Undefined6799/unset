@@ -1,0 +1,2 @@
+// fixture: domains/identity/resolve-handle.ts findings=0
+export const knownAs = "also"; // no match: the words apart
