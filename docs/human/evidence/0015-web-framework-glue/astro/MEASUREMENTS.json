@@ -1,0 +1,79 @@
+{
+  "candidate": "astro",
+  "versions": {
+    "@astrojs/node": "11.1.6",
+    "@astrojs/react": "7.0.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "astro": "7.3.5",
+    "playwright-core": "1.56.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "ssrRenderer": "@astrojs/react (react-dom/server) through Astro pages",
+  "glueLines": {
+    "devSsr": 0,
+    "manifest": 0,
+    "css": 0,
+    "islands": 0,
+    "serialiser": 0,
+    "shell": 24,
+    "config": 6,
+    "total": 30
+  },
+  "declarativeConfigLines": 23,
+  "cssIdentical": {
+    "dev": null,
+    "prod": true,
+    "mismatches": []
+  },
+  "hydrationErrors": 0,
+  "hydrationErrorsByEngine": {
+    "chromium": 0,
+    "firefox": null,
+    "webkit": null
+  },
+  "islandsWorkUnderCsp": false,
+  "islandsWorkWithoutCsp": true,
+  "inlineScriptsOnIslandPage": 2,
+  "inlineStyleElementsOnIslandPage": 1,
+  "cspViolations": 3,
+  "styleAttrViolations": 1,
+  "styleAttrViolationsElsewhere": 1,
+  "zeroJsRoute": {
+    "scriptTags": 0,
+    "modulePreloads": 0,
+    "jsBytes": 0
+  },
+  "jsGzipBytes": {
+    "reactRuntime": 60089,
+    "bootstrap": 1834,
+    "perIsland": {
+      "Counter": 586,
+      "Search": 682
+    },
+    "total": 62843,
+    "headroomFor75KB": 14877
+  },
+  "astroFiles": 3,
+  "rawReports": [
+    "raw/build-stats.json",
+    "raw/chromium-prod-no-csp.json",
+    "raw/chromium-prod.json",
+    "raw/css-maps-prod.json",
+    "raw/deps.json",
+    "raw/glue.json",
+    "raw/gzip.json",
+    "raw/prod-html.json"
+  ],
+  "buildSecondsMedian": 2.661150543,
+  "deps": {
+    "direct": 8,
+    "transitive": 213
+  },
+  "verdict": "FAIL",
+  "failReasons": [
+    "Island hydration needs inline <script> blocks (the astro-island runtime and the client:load directive) and an inline <style>; under the plan's no-inline, path-scoped CSP the islands never hydrate.",
+    "Astro 7.3.5's own security.csp allows them only by hashing them (sent as a header or a <meta>), and step 5 counts a hash-only fix as FAIL."
+  ]
+}

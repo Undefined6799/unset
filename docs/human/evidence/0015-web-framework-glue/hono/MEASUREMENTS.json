@@ -1,0 +1,78 @@
+{
+  "candidate": "hono",
+  "versions": {
+    "@hono/node-server": "2.1.1",
+    "@hono/vite-dev-server": "0.26.1",
+    "@types/node": "26.6.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.2",
+    "hono": "4.13.10",
+    "playwright-core": "1.56.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.3.1"
+  },
+  "ssrRenderer": "react-dom/server renderToString (no streaming)",
+  "glueLines": {
+    "devSsr": 16,
+    "manifest": 19,
+    "css": 7,
+    "islands": 39,
+    "serialiser": 2,
+    "shell": 33,
+    "config": 34,
+    "total": 150
+  },
+  "declarativeConfigLines": 13,
+  "cssIdentical": {
+    "dev": true,
+    "prod": true,
+    "mismatches": []
+  },
+  "hydrationErrors": 0,
+  "hydrationErrorsByEngine": {
+    "chromium": 0,
+    "firefox": null,
+    "webkit": null
+  },
+  "cspViolations": 0,
+  "styleAttrViolations": 1,
+  "styleAttrViolationsElsewhere": 0,
+  "zeroJsRoute": {
+    "scriptTags": 0,
+    "modulePreloads": 0,
+    "jsBytes": 0
+  },
+  "jsGzipBytes": {
+    "reactRuntime": 58886,
+    "bootstrap": 1234,
+    "perIsland": {
+      "Counter": 551,
+      "Search": 646
+    },
+    "total": 61009,
+    "headroomFor75KB": 16680
+  },
+  "rawReports": [
+    "raw/build-stats.json",
+    "raw/chromium-dev.json",
+    "raw/chromium-prod.json",
+    "raw/client-manifest.json",
+    "raw/css-maps-dev-client.json",
+    "raw/css-maps-dev-server.json",
+    "raw/css-maps-prod-client.json",
+    "raw/css-maps-prod-server.json",
+    "raw/deps.json",
+    "raw/fixture.json",
+    "raw/glue.json",
+    "raw/gzip.json",
+    "raw/prod-html.json"
+  ],
+  "buildSecondsMedian": 1.8534789410000003,
+  "deps": {
+    "direct": 11,
+    "transitive": 31
+  },
+  "verdict": "PASS"
+}

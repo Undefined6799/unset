@@ -1,0 +1,72 @@
+{
+  "engine": "chromium",
+  "version": "141.0.7390.37",
+  "base": "http://localhost:4321",
+  "pages": [
+    {
+      "url": "http://localhost:4321/",
+      "status": 200,
+      "console": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "scriptTags": 2,
+      "modulePreloads": 0,
+      "scriptBytes": 184532,
+      "hydrationErrors": null,
+      "boxStyle": {
+        "border": "rgb(0, 128, 0) 2px",
+        "padding": "8px"
+      },
+      "plainDivStyle": {
+        "border": "rgb(0, 0, 0) 0px",
+        "padding": "0px"
+      },
+      "interactions": {
+        "counterAfterClick": "Count: 2",
+        "searchResults": ["hello"]
+      }
+    },
+    {
+      "url": "http://localhost:4321/@demo",
+      "status": 200,
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "scriptTags": 0,
+      "modulePreloads": 0,
+      "scriptBytes": 0,
+      "hydrationErrors": null,
+      "boxStyle": {
+        "border": "rgb(0, 128, 0) 2px",
+        "padding": "8px"
+      },
+      "plainDivStyle": {
+        "border": "rgb(0, 0, 0) 0px",
+        "padding": "0px"
+      },
+      "interactions": null
+    },
+    {
+      "url": "http://localhost:4321/neg",
+      "status": 200,
+      "console": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "scriptTags": 0,
+      "modulePreloads": 0,
+      "scriptBytes": 0,
+      "hydrationErrors": null,
+      "boxStyle": null,
+      "plainDivStyle": {
+        "border": "rgb(0, 0, 0) 0px",
+        "padding": "0px"
+      },
+      "interactions": null
+    }
+  ]
+}
