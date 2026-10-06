@@ -1,0 +1,3 @@
+// fixture: domains/identity/resolve-handle.ts findings=1
+// reads the claim from alsoknownas: any case counts, comments too
+export const ok = true;

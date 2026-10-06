@@ -1,0 +1,3 @@
+// fixture: infrastructure/pds/oauth/identity-resolvers.ts findings=0
+// the library re-reads alsoKnownAs from the document it is handed
+export {};
