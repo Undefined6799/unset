@@ -1268,9 +1268,27 @@ Diagram: none.
 
 ---
 
+### P1.07e — Name the CSRF log event (split from P1.07, SE-6)
+Tags: —            Depends on: P1.03            Plan: rule SE-6 (trusted base alone), the P1.04l/P1.05e/P1.06e prelude pattern
+Where: one product PR. `shared/log/logger.ts` and `logger.test.ts` (`shared/log` is not trusted base).
+
+Why: P1.07 is trusted base (`shared/http` only) and logs `csrf.denied`; a typed `EVENTS` entry must exist on main before
+the trusted PR that logs it. The `csrf.denied` error code already exists in `shared/errors`, so nothing is added there.
+
+Outputs: `csrf.denied` joins `EVENTS`, with one known-event line in `logger.test.ts`.
+
+Done when (tests): the known-event line passes.
+
+As built: merged before P1.07 (book edit 2026-10-05-p107-csrf-split).
+
+---
+
 ### P1.07 — CSRF gate
-Tags: [SEC]            Depends on: P1.04            Plan: §2 rule 14, §5.1 (Hono's `csrf` not used), §6.1 (A10: an exception denies)
-Where: `shared/http/csrf/{gate.ts,gate.test.ts,coverage.test.ts}`
+Tags: [SEC]            Depends on: P1.04, P1.07e            Plan: §2 rule 14, §5.1 (Hono's `csrf` not used), §6.1 (A10: an exception denies)
+Where: `shared/http/csrf/{gate.ts,gate.test.ts,coverage.test.ts,exceptions.ts}`, `server.ts` (the gate on every route
+  that is not GET or HEAD), `routes.ts` (refuses GET with `mutates: true` unless the path is in
+  `GET_MUTATION_EXCEPTIONS`), `index.ts`, `server.test.ts`. `shared/http/` only, which CODEOWNERS already covers; the
+  log event is P1.07e (SE-6)
 Size: ~90 source lines, ~220 test lines
 
 Goal: every request other than GET and HEAD passes one gate that accepts only same-origin requests, decided by
@@ -1358,7 +1376,11 @@ Done when (tests):
   - json_content_type_still_gated: route accepting `application/json`, cross-site POST → 403 (the Hono `csrf` gap, plan §5.1).
   - exception_denies: header getter stubbed to throw → 403 with reason `error`.
   - every_post_route_gated: coverage test over each entrypoint's real routes (steps 7–8).
-  - no_raw_hono_routes: guard (step 9) passes on the tree; a fixture with `app.post(` fails it.
+  - no_raw_hono_routes: satisfied by `route_registration_guard` (P1.04q); its fixtures include `app.post(`. P1.07 adds
+    no second guard and changes nothing under `scripts/` or `.github/`. Checked on main at `c31385a`
+    (`scripts/guards/route-registration.ts:15`): the verb pattern covers get, post, put, delete, options, patch, query,
+    all, on, use, route, basePath and mount, any `hono` or `@hono/*` import outside the two kit files fails, and
+    `createServer` never returns its Hono instance, so no P1.07q is needed (book edit 2026-10-05-p107-csrf-split).
   - get_cannot_mutate: `defineRoute({ method: "GET", path: "/x", mutates: true })` throws at definition.
   - only_listed_get_routes_mutate: over each entrypoint's real route table, the set of GET routes with `mutates: true`
     equals the paths in `GET_MUTATION_EXCEPTIONS` (today exactly `/oauth/callback`, once P2.06 adds it); the list has
@@ -1388,11 +1410,32 @@ flowchart TD
 
 ---
 
+### P1.08e — Seed the CSP config key and name the CSP log event (split from P1.08, SE-6)
+Tags: —            Depends on: P1.04, P1.03            Plan: rule SE-6 (trusted base alone), the P1.05e/P1.06e prelude pattern
+Where: one product PR. `shared/log/logger.ts` and `logger.test.ts`; the six `interfaces/*/routes.manifest.test.ts` files.
+Size: ~15 lines            Labels: kind/feature
+
+Why: P1.08 adds a required `shared/http` config key, `MEDIA_ORIGIN`, and logs `csp.handler_override`. A required key
+needs a product prelude that seeds the six manifest test envs, and an `EVENTS` entry must land before the trusted-base
+PR that logs it.
+
+Outputs:
+  - `csp.handler_override` joins `EVENTS`, with one known-event line in `logger.test.ts`.
+  - Each of the six manifest tests sets `MEDIA_ORIGIN=https://unset-media.test`. `ASSETS_BASE` and `DEV_VITE_ORIGIN`
+    are not seeded; if either turns out to be required at startup, it joins this step before P1.08 opens.
+
+Done when (tests): the event test passes, and each of the six manifest tests runs with `MEDIA_ORIGIN` set.
+
+As built: merged before P1.08 (book edit 2026-10-05-p108e-csp-prelude).
+
+---
+
 ### P1.08 — CSP builder and security headers
-Tags: [SEC]            Depends on: P1.04            Plan: §2 rule 15, §5.1 (script and CSP rules), §5.4 (profile group CSP), §5.2 (media sandbox), §6.1 (Trusted Types, ZAP headers)
+Tags: [SEC]            Depends on: P1.04, P1.08e            Plan: §2 rule 15, §5.1 (script and CSP rules), §5.4 (profile group CSP), §5.2 (media sandbox), §6.1 (Trusted Types, ZAP headers)
 Where: `shared/http/csp/{sources.ts,policies.ts,build.ts,headers.ts}` + `__snapshots__/` + tests; its config keys in
-  the kit fragment `shared/http/config.ts` (P1.04k). The `inline-style` guard is **P1.08i** (SE-6: this PR touches only
-  `shared/http/`)
+  the kit fragment `shared/http/config.ts` (P1.04k), plus `server.ts`, `index.ts` and `server.test.ts`. The `inline-style`
+  guard is **P1.08i**, and the `MEDIA_ORIGIN` seed and `csp.handler_override` event are **P1.08e** (SE-6: this PR touches
+  only `shared/http/`)
 Size: ~200 source lines, ~240 test lines
 
 Goal: every response, error pages included, carries exactly the CSP and security headers of its route group, built from

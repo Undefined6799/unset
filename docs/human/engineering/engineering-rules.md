@@ -254,7 +254,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Enforced by: the logger's type. Biome `noConsole` *(unverified)* or Semgrep outside the logger. A Vitest that sends PII-shaped values through every route group and greps the captured logs.
 - Source: SRE — ch. 6, ch. 12; DevOps Handbook — ch. 14 (Create Telemetry to Enable Seeing and Solving Problems).
 - Status: PARTLY — Plan §6 logging, P1.04 `request_log_uses_template`. NEW: the enforced schema.
-- Amended 2026-10-06 (P1.11e): `version` is a non-negative safe integer (anything else is dropped); `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. Neither can carry a DID, handle, IP or token. A new field needs an architecture ruling and a line here.
+- Amended 2026-10-06 (P1.11e): `version` is a non-negative safe integer (anything else is dropped); `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. Neither can carry a DID, handle, IP or token. A new field needs an architecture ruling and a line here. String fields other than `route` and `reqId` are fixed words by shape, so a handle, DID, email, IP or URL cannot pass (P1.03w, ruling 2026-10-06).
 - Priority: P1
 
 ## 7. Testing

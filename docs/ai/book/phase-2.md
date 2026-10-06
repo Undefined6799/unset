@@ -114,6 +114,11 @@ slice exit **P2.13a**, in that order, after the Phase 1 slice-1 steps (`01-outli
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a) is built after slice 2 and the i18n slice (the rest of Phase 1, ending at
 P1.38). Step ids did not change; the file is in build order.
 
+**The slice order binds (Alex, 2026-10-05 23:29Z, "ok but then maybe we should stick to the plan then").** A Phase 2
+step whose dependencies are merged still waits for its slice: P2.01k (slice 1) ran early, while P2.09k, P2.16b and
+P2.18k wait for the slice 1 review after P2.13a. Building a later step early needs Alex's own typed word naming each
+step id (book edits 2026-10-05-early-phase-2-steps and the slice-gate ruling).
+
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
 (P2.01–P2.08, P2.11, P2.15, P2.12, P2.13, P2.13a) keep their user-facing English text in one `messages.ts` per feature
 (plain exported constants, no catalog machinery); where they say "catalog key", "catalogs" or "EN/FR", read "the
@@ -307,25 +312,31 @@ stateDiagram-v2
 
 ### P2.01k — `resolveTxt` in `net-guard` (split from P2.01, SE-6)
 Tags: [SEC]            Depends on: P1.18            Plan: §2 rule 13 (one egress); §9 trusted base (rule SE-6, as updated 2026-10-04; plan `6275827`)
-Where: `infrastructure/net-guard/dns.ts` + `dns.test.ts`, its export from `infrastructure/net-guard/index.ts`
+Where: `infrastructure/net-guard/src/dns.ts` + `src/dns.test.ts`, its export from `infrastructure/net-guard/index.ts`,
+  and one line in `src/resolve.ts` (net-guard's as-built `src/` layout)
 Size: ~40 source lines, ~60 test lines
 
 Why a separate step (letter suffix): `net-guard` is trusted base, and P1.18 exports no `resolveTxt` (checked: no
 phase-1 step names it), so P2.01's old "A0" addition is its own PR, first.
 Goal: DNS TXT lookups (for `_atproto.<handle>`) go through `net-guard`, bounded in time.
 Inputs: P1.18 `NetGuardError`; config `IDENTITY_DNS_TIMEOUT_MS` (declared by the caller and passed in).
-Outputs: `resolveTxt(name: string, { timeoutMs }): Promise<string[][]>` throwing `NetGuardError{kind: 'dns', code:
-  'ENOTFOUND' | 'ENODATA' | 'ESERVFAIL' | 'ETIMEOUT' | …}`, as P2.01's interface row states.
-Algorithm: a `node:dns` `Resolver` with `timeout = timeoutMs`, `tries = 2`, servers from the system; return the TXT
-  records; map every error to `NetGuardError` with its code; a name that is not a valid DNS name → `kind: 'dns'`,
-  `code: 'EBADNAME'`, no query sent.
-Edge cases and failures: timeout → `ETIMEOUT`; an empty answer → `ENODATA`; the resolver throws anything else → `dns`
-  with the code, never an unwrapped error.
+Outputs: `resolveTxt(name: string, { timeoutMs }): Promise<string[][]>` throwing P1.18's as-built `NetGuardError(code)`
+  with `egress.*` codes (as built; replaces the pre-build `{kind: 'dns', code: 'ENOTFOUND' | …}` shape). One new code,
+  `egress.dns_no_record`, for NXDOMAIN, NODATA and an empty answer; timeout and cancel throw the existing
+  `egress.dns_timeout`; a bad name (no query sent) and every other error throw `egress.dns_failed`, never an unwrapped
+  error.
+Algorithm: a `node:dns` `Resolver` with `tries = 2` and `timeout = maxTimeout = timeoutMs / 2`, servers from the system,
+  inside the hard `timeoutMs` timer (c-ares gives each try the full `timeout`, so with `timeout = timeoutMs` the second
+  try could never start before the hard timer fires); return the TXT records.
+Edge cases and failures: timeout → `egress.dns_timeout`; an empty answer → `egress.dns_no_record`; anything else →
+  `egress.dns_failed`.
 Threats: outbound DNS.
   - D A slow resolver holding a request → bounded `timeoutMs`, two tries (`resolve_txt_timeout`).
   - T A crafted name → validated before any query (`resolve_txt_bad_name`).
-Done when (tests): `resolve_txt_ok` (stub resolver returns records → same records); `resolve_txt_timeout`;
-  `resolve_txt_nodata`; `resolve_txt_bad_name` (no query sent).
+Done when (tests): `resolve_txt_ok` (stub resolver returns records → same records); `resolve_txt_timeout` asserts
+  `egress.dns_timeout`; `resolve_txt_nodata` asserts `egress.dns_no_record`; `resolve_txt_bad_name` asserts
+  `egress.dns_failed` with no query sent.
+As built (#67): the above (book edit 2026-10-05-p201k-as-built).
 Reuse: none. Not in this step: handle resolution itself (P2.01). Diagram: none.
 
 ---
@@ -403,7 +414,7 @@ Outputs:
       adapter was built with; any other origin is `refused` before any network use. `public` takes only `https:`
       URLs with no userinfo, `GET` only. The domain passes no policy, host list or headers beyond `accept`.
       `maxBytes` is also capped at 64 KiB in the adapter.
-    - `txt(name)` returns `records`, `no_record` (`ENOTFOUND`, `ENODATA`) or `unavailable` (every other code).
+    - `txt(name)` returns `records`, `no_record` (`egress.dns_no_record`) or `unavailable` (every other code).
     The tables in A.4 and B.3 below read against these outcomes, unchanged in meaning. Domain tests use small inline
     stand-ins of the port inside their test files (TE-1; `fake_files_outside_domains` forbids a `*.fake.ts` under
     `domains/`).
@@ -411,7 +422,8 @@ Outputs:
   - The `alsoKnownAs` static scan is P2.01q's guard; no static test file here.
 
 Algorithm:
-  A0. All network use goes through `IdentityNetwork` (implemented with `guardedFetch` and `resolveTxt`, P2.01k).
+  A0. All network use goes through `IdentityNetwork` (implemented with `guardedFetch` and `resolveTxt`, P2.01k;
+      `resolveTxt` returns the TXT records or throws `NetGuardError` with an `egress.*` code, P2.01k as built).
   A. `resolveDid(did, {consistency})`
     1. If `parseDid(did)` is null → throw `IdentityError('invalid_doc')`.
     2. If `consistency == 'cached'` and the LRU cache holds an entry younger than `DID_DOC_CACHE_TTL_S` → return it.
@@ -449,8 +461,8 @@ Algorithm:
          - exactly one distinct DID → return `{found, did, via: 'dns'}` (DNS wins; HTTPS is not consulted).
          - more than one distinct DID → dnsResult = `invalid` (treated as not found for DNS; go to step 3).
          - zero → dnsResult = `none`.
-       - throws with `ENOTFOUND` or `ENODATA` → dnsResult = `none`.
-       - throws with anything else (`ESERVFAIL`, `ETIMEOUT`, `ECONNREFUSED`…) → dnsResult = `unavailable`.
+       - throws `egress.dns_no_record` → dnsResult = `none`.
+       - throws anything else → dnsResult = `unavailable` (P2.01k as built).
     3. HTTPS: `guardedFetch('https://' + handle + '/.well-known/atproto-did', {policy: 'public', timeoutMs:
        IDENTITY_HTTP_TIMEOUT_MS, maxBytes: 1024})`:
        - 200 → body trimmed of ASCII whitespace; if `parseDid(body)` → httpsResult = `found(did)`; else `none`.
