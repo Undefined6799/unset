@@ -14,6 +14,7 @@ export {
   type NetGuardSettings,
 } from "./src/request.ts";
 export {
+  type AddressResolver,
   type LookupAnswer,
   type NetGuardCode,
   NetGuardError,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { NetGuardError, pinnedLookup, resolveVetted } from "../index.ts";
+import { type AddressResolver, NetGuardError, pinnedLookup, resolveVetted } from "../index.ts";
 
 type Answer = { address: string; family: number }[];
 const answering = (...addresses: string[]) => {
@@ -147,5 +147,141 @@ describe("pinnedLookup", () => {
   test("pinned_lookup_refuses_unvetted_input", () => {
     expect(() => pinnedLookup([])).toThrow();
     expect(() => pinnedLookup(["example.com"])).toThrow();
+  });
+});
+
+/** A stub c-ares resolver (DNS is an unmanaged dependency, TE-1): each family answers addresses or fails with a code. */
+function caresAnswering(v4: string[] | string, v6: string[] | string, delayMs = 0) {
+  const seen = {
+    built: [] as { timeout: number; tries: number; maxTimeout: number }[],
+    names: [] as string[],
+    cancelled: 0,
+  };
+  const answer = (value: string[] | string) =>
+    new Promise<string[]>((resolve, reject) => {
+      setTimeout(() => {
+        if (typeof value === "string") reject(Object.assign(new Error(`query ${value}`), { code: value }));
+        else resolve(value);
+      }, delayMs);
+    });
+  const createResolver = (options: { timeout: number; tries: number; maxTimeout: number }): AddressResolver => {
+    seen.built.push(options);
+    return {
+      resolve4: (name) => {
+        seen.names.push(`4:${name}`);
+        return answer(v4);
+      },
+      resolve6: (name) => {
+        seen.names.push(`6:${name}`);
+        return answer(v6);
+      },
+      cancel: () => {
+        seen.cancelled++;
+      },
+    };
+  };
+  return { createResolver, seen };
+}
+
+describe("resolveVetted on c-ares (public names, P2.01m)", () => {
+  test("public_names_use_both_families", async () => {
+    const { createResolver, seen } = caresAnswering(["93.184.215.14"], ["2606:2800:21f:cb07:6820:80da:af6b:8b2c"]);
+    expect(await resolveVetted("Example.COM", { allow: "public" }, { createResolver, timeoutMs: 2000 })).toEqual([
+      "93.184.215.14",
+      "2606:2800:21f:cb07:6820:80da:af6b:8b2c",
+    ]);
+    expect(seen.names.sort()).toEqual(["4:example.com", "6:example.com"]);
+    expect(seen.built).toEqual([{ timeout: 1000, tries: 2, maxTimeout: 1000 }]);
+  });
+
+  test("one_family_is_enough", async () => {
+    const { createResolver } = caresAnswering(["93.184.215.14"], "ENODATA");
+    expect(await resolveVetted("example.com", { allow: "public" }, { createResolver })).toEqual(["93.184.215.14"]);
+  });
+
+  test("no_record_on_nxdomain", async () => {
+    const { createResolver } = caresAnswering("ENOTFOUND", "ENOTFOUND");
+    expect(await codeOf(resolveVetted("nx.example.com", { allow: "public" }, { createResolver }))).toBe(
+      "egress.dns_no_record",
+    );
+  });
+
+  test("no_record_on_nodata_both", async () => {
+    for (const [v4, v6] of [
+      ["ENODATA", "ENODATA"],
+      ["ENOTFOUND", "ENODATA"],
+    ] as const) {
+      const { createResolver } = caresAnswering(v4, v6);
+      expect(await codeOf(resolveVetted("a.example.com", { allow: "public" }, { createResolver }))).toBe(
+        "egress.dns_no_record",
+      );
+    }
+    const empty = caresAnswering([], []);
+    expect(
+      await codeOf(resolveVetted("a.example.com", { allow: "public" }, { createResolver: empty.createResolver })),
+    ).toBe("egress.dns_no_record");
+  });
+
+  test("one_family_error_fails_closed", async () => {
+    for (const [v4, v6] of [
+      [["93.184.215.14"], "ESERVFAIL"],
+      ["ETIMEOUT", ["2606:2800:21f:cb07:6820:80da:af6b:8b2c"]],
+      ["ENOTFOUND", "EREFUSED"],
+    ] as const) {
+      const { createResolver } = caresAnswering(v4 as string[] | string, v6 as string[] | string);
+      expect(await codeOf(resolveVetted("a.example.com", { allow: "public" }, { createResolver }))).toBe(
+        "egress.dns_failed",
+      );
+    }
+  });
+
+  test("mixed_answers_refused_on_cares", async () => {
+    const { createResolver } = caresAnswering(["93.184.215.14"], ["fd00::1"]);
+    expect(await codeOf(resolveVetted("a.example.com", { allow: "public" }, { createResolver }))).toBe(
+      "egress.private_address",
+    );
+    const v4 = caresAnswering(["93.184.215.14", "10.0.0.1"], "ENODATA");
+    expect(
+      await codeOf(resolveVetted("a.example.com", { allow: "public" }, { createResolver: v4.createResolver })),
+    ).toBe("egress.private_address");
+  });
+
+  test("malformed_answer_fails", async () => {
+    const { createResolver } = caresAnswering(["93.184.215.014"], "ENODATA");
+    expect(await codeOf(resolveVetted("a.example.com", { allow: "public" }, { createResolver }))).toBe(
+      "egress.dns_failed",
+    );
+  });
+
+  test("timeout_cancels_the_query", async () => {
+    vi.useFakeTimers();
+    const { createResolver, seen } = caresAnswering(["93.184.215.14"], [], 10_000);
+    const pending = codeOf(resolveVetted("slow.example.com", { allow: "public" }, { createResolver, timeoutMs: 500 }));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await pending).toBe("egress.dns_timeout");
+    expect(seen.cancelled).toBe(1);
+  });
+
+  test("private_mode_uses_lookup", async () => {
+    // Internal names may live in /etc/hosts, which c-ares skips: private mode keeps dns.lookup.
+    const { createResolver, seen } = caresAnswering(["93.184.215.14"], []);
+    expect(await resolveVetted("localhost", { allow: "private" }, { createResolver })).toContain("127.0.0.1");
+    expect(seen.built).toEqual([]);
+  });
+
+  test("a_lookup_stub_replaces_both_resolvers", async () => {
+    const { lookup, calls } = answering("93.184.215.14");
+    const { createResolver, seen } = caresAnswering(["1.1.1.1"], []);
+    expect(await resolveVetted("example.com", { allow: "public" }, { lookup, createResolver })).toEqual([
+      "93.184.215.14",
+    ]);
+    expect(calls).toEqual(["example.com"]);
+    expect(seen.built).toEqual([]);
+  });
+
+  test("literals_skip_cares", async () => {
+    const { createResolver, seen } = caresAnswering(["1.1.1.1"], []);
+    expect(await resolveVetted("93.184.215.14", { allow: "public" }, { createResolver })).toEqual(["93.184.215.14"]);
+    expect(seen.built).toEqual([]);
   });
 });
