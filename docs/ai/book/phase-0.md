@@ -981,8 +981,8 @@ Outputs:
       provenance attestations; fails on an invalid signature).
     - `secrets` (10 min): checkout with `fetch-depth: 0`; run the gitleaks CLI from its container image pinned by index
       digest: `docker run --rm -v "$PWD:/repo" -w /repo <gitleaks image>@sha256:… git --redact --config .gitleaks.toml .`
-      (full history) and `… dir --redact --config .gitleaks.toml .` (working tree). No action, no token, no run-time
-      binary download.
+      (full history on `main`; PRs scan their own range, P0.07a) and `… dir --redact --config .gitleaks.toml .`
+      (working tree). No action, no token, no run-time binary download.
     - `actionlint` (5 min): the `rhysd/actionlint` image pinned by index digest, over `.github/workflows/`.
     - `semgrep` (15 min): the `semgrep/semgrep` image pinned by index digest; `semgrep scan --config p/typescript
       --config p/nodejs --config p/owasp-top-ten --metrics=off --error --sarif --output semgrep.sarif`; the step then
@@ -1009,7 +1009,8 @@ Outputs:
         prints, and default rules do not know it);
       `age-secret-key` — `AGE-SECRET-KEY-1[02-9AC-HJ-NP-Z]{58}`;
       `age-plugin-identity` — `AGE-PLUGIN-[A-Z0-9-]+-1[02-9AC-HJ-NP-Z]+`.
-    No allowlist entries. Tests that need these strings build them at run time (never committed).
+    No allowlist entries, except the one public-key exception added by P0.07a (ruling 2026-10-06
+    secrets-scan-scope-and-public-keys). Tests that need these strings build them at run time (never committed).
   - `.semgrepignore`: `node_modules/`, `dist/`, `*.generated.*`, `scripts/guards/fixtures/`.
 
 Algorithm (what the agent does):
@@ -1055,7 +1056,8 @@ Threats: untrusted branch code running in CI next to secrets and the OIDC issuer
     (`secrets_and_oidc_gated`, `least_privilege`).
   - E Script injection through a PR title or branch name → no `${{` in `run:`, no `pull_request_target`/`workflow_run`
     (`no_expression_in_run`, `banned_triggers`).
-  - I A secret or private key is committed → full-history gitleaks with the multibase and age rules
+  - I A secret or private key is committed → full-history gitleaks on `main` (PRs scan their own range, P0.07a)
+    with the multibase and age rules
     (`secret_patterns`, `planted_canary_fails`, `planted_multibase_fails`).
   - T A tampered or vulnerable dependency → `npm audit`, `npm audit signatures`, install scripts off (algorithm step
     6).
@@ -2058,6 +2060,8 @@ Rule recorded:
     pushes to main.
   - Hand-off: a PR counts as green only when every job in `required-checks.json` has a completed **success**, not a
     skip, on the current head. So the order is: mark ready, wait for that run, hand over.
+  - Since P0.07a, also run gitleaks (8.30.1, the pinned image or binary) over the branch range
+    (`--log-opts=origin/main..HEAD`) before each push to a draft: CI scans a PR only once it is ready.
 
 Algorithm:
   1. Add `ready_for_review` to the `pull_request` types in both workflows. `ci.yml` had no `types`, so it lists the
@@ -2079,6 +2083,41 @@ Done when (tests, `scripts/guards/workflow-pins.test.ts`):
     `reopened` unless `types` lists more. A skipped required check may count as passing under branch protection
     (unverified until protection exists). That is harmless, because a draft cannot merge and marking it ready runs
     everything again. The PR proves on itself that marking it ready starts a full, non-skipped run on the same head.
+
+---
+
+### P0.07a — Secrets job: per-PR range, full history on main, public-key exception (amends P0.07)
+Tags: [SEC] [ALEX] (typed approval before the PR)    Depends on: P0.07, P0.09l (same `ci.yml`; draft trigger)
+Source: architecture ruling 2026-10-06 secrets-scan-scope-and-public-keys, after a public `did:key` test vector on
+another branch turned every open PR's `secrets` check red. Alex approved both parts and the branch
+`claude/phase-0-secrets-scan-scope` (project chat, 2026-10-06 00:50Z).
+Where (check paths only, one PR): `.github/workflows/ci.yml` (the `secrets` job), `.github/.gitleaks.toml`, and the
+planted fixtures `scripts/ci/secrets-fixtures.ts` with their test.
+
+Algorithm:
+  1. On `pull_request`: `gitleaks git --log-opts="$BASE_SHA..$HEAD_SHA"` over the PR's own commits, the SHAs taken
+     from `github.event.pull_request.{base,head}.sha` through `env:`, never inline in `run:`. The step first checks
+     that both commits exist and the range is not empty: gitleaks v8.30.1 (`sources/git.go`) carries on past a
+     `git log` error, which would read as a clean scan. The `dir` scan of the working tree runs as before.
+  2. Every other event (a push to `main`): the full-history scan of all refs, with `fetch-depth: 0`, unchanged.
+  3. Unchanged: the check name `secrets`, the pinned image and `--redact`.
+  4. One `[[allowlists]]` entry in `.gitleaks.toml`: `targetRules = ["generic-api-key"]`, `regexTarget = "secret"`
+     (both read in gitleaks v8.30.1 `config/config.go`; a targeted allowlist joins only that rule's allowlists), two
+     anchored regexes: a whole `zQ3s` (K-256) or `zDn` (P-256) base58btc public key at its exact 49-character length,
+     with or without `did:key:`, or `did:plc:` plus exactly 24 `[a-z2-7]`.
+  5. The secrets job proves the scope and the exception on fixtures built at run time (`node
+     scripts/ci/secrets-fixtures.ts`); values derive from fixed labels, because a random value can contain one of
+     generic-api-key's stop words and pass a must-fail case.
+
+Known gap (accepted in the ruling): a secret pushed to a draft branch is found when that branch is marked ready or
+when `main` is next pushed. The local gate covers drafts (P0.09l, gitleaks over the branch range before each push).
+
+Done when (tests): in `scripts/ci/secrets-fixtures.ts` (CI `secrets` job): `pr_range_planted_secret_fails`,
+`other_branch_secret_not_pr_gate`, `main_full_history_finds_it`, `public_did_key_vectors_pass`,
+`public_vectors_fail_without_exception`, `private_multibase_still_fails` (z3vL and z42t, bare and as `did:key:`),
+`api_key_beside_public_key_fails`, `wrong_length_zq3s_fails` (one character long and short); in
+`scripts/ci/secrets-fixtures.test.ts` (Vitest): `sha_from_env_not_inline`, `pr_scans_range_and_main_scans_everything`,
+`exception_targets_one_rule_on_the_secret`, `exception_matches_public_identifiers_only`.
 
 ---
 

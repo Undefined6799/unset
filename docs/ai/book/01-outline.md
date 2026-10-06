@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 27 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05).
+Depth: **build-ready**. 28 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a added 2026-10-06).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -44,6 +44,7 @@ Depth: **build-ready**. 27 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09h | Size guard counts a pure rename once | — | P0.09g, P0.09i | `phase-0.md` |
 | P0.09i | pr-shape skips template headings for Renovate only | — | P0.09g | `phase-0.md` |
 | P0.09l | Checks skip draft PRs | — | P0.09i | `phase-0.md` |
+| P0.07a | Secrets job: per-PR range, public-key exception | [SEC] [ALEX] | P0.07, P0.09l | `phase-0.md` |
 | P0.09j | Guard fixtures isolate git from the caller's environment | — | P0.09g | `phase-0.md` |
 | P0.09k | Case-collision guard | — | P0.09j | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
@@ -75,6 +76,7 @@ flowchart TD
   P0_09h["P0.09h Renames count once"]
   P0_09i["P0.09i Renovate skips template headings"]
   P0_09l["P0.09l Checks skip draft PRs"]
+  P0_07a["P0.07a Secrets scan scope"]
   P0_09j["P0.09j Fixture git ignores hook env"]
   P0_09k["P0.09k Case-collision guard"]
   P0_10["P0.10 Secret scanning"]
@@ -108,6 +110,8 @@ flowchart TD
   P0_09i --> P0_09l
   P0_07 --> P0_10
   P0_07 --> P0_11a
+  P0_07 --> P0_07a
+  P0_09l --> P0_07a
   P0_11a --> P0_11
   P0_10 --> P0_12
   P0_07 --> P0_13
