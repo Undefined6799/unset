@@ -1,16 +1,22 @@
-// The kit showcase (P1.24; book P1.24 "Where"): every built component in each variant and state, server-rendered
+// The kit showcase (P1.24, P1.24s; book P1.24 "Where"): every built component in each variant and state, server-rendered
 // with no JS. P1.26's test server serves it for the axe and target-size checks in both themes; no app links it.
 import type { ReactNode } from "react";
+import { Avatar } from "../components/Avatar/Avatar.tsx";
 import { Button } from "../components/Button/Button.tsx";
 import { Checkbox } from "../components/Checkbox/Checkbox.tsx";
+import { DescriptionList } from "../components/DescriptionList/DescriptionList.tsx";
 import { Icon } from "../components/Icon/Icon.tsx";
 import { Input } from "../components/Input/Input.tsx";
 import { Kbd } from "../components/Kbd/Kbd.tsx";
 import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
+import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
+import { Pagination } from "../components/Pagination/Pagination.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
 import { SectionHeading } from "../components/SectionHeading/SectionHeading.tsx";
 import { Select } from "../components/Select/Select.tsx";
+import { SkipLink } from "../components/SkipLink/SkipLink.tsx";
+import { Switch } from "../components/Switch/Switch.tsx";
 import { Tag } from "../components/Tag/Tag.tsx";
 import { Textarea } from "../components/Textarea/Textarea.tsx";
 import { type SafeHref, safeHref } from "../safe-href.ts";
@@ -95,6 +101,41 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
     />
   ),
   Select: <Select name="lang" label="Language" options={languages} placeholder="pick one" />,
+  Avatar: (
+    <p>
+      <Avatar name="alex" size={24} /> <Avatar name="alex" /> <Avatar name="alex" size={64} alt="Alex" />{" "}
+      <Avatar name="alex" size={128} />
+    </p>
+  ),
+  Switch: (
+    <>
+      <Switch name="showEmail" label="show my email" defaultChecked />
+      <Switch name="private" label="private profile" />
+      <Switch name="locked" label="unavailable" disabled />
+    </>
+  ),
+  SkipLink: <SkipLink shown />,
+  MediaFrame: (
+    <>
+      <MediaFrame alt="" ratio="3:1" caption="profile cover" />
+      <MediaFrame alt="" ratio="9:16" emptyText="[no cover]" />
+    </>
+  ),
+  DescriptionList: (
+    <DescriptionList
+      items={[
+        { label: "Handle", value: "alex.example" },
+        { label: "DID", value: "did:plc:ewvi7nxzyoun6zhxrhs64oiz", mono: true },
+        { label: "Joined", value: null },
+      ]}
+    />
+  ),
+  Pagination: (
+    <>
+      <Pagination page={5} pages={12} hrefFor={(n) => href(`/kit?page=${n}`)} />
+      <Pagination label="Followers" newer={null} older={href("/kit?cursor=next")} />
+    </>
+  ),
 };
 
 export function Showcase() {
