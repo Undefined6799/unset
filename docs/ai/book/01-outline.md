@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 76 steps: 58 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 77 steps: 59 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -183,9 +183,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
+| P1.27r | Make `images` a required check (split from P1.27q) | [SEC] [ALEX] | P1.27q | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11p, P1.27, P1.28 | `phase-1.md` |
-| P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
+| P1.30 | Deploy preflight | [SEC] | P1.27, P1.27r | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -258,6 +259,7 @@ flowchart TD
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
+  P1_27r["P1.27r images required check"]
   P1_28["P1.28 Edge Caddy"]
   P1_29["P1.29 Development stack"]
   P1_30["P1.30 Deploy preflight"]
@@ -325,6 +327,7 @@ flowchart TD
   P1_11p --> P1_29
   P1_28 --> P1_29
   P1_27 --> P1_30
+  P1_27r --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
   P1_18 --> P2_01
@@ -414,8 +417,8 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 10 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, the server
-baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority, compliance skeletons, the
+Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+and signing (P1.27s, contingent on Alex's guard approval), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority, compliance skeletons, the
 Arachnid application, and the Phase 1 exit.
 
 | Id | Step | Tags | Deps | Owner file |
@@ -430,6 +433,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.33, P1.33a, P0.12, P0.11, P1.29 | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
+| P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
 | P1.36 | Compliance skeletons | — | P0.07 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
@@ -443,6 +447,7 @@ flowchart TD
   P1_33a["P1.33a Retire the 0x40 prototype before"]
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
+  P1_27s["P1.27s publish and sign images"]
   P1_36["P1.36 Compliance skeletons"]
   P1_37a["P1.37a Apply for Arachnid Shield access"]
   P1_38["P1.38 Phase 1 exit"]
@@ -478,7 +483,7 @@ Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34 | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38 | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.30, P1.11p, P1.33 | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
