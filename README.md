@@ -33,6 +33,8 @@ git config core.hooksPath scripts/githooks   # secret scan + guards before each 
 npm run check                         # typecheck, lint, guards, tests
 ```
 
+`npm run check` needs Docker: the Postgres tests start the pinned image themselves and fail, rather than skip, without it.
+
 ## License
 
 Licence: AGPL-3.0-only, with every `shared/` package under MIT ([ADR 0012](docs/human/decisions/0012-licence.md)). The repository stays private until launch.
