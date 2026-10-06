@@ -122,7 +122,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 58 steps: 44 from `phase-1.md`, 14 from `phase-2.md` (including the
+Depth: **build-ready**. 74 steps: 57 from `phase-1.md`, 17 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -147,21 +147,27 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.06 | Body limits and the rate-limit primitive | [SEC] | P1.05, P1.06e | `phase-1.md` |
 | P1.06q | Route policy guard (split from P1.06p, SE-6) | — | P0.09c | `phase-1.md` |
 | P1.06p | Per-interface rate-limit policy tables and the every-route-has-a-policy check | [SEC] | P1.06, P1.06q, P1.04 | `phase-1.md` |
-| P1.07 | CSRF gate | [SEC] | P1.04 | `phase-1.md` |
-| P1.08 | CSP builder and security headers | [SEC] | P1.04 | `phase-1.md` |
+| P1.07e | Name the CSRF log event (split from P1.07, SE-6) | — | P1.03 | `phase-1.md` |
+| P1.07 | CSRF gate | [SEC] | P1.04, P1.07e | `phase-1.md` |
+| P1.08e | Seed the CSP config key and name the CSP log event (split from P1.08, SE-6) | — | P1.04, P1.03 | `phase-1.md` |
+| P1.08 | CSP builder and security headers | [SEC] | P1.04, P1.08e | `phase-1.md` |
 | P1.08i | `inline-style` guard (split from P1.08, SE-6) | — | P1.08 | `phase-1.md` |
 | P1.09 | Return-path validator, fuzz-tested | [SEC] | P1.01 | `phase-1.md` |
 | P1.10 | Island props serialiser, fuzz-tested | [SEC] | P1.01 | `phase-1.md` |
-| P1.11g | Postgres bootstrap script: `migrator`, `tap`, the `PUBLIC` revokes (split from P1.11, SE-6) | [SEC] | P1.02 | `phase-1.md` |
-| P1.11q | Transactions Semgrep rule, CI Postgres service, required check (check part of P1.11; SE-6 `q`) | — | P1.11g, P1.02 | `phase-1.md` |
-| P1.11 | Postgres and the migration runner as the `migrator` role | — | P1.11q, P1.11g, P1.02 | `phase-1.md` |
-| P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11 | `phase-1.md` |
+| P1.11h | Postgres test helper (prelude to P1.11g, SE-6) | [SEC] | P1.02 | `phase-1.md` |
+| P1.11g | Postgres bootstrap script: `migrator`, `tap`, the `PUBLIC` revokes (split from P1.11, SE-6) | [SEC] | P1.02, P1.11h | `phase-1.md` |
+| P1.11e | Migration log events and the busy error (prelude to P1.11, SE-6) | — | P1.03 | `phase-1.md` |
+| P1.11q | Transactions and pool-access Semgrep rules (split from P1.11, SE-6) | — | P1.01s | `phase-1.md` |
+| P1.11 | Postgres and the migration runner as the `migrator` role | — | P1.11e, P1.11g, P1.11q, P1.02 | `phase-1.md` |
+| P1.11p | Pool, transactions and the connection budget (split from P1.11) | — | P1.11 | `phase-1.md` |
+| P1.11t | Postgres integration setup and the query budget test (split from P1.11) | — | P1.11p | `phase-1.md` |
+| P1.12 | Roles and grants, the role roster, default privileges, grant-matrix test | [SEC] | P1.11p | `phase-1.md` |
 | P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12 | `phase-1.md` |
 | P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12 | `phase-1.md` |
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.02, P1.12 | `phase-1.md` |
 | P1.15 | Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier | [SEC] | P1.12, P1.13 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.12, P1.13 | `phase-1.md` |
-| P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11 | `phase-1.md` |
+| P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p | `phase-1.md` |
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
 | P1.20 | Framework-glue spike | [SPIKE] | P1.04, P1.10 | `phase-1.md` |
@@ -177,13 +183,16 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11, P1.27, P1.28 | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
 | P2.01k | `resolveTxt` in `net-guard` (split from P2.01, SE-6) | [SEC] | P1.18 | `phase-2.md` |
-| P2.01 | DID and handle resolution | [SEC] | P2.01k, P1.18 | `phase-2.md` |
+| P2.01q | `alsoKnownAs` guard (split from P2.01, SE-6) | — | P0.09c | `phase-2.md` |
+| P2.01m | `resolveVetted` on c-ares for public names | [SEC] | P2.01k | `phase-2.md` |
+| P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18 | `phase-2.md` |
+| P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.03 | Session store and lifecycle | [SEC] | P1.12 | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.17, P1.31, P2.01 | `phase-2.md` |
@@ -195,7 +204,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30 | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P2.01a, P2.01m | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -214,13 +223,20 @@ flowchart TD
   P1_06["P1.06 Body limits and the rate-limit"]
   P1_06q["P1.06q route policy guard"]
   P1_06p["P1.06p Per-interface rate-limit tables"]
+  P1_07e["P1.07e CSRF log event"]
   P1_07["P1.07 CSRF gate"]
+  P1_08e["P1.08e CSP prelude"]
   P1_08["P1.08 CSP builder and security headers"]
   P1_08i["P1.08i inline-style guard"]
   P1_09["P1.09 Return-path validator"]
   P1_10["P1.10 Island props serialiser"]
   P1_11["P1.11 Postgres and the migration runner"]
   P1_11g["P1.11g Postgres bootstrap script"]
+  P1_11h["P1.11h Postgres test helper"]
+  P1_11e["P1.11e Migration log events"]
+  P1_11q["P1.11q Transactions and pool rules"]
+  P1_11p["P1.11p Pool and transactions"]
+  P1_11t["P1.11t Postgres integration setup"]
   P1_12["P1.12 Roles and grants"]
   P1_12p["P1.12p Role password sync"]
   P1_13["P1.13 DID-column registry test reading"]
@@ -247,6 +263,9 @@ flowchart TD
   P1_37["P1.37 Legal paperwork"]
   P2_01["P2.01 DID and handle resolution"]
   P2_01k["P2.01k resolveTxt in net-guard"]
+  P2_01q["P2.01q alsoKnownAs guard"]
+  P2_01m["P2.01m resolveVetted on c-ares"]
+  P2_01a["P2.01a Identity network adapter"]
   P2_02["P2.02 verifyHandledid"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_04["P2.04 OAuth client"]
@@ -270,12 +289,18 @@ flowchart TD
   P1_01 --> P1_10
   P1_02 --> P1_11g
   P1_11g --> P1_11
-  P1_11 --> P1_12
+  P1_02 --> P1_11h
+  P1_11h --> P1_11g
+  P1_11e --> P1_11
+  P1_11q --> P1_11
+  P1_11 --> P1_11p
+  P1_11p --> P1_11t
+  P1_11p --> P1_12
   P1_12 --> P1_13
   P1_12 --> P1_14
   P1_13 --> P1_15
   P1_13 --> P1_16
-  P1_11 --> P1_17
+  P1_11p --> P1_17
   P1_02 --> P1_18
   P1_18 --> P1_18a
   P1_04 --> P1_20
@@ -293,7 +318,7 @@ flowchart TD
   P1_25 --> P1_26
   P1_04 --> P1_27
   P1_27 --> P1_28
-  P1_11 --> P1_29
+  P1_11p --> P1_29
   P1_28 --> P1_29
   P1_27 --> P1_30
   P1_01 --> P1_31
@@ -343,7 +368,17 @@ flowchart TD
   P1_06q --> P1_06p
   P1_05e --> P1_06e
   P1_06e --> P1_06
+  P1_03 --> P1_07e
+  P1_07e --> P1_07
+  P1_04 --> P1_08e
+  P1_03 --> P1_08e
+  P1_08e --> P1_08
   P2_01k --> P2_01
+  P2_01q --> P2_01
+  P2_01k --> P2_01m
+  P2_01 --> P2_01a
+  P2_01m --> P2_13a
+  P2_01a --> P2_13a
 ```
 
 ## i18n slice — EN/FR catalogs and the locale preference (English first, Alex 2026-10-04 12:58Z)
@@ -436,7 +471,7 @@ Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34 | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38 | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.30, P1.11, P1.33 | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.30, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid

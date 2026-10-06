@@ -2119,6 +2119,8 @@ Done when (tests): in `scripts/ci/secrets-fixtures.ts` (CI `secrets` job): `pr_r
 `scripts/ci/secrets-fixtures.test.ts` (Vitest): `sha_from_env_not_inline`, `pr_scans_range_and_main_scans_everything`,
 `exception_targets_one_rule_on_the_secret`, `exception_matches_public_identifiers_only`.
 
+As built: merged as PR #73 (head `163c55a`) on 2026-10-06, as specified (book edit 2026-10-06-p007a-secrets-scope-step).
+
 ---
 
 ### P0.09h — Size guard counts a pure rename once (architecture ruling 2026-10-05 03:47Z)
