@@ -1730,7 +1730,7 @@ Not in this step: a live-search island; Follow buttons (P4.18).
 Diagram: none.
 
 ### P3.15 — Report intake and the public notice form
-Tags: [MOD] [SEC]            Depends on: P3.12, P3.06, P1.15, P1.14            Plan: §5.8 "A report button stays on every post", §6 "Reports go into the moderation queue, never into logs", DSA Art. 16; plan-issues #6; AD §3.1, §7.4
+Tags: [MOD] [SEC]            Depends on: P3.12, P3.06, P1.15, P1.14, P1.14d            Plan: §5.8 "A report button stays on every post", §6 "Reports go into the moderation queue, never into logs", DSA Art. 16; plan-issues #6; AD §3.1, §7.4
 Where: `interfaces/http/routes/report.ts`, `apps/web/src/screens/report.tsx`, migration `NNNN_reports.sql`
 Size: ~220 source lines, ~260 test lines
 
