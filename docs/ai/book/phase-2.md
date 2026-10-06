@@ -641,10 +641,29 @@ Reuse (provisional — for reuse review):
     for external handles). Rewrite as above; the registry rule is P3.08.
   - vault `pitfalls/self-asserted-did-doc-handle-must-be-bidirectionally-verified` → cite in the module comment.
 Not in this step: the `*.0x40.me` "our PDS confirms" rule (P3.08); handle display components (P2.13); identity-event
-  invalidation wiring (P3.05); passing `onUnexpected` (P2.04 or P2.06, whichever composes the verifier first: it
+  invalidation wiring (P3.05); the index export (P2.02x); passing `onUnexpected` (P2.04 or P2.06, whichever composes the verifier first: it
   depends on P1.03w, and a `shared/log` prelude, its id the composing step's id plus `e`, adds the
   `identity.verify_error` EVENTS entry before it, the P1.04l pattern).
 Diagram: none.
+
+### P2.02x — Export `verifyHandle` from the identity index (split from P2.02, SE-6)
+Tags: —            Depends on: P2.02            Plan: rule SE-6 (trusted base alone)
+Where: `domains/identity/index.ts` only (about 7 lines). Product PR. (As built, #83 also changed three import lines in
+  `verify-handle.test.ts`.)
+
+Why: P2.02's file is trusted base, and the module index that re-exports it lands in its own PR. General note for
+builders: a trusted-base file and the module index that re-exports it always land in two PRs; plan the export as its own
+small step.
+
+Outputs: `domains/identity/index.ts` exports `createHandleVerifier`, `displayHandle` and the types `HandleVerdict`
+  and `HandleVerifierOptions`.
+The composing step (P2.06, which already depends on P2.02) depends on P2.02x.
+
+As built (#83, merged 2026-10-06 02:40Z): as above. Its PR and commit title reads "P2.02 Export verifyHandle from the
+identity index", so anyone deriving merged steps from commit prefixes counts that commit as P2.02x (book edit
+2026-10-06-p103w-and-p202-correction).
+
+---
 
 ### P2.03 — Session store and lifecycle
 Tags: [SEC]            Depends on: P1.12            Plan: §2 rule 7; §5.3 "Sessions"
@@ -1129,7 +1148,7 @@ Not in this step: the callback (P2.06); sign-up entry (`/signup`, P2.10, reuses 
 Diagram: see "Sequence: login and callback".
 
 ### P2.06 — Callback
-Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P1.07, P1.16            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
+Tags: [SEC]            Depends on: P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16            Plan: §2 rules 2, 3, 6, 7, 19 (expected account); §5.3; §6 "no user sign-in records"
 Where: `interfaces/http/routes/oauth-callback.ts`, `domains/identity/auth/complete-auth.ts`, migration `0203_app_account.sql`
   (the per-DID app account row used from here on), coverage and grants
 Size: ~190 source lines, ~320 test lines

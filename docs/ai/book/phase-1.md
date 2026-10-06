@@ -820,6 +820,10 @@ Done when (tests):
 Order: lands before the first PR that logs a value from outside a fixed union, and at the latest before the
 composition PR that wires P2.02's `onUnexpected` (P2.04 or P2.06), which gains P1.03w in its Depends-on line.
 Rule text: SE-7's "Amended 2026-10-06" line (architecture ruling 2026-10-06-se7-verify-error-and-word-fields).
+As built (branch `claude/phase-1-blocks-yyw0e5-p103w`): `shared/log/logger.ts`, `logger.test.ts` and
+`logger.hardening.test.ts`, with the three tests above. Accepted deviation: the older `logger_scrubs_*` cases call
+`scrub()` directly, since `reason` now refuses non-words before `scrub()` runs; `scrub()` keeps its own coverage
+(book edit 2026-10-06-p111-sslmode-and-p103w-as-built).
 Diagram: none.
 
 ---
@@ -1911,8 +1915,11 @@ p111-test-db-and-pg-config and p111g-postgres-test-mechanism). This text stays t
     `must_be_migrator`, `index_needs_query_comment`, `scram_only`.
   - **P1.11p** (product): `pool.ts` (`createPool`, `acquire`, `withClient`), `withTransaction(pool, deadline, fn)` in
     `tx.ts` on top of `inTransaction`, `checkConnectionBudget` and the use of `db.busy`; database tests under
-    `tests/integration/postgres/`, as P1.11. Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
-    `tx_commit_and_rollback`, `connection_budget`.
+    `tests/integration/postgres/`, as P1.11; the `PG_SSLMODE` host rule and `PG_SSLROOTCERT` (see the config keys
+    below). Tests: `pool_settings`, `pool_exhaustion_fails_fast`, `acquire_nested_in_deadline`,
+    `tx_commit_and_rollback`, `connection_budget`, `sslmode_disable_refused_for_ipv6_literal` (`fd00::5`),
+    `sslmode_disable_allowed_for_loopback` (`127.0.0.1`, `::1`), `sslmode_disable_allowed_for_single_label`
+    (`postgres`), `sslmode_disable_refused_for_dotted_host`, `sslrootcert_passed_as_ca`.
   - **P1.11t** (product): the `tests/integration/setup/pg.setup.ts` globalSetup and `query_budget_per_route`. It folds
     into P1.11p if P1.11p stays near 400 source lines, else stays its own step after P1.11p; P1.11p's PR says which
     (book edit 2026-10-06-p111-as-built).
@@ -1995,8 +2002,16 @@ Outputs:
   - Config keys: `PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` (`secretFile`), `PG_POOL_MAX`
     (`int 1..50`), `PG_CONNECT_TIMEOUT_MS` (`int 100..10000`, default 2000; 0, which node-postgres reads as "wait
     forever", is outside the range), `PG_MAX_REPLICAS` (`int 1..4`, default 3: the most replicas of one service alive at once during a
-    rollout), `PG_SSLMODE` (`oneOf(["disable","require","verify-full"])`, `disable` allowed only on the internal
-    Docker network: cross-field rule `PG_HOST` must not contain a dot when `disable`). No prelude seeds these keys
+    rollout), `PG_SSLMODE` (`oneOf(["disable","verify-full"])`, no default: every environment states it and a missing
+    value fails at startup; `disable` is for the Compose network only, `verify-full` is `ssl: true`, so Node checks
+    the chain and the host name, `pg/lib/connection.js:102-121`, pg 8.23.0; there is no mode that encrypts without
+    verifying, so never `require` and never `rejectUnauthorized: false`). As built in P1.11 (#80): the cross-field
+    rule refuses `disable` when `PG_HOST` contains a dot (`migrate_config_plain_tcp_only_inside_compose`). P1.11p
+    replaces it with architecture's rule (2026-10-06 02:41Z): `disable` only when `PG_HOST` is a single-label name
+    matching `^[a-z][a-z0-9-]{0,62}$`, tested locally in the Postgres config, or a loopback address by
+    `classifyAddress(host) === "loopback"` from net-guard's `index.ts` (not `isInternalName`, which admits `.local`,
+    `.internal`, `.home.arpa` and metadata names); every dotted name and every other IP literal, IPv6 included, must
+    use `verify-full`. A private CA gets `PG_SSLROOTCERT`, passed as `ssl.ca` (P1.11p). No prelude seeds these keys
     while no `compose.ts` wires a pool (ruling 2026-10-06 01:25Z (2)): they are parsed only by the migrate CLI and the
     test setup. The step that first wires a pool into a compose adds the `PG_*` keys to that interface's manifest test
     env in the same PR, with a prelude only if that PR is trusted base.
