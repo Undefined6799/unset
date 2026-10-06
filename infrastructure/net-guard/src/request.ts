@@ -6,7 +6,7 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { Agent, buildConnector, type Dispatcher, request as undiciRequest } from "undici";
 import { classifyAddress, isInternalName, normaliseHost } from "./classify.ts";
 import type { Policy } from "./policies.ts";
-import { type LookupAnswer, type NetGuardCode, NetGuardError, pinnedLookup, resolveVetted } from "./resolve.ts";
+import { type LookupAnswer, type NetGuardCode, NetGuardError, pinnedLookup, resolveVettedWith } from "./resolve.ts";
 
 /** What the composition root passes in (parsed by shared/config netGuardFields, plus wiring). */
 export type NetGuardSettings = {
@@ -279,7 +279,7 @@ async function exchange(
   seen: Seen,
 ): Promise<GuardedResponse> {
   const { limits } = prepared;
-  const addresses = await resolveVetted(
+  const addresses = await resolveVettedWith(
     target.host,
     { allow: target.allow },
     {

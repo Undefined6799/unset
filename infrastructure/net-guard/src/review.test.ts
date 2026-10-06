@@ -1,7 +1,9 @@
 // Review-found gaps (P1.18): expected classes written out by hand, so deleting or narrowing a table row turns a test
 // red, plus the resolver and lookup cases a review proved by running code.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { classifyAddress, isInternalName, NetGuardError, pinnedLookup, resolveVetted } from "../index.ts";
+import { classifyAddress, isInternalName, NetGuardError, pinnedLookup } from "../index.ts";
+// The seamed entry: these cases stub the resolver, which the package entry no longer accepts (P2.01m).
+import { resolveVettedWith as resolveVetted } from "./resolve.ts";
 
 afterEach(() => {
   vi.useRealTimers();
