@@ -28,7 +28,7 @@ Depth: **build-ready**. 29 steps (P0.09a retired, P0.09d added; editor pass 2026
 |---|---|---|---|---|
 | P0.01 | Create the empty private repository and grant the Claude GitHub app access | [ALEX] | — | `phase-0.md` |
 | P0.02 | Push the bootstrap bundle tip and reconcile it with the revised plan | — | P0.01 | `phase-0.md` |
-| P0.03 | Ruleset on `main` (unblocked by GitHub Pro 2026-10-06, awaiting Alex; deferred before that, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
+| P0.03 | Ruleset on `main` (applied 2026-10-06, ADR 0017; deferred before that, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
 | P0.04 | Toolchain: TypeScript 7, Node 26, Vitest only, `.npmrc`, "discovered equals executed" | — | P0.03 | `phase-0.md` |
 | P0.05 | Lint stack: Biome CSS rules, dependency-cruiser on the swc parser, file-size and line-budget warnings | — | P0.04 | `phase-0.md` |
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 94 steps: 76 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 95 steps: 77 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -136,6 +136,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 |---|---|---|---|---|
 | P1.01 | Workspace skeleton | — | P0.05 | `phase-1.md` |
 | P1.01s | Semgrep custom rules: computed imports and floating promises (parallel-safe) | [SEC] | P1.01, P0.07 | `phase-1.md` |
+| P1.01q | References test robust under the full suite (check step; 20 s per-test timeout) | — | — | `phase-1.md` |
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
 | P1.03w | Fixed-word string fields in `shared/log` (SE-7 ruling) | [SEC] | P1.03 | `phase-1.md` |
@@ -232,6 +233,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 ```mermaid
 flowchart TD
   P1_01["P1.01 Workspace skeleton"]
+  P1_01q["P1.01q References test timeout"]
   P1_02["P1.02 Typed config loader per entrypoint"]
   P1_03["P1.03 Error model"]
   P1_04["P1.04 HTTP server skeleton per"]
@@ -1317,7 +1319,7 @@ does not create is isolated trusted base).
 
 Editor pass A: P0.09d added (AI notes vault and guard; parallel-safe; depends on P0.06); P0.09a retired; P2.13b added
 (graphify in CI, first row of slice 2, after P2.13a); P0.03 and P0.14 titles note decision 41 (updated 2026-10-06 for
-GitHub Pro: unblocked, awaiting Alex's ruleset).
+GitHub Pro; the ruleset was applied 2026-10-06, ADR 0017).
 
 ## Dependency check (2026-10-04 evening)
 

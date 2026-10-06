@@ -485,6 +485,22 @@ the Phase 0 thread:
 
 ---
 
+### P1.01q — References test robust under the full suite (check paths, kind/build)
+Tags: —            Depends on: —            Plan: book edit 2026-10-06-p101q-references-test-timeout
+Why: `scripts/workspace/references.test.ts` › `every_ts_file_is_typechecked` runs two real typecheck passes and timed
+  out at vitest's 5 s default under the full push-to-main suite, turning main red at 6d19089 and e4c33f1 (2026-10-06).
+Where: `scripts/workspace/references.test.ts` only (check path, SE-6; neutral, cleared by the coordinator). A per-test
+  timeout sized from a measurement with about 3× headroom, stated in the PR body; never unbounded. Not allowed: skipping,
+  weakening, retrying or moving the test, changing an assertion, or a global `testTimeout` in the root
+  `vitest.config.ts`.
+As built (#353, merged 2026-10-06): option (b), a 20 s per-test timeout; measured 3.5 s alone and up to 5.7 s inside the
+  full suite.
+Done when: the test passes in the full suite locally; the PR's CI is green; the first push-to-main run after merge is
+  green on that test.
+Diagram: none.
+
+---
+
 ### P1.02 — Typed config loader per entrypoint
 Tags: [SEC]            Depends on: P1.01            Plan: §2 rule 24, §4 platform row, §9 ("one config"); review 07 §4 (no `required:false` secrets)
 Where: `shared/config/{schema.ts,load.ts,secret.ts,index.ts}` + tests; each `interfaces/<x>/config.ts` declaring
@@ -5341,9 +5357,13 @@ Shape (architecture ruling 2026-10-06-p127q-packages-write-shape, amended 03:15Z
   - `publish-images.yml` is triggered by `push` to `main` and `workflow_dispatch` only, and has one job, `publish`. A
     `pull_request` trigger anywhere in that file fails the guard. It is not a required check, since it never runs on a
     PR. `images.yml` stays the unprivileged required check `images` on PRs.
-  - The gate: `publish` declares `environment: signing` and its job-level `if:` is exactly `GATE_IF` (push to
-    `refs/heads/main`). `packages: write` joins `id-token: write` in `ungated()`'s privileged test. On the free plan
-    environment protection rules are unavailable (decision 41), so the `if` gate is what binds.
+  - The gate: `publish` declares `environment: signing` (main-only deployment branches; required reviewer: Alex,
+    prevent self-review off) and its job-level `if:` is exactly `GATE_IF` (push to `refs/heads/main`).
+    `packages: write` joins `id-token: write` in `ungated()`'s privileged test. The required reviewer (architecture
+    Amendment 22:20Z, available since the repository went public) adds a human gate on top of the branch rule,
+    `GATE_IF` and the fail-closed key check and replaces none of them; it is a settings click on Alex's P1.27s list
+    (recommended on). If he declines, the earlier fail-closed shape stands and no code changes. Each publish run
+    waits for his approval in the Actions tab.
   - `lineProblems` accepts `packages: write` only in `publish-images.yml`, inside the job `publish`, at job level
     (top-level permissions stay `{}`). Any other file or job wanting it is a guard change, a check-path PR and a
     reviewed decision. Every other write scope is still refused, and `contents: write` is never paired with it.
