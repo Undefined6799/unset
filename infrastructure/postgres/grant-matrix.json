@@ -67,6 +67,7 @@
       "owner": "migrator",
       "grants": {
         "admin": ["USAGE"],
+        "retention": ["USAGE"],
         "web": ["USAGE"]
       },
       "defaults": {
