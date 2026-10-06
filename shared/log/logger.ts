@@ -34,6 +34,10 @@ const EVENTS = [
   // P1.23, the island renderer: in production an island's props were over its byte limit, so it rendered static
   // (logged with the island name only).
   "island.props_too_large",
+  // P1.16, the single-use store: a token refused (a fixed reason word and the purpose, never the token or a DID), and
+  // an externally minted id whose expiry was past its purpose's maximum and was cut to it.
+  "single_use.rejected",
+  "single_use.claim_clamped",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
