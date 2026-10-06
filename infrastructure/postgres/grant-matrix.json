@@ -1,0 +1,110 @@
+{
+  "pluginRule": {
+    "schemaPrefix": "plugin_",
+    "rule": "one schema plugin_<id> and one role plugin_<id> per plugin; the role's search_path is its schema; it holds no privilege outside its schema but CONNECT; no other service or job role holds one on that schema (decision 25)"
+  },
+  "roles": {
+    "web": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "api": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "indexer": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "admin": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "retention": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "media": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "review": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "review_egress": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "auditor": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "backup": {
+      "database": ["CONNECT"],
+      "memberOf": []
+    },
+    "legal_hold_reader": {
+      "database": [],
+      "memberOf": []
+    },
+    "audit_owner": {
+      "database": [],
+      "memberOf": []
+    }
+  },
+  "schemas": {
+    "*": {
+      "defaults": {
+        "migrator": {
+          "routines": {
+            "migrator": ["EXECUTE"]
+          }
+        }
+      }
+    },
+    "app": {
+      "owner": "migrator",
+      "grants": {
+        "admin": ["USAGE"],
+        "web": ["USAGE"]
+      },
+      "defaults": {
+        "migrator": {
+          "sequences": {
+            "web": ["SELECT", "USAGE"]
+          }
+        }
+      }
+    },
+    "audit": {
+      "owner": "audit_owner",
+      "grants": {
+        "admin": ["USAGE"],
+        "auditor": ["USAGE"],
+        "indexer": ["USAGE"],
+        "retention": ["USAGE"],
+        "web": ["USAGE"]
+      }
+    },
+    "idx": {
+      "owner": "migrator",
+      "grants": {
+        "admin": ["USAGE"],
+        "api": ["USAGE"],
+        "indexer": ["USAGE"],
+        "web": ["USAGE"]
+      }
+    },
+    "types": {
+      "owner": "migrator",
+      "grants": {
+        "admin": ["USAGE"],
+        "api": ["USAGE"],
+        "indexer": ["USAGE"],
+        "web": ["USAGE"]
+      }
+    }
+  },
+  "tables": {}
+}

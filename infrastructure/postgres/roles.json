@@ -1,0 +1,180 @@
+[
+  {
+    "name": "web",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 40,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "2s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "each app table's step", "P1.15", "P5.07b"],
+    "passwordFrom": "pg_web_password"
+  },
+  {
+    "name": "api",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 20,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "2s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "each idx table's step"],
+    "passwordFrom": "pg_api_password"
+  },
+  {
+    "name": "indexer",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 10,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "10s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "each idx table's step", "P1.15", "P3.07"],
+    "passwordFrom": "pg_indexer_password"
+  },
+  {
+    "name": "admin",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 10,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "5s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "P1.15", "Phase 3 views"],
+    "passwordFrom": null
+  },
+  {
+    "name": "retention",
+    "class": "job",
+    "login": true,
+    "connectionLimit": 2,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "60s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "each table's step", "P1.15a"],
+    "passwordFrom": null
+  },
+  {
+    "name": "media",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 10,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "2s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P2.19", "P3.09", "P4.21a"],
+    "passwordFrom": null
+  },
+  {
+    "name": "review",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 4,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "10s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["Phase 4 review steps"],
+    "passwordFrom": null
+  },
+  {
+    "name": "review_egress",
+    "class": "service",
+    "login": true,
+    "connectionLimit": 2,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "5s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["Phase 4 review-egress step", "P5.07b"],
+    "passwordFrom": null
+  },
+  {
+    "name": "auditor",
+    "class": "job",
+    "login": true,
+    "connectionLimit": 2,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "60s"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "P1.15", "P1.15a"],
+    "passwordFrom": null
+  },
+  {
+    "name": "backup",
+    "class": "job",
+    "login": true,
+    "connectionLimit": 2,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\"",
+      "statement_timeout": "0"
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P5.04"],
+    "passwordFrom": null
+  },
+  {
+    "name": "legal_hold_reader",
+    "class": "group",
+    "login": false,
+    "connectionLimit": null,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\""
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P4.07"],
+    "passwordFrom": null
+  },
+  {
+    "name": "audit_owner",
+    "class": "owner",
+    "login": false,
+    "connectionLimit": null,
+    "settings": {
+      "idle_in_transaction_session_timeout": "10s",
+      "lock_timeout": "3s",
+      "search_path": "\"\""
+    },
+    "createdBy": "P1.12",
+    "grantsBy": ["P1.12", "P1.15"],
+    "passwordFrom": null
+  }
+]
