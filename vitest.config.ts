@@ -1,6 +1,5 @@
 // Vitest is the only test runner (decision 16). scripts/test/run.ts checks that
 // every test file in the repository was selected and actually ran.
-import { existsSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 import { SKIP_DIRS } from "./scripts/guards/files.ts";
 
@@ -21,12 +20,10 @@ const PROJECTS = [
   "tests/e2e",
 ];
 
-// The integration project's one Postgres (P1.11t): started once per run, only when that project runs. Set only once
-// the setup file exists, so this check change can land before the product PR that adds it (P1.11v).
-const PG_SETUP = "tests/integration/setup/pg.setup.ts";
-const GLOBAL_SETUP: Record<string, { globalSetup: string }> = existsSync(new URL(PG_SETUP, import.meta.url))
-  ? { "tests/integration": { globalSetup: PG_SETUP } }
-  : {};
+// The integration project's one Postgres (P1.11t): started once per run, only when that project runs.
+const GLOBAL_SETUP: Record<string, { globalSetup: string }> = {
+  "tests/integration": { globalSetup: "tests/integration/setup/pg.setup.ts" },
+};
 
 export default defineConfig({
   test: {

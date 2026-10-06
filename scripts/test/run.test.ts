@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test, vi } from "vitest";
@@ -180,6 +180,14 @@ describe("repository settings", () => {
   test("retry_zero", async () => {
     const config = (await import("../../vitest.config.ts")).default as { test?: { retry?: number } };
     expect(config.test?.retry).toBe(0);
+  });
+
+  test("integration_global_setup_file_exists", async () => {
+    type Project = { test?: { name?: string; globalSetup?: string | string[] } };
+    const config = (await import("../../vitest.config.ts")).default as { test?: { projects?: Project[] } };
+    const setups = (config.test?.projects ?? []).flatMap((p) => [p.test?.globalSetup ?? []].flat());
+    expect(setups).toContain("tests/integration/setup/pg.setup.ts");
+    for (const setup of setups) expect(existsSync(join(REPO, setup)), setup).toBe(true);
   });
 
   test("npmrc_lines", () => {
