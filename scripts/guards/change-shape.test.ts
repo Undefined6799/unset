@@ -196,7 +196,12 @@ describe("trusted base (SE-6)", () => {
     });
     const real = readTrustedBase(read(".github/CODEOWNERS"));
     expect(real.ok && real.section.patterns).toEqual(
-      expect.arrayContaining(["/deployment/edge/", "/shared/lexicons/", "/interfaces/chat-auth/"]),
+      expect.arrayContaining([
+        "/deployment/edge/",
+        "/shared/lexicons/",
+        "/interfaces/chat-auth/",
+        "/infrastructure/postgres/roles.ts",
+      ]),
     );
     expect(real.ok && real.section.parsedPaths.length).toBeGreaterThan(0);
     const broken = (text: string) => readTrustedBase(text).ok;
