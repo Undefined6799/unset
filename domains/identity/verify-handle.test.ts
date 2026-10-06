@@ -1,13 +1,14 @@
 import { describe, expect, test } from "vitest";
 import {
   createDidResolver,
+  createHandleVerifier,
   type Did,
+  displayHandle,
   type HttpOutcome,
   type IdentityNetwork,
   parseDid,
   type TxtOutcome,
 } from "./index.ts";
-import { createHandleVerifier, displayHandle } from "./verify-handle.ts";
 
 const A = parseDid("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa") as Did;
 const B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
