@@ -163,7 +163,8 @@ describe("end to end with real Vitest", { timeout: 60_000 }, () => {
       {
         "tsconfig.json": read("tsconfig.json"),
         "tsconfig.base.json": read("tsconfig.base.json"),
-        "scripts/tsconfig.json": read("scripts/tsconfig.json"),
+        // Without its project references: the fixture holds only these files, and the include list is under test.
+        "scripts/tsconfig.json": JSON.stringify({ ...JSON.parse(read("scripts/tsconfig.json")), references: [] }),
         "scripts/a.test.mts": bad,
         "scripts/b.test.tsx": bad,
       },

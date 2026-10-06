@@ -39,6 +39,8 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1, AB-1 | Folder dependencies form an allowlist matrix; any unlisted edge fails | checked: `MATRIX`, `depcruise_unlisted_edge_fails`, `depcruise_matrix_rows_have_fixtures` |
 | ADG §1 | Apps never import each other | checked: `no-app-to-app` |
 | ADG §1 | Apps import only `shared/` | checked: `app-only-shared` |
+| ADG §1, ADR 0015 | An app's `vite.config.ts` is build-time tooling: it may import Node built-ins, npm, its own app, `shared/` and `scripts/ui/css-scope.ts`, nothing else | checked: `app-build-config-imports`, `app_build_config_is_tooling` |
+| ADG §1, ADR 0015 | Nothing imports an app's `vite.config.ts` | checked: `app-build-config-not-imported`, `app_build_config_is_tooling` |
 | ADG §1 | Only the serving interface imports its app's render entry | checked: `app-render-entry-only` |
 | ADG §1 | Interfaces never import each other | checked: `no-interface-to-interface` |
 | ADG §1 | `web` never imports `admin` | checked: `web-not-admin` |

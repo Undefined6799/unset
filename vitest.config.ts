@@ -2,6 +2,7 @@
 // every test file in the repository was selected and actually ran.
 import { defineConfig } from "vitest/config";
 import { SKIP_DIRS } from "./scripts/guards/files.ts";
+import { scopedName } from "./scripts/ui/css-scope.ts";
 
 // A bare name is skipped at any depth; a path is skipped from the repo root.
 const exclude = [...SKIP_DIRS].map((dir) => (dir.includes("/") ? `${dir}/**` : `**/${dir}/**`));
@@ -25,8 +26,13 @@ const GLOBAL_SETUP: Record<string, { globalSetup: string }> = {
   "tests/integration": { globalSetup: "tests/integration/setup/pg.setup.ts" },
 };
 
+// CSS Modules (P1.23v): tests render the same class names as both production builds. Vitest replaces
+// css.modules.generateScopedName with its own unless classNameStrategy is "scoped", and turns a .module.css import
+// into a proxy unless test.css includes it (vitest 5.0.2, dist/chunks/index.C-uw7tH9.js:7946-7952 and 8040).
 export default defineConfig({
+  css: { modules: { generateScopedName: scopedName } },
   test: {
+    css: { include: [/\.module\.css$/], modules: { classNameStrategy: "scoped" } },
     exclude,
     passWithNoTests: false,
     allowOnly: false,

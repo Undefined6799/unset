@@ -273,6 +273,34 @@ describe("boundary rules", () => {
     await expectPass(edge("vitest.config.ts", "./scripts/guards/files.ts"));
   });
 
+  test("app_build_config_is_tooling", async () => {
+    // P1.23v: an app's vite.config.ts may use Node and the shared class-name hash; app source may not, and nothing
+    // imports the config.
+    await expectPass(
+      edge("apps/web/vite.config.ts", "node:crypto"),
+      edge("apps/web/vite.config.ts", "../../scripts/ui/css-scope.ts"),
+    );
+    await expectFail(null, edge("apps/web/src/a.ts", "node:crypto"));
+    await expectFail("app-only-shared", edge("apps/web/src/a.ts", "../../../scripts/ui/css-scope.ts"));
+    await expectFail(
+      "app-build-config-not-imported",
+      edge("apps/web/render.tsx", "./vite.config.ts"),
+      edge("scripts/budgets/a.ts", "../../apps/web/vite.config.ts"),
+    );
+    await expectFail(null, edge("apps/web/src/vite.config.ts", "node:crypto"));
+    await expectFail(
+      "app-build-config-imports",
+      edge("apps/web/vite.config.ts", "../../scripts/guards/x.ts"),
+      edge("apps/web/vite.config.ts", "../../domains/identity/index.ts"),
+      edge("apps/web/vite.config.ts", "../admin/b.ts"),
+    );
+    await expectPass(
+      edge("apps/web/vite.config.ts", "./src/a.ts"),
+      edge("apps/web/vite.config.ts", "../../shared/ui/index.ts"),
+      edge("apps/web/vite.config.ts", "vite"),
+    );
+  });
+
   test("depcruise_fake_tsx_and_render_prefix", async () => {
     await expectFail("fake-only-in-composition-root", edge("interfaces/http/routes/a.ts", "../x.fake.tsx"));
     await expectFail("app-render-entry-only", edge("interfaces/http/a.ts", "../../apps/web/render.tsx/x.ts"));

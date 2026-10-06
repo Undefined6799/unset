@@ -31,8 +31,13 @@ const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
-// Root files count as tooling only when they are config files (vitest.config.ts).
-const TOOLING = "^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|tsx|mts|cts)$";
+// An app's Vite build config (P1.23v; architecture record 2026-10-06-p116-retention-usage-and-p124-icon-source.md,
+// amendments 20:20Z and 20:55Z): it runs in Node at build time only, so it may import node:crypto and
+// scripts/ui/css-scope.ts, and nothing imports it. Three rules implement that one allowance: app-only-shared exempts
+// the config, app-build-config-imports narrows what it may reach, and app-build-config-not-imported keeps it a leaf. Exactly apps/<app>/vite.config.ts; a file of that name deeper in an app is product code.
+const APP_BUILD_CONFIG = "^apps/[^/]+/vite\\.config\\.ts$";
+// Root files count as tooling only when they are config files (vitest.config.ts); so does an app's build config.
+const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|tsx|mts|cts)$|${APP_BUILD_CONFIG}`;
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
 const LEAF_SHARED = "^shared/(ui|lexicons|admin-envelope)/";
@@ -116,7 +121,7 @@ module.exports = {
     forbidden(
       "app-only-shared",
       "Among repository folders an app imports only its own folder and shared/ (guideline §1).",
-      { path: "^apps/" },
+      { path: "^apps/", pathNot: APP_BUILD_CONFIG },
       { path: "^(?!apps/|shared/|node_modules/)[^/]+/" },
     ),
     forbidden(
@@ -249,6 +254,21 @@ module.exports = {
       "compose.ts reaches a fake only by a dynamic import() after its UNSET_ENV check (rule TE-1).",
       { path: "^interfaces/[^/]+/compose\\.ts$" },
       { path: FAKE, dynamic: false },
+    ),
+    forbidden(
+      "app-build-config-imports",
+      "An app's vite.config.ts imports only Node built-ins, npm, its own app, shared/ and scripts/ui/css-scope.ts (P1.23v).",
+      { path: "^apps/([^/]+)/vite\\.config\\.ts$" },
+      {
+        pathNot: ["^apps/$1/", "^shared/", "^scripts/ui/css-scope\\.ts$"],
+        dependencyTypesNot: ["core", ...NPM.dependencyTypes],
+      },
+    ),
+    forbidden(
+      "app-build-config-not-imported",
+      "An app's vite.config.ts is build-time tooling; no module imports it (P1.23v).",
+      {},
+      { path: APP_BUILD_CONFIG },
     ),
     forbidden("no-circular", "No dependency cycles.", {}, { circular: true }),
     forbidden(
