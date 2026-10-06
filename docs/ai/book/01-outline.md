@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 83 steps: 65 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 93 steps: 75 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -172,9 +172,12 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.12p | Role password sync (split from P1.12, SE-6) | [SEC] | P1.12, P0.09 (`roles.ts` in the trusted base) | `phase-1.md` |
 | P1.12x | Export `syncRolePasswords` and test role logins (split from P1.12p) | [SEC] | P1.12p, P1.12t | `phase-1.md` |
 | P1.13 | DID-column registry test reading `pg_catalog` | — | P1.12t | `phase-1.md` |
-| P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.02, P1.12 | `phase-1.md` |
+| P1.14q | New trusted workspace may carry its root reference and lockfile entries (check part of P1.14; SE-6 `q`) | [SEC] | P0.09 | `phase-1.md` |
+| P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.14q, P1.02, P1.12 | `phase-1.md` |
+| P1.14d | Sealed type and column registry (split from P1.14; P1.14m first if pr-shape classes the migration trusted) | [SEC] | P1.14, P1.13 | `phase-1.md` |
 | P1.15 | Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier | [SEC] | P1.12, P1.13 | `phase-1.md` |
-| P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.12, P1.13 | `phase-1.md` |
+| P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
+| P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p | `phase-1.md` |
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
@@ -187,8 +190,15 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
 | P1.23r | Style-prop lint and island CI wiring (check part of P1.23, after it) | [SEC] | P1.23 | `phase-1.md` |
-| P1.24 | UI kit, part 1: the "is it on the sheet?" gate and the static and form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.22, P1.23r | `phase-1.md` |
-| P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.23, P1.23r | `phase-1.md` |
+| P1.23f | CSS scope function (product split of P1.23v) | — | — | `phase-1.md` |
+| P1.23v | CSS Modules check config: Vitest scoped names, TOOLING widened to app Vite configs | [SEC] [ALEX] | P1.23f | `phase-1.md` |
+| P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v | `phase-1.md` |
+| P1.24i | Icons and inventory (split from P1.24) | [SEC] | P1.22, P1.23r | `phase-1.md` |
+| P1.24h | `safeHref` (trusted base, split from P1.24) | [SEC] | P1.22 | `phase-1.md` |
+| P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
+| P1.24 | UI kit, part 1a: Button, Link, Tag, Mark, SectionHeading, Kbd and the form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.24i, P1.24h, P1.23c | `phase-1.md` |
+| P1.24s | UI kit, part 1b: Avatar, Switch, SkipLink, MediaFrame, DescriptionList, Pagination | — | P1.24i, P1.24h, P1.23c | `phase-1.md` |
+| P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.24s, P1.24q, P1.23, P1.23r | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
@@ -207,7 +217,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03 | Session store and lifecycle | [SEC] | P1.12 | `phase-2.md` |
-| P2.04 | OAuth client | [SEC] | P1.14, P1.17, P1.31, P2.01 | `phase-2.md` |
+| P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01 | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04 | `phase-2.md` |
@@ -257,8 +267,11 @@ flowchart TD
   P1_12p["P1.12p Role password sync"]
   P1_12x["P1.12x Password export and login test"]
   P1_13["P1.13 DID-column registry test reading"]
+  P1_14q["P1.14q Trusted workspace guard"]
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
+  P1_14d["P1.14d Sealed type and registry"]
   P1_15["P1.15 Audit: append-only audit.append"]
+  P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17["P1.17 Per-DID Postgres advisory lock"]
   P1_18["P1.18 net-guard core"]
@@ -270,7 +283,14 @@ flowchart TD
   P1_22["P1.22 Base styles"]
   P1_23["P1.23 Island runtime"]
   P1_23r["P1.23r Style lint and island CI"]
+  P1_23f["P1.23f CSS scope function"]
+  P1_23v["P1.23v CSS Modules check config"]
+  P1_23c["P1.23c CSS Modules glue"]
+  P1_24i["P1.24i Icons and inventory"]
+  P1_24h["P1.24h safeHref"]
+  P1_24q["P1.24q UI inventory guard"]
   P1_24["P1.24 UI kit"]
+  P1_24s["P1.24s UI kit part 1b"]
   P1_24a["P1.24a UI kit"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
@@ -325,8 +345,12 @@ flowchart TD
   P1_12 --> P1_12t
   P1_12t --> P1_13
   P1_12 --> P1_14
+  P1_14q --> P1_14
+  P1_14 --> P1_14d
+  P1_13 --> P1_14d
   P1_13 --> P1_15
   P1_13 --> P1_16
+  P1_16g --> P1_16
   P1_11p --> P1_17
   P1_02 --> P1_18
   P1_18 --> P1_18a
@@ -343,11 +367,25 @@ flowchart TD
   P1_20 --> P1_23
   P1_08 --> P1_23
   P1_22 --> P1_23
-  P1_22 --> P1_24
+  P1_22 --> P1_24i
+  P1_22 --> P1_24h
   P1_24 --> P1_24a
+  P1_24i --> P1_24
+  P1_23 --> P1_23c
+  P1_23r --> P1_23c
+  P1_23f --> P1_23v
+  P1_23v --> P1_23c
+  P1_23c --> P1_24
+  P1_23c --> P1_24s
+  P1_24h --> P1_24
+  P1_24i --> P1_24q
+  P1_24i --> P1_24s
+  P1_24h --> P1_24s
+  P1_24s --> P1_24a
+  P1_24q --> P1_24a
   P1_23 --> P1_24a
   P1_23 --> P1_23r
-  P1_23r --> P1_24
+  P1_23r --> P1_24i
   P1_23r --> P1_24a
   P1_24a --> P1_25
   P1_25 --> P1_26
@@ -362,6 +400,7 @@ flowchart TD
   P2_01 --> P2_02
   P1_12 --> P2_03
   P1_14 --> P2_04
+  P1_14d --> P2_04
   P1_17 --> P2_04
   P1_31 --> P2_04
   P2_01 --> P2_04
@@ -448,7 +487,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority, compliance skeletons, the
 Arachnid application, and the Phase 1 exit.
 
@@ -465,6 +504,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
+| P1.24b | Remaining islands, after the budget ruling (added step) | — | P1.24a, plus an architecture ruling (runtime share or budget raise) | `phase-1.md` |
 | P1.36 | Compliance skeletons | — | P0.07 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
@@ -499,7 +539,7 @@ Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.09k | `pds-admin` egress policy in `net-guard` (split from P2.09, SE-6) | [SEC] | P1.18a | `phase-2.md` |
 | P2.09 | Minimal `pds-admin` (`invite.issue` only) | [SEC] | P2.09k, P1.27, P1.29, P1.34 | `phase-2.md` |
 | P2.09d | `pds-admin` in the dev stack (split from P2.09, SE-6) | [SEC] | P2.09 | `phase-2.md` |
-| P2.10 | Invites and `/join?invite=` | [SEC] | P2.09d, P2.09, P2.05, P1.14 | `phase-2.md` |
+| P2.10 | Invites and `/join?invite=` | [SEC] | P2.09d, P2.09, P2.05, P1.14, P1.14d | `phase-2.md` |
 | P2.14 | Module identity seam | [SEC] | P1.16, P2.03 | `phase-2.md` |
 | P2.16b | PDQ hasher (one module for images and video frames) | [SEC] | P1.01 | `phase-2.md` |
 | P2.16 | Image fingerprint stage (interface, local PDQ, fake check) | [SEC] [MOD] | P2.16b, P1.02, P1.12, P1.15 | `phase-2.md` |
@@ -581,7 +621,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.12 | Public `/@handle` and `/@handle/p/{rkey}` | [SEC] | P3.09, P2.20, P2.02 | `phase-3.md` |
 | P3.13 | Handle hosts | — | P3.12 | `phase-3.md` |
 | P3.14 | Directory and search | — | P3.05 | `phase-3.md` |
-| P3.15 | Report intake and the public notice form | [MOD] [SEC] | P3.12, P3.06, P1.15, P1.14 | `phase-3.md` |
+| P3.15 | Report intake and the public notice form | [MOD] [SEC] | P3.12, P3.06, P1.15, P1.14, P1.14d | `phase-3.md` |
 | P3.16 | `pds-admin` v1: envelope pipeline, key model and migration from P2.09 | [SEC] | P3.00, P2.09, P1.15 | `phase-3.md` |
 | P3.16d | `pds-admin`: verb table, limits, receipts, alerts and the digest | [SEC] | P3.16 | `phase-3.md` |
 | P3.16a | `pds-admin`: delete holds and the held delete | [SEC] | P3.16d | `phase-3.md` |
@@ -968,7 +1008,7 @@ Depth: **detail by risk; P6.00 refines** (contract parts in full, algorithms a r
 | P6.09a | Peer identity change interrupt | [SEC] [CHAT] | P6.09, P6.12 | `phase-6.md` |
 | P6.13 | Attachments: refused in unencrypted rooms; the follow gate | [SEC] [CHAT] | P6.12, P6.06a (and through it P4.18) | `phase-6.md` |
 | P6.14 | Block, and report a message or a person | [CHAT] [MOD] | P6.12, P3.15 | `phase-6.md` |
-| P6.14a | Chat report route, report evidence: upload, fingerprint check, verification | [SEC] [CHAT] [MOD] | P6.14, P6.13, P2.16, P4.04, P4.07, P1.14, P1.16, P1.18 | `phase-6.md` |
+| P6.14a | Chat report route, report evidence: upload, fingerprint check, verification | [SEC] [CHAT] [MOD] | P6.14, P6.13, P2.16, P4.04, P4.07, P1.14, P1.14d, P1.16, P1.18 | `phase-6.md` |
 | P6.15g | `admin` read grant on the chat mapping (SE-6) | [SEC] [CHAT] | P6.00, P2.14 | `phase-6.md` |
 | P6.15 | `admin` polls Synapse event and user reports into its queue | [SEC] [MOD] [CHAT] [ALEX] | P6.15g, P6.14a, P6.02a, P3.20, P3.19 | `phase-6.md` |
 | P6.16 | Full logout, revoke, and back-channel logout from the app | [SEC] [CHAT] | P6.07, P6.03, P6.05, P2.08 | `phase-6.md` |

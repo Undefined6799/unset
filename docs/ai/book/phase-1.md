@@ -2607,11 +2607,30 @@ Diagram: none.
 ---
 
 ### P1.14 — Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation
-Tags: [SEC]            Depends on: P1.02, P1.12            Plan: §5.3 (tokens sealed, KEK from the secret store, key id for rotation), §4 platform row, §6.1 (ASVS V11)
-Where: `infrastructure/seal/{keyring.ts,context.ts,seal.ts,sealStream.ts,rewrap.ts}` + tests;
-  `infrastructure/postgres/migrations/0004_sealed_type.sql`; `infrastructure/postgres/sealed-columns.json`;
-  `tests/integration/postgres/sealed-columns.test.ts`
-Size: ~260 source lines, ~330 test lines
+Tags: [SEC]            Depends on: P1.14q, P1.02, P1.12            Plan: §5.3 (tokens sealed, KEK from the secret store, key id for rotation), §4 platform row, §6.1 (ASVS V11)
+Split (book edits 2026-10-06-p114-split and architecture's 2026-10-06-p114-seal-structure-and-new-trusted-workspace,
+  final 19:53Z): `infrastructure/seal/` is trusted base, so the database half cannot ride with it. Three steps, in order:
+  1. **P1.14q** (check paths, [SEC], Alex said yes 19:50Z): `scripts/guards/trusted-base.ts` lets two root files ride
+     with a trusted-base PR that creates a new trusted workspace. The root `tsconfig.json` rides only when its diff
+     adds nothing but `references` entries `{ "path": "<dir>" }` whose `<dir>/package.json` is added in the same PR and
+     matches a trusted pattern; a removed or reordered reference, `compilerOptions`, `files`, or a reference to an
+     existing or non-trusted folder keeps it a feature path. In `lockfileOutsideScope`, the entries `<dir>` and
+     `node_modules/<name from the added package.json>` (its link, resolving to the same `<dir>`) are in scope; every
+     other changed entry must still be in a trusted package's closure. Eight fixtures: a new trusted workspace plus
+     its root reference passes; a reference to an existing workspace fails; a reference to a new non-trusted folder
+     fails; a reference plus a `compilerOptions` change fails; a removed reference fails; a lockfile diff of only the
+     new workspace and link entries passes; the same plus an unrelated third-party entry fails; a link for the new
+     name resolving to another folder fails. Every later new trusted package uses the same path.
+  2. **P1.14** (this step, trusted): `infrastructure/seal/**` and its unit tests, the root `tsconfig.json` reference
+     and the lockfile. Built at 409 lines; the PR body gives the reason.
+  3. **P1.14d** (sealed type and column registry; below), or **P1.14m** then P1.14d if local pr-shape classes
+     migration 0005 as trusted base (the book accepts the class only on pr-shape's own output).
+  If Alex had declined P1.14q there would be no non-guard path: seal would wait, with no workaround booked.
+Where: `infrastructure/seal/{keyring.ts,context.ts,seal.ts,sealStream.ts,rewrap.ts}` + unit tests. Seal is generic and
+  knows no registry: `sealContext` takes the context as a required argument, bound into the AEAD associated data, and
+  an empty or malformed context is refused (fail closed). Seal's own tests use literal contexts. The migration,
+  `sealed-columns.json`, `SealedColumnId` and `rewrapAll` are P1.14d's.
+Size: ~200 source lines (built at 409 with the root files), ~330 test lines
 
 Goal: any secret the app must store and read back itself (OAuth token sets, DPoP keys) is encrypted with a fresh data
 key wrapped by a named key-encryption key, bound to the exact column and row it belongs to, and every stored value can be
@@ -2622,9 +2641,10 @@ Outputs:
   - Config: `SEAL_KEYRING_FILE` (`secretFile`): JSON `{ "active": "<kid>", "keys": { "<kid>": "<base64 32 bytes>", … } }`;
     `kid` matches `^[a-z0-9]{1,16}$`. Boot fails if `active` is missing from `keys`, any key is not 32 bytes, or there are
     more than 4 keys.
-  - Contexts are not free strings. `sealed-columns.json` lists every column of type `types.sealed` as
-    `{ "<schema>.<table>.<column>": { "rowKey": "<column whose value identifies the row>" } }`. A generated union
-    `SealedColumnId` is produced from it. `sealContext(column: SealedColumnId, rowKey: string): SealContext` returns the
+  - Contexts are not free strings. (P1.14d) `sealed-columns.json` in `infrastructure/postgres` lists every column of
+    type `types.sealed` as `{ "<schema>.<table>.<column>": { "rowKey": "<column whose value identifies the row>" } }`.
+    `SealedColumnId` is `keyof` that JSON, typed in `infrastructure/postgres` with no generator, and wraps seal's
+    generic `sealContext`. `sealContext(column: SealedColumnId, rowKey: string): SealContext` returns the
     branded string `"<schema>.<table>.<column>|<rowKey>"`; `rowKey` must be non-empty printable ASCII without `|`.
     Two call sites can therefore never share or drift on a context.
   - `seal(plaintext: Uint8Array, context: SealContext): string` and `unseal(sealed: string, context: SealContext):
@@ -2652,16 +2672,18 @@ Outputs:
     `subject_ref`, P4.07), `app.transmission_buffer.sealed` (`sealTo`, P4.03). `rewrapAll` skips entries with a `form`.
   - Nonce argument (why random IVs are safe here): each call uses a fresh DEK, so the data IV never repeats under a key.
     The KEK wraps one DEK per call with a random 96-bit IV; NIST SP 800-38D bounds random-IV use at 2^32 invocations per
-    key, far above our volume. A metric `seal.count_by_kid` (a counter per kid, no context) lets rotation happen long
-    before that.
+    key, far above our volume. A counter per kid (no context) lets rotation happen long before that: P1.14 exports it
+    in-process only, as `sealCountByKid()` (a per-process `Map<kid, number>`; `kid` is an identifier, never key
+    material). The metrics step exports it as `seal.count_by_kid`; adding `kid` to SE-7's allowlist with a shape rule
+    needs an architecture ruling then.
   - Errors: `SealError { code: "seal.format" | "seal.unknown_kid" | "seal.auth_failed" | "seal.too_large" }`; no partial
     plaintext is ever returned.
   - `rewrap(sealed): string` — unwraps the DEK with its kid and wraps it with the active kid; the data part is unchanged
     (cheap, no plaintext touched).
-  - Domain `types.sealed AS text CHECK (VALUE ~ '^s1\.[a-z0-9]{1,16}\.')`; `sealed-columns.test.ts` compares the
+  - (P1.14d) Domain `types.sealed AS text CHECK (VALUE ~ '^s1\.[a-z0-9]{1,16}\.')`; `sealed-columns.test.ts` compares the
     `pg_catalog` columns of type `types.sealed` with the entries without a `form` (the P1.13 method), and checks that
     every entry with a `form` names an existing `text` or `bytea` column that is not `types.sealed`.
-  - `rewrapAll(db, { batchSize = 500 })`: for each registered column: `SELECT … WHERE split_part(col,'.',2) <> $active
+  - (P1.14d, in `infrastructure/postgres`) `rewrapAll(db, { batchSize = 500 })`: for each registered column: `SELECT … WHERE split_part(col,'.',2) <> $active
     LIMIT $batch FOR UPDATE SKIP LOCKED`, rewrap, `UPDATE`, commit per batch; returns counts per kid.
     `rewrapAll --check <kid>` exits 1 while any row still uses that kid. Run by the operator after adding a key; a key is
     removed from the keyring only after `--check` passes (runbook text in P5.06).
@@ -2719,12 +2741,13 @@ Done when (tests):
   - unknown_kid: value with kid `zz` → `unknown_kid`.
   - rotation: keyring {k1 active} seal; then {k2 active, k1} → unseal works; `rewrap` → value now `s1.k2.…` and unseals;
     with keyring {k2} only → works.
-  - rewrap_all_counts: a table with 3 k1 values → `rewrapAll` → {k1: 0, k2: 3}; `--check k1` exits 0; before rewrap it
-    exits 1.
+  - rewrap_all_counts (P1.14d): a table with 3 k1 values → `rewrapAll` → {k1: 0, k2: 3}; `--check k1` exits 0;
+    before rewrap it exits 1.
   - keyring_validation: active missing, a 31-byte key, 5 keys, a bad kid → boot `ConfigError` (parametrised).
-  - sealed_columns_registry: a temp migration adding a `types.sealed` column without a registry row → test fails; an
+  - sealed_columns_registry (P1.14d): a temp migration adding a `types.sealed` column without a registry row → test fails; an
     entry with `form: "sealToStream"` naming a missing column, or a `types.sealed` one → test fails.
-  - count_metric: three seals with k1 → `seal.count_by_kid{kid="k1"}` = 3.
+  - count_metric: three seals with k1 → `sealCountByKid()` reports k1 = 3.
+  - context_required: an empty or malformed context → refused before any crypto.
   - never_logged: capture logs during `auth_failed` → no part of the value appears.
   - known_answer: fixed DEK, IVs and KEK (randomness injected as a dependency) → exact expected output, guarding the format.
   - stream_roundtrip: 0 bytes, 1 byte, exactly 64 KiB, 25 MiB + 1 byte → `unsealStream(sealStream(x))` equals x.
@@ -2738,7 +2761,26 @@ Reuse: prototype `/home/claude/0x40/app/src/lib/secrets/seal.ts:20-57` → LESSO
 tag; no key id, no context binding, no envelope, KEK read from a hard-coded env name at every call). Node `crypto` → USE.
 Provisional — for reuse review.
 Not in this step: public-key sealing for data no server may read back (P1.14a); the OAuth stores that use `seal`
-(P2.04); KEK custody and the rotation runbook (P5.06).
+(P2.04); KEK custody and the rotation runbook (P5.06); the sealed type, registry and `rewrapAll` (P1.14d).
+Diagram: none.
+
+---
+
+### P1.14d — Sealed type and column registry (split from P1.14)
+Tags: [SEC]            Depends on: P1.14, P1.13 (or P1.14m, if split)            Plan: §5.3
+Where: `infrastructure/postgres/migrations/<next>_sealed_type.sql` (`types.sealed`; the next free number when it opens:
+  0004 is P1.13's and 0005 P1.16g's),
+  `infrastructure/postgres/sealed-columns.json`, `SealedColumnId` (`keyof` that JSON, no generator) and the mapping
+  from a column id and row key to seal's context string, `rewrapAll` with `--check`, `sealed-columns.test.ts`.
+  The `d` letter: unused on P1.14, and r1's suggested `b` was never booked.
+Class check before opening: if local pr-shape classes `0005_sealed_type.sql` as trusted base, split once more into
+  **P1.14m** (trusted: the migration plus `tests/integration/postgres/` tests only) and P1.14d (product: JSON, types,
+  `rewrapAll` and its tests), which then depends on P1.14m.
+Size: ~80 source lines.
+Done when (tests): `rewrap_all_counts` and `sealed_columns_registry` (specified in P1.14), and a test that two different
+  columns, or two rows, produce different contexts, so a sealed value cannot be moved between them and still open.
+Binding: every step that declares a sealed column or calls `rewrapAll` depends on P1.14d next to P1.14 (P2.04, P2.10,
+  P3.15, P6.14a). P1.14a keeps P1.14 only.
 Diagram: none.
 
 ---
@@ -2924,8 +2966,22 @@ flowchart LR
 
 ---
 
+### P1.16g — Retention's USAGE on schema `app` (split from P1.16)
+Tags: [SEC]            Depends on: P1.12            Plan: §5.2 (roles map to processes)
+Where (trusted base, alone; book edit 2026-10-06-p116-split and architecture's 2026-10-06-p116-retention-usage-and-p124-icon-source,
+  Amendment 20:05Z): one migration `GRANT USAGE ON SCHEMA app TO retention`, the matching `grant-matrix.json` row, and
+  `grants.test.ts` `retention_has_app_usage`, which pins the exact USAGE holders on `app` (admin, retention, web), USAGE
+  as retention's only schema privilege, and no default privileges for retention. The `g` letter follows the grants-step
+  convention (P4.04g, P5.02g). As built: #126, migration 0005.
+Why: on main `retention` had no USAGE on `app`, so P1.16's table grants would do nothing, and `GRANT USAGE ON SCHEMA`
+  is trusted for the grant guard. Sweep must be tested as `retention` (TE-2), not as migrator, so the grant cannot wait
+  for the retention-job step.
+Diagram: none.
+
+---
+
 ### P1.16 — Durable single-use nonce and ticket store
-Tags: [SEC]            Depends on: P1.12, P1.13            Plan: §2 rule 6 ("Every nonce and ticket is single-use in a durable store"), §5.2 (`jti` replay), §4 identity seam
+Tags: [SEC]            Depends on: P1.16g, P1.12t, P1.12, P1.13            Plan: §2 rule 6 ("Every nonce and ticket is single-use in a durable store"), §5.2 (`jti` replay), §4 identity seam
 Where: `infrastructure/postgres/migrations/0007_single_use.sql`, `infrastructure/postgres/singleUse/store.ts` + tests; registry and
   matrix rows
 Size: ~40 lines SQL, ~120 source lines, ~200 test lines
@@ -2937,12 +2993,23 @@ Inputs: P1.12 (roles), P1.13 (`types.did`).
 Outputs:
   - Table `app.single_use(id bytea PRIMARY KEY, purpose text NOT NULL, bind_did types.did, bind_extra bytea,
     expires_at timestamptz NOT NULL, consumed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`, index on
-    `expires_at`. `id` = `sha256(token)` for issued tokens, `sha256(purpose || ':' || issuer || ':' || external id)` for claimed ones (a JWT
-    `jti` is unique only per issuer, so the issuer is part of the id);
+    `expires_at`. `id` = `sha256(token)` for issued tokens, and for claimed ones
+    `sha256(JSON.stringify([purpose, issuer, externalId]))` (a JWT `jti` is unique only per issuer, so the issuer is
+    part of the id; a plain `purpose:issuer:id` join is ambiguous because DIDs contain colons; architecture Amendment
+    20:15Z). Each element is validated before hashing (`purpose` from its enum, `issuer` by the DID shape,
+    `externalId` by its own shape and length cap; a non-string is refused) and nothing is normalised after, so the same
+    input always gives the same bytes. Changing the encoding later orphans every stored key: it is a migration with its
+    own step, never a refactor;
     raw tokens are never stored. Grants (written in this migration; `bind_did` has a registry row, so by column list,
     02-shared-blocks §11): `web` SELECT/INSERT/UPDATE on the columns it uses; `api` none (the `api` process gets its own
     `idx.jti_seen` table in P3.11 because it has no `app` access — see notes); `retention` DELETE (as `rowPrivileges`)
-    with SELECT on `expires_at` only.
+    with SELECT on `expires_at` only, as a column list, in this same migration (the schema USAGE is P1.16g's).
+    `grants.test.ts` pins the table-level limits: no other column, no INSERT, UPDATE or TRUNCATE, nothing on other `app`
+    tables. If sweep ever needs another column, that column is added by name, never the whole table. As built: migration
+    0006, which local pr-shape classes as feature, so there is no P1.16m. `tests/integration/setup/pg.setup.ts`'s
+    `PROCESS_ROLES` gains `"retention"` (the jobs process's role; `pg.setup.test`'s expected list with it), so the
+    sweep test connects as `retention`. The `expires_at` index is kept on PF-1 evidence (daily sweep p99
+    58.54 to 7.95 ms; a missed day p99 207.67 to 87.10 ms).
   - `Purpose` closed union with a max TTL each: `login.nonce` (10 min), `module.assertion` (2 min), `service_auth.jti`
     (2 min), `invite.claim` (10 min), `email.interstitial` (10 min), `chat.openid` (1 h; Phase 6's OpenID handoff,
     added at the phase-6 editor's request). Later steps add purposes.
@@ -2996,7 +3063,10 @@ Done when (tests): (real Postgres)
   - ttl_cap: `issue("module.assertion", { ttlS: 600 })` → throws.
   - claim_once: `claim({issuer: A, externalId: j})` → true, again → false; concurrent claims → one true.
   - claim_scoped_by_issuer: `claim({issuer: A, externalId: j})` then `claim({issuer: B, externalId: j})` → both true.
-  - sweep: rows expired 2 days ago deleted; rows expired 1 hour ago kept.
+  - sweep (connected as `retention`): rows expired 2 days ago deleted; rows expired 1 hour ago kept.
+  - claim_key_no_colon_collision: two (issuer, externalId) pairs whose plain colon joins are equal hash differently;
+    claim_key_vector: a fixed vector pins the exact key; claim_key_validated: each invalid element is refused before
+    any database call.
   - db_error_throws: pool stubbed to fail → `consume` rejects (not `invalid`, not `ok`).
 
 Reuse: prototype `/home/claude/0x40/chat-auth/src/store.ts:142-154` (`consumeHandoffNonce`: INSERT … ON CONFLICT DO
@@ -4158,8 +4228,10 @@ From P1.22 (book edit 2026-10-06-p122-shape): this step wires P1.22's pure prefs
 `document_no_inline_script_or_style` and the rendered `public_page_ignores_pref_cookies` byte-equality.
 
 **Where:** `apps/web/src/islands/runtime/{registry.ts, island.tsx, bootstrap.ts}`; `apps/web/render.tsx` (takes the
-parsed manifest as a prop); `apps/web/vite.config.ts`; `interfaces/http/routes/` (the assets route) and the manifest
-loader in `interfaces/http/`, read once in `compose.ts`; tests. `apps/` never touches `node:fs`. The island budget
+parsed manifest as a prop); `apps/web/vite.config.ts`; `interfaces/http/routes/assets.ts` (the assets route) and the
+manifest parser `interfaces/http/web/build.ts`, read once in `compose.ts`; tests. As built (book edit
+2026-10-06-p123-shape, appendix): http config key `WEB_BUILD_DIR`, optional, empty means `apps/web/dist/client`;
+tests point it at a committed testdata manifest; a missing or malformed manifest there still fails startup. `apps/` never touches `node:fs`. The island budget
 (`scripts/budgets/island.ts`) and the dependency-cruiser rule landed in P1.23q.
 
 **Shape and placement (book edits 2026-10-06-p123-shape and -p123-islands-runtime-placement):**
@@ -4283,10 +4355,10 @@ GET /assets/<file>:
 
 **Threats:** scripts the browser runs on our app pages.
   - T Injected script runs on an app page → path-scoped `script-src` with Trusted Types, no inline script
-    (`csp_app_group_snapshot`, `csp_no_violations`, `island_none_no_script`).
+    (P1.08's `snapshot_per_group` and `no_unsafe_tokens`, `csp_no_violations`, `island_none_no_script`).
   - T Props escape their script element → P1.10's serialiser (`island_props_xss_escaped`).
   - I A crafted asset path reads files outside the manifest → only listed files, encoded traversal rejected
-    (`assets_rejects_unlisted`, `assets_rejects_encoded_traversal`).
+    (`unlisted_file_404`, `traversal_refused`).
   - E An island reaches server code by import → dependency-cruiser boundary (`island_import_boundary`).
 
 **Done when (tests):**
@@ -4299,18 +4371,21 @@ GET /assets/<file>:
   code and island name only; `island_props_too_large_dev_throws`.
 - `island_unknown_throws`; `island_props_invalid_throws`.
 - `island_ids_unique_per_response`: a page with three islands, two of the same name → three distinct ids.
-- `assets_serves_manifest_file`: exact headers; `assets_rejects_unlisted`, `assets_rejects_encoded_traversal`,
-  `assets_rejects_bad_extension` → 404.
-- `csp_app_group_snapshot`: P1.08 snapshot contains `script-src https://<host>/assets/` and `trusted-types
-  'none'`, and no `'unsafe-inline'`, nonce or hash.
-- `bootstrap_isolates_failure_unit` (DOM environment): one island's import rejects, the other still hydrates. A DOM
-  dev dependency (jsdom or happy-dom), if needed, is exact-pinned and its lockfile rides this step.
+- `assets_serves_manifest_file`: exact headers; `assets_rejects_bad_extension` → 404. (`unlisted_file_404` and
+  `traversal_refused` below replace `assets_rejects_unlisted` and `assets_rejects_encoded_traversal`.)
+- `csp_app_group_snapshot` is dropped: P1.08's `snapshot_per_group` and `no_unsafe_tokens` already cover it.
+- `bootstrap_isolates_failure_unit` and `bootstrap_leaves_static_on_bad_props` (`hydrate.test.tsx`, Vitest's jsdom
+  environment; jsdom 30.1.1 is already a root dev dependency): one island's import rejects, the other still hydrates;
+  bad props leave the island static.
 - `bootstrap_isolates_failure` and `csp_no_violations` (Playwright, production build) move to P1.26's harness.
 - `traversal_refused`, `unlisted_file_404`, `content_type_fixed_with_nosniff`, `hashed_asset_immutable`,
   `manifest_missing_fails_startup` (the placement ruling's conditions).
 - `jsx_runtime_matches_allowlist`: the build's JSX runtime specifier equals the single P1.23q allowlist entry.
-- `island_budget_check` is P1.23q's; `glue_line_warning` (`count-glue-lines apps/web/src/islands/runtime`, warning
-  above the ADR number) is P1.23r's CI wiring.
+- `island_budget_check` is P1.23q's; `glue_line_warning` (`count-glue-lines apps/web/src/islands/runtime --config
+  apps/web/vite.config.ts`, so the number compares with ADR 0015's total; warning above it) is P1.23r's CI wiring.
+  Known gap in P1.23r's style-prop rule: it does not inspect JSX spreads (`{...{ style }}`). Mitigated, not closed: the
+  CSP without `'unsafe-inline'` blocks a server-rendered `style=` attribute and review catches a spread carrying
+  `style`. Closing it is a later check-path tightening (a GritQL spread case), booked when a slot is free.
 - `island_import_boundary`: fixture island importing `infrastructure/postgres` → dependency-cruiser violation.
 - P1.23q's allowlist fixtures: `island_imports_jsx_runtime_passes` (the named JSX runtime module passes),
   `island_imports_other_subpath_fails` (another subpath of the same package), `island_imports_unrelated_package_fails`
@@ -4326,6 +4401,70 @@ GET /assets/<file>:
 
 **Not in this step:** specific islands (the kit's in P1.24a, the editor preview in P2.21, like and follow, search);
 the chat bundle (P6.06); the CSP builder itself (P1.08).
+
+---
+
+### P1.23f — CSS scope function (product split of P1.23v)
+Tags: —            Depends on: —            Plan: ADR 0015
+Where: `scripts/ui/css-scope.ts` (a tool under the P1.21 ruling, not a check folder): sha256 over the repo-relative
+  POSIX path (never absolute, so builds reproduce across machines) plus the class name, and its test
+  `css_scope_fixed_vector`. Nothing imports it yet. As built: `scopedName(name, filename)` returns
+  `<class>_<first 8 hex of sha256("<repo-relative POSIX path>:<class>")>`, strips the query string, and refuses a
+  relative path or a file outside the repo; `shared/ui/components/Button/Button.module.css` with class `root` gives
+  `root_9e846a57`; four tests.
+Why its own step: local pr-shape classes `scripts/ui/css-scope.ts` as feature (as `scripts/ui/icons.ts` was in #127),
+  and check and product paths never mix, so the function lands first on its own.
+Diagram: none.
+
+---
+
+### P1.23v — CSS Modules check config (check paths, kind/build)
+Tags: [SEC] [ALEX]            Depends on: P1.23f            Plan: ADR 0015; architecture Amendment 20:20Z
+Why: Vitest 5.0.2 replaces `generateScopedName` unless `test.css.modules.classNameStrategy` is `"scoped"`, and proxies
+  `.module.css` without `test.css.include`; the depcruise app row allows no core modules and TOOLING covered only root
+  `*.config.ts`.
+Where:
+  - Root `vitest.config.ts` gains `css.modules.generateScopedName` imported from `scripts/ui/css-scope.ts`, and
+    `test.css` with `include: [/\.module\.css$/]` and `modules.classNameStrategy: "scoped"`. This weakens no check;
+    the coordinator cleared it as a tightening.
+  - `scripts/lint/.dependency-cruiser.cjs`: TOOLING widens to exactly `^apps/[^/]+/vite\.config\.ts$` (a Vite config is
+    Node build tooling that never reaches the browser). Only the root `vitest.config.ts` and `apps/<app>/vite.config.ts`
+    may import `css-scope.ts`. Rejected: moving the web config to the root (against the root tidy, #42) and a pure-JS
+    sha256 in `shared/` (a second hash implementation).
+  - `[ALEX]`: the TOOLING line is a loosening, so this step needs Alex's typed word naming the change and the branch,
+    verified first-hand before it opens.
+Done when (fixtures in `depcruise.test.ts`): `apps/web/vite.config.ts` importing `node:crypto` and
+  `scripts/ui/css-scope.ts` passes; an app source file importing `node:crypto` fails; an app source file importing
+  `scripts/ui/css-scope.ts` fails; any file importing `apps/web/vite.config.ts` fails; `apps/web/src/vite.config.ts`
+  (not at the app root) is not tooling and fails on `node:crypto`.
+Diagram: none.
+
+---
+
+### P1.23c — CSS Modules server-render glue (gap-fill for P1.23)
+Tags: —            Depends on: P1.23, P1.23r, P1.23v            Plan: §5.1; ADR 0015 ("Carried into P1.23")
+Why (book edit 2026-10-06-p123c-css-modules-glue; architecture follow-up 20:10Z): ADR 0015 carries `css.ts`,
+  `styles.ts` and `generateScopedName` into P1.23, and none of P1.23, P1.23q or P1.23r shipped them. P1.24's Button is
+  the first `.module.css`. Owner: Phase 2. Unblocks P1.24 and P1.24s.
+Where (product paths only): `apps/web/vite.config.ts` and the document glue.
+  - **Scoped names.** One `generateScopedName` (`scripts/ui/css-scope.ts`, from P1.23f: sha256 of the
+    repo-relative POSIX path and class name), shared by the client build, the SSR build and Vitest.
+  - **Production server render.** A Vite SSR build (`build.ssr`) of `apps/web`'s render entry from the same config,
+    loaded by `interfaces/http` through one loader that fails startup if the output is missing. Vitest keeps importing
+    source. No Vite or dev server at runtime, and no hand-built class map.
+  - **Styles.** One styles entry imports every CSS Module. The document links the client manifest's css entries as
+    `/assets/<hash>.css` through P1.23's exact-name route; no inline styles, so the CSP is unchanged.
+  - **P1.27's image** runs both builds and ships only their outputs (`prod_image_has_ssr_build_only`).
+  - **Glue lines** re-measured with `count-glue-lines.ts` (warning above 150 as the ADR says); the result goes in the PR
+    body and ADR 0015's evidence.
+Size: about 250 to 350 lines; above 400 the body gives the reason.
+Order: P1.23f, P1.23v, P1.23c, then P1.24 and P1.24s; P1.24i, P1.24h and P1.24q are unaffected.
+Done when (tests): `ssr_class_equals_client_selector`, `scoped_name_deterministic` (client build, SSR build and Vitest
+  agree), `ssr_loader_fails_startup_when_missing`, `document_links_manifest_css` (exact hashed names; nothing unknown
+  served), `no_inline_style_in_document`, `scoped_names_unique` (eight hex digits is 32 bits, so a collision would
+  be silent: the build fails if two distinct path and class pairs share a scoped name); the SSR loader wired in `interfaces/http`; the glue count recorded; local
+  pr-shape classes it as product.
+Diagram: none.
 
 ---
 
@@ -4352,8 +4491,49 @@ is solid (v40: `surface-card` is opaque, `#161519` dark and `#fbfafa` light, rea
 prop and the `surface-card-solid` token are gone); **MediaFrame** (v41); **Pagination** (non-feed lists only);
 **DescriptionList** (v45, Data group, approved 22:00Z); and the feed pieces **NewPosts** and **FeedMore** (v44). P1.24, P1.24a and P1.25 no longer wait on design.
 
+**Split (book edits 2026-10-06-p124-split and architecture's 2026-10-06-p116-retention-usage-and-p124-icon-source,
+20:00Z).** 18 components with module CSS, `safeHref`, the inventory and the icon pipeline come to 1,100 to 1,400 lines,
+and the inventory check decides CI, so it is a guard. Steps, in order (`b` stays reserved for P1.24b):
+1. **P1.24i, icons and inventory** (product; depends on P1.22, P1.23r): the sheet copy extension (the 23 component
+   READMEs and `shared/ui/sheet/bundle.js.txt`, each sha256 in `sheet/source.json`); the 36 Iconoir v7.12.1
+   `icons/regular/*.svg` files byte for byte as `shared/ui/icons/svg/<our-name>.svg.txt` (Biome 2.5.15 lints `.svg` as
+   HTML; provenance only, never served by the assets route and never imported) and Iconoir's `LICENSE` from the same
+   tag as `LICENSE-iconoir.txt`; one generated `shared/ui/icons/icons.json` (`iconoirVersion`, `sheetVersion`, each
+   icon's geometry, sha256 against the upstream file and Iconoir name; `IconName` is `keyof` it); the pure functions in
+   `shared/ui/scripts/icons.ts` (no Node built-ins; nothing in `apps/` or any island imports it) with the Node entry
+   `scripts/ui/icons.ts` (P1.21 ruling: run by `node`, no npm line, never run by CI); the folder README; the Icon
+   component; `inventory.json` with all 23 components plus the stop items; `docs/human/ui/stop-items.md`. The fetch
+   happened once, by hand, and is recorded in the PR body; nothing touches the network at build or test time. Tests:
+   `icon_allowlist_matches_sheet`, `icon_renders_inline`, `icon_approval_recorded`, `stop_item_needs_dated_approval`,
+   `stop_items_doc_exists`, `inventory_covers_sheet`, `icons_bundle_not_executed` (a fixture with a side effect),
+   `icon_svg_allowlist_enforced`, `icons_match_sheet_data`, and one freshness test on `icons.json`.
+2. **P1.24h, `safeHref`** (trusted base, `/shared/ui/safe-href.ts` in CODEOWNERS; its tests only; can run beside
+   P1.24i).
+3. **P1.24q, UI inventory guard** (check paths, kind/build; after P1.24i, since it reads `inventory.json`; a
+   tightening, no Alex): `scripts/guards/ui-inventory.ts` with every check-inventory rule, its fixtures and an AB-4
+   planted failure, wired into the guards run; it passes on main as it stands then.
+4. **P1.24, UI kit part 1a** (this step; depends on P1.24i, P1.24h, P1.23c): Button, Link, Tag, Mark, SectionHeading, Kbd,
+   Input, Textarea, Checkbox, RadioGroup, Select.
+5. **P1.24s, UI kit part 1b** (depends on P1.24i and P1.23c, plus P1.24h if any of its components links): Avatar, Switch,
+   SkipLink, MediaFrame, DescriptionList, Pagination.
+6. P1.24a, then P1.24b if the budget ruling requires it.
+These PRs add only the server-rendered showcase markup; `components_axe_clean` and `components_target_size` run in
+P1.26's harness. `card_surface_opaque` moves to P1.24a with Card.
+
+**Icon source [SEC]** (architecture follow-up 20:10Z and Amendment 20:12Z, final): the icons are the Iconoir v7.12.1
+files, copied byte for byte and checked against the sheet's ICONS data, which is the equality oracle. The sheet data
+is read from `bundle.js.txt` by `JSON.parse` of a slice cut at fixed, tested boundaries, never executed (no `eval`,
+`import()`, `require`, `vm` or `Function`; no parser dependency); invalid JSON fails, with no evaluating fallback. Each
+committed SVG must equal its ICONS entry element by element and attribute by attribute (order and whitespace aside),
+and the name list must equal the Icon README table. The allowlist applies to the upstream files (a third party):
+elements `svg`, `g`, `path`, `circle`, `ellipse`, `rect`, `line`, `polyline`, `polygon`; presentation attributes only
+(`d`, `points`, coordinates, `fill`, `stroke`, `stroke-*`, `viewBox`, `xmlns`); script, `on*`, `href`, `style`,
+`foreignObject` or `use` fails. A bundle whose sha256 differs from `source.json`, a name not on the README list or a
+count other than 36 is refused. Mark takes its geometry from the same check. Any mismatch with the sheet is a
+stop-and-report, not an edit.
+
 **Where:** `shared/ui/components/<Name>/{<Name>.tsx, <Name>.module.css, <Name>.test.tsx}`;
-`shared/ui/inventory.json`; `shared/ui/scripts/check-inventory.ts`; `shared/ui/showcase/` (a zero-JS
+`shared/ui/inventory.json`; `scripts/guards/ui-inventory.ts` (P1.24q); `shared/ui/showcase/` (a zero-JS
 showcase page served only by the test server, P1.26); `docs/human/ui/stop-items.md`.
 
 **Size:** ~400 source lines (TSX plus module CSS), ~400 test lines. Over the README's PR upper bound is avoided
@@ -4391,8 +4571,9 @@ step imports them from `shared/ui`; P2.20 and every other caller use this one fu
   - `Icon` — **settled, built in this step** (#12b: Iconoir chosen 2026-10-03 18:00Z; the sheet's 36-icon list,
     Iconoir 7.12.1 regular, MIT, approved by Alex at 18:02Z and published as final in sheet version 34, Foundations
     group). Inventory entry `{ "Icon": { "sheet": "Foundations/Icon (sheet v34)", "status": "built" } }`, with the
-    approval line in `docs/human/ui/stop-items.md`. Rules: each SVG is copied byte for byte from the sheet's Icon files (Foundations group, v34) at the
-    pinned version into `shared/ui/icons/svg/<name>.svg` (data, not a dependency; nothing fetched at build or run
+    approval line in `docs/human/ui/stop-items.md`. Rules: Iconoir v7.12.1 files copied byte for byte, checked against
+    the sheet's ICONS data (bundle sha256 recorded in `shared/ui/sheet/source.json`; see "Icon source" above), at the
+    pinned version into `shared/ui/icons/svg/<name>.svg.txt` (data, not a dependency; nothing fetched at build or run
     time); `shared/ui/icons/icons.json` records `{ iconoirVersion: "7.12.1", sheetVersion, icons: { "<name>":
     "<sha256>" } }` and is the **allowlist, generated from the sheet's Icon list** (never hand-edited, never the font
     `cmap`); `shared/ui/icons/LICENSE-iconoir.txt` carries Iconoir's MIT notice and the folder README states the
@@ -4495,7 +4676,7 @@ Components:
 - `components_axe_clean` (P1.26 harness on the showcase page): axe zero violations in both themes.
 - `components_target_size`: every interactive element in the showcase ≥ 24×24 CSS px.
 - `stop_items_doc_exists` and lists a step id for each `stop` entry.
-- `card_surface_opaque`: `surface-card` resolves to an opaque colour in both themes (alpha 1); no `surface-card-solid`
+- `card_surface_opaque` (moves to P1.24a with Card): `surface-card` resolves to an opaque colour in both themes (alpha 1); no `surface-card-solid`
   token and no `solid` prop on `Card` exist (type error and inventory check).
 - `mediaframe_shapes`: exactly the five sheet shapes (any other → type error); 2px corners and hairline from tokens; no
   image → `[no image]`; the box keeps its size with the image missing.
@@ -4530,7 +4711,7 @@ Modal, the Select listbox island, AsciiBackground, Toast, NewPosts, FeedMore (P1
 **Added because:** P1.24 holding all 23 components plus the gate exceeds one PR, and the interactive components
 need the island runtime (P1.23), which P1.24 does not depend on.
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04) · **Depends on:** P1.24, P1.23, P1.23r · **Plan:** §8 Phase 1, §5.1 (islands; zero-JS pages), §6.1
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04) · **Depends on:** P1.24, P1.24s, P1.24q, P1.23, P1.23r · **Plan:** §8 Phase 1, §5.1 (islands; zero-JS pages), §6.1
 
 **Where:** `shared/ui/components/<Name>/…` as P1.24; islands under `shared/ui/islands/*.island.tsx`.
 
@@ -4617,7 +4798,14 @@ enhanced by an island.
   the DOM.
 - Table without caption → TypeScript error.
 
+**Island budget, measure first (book edit 2026-10-06-p123-shape, 19:45Z):** after React 19.3.0 the island JS total is
+67,839 of 76,800 gzip bytes (60,452 at P1.23), so about 8.9 KB remains for every island this step adds. The PR body
+lists the total after each island it adds, measured by `scripts/budgets/island.ts` on the production build. Islands go
+in order of need; if the next one would cross the total, this step stops at the last one that fits and reports it. It
+never raises the budget or ships an island over it. The rest wait in **P1.24b**.
+
 **Done when (tests):**
+- Island total reported per island in the PR body; stop at the budget.
 - `inventory_all_built`: 23 entries `built` (plus stop items untouched).
 - `commandblock_no_js_no_button`: SSR HTML has no copy button; with JS (Playwright) the button appears.
 - `commandblock_copy_announces` and `commandblock_copy_denied_announces` (Playwright with clipboard permission
@@ -4658,6 +4846,16 @@ enhanced by an island.
 - `app/src/components/app-shell.tsx:28-186` → LESSON for Header/Footer structure (P1.25 takes the rest).
 
 **Not in this step:** the app shell and error pages (P1.25); stop items (Alex's answers become new steps).
+
+---
+
+### P1.24b — Remaining islands, after the budget ruling (added step)
+Tags: —            Depends on: P1.24a, plus one of the rulings below
+Holds the islands P1.24a could not fit under the 76,800-byte island total. They move here only after one of:
+architecture rules on reducing the runtime's share (code-splitting the React runtime out of the bootstrap, a lighter
+runtime within ADR 0015, or dropping islands that could be zero-JS); or a budget raise, which is a check-path loosening
+needing an architecture ruling and Alex's typed word. A Renovate bump that pushes the total past the limit is caught by
+the island budget check on its own PR and is Alex's to decide.
 
 ---
 
@@ -5023,6 +5221,8 @@ nothing written to the lock).
 - `image_has_no_dev_deps`: no `devDependencies` present in the runtime image.
 - `prod_image_has_no_dev_server`: the image is built with production dependencies only, and no dev server package
   is present or imported by any production entry (book edit 2026-10-06-p123-shape).
+- `prod_image_has_ssr_build_only`: the image build runs both Vite builds (client and SSR, P1.23c) and ships only their
+  outputs.
 - `image_health_ok`: container started with test env → `/health` 200 within 20 s.
 - `trivyignore_expiry_enforced`: expired entry → fails; missing reason → fails.
 - `lock_covers_compose_images`: every `image:` in compose files resolves to a lock entry that points at our

@@ -2332,7 +2332,7 @@ Diagram: see P6.14a.
 ---
 
 ### P6.14a — Chat report route, report evidence: upload, fingerprint check, verification
-Tags: [SEC] [CHAT] [MOD]            Depends on: P6.14, P6.13, P2.16, P4.04, P4.07, P1.14, P1.16, P1.18            Plan: §5.6 "encrypted media" (written carve-out), §5.8 fingerprint check on everything, §6 RoPA and retention
+Tags: [SEC] [CHAT] [MOD]            Depends on: P6.14, P6.13, P2.16, P4.04, P4.07, P1.14, P1.14d, P1.16, P1.18            Plan: §5.6 "encrypted media" (written carve-out), §5.8 fingerprint check on everything, §6 RoPA and retention
 Where: `apps/chat/matrix/safety/{report-submit,evidence-upload}.ts`; `interfaces/http/routes/chat/{report,report-evidence}.ts`;
   `domains/moderation/chat-evidence/verify.ts` (pure); `interfaces/review/jobs/verify-chat-evidence.ts`; migration
   `app.chat_evidence`; RoPA entry "reporter-supplied chat content"

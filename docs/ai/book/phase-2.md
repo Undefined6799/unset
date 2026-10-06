@@ -786,7 +786,7 @@ Not in this step: OAuth token storage (P2.04); what happens on login (P2.06) or 
 Diagram: see "State diagram: app session lifecycle" at the top of this file.
 
 ### P2.04 — OAuth client
-Tags: [SEC]            Depends on: P1.14, P1.17, P1.31, P2.01            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
+Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
 Decision 34 (slice 1): this step needs P1.31's set JSON and NSID, not the publication. It used to depend on P1.35; it now
   builds in slice 1, before the set is published. Until P1.35, no authorization server can resolve `include:` for the set,
   so every login takes P2.05's tested fallback (`SCOPE_FALLBACK`: the same permissions written out); no scope is added
@@ -2178,7 +2178,7 @@ Done when (tests): P1.29's compose tests pass with the new service; an end-to-en
 Reuse: none. Not in this step: the service code (P2.09). Diagram: none.
 
 ### P2.10 — Invites and `/join?invite=`
-Tags: [SEC] (E3)            Depends on: P2.09d, P2.09, P2.05, P1.14 (invite codes are sealed)            Plan: §5.3 "Login and signup"; §3 "PDS branding env"; §6 "Invite-country rule"
+Tags: [SEC] (E3)            Depends on: P2.09d, P2.09, P2.05, P1.14, P1.14d (invite codes are sealed)            Plan: §5.3 "Login and signup"; §3 "PDS branding env"; §6 "Invite-country rule"
 Where: `interfaces/http/routes/{invite.ts, join.ts, signup.ts}`, `apps/web/screens/{Invite.tsx, Join.tsx}`,
   `apps/web/islands/CopyButton.tsx`, migration `0204_app_invite.sql` (grants written in the migration by column list, DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges since the column-list ruling), catalogs
 Size: ~210 source lines, ~240 test lines
