@@ -1,0 +1,4 @@
+// fixture: interfaces/http/routes/profile.ts findings=3
+const handle = doc.alsoKnownAs[0];
+const claimed = doc["alsoKnownAs"];
+export const { rawAlsoKnownAs } = resolved;

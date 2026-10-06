@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, test } from "vitest";
+import * as alsoKnownAs from "./also-known-as.ts";
 import * as caseCollision from "./case-collision.ts";
 import * as compositionRoot from "./composition-root.ts";
 import * as cookieDomain from "./cookie-domain.ts";
@@ -26,6 +27,7 @@ const RULES: [string, (root: string) => Finding[]][] = [
   ["route-registration", routeRegistration.scanAll],
   ["composition-root", compositionRoot.scanAll],
   ["case-collision", caseCollision.scanAll],
+  ["also-known-as", alsoKnownAs.scanAll],
 ];
 
 describe("repo_clean", () => {
@@ -33,6 +35,11 @@ describe("repo_clean", () => {
     const findings = scanAll(ROOT);
     expect(findings, report(findings)).toEqual([]);
   });
+});
+
+test("also_known_as_scans_files", () => {
+  // An empty scan would pass vacuously: the guard must have read the product folders.
+  expect(alsoKnownAs.scannedFiles(ROOT).length).toBeGreaterThan(0);
 });
 
 test("report_format", () => {
