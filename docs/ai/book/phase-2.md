@@ -648,7 +648,7 @@ Diagram: none.
 
 ### P2.02x — Export `verifyHandle` from the identity index (split from P2.02, SE-6)
 Tags: —            Depends on: P2.02            Plan: rule SE-6 (trusted base alone)
-Where: `domains/identity/index.ts` only (about 7 lines). Product PR. (As built, #83 also adjusted one import in
+Where: `domains/identity/index.ts` only (about 7 lines). Product PR. (As built, #83 also changed three import lines in
   `verify-handle.test.ts`.)
 
 Why: P2.02's file is trusted base, and the module index that re-exports it lands in its own PR. General note for
@@ -659,7 +659,9 @@ Outputs: `domains/identity/index.ts` exports `createHandleVerifier`, `displayHan
   and `HandleVerifierOptions`.
 The composing step (P2.06, which already depends on P2.02) depends on P2.02x.
 
-As built (#83): as above (book edit 2026-10-06-p103w-and-p202-correction).
+As built (#83, merged 2026-10-06 02:40Z): as above. Its PR and commit title reads "P2.02 Export verifyHandle from the
+identity index", so anyone deriving merged steps from commit prefixes counts that commit as P2.02x (book edit
+2026-10-06-p103w-and-p202-correction).
 
 ---
 
