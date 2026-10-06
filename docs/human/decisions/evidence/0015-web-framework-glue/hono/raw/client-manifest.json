@@ -1,0 +1,54 @@
+{
+  "_Box-CHz8qV7r.js": {
+    "file": "assets/Box-CHz8qV7r.js",
+    "name": "Box",
+    "imports": ["_react-runtime-CvJzaliv.js", "_Box.module-eb9M179u.js"]
+  },
+  "_Box-zez3NQjg.css": {
+    "file": "assets/Box-zez3NQjg.css",
+    "src": "_Box-zez3NQjg.css"
+  },
+  "_Box.module-eb9M179u.js": {
+    "file": "assets/Box.module-eb9M179u.js",
+    "name": "Box.module",
+    "imports": ["_rolldown-runtime-BpQH8Ho1.js"],
+    "css": ["assets/Box-zez3NQjg.css"]
+  },
+  "_react-runtime-CvJzaliv.js": {
+    "file": "assets/react-runtime-CvJzaliv.js",
+    "name": "react-runtime",
+    "imports": ["_rolldown-runtime-BpQH8Ho1.js"]
+  },
+  "_rolldown-runtime-BpQH8Ho1.js": {
+    "file": "assets/rolldown-runtime-BpQH8Ho1.js",
+    "name": "rolldown-runtime"
+  },
+  "src/glue/boot.ts": {
+    "file": "assets/boot-O1hyhVQE.js",
+    "name": "boot",
+    "src": "src/glue/boot.ts",
+    "isEntry": true,
+    "imports": ["_react-runtime-CvJzaliv.js"]
+  },
+  "src/glue/styles.ts": {
+    "file": "assets/styles-BKOQgPQS.js",
+    "name": "styles",
+    "src": "src/glue/styles.ts",
+    "isEntry": true,
+    "imports": ["_Box.module-eb9M179u.js"]
+  },
+  "src/islands/Counter.tsx": {
+    "file": "assets/Counter-DOplQxef.js",
+    "name": "Counter",
+    "src": "src/islands/Counter.tsx",
+    "isEntry": true,
+    "imports": ["_react-runtime-CvJzaliv.js", "_Box-CHz8qV7r.js"]
+  },
+  "src/islands/Search.tsx": {
+    "file": "assets/Search-Cgknd06p.js",
+    "name": "Search",
+    "src": "src/islands/Search.tsx",
+    "isEntry": true,
+    "imports": ["_react-runtime-CvJzaliv.js", "_Box-CHz8qV7r.js"]
+  }
+}

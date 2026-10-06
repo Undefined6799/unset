@@ -1,0 +1,4 @@
+{
+  "candidate": "hono",
+  "ssrRenderer": "react-dom/server renderToString (no streaming)"
+}

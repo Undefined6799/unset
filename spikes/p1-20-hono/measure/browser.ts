@@ -10,6 +10,7 @@ type PageReport = {
   status: number;
   console: { type: string; text: string }[];
   pageErrors: string[];
+  failedRequests: string[];
   scriptTags: number;
   modulePreloads: number;
   scriptBytes: number;
@@ -21,13 +22,14 @@ type PageReport = {
 
 async function visit(page: Page, url: string, interact: boolean): Promise<PageReport> {
   const report: PageReport = {
-    url, status: 0, console: [], pageErrors: [], scriptTags: 0, modulePreloads: 0, scriptBytes: 0,
+    url, status: 0, console: [], pageErrors: [], failedRequests: [], scriptTags: 0, modulePreloads: 0, scriptBytes: 0,
     hydrationErrors: null, boxStyle: null, plainDivStyle: null, interactions: null,
   };
   page.removeAllListeners();
   page.on("console", (m) => report.console.push({ type: m.type(), text: m.text() }));
   page.on("pageerror", (e) => report.pageErrors.push(String(e)));
   page.on("response", async (r) => {
+    if (r.status() >= 400) report.failedRequests.push(`${r.status()} ${new URL(r.url()).pathname}`);
     if (r.request().resourceType() === "script") report.scriptBytes += (await r.body().catch(() => Buffer.alloc(0))).length;
   });
   const response = await page.goto(url, { waitUntil: "networkidle" });

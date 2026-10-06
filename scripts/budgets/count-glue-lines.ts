@@ -40,8 +40,8 @@ function functionSpans(node: unknown, spans: [number, number][] = []): [number, 
   return spans;
 }
 
-/** Glue lines of one config file: function lines, plus declarative lines beyond the free allowance. */
-export function configGlueLines(file: string, source: string): number {
+/** A config file's code lines, split into lines inside a function and the remaining declarative lines. */
+export function configLineSplit(file: string, source: string): { functionLines: number; declarativeLines: number } {
   const lang = file.endsWith(".tsx") ? "tsx" : "ts";
   const { program, errors } = parseSync(file, source, { lang });
   if (errors.length > 0) throw new Error(`cannot parse ${file}: ${errors[0]?.message}`);
@@ -52,8 +52,13 @@ export function configGlueLines(file: string, source: string): number {
     for (let line = lineOf(start); line <= lineOf(Math.max(start, end - 1)); line++) inFunction.add(line);
   }
   const functionLines = countLines([...inFunction].sort((a, b) => a - b).map((i) => lines[i]).join("\n"));
-  const declarative = countLines(source) - functionLines;
-  return functionLines + Math.max(0, declarative - FREE_DECLARATIVE_LINES);
+  return { functionLines, declarativeLines: countLines(source) - functionLines };
+}
+
+/** Glue lines of one config file: function lines, plus declarative lines beyond the free allowance. */
+export function configGlueLines(file: string, source: string): number {
+  const { functionLines, declarativeLines } = configLineSplit(file, source);
+  return functionLines + Math.max(0, declarativeLines - FREE_DECLARATIVE_LINES);
 }
 
 export function countGlueLines(dir: string, configs: readonly string[] = []): number {

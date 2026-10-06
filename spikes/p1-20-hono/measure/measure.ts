@@ -5,7 +5,13 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { createServer } from "vite";
+import { countLines } from "../../../scripts/budgets/check.ts";
+import { configLineSplit } from "../../../scripts/budgets/count-glue-lines.ts";
+import { deriveMeasurements, readRawReports } from "../../../scripts/docs/glue-spike.ts";
 import { runChromium } from "./browser.ts";
+
+// Build configs whose functions count as glue (step 4a); the measurement config adds only the class-map hook.
+const CONFIGS = ["vite.config.ts", "vite.measure.config.ts"];
 
 const OUT = "measure/out/raw";
 rmSync("measure/out", { recursive: true, force: true });
@@ -64,7 +70,7 @@ try {
   const devServer: Record<string, unknown> = {};
   for (const m of modules) devServer[m] = ((await vite.ssrLoadModule(`/${m}`)) as { default: unknown }).default;
   write("css-maps-dev-server.json", devServer);
-  const report = await runChromium("http://localhost:5173", [{ path: "/", interact: true }], join(OUT, "chromium-dev.json"));
+  const report = await runChromium("http://localhost:5173", [{ path: "/", interact: true }, { path: "/@demo", interact: false }], join(OUT, "chromium-dev.json"));
   void report;
   const { chromium } = await import("playwright-core");
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
@@ -78,17 +84,30 @@ try {
   await vite.close();
 }
 
-// f. dependencies of a clean install.
+// f. dependencies of a clean install, with the exact installed version of each direct one.
 const parseable = run("npm", ["ls", "--all", "--parseable"]).trim().split("\n").slice(1);
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+const direct = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})].sort();
+const versions = Object.fromEntries(
+  direct.map((name) => [name, JSON.parse(readFileSync(`node_modules/${name}/package.json`, "utf8")).version]),
+);
 write("deps.json", {
-  direct: [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})],
+  versions,
+  direct,
   transitive: [...new Set(parseable.map((p) => p.slice(p.lastIndexOf("node_modules/") + 13)))].sort(),
 });
 
-// a. glue lines, with the repository's counter.
-const glue = Number(run("node", ["../../scripts/budgets/count-glue-lines.ts", "src/glue", "--config", "vite.config.ts"]).trim());
-const perFile: Record<string, number> = {};
-for (const f of readdirSync("src/glue")) perFile[f] = Number(run("node", ["../../scripts/budgets/count-glue-lines.ts", "src/glue", "--config", "vite.config.ts"]).trim()) && Number(run("node", ["-e", `import('../../scripts/budgets/check.ts').then(m=>console.log(m.countLines(require('fs').readFileSync('src/glue/${f}','utf8'))))`]).trim());
-write("glue.json", { total: glue, perFile, config: "vite.config.ts" });
-console.log("raw reports written");
+// a. glue lines, with the repository's counter: every glue file, and each build config's split.
+const files = Object.fromEntries(
+  readdirSync("src/glue").map((f) => [f, countLines(readFileSync(join("src/glue", f), "utf8"))]),
+);
+const configs = Object.fromEntries(
+  CONFIGS.map((f) => [f, configLineSplit(f, readFileSync(f, "utf8"))]),
+);
+write("glue.json", { files, configs });
+write("fixture.json", { candidate: "hono", ssrRenderer: "react-dom/server renderToString (no streaming)" });
+
+const reports = readdirSync(OUT).map((f) => `raw/${f}`).sort();
+const measurements = deriveMeasurements(readRawReports("measure/out", reports));
+writeFileSync("measure/out/MEASUREMENTS.json", `${JSON.stringify(measurements, null, 2)}\n`);
+console.log(`verdict ${measurements.verdict}`);

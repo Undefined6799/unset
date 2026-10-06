@@ -3,7 +3,7 @@
 import { createApp } from "../app.tsx";
 
 const app = createApp({ negativeControl: true });
-app.get("/@refresh-preamble.js", (c) =>
+app.get("/_dev/refresh-preamble", (c) =>
   c.body(
     [
       'import RefreshRuntime from "/@react-refresh";',

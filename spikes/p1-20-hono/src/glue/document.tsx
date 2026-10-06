@@ -14,7 +14,7 @@ function Document({ children, scripts }: { children: ReactNode; scripts: boolean
         {stylesheetHrefs().map((href) => (
           <link key={href} rel="stylesheet" href={href} />
         ))}
-        {scripts && !import.meta.env.PROD && <script type="module" src="/@refresh-preamble.js" />}
+        {scripts && !import.meta.env.PROD && <script type="module" src="/_dev/refresh-preamble" />}
         {scripts && <script type="module" src={assetUrl("src/glue/boot.ts")} />}
       </head>
       <body>{children}</body>

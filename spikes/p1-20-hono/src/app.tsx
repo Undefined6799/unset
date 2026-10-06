@@ -28,6 +28,8 @@ export function createApp(options: { negativeControl: boolean }) {
     return c.redirect("/?ok=1", 303);
   });
   app.get("/api/echo", (c) => c.json({ q: c.req.query("q") ?? "" }));
+  // No icon in the fixture; an empty answer keeps the console free of the browser's favicon 404.
+  app.get("/favicon.ico", (c) => c.body(null, 204));
   if (options.negativeControl) {
     app.get("/neg", (c) => c.html(page(<div style={{ color: "red" }}>negative control</div>, false)));
   }
