@@ -8,6 +8,8 @@ export {
   type PropsSchema,
 } from "./islands/define.ts";
 export { type JsonValue, renderPropsTag, SerializeError, serializeProps } from "./islands/props.ts";
+// P1.24h: the one link validator; every component link takes its SafeHref.
+export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 export type { FallbackFace, FontMetrics } from "./scripts/build-tokens.ts";
 // P1.21m: the fallback-face metrics, computed by scripts/ui/font-metrics.ts.
 export { buildFontMetrics, type FaceMetrics, type FallbackSpec, type WebFont } from "./scripts/font-metrics.ts";
