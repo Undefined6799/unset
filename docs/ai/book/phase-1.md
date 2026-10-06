@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15, P1.16, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15m, P1.15, P1.16, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37; then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -113,7 +113,8 @@ flowchart TD
   P112 --> P113["P1.13 DID-column registry"]
   P112 --> P114["P1.14 seal [SEC]"]
   P114 --> P114a["P1.14a sealTo (age) [SEC]"]
-  P113 --> P115["P1.15 audit chain [SEC]"]
+  P113 --> P115m["P1.15m audit SQL [SEC]"]
+  P115m --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P111 --> P117["P1.17 advisory lock"]
@@ -2802,9 +2803,28 @@ Diagram: none.
 ---
 
 ### P1.15 — Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier
-Tags: [SEC]            Depends on: P1.12, P1.13            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
-Where: `infrastructure/postgres/migrations/0005_audit.sql`, `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
-  + tests; `erasure-registry.json` and `grant-matrix.json` rows
+Tags: [SEC]            Depends on: P1.15m, P1.14q            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
+Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` is a new trusted workspace, so its root
+  `tsconfig.json` reference and lockfile entries wait for P1.14q, while the SQL needs neither (the P1.14 / P1.14m
+  precedent: `m` is the migration part). Two trusted-base steps, in order; this section's text specifies both:
+  1. **P1.15m** (trusted; depends on P1.12, P1.13, and on #126's 0005 and P1.16's 0006 for migration order only):
+     `infrastructure/postgres/migrations/0007_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
+     with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `event_pii`, `audit.row_hash`,
+     `audit.append`, the triggers, auditor SELECT and the default-privileges line; the `grant-matrix.json` and
+     `erasure-registry.json` rows. Tests in `tests/integration/postgres/audit.test.ts`: `append_as_admin`,
+     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `pii_only_admin`,
+     `concurrent_appends`, `audit_flood_does_not_block`, `registry_rows`, and `row_hash_known_answer` (SQL) against a
+     vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged.
+  2. **P1.15** (trusted; depends on P1.15m, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
+     `append.ts` (with the TS validation), `rowHash.ts`, `verify.ts`, plus the root `tsconfig.json` reference and the
+     package's own lockfile entries as P1.14q permits. Tests: `reason_union_matches_table`,
+     `typed_append_rejects_free_text`, `row_hash_known_answer` (TS, same vector), `chain_links`,
+     `tamper_chain_metadata`, `tamper_body`. P1.14 and P1.15 each add one trusted workspace alone: two PRs after
+     P1.14q, in either order.
+  Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
+  The tailnet-address exception (P1a-A1) is built as booked and flagged provisional in the PR body.
+Where: `infrastructure/postgres/migrations/0007_audit.sql` (P1.15m), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
+  (P1.15) + tests; `erasure-registry.json` and `grant-matrix.json` rows (P1.15m)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
 
 Goal: moderation and security events are written only through one database function that stamps the writing role itself
