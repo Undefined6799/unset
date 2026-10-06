@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15, P1.16, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
-  P1.29, P1.30, P1.32, P1.31, P1.37; then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+  P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -70,7 +70,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   stays where it is below so ids and links hold; P1.22b sits after P1.37. No French page ships before this slice lands.
   It may run before, beside or after slice 2's steps; P1.38 waits for it, because the Phase 1 exit needs both languages.
 - **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode), P1.33
-  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.36, P1.37a, then the Phase 1 exit P1.38.
+  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.37a, then the Phase 1 exit P1.38.
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
 
 Why some pieces the plan lists for later stay in slice 1 (each is a security or dependency reason; none adds scope):
@@ -119,7 +119,9 @@ flowchart TD
   P115m --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P113 --> P116["P1.16 single-use store [SEC]"]
+  P103 --> P117e["P1.17e lock log events"]
   P111 --> P117["P1.17 advisory lock"]
+  P117e --> P117
   P102 --> P118["P1.18 net-guard core [SEC]"]
   P118 --> P118a["P1.18a net-guard requests + policies [SEC]"]
   P118a --> P118b["P1.18b proxy mode + egress proxy [SEC]"]
@@ -3134,8 +3136,20 @@ Diagram: none.
 
 ---
 
+### P1.17e — Name the lock log events (prelude to P1.17)
+Tags: —            Depends on: P1.03            Plan: §6.1; book edit 2026-10-06-p117e-split (final 23:15Z)
+Status: built (#363).
+Where: `shared/log/` only: EVENTS entries `lock.hold_exceeded` and `lock.lost` plus their EVENTS test rows. Label
+  kind/feature.
+Why: a shared/log EVENTS entry precedes the PR that logs it, trusted base or not (the P1.11e, P1.16e and P1.23e
+  pattern); #361 first carried both entries with the code. No new log field: one would need an architecture ruling and
+  an engineering-rules line (SE-7). P1.17 merges main after this lands.
+Diagram: none.
+
+---
+
 ### P1.17 — Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`)
-Tags: —            Depends on: P1.11p            Plan: §5.2 (`pg_advisory_xact_lock(hashtext(did))`, ~40 lines, two `web` replicas); review 02 SERIOUS-5
+Tags: —            Depends on: P1.11p, P1.17e            Plan: §5.2 (`pg_advisory_xact_lock(hashtext(did))`, ~40 lines, two `web` replicas); review 02 SERIOUS-5
 Where: `infrastructure/postgres/lock.ts` + `lock.test.ts`
 Size: ~80 source lines, ~160 test lines
 
@@ -7040,7 +7054,16 @@ replaces it).
 
 **Tags:** — · **Depends on:** P0.07 · **Plan:** §6 (ASVS 5.0 L2, AI system record, RoPA), §7; launch gate L.03
 
-**Where:** `docs/human/compliance/{asvs-5-l2.md, asvs-5.0.csv, ai-system-record.md, ropa.md}`; `tests/compliance.test.ts`.
+**Where:** `docs/human/compliance/{asvs-5-l2.md, asvs-5.0.csv, ai-system-record.md, ropa.md}`; `scripts/docs/compliance.test.ts`
+(any parser beside it in `scripts/docs/`).
+
+**Placement and order (book edit 2026-10-06-p136-pull-forward-and-placement, final 23:09Z):** pulled forward into slice 1
+on Alex's "Yes p136" (2026-10-06 23:08Z). The test sits in `scripts/docs/` like P0.09's `docs.test.ts`, because no Vitest
+project selects `tests/compliance.test.ts` and `tests/integration/` would put it behind the Postgres setup. It is a CI
+gate, so the PR is check class and the `docs/human/compliance/` files ride with it; the id stays P1.36 (nothing is
+split off, so no `q`). `asvs-5.0.csv` is pinned with its source URL and sha256, the fetch is recorded in the PR body,
+and nothing touches the network at test time. The controller contact (P2.15) and the SMTP provider (Alex answer 21)
+stay `open` rows with evidence `step:P2.15`.
 
 **Size:** ~400 lines of docs (tables), ~150 test lines.
 
