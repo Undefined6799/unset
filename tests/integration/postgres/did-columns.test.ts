@@ -177,7 +177,9 @@ describe("DID columns", () => {
 
   test("detects_missing_row", async () => {
     const pool = await migratedWith("CREATE TABLE app.t (owner types.did)");
-    expect(await didColumns(pool)).toEqual([{ schema: "app", table: "t", column: "owner", kind: "did" }]);
+    expect((await didColumns(pool)).filter((c) => c.table === "t")).toEqual([
+      { schema: "app", table: "t", column: "owner", kind: "did" },
+    ]);
     expect(await registryProblems(pool)).toEqual(["add an erasure row for app.t.owner"]);
   });
 
@@ -197,7 +199,8 @@ describe("DID columns", () => {
     const pool = await migratedWith(
       "CREATE TABLE idx.r (record_uri types.at_uri, uris types.at_uri[], dids types.did[]); CREATE TABLE idx.s (record_uri text)",
     );
-    expect((await didColumns(pool)).map((c) => `${c.table}.${c.column} ${c.kind}`)).toEqual([
+    const indexed = (await didColumns(pool)).filter((c) => c.schema === "idx");
+    expect(indexed.map((c) => `${c.table}.${c.column} ${c.kind}`)).toEqual([
       "r.dids did[]",
       "r.record_uri at_uri",
       "r.uris at_uri[]",
@@ -221,6 +224,7 @@ describe("DID columns", () => {
       "CREATE TABLE app.w (a types.did NOT NULL, b types.did, c types.did, d types.did, e types.did)",
     );
     const rows_: Registry = {
+      ...registry,
       "app.w.a": { strategy: "set_null" },
       "app.w.b": { strategy: "retain" },
       "app.w.c": { strategy: "audit_redact", class: "sec", reason: "audit" },

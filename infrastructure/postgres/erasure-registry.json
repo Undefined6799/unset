@@ -1,1 +1,6 @@
-{}
+{
+  "app.single_use.bind_did": {
+    "strategy": "delete_row",
+    "reason": "a single-use token bound to the person; it has no use once they are erased"
+  }
+}
