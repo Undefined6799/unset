@@ -3324,11 +3324,21 @@ Diagram: none.
 
 **Tags:** [SPIKE] · **Depends on:** P1.04, P1.10 · **Plan:** §5.1, §6.1 (budgets), §10 row 4, §11 Q3; review fable 02 SERIOUS-4
 
-**Where:** branch `claude/p1-20-glue-spike`. Throwaway code in `spikes/p1-20-hono/` and `spikes/p1-20-astro/`
-(a dependency-cruiser rule forbids any import of `spikes/` from `apps/`, `interfaces/`, `domains/`, `infrastructure/` or `shared/`). What merges:
-`docs/human/decisions/NNNN-web-framework-glue.md`, `spikes/p1-20-*/MEASUREMENTS.json`, and `scripts/count-glue-lines`
-(kept, because P1.23 and P1.38 re-measure with the same rule). The spike code itself stays on the branch, tagged
-`spike/p1-20`, as the reference P1.23 starts from.
+**Where:** branch `claude/p1-20-glue-spike`. Throwaway code in `spikes/p1-20-hono/` and `spikes/p1-20-astro/` on that
+branch only; nothing under `spikes/` merges, so main has no `spikes/` folder and no dependency-cruiser rule for it
+(architecture ruling 2026-10-06-p120-spike-artefacts-layout). The spike's npm dependencies live only in the branch's
+`package.json`; main's lockfile is untouched. What merges, in one check-path PR (docs never change a PR's class, SE-6;
+no P1.20q):
+- `docs/human/decisions/NNNN-web-framework-glue.md`, the ADR, which names the evidence folder in one line;
+- `docs/human/decisions/evidence/NNNN-web-framework-glue/`: `MEASUREMENTS.json` per candidate and only the raw
+  Playwright reports `hono_verdict_consistent` reads (no screenshots or traces, about 200 KB at most, fixture data
+  only); larger Playwright output stays a CI artefact linked from the ADR;
+- `scripts/budgets/count-glue-lines.ts` with `count_glue_lines_rule` and `glue_count_includes_config_plugin` (kept,
+  because P1.23 and P1.38 re-measure with the same rule; the npm script name stays `count-glue-lines`);
+- in `scripts/docs/`: `hono_verdict_consistent`, `astro_measurements_recorded` and `adr_has_required_sections`.
+The spike code itself stays on the branch, tagged `spike/p1-20`, as the reference P1.23 starts from. Its other tests
+(`css_map_diff_detects_mismatch`, `neg_route_style_attr_blocked`, `zero_js_route_check`) run on the branch, and their
+output joins the raw reports.
 
 **Size:** ~450–700 spike lines (not merged), ~150 measurement-script lines, ~250 test lines; ADR ~120 lines.
 
@@ -3349,7 +3359,8 @@ changes in an ADR.
 - `MEASUREMENTS.json` per candidate:
   `{ candidate, versions{}, ssrRenderer, glueLines{ devSsr, manifest, css, islands, serialiser, config, total },
   declarativeConfigLines,
-  cssIdentical{ dev: bool, prod: bool, mismatches: string[] }, hydrationErrors: int, cspViolations: int,
+  cssIdentical{ dev: bool, prod: bool, mismatches: string[] }, hydrationErrors: int (Chromium's),
+  hydrationErrorsByEngine{ chromium: int, firefox: int|null, webkit: int|null }, cspViolations: int,
   styleAttrViolations: int, zeroJsRoute{ scriptTags: int, modulePreloads: int, jsBytes: int },
   jsGzipBytes{ reactRuntime, bootstrap, perIsland{}, total, headroomFor75KB }, rawReports: string[],
   buildSecondsMedian, deps{ direct, transitive }, verdict: "PASS"|"BORDERLINE"|"FAIL"|"INCOMPLETE" }`.
@@ -3399,8 +3410,12 @@ changes in an ADR.
    b. CSS identical:
       i.   build both bundles; extract every CSS Module's exported class map from the server bundle and from
            the client bundle; diff; each difference is a mismatch.
-      ii.  Playwright (Chromium, Firefox and WebKit) on the prod build and on the dev server: load /, use both
-           islands; collect console errors and page errors; every React hydration-mismatch message is counted.
+      ii.  Playwright on Chromium (Firefox and WebKit where available; where not, record
+           `hydrationErrorsByEngine: { chromium: n, firefox: null, webkit: null }`, `null` meaning not measured) on
+           the prod build and on the dev server: load /, use both islands; collect console errors and page errors;
+           every React hydration-mismatch message is counted. The verdict uses Chromium's count and the ADR states
+           the gap in one line; P1.26's `hydration_errors_all_engines` re-checks all three engines on the real app
+           (waiting for P1.26 would deadlock: it depends on P1.20 through P1.25, P1.24, P1.22 and P1.21).
            Each run's raw Playwright JSON report is saved and listed in rawReports.
       iii. Box's computed style on / differs from an unstyled <div> (proves the CSS was linked for SSR).
    c. CSP: on the prod build (Chromium; Trusted Types is Chromium-only), count console messages containing
@@ -3444,7 +3459,8 @@ changes in an ADR.
    rule; the verdict; the consequences table below; which spike files P1.23 carries over; the dev-only
    deviations, each marked dev-only (for example a dev CSP that adds connect-src ws: for HMR, or a dev-only
    flash of unstyled content); and the re-measure rule (P1.23's CI warns when its glue exceeds the accepted
-   number).
+   number); and a "Re-checks" line: P1.26's `hydration_errors_all_engines` re-checks the hydration count on all
+   three engines, and a failure there reopens this ADR, never silenced.
 ```
 
 Outcome → later steps that change:
@@ -3948,12 +3964,12 @@ GET /assets/<file>:
 - `csp_no_violations` (Playwright Chromium, production build): interacting with a demo island → zero console
   messages about CSP or Trusted Types.
 - `island_budget_check`: fixture chunk of 16 KB gzipped → exit 1.
-- `glue_line_warning`: `count-glue-lines apps/web/src/islands/runtime` reported; above the ADR number → CI warning.
+- `glue_line_warning`: `count-glue-lines apps/web/src/islands/runtime` (`scripts/budgets/count-glue-lines.ts`, P1.20) reported; above the ADR number → CI warning.
 - `island_import_boundary`: fixture island importing `infrastructure/postgres` → dependency-cruiser violation.
 - `jsx_style_prop_rejected`: fixture component with `style={{ color: "red" }}` → lint error.
 
 **Reuse** (all provisional — for reuse review):
-- Spike glue `spikes/p1-20-hono/src/glue/*` → SALVAGE candidate only if the reuse reviewer confirms it meets this
+- Spike glue `spikes/p1-20-hono/src/glue/*` (on the `spike/p1-20` tag, never on main) → SALVAGE candidate only if the reuse reviewer confirms it meets this
   step; expected changes: registry from the file convention, the `SPIKE_INSTRUMENT` flag removed, tests added.
 - Prototype: no island runtime (Next.js) → none.
 - `app/src/lib/csp.ts:1-49` → LESSON: `wasm-unsafe-eval` and Matrix `connect-src` on every route is the
@@ -4459,6 +4475,9 @@ Any step fails → job fails; required check on main.
 - `assert_tests_ran_skip_fails`: report with one skipped test without reason → exit 1.
 - `lhci_no_public_upload`: config test asserts `upload.target === "filesystem"`.
 - `reflow_320`: real pages have `scrollWidth ≤ clientWidth` at 320 px.
+- `hydration_errors_all_engines`: on the real app, Chromium, Firefox and WebKit load a page with islands, and the
+  count of hydration errors is 0 in each. A failure reopens the P1.20 ADR; it is never silenced (book edit
+  2026-10-06-p120-split-and-browsers).
 
 **Reuse** (all provisional — for reuse review):
 - Prototype Playwright setup (`app/e2e/` if present) → LESSON at most; its pages and selectors are Next.js-specific.
@@ -6393,7 +6412,7 @@ its fake (P2.16); storing the API key (P5.06).
    kit showcase in both themes; the Android fallback-font check of P1.26; records results.
 5. Record the open Alex answers (P1a-A1, P1a-A2, P1b-A1–P1b-A5; plan issue 19 for P1.33a is settled by decision 24) and their status; a provisional default still in force is listed as such.
 6. phase-metrics: LOC per package (non-test, non-generated), direct and transitive dependency counts, glue
-   lines (count-glue-lines with its config rule), JS and CSS budgets (per bundle and per page) → compared with §4
+   lines (count-glue-lines, `scripts/budgets/count-glue-lines.ts`, with its config rule), JS and CSS budgets (per bundle and per page) → compared with §4
    targets; over target → listed, not failing.
 7. Write docs/human/phase-exits/phase-1.md: each criterion → evidence link; open items carried to Phase 2.
 ```
