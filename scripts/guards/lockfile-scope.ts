@@ -1,6 +1,7 @@
 // The root lockfile's scope in a trusted-base PR (rule SE-6, ruling 2026-10-05 02:50Z): every entry the PR adds,
 // changes or moves is a changed trusted package's own workspace entry or in its dependency closure, so that npm
-// re-hoisting an existing package passes. Pure; `change-shape.ts` reads both lockfiles.
+// re-hoisting an existing package passes. A trusted package the PR creates also explains its own link entry (ruling
+// 2026-10-06 19:50Z). Pure; `change-shape.ts` reads both lockfiles.
 // Format: npm lockfile v2/v3 `packages`, keyed by install path ("" is the root, "node_modules/a", "shared/http").
 //
 // The closure is a set of install paths, not of names: an entry elsewhere that merely shares a name and version is
@@ -9,6 +10,9 @@
 // the lockfile is taken as npm wrote it; the dependencies guard, audit, the 7-day rule and the SBOM judge it.
 
 import { isDeepStrictEqual } from "node:util";
+
+/** A trusted workspace the PR creates (ruling 2026-10-06 19:50Z, P1.14q): its folder and the name its manifest declares. */
+export type NewWorkspace = { readonly dir: string; readonly name: string };
 
 type Entry = { name?: unknown; version?: unknown; link?: unknown; resolved?: unknown; [field: string]: unknown };
 type Packages = Record<string, Entry>;
@@ -115,7 +119,12 @@ function changedSides(before: Packages, after: Packages): { removed: [string, En
  * head closure; a removal and an addition of the same name and content are one move. An entry whose `name` is not
  * the name its path loads, or a known version with a new tarball or dependency list, is outside wherever it sits.
  */
-export function lockfileStrays(base: unknown, head: unknown, workspaces: readonly string[]): string[] {
+export function lockfileStrays(
+  base: unknown,
+  head: unknown,
+  workspaces: readonly string[],
+  born: readonly NewWorkspace[] = [],
+): string[] {
   const [before, after] = [packagesOf(base), packagesOf(head)];
   if (before === null || after === null) return ["package-lock.json has no packages map"];
   const [baseClosure, headClosure] = [closure(before, workspaces), closure(after, workspaces)];
@@ -126,6 +135,13 @@ export function lockfileStrays(base: unknown, head: unknown, workspaces: readonl
     after[key] !== undefined &&
     isDeepStrictEqual(withoutFlags(before[key]), withoutFlags(after[key])) &&
     (baseClosure.has(key) || headClosure.has(key));
+  // A new workspace's own link, `node_modules/<its name>` resolving to its folder, is the one entry outside the closure
+  // it explains; the same name linked anywhere else is a stray.
+  const ownLink = (key: string, entry: Entry): boolean =>
+    before[key] === undefined &&
+    born.some(
+      (w) => w.name !== "" && key === `node_modules/${w.name}` && entry.link === true && entry.resolved === w.dir,
+    );
   const strays = new Set<string>();
   for (const [key, entry] of removed) {
     if (!baseClosure.has(key) && !flagsOnly(key)) strays.add(`${key || "(root)"} (${identity(key, entry)})`);
@@ -134,6 +150,7 @@ export function lockfileStrays(base: unknown, head: unknown, workspaces: readonl
     const alias = key.includes("node_modules/") && typeof entry.name === "string" && entry.name !== nameOf(key, entry);
     const baseContent = known.get(identity(key, entry));
     const swapped = baseContent !== undefined && !isDeepStrictEqual(baseContent, content(entry));
+    if (ownLink(key, entry)) continue;
     if ((!headClosure.has(key) && !flagsOnly(key)) || alias || swapped)
       strays.add(`${key || "(root)"} (${identity(key, entry)})`);
   }
