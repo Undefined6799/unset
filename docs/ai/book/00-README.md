@@ -279,7 +279,9 @@ Every step is designed so its code follows these rules, and its tests or CI guar
     option letter. A PR that creates a workspace also adds its hub note (`docs/ai/notes/area/<name>.md`), so the
     `notes-hub` warning never lands; docs never change a PR's class, so a trusted PR can carry it too
     (`infrastructure/seal` stays an accepted warning until the next step that touches it adds its note; book edit
-    2026-10-07-p115-as-built). A human can go from any file to the step that explains it, and back.
+    2026-10-07-p115-as-built). A real internet host may appear in a test only when the check's subject is that exact
+  host (C7's `https://bsky.network`); otherwise test hosts are RFC 2606 names (book edit 2026-10-07-p130-as-built,
+  item 4). A human can go from any file to the step that explains it, and back.
 
 ## How the review works
 

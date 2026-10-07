@@ -155,6 +155,7 @@ flowchart LR
   P1_11["P1.11 Postgres + migrator"]:::ext
   P1_18["P1.18 net-guard"]:::ext
   P1_19["P1.19 i18n"]:::ext
+  P1_15s["P1.15s audit chain tests"]:::ext
 
   P1_20["P1.20 glue spike SPIKE"]
   P1_21["P1.21 token pipeline"]
@@ -168,6 +169,7 @@ flowchart LR
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
   P1_25k["P1.25k error-page hook in the kit"]
+  P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -202,8 +204,6 @@ flowchart LR
   P1_37["P1.37 legal paperwork 1 ALEX"]
   P1_37a["P1.37a Arachnid application ALEX"]
   P1_38["P1.38 Phase 1 exit"]
-  P1_15s["P1.15s audit chain tests"]
-  P1_15b["P1.15b verify through SET ROLE"]
 
   P1_04 --> P1_20
   P1_10 --> P1_20
@@ -225,7 +225,11 @@ flowchart LR
   P1_24k -.-> P1_25
   P1_24c -.-> P1_26
   P1_08 --> P1_25
+  P1_04 --> P1_25k
+  P1_08 --> P1_25k
   P1_25k --> P1_25
+  P1_24c --> P1_25h
+  P1_25h --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
@@ -279,8 +283,7 @@ flowchart LR
   P0_12 -.-> P1_35
   P0_07 --> P1_36
   P1_26 --> P1_38
-  P1_15s -.-> P1_38
-  P1_15s --> P1_15b
+  P1_15s --> P1_38
   P1_19 --> P1_22b["P1.22b locale (i18n slice)"]
   P1_22 --> P1_22b
   P1_26 --> P1_22b
@@ -3143,6 +3146,8 @@ Done when (tests): (real Postgres)
   - chain_links: 100 appends across both lanes → `verifyChain` ok in both modes; seqs 1..n contiguous per lane.
   - row_hash_known_answer: fixed inputs → the same 32 bytes from `rowHash` (TS) and `audit.row_hash` (SQL), equal to a
     vector committed in the test.
+  - to_micros_keeps_the_sixth_digit: a timestamp with a non-zero sixth fractional digit keeps it through `rowHash`'s
+    microsecond encoding (added as built, #426).
   - tamper_chain_metadata: a test superuser disables the trigger and edits `retention_class` on a row → `verifyChain`
     (`links`) reports that seq with reason `hash`.
   - tamper_body: edit a body row's `body_text` (trigger disabled) → `full` reports `body_mac`; `links` stays ok (documents
@@ -5292,7 +5297,8 @@ h, i, j, k, q and s). It stays inside the 1,601 bytes of island headroom, and th
 
 Tests: `toast_close_moves_focus_to_main` (jsdom; P1.26's toast keyboard test asserts it in the browser),
 `select_island_leaves_required_native`, `select_island_labelledby_label`, `select_label_click_focuses_combobox`,
-`ui_build_entries_run_in_node` with `font-metrics.ts --check` added, and the island budget gate unchanged.
+`ui_build_entries_run_in_node` with `font-metrics.ts --check` added, `toast_close_leaves_focus_held_elsewhere` (added
+as built, #433), and the island budget gate unchanged.
 
 **As built** (#433, merged 2026-10-07T12:12:22Z as `30022a8`; book edit 2026-10-07-p125-split, P1.24c section added
 12:28Z): no deviation from the record; an extra test, `toast_close_leaves_focus_held_elsewhere`, joins the list. Its
@@ -5312,7 +5318,7 @@ book's adopted behaviour, narrowed, and the hook is an extension point inside th
 **What** (read on main fa74f1a: `errorResponse` maps non-public codes to `internal.error` and sets `no-store`;
 `fail()` at `server.ts:148`; `secured()`'s catch at `:222`; `reqId = randomUUID()` at `:292`):
 1. **The hook:** `errorPage?: (code: ErrorCode, ctx: { group: "app" | "profile" | "admin"; reqId?: string }) =>
-   string`.
+   string` (`group` gains `"public"` with the `public` group below).
    - Synchronous: a Promise return is a type error, so the hook cannot await I/O or hang a response past the kit.
    - Inputs are only what the kit chooses: `code` after the public mapping (never an internal code); a page group
      (the api, media and static groups never call it); `reqId` only for `internal.error`. No path, query, header,
@@ -5344,18 +5350,72 @@ book's adopted behaviour, narrowed, and the hook is an extension point inside th
   Accept-Language give byte-identical bodies with `cache-control: no-cache`.
 - `secured_fallback_never_calls_hook`.
 
-**Unbooked candidate:** a per-page `script-src 'none'` CSP on zero-JS pages, a tightening in the trusted CSP builder.
-Recorded, not booked; the step book books it when someone asks.
+**The `public` group** (book edit 2026-10-07-p125-split, section added 12:55Z; architecture's
+2026-10-07-p125-public-route-group): the kit gains a group `public` for `/`, `/terms` and `/privacy`: `default-src
+'none'`, no `script-src` (so no script runs), `style-src` and `font-src` from the assets path, `img-src` the assets
+path only (favicons and any sheet logo; no media origin, since these pages show no user images), `manifest-src
+'self'`, the locked `form-action`, `base-uri` and `frame-ancestors`, and `object-src 'none'`; every other header as
+the page groups. `documentPrefs(group)` already gives public behaviour to any group other than app, so it reads no
+cookie and sends no `Vary: Cookie`, and theme.ts keeps its signature. `groupForPath` is unchanged: unmatched paths
+stay `app`, and the three routes declare `group: "public"` at registration (P1.25). Neither `profile` (its `img-src`
+is fixed to the media origin by plan line 658, which only Alex can change) nor `app` (a script-src three zero-JS pages
+do not need) fits. It is not a loosening: a group stricter than `app`, with no existing policy changed. It rides in
+this step if the size rule allows (both are `shared/http`, trusted), and the hook's page groups then gain `public`.
+Otherwise it goes first in its own trusted part, **P1.25j "Add the public page group to the server kit"** ([SEC],
+trusted, `shared/http` only, depends on P1.08, slice 1; `j` is a kit-part letter); P1.25 then depends on P1.25j as
+well, and the board creates its issue only if the split happens. Tests, in whichever kit PR carries it:
+`public_policy_has_no_script_src` (no `script-src`, no `'unsafe-*'`), the `public` snapshot in `policies.test.ts`, and
+`public_policy_img_src_assets_only` (`img-src` exactly the assets path). This supersedes the unbooked per-page
+`script-src 'none'` candidate the split record first noted.
+
+---
+
+### P1.25h — Move the UI build runners to shared/ui-build
+Tags: —            Depends on: P1.24c (merged; it last touched the entries test and `font-metrics.ts`)
+Slice 1, feature class; book edit 2026-10-07-p125h-ui-build-workspace and architecture's
+2026-10-07-p125-ui-build-workspace as amended 13:10Z (which wins where they differ). Letter `h`: helper part; P1.25's
+taken letters are k and j (j reserved as P1.25k's fallback). Owned by the third thread, before P1.25.
+
+**Why:** DC-2 (`scripts/lint/.dependency-cruiser.cjs:184-195`) lets anything outside a shared workspace reach it only
+through its one `index.ts`. `shared/ui/index.ts` exports the island plumbing and the Node build runners (`runIcons`,
+`runTokens`, `buildFontMetrics`), which `scripts/ui/*.ts` loads under plain Node 26, which refuses `.tsx`; so the
+index cannot also export the React components apps/web needs. A second public entry would be a lint loosening and
+would break DC-2's one-surface rule. The cause is two runtimes in one workspace, so the runners move out.
+
+**Where:** new MIT workspace `shared/ui-build/` (`@unset/shared-ui-build`, exports `"."`): `index.ts`, `package.json`,
+tsconfig, LICENSE, hub note `docs/ai/notes/area/ui-build.md`; `build-tokens.ts`, `font-metrics.ts`, `icons.ts`,
+`tokens.ts` and their tests, moved unchanged from `shared/ui/scripts/`; `scripts/ui/*.ts` importing the new index;
+`shared/ui/index.ts` exporting Header, Footer, SkipLink, Callout, RadioGroup and Button (and later components)
+beside the island plumbing; the workspace and lockfile entries.
+
+**Rules:**
+- The data stays in shared/ui (`icons/icons.json`, `icons/drawings/*.generated.ts`, tokens, fonts); the runners still
+  read and write it through the injected IO and the paths `scripts/ui` binds. Only the code moves.
+- `FontMetrics` and `FallbackFace` stay owned by shared/ui and exported from its index. shared/ui-build imports them
+  with a whole-statement `import type { … } from "@unset/shared-ui"` (the inline `import { type X }` is refused: it
+  can leave a runtime import behind). `@unset/shared-ui` is a devDependency of `@unset/shared-ui-build`, types only;
+  shared/ui takes no dependency on shared/ui-build, so there is no cycle. The generic `shared` row
+  (`.dependency-cruiser.cjs:116`) already covers `shared/ui-build/`, so the MATRIX is unchanged and no q or v part is
+  booked.
+- The freshness tests (`icon_allowlist_matches_sheet` and the token test) stay with shared/ui, which owns the data,
+  and import the runner through `@unset/shared-ui-build`'s index.
+- A pure move counts lightly against the size budget; the body says it is a move with no logic change, and `git diff
+  -M` shows the renames.
+
+Tests: `ui_build_is_jsx_free` (under `shared/ui-build/`: no `.tsx` file, no `react` import, and every import of
+`@unset/shared-ui` a whole-statement `import type`), `ui_build_entries_run_in_node` against the new index (the
+end-to-end proof that nothing reaches `.tsx` at runtime), the moved runner tests unchanged, and P1.25's component
+imports through `@unset/shared-ui` passing depcruise with no rule change.
 
 ---
 
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h (and P1.25j if the `public` group splits out of P1.25k) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
-`interfaces/http/routes/test-routes.ts`; favicon files copied from the sheet's `assets/Logos/`; tests. P1.25 wires the
+`interfaces/http/routes/test-routes.ts`; the two favicon PNGs from the sheet (below); tests. P1.25 wires the
 kit's `errorPage` hook (P1.25k) in `apps/web`: feature class, no trusted path. `static-500.html` is dropped (book edits
 2026-10-07-p125-split and 2026-10-07-p125k-error-page-hook): the kit's fixed page and `secured()`'s static 500 already
 cover it.
@@ -5372,18 +5432,19 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
 
 **Outputs:**
 - `AppShell({ group, title, children, noindex? })` (`group` from the route table, P1.22): `<head>` with charset,
-  viewport, `<title>`, the `color-scheme` meta from `resolvePrefs`,
-  `<link rel="preload" as="font" type="font/woff2" crossorigin>` for the two fonts, the stylesheet links from the
-  manifest, favicons (SVG plus PNG from the sheet), `<meta name="robots" content="noindex">` when `noindex`; body
-  with a skip link (SkipLink, approved by Alex 18:21Z, sheet v39), `Header`, `<main id="main">`,
-  `Footer` whose slot holds `LanguageLinks` on public pages and `PrefsForms` on app pages (P1.22). `AppShell` takes
-  `feed?: true`: a feed page renders **no footer**, and the footer's links and slot move into the `Header` menu (sheet
-  v44; used by P3.12 and P4.21/P4.22).
-- Route groups in Phase 1: `/`, `/terms`, `/privacy` and every error page are **public** (no cookie read, no
-  `Vary: Cookie`). Error pages render through the kit's hook, so they are anonymous by construction: the hook
+  viewport, `<title>`, the `color-scheme` meta from `resolvePrefs`, `<link rel="preload" as="font" type="font/woff2"
+  crossorigin>` for the two fonts, the stylesheet links from the manifest, favicons (the 32 px PNG and the 180 px
+  apple-touch PNG from the sheet; the SVG favicon later), `<meta name="robots" content="noindex">` when `noindex`;
+  body with a skip link (SkipLink, approved by Alex 18:21Z, sheet v39), `Header`, `<main id="main">`, `Footer` whose
+  slot holds `LanguageLinks` on public pages and `PrefsForms` on app pages (P1.22). `AppShell` takes `feed?: true`: a
+  feed page renders **no footer**, and the footer's links and slot move into the `Header` menu (sheet v44; used by
+  P3.12 and P4.21/P4.22).
+- Route groups in Phase 1: `/`, `/terms`, `/privacy` and every error page are **public** (no cookie read, no `Vary:
+  Cookie`). The three pages register with the kit's `group: "public"` (P1.25k or P1.25j): no `script-src`, `img-src`
+  the assets path only. Error pages render through the kit's hook, so they are anonymous by construction: the hook
   receives only the code, the kit's group and, for 500, the kit's `reqId`. The hook's `group` is the kit's header
-  group, not P1.22's app/public page group. The only `app` page in Phase 1 is the test page `/__test/app` (test
-  server only), which P1.22's and P1.26's cookie tests use until Phase 2 adds real signed-in pages.
+  group, not P1.22's app/public page group. The only `app` page in Phase 1 is the test page `/__test/app` (test server
+  only), which P1.22's and P1.26's cookie tests use until Phase 2 adds real signed-in pages.
 - Zero-JS pages: `renderPage` takes `islands: "off"` as a fixed argument for `/`, `/terms`, `/privacy`, 404 and 500,
   never from the request. "off" emits no bootstrap script, no props `<script type="application/json">`, no
   `modulepreload` and no island markers; Document provides no IslandSlot renderer, so the header menu renders static
@@ -5421,7 +5482,10 @@ Request → route:
 - HEAD on any page → same headers, no body.
 
 **Done when (tests):**
-- `shell_head_contents`: preload links for both fonts, stylesheet from manifest, favicons, color-scheme meta.
+- `shell_head_contents`: preload links for both fonts, stylesheet from manifest, the two PNG favicon links and no
+  SVG favicon link, color-scheme meta.
+- `public_routes_use_public_group`: `/`, `/terms` and `/privacy` are registered with group `public` and carry its
+  CSP.
 - `shell_zero_js`: `/`, `/terms`, `/privacy`, 404, 500 → no `<script` of any type and no `modulepreload` link.
 - `header_menu_static_on_zero_js_pages`: the menu is a `<details>` with a `<summary>`, its links present with no JS.
 - `notfound_no_echo`: `GET /%3Cscript%3Ex` → 404, body lacks `script>x`, `Cache-Control: no-cache` (now from the
@@ -5435,6 +5499,13 @@ Request → route:
 - `legal_placeholders_noindex`: meta and header present.
 - `shell_feed_no_footer`: `AppShell` with `feed` → no `<footer>`; the footer links and `PrefsForms` are in the header
   menu, reachable by keyboard with JS off.
+
+**Favicons** (book edit 2026-10-07-p125-split, section added 12:55Z): sheet v45 names only the Logos README; the image
+files are unnamed uploads. P1.25 ships the 32 px PNG favicon and the 180 px apple-touch icon, each picked from the
+uploads by its pixel size and recorded in the PR body by sha256. The self-switching SVG favicon is left out: no
+uploaded file matches it, and nothing is drawn by hand in its place. Once Alex publishes it on the sheet by name, the
+next PR that touches `apps/web/src/shell/head.tsx` adds it with its sha256 and the test updated; no step is booked for
+it alone.
 
 **Riders from P1.24c** (book edit 2026-10-07-p125-split, added 12:28Z; product class, like P1.25; the body lists them
 under a "Riders from P1.24c" heading):
@@ -5547,6 +5618,8 @@ Any step fails → job fails; required check on main.
 - `axe_detects_violation`: fixture test page with an unlabeled input → the a11y spec fails (proves the harness
   bites).
 - `csp_violation_detected`: fixture page with an inline script → csp spec fails.
+- `public_pages_no_csp_violations`: `/`, `/terms` and `/privacy` load under the `public` group with zero CSP
+  violation reports, favicon included (book edit 2026-10-07-p125-split, public group section).
 - `zero_js_detected`: fixture page with a script on a zero-JS route → fails.
 - `assert_tests_ran_skip_fails`: report with one skipped test without reason → exit 1.
 - `lhci_no_public_upload`: config test asserts `upload.target === "filesystem"`.
@@ -6856,7 +6929,7 @@ Checks (C1–C12 in P1.30, C13–C24 in P1.30s):
 | C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
 | C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it |
 | C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature) |
-| C5 | lock digests are multi-arch index digests (not a per-platform manifest) |
+| C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
 | C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
 | C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
 | C8 | no variable matching `PDS_RATE_LIMIT_BYPASS_*` (`_IPS`, `_KEY`, any future one) is set in any env, any phase; present, even empty → FAIL (no bypass key, no bypass IPs; a bypass IP is also a trusted proxy, and the PDS silently truncates a CIDR to its network address, `pds/src/config/config.ts:246-248`) |
@@ -6880,7 +6953,9 @@ Checks (C1–C12 in P1.30, C13–C24 in P1.30s):
 **Algorithm:**
 ```text
 1. Parse args; unknown flag → exit 2.
-2. Load env files and secrets into SecretMap; unreadable → exit 2 naming the file (not its content).
+2. Load env files and secrets into SecretMap; exit 2: an env or compose file exists but cannot be read, naming the
+   file (not its content); a missing or wrongly-moded secret file is a C9 failure, exit 1 "input missing" (secret
+   files are only stat-checked, never loaded; as built, #435).
 3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
 4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error"
    (fail closed). Network checks (C3, C4) timeout 30 s each → FAIL. An input file a check reads that is absent or
@@ -6954,6 +7029,17 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 - Vault notes `pin-image-index-digests`, `pds-key-custody-and-disaster-recovery` → LESSON.
 - Prototype deploy scripts → LESSON at most (they used `docker compose config`).
 
+**As built** (#435, merged by Alex at 2026-10-07T12:20:25Z as `57b94e1`; book edit 2026-10-07-p130-as-built): the
+`toJS` layer, the two-case `parser_sets_max_alias_count_zero`, the glob and networks left out, as
+2026-10-07-p130p-as-built says. 580 counted lines, 30 over the ~550 split line (the 26-line alias layer, 12 of it a
+re-wrapped import), named under "unsure"; no action. The body cited three carried records by `unset-plan/` paths and
+missed 2026-10-07-p130p-parser-split, which set the scope (the citation rule stands); it did not name the
+security-review path `docs/human/runbooks/pds-debug-logging.md` (the rule already says a body names every one); its
+"departure" from `scripts/preflight/` was stale. C7's test (`preflight.test.ts:166`) sets `PDS_CRAWLERS` to
+`https://bsky.network` and stays: there the real relay host is the subject (00-README's real-host rule). C9's exit 1
+for a missing secret file is right, and step 2 above is narrowed to match. C5 gained the 30 s network timeout, a
+tightening. The C8 test addresses ride on P1.30s.
+
 **Not in this step:** checks C13–C24 (P1.30s); running the deploy (P5.03); backup checks (P5.04).
 
 ---
@@ -6986,6 +7072,11 @@ fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The ret
   `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
   `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
 - The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
+
+**Rider from P1.30 as built** (book edit 2026-10-07-p130-as-built): the C8 bypass-IP values in
+`preflight.test.ts:184-186` (`172.30.10.x`, copied from P1.29's planned network table) change to a documentation
+range, for example `198.51.100.2`, `198.51.100.4` and `198.51.100.0/24`. Any value fails C8, so the address is a
+stand-in, and the test's behaviour is unchanged.
 
 **Not in this step:** anything P1.30 builds; C17 (P1.30t); C18 (P1.30u).
 
