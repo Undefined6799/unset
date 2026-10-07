@@ -6,6 +6,7 @@
     { "path": "scripts/ui" },
     { "path": "deployment" },
     { "path": "domains/identity" },
+    { "path": "infrastructure/audit" },
     { "path": "infrastructure/net-guard" },
     { "path": "infrastructure/pds" },
     { "path": "infrastructure/postgres" },
