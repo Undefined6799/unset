@@ -164,6 +164,7 @@ flowchart LR
   P1_24f["P1.24f UI kit: feed and feedback, no-JS"]
   P1_24j["P1.24j islands, budget-measured"]
   P1_24b["P1.24b toast and select islands"]
+  P1_24c["P1.24c toast focus, required select, labels"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -206,8 +207,9 @@ flowchart LR
   P1_24k --> P1_24f
   P1_24f --> P1_24j
   P1_24j --> P1_24b
+  P1_24b --> P1_24c
   P1_24k -.-> P1_25
-  P1_24j -.-> P1_26
+  P1_24c -.-> P1_26
   P1_08 --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
@@ -2844,7 +2846,7 @@ Diagram: none.
 ---
 
 ### P1.15 — Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier
-Tags: [SEC]            Depends on: P1.15g, P1.14q            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
+Tags: [SEC]            Depends on: P1.15m, P1.15d, P1.15g, P1.14q            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
 Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` is a new trusted workspace, so its root
   `tsconfig.json` reference and lockfile entries wait for P1.14q, while the SQL needs neither (the P1.14 / P1.14m
   precedent: `m` is the migration part). Three steps, in order; this section's text specifies the last two:
@@ -2911,15 +2913,32 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      Alex's decision and an expand migration
      with a new signature. `adm.session.login_ip` and `pds-admin`'s staff addresses (P3.17) are unchanged. The text
      below is amended to match.
-  2. **P1.15** (trusted; depends on P1.15g, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
-     `append.ts` (with the TS validation), `rowHash.ts`, `verify.ts`, plus the root `tsconfig.json` reference and the
-     package's own lockfile entries as P1.14q permits. Tests: `reason_union_matches_table`,
-     `typed_append_rejects_free_text`, `row_hash_known_answer` (TS, same vector), `chain_links`,
-     `tamper_chain_metadata`, `tamper_body`. P1.14 and P1.15 each add one trusted workspace alone: two PRs after
-     P1.14q, in either order.
+  2. **P1.15** (trusted, Closes #143; depends on P1.15m #411, P1.15d #418, P1.15g #420 and P1.14q, all merged; book
+     edit 2026-10-07-p115s-chain-tests): the `infrastructure/audit` workspace alone, `actions.ts`, `append.ts` (with
+     the TS validation), `rowHash.ts`, `verify.ts`, `error.ts`, and `db.ts` with a one-method `AuditDb` interface
+     (the transaction narrowed to what append and verify need), plus the root `tsconfig.json` reference and the
+     package's own lockfile entries as P1.14q permits. No `pg` import and no MATRIX change: the workspace reaches the
+     database only through `AuditDb`, so the rule that `infrastructure/audit` cannot import `infrastructure/postgres`
+     holds unchanged, and P1.15v is not needed and not booked. Test in this PR: `rowHash.test.ts` inside the
+     workspace (`row_hash_known_answer`, TS), reproducing `audit-row-hash.vector.json` byte for byte with the fixture
+     DIDs of 02-shared-blocks (the two constants of `audit.test.ts:77-78`, or a shared `tests/fixtures/dids.ts` if one
+     exists by then). P1.14 and P1.15 each add one trusted workspace alone: two PRs after P1.14q, in either order.
+  3. **P1.15s** (feature; depends on P1.15, opened only after it merges, never stacked): the audit chain integration
+     tests. A trusted PR may carry only trusted files and tests with a matching path segment, and these tests need
+     the `tests/tsconfig.json` reference to the new workspace, which is outside `infrastructure/audit/`; splitting
+     keeps P1.15 pure with no change to the gate. Contents: `tests/integration/audit/chain.test.ts` with
+     `reason_union_matches_table`, `typed_append_rejects_free_text`, `chain_links`, `tamper_chain_metadata` and
+     `tamper_body` as worded below, its own `AuditDb` over a real `pg` client and real roles (the adapter lives in
+     the test file, not the workspace), and the `tests/tsconfig.json` reference. Red evidence: each tamper test fails
+     with `verify` stubbed to report ok. Widening `trusted-base.ts` to let a trusted PR carry the reference line
+     would be a loosening of a check gate and is not booked; if the split recurs, the step book can propose it as its
+     own check-class step for Alex.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
-  (P1.15) + tests; `erasure-registry.json` and `grant-matrix.json` rows (P1.15m to P1.15g)
+  None depends on P1.15s except P1.38, so the tamper tests exist before Phase 1 closes.
+Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
+  `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) + `rowHash.test.ts`;
+  `tests/integration/audit/chain.test.ts` and the `tests/tsconfig.json` reference (P1.15s); `erasure-registry.json`
+  and `grant-matrix.json` rows (P1.15m to P1.15g)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
 
 Goal: moderation and security events are written only through one database function that stamps the writing role itself
@@ -5136,12 +5155,13 @@ Slice 1, issue #421, feature class (`shared/ui` islands and icon drawings, `scri
 the copy, header-menu, tabs and modal islands at 72,799 of 76,800 gzip bytes; toast measured 78,206 because
 `Icon.tsx` imports the whole `icons.json` (5,082 gzip bytes), so one close icon shipped all 36 drawings.
 - **Drawing modules first.** The icon build (`scripts/ui/icons.ts`, product class) also writes one generated module per
-  icon, `shared/ui/icons/drawings/<name>.ts`, exporting that icon's frozen path list, from the same `icons.json`, never
-  edited by hand.
+  icon, `shared/ui/icons/drawings/<name>.generated.ts` (as built; the suffix the size guard and line budget already
+  treat as generated), exporting that icon's frozen path list, from the same `icons.json`, never edited by hand.
 - **Icon.tsx keeps the only inline svg** (the kit rule stays word for word). It gains one internal drawing component;
   `Icon` (by name, server-side) and an exported `IconDrawing` (by path list) both render through it, sharing size,
   `aria-hidden`, `focusable` and the `label` rule. Islands use `IconDrawing` with a static import of the one drawing
-  they need; pages keep `<Icon name>`.
+  they need; pages keep `<Icon name>`. `Icon` reads the map inside its body, so a chunk that only uses `IconDrawing`
+  carries no map.
 - **Then toast, then select,** each measured against the island budget as it stands; the close icon's measured cost
   goes in the body. If toast or select still does not fit, the PR stops at the last island that fits and comes back
   to the step book; a budget change stays a separate loosening needing Alex.
@@ -5157,6 +5177,61 @@ keys or the path data of a fixed sentinel icon no island imports), `icon_drawing
 freshness test beside `icon_allowlist_matches_sheet`: every module equals its entry and every entry has a module),
 `icon_drawing_matches_icon_markup` (`IconDrawing` with `close` renders the same markup as `<Icon name="close">` at all
 three sizes, with and without `label`), and the island budget gate unchanged.
+
+**As built** (#423, merged by Alex at 2026-10-07T11:27:10Z as "P1.24b Add the toast and select islands within
+budget", Closes #421; book edit 2026-10-07-p124b-as-built-and-p124c, amended 12:12Z):
+- **Title:** the booked title's summary (53 characters) failed `SUMMARY_MAX = 50` in `scripts/guards/commit-msg.ts:23`,
+  so the PR shortened it, as the row-title rule in 00-README allows.
+- **Size:** pr-shape warned at 444 changed source lines, under the split threshold of about 550; P1.24d was not
+  triggered.
+- **Regression fix inside the step:** #419 exported `IslandSlot` from `shared/ui/islands/slot.tsx` through
+  `shared/ui/index.ts`; Node 26 refuses `.tsx`, so `node scripts/ui/icons.ts`, `tokens.ts` and `font-metrics.ts`
+  stopped loading. `slot` has no JSX and is now `slot.ts` (test `ui_build_entries_run_in_node`); the P1.24j paths
+  read `slot.ts`. Rule for later steps: a module that the `scripts/ui` entries reach has no JSX and a `.ts` name.
+- **Drawing modules** are `<name>.generated.ts`, within the ruling's intent.
+- **`Icon.tsx` reads `icons.json` inside `Icon`'s body,** not at module level: a module-level read kept the whole map
+  in every chunk, and inside the body rolldown 1.2.12 drops it from chunks that never call `Icon`
+  (`island_bundle_has_no_icon_map` proves it on the real build).
+- **Measured** on the production build (`scripts/budgets/island.ts`, gzip bytes): toast island 731, select island
+  1,557, the close drawing module alone 308; island total 75,199 of 76,800 (1,601 bytes of headroom). No budget
+  change; P1.24d and P1.24v were not needed and are not booked.
+- **AI notes:** `docs/ai/notes/area/ui.md` and the copied-SVG pitfall note changed in their own commit, disclosed in
+  the body.
+- **`shared/ui` line budget** warns at 2,742 of 2,500 (it already warned at 2,535 on main): a warning, not a failure.
+  No step is booked; if it crosses the hard limit, the step that crosses it splits.
+- Its open points go to P1.24c.
+
+### P1.24c — Settle toast focus, required select, labels
+Tags: —            Depends on: P1.24b (merged)
+Slice 1, feature class (`shared/ui` only; no check path, no budget change); book edit
+2026-10-07-p124b-as-built-and-p124c. Letter `c` is glue on P1.24b (P1.24's taken letters are a, b, d (reserved), f,
+h, i, j, k, q and s). It stays inside the 1,601 bytes of island headroom, and the body measures it.
+- **Focus after a toast closes.** Today the focused close link disappears and focus falls to `<body>`, losing the
+  keyboard user's place (WCAG 2.2 SC 2.4.3 Focus Order). When the toast island hides a toast that held focus, it
+  moves focus to the page's `<main id="main">` (the target `SkipLink` already names,
+  `shared/ui/components/SkipLink/SkipLink.tsx:9`), adding `tabindex="-1"` if it is missing. With no `#main`, focus is
+  left where the browser puts it; if focus was elsewhere, it is not moved. Behaviour, not a visual change, so not a
+  sheet question.
+- **A required select stays native.** Today a required Select whose placeholder is still chosen hides its native
+  control, so the browser cannot focus it to show its message: the form silently does not submit and the browser
+  logs "An invalid form control is not focusable", which P1.26's zero-console-errors check would fail. Fail safe
+  until the sheet says otherwise: the select island does not take over a native `<select required>`; the native
+  control stays, styled as it is with no JS, and the browser's own validation works. How a required listbox shows
+  its error is a sheet question parked for Alex; no slice-1 form uses a required Select, so nothing waits on it, and
+  when a form needs one the coordinator asks Alex on a card with the sheet piece.
+- **Labels.** Today the combobox takes its name from the label's text through `aria-label`, and clicking the visible
+  label focuses the hidden native control, so nothing happens. `fieldIds` gains a label id, `${control}-label`, and
+  `Field` prints it on the `<label>`; the combobox points `aria-labelledby` at it instead of copying the text, and the
+  island handles a click on that label by focusing the combobox.
+- **`font-metrics.ts` in the entry test.** #423's `ui_build_entries_run_in_node` (`scripts/ui/entries.test.ts:11`)
+  runs only `icons.ts` and `tokens.ts`, each with `--check`; `font-metrics.ts` has no `--check`, so running it would
+  rewrite `font-metrics.json`. P1.24c gives `font-metrics.ts` a `--check` flag that writes nothing and exits non-zero
+  when the file is stale, as the other two do, and adds it to the test's list. `scripts/ui` is product class, not a
+  check path, so this stays inside P1.24c's feature class.
+
+Tests: `toast_close_moves_focus_to_main` (jsdom; P1.26's toast keyboard test asserts it in the browser),
+`select_island_leaves_required_native`, `select_island_labelledby_label`, `select_label_click_focuses_combobox`,
+`ui_build_entries_run_in_node` with `font-metrics.ts --check` added, and the island budget gate unchanged.
 
 ---
 
@@ -5246,10 +5321,13 @@ Request → route:
 
 ### P1.26 — Accessibility and browser test harness
 
-**Tags:** — · **Depends on:** P1.25, P1.24j · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
+**Tags:** — · **Depends on:** P1.25, P1.24c · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
 
-Pending, not skipped (book edit 2026-10-07-p124b-and-p124j-as-built): the toast and select island keyboard tests
-move to P1.24b and run when it lands; P1.26 still depends on P1.24j only. The tabs keyboard and axe tests check the
+The toast and select islands landed in P1.24b (#423) and are settled in P1.24c, so P1.26 depends on P1.24c as well as
+P1.25 and its keyboard, axe and console checks run on the settled islands (book edit
+2026-10-07-p124b-as-built-and-p124c); the toast keyboard test asserts focus moves to `#main` after close. The
+browser checks the #423 body left unverified (the APG combobox pattern, a hidden select's real POST) stay here as
+booked. The tabs keyboard and axe tests check the
 default mode against its built form (links in natural tab order with aria-current, no tab roles) and eager mode
 against the ARIA tabs pattern.
 
@@ -6164,11 +6242,18 @@ line; docs never change its class. If pr-shape reports mixed, the PR stops and a
    `rate_limit` zone fails the check.
 2. Documentation addresses: in `tests/integration/deployment/edge/edge.test.ts` (lines 137 and 152 to 154),
    `1.2.3.4` and `5.6.7.8` become addresses from `192.0.2.0/24` (RFC 5737), for example `192.0.2.10` and
-   `192.0.2.20`; a test that needs two different /64s also uses `2001:db8::/32` (RFC 3849).
+   `192.0.2.20`; a test that needs two different /64s also uses `2001:db8::/32` (RFC 3849). The rule, as widened
+   (book edit 2026-10-07-fixture-documentation-addresses): addresses in fixtures and tests come from the
+   documentation ranges (RFC 5737 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24; RFC 3849 2001:db8::/32) or
+   loopback, except in tests whose subject is address classification. As built (#422), `edge.test.ts:271` and `:289`
+   use `203.0.113.9` (TEST-NET-3) and stay.
 3. ADR 0018's status line (`docs/human/decisions/0018-edge-rate-limit-plugin.md:3`) becomes "Accepted (Alex merged
    the P1.28 pull request, #409, at 2026-10-07T03:31:33Z)". The ADR named that PR as the place for his word, and it
    was not yet accepted, so the status line is the only change. If Alex objects, the line goes back to Proposed and
-   the open points go to a card.
+   the open points go to a card. As built, `0018-edge-rate-limit-plugin.md:3-4` keeps a provenance tail after the
+   Accepted text ("architecture's reuse ruling 2026-10-07 00:45Z, record p128-edge-bases-and-ratelimit-adr"); it says
+   where the decision came from and is not a status edit after acceptance (book edit
+   2026-10-07-fixture-documentation-addresses).
 4. P1.28b item 4: edge_logs_no_client_address timed out because the first probe() test pulled the probe's node image
    inside its 5 s. The fix pulls that image by its locked digest in beforeAll (600 s hook timeout), gives every probe
    connection a 1 s connect timeout, waits on the 429 and 502 log lines with a deadline, and sets a per-test timeout
@@ -6383,7 +6468,8 @@ the `yaml` 2.9.1 strict subset with its refusals, and the redacting `SecretMap`.
 `deployment/preflight/`, 223 source lines, importing only `yaml` and Node built-ins. `compose-parse.ts` sets five of
 the six parser options and omits `maxAliasCount: 0`, and `preflight_matches_compose_config` compares name, service
 set, image and ports on one synthetic fixture. No behavioural gap (every anchor and alias is refused before any
-value conversion, and the parser never calls `toJS`); P1.30 core restores the option and extends the test. No reopen.
+value conversion, and the parser never calls `toJS`); P1.30 core restores it as a `toJS` layer and extends the test.
+No reopen.
 
 ---
 
@@ -6434,8 +6520,10 @@ files; the network table (P1.29).
 - The parser is `yaml` 2.9.1, already a direct, exact-pinned root devDependency (P0.09b), so the lockfile does not
   change. If the preflight ever runs from an `npm ci --omit=dev` install, moving it to `dependencies` is a one-line
   change in the same PR; by default it runs from a full CI checkout before deploy. It parses with
-  `parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, maxAliasCount: 0, strict: true })`
-  and then **refuses**, failing closed with the reason and the line:
+  `parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, strict: true })`
+  and then **refuses**, failing closed with the reason and the line (after the walk passes, one
+  `doc.toJS({ maxAliasCount: 0 })` call per document is a second layer: `maxAliasCount` is a `ToJSOptions` field in
+  yaml 2.9.1, read only by `toJS`; book edit 2026-10-07-p130p-as-built, amended 11:58Z):
   - more than one document;
   - any anchor, alias or `<<` merge key;
   - any explicit tag;
@@ -6533,13 +6621,19 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 - `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
 - The parser and `SecretMap` tests are P1.30p's, except two that P1.30 core carries (book edit
   2026-10-07-p130p-as-built); the body says why the option was missing in P1.30p and that it is restored:
-  - `parser_sets_max_alias_count_zero`: P1.30 core adds `maxAliasCount: 0`, a second layer behind the refusal walk,
-    so the parser matches the six options above. The test asserts the option object, or a document whose only fault
-    is one alias refused by the option rather than the walk, whichever the code allows without reaching into
-    internals.
+  - `parser_sets_max_alias_count_zero`: `maxAliasCount` is a `ToJSOptions` field that only `toJS` reads (yaml
+    2.9.1), so it is not a parse option (the earlier "one-line option" wording is withdrawn). After the refusal walk
+    passes, the parser calls `doc.toJS({ maxAliasCount: 0 })` once per document, maps any error to a `ParseError`
+    naming the file, and uses the result for nothing else; the typed view still comes from the walk. Two cases: a
+    document whose only fault is one alias is refused by the walk, as today; and the `toJS` layer refuses the same
+    document on its own, through a small exported helper (for example `expandNoAliases(doc, file)`) called directly
+    with the walk skipped, which proves the layer is live. The body says why the option was missing in P1.30p, why
+    it moved to `toJS`, and that it is restored.
   - `preflight_matches_compose_config`, extended: it compares the parser's full view (name, services, image, ports,
-    `env_file`, `environment`, `secrets`, networks) with `docker compose config --format json --no-interpolate`
-    (`--no-interpolate` keeps `${VAR}` literal, so no secret value is printed), over every `compose*.yaml` in the
+    `env_file`, `environment`, `secrets`) with `docker compose config --format json --no-interpolate`. Networks are
+    not compared: the parser reads no `networks` key (it only refuses interpolation in `network_mode`); a later step
+    that makes it read networks adds them here. `--no-interpolate` keeps `${VAR}` literal, so no secret value is
+    printed. It runs over every `compose*.yaml` in the
     repo found by glob plus the synthetic fixture. Until the first real compose file exists it runs on the fixture
     alone and says so in its output rather than passing silently.
 - `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
@@ -7875,7 +7969,7 @@ its fake (P2.16); storing the API key (P5.06).
 
 ### P1.38 — Phase 1 exit
 
-**Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
+**Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
 
 **Where:** `.github/workflows/phase-exit.yml`; `scripts/phase-metrics.ts`; `docs/human/phase-exits/phase-1.md`.
 

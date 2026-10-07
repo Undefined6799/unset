@@ -266,10 +266,16 @@ Every step is designed so its code follows these rules, and its tests or CI guar
     code decides pass or fail are check paths; a script CI runs to pass or fail moves under one (ruling 01:43Z), while
     generators and developer tools stay outside.
     The checks are P0.09c's. Its description follows the one PR template (P0.09; rule DL-3) and links the step.
-    Each cited record by its full path (`unset-plan/book-edits/<file>.md`, or its `docs/ai/book/` place once
-    carried), never a directory plus basenames (book edit 2026-10-07-p115m-as-built). The class a step names is
-    always pr-shape's output, not a label: there is no `kind/trusted` label, and trusted-base PRs carry `kind/feature`
-    by convention. A human can go from any file to the step that explains it, and back.
+    Each cited record by its full path (`unset-plan/book-edits/<file>.md`, relative to the shared project folder
+    with no `/mnt/project-files/` prefix, or its `docs/ai/book/` place in a PR opened after the carrier merged), one
+    full path per record, never a directory plus basenames (book edit 2026-10-07-p115m-as-built, item 7). The class
+    a step names is always pr-shape's output, not a label: there is no `kind/trusted` label, and trusted-base PRs
+    carry `kind/feature` by convention. A row title's summary, the text after the step id and its space, is at most
+    50 characters and the whole title at most 72 (`SUMMARY_MAX` and `SUBJECT_MAX`, `scripts/guards/commit-msg.ts:23-24`,
+    which `checkPrTitle` applies to the PR title because it becomes the squash subject); the step book counts it when
+    booking. A booked title already too long is shortened by the PR that builds it, whose body names both titles, and
+    the step book records it as built; no mass retitle (book edit 2026-10-07-p124b-as-built-and-p124c, amended
+    12:12Z). A human can go from any file to the step that explains it, and back.
 
 ## How the review works
 
