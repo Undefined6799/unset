@@ -164,11 +164,24 @@ describe("runtime stage", () => {
     ]);
   });
 
-  test("runtime_has_no_npm", () => {
-    expect(runtime).toContain("RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx");
+  test("runtime_has_no_package_manager", () => {
+    const removal = runtime.find((line) => line.startsWith("RUN rm -rf ")) ?? "";
+    for (const path of [
+      "/usr/local/lib/node_modules/npm",
+      "/usr/local/lib/node_modules/corepack",
+      "/opt/yarn-*",
+      ...["npm", "npx", "corepack", "yarn", "yarnpkg", "pnpm", "pnpx"].map((tool) => `/usr/local/bin/${tool}`),
+    ]) {
+      expect(removal.split(" "), path).toContain(path);
+    }
+    expect(runtime.indexOf(removal)).toBeLessThan(runtime.indexOf("USER 65532:65532"));
+    // The build and deps stages keep npm: they run npm ci.
     expect(
-      runtime.indexOf("RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx"),
-    ).toBeLessThan(runtime.indexOf("USER 65532:65532"));
+      dockerfile
+        .split(/^FROM .*$/m)
+        .slice(1, -1)
+        .join(""),
+    ).not.toContain("rm -rf");
   });
 
   test("runtime_entry_is_the_web_server", () => {
