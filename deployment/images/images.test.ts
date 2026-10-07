@@ -159,9 +159,16 @@ describe("runtime stage", () => {
 
   test("image_has_no_dev_deps", () => {
     expect(dockerfile).toMatch(/^RUN npm ci --ignore-scripts --omit=dev$/m);
-    expect(runtime.filter((line) => line.includes("node_modules"))).toEqual([
+    expect(runtime.filter((line) => line.startsWith("COPY ") && line.includes("node_modules"))).toEqual([
       "COPY --from=deps /app/node_modules node_modules",
     ]);
+  });
+
+  test("runtime_has_no_npm", () => {
+    expect(runtime).toContain("RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx");
+    expect(
+      runtime.indexOf("RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx"),
+    ).toBeLessThan(runtime.indexOf("USER 65532:65532"));
   });
 
   test("runtime_entry_is_the_web_server", () => {

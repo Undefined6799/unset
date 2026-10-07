@@ -34,6 +34,9 @@ COPY --from=deps /app/shared shared
 COPY --from=deps /app/interfaces/http interfaces/http
 COPY --from=build /app/apps/web/package.json apps/web/package.json
 COPY --from=build /app/apps/web/dist apps/web/dist
+# The server needs node only. The base's bundled npm (and its own dependencies, which Trivy flags) leaves the runtime;
+# the official Node 26 Alpine image ships no yarn or corepack (nodejs/docker-node 26/alpine3.24/Dockerfile).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER 65532:65532
 EXPOSE 8080
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
