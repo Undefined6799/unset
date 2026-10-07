@@ -3255,6 +3255,7 @@ denials to their error code.
 
 ### P1.15c — Pin the audit chain denials to code 42501
 Tags: [SEC]            Depends on: P1.15b (merged, #453)
+As built: merged by Alex at 2026-10-07T20:58:20Z as `49f5a64` (#491).
 Slice 1, feature, `tests/integration/audit/chain.test.ts` only; book edit 2026-10-07-p115b-as-built-and-p115c. Letter
 `c`: glue on P1.15b (P1.15's taken letters are b, d, g, m, q, s and x). Owner: Phase 1. `chain.test.ts:213` and
 `:221-225` match `/permission denied/` on the message, which also fires on a missing schema `USAGE`, so the test would
@@ -4717,6 +4718,7 @@ the chat bundle (P6.06); the CSP builder itself (P1.08).
 
 ### P1.23d — Bound the island props fuzz test's work
 Tags: [SEC], trusted            Depends on: —
+As built: merged by Alex at 2026-10-07T19:50:07Z as `c9aa116` (#489).
 Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing, from architecture's
 2026-10-07-test-timing-fuzz-and-image-tests. Neutral; the coordinator clears it. Owner: the third thread. Priority: the
 next free slot, ahead of every other step, because it protects every PR's check. Order: P1.23d, P1.28i, P1.28r.
@@ -5592,8 +5594,8 @@ lost in the move), cleared by the coordinator; not a classifier path.
 
 Tests: a `check.test.ts` case counting a `shared/ui-build/` file under its own key; AB-1 fixtures (pass: an internal
 import, a type-only import of the shared-ui index; fail: `node:fs` from shared/ui-build, a value import of the
-shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green and the budget prints a
-`shared/ui-build` line.
+shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green, the budget prints a
+`shared/ui-build` line, and all five fixtures behave as listed.
 
 ---
 
@@ -5675,7 +5677,7 @@ removes ownership only from paths that no longer exist.
 
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25i (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h (and P1.25j if that splits), P1.25i (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
@@ -6524,6 +6526,7 @@ word from Alex: a tightening, no `.github/` path.
 
 ### P1.28t — Close the Dockerfile reader's gaps
 Tags: [SEC]            Depends on: P1.28c (merged, #479)
+As built: merged by Alex at 2026-10-07T21:00:26Z as `38db567` (#493).
 Slice 1, feature, `deployment/images/images.test.ts` only, under the `/deployment/` security-review line; book edit
 2026-10-07-p128c-p128t-reader-gaps, with architecture's 2026-10-07-p128u-reader-gaps (amending
 2026-10-07-p128-copy-from-image-ref), which wins where they differ. Owner: Phase 1. Rule: where BuildKit's exact
@@ -6881,7 +6884,7 @@ runtime.
 
 ### P1.28h — Add the Caddyfile reader for edge checks
 
-As built: merged by Alex at 2026-10-07T19:02:30Z as `337df28` (#463), with amendments 1 to 4 below.
+As built: merged by Alex at 2026-10-07T19:02:30Z as `337df28` (#463), with points 1 to 4 below.
 
 Booked from architecture's 2026-10-07-p130s-networks-and-caddyfile-reader (point 2) by book edit
 2026-10-07-p130s-split-and-p128h. `edge.test.ts` reads the Caddyfile by regular expressions over text
@@ -6937,6 +6940,26 @@ existing `edge.test.ts` zone tests unchanged and green.
 
 ---
 
+### P1.28i — Split the edge image build into its own tests
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+As built: merged by Alex at 2026-10-07T19:49:03Z as `27cc41d` (#488).
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing. Neutral. Owner: Phase 1, which also holds
+P1.28s on the same file; P1.28i goes first to avoid a conflict (P1.28s does not depend on it).
+- The Docker build part of `deployment/edge/caddyfile.test.ts` (lines 222-236 and its `buildEdgeImage` and docker
+  helpers above them) moves to `deployment/edge/caddyfile.image.test.ts` in the same folder, with the byte-for-byte
+  check unchanged.
+- `tests/integration/deployment/edge/edge.test.ts` also builds the edge image (`buildEdgeImage()`,
+  `edge-container.ts:97`), so it is renamed `edge.image.test.ts` here and P1.28r's guard is green on arrival. The rename
+  rides the trusted PR (its path segment `deployment/edge` matches a trusted folder, `trusted-base.ts:142-150`);
+  `edge-container.ts` stays as a helper.
+- An ASVS row in `docs/human/compliance/asvs-5-l2.md` citing `edge.test.ts` or a moved test name is updated in the
+  same PR.
+
+Done when both image test files run and pass in CI (inside the one `npm test` until P1.28r) and the test count in the
+check log is unchanged.
+
+---
+
 ### P1.28s — Refuse quoted top-level tokens in the Caddyfile
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
 Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
@@ -6957,25 +6980,6 @@ Test: `refuses_quoted_top_level_token`, with two cases, `"(s)" {` and `"localhos
 
 Not booked: a future non-test helper under `deployment/` that needs Node built-ins needs its own MATRIX row first (a
 `scripts/lint` allowance, so Alex's typed line); the step that wants it books it.
-
----
-
-### P1.28i — Split the edge image build into its own tests
-Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
-Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing. Neutral. Owner: Phase 1, which also holds
-P1.28s on the same file; P1.28i goes first to avoid a conflict (P1.28s does not depend on it).
-- The Docker build part of `deployment/edge/caddyfile.test.ts` (lines 222-236 and its `buildEdgeImage` and docker
-  helpers above them) moves to `deployment/edge/caddyfile.image.test.ts` in the same folder, with the byte-for-byte
-  check unchanged.
-- `tests/integration/deployment/edge/edge.test.ts` also builds the edge image (`buildEdgeImage()`,
-  `edge-container.ts:97`), so it is renamed `edge.image.test.ts` here and P1.28r's guard is green on arrival. The rename
-  rides the trusted PR (its path segment `deployment/edge` matches a trusted folder, `trusted-base.ts:142-150`);
-  `edge-container.ts` stays as a helper.
-- An ASVS row in `docs/human/compliance/asvs-5-l2.md` citing `edge.test.ts` or a moved test name is updated in the
-  same PR.
-
-Done when both image test files run and pass in CI (inside the one `npm test` until P1.28r) and the test count in the
-check log is unchanged.
 
 ---
 
@@ -7002,6 +7006,238 @@ is not taken.
 
 Done when `npm test` prints the unit run, then the images run, and the `props.fuzz` margin no longer shares the runner
 with an xcaddy compile.
+
+---
+
+### P1.30q — Allow the deploy preflight in the boundary matrix
+
+Check class (SE-6 `q`; issue #404), `scripts/lint` only (book edit 2026-10-07-p130q-p203e). The dependency-cruiser
+MATRIX has no row for `deployment/`, so every preflight import fails with "not-in-allowed". This step adds one MATRIX
+row, `deployment-preflight`: from `^deployment/preflight/` to only itself, Node built-ins and the `yaml` package, with
+a fixture for it. It enforces architecture's location ruling (2026-10-07-p130-preflight-location-and-yaml).
+
+**Tags:** [SEC] · **Depends on:** — · **Status:** built (#406) · **Plan:** SE-6; guideline §1 (dependency-cruiser
+enforces boundaries)
+
+**Done when (tests):** `deployment_preflight_is_a_leaf`: the preflight may not import `scripts/ci/verify-images.ts`,
+`shared/`, `deployment/images/` or `pg`, and nothing may import it.
+
+If P1.30s ever needs another edge, that edge is a separate `q` step; the row is never widened inside P1.30s
+(02-shared-blocks, editor pass 2026-10-07).
+
+---
+
+### P1.30p — Add the strict Compose parser and SecretMap
+
+Feature class (issue #414), `deployment/preflight/` only (book edit 2026-10-07-p130p-parser-split; letter `p` after the P1.11p and
+P1.12p precedents). Builds `compose-parse.ts` and `secret-map.ts` (about 223 lines) as P1.30's Outputs describe them:
+the `yaml` 2.9.1 strict subset with its refusals, and the redacting `SecretMap`.
+
+**Tags:** [SEC] · **Depends on:** P1.30q · **Plan:** as P1.30
+
+**Done when (tests),** in `compose-parse.test.ts` and `secret-map.test.ts`:
+- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
+  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
+  `preflight_refuses_interpolation_in_security_fields`: each refuses, naming the feature and line (exit 2 once P1.30's
+  CLI runs it).
+- `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
+- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
+  `docker compose -f <file> config --format json --no-interpolate` agrees with the parser's normalised view on every
+  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+
+**As built** (#416, merged by Alex at 2026-10-07T03:52:55Z; book edit 2026-10-07-p130p-as-built): four files under
+`deployment/preflight/`, 223 source lines, importing only `yaml` and Node built-ins. `compose-parse.ts` sets five of
+the six parser options and omits `maxAliasCount: 0`, and `preflight_matches_compose_config` compares name, service
+set, image and ports on one synthetic fixture. No behavioural gap (every anchor and alias is refused before any
+value conversion, and the parser never calls `toJS`); P1.30 core restores it as a `toJS` layer and extends the test.
+No reopen.
+
+---
+
+### P1.30 — Deploy preflight core, C1–C12
+
+The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
+signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
+
+Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, the check runner,
+the injected verifier, checks C1–C12 and the debug-logging runbook (C12's failure points to it). P1.30p, above, builds
+the strict compose parser and `SecretMap` (book edit 2026-10-07-p130p-parser-split: P1.30 core measured 777 changed
+source lines, and the parser carries the parser-differential threat, so it gets its own review). P1.30s, below, builds
+C13–C24 except C17 (P1.30t) and C18 (P1.30u). P1.30's body says why it is over 400 lines (one runner and twelve checks
+with shared types, measured at 554). This section keeps the full design of all 24 checks; each part's tests are listed
+under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
+
+**Tags:** [SEC] · **Depends on:** P1.27, P1.30q, P1.30p · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+
+**Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
+guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
+`docs/human/runbooks/pds-debug-logging.md`; tests. The PR carries no check-path files. `/deployment/preflight/` is a
+candidate for the trusted base later, as a tightening in its own CODEOWNERS PR; unbooked.
+
+**Size:** ~470 source lines and ~470 test lines across P1.30 and P1.30s. Test lines do not count toward the 400
+budget; if P1.30's source lines pass it, the PR body says why.
+
+**Goal:** Before any `compose up` on a server, one command checks the stack against every rule that, if broken,
+would leak data or cannot be fixed later, and refuses to proceed on any failure.
+
+**Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
+files; the network table (P1.29).
+- `images.lock.json` and `cosign.pub` arrive with P1.27s, the network table with P1.29 and the retirement report with
+  P1.33a. Until then the checks that read them FAIL (below); the tests use fixtures for every input, so both parts
+  are green on main without those steps.
+- C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
+  `node scripts/ci/verify-images.ts <lock>` by a fixed path and fixed arguments, with no shell and no config key. The
+  preflight never imports `scripts/` (product code never imports tooling, `scripts/lint/.dependency-cruiser.cjs`).
+
+**Outputs:**
+- `preflight --env dev|prod --compose <file>... → exit 0 (all pass) | 1 (a check failed) | 2 (preflight could not
+  run)`. No `--skip` flag of any kind.
+- Output: one line per check, `PASS|FAIL <id> <short reason>`; never a secret value.
+- `SecretMap`: loads secret files into a map whose `toString`, `toJSON` and `inspect` return `[redacted]`; values
+  are only reachable through `secretMap.use(name, fn)`.
+- Compose is parsed from YAML by the script itself with interpolation resolved from the env files and the
+  SecretMap kept apart — **never** `docker compose config`, which prints interpolated secrets (it leaked in the
+  prototype).
+- The parser is `yaml` 2.9.1, already a direct, exact-pinned root devDependency (P0.09b), so the lockfile does not
+  change. If the preflight ever runs from an `npm ci --omit=dev` install, moving it to `dependencies` is a one-line
+  change in the same PR; by default it runs from a full CI checkout before deploy. It parses with
+  `parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, strict: true })`
+  and then **refuses**, failing closed with the reason and the line (after the walk passes, one
+  `doc.toJS({ maxAliasCount: 0 })` call per document is a second layer: `maxAliasCount` is a `ToJSOptions` field in
+  yaml 2.9.1, read only by `toJS`; book edit 2026-10-07-p130p-as-built, amended 11:58Z):
+  - more than one document;
+  - any anchor, alias or `<<` merge key;
+  - any explicit tag;
+  - duplicate keys;
+  - top-level `include` and a service `extends`;
+  - `${...}` interpolation in a security-relevant field: `image`, `privileged`, `cap_add`, `security_opt`, `user`,
+    `network_mode`, `pid`, `ipc`, `ports`, `volumes`, `devices`, `read_only`, `environment` keys, `env_file`.
+
+  Everything outside that subset is refused rather than interpreted. JSON compose files are refused: the compose
+  files are reviewed security configuration whose comments carry the reasons rules cite. The risk being managed is
+  parser differential (the preflight reading a file one way and Compose another), so a CI-only test compares the
+  preflight's view with Compose's own reading.
+
+Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in P1.30u):
+| Id | Check |
+|---|---|
+| C1 | `name:` present and equals `unset-<env>` |
+| C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
+| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it |
+| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature) |
+| C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
+| C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
+| C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
+| C8 | no variable matching `PDS_RATE_LIMIT_BYPASS_*` (`_IPS`, `_KEY`, any future one) is set in any env, any phase; present, even empty → FAIL (no bypass key, no bypass IPs; a bypass IP is also a trusted proxy, and the PDS silently truncates a CIDR to its network address, `pds/src/config/config.ts:246-248`) |
+| C9 | every referenced secret file exists, is non-empty, mode 0600, owned by the deploy user |
+| C10 | published ports: only the edge publishes 80/443; any other published port binds 127.0.0.1 |
+| C11 | SMTP: `PDS_EMAIL_SMTP_URL` present; never Mailpit (book edit 2026-10-07-no-mailpit); scheme `smtps`, or `smtp` with STARTTLS required |
+| C12 | PDS `LOG_ENABLED` unset or `false`, and `LOG_LEVEL` absent or exactly one of `info`, `warn`, `error`, `fatal`, `silent` (rider on P1.30u, book edit 2026-10-07-no-mailpit) (when on, `pino-http` logs `remoteAddress`, `remotePort` and every request header except `authorization`/`dpop`, `pds/src/logger.ts:40-58`) |
+| C13 | `PDS_LEXICON_AUTHORITY_DID` absent (it redirects resolution of **every** NSID to one DID, `pds/src/context.ts:412-419`) |
+| C14 | `PDS_DEV_MODE` absent or `false` |
+| C15 | `PDS_SERVICE_HANDLE_DOMAINS` set explicitly: exactly `.0x40.space` in dev (as built, #452); never contains `.0x40.me` |
+| C16 | `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true` (plan §5.3: "the deploy preflight fails otherwise") |
+| C17 | networks: only services in the env's network table share a network with the PDS; `db` is `internal: true` (no `mail` network, book edit 2026-10-07-no-mailpit) |
+| C18 | edge: the Caddy site for the PDS host (and every site with an upstream) imports `ratelimit.caddy` and carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (read from the config the edge image or mount serves); with C7 and C12 this is plan §5.2's "three settings" |
+| C19 | moderation mail (phase-3 PI-6): `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` present; same scheme rule as C11 (Mailpit never allowed). Without them the PDS drops every moderation receipt, alert and digest silently |
+| C20 | `PDS_MOD_SERVICE_*` absent (phase-5 F4: only `PDS_REPORT_SERVICE_*` may be set, from Phase 5) |
+| C21 | when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL. Other hostnames skip it (PASS "n/a") |
+| C22 | when the env sets `VIDEO_MASTER_MAX_BYTES` (Phase 4 on): `PDS_BLOB_UPLOAD_LIMIT` is set and ≥ it (the PDS default is 5 MB; phase-4-part1 note 10); before Phase 4, PASS "n/a" |
+| C23 | prod only (P5.07b, decision 23): `FINGERPRINT_CHECK=arachnid` and `FAKE_FINGERPRINT_LIST` absent; dev and local skip it (PASS "n/a"); the server's own boot refusal (P5.07b) is the second guard |
+| C24 | host clock (findings F-16): `timedatectl show -p NTPSynchronized --value` prints `yes`, and when `chronyc` is installed `chronyc tracking` reports a system-time offset ≤ 1 s. Service-auth JWTs (60 s), `pds-admin` envelopes (`iat`/`exp`, 5 s of future leeway) and WebAuthn assertions assume a synchronised clock. Command missing or output unparsable → FAIL. Skipped (PASS "n/a") only when `PDS_HOSTNAME` ends in `.localhost` (an agent's throwaway stack) |
+
+**Algorithm:**
+```text
+1. Parse args; unknown flag → exit 2.
+2. Load env files and secrets into SecretMap; exit 2: an env or compose file exists but cannot be read, naming the
+   file (not its content); a missing or wrongly-moded secret file is a C9 failure, exit 1 "input missing" (secret
+   files are only stat-checked, never loaded; as built, #435).
+3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
+4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error" (fail closed).
+   Network checks (C3, C4, C5) timeout 30 s each → FAIL (C5 and C24 as built, #435 and #452). An input file a check
+   reads that is absent or unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
+5. Any FAIL → exit 1. All PASS → exit 0.
+```
+
+`pds-debug-logging.md` (the only way to turn PDS logging on): Alex only; set `LOG_ENABLED=true` with
+`LOG_DESTINATION` on a tmpfs path inside the container; reproduce; copy out only the lines needed after removing
+addresses and headers; set it back to false; restart (tmpfs is purged); note the date in the runbook log. Preflight
+fails while it is on, so a debugging session cannot be forgotten across a deploy.
+
+**Edge cases and failures:**
+- No network for signature verification → C3/C4 FAIL (never pass on unknown).
+- An input a later step brings (lock, `cosign.pub`, network table, retirement report) is missing → that check FAILs,
+  `input missing: <path>`, exit 1. Exit 2 stays reserved for what the algorithm names (bad arguments, unreadable env
+  or secret files, a compose parse error). The only "n/a" passes are C21 on other hostnames, C22 before Phase 4,
+  C23 outside prod and C24 on `.localhost`.
+- An env value interpolated from a secret → the value never leaves SecretMap; the reason names the variable only.
+- `PDS_RECOVERY_DID_KEY` missing on an existing PDS → FAIL; it cannot be retrofitted into existing DID docs (vault
+  note `pds-key-custody-and-disaster-recovery`), so the message says so.
+- PDS rate limits enabled → C7 FAIL: every user would share the edge address's one bucket (3,000 requests per
+  5 min) and a busy minute would lock everyone out. Per-client limiting is the edge's job (C18). Any bypass key or
+  bypass IP → C8 FAIL. (With limits off the PDS ignores the bypass list anyway, `config.ts:242-250`; C8 still
+  fails on a value so that turning limits on later cannot silently activate a stale bypass.)
+
+**Threats:** what a deploy is allowed to start.
+  - T An unsigned or unlisted image deployed → digest, signature and provenance checks (C2–C5; their failing
+    fixtures).
+  - I A deploy setting that leaks data (PDS logging on or at debug, client address forwarded, Mailpit anywhere) → C7,
+    C11, C12, C18 (`c12_log_enabled_fails`, `c18_forwarded_header_passed_fails`).
+  - E A rate-limit bypass key or IP, dev mode, or an admin-wide lexicon redirect → C8, C13, C14
+    (`c8_any_bypass_var_fails`, `c13_lexicon_authority_did_fails`).
+  - I The preflight prints secrets → SecretMap redaction; never `docker compose config`
+    (`preflight_never_prints_secrets`, `secret_map_redacts`, `preflight_does_not_call_docker_compose_config`).
+  - S Tokens and envelopes judged against a drifting host clock → C24 (`c24_clock_unsynchronised_fails`).
+  - E A check skipped or erroring is read as a pass → no skip flag; a throwing check fails; a missing input fails
+    (`preflight_no_skip_flag`, `preflight_check_throws_fails_closed`, `missing_input_fails_check_not_run`).
+  - T The preflight approves a file Compose reads differently → strict YAML subset, refusals, and a CI comparison
+    with `docker compose config` (`preflight_refuses_*`, `preflight_matches_compose_config`).
+
+**Done when (tests):**
+- The all-good fixture → exit 0. One failing fixture per check C1–C12 → exit 1 with that id. Named ones:
+  `c7_pds_rate_limits_enabled_fails`, `c7_pds_rate_limits_unset_fails`, `c8_any_bypass_var_fails` (`_KEY`, the edge's
+  IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`.
+- `preflight_never_prints_secrets`: fixture secrets with a canary string → canary absent from all output.
+- `preflight_no_skip_flag`: `--skip C3` → exit 2.
+- `preflight_check_throws_fails_closed`.
+- `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
+- `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
+- The parser and `SecretMap` tests are P1.30p's, except two that P1.30 core carries (book edit
+  2026-10-07-p130p-as-built); the body says why the option was missing in P1.30p and that it is restored:
+  - `parser_sets_max_alias_count_zero`: `maxAliasCount` is a `ToJSOptions` field that only `toJS` reads (yaml
+    2.9.1), so it is not a parse option (the earlier "one-line option" wording is withdrawn). After the refusal walk
+    passes, the parser calls `doc.toJS({ maxAliasCount: 0 })` once per document, maps any error to a `ParseError`
+    naming the file, and uses the result for nothing else; the typed view still comes from the walk. Two cases: a
+    document whose only fault is one alias is refused by the walk, as today; and the `toJS` layer refuses the same
+    document on its own, through a small exported helper (for example `expandNoAliases(doc, file)`) called directly
+    with the walk skipped, which proves the layer is live. The body says why the option was missing in P1.30p, why
+    it moved to `toJS`, and that it is restored.
+  - `preflight_matches_compose_config`, extended: it compares the parser's full view (name, services, image, ports,
+    `env_file`, `environment`, `secrets`) with `docker compose config --format json --no-interpolate`. Networks are
+    not compared: the parser reads no `networks` key (it only refuses interpolation in `network_mode`); a later step
+    that makes it read networks adds them here. `--no-interpolate` keeps `${VAR}` literal, so no secret value is
+    printed. It runs over every `compose*.yaml` in the
+    repo found by glob plus the synthetic fixture. Until the first real compose file exists it runs on the fixture
+    alone and says so in its output rather than passing silently.
+- `pds_device_row_has_no_client_ip` moved to P1.29, and with its split to P1.29t (book edits 2026-10-07-p130-split
+  and 2026-10-07-p129-split).
+
+**Reuse** (all provisional — for reuse review):
+- Vault notes `pin-image-index-digests`, `pds-key-custody-and-disaster-recovery` → LESSON.
+- Prototype deploy scripts → LESSON at most (they used `docker compose config`).
+
+**As built** (#435, merged by Alex at 2026-10-07T12:20:25Z as `57b94e1`; book edit 2026-10-07-p130-as-built): the
+`toJS` layer, the two-case `parser_sets_max_alias_count_zero`, the glob and networks left out, as
+2026-10-07-p130p-as-built says. 580 counted lines, 30 over the ~550 split line (the 26-line alias layer, 12 of it a
+re-wrapped import), named under "unsure"; no action. The body cited three carried records by `unset-plan/` paths and
+missed 2026-10-07-p130p-parser-split, which set the scope (the citation rule stands); it did not name the
+security-review path `docs/human/runbooks/pds-debug-logging.md` (the rule already says a body names every one); its
+"departure" from `scripts/preflight/` was stale. C7's test (`preflight.test.ts:166`) sets `PDS_CRAWLERS` to
+`https://bsky.network` and stays: there the real relay host is the subject (00-README's real-host rule). C9's exit 1
+for a missing secret file is right, and step 2 above is narrowed to match. C5 gained the 30 s network timeout, a
+tightening. The C8 test addresses ride on P1.30s.
+
+**Not in this step:** checks C13–C24 (P1.30s, P1.30t, P1.30u); running the deploy (P5.03); backup checks (P5.04).
 
 ---
 
@@ -7316,238 +7552,6 @@ dev-seed:
 - `deploy/secrets/pds.env.example` → LESSON: its SMTP warning.
 
 **Not in this step:** production compose (P5.02/P5.03); Tap decisions (P3.01); real SMTP (P2.25 prerequisite).
-
----
-
-### P1.30q — Allow the deploy preflight in the boundary matrix
-
-Check class (SE-6 `q`; issue #404), `scripts/lint` only (book edit 2026-10-07-p130q-p203e). The dependency-cruiser
-MATRIX has no row for `deployment/`, so every preflight import fails with "not-in-allowed". This step adds one MATRIX
-row, `deployment-preflight`: from `^deployment/preflight/` to only itself, Node built-ins and the `yaml` package, with
-a fixture for it. It enforces architecture's location ruling (2026-10-07-p130-preflight-location-and-yaml).
-
-**Tags:** [SEC] · **Depends on:** — · **Status:** built (#406) · **Plan:** SE-6; guideline §1 (dependency-cruiser
-enforces boundaries)
-
-**Done when (tests):** `deployment_preflight_is_a_leaf`: the preflight may not import `scripts/ci/verify-images.ts`,
-`shared/`, `deployment/images/` or `pg`, and nothing may import it.
-
-If P1.30s ever needs another edge, that edge is a separate `q` step; the row is never widened inside P1.30s
-(02-shared-blocks, editor pass 2026-10-07).
-
----
-
-### P1.30p — Add the strict Compose parser and SecretMap
-
-Feature class (issue #414), `deployment/preflight/` only (book edit 2026-10-07-p130p-parser-split; letter `p` after the P1.11p and
-P1.12p precedents). Builds `compose-parse.ts` and `secret-map.ts` (about 223 lines) as P1.30's Outputs describe them:
-the `yaml` 2.9.1 strict subset with its refusals, and the redacting `SecretMap`.
-
-**Tags:** [SEC] · **Depends on:** P1.30q · **Plan:** as P1.30
-
-**Done when (tests),** in `compose-parse.test.ts` and `secret-map.test.ts`:
-- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
-  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
-  `preflight_refuses_interpolation_in_security_fields`: each refuses, naming the feature and line (exit 2 once P1.30's
-  CLI runs it).
-- `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
-- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
-  `docker compose -f <file> config --format json --no-interpolate` agrees with the parser's normalised view on every
-  field the preflight checks. The test may call `docker compose config`; the preflight never does.
-
-**As built** (#416, merged by Alex at 2026-10-07T03:52:55Z; book edit 2026-10-07-p130p-as-built): four files under
-`deployment/preflight/`, 223 source lines, importing only `yaml` and Node built-ins. `compose-parse.ts` sets five of
-the six parser options and omits `maxAliasCount: 0`, and `preflight_matches_compose_config` compares name, service
-set, image and ports on one synthetic fixture. No behavioural gap (every anchor and alias is refused before any
-value conversion, and the parser never calls `toJS`); P1.30 core restores it as a `toJS` layer and extends the test.
-No reopen.
-
----
-
-### P1.30 — Deploy preflight core, C1–C12
-
-The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
-signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
-
-Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, the check runner,
-the injected verifier, checks C1–C12 and the debug-logging runbook (C12's failure points to it). P1.30p, above, builds
-the strict compose parser and `SecretMap` (book edit 2026-10-07-p130p-parser-split: P1.30 core measured 777 changed
-source lines, and the parser carries the parser-differential threat, so it gets its own review). P1.30s, below, builds
-C13–C24 except C17 (P1.30t) and C18 (P1.30u). P1.30's body says why it is over 400 lines (one runner and twelve checks
-with shared types, measured at 554). This section keeps the full design of all 24 checks; each part's tests are listed
-under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
-
-**Tags:** [SEC] · **Depends on:** P1.27, P1.30q, P1.30p · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
-
-**Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
-guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
-`docs/human/runbooks/pds-debug-logging.md`; tests. The PR carries no check-path files. `/deployment/preflight/` is a
-candidate for the trusted base later, as a tightening in its own CODEOWNERS PR; unbooked.
-
-**Size:** ~470 source lines and ~470 test lines across P1.30 and P1.30s. Test lines do not count toward the 400
-budget; if P1.30's source lines pass it, the PR body says why.
-
-**Goal:** Before any `compose up` on a server, one command checks the stack against every rule that, if broken,
-would leak data or cannot be fixed later, and refuses to proceed on any failure.
-
-**Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
-files; the network table (P1.29).
-- `images.lock.json` and `cosign.pub` arrive with P1.27s, the network table with P1.29 and the retirement report with
-  P1.33a. Until then the checks that read them FAIL (below); the tests use fixtures for every input, so both parts
-  are green on main without those steps.
-- C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
-  `node scripts/ci/verify-images.ts <lock>` by a fixed path and fixed arguments, with no shell and no config key. The
-  preflight never imports `scripts/` (product code never imports tooling, `scripts/lint/.dependency-cruiser.cjs`).
-
-**Outputs:**
-- `preflight --env dev|prod --compose <file>... → exit 0 (all pass) | 1 (a check failed) | 2 (preflight could not
-  run)`. No `--skip` flag of any kind.
-- Output: one line per check, `PASS|FAIL <id> <short reason>`; never a secret value.
-- `SecretMap`: loads secret files into a map whose `toString`, `toJSON` and `inspect` return `[redacted]`; values
-  are only reachable through `secretMap.use(name, fn)`.
-- Compose is parsed from YAML by the script itself with interpolation resolved from the env files and the
-  SecretMap kept apart — **never** `docker compose config`, which prints interpolated secrets (it leaked in the
-  prototype).
-- The parser is `yaml` 2.9.1, already a direct, exact-pinned root devDependency (P0.09b), so the lockfile does not
-  change. If the preflight ever runs from an `npm ci --omit=dev` install, moving it to `dependencies` is a one-line
-  change in the same PR; by default it runs from a full CI checkout before deploy. It parses with
-  `parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, strict: true })`
-  and then **refuses**, failing closed with the reason and the line (after the walk passes, one
-  `doc.toJS({ maxAliasCount: 0 })` call per document is a second layer: `maxAliasCount` is a `ToJSOptions` field in
-  yaml 2.9.1, read only by `toJS`; book edit 2026-10-07-p130p-as-built, amended 11:58Z):
-  - more than one document;
-  - any anchor, alias or `<<` merge key;
-  - any explicit tag;
-  - duplicate keys;
-  - top-level `include` and a service `extends`;
-  - `${...}` interpolation in a security-relevant field: `image`, `privileged`, `cap_add`, `security_opt`, `user`,
-    `network_mode`, `pid`, `ipc`, `ports`, `volumes`, `devices`, `read_only`, `environment` keys, `env_file`.
-
-  Everything outside that subset is refused rather than interpreted. JSON compose files are refused: the compose
-  files are reviewed security configuration whose comments carry the reasons rules cite. The risk being managed is
-  parser differential (the preflight reading a file one way and Compose another), so a CI-only test compares the
-  preflight's view with Compose's own reading.
-
-Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in P1.30u):
-| Id | Check |
-|---|---|
-| C1 | `name:` present and equals `unset-<env>` |
-| C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
-| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it |
-| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature) |
-| C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
-| C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
-| C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
-| C8 | no variable matching `PDS_RATE_LIMIT_BYPASS_*` (`_IPS`, `_KEY`, any future one) is set in any env, any phase; present, even empty → FAIL (no bypass key, no bypass IPs; a bypass IP is also a trusted proxy, and the PDS silently truncates a CIDR to its network address, `pds/src/config/config.ts:246-248`) |
-| C9 | every referenced secret file exists, is non-empty, mode 0600, owned by the deploy user |
-| C10 | published ports: only the edge publishes 80/443; any other published port binds 127.0.0.1 |
-| C11 | SMTP: `PDS_EMAIL_SMTP_URL` present; never Mailpit (book edit 2026-10-07-no-mailpit); scheme `smtps`, or `smtp` with STARTTLS required |
-| C12 | PDS `LOG_ENABLED` unset or `false`, and `LOG_LEVEL` absent or exactly one of `info`, `warn`, `error`, `fatal`, `silent` (rider on P1.30u, book edit 2026-10-07-no-mailpit) (when on, `pino-http` logs `remoteAddress`, `remotePort` and every request header except `authorization`/`dpop`, `pds/src/logger.ts:40-58`) |
-| C13 | `PDS_LEXICON_AUTHORITY_DID` absent (it redirects resolution of **every** NSID to one DID, `pds/src/context.ts:412-419`) |
-| C14 | `PDS_DEV_MODE` absent or `false` |
-| C15 | `PDS_SERVICE_HANDLE_DOMAINS` set explicitly: exactly `.0x40.space` in dev (as built, #452); never contains `.0x40.me` |
-| C16 | `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true` (plan §5.3: "the deploy preflight fails otherwise") |
-| C17 | networks: only services in the env's network table share a network with the PDS; `db` is `internal: true` (no `mail` network, book edit 2026-10-07-no-mailpit) |
-| C18 | edge: the Caddy site for the PDS host (and every site with an upstream) imports `ratelimit.caddy` and carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (read from the config the edge image or mount serves); with C7 and C12 this is plan §5.2's "three settings" |
-| C19 | moderation mail (phase-3 PI-6): `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` present; same scheme rule as C11 (Mailpit never allowed). Without them the PDS drops every moderation receipt, alert and digest silently |
-| C20 | `PDS_MOD_SERVICE_*` absent (phase-5 F4: only `PDS_REPORT_SERVICE_*` may be set, from Phase 5) |
-| C21 | when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL. Other hostnames skip it (PASS "n/a") |
-| C22 | when the env sets `VIDEO_MASTER_MAX_BYTES` (Phase 4 on): `PDS_BLOB_UPLOAD_LIMIT` is set and ≥ it (the PDS default is 5 MB; phase-4-part1 note 10); before Phase 4, PASS "n/a" |
-| C23 | prod only (P5.07b, decision 23): `FINGERPRINT_CHECK=arachnid` and `FAKE_FINGERPRINT_LIST` absent; dev and local skip it (PASS "n/a"); the server's own boot refusal (P5.07b) is the second guard |
-| C24 | host clock (findings F-16): `timedatectl show -p NTPSynchronized --value` prints `yes`, and when `chronyc` is installed `chronyc tracking` reports a system-time offset ≤ 1 s. Service-auth JWTs (60 s), `pds-admin` envelopes (`iat`/`exp`, 5 s of future leeway) and WebAuthn assertions assume a synchronised clock. Command missing or output unparsable → FAIL. Skipped (PASS "n/a") only when `PDS_HOSTNAME` ends in `.localhost` (an agent's throwaway stack) |
-
-**Algorithm:**
-```text
-1. Parse args; unknown flag → exit 2.
-2. Load env files and secrets into SecretMap; exit 2: an env or compose file exists but cannot be read, naming the
-   file (not its content); a missing or wrongly-moded secret file is a C9 failure, exit 1 "input missing" (secret
-   files are only stat-checked, never loaded; as built, #435).
-3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
-4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error" (fail closed).
-   Network checks (C3, C4, C5) timeout 30 s each → FAIL (C5 and C24 as built, #435 and #452). An input file a check
-   reads that is absent or unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
-5. Any FAIL → exit 1. All PASS → exit 0.
-```
-
-`pds-debug-logging.md` (the only way to turn PDS logging on): Alex only; set `LOG_ENABLED=true` with
-`LOG_DESTINATION` on a tmpfs path inside the container; reproduce; copy out only the lines needed after removing
-addresses and headers; set it back to false; restart (tmpfs is purged); note the date in the runbook log. Preflight
-fails while it is on, so a debugging session cannot be forgotten across a deploy.
-
-**Edge cases and failures:**
-- No network for signature verification → C3/C4 FAIL (never pass on unknown).
-- An input a later step brings (lock, `cosign.pub`, network table, retirement report) is missing → that check FAILs,
-  `input missing: <path>`, exit 1. Exit 2 stays reserved for what the algorithm names (bad arguments, unreadable env
-  or secret files, a compose parse error). The only "n/a" passes are C21 on other hostnames, C22 before Phase 4,
-  C23 outside prod and C24 on `.localhost`.
-- An env value interpolated from a secret → the value never leaves SecretMap; the reason names the variable only.
-- `PDS_RECOVERY_DID_KEY` missing on an existing PDS → FAIL; it cannot be retrofitted into existing DID docs (vault
-  note `pds-key-custody-and-disaster-recovery`), so the message says so.
-- PDS rate limits enabled → C7 FAIL: every user would share the edge address's one bucket (3,000 requests per
-  5 min) and a busy minute would lock everyone out. Per-client limiting is the edge's job (C18). Any bypass key or
-  bypass IP → C8 FAIL. (With limits off the PDS ignores the bypass list anyway, `config.ts:242-250`; C8 still
-  fails on a value so that turning limits on later cannot silently activate a stale bypass.)
-
-**Threats:** what a deploy is allowed to start.
-  - T An unsigned or unlisted image deployed → digest, signature and provenance checks (C2–C5; their failing
-    fixtures).
-  - I A deploy setting that leaks data (PDS logging on or at debug, client address forwarded, Mailpit anywhere) → C7,
-    C11, C12, C18 (`c12_log_enabled_fails`, `c18_forwarded_header_passed_fails`).
-  - E A rate-limit bypass key or IP, dev mode, or an admin-wide lexicon redirect → C8, C13, C14
-    (`c8_any_bypass_var_fails`, `c13_lexicon_authority_did_fails`).
-  - I The preflight prints secrets → SecretMap redaction; never `docker compose config`
-    (`preflight_never_prints_secrets`, `secret_map_redacts`, `preflight_does_not_call_docker_compose_config`).
-  - S Tokens and envelopes judged against a drifting host clock → C24 (`c24_clock_unsynchronised_fails`).
-  - E A check skipped or erroring is read as a pass → no skip flag; a throwing check fails; a missing input fails
-    (`preflight_no_skip_flag`, `preflight_check_throws_fails_closed`, `missing_input_fails_check_not_run`).
-  - T The preflight approves a file Compose reads differently → strict YAML subset, refusals, and a CI comparison
-    with `docker compose config` (`preflight_refuses_*`, `preflight_matches_compose_config`).
-
-**Done when (tests):**
-- The all-good fixture → exit 0. One failing fixture per check C1–C12 → exit 1 with that id. Named ones:
-  `c7_pds_rate_limits_enabled_fails`, `c7_pds_rate_limits_unset_fails`, `c8_any_bypass_var_fails` (`_KEY`, the edge's
-  IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`.
-- `preflight_never_prints_secrets`: fixture secrets with a canary string → canary absent from all output.
-- `preflight_no_skip_flag`: `--skip C3` → exit 2.
-- `preflight_check_throws_fails_closed`.
-- `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
-- `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
-- The parser and `SecretMap` tests are P1.30p's, except two that P1.30 core carries (book edit
-  2026-10-07-p130p-as-built); the body says why the option was missing in P1.30p and that it is restored:
-  - `parser_sets_max_alias_count_zero`: `maxAliasCount` is a `ToJSOptions` field that only `toJS` reads (yaml
-    2.9.1), so it is not a parse option (the earlier "one-line option" wording is withdrawn). After the refusal walk
-    passes, the parser calls `doc.toJS({ maxAliasCount: 0 })` once per document, maps any error to a `ParseError`
-    naming the file, and uses the result for nothing else; the typed view still comes from the walk. Two cases: a
-    document whose only fault is one alias is refused by the walk, as today; and the `toJS` layer refuses the same
-    document on its own, through a small exported helper (for example `expandNoAliases(doc, file)`) called directly
-    with the walk skipped, which proves the layer is live. The body says why the option was missing in P1.30p, why
-    it moved to `toJS`, and that it is restored.
-  - `preflight_matches_compose_config`, extended: it compares the parser's full view (name, services, image, ports,
-    `env_file`, `environment`, `secrets`) with `docker compose config --format json --no-interpolate`. Networks are
-    not compared: the parser reads no `networks` key (it only refuses interpolation in `network_mode`); a later step
-    that makes it read networks adds them here. `--no-interpolate` keeps `${VAR}` literal, so no secret value is
-    printed. It runs over every `compose*.yaml` in the
-    repo found by glob plus the synthetic fixture. Until the first real compose file exists it runs on the fixture
-    alone and says so in its output rather than passing silently.
-- `pds_device_row_has_no_client_ip` moved to P1.29, and with its split to P1.29t (book edits 2026-10-07-p130-split
-  and 2026-10-07-p129-split).
-
-**Reuse** (all provisional — for reuse review):
-- Vault notes `pin-image-index-digests`, `pds-key-custody-and-disaster-recovery` → LESSON.
-- Prototype deploy scripts → LESSON at most (they used `docker compose config`).
-
-**As built** (#435, merged by Alex at 2026-10-07T12:20:25Z as `57b94e1`; book edit 2026-10-07-p130-as-built): the
-`toJS` layer, the two-case `parser_sets_max_alias_count_zero`, the glob and networks left out, as
-2026-10-07-p130p-as-built says. 580 counted lines, 30 over the ~550 split line (the 26-line alias layer, 12 of it a
-re-wrapped import), named under "unsure"; no action. The body cited three carried records by `unset-plan/` paths and
-missed 2026-10-07-p130p-parser-split, which set the scope (the citation rule stands); it did not name the
-security-review path `docs/human/runbooks/pds-debug-logging.md` (the rule already says a body names every one); its
-"departure" from `scripts/preflight/` was stale. C7's test (`preflight.test.ts:166`) sets `PDS_CRAWLERS` to
-`https://bsky.network` and stays: there the real relay host is the subject (00-README's real-host rule). C9's exit 1
-for a missing secret file is right, and step 2 above is narrowed to match. C5 gained the 30 s network timeout, a
-tightening. The C8 test addresses ride on P1.30s.
-
-**Not in this step:** checks C13–C24 (P1.30s, P1.30t, P1.30u); running the deploy (P5.03); backup checks (P5.04).
 
 ---
 
