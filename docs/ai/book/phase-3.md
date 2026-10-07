@@ -118,7 +118,7 @@ flowchart TD
   P300 --> P303
   P300 --> P316
   P300 --> P317
-  P129[P1.29 dev compose]:::ext --> P301
+  P129[P1.29t dev stack tested]:::ext --> P301
   P206[P2.06 callback]:::ext --> P302
   P112[P1.12 roles]:::ext --> P303
   P113[P1.13 erasure registry]:::ext --> P303
@@ -422,7 +422,7 @@ Not in this step: building anything; editing other phases (gaps go to the editor
 Diagram: none.
 
 ### P3.01 — Tap spike
-Tags: [SPIKE]            Depends on: P3.00, P1.29            Plan: §3 (Tap row), §5.2 "Indexer and Tap trust rules", §8 Phase 5 egress, §10 risks, §11 Q13
+Tags: [SPIKE]            Depends on: P3.00, P1.29t            Plan: §3 (Tap row), §5.2 "Indexer and Tap trust rules", §8 Phase 5 egress, §10 risks, §11 Q13
 Where: `deployment/tap/` (build recipe only), `spikes/tap/` (throwaway harness, deleted after the ADR), `docs/human/decisions/00xx-ingest-via-tap.md`
 Size: ~250 lines of throwaway harness, ~0 kept source; the ADR ~2 pages
 

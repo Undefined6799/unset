@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 124 steps: 103 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 131 steps: 110 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -228,11 +228,18 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
+| P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
+| P1.29k | Migrate image (separate Dockerfile), syncRolePasswords wiring, postgres in the lock | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.11p, P1.28, P1.30t | `phase-1.md` |
+| P1.29a | PDS and Mailpit vendor images and services in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a | `phase-1.md` |
+| P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
-| P1.30s | Deploy preflight C13–C24 | [SEC] | P1.30 | `phase-1.md` |
+| P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
+| P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
+| P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -257,7 +264,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P1.30s, P2.01a, P2.01m | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -351,11 +358,18 @@ flowchart TD
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_28b["P1.28b Edge leftovers"]
-  P1_29["P1.29 Development stack"]
+  P1_28h["P1.28h Caddyfile reader"]
+  P1_29k["P1.29k Migrate image, postgres locked"]
+  P1_29["P1.29 Development stack, no PDS"]
+  P1_29a["P1.29a PDS and Mailpit"]
+  P1_29s["P1.29s Dev seed and precheck"]
+  P1_29t["P1.29t Running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
   P1_30p["P1.30p compose parser and SecretMap"]
   P1_30["P1.30 Deploy preflight core"]
-  P1_30s["P1.30s Deploy preflight C13–C24"]
+  P1_30s["P1.30s Preflight C13–C24 but C17, C18"]
+  P1_30t["P1.30t Preflight C17 networks"]
+  P1_30u["P1.30u Preflight C18 edge zones"]
   P1_32["P1.32 Permanent choices"]
   P1_31["P1.31 Lexicons package"]
   P1_37["P1.37 Legal paperwork"]
@@ -482,6 +496,7 @@ flowchart TD
   P1_11p --> P1_29
   P1_28 --> P1_29
   P1_28 --> P1_28b
+  P1_28b --> P1_28h
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -526,10 +541,21 @@ flowchart TD
   P2_08 --> P2_13a
   P2_12 --> P2_13a
   P1_26 --> P2_13a
-  P1_29 --> P2_13a
+  P1_29k --> P1_29
+  P1_30t --> P1_29
+  P1_29 --> P1_29a
+  P1_29a --> P1_29s
+  P1_29a --> P1_29t
+  P1_29s --> P1_29t
+  P1_29t --> P2_13a
   P1_30 --> P2_13a
   P1_30 --> P1_30s
   P1_30s --> P2_13a
+  P1_30 --> P1_30t
+  P1_30t --> P2_13a
+  P1_30 --> P1_30u
+  P1_28h --> P1_30u
+  P1_30u --> P2_13a
   P1_03 --> P1_04k
   P1_03 --> P1_03w
   P1_03 --> P1_04l
@@ -542,8 +568,8 @@ flowchart TD
   P1_12 --> P1_12p
   P1_12p --> P1_12x
   P1_12t --> P1_12x
-  P1_12p --> P1_29
-  P1_12x --> P1_29
+  P1_12p --> P1_29k
+  P1_12x --> P1_29k
   P1_06 --> P1_06p
   P1_06q --> P1_06p
   P1_05e --> P1_06e
@@ -600,7 +626,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.33, P1.33a, P0.12, P0.11, P1.29 | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
@@ -635,7 +661,7 @@ Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
 | P2.09k | `pds-admin` egress policy in `net-guard` (split from P2.09, SE-6) | [SEC] | P1.18a | `phase-2.md` |
-| P2.09 | Minimal `pds-admin` (`invite.issue` only) | [SEC] | P2.09k, P1.27, P1.29, P1.34 | `phase-2.md` |
+| P2.09 | Minimal `pds-admin` (`invite.issue` only) | [SEC] | P2.09k, P1.27, P1.29t, P1.34 | `phase-2.md` |
 | P2.09d | `pds-admin` in the dev stack (split from P2.09, SE-6) | [SEC] | P2.09 | `phase-2.md` |
 | P2.10 | Invites and `/join?invite=` | [SEC] | P2.09d, P2.09, P2.05, P1.14, P1.14d | `phase-2.md` |
 | P2.14 | Module identity seam | [SEC] | P1.16, P2.03 | `phase-2.md` |
@@ -702,7 +728,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
 | P3.00 | Refine Phase 3 | [STOP] | P2.26 (every Phase 0–2 step merged) | `phase-3.md` |
-| P3.01 | Tap spike | [SPIKE] | P3.00, P1.29 | `phase-3.md` |
+| P3.01 | Tap spike | [SPIKE] | P3.00, P1.29t | `phase-3.md` |
 | P3.03 | Index schema | [SEC] | P3.00, P1.12, P1.13 | `phase-3.md` |
 | P3.02 | Tap deployment and repo tracking | [SEC] | P3.01, P3.03, P2.06 | `phase-3.md` |
 | P3.04 | Ingest invariants as tests first | — | P3.03 | `phase-3.md` |

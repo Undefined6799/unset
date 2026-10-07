@@ -150,7 +150,7 @@ flowchart TD
   P205 --> P206[P2.06 callback]; P203 --> P206; P202 --> P206
   P204 --> P207[P2.07 resilience]
   P206 --> P208[P2.08 logout]
-  P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29 compose.dev] --> P209; P134 --> P209
+  P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
@@ -1884,7 +1884,7 @@ Not in this step: the profile editor (P2.21); privacy switch actions (P2.22); ex
 Diagram: none.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
-Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P1.30s, P2.01a, P2.01m            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
+Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
 Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` dev stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation
@@ -2042,7 +2042,7 @@ Done when (tests): `pds_admin_policy_exact_origin`; `pds_admin_policy_private_on
 Reuse: none. Not in this step: `pds-admin` itself (P2.09); the compose service (P2.09d). Diagram: none.
 
 ### P2.09 — Minimal `pds-admin` (`invite.issue` only)
-Tags: [SEC]            Depends on: P2.09k, P1.27, P1.29, P1.34            Plan: §5.2 "`pds-admin`", "Rules for the handle domain"; admin design §6.2 envelope, TB6
+Tags: [SEC]            Depends on: P2.09k, P1.27, P1.29t, P1.34            Plan: §5.2 "`pds-admin`", "Rules for the handle domain"; admin design §6.2 envelope, TB6
 Where: `interfaces/pds-admin/{server.mjs, verify-envelope.mjs, jcs.mjs, log.mjs, jti.mjs, pds.mjs, reserved-labels.json, cli.mjs}`,
   `tests/integration/pds-admin/*.test.ts` (Vitest), `shared/admin-envelope/sign.ts` (the `web` side signer); all
   trusted base, so this PR touches nothing else (SE-6). The `net-guard` policy is **P2.09k**; the
