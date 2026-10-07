@@ -278,3 +278,12 @@ their own, but no step may rebuild them.
   books the matrix row as its own `q` part first, with a leaf or edge test that encodes the folder's allowed imports.
   The feature PR never widens the matrix. First use: P1.30q for `deployment/preflight/` (book edit
   2026-10-07-p130q-p203e).
+
+### Editor pass (2026-10-07, known-answer vectors)
+
+- Test-fixture note: fixtures carry no secret-shaped strings (no base64 or long hex), so gitleaks' generic-api-key
+  rule never needs an exception. Known-answer vectors (`*.vector.json`) may carry long hex when every input is a
+  visibly synthetic pattern, the expected output is reproducible from a documented encoding, and gitleaks passes
+  with no allowlist change. If gitleaks flags such a file, the PR stops and comes back: an allowlist entry is a
+  loosening and needs Alex's word. First use: `tests/integration/postgres/audit-row-hash.vector.json` (P1.15m,
+  encoding in 0008's comment; book edit 2026-10-07-p115m-as-built).

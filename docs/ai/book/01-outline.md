@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 115 steps: 94 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 118 steps: 97 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -210,6 +210,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24k | UI kit 2b: chrome, no-JS | — | P1.24a | `phase-1.md` |
 | P1.24f | UI kit 2c: feed and feedback, no-JS | — | P1.24k | `phase-1.md` |
 | P1.24j | Islands, budget-measured | — | P1.24f | `phase-1.md` |
+| P1.24b | Toast and select islands within the JS budget (per-icon drawing modules first) | feature | P1.24j | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24j | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
@@ -220,9 +221,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
+| P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
-| P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q | `phase-1.md` |
+| P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
+| P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
 | P1.30s | Deploy preflight C13–C24 | [SEC] | P1.30 | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
@@ -236,7 +239,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
-| P2.03x | Session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
+| P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
 | P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
 | P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01 | `phase-2.md` |
@@ -325,6 +328,7 @@ flowchart TD
   P1_24k["P1.24k UI kit: chrome"]
   P1_24f["P1.24f UI kit: feed and feedback"]
   P1_24j["P1.24j Islands"]
+  P1_24b["P1.24b toast and select islands"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -334,8 +338,10 @@ flowchart TD
   P1_28v["P1.28v mirror scan per stage"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
+  P1_28b["P1.28b Edge leftovers"]
   P1_29["P1.29 Development stack"]
   P1_30q["P1.30q preflight boundary row"]
+  P1_30p["P1.30p compose parser and SecretMap"]
   P1_30["P1.30 Deploy preflight core"]
   P1_30s["P1.30s Deploy preflight C13–C24"]
   P1_32["P1.32 Permanent choices"]
@@ -444,6 +450,7 @@ flowchart TD
   P1_24a --> P1_24k
   P1_24k --> P1_24f
   P1_24f --> P1_24j
+  P1_24j --> P1_24b
   P1_24k --> P1_25
   P1_24j --> P1_26
   P1_25 --> P1_26
@@ -458,8 +465,11 @@ flowchart TD
   P1_27 --> P1_28
   P1_11p --> P1_29
   P1_28 --> P1_29
+  P1_28 --> P1_28b
   P1_27 --> P1_30
   P1_30q --> P1_30
+  P1_30q --> P1_30p
+  P1_30p --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
   P1_18 --> P2_01
@@ -559,7 +569,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -577,7 +587,6 @@ Arachnid application, and the Phase 1 exit.
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
-| P1.24b | Remaining islands, after the budget ruling (added step) | — | P1.24j, plus an architecture ruling (runtime share or budget raise) | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
 

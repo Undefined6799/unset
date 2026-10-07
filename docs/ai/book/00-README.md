@@ -265,8 +265,11 @@ Every step is designed so its code follows these rules, and its tests or CI guar
     work touches only check paths, tooling, scripts, tests and docs stays one step. Only the `scripts/` folders whose
     code decides pass or fail are check paths; a script CI runs to pass or fail moves under one (ruling 01:43Z), while
     generators and developer tools stay outside.
-    The checks are P0.09c's. Its description follows the one PR template (P0.09; rule DL-3) and links the step. A
-    human can go from any file to the step that explains it, and back.
+    The checks are P0.09c's. Its description follows the one PR template (P0.09; rule DL-3) and links the step.
+    Each cited record by its full path (`unset-plan/book-edits/<file>.md`, or its `docs/ai/book/` place once
+    carried), never a directory plus basenames (book edit 2026-10-07-p115m-as-built). The class a step names is
+    always pr-shape's output, not a label: there is no `kind/trusted` label, and trusted-base PRs carry `kind/feature`
+    by convention. A human can go from any file to the step that explains it, and back.
 
 ## How the review works
 

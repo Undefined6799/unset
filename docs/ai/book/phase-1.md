@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
-  P1.29, P1.30q, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28, P1.28b,
+  P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -163,6 +163,7 @@ flowchart LR
   P1_24k["P1.24k UI kit: chrome, no-JS"]
   P1_24f["P1.24f UI kit: feed and feedback, no-JS"]
   P1_24j["P1.24j islands, budget-measured"]
+  P1_24b["P1.24b toast and select islands"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -172,8 +173,10 @@ flowchart LR
   P1_28v["P1.28v mirror scan per stage [ALEX]"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
+  P1_28b["P1.28b edge leftovers"]
   P1_29["P1.29 compose.dev.yaml"]
   P1_30q["P1.30q preflight boundary row"]
+  P1_30p["P1.30p compose parser and SecretMap"]
   P1_30["P1.30 deploy preflight core"]
   P1_30s["P1.30s preflight C13–C24"]
   P1_31["P1.31 lexicons package"]
@@ -202,6 +205,7 @@ flowchart LR
   P1_24a --> P1_24k
   P1_24k --> P1_24f
   P1_24f --> P1_24j
+  P1_24j --> P1_24b
   P1_24k -.-> P1_25
   P1_24j -.-> P1_26
   P1_08 --> P1_25
@@ -219,8 +223,11 @@ flowchart LR
   P1_11 --> P1_29
   P1_27 --> P1_29
   P1_28 -.-> P1_29
+  P1_28 --> P1_28b
   P1_27 --> P1_30
   P1_30q --> P1_30
+  P1_30q --> P1_30p
+  P1_30p --> P1_30
   P1_29 -.-> P1_30
   P1_01 --> P1_31
   P1_32 -.-> P1_31
@@ -2870,7 +2877,7 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `audit.row_hash`,
      `audit.append`, the triggers, auditor SELECT and the default-privileges line; the `grant-matrix.json` and
      `erasure-registry.json` rows. Tests in `tests/integration/postgres/audit.test.ts`: `append_as_admin`,
-     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `append_has_no_pii_parameter`,
+     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `append_has_no_pii_argument`,
      `concurrent_appends`, `audit_flood_does_not_block`, `registry_rows`, and `row_hash_known_answer` (SQL) against a
      vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged. No `REVOKE TRUNCATE`:
      only the owner holds it, and the grants test proves no role does (a default-privileges path that grants it goes
@@ -2879,23 +2886,27 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      reports mixed_grant_change on one 0008, so the class comes from pr-shape, the P1.14m precedent). The SQL above
      ships in three PRs, merged in number order, each leaving main green:
      - **P1.15m** (trusted; P1.15x, P1.15q, P1.12, P1.13), 0008: the `types` and `public` USAGE grants to `audit_owner`,
-       `audit_owner`'s routine default privilege, the four `audit.*` plpgsql functions, the matrix `schemas` and
-       `defaults` lines and the `grants.test.ts` stand-in updates. The default privilege revoking EXECUTE from
+       `audit_owner`'s routine default privilege, the four `audit.*` functions, the matrix `schemas` and
+       `defaults` lines and the `grants.test.ts` stand-in updates. As built (#411, merged 2026-10-07T03:43:30Z, book
+       edit 2026-10-07-p115m-as-built), it also created `tests/integration/postgres/audit.test.ts` with
+       `append_has_no_pii_argument` and `row_hash_known_answer`, and the vector file
+       `tests/integration/postgres/audit-row-hash.vector.json`, which P1.15g does not rewrite. The default privilege revoking EXECUTE from
        PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
-       0008. No 0008 function depends on an audit table (no audit table type in a signature, no `%ROWTYPE`, no
-       `LANGUAGE sql` body).
+       0008. Functions name no audit table in a body that is checked at CREATE time. `lp` and `row_hash` are
+       SQL-standard `RETURN` bodies, and the two that touch tables are plpgsql (no audit table type in a signature,
+       no `%ROWTYPE`).
      - **P1.15d** (feature; P1.15m), 0009 under `SET ROLE audit_owner`: the tables (five under the "No
        address" answer below), the seeds, the `(writer, ts)` index with its PF-1 evidence, the triggers (the
        statement-level one included; none on `event_pii`), auditor's SELECT on the chain, the matrix `audit.chain`
        row and the registry rows (no `event_pii` row).
      - **P1.15g** (trusted, grant migration; P1.15d), 0010: `GRANT EXECUTE ON audit.append` to `web`, `indexer` and
-       `admin` (only they hold it after 0010), the matrix `audit.append` row, and
-       `tests/integration/postgres/audit.test.ts`.
+       `admin` (only they hold it after 0010), the matrix `audit.append` row, and **extends**
+       `tests/integration/postgres/audit.test.ts` (created in P1.15m) with the EXECUTE-grant tests.
      **No audit PII** (P1a-A1 answered "No address", 2026-10-07; book edit 2026-10-06-p115m-tailnet-deferral-steps, architecture 00:20Z):
      `audit.event_pii` goes entirely. In 0008 `audit.append` has no `p_pii` and no step 7, `redact` works on the body
      only, and `erase_subject` has no `event_pii` clause; 0009 creates five tables (`retention_classes`, `actions`,
      `reasons`, `chain`, `event_body`) with no `event_pii` trigger or registry row; the verifier's `full` mode checks
-     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_parameter`. P1.15t is retired (the
+     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_argument`. P1.15t is retired (the
      P1.15q id is reused above for the check step) and `ip-columns.allow.json` stays `[]`. Any future audit PII is
      Alex's decision and an expand migration
      with a new signature. `adm.session.login_ip` and `pds-admin`'s staff addresses (P3.17) are unchanged. The text
@@ -3033,7 +3044,7 @@ Threats: the record of moderator and security actions versus the people and proc
   - T Rows edited with the triggers disabled → the chain verifier and body MACs detect it (`tamper_chain_metadata`,
     `tamper_body`); `migrator` acting as the owner is answered by P3.22's off-box anchor.
   - I Personal data or secrets in free-text audit fields → typed fields, a closed reason list, no PII parameter
-    (`typed_append_rejects_free_text`, `unknown_reason`, `append_has_no_pii_parameter`).
+    (`typed_append_rejects_free_text`, `unknown_reason`, `append_has_no_pii_argument`).
   - D A user-triggered flood blocks operator events → only that class is capped (`audit_flood_does_not_block`).
   - I A per-member sign-in record → no such action exists (`unknown_action`; Alex answer P1a-A2).
 
@@ -3047,7 +3058,7 @@ Done when (tests): (real Postgres)
   - no_direct_insert: `web` runs `INSERT INTO audit.chain …` → `42501`.
   - append_only: as `audit_owner`, `UPDATE`, `DELETE`, `TRUNCATE` on `audit.chain` → raise; `UPDATE` on a side table →
     raise.
-  - append_has_no_pii_parameter: `audit.append` has no `p_pii` argument (replaces `pii_only_admin` and
+  - append_has_no_pii_argument: `audit.append` has no `p_pii` argument (replaces `pii_only_admin` and
     `pii_refused_until_exception_settled`).
   - chain_links: 100 appends across both lanes → `verifyChain` ok in both modes; seqs 1..n contiguous per lane.
   - row_hash_known_answer: fixed inputs → the same 32 bytes from `rowHash` (TS) and `audit.row_hash` (SQL), equal to a
@@ -4700,7 +4711,8 @@ and the inventory check decides CI, so it is a guard. Steps, in order (`b` stays
 5. **P1.24s, UI kit part 1b** (depends on P1.24i and P1.23c, plus P1.24h if any of its components links): Avatar, Switch,
    SkipLink, MediaFrame, DescriptionList, Pagination.
 6. P1.24a (zero-JS blocks), P1.24k (chrome, no-JS), P1.24f (feed and feedback, no-JS), P1.24j (islands), then P1.24b
-   if the budget ruling requires it (book edits 2026-10-07-p124a-split and 2026-10-07-p124k-split).
+   (toast and select, per-icon drawing modules first; book edits 2026-10-07-p124b-island-icons,
+   2026-10-07-p124a-split and 2026-10-07-p124k-split).
 These PRs add only the server-rendered showcase markup; `components_axe_clean` and `components_target_size` run in
 P1.26's harness. `card_surface_opaque` moves to P1.24a with Card.
 
@@ -4919,7 +4931,7 @@ four:
      this part.
   3. **P1.24j** (depends on P1.24f): the islands in order of need (copy, header-menu, tabs, modal, toast, select),
      measuring the island budget after each and stopping at the last that fits the 76,800-byte total
-     (2026-10-06-p123-shape measure-first rule); the rest go to P1.24b.
+     (2026-10-06-p123-shape measure-first rule); the rest go to P1.24b. As built (#419) toast and select went to P1.24b.
   SSR unit tests cover every component's no-JS behaviour here. The Playwright tests (commandblock copy and denied,
   select and tabs keyboard, `header_folds_by_container`, axe in both themes) run in P1.26's harness on the showcase,
   since P1.26 depends on P1.25, which depends on this work. P1.25 depends on P1.24k instead of P1.24a (the shell needs
@@ -4953,10 +4965,12 @@ enhanced by an island.
 - `Footer` (links, and one slot that P1.25 fills by route group: `PrefsForms` on app pages, `LanguageLinks` on
   public pages, P1.22).
 - `Tabs`: two modes (book edit 2026-10-07-p124j-tabs-modes-and-styles-entry). Default: without JS, each tab is a link
-  to `?tab=<id>` and the server renders only that panel (`aria-current="page"`); island `tabs.island.tsx` intercepts
-  the links and navigates, fetching nothing new. `eager`: the server renders every panel with the unchosen ones
-  `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the URL in
-  sync with `history.replaceState`. See "Tabs eager mode" below.
+  to `?tab=<id>` and the server renders only that panel (`aria-current="page"`). In the default mode the tabs island
+  adds keyboard handling only: arrow, Home and End move focus between the tab links, which keep their natural tab
+  order and aria-current, with no tab roles. Choosing a tab is still a plain navigation to ?tab=<id>, and the server
+  renders that panel. There is no fetch and no client-side panel swap. `eager`: the server renders every panel with the
+  unchosen ones `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps
+  the URL in sync with `history.replaceState`. See "Tabs eager mode" below.
 - `Modal`: requires `fallbackHref` — without JS the trigger is a link to a full page with the same content; island
   `modal.island.tsx` opens a native `<dialog>` with `showModal()` (focus trap and Escape come from the
   platform), returns focus to the trigger on close.
@@ -5035,8 +5049,12 @@ CSS alone, so no-JS shows only the chosen panel and `?tab=` still picks it
 (`tabs_eager_hides_unchosen_with_hidden_attribute`). Hiding is not a security boundary: hidden panels ship in the
 HTML, so every panel of an eager Tabs holds only what the viewer may see on that request, and a panel that needs a
 different permission or costly data uses the default mode. Eager mode departs from P1.24k's "server renders only the
-chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the island
-intercepts the links and fetches nothing new: it navigates. In eager mode an unknown `?tab=` falls back to the first
+chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the tabs island
+adds keyboard handling only: arrow, Home and End move focus between the tab links, which keep their natural tab
+order and aria-current, with no tab roles (as built in #419, `TabsBar.tsx` lines 72 to 105,
+`tabs_island_default_mode_keys_only`; the ARIA tabs pattern with roving tabindex is eager mode's only).
+Choosing a tab is still a plain navigation to ?tab=<id>, and the server renders that panel. There is no fetch and no
+client-side panel swap. In eager mode an unknown `?tab=` falls back to the first
 tab and is not echoed, and the island switches panels client-side with the ARIA tabs pattern. Mode of each booked
 use (checked on main 16d10ee): P4.21 and P4.22, the `/home` feed tab bar, use the default (per-viewer feeds loaded
 through the PDS proxy, and P4.21 already routes `?tab=<id>` to the server); the P1.24j and P1.26 showcase shows both
@@ -5047,9 +5065,12 @@ at an island boundary and comes back to the step book.
 
 **The styles entry in the island total** (same record): `apps/web/src/styles.ts` is a build device whose output that
 matters is CSS; its JS (3,735 gzip bytes of class-name maps) is never requested by a page, so it does not belong in
-the island total. First fix, product side, inside P1.24j: the entry imports the CSS Modules for side effect only
-instead of exporting the eager glob's maps, on vite 8.3.1 and rolldown, with the build's CSS output unchanged
-(`styles_entry_emits_css_only`: the entry's JS is under 300 gzip bytes and the CSS asset list is unchanged). Only if
+the island total. First fix, product side, inside P1.24j: the entry emits CSS only instead of exporting the eager glob's
+maps, on vite 8.3.1 and rolldown, with the build's CSS output unchanged; as built (#419) via a vite config plugin and
+a `?styles-entry` import query (a plain side-effect import is tree-shaken), leaving 39 bytes of entry JS and
+byte-identical CSS (`styles_entry_emits_css_only`: the entry's JS is under 300 gzip bytes, the CSS asset list is
+unchanged, and an island that imports a CSS Module does not pull that module's CSS out of the linked stylesheet).
+Only if
 that fails: **P1.24v** (architecture wrote P1.24q, an id the merged UI inventory guard #368 holds; booked only if
 needed, step book 2026-10-07-p124j-tabs-modes-and-styles-entry), a check-class PR in `scripts/budgets/` alone, which is a loosening and needs Alex's word
 naming the change ("the styles entry's JS leaves the island total") and the branch. Its exclusion matches the
@@ -5057,7 +5078,7 @@ manifest key `src/styles.ts` exactly, fails if that chunk imports or dynamically
 or bootstrap chunk imports it, and prints the excluded bytes on every run (`styles_entry_excluded_only_by_exact_key`,
 `styles_entry_with_imports_fails`, and in apps/web `pages_never_load_styles_entry`). The per-island 15 KB gate, the
 75 KB total and the CSS budget still hold. Until then the step builds islands in book order and stops at the last
-one that fits the current measure.
+one that fits the current measure. As built the fix held, so P1.24v is not needed and not booked.
 
 **Done when (tests):**
 - Island total reported per island in the PR body; stop at the budget.
@@ -5108,13 +5129,34 @@ one that fits the current measure.
 
 ---
 
-### P1.24b — Remaining islands, after the budget ruling (added step)
-Tags: —            Depends on: P1.24j, plus one of the rulings below
-Holds the islands P1.24j could not fit under the 76,800-byte island total. They move here only after one of:
-architecture rules on reducing the runtime's share (code-splitting the React runtime out of the bootstrap, a lighter
-runtime within ADR 0015, or dropping islands that could be zero-JS); or a budget raise, which is a check-path loosening
-needing an architecture ruling and Alex's typed word. A Renovate bump that pushes the total past the limit is caught by
-the island budget check on its own PR and is Alex's to decide.
+### P1.24b — Add the toast and select islands within the JS budget
+Tags: —            Depends on: P1.24j
+Slice 1, issue #421, feature class (`shared/ui` islands and icon drawings, `scripts/ui/icons.ts`); book edits
+2026-10-07-p124b-and-p124j-as-built and 2026-10-07-p124b-island-icons (architecture's ruling). P1.24j (#419) built
+the copy, header-menu, tabs and modal islands at 72,799 of 76,800 gzip bytes; toast measured 78,206 because
+`Icon.tsx` imports the whole `icons.json` (5,082 gzip bytes), so one close icon shipped all 36 drawings.
+- **Drawing modules first.** The icon build (`scripts/ui/icons.ts`, product class) also writes one generated module per
+  icon, `shared/ui/icons/drawings/<name>.ts`, exporting that icon's frozen path list, from the same `icons.json`, never
+  edited by hand.
+- **Icon.tsx keeps the only inline svg** (the kit rule stays word for word). It gains one internal drawing component;
+  `Icon` (by name, server-side) and an exported `IconDrawing` (by path list) both render through it, sharing size,
+  `aria-hidden`, `focusable` and the `label` rule. Islands use `IconDrawing` with a static import of the one drawing
+  they need; pages keep `<Icon name>`.
+- **Then toast, then select,** each measured against the island budget as it stands; the close icon's measured cost
+  goes in the body. If toast or select still does not fit, the PR stops at the last island that fits and comes back
+  to the step book; a budget change stays a separate loosening needing Alex.
+- **Split if large:** the drawing modules, `IconDrawing` and the three tests go first as **P1.24d** (feature class;
+  P1.24h is taken by safeHref), and P1.24b then depends on it.
+- **Refused by the ruling:** icon markup reached by id, a smaller icon subset, a shared icon chunk, a budget change.
+- No-JS behaviour is unaffected: P1.24f already ships the server-printed toast with its close link and the native
+  select; only the enhancement waits. P1.26's toast and select island keyboard tests move here and run when it lands;
+  until then P1.26 lists them as pending, never skipped.
+
+Tests: `island_bundle_has_no_icon_map` (apps/web build: no island chunk holds the `iconoirVersion` or `sheetVersion`
+keys or the path data of a fixed sentinel icon no island imports), `icon_drawing_modules_match_icons_json` (in the
+freshness test beside `icon_allowlist_matches_sheet`: every module equals its entry and every entry has a module),
+`icon_drawing_matches_icon_markup` (`IconDrawing` with `close` renders the same markup as `<Icon name="close">` at all
+three sizes, with and without `label`), and the island budget gate unchanged.
 
 ---
 
@@ -5205,6 +5247,11 @@ Request → route:
 ### P1.26 — Accessibility and browser test harness
 
 **Tags:** — · **Depends on:** P1.25, P1.24j · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
+
+Pending, not skipped (book edit 2026-10-07-p124b-and-p124j-as-built): the toast and select island keyboard tests
+move to P1.24b and run when it lands; P1.26 still depends on P1.24j only. The tabs keyboard and axe tests check the
+default mode against its built form (links in natural tab order with aria-current, no tab roles) and eager mode
+against the ARIA tabs pattern.
 
 **Where:** `tests/e2e/{playwright.config.ts, pages.ts, a11y.spec.ts, nojs.spec.ts, csp.spec.ts, headers.spec.ts}`;
 `tests/e2e/fixtures/servers.ts`; `.pa11yci.json`; `lighthouserc.json`; `.github/workflows/e2e.yml`;
@@ -5760,6 +5807,8 @@ minimal `permissions`, nothing pushed or signed until P1.27s.
 
 ### P1.28d — Label every base entry with its stage
 
+Issue #396. Status: built (#412).
+
 **Tags:** [SEC] · **Depends on:** P1.27 (merged) · **Class:** feature (neutral: it neither tightens nor loosens a
 check, so it does not wait for Alex) · records 2026-10-07-p128-edge-bases-and-ratelimit-adr (section "Mirror scan of
 build-only images", architecture 02:10Z) and 2026-10-07-p128v-mirror-scan-stage (final 02:12Z)
@@ -5779,6 +5828,8 @@ non-final Dockerfile stage; the final stage's `FROM` is a `runtime` entry or `sc
 ---
 
 ### P1.28v — Scan build-only bases at fail-on-critical [ALEX]
+
+Issue #397.
 
 **Tags:** [SEC] [ALEX] · **Depends on:** P1.28d and Alex's tap · **Class:** check (a loosening); waiting on Alex's
 word on the card "Should the weekly mirror scan only warn, not fail, on HIGH findings in build-only images, while
@@ -6095,6 +6146,38 @@ takes admin Basic auth).
 **Not in this step:** the app host's site config (Phase 2); the PDS's own settings (P1.29, P1.30); `LOG_ENABLED`
 on the PDS (P1.30 C12).
 
+**As built:** merged by Alex as #409 at 2026-10-07T03:31:33Z; three leftovers go to P1.28b.
+
+---
+
+### P1.28b — Edge leftovers
+
+Issue #415. Trusted base (book edit 2026-10-07-p128b-edge-leftovers): `/deployment/edge/` is in CODEOWNERS' trusted section, so
+the PR carries only `deployment/edge/**`, edge-path tests (`tests/integration/deployment/edge/`) and the ADR status
+line; docs never change its class. If pr-shape reports mixed, the PR stops and asks the step book.
+
+**Tags:** [SEC] · **Depends on:** P1.28 (merged; in Phase 2's lane it follows P1.28d and P1.30p, lane order only) ·
+**Size:** small
+
+**Contents:**
+1. `pds_route_without_zone_fails`, the negative twin of `every_pds_route_has_a_zone`: a fixture PDS route with no
+   `rate_limit` zone fails the check.
+2. Documentation addresses: in `tests/integration/deployment/edge/edge.test.ts` (lines 137 and 152 to 154),
+   `1.2.3.4` and `5.6.7.8` become addresses from `192.0.2.0/24` (RFC 5737), for example `192.0.2.10` and
+   `192.0.2.20`; a test that needs two different /64s also uses `2001:db8::/32` (RFC 3849).
+3. ADR 0018's status line (`docs/human/decisions/0018-edge-rate-limit-plugin.md:3`) becomes "Accepted (Alex merged
+   the P1.28 pull request, #409, at 2026-10-07T03:31:33Z)". The ADR named that PR as the place for his word, and it
+   was not yet accepted, so the status line is the only change. If Alex objects, the line goes back to Proposed and
+   the open points go to a card.
+4. P1.28b item 4: edge_logs_no_client_address timed out because the first probe() test pulled the probe's node image
+   inside its 5 s. The fix pulls that image by its locked digest in beforeAll (600 s hook timeout), gives every probe
+   connection a 1 s connect timeout, waits on the 429 and 502 log lines with a deadline, and sets a per-test timeout
+   sized from measured runs; the assertion is unchanged, and no retry, skip or quarantine is allowed.
+
+The long-window zones `session_day` and `firehose_hour` are checked statically: a runtime trip would need a day or an
+hour of requests, or a fake clock the pinned plugin does not offer. The short-window zones prove the mechanism at
+runtime.
+
 ---
 
 ### P1.29 — Development stack (`compose.dev.yaml`)
@@ -6247,6 +6330,9 @@ dev-seed:
 - `seed_file_mode_0600`.
 - `precheck_refuses_unknown_pds_did`: stub `describeServer` answering a foreign DID → refuses.
 - `dev_down_never_removes_volumes`: the npm script contains no `-v`/`--volumes`.
+- `preflight_matches_compose_config` (P1.30p's, extended in P1.30 core; CI only) passes on `compose.dev.yaml` in
+  this PR (book edit 2026-10-07-p130p-as-built). Any later step adding a compose file (P5.03 and on) inherits it
+  through the glob and names it anyway.
 
 **Reuse** (all provisional — for reuse review):
 - `deploy/compose.yaml:1` (name), `48-49`, `180-182` (hardening) → LESSON.
@@ -6275,17 +6361,46 @@ If P1.30s ever needs another edge, that edge is a separate `q` step; the row is 
 
 ---
 
+### P1.30p — Add the strict Compose parser and SecretMap
+
+Feature class (issue #414), `deployment/preflight/` only (book edit 2026-10-07-p130p-parser-split; letter `p` after the P1.11p and
+P1.12p precedents). Builds `compose-parse.ts` and `secret-map.ts` (about 223 lines) as P1.30's Outputs describe them:
+the `yaml` 2.9.1 strict subset with its refusals, and the redacting `SecretMap`.
+
+**Tags:** [SEC] · **Depends on:** P1.30q · **Plan:** as P1.30
+
+**Done when (tests),** in `compose-parse.test.ts` and `secret-map.test.ts`:
+- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
+  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
+  `preflight_refuses_interpolation_in_security_fields`: each refuses, naming the feature and line (exit 2 once P1.30's
+  CLI runs it).
+- `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
+- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
+  `docker compose -f <file> config --format json --no-interpolate` agrees with the parser's normalised view on every
+  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+
+**As built** (#416, merged by Alex at 2026-10-07T03:52:55Z; book edit 2026-10-07-p130p-as-built): four files under
+`deployment/preflight/`, 223 source lines, importing only `yaml` and Node built-ins. `compose-parse.ts` sets five of
+the six parser options and omits `maxAliasCount: 0`, and `preflight_matches_compose_config` compares name, service
+set, image and ports on one synthetic fixture. No behavioural gap (every anchor and alias is refused before any
+value conversion, and the parser never calls `toJS`); P1.30 core restores the option and extends the test. No reopen.
+
+---
+
 ### P1.30 — Deploy preflight core, C1–C12
 
 The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
 signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
-Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, `SecretMap`,
-the compose parser, the check runner, checks C1–C12 and the debug-logging runbook (C12's failure points to it).
-P1.30s, below, builds C13–C24. This section keeps the full design of all 24 checks; each part's tests are listed
+Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, the check
+runner, the injected verifier, checks C1–C12 and the debug-logging runbook (C12's failure points to it). P1.30p,
+above, builds the strict compose parser and `SecretMap` (book edit 2026-10-07-p130p-parser-split: P1.30 core measured
+777 changed source lines, and the parser carries the parser-differential threat, so it gets its own review). P1.30s,
+below, builds C13–C24. P1.30's body says why it is over 400 lines (one runner and twelve checks with shared types,
+measured at 554). This section keeps the full design of all 24 checks; each part's tests are listed
 under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
 
-**Tags:** [SEC] · **Depends on:** P1.27, P1.30q · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+**Tags:** [SEC] · **Depends on:** P1.27, P1.30q, P1.30p · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
 **Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
 guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
@@ -6412,17 +6527,21 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
   `c7_pds_rate_limits_enabled_fails`, `c7_pds_rate_limits_unset_fails`, `c8_any_bypass_var_fails` (`_KEY`, the edge's
   IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`.
 - `preflight_never_prints_secrets`: fixture secrets with a canary string → canary absent from all output.
-- `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
 - `preflight_no_skip_flag`: `--skip C3` → exit 2.
 - `preflight_check_throws_fails_closed`.
 - `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
 - `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
-- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
-  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
-  `preflight_refuses_interpolation_in_security_fields`: each → exit 2 naming the feature and line.
-- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
-  `docker compose -f <file> config --format json --no-interpolate` agrees with the preflight's normalised view on every
-  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+- The parser and `SecretMap` tests are P1.30p's, except two that P1.30 core carries (book edit
+  2026-10-07-p130p-as-built); the body says why the option was missing in P1.30p and that it is restored:
+  - `parser_sets_max_alias_count_zero`: P1.30 core adds `maxAliasCount: 0`, a second layer behind the refusal walk,
+    so the parser matches the six options above. The test asserts the option object, or a document whose only fault
+    is one alias refused by the option rather than the walk, whichever the code allows without reaching into
+    internals.
+  - `preflight_matches_compose_config`, extended: it compares the parser's full view (name, services, image, ports,
+    `env_file`, `environment`, `secrets`, networks) with `docker compose config --format json --no-interpolate`
+    (`--no-interpolate` keeps `${VAR}` literal, so no secret value is printed), over every `compose*.yaml` in the
+    repo found by glob plus the synthetic fixture. Until the first real compose file exists it runs on the fixture
+    alone and says so in its output rather than passing silently.
 - `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
 
 **Reuse** (all provisional — for reuse review):
