@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -201,6 +201,7 @@ flowchart LR
   P1_28r["P1.28r images project after unit tests"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
+  P1_28o["P1.28o edge drops apk-tools"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
@@ -283,6 +284,7 @@ flowchart LR
   P1_29w --> P1_29v
   P1_29w --> P1_29
   P1_29x --> P1_29v
+  P1_29x --> P1_28o
   P1_28w --> P1_29v
   P1_29v --> P1_29d
   P1_29d --> P1_29
@@ -7723,6 +7725,36 @@ dev-seed:
 - `deploy/secrets/pds.env.example` → LESSON: its SMTP warning.
 
 **Not in this step:** production compose (P5.02/P5.03); Tap decisions (P3.01); real SMTP (P2.25 prerequisite).
+
+---
+
+### P1.28o — Remove apk-tools from the edge image
+Tags: [SEC], trusted            Depends on: P1.29x
+Slice 1, trusted base (`deployment/edge/`); book edit 2026-10-07-p128o-edge-apk-tools (final 22:10Z), from
+architecture's amendment 3, point 4, in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; no word from
+Alex. Owner: Phase 1. It follows P1.29x, which carries amendments 2 and 3 (the Dockerfile kind map and the inverted
+package-manager rule); after P1.29x, the edge's `apk del` is the one allowed removal verb.
+
+**The finding:** `deployment/edge/Dockerfile:27` runs `apk del --no-network curl libcap` in the `runtime` stage (FROM
+at :20). That proves `apk` is present in the final stage, and deleting curl and libcap leaves apk-tools behind, so the
+Caddy runtime carries a package manager.
+
+**What:** preferred, remove `apk-tools` in the same final-stage RUN, after the other deletions (for example
+`apk del --no-network curl libcap apk-tools`, or a second `apk del` as the last command in that RUN); after that RUN,
+nothing may call `apk`. Fallback, only if removing apk-tools breaks the image: a scratch or distroless final stage with
+the static caddy binary. The PR body says which it chose, and why.
+
+Test: an image test in a `*.image.test.ts` file under `deployment/edge/` (P1.28r's rule), in the images project, shows
+`apk` is absent from the built edge image: `/sbin/apk` does not exist and `apk` is not on PATH.
+
+Done when the edge image builds, the existing edge image tests and the adapt byte check stay green, and the new test
+passes in CI.
+
+**After it lands:** the edge kind gains `runtime_has_no_package_manager` (apk) in `deployment/images/images.test.ts`.
+That file is product class, so a trusted PR cannot carry it. It rides the next product PR that touches
+`images.test.ts` after P1.28o merges (P1.29d is the likely carrier); if none is open within a day of P1.28o merging, it
+becomes a small product step of its own, and the coordinator asks for it. Either way it is a tightening, with no line
+from Alex.
 
 ---
 

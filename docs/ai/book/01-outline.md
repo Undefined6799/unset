@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 154 steps: 133 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 155 steps: 134 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -263,6 +263,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Lock entries declare stripped paths, proven deleted in every final stage | [SEC] | P1.29k | `phase-1.md` |
+| P1.28o | Edge runtime drops apk-tools; image test proves no package manager | [SEC], trusted | P1.29x | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r | `phase-1.md` |
@@ -409,6 +410,7 @@ flowchart TD
   P1_28r["P1.28r Images project after unit tests"]
   P1_29k["P1.29k Migrate image, syncRolePasswords"]
   P1_29x["P1.29x Stripped paths declared"]
+  P1_28o["P1.28o Edge drops apk-tools"]
   P1_29w["P1.29w Discover and scan every image"]
   P1_29v["P1.29v Mirror scan skips stripped"]
   P1_29d["P1.29d Gosu-free Postgres image"]
@@ -623,6 +625,7 @@ flowchart TD
   P1_29w --> P1_29v
   P1_29w --> P1_29
   P1_29x --> P1_29v
+  P1_29x --> P1_28o
   P1_28w --> P1_29v
   P1_29v --> P1_29d
   P1_29d --> P1_29
