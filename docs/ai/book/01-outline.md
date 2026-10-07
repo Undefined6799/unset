@@ -218,7 +218,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28q | images.yml: build, lint, scan, health-check the edge image | check | P1.27q, P1.27 | `phase-1.md` |
 | P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
-| P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature) | [SEC] | P1.27, P1.28v | `phase-1.md` |
+| P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
@@ -453,7 +453,6 @@ flowchart TD
   P1_28q --> P1_28
   P1_27 --> P1_28d
   P1_28d --> P1_28v
-  P1_28v --> P1_28x
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28

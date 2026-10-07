@@ -213,7 +213,6 @@ flowchart LR
   P1_28q --> P1_28
   P1_27 --> P1_28d
   P1_28d --> P1_28v
-  P1_28v --> P1_28x
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -5750,13 +5749,14 @@ and edge jobs, unchanged and only asserted).
 
 **Opening:** only after Alex's tap; the body quotes the tap and its time and names `.github/workflows/mirror.yml` as
 the one workflow touched. Alex's answer joins `alex-answers.md` as a `mirror-build-stage` row. If he says no, P1.28v
-is withdrawn, P1.28d stays, the builder findings go to per-CVE trivyignore cards, and P1.28x waits on them.
+is withdrawn, P1.28d stays, and the builder findings go to per-CVE trivyignore cards (P1.28x is already merged, book
+edit 2026-10-07-p128x-merged-as-built).
 
 ---
 
 ### P1.28x — Edge pins (non-trusted part of P1.28)
 
-**Tags:** [SEC] · **Depends on:** P1.27, P1.28v (it lists the builder image in `mirror.list.json`) · **Class:**
+**Tags:** [SEC] · **Depends on:** P1.27 · **Status:** merged as built (#391) · **Class:**
 feature (product, non-trusted) · record
 2026-10-07-p128-split-and-p1b-a1.md (final 01:10Z)
 
@@ -5765,18 +5765,25 @@ with an `edge` path segment, and docs. The pins it needs elsewhere land first, h
 
 **Contents:** the `caddy` and `caddy-builder` entries in `deployment/images/bases.lock.json`;
 `deployment/mirror.list.json`; and `deployment/images/images.test.ts`, whose allowlist widens to
-`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27). Its entries
-carry `stage` (P1.28d): `caddy` is `runtime`, `caddy-builder` is `build`.
+`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27). P1.28d labels
+its entries with `stage`: `caddy` is `runtime`, `caddy-builder` is `build`.
 
-**Digest age** (step book 2026-10-07 02:03Z, book edit 2026-10-07-p128-split-and-p1b-a1): a first pin follows the
-7-day rule of "Bumping a pinned base digest" in P1.27. The indexes current at booking, `caddy:2.11.7-alpine`
-(`d8542f48…f75f`) and `caddy:2.11.7-builder-alpine` (`80331d37…7c26`), were both pushed at 2026-10-06T05:52Z and are
-too young. Re-pin each tag, judged separately, to the newest 2.11.7 index at least 7 days old, found in the tag's
-digest history. Exception: if Trivy shows the older index has a fixable HIGH or CRITICAL finding that the current
-index fixes, keep the current index and name the CVEs. If 2.11.7 has no index that old, P1.28x waits and does not
-drop to 2.11.6 (the book, ADR 0018 and the plugin skew test, upstream issue #94, are written against 2.11.7); it
-re-pins once each tag has an index 7 days old, which is these digests on or after 2026-10-13T05:52Z if nothing newer
-appears. P1.28 keeps waiting on P1.28x. The PR body gives each digest's push time and how it was chosen.
+**As built** (book edit 2026-10-07-p128x-merged-as-built): merged on 2026-10-07 by Alex's merge of #391 at
+03:15:25Z (`6f27d64`). `bases.lock.json` pins `caddy` `2.11.7-alpine` at `d8542f48…f75f` and `caddy-builder`
+`2.11.7-builder-alpine` at `80331d37…7c26`, both pushed 2026-10-06T05:52Z, so under 7 days old when merged. This was
+his decision; the book records it and does not reverse it. No entry carries `stage` yet; P1.28d adds it. The earlier
+hold (re-pin to an index 7 days old, "P1.28x waits", P1.28v as a dependency) is superseded and kept only as history in
+2026-10-07-p128-split-and-p1b-a1. The age rule still governs the next change to either Caddy digest (the bump
+procedure in P1.27, from P1.27v or a hand bump); no re-pin is needed just to satisfy the age, and nothing changes when
+the pins reach 7 days on 2026-10-13T05:52Z. P1.28 is unblocked: P1.27, P1.28q and P1.28x are merged.
+
+**Mirror scan until the builder findings are settled:** with `caddy-builder` in `mirror.list.json`, main's mirror scan
+(not required) reports the builder's eight fixable HIGH Go standard-library findings and stays red. The expected route
+is P1.28d now (neutral, no tap), then P1.28v after Alex's tap. Until then the red scan is a known, reported state and
+no reason for an ignore entry. If Alex declines the card: per-CVE trivyignore entries on his card, scoped to the
+builder's xcaddy path if Trivy allows it, with the shortest expiry that covers the next Go point release reaching the
+upstream builder and never more than 90 days; otherwise the scan stays red until a fixed builder index is re-pinned by
+the bump procedure. Nothing is ignored pre-emptively, and the shipped edge image's own scan stays at fail-on-HIGH.
 
 ---
 
