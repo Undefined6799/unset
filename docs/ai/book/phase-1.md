@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28, P1.28b,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b,
   P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -122,6 +122,7 @@ flowchart TD
   P115d --> P115g["P1.15g audit EXECUTE grants [SEC]"]
   P115g --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
+  P115 --> P115s["P1.15s audit chain tests"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P103 --> P117e["P1.17e lock log events"]
   P111 --> P117["P1.17 advisory lock"]
@@ -165,6 +166,7 @@ flowchart LR
   P1_24j["P1.24j islands, budget-measured"]
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
+  P1_25k["P1.25k error-page hook in the kit"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -172,6 +174,8 @@ flowchart LR
   P1_28q["P1.28q images.yml: edge image"]
   P1_28d["P1.28d base entries labelled by stage"]
   P1_28v["P1.28v mirror scan per stage [ALEX]"]
+  P1_28w["P1.28w mirror scan pipefail shell"]
+  P1_28u["P1.28u image refs outside FROM"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
@@ -190,6 +194,7 @@ flowchart LR
   P1_37["P1.37 legal paperwork 1 ALEX"]
   P1_37a["P1.37a Arachnid application ALEX"]
   P1_38["P1.38 Phase 1 exit"]
+  P1_15s["P1.15s audit chain tests"]
 
   P1_04 --> P1_20
   P1_10 --> P1_20
@@ -211,6 +216,7 @@ flowchart LR
   P1_24k -.-> P1_25
   P1_24c -.-> P1_26
   P1_08 --> P1_25
+  P1_25k --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
@@ -219,6 +225,8 @@ flowchart LR
   P1_28q --> P1_28
   P1_27 --> P1_28d
   P1_28d --> P1_28v
+  P1_28v --> P1_28w
+  P1_28v --> P1_28u
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -250,6 +258,7 @@ flowchart LR
   P0_12 -.-> P1_35
   P0_07 --> P1_36
   P1_26 --> P1_38
+  P1_15s -.-> P1_38
   P1_19 --> P1_22b["P1.22b locale (i18n slice)"]
   P1_22 --> P1_22b
   P1_26 --> P1_22b
@@ -2923,22 +2932,29 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      workspace (`row_hash_known_answer`, TS), reproducing `audit-row-hash.vector.json` byte for byte with the fixture
      DIDs of 02-shared-blocks (the two constants of `audit.test.ts:77-78`, or a shared `tests/fixtures/dids.ts` if one
      exists by then). P1.14 and P1.15 each add one trusted workspace alone: two PRs after P1.14q, in either order.
-  3. **P1.15s** (feature; depends on P1.15, opened only after it merges, never stacked): the audit chain integration
-     tests. A trusted PR may carry only trusted files and tests with a matching path segment, and these tests need
-     the `tests/tsconfig.json` reference to the new workspace, which is outside `infrastructure/audit/`; splitting
-     keeps P1.15 pure with no change to the gate. Contents: `tests/integration/audit/chain.test.ts` with
-     `reason_union_matches_table`, `typed_append_rejects_free_text`, `chain_links`, `tamper_chain_metadata` and
-     `tamper_body` as worded below, its own `AuditDb` over a real `pg` client and real roles (the adapter lives in
-     the test file, not the workspace), and the `tests/tsconfig.json` reference. Red evidence: each tamper test fails
-     with `verify` stubbed to report ok. Widening `trusted-base.ts` to let a trusted PR carry the reference line
-     would be a loosening of a check gate and is not booked; if the split recurs, the step book can propose it as its
-     own check-class step for Alex.
+     **As built** (#426, merged by Alex at 2026-10-07T11:58:59Z; book edit 2026-10-07-p115-as-built): the workspace
+     also has `index.ts`, its package entry (`package.json` exports it, rule DC-2), and an extra test
+     `to_micros_keeps_the_sixth_digit` guards the timestamp precision the row hash depends on. Its `notes-hub`
+     warning (`scripts/guards/notes.ts:206`) is answered by P1.15s.
+  3. **P1.15s** (feature, slice 1 beside P1.15; depends on P1.15, opened only after it merges, never stacked): the
+     audit chain integration tests. A trusted PR may carry only trusted files and tests with a matching path segment,
+     and these tests need the `tests/tsconfig.json` reference to the new workspace, which is outside
+     `infrastructure/audit/`; splitting keeps P1.15 pure with no change to the gate. Contents:
+     `tests/integration/audit/chain.test.ts` with `reason_union_matches_table`, `typed_append_rejects_free_text`,
+     `chain_links`, `tamper_chain_metadata` and `tamper_body` as worded below, its own `AuditDb` over a real `pg`
+     client and real roles (the adapter lives in the test file, not the workspace), and the `tests/tsconfig.json`
+     reference, plus the audit hub note `docs/ai/notes/area/audit.md` (book edit 2026-10-07-p115-as-built): what the
+     workspace owns and that it reaches the database only through `AuditDb`; links to `rowHash.ts`, `verify.ts` and the
+     vector; the pitfalls (microsecond timestamps, SQL `RETURN` bodies, `SET ROLE audit_owner`). Docs never change a
+     PR's class, so P1.15s stays feature. Red evidence: each tamper test fails with `verify` stubbed to report ok.
+     Widening `trusted-base.ts` to let a trusted PR carry the reference line would be a loosening of a check gate and
+     is not booked; if the split recurs, the step book can propose it as its own check-class step for Alex.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
   None depends on P1.15s except P1.38, so the tamper tests exist before Phase 1 closes.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
-  `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) + `rowHash.test.ts`;
-  `tests/integration/audit/chain.test.ts` and the `tests/tsconfig.json` reference (P1.15s); `erasure-registry.json`
-  and `grant-matrix.json` rows (P1.15m to P1.15g)
+  `infrastructure/audit/{index.ts,actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) +
+  `rowHash.test.ts`; `tests/integration/audit/chain.test.ts`, the `tests/tsconfig.json` reference and
+  `docs/ai/notes/area/audit.md` (P1.15s); `erasure-registry.json` and `grant-matrix.json` rows (P1.15m to P1.15g)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
 
 Goal: moderation and security events are written only through one database function that stamps the writing role itself
@@ -5233,15 +5249,71 @@ Tests: `toast_close_moves_focus_to_main` (jsdom; P1.26's toast keyboard test ass
 `select_island_leaves_required_native`, `select_island_labelledby_label`, `select_label_click_focuses_combobox`,
 `ui_build_entries_run_in_node` with `font-metrics.ts --check` added, and the island budget gate unchanged.
 
+**As built** (#433, merged 2026-10-07T12:12:22Z as `30022a8`; book edit 2026-10-07-p125-split, P1.24c section added
+12:28Z): no deviation from the record; an extra test, `toast_close_leaves_focus_held_elsewhere`, joins the list. Its
+follow-ups ride P1.25 (product class; P1.26 is check class and cannot carry product code).
+
+---
+
+### P1.25k — Add the error-page hook to the server kit
+Tags: [SEC], trusted            Depends on: P1.04, P1.08 (both merged; P1.08 is #66)
+Slice 1, trusted base (`/shared/http/` is in CODEOWNERS' trusted section, "CSRF gate, session and CSP builder"); book
+edits 2026-10-07-p125-split and architecture's 2026-10-07-p125k-error-page-hook (which wins where they differ).
+Letter `k` is the server-kit part, the letter architecture named. No word from Alex is needed: the 404 change is the
+book's adopted behaviour, narrowed, and the hook is an extension point inside the trusted base under trusted review.
+
+**Where:** `shared/http/` only (`server.ts`, `errors.ts` as needed); tests in `shared/http/server.test.ts`.
+
+**What** (read on main fa74f1a: `errorResponse` maps non-public codes to `internal.error` and sets `no-store`;
+`fail()` at `server.ts:148`; `secured()`'s catch at `:222`; `reqId = randomUUID()` at `:292`):
+1. **The hook:** `errorPage?: (code: ErrorCode, ctx: { group: "app" | "profile" | "admin"; reqId?: string }) =>
+   string`.
+   - Synchronous: a Promise return is a type error, so the hook cannot await I/O or hang a response past the kit.
+   - Inputs are only what the kit chooses: `code` after the public mapping (never an internal code); a page group
+     (the api, media and static groups never call it); `reqId` only for `internal.error`. No path, query, header,
+     cookie, locale or session reaches it, so an error body cannot echo the caller and the hook cannot look up who
+     is signed in.
+   - It returns only the body. The kit keeps the status, `content-type`, `cache-control`, every extra header
+     (`allow`, `retry-after`, `connection`) and the group's security headers through `secured()`.
+   - A throw, a non-string or a body over 256 KiB falls back to today's fixed page for that code, logged once through
+     the existing `log.logError` (stack path-only); the hook is never called twice and the error's text never
+     reaches the body.
+   - `secured()`'s catch never calls the hook: the last-resort 500 stays the fixed static page.
+2. **404 gets `no-cache`**, for `http.not_found` in the app, profile and admin groups only. Every other error (405
+   included) and every api, media and static response stays `no-store`. Safe because the 404 body depends only on
+   the group.
+3. **The request id in the 500 body only:** the kit's `reqId` (never taken from a request header) goes in the body of
+   `internal.error` responses, not 4xx and not `http.deadline`. No `x-request-id` header until a booked step asks.
+
+**Done when (tests),** in `shared/http/server.test.ts`:
+- `error_page_hook_renders_page_groups`: app, profile and admin use the hook's body; api, media and static never call
+  it.
+- `error_page_hook_receives_no_request_data`: a spy records only the code, the group and, for 500, the reqId.
+- `error_page_hook_throw_falls_back`: today's fixed page, same status and headers, one logError line, no error text.
+- `error_page_hook_non_string_or_oversize_falls_back`.
+- `error_page_hook_keeps_kit_headers`: status, content-type, cache-control, allow and retry-after unchanged; security
+  headers present.
+- `internal_error_body_has_kit_request_id`: the 500 body holds the same reqId as `http.request`, UUID shape; no 4xx
+  body holds it.
+- `not_found_body_identical_across_requests`: two 404s in one group with different paths, queries, cookies and
+  Accept-Language give byte-identical bodies with `cache-control: no-cache`.
+- `secured_fallback_never_calls_hook`.
+
+**Unbooked candidate:** a per-page `script-src 'none'` CSP on zero-JS pages, a tightening in the trusted CSP builder.
+Recorded, not booked; the step book books it when someone asks.
+
 ---
 
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08 · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
-`apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx, static-500.html}`;
-`interfaces/http/routes/test-routes.ts`; favicon files copied from the sheet's `assets/Logos/`; tests.
+`apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
+`interfaces/http/routes/test-routes.ts`; favicon files copied from the sheet's `assets/Logos/`; tests. P1.25 wires the
+kit's `errorPage` hook (P1.25k) in `apps/web`: feature class, no trusted path. `static-500.html` is dropped (book edits
+2026-10-07-p125-split and 2026-10-07-p125k-error-page-hook): the kit's fixed page and `secured()`'s static 500 already
+cover it.
 
 **Size:** ~300 source lines, ~300 test lines.
 
@@ -5263,16 +5335,25 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
   `feed?: true`: a feed page renders **no footer**, and the footer's links and slot move into the `Header` menu (sheet
   v44; used by P3.12 and P4.21/P4.22).
 - Route groups in Phase 1: `/`, `/terms`, `/privacy` and every error page are **public** (no cookie read, no
-  `Vary: Cookie`). The only `app` page in Phase 1 is the test page `/__test/app` (test server only), which P1.22's
-  and P1.26's cookie tests use until Phase 2 adds real signed-in pages.
+  `Vary: Cookie`). Error pages render through the kit's hook, so they are anonymous by construction: the hook
+  receives only the code, the kit's group and, for 500, the kit's `reqId`. The hook's `group` is the kit's header
+  group, not P1.22's app/public page group. The only `app` page in Phase 1 is the test page `/__test/app` (test
+  server only), which P1.22's and P1.26's cookie tests use until Phase 2 adds real signed-in pages.
+- Zero-JS pages: `renderPage` takes `islands: "off"` as a fixed argument for `/`, `/terms`, `/privacy`, 404 and 500,
+  never from the request. "off" emits no bootstrap script, no props `<script type="application/json">`, no
+  `modulepreload` and no island markers; Document provides no IslandSlot renderer, so the header menu renders static
+  as `<details>`/`<summary>` (P1.24j condition 4). App pages keep the island; error pages render with no island run at
+  all. A component that renders correctly only with its island is a bug on an "off" page.
 - Routes: `GET /` (placeholder landing text from the catalog), `GET /terms` and `GET /privacy` (placeholder pages
   saying the documents are in preparation, `noindex`; real texts come with the legal work).
 - Error pages:
-  - 404: catalog text, link home; `Cache-Control: no-cache`; the requested path is not echoed.
-  - 500: catalog text plus `requestId` (shown so a user can quote it; it is an opaque random id); `Cache-Control:
-    no-store`. If rendering the 500 page itself throws, the handler sends `static-500.html` (built at build
-    time, no data).
-  - 503: `Retry-After: 30`, `Cache-Control: no-store`; used by the maintenance flag P1.02 exposes, if any.
+  - 404: catalog text, link home; `Cache-Control: no-cache`, set by the kit in page groups (P1.25k); the requested
+    path is never echoed.
+  - 500: catalog text plus the kit's `reqId` (shown so a user can quote it; the same id `http.request` logs);
+    `Cache-Control: no-store`. If the hook throws, returns a non-string or runs over 256 KiB, the kit's fixed page
+    is the fallback.
+  - 503: no maintenance flag is booked. The `/__test/unavailable` route, defined in the test file only and never in
+    production routing, returns its own page with `Retry-After: 30` and `Cache-Control: no-store`.
   - `?error=<code>` on any shell page: the code is looked up in the catalog; known → a `Callout` (danger) with the
     catalog text; unknown → ignored; the raw value is never rendered.
 - `TEST_ROUTES=1` (test server only) mounts `/__test/throw`, `/__test/showcase`, `/__test/unavailable`, `/__test/app`; in
@@ -5283,10 +5364,8 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
 Request → route:
 1. Matched route renders inside AppShell.
 2. No route → 404 page (status 404).
-3. Handler throws → log { code: "http.unhandled", requestId, route pattern } (no message text, no stack in
-   production logs if it can contain user data; the stack goes to logs only with paths, per P1.03 rule) →
-   try render 500 page; that throws → send static-500.html. Both with status 500.
-4. Maintenance flag on → 503 page for every route except /health.
+3. Handler throws → the kit's existing logError event (no new event; stack path-only, per P1.03 rule) → the
+   kit renders the 500 page through the hook; a hook failure → the kit's fixed page. Both with status 500.
 ```
 
 **Edge cases and failures:**
@@ -5298,16 +5377,30 @@ Request → route:
 
 **Done when (tests):**
 - `shell_head_contents`: preload links for both fonts, stylesheet from manifest, favicons, color-scheme meta.
-- `shell_zero_js`: `/`, `/terms`, `/privacy`, 404, 500 → no `<script`.
-- `notfound_no_echo`: `GET /%3Cscript%3Ex` → 404, body lacks `script>x`, `Cache-Control: no-cache`.
-- `server_error_request_id`: `/__test/throw` → 500, body contains the response's request id, no stack text.
-- `server_error_fallback_static`: 500 renderer forced to throw → static page, status 500.
-- `unavailable_retry_after`: 503 with `Retry-After: 30`.
+- `shell_zero_js`: `/`, `/terms`, `/privacy`, 404, 500 → no `<script` of any type and no `modulepreload` link.
+- `header_menu_static_on_zero_js_pages`: the menu is a `<details>` with a `<summary>`, its links present with no JS.
+- `notfound_no_echo`: `GET /%3Cscript%3Ex` → 404, body lacks `script>x`, `Cache-Control: no-cache` (now from the
+  kit).
+- `server_error_request_id`: `/__test/throw` → 500, body holds the kit's `reqId` (UUID shape), the same as on
+  `http.request`, no stack text.
+- `server_error_fallback_static`: the hook forced to throw → the kit's fixed page, status 500.
+- `unavailable_retry_after`: 503 with `Retry-After: 30`, on the test-only route.
 - `error_param_known_code` → Callout with catalog text; `error_param_unknown_ignored`.
 - `test_routes_refused_in_prod`: config with both set → startup exits 1 with the code.
 - `legal_placeholders_noindex`: meta and header present.
 - `shell_feed_no_footer`: `AppShell` with `feed` → no `<footer>`; the footer links and `PrefsForms` are in the header
   menu, reachable by keyboard with JS off.
+
+**Riders from P1.24c** (book edit 2026-10-07-p125-split, added 12:28Z; product class, like P1.25; the body lists them
+under a "Riders from P1.24c" heading):
+1. Disabled Select label click: `SelectListbox.tsx:57-62` focuses the combobox on a label click even when the native
+   control is disabled, unlike native behaviour. The handler returns without focusing when `element.disabled`. Test:
+   `select_label_click_disabled_no_focus`.
+2. Untested branches get tests: `toast_close_without_main_leaves_focus` (the no-`#main` branch, `ToastClose.tsx:43`)
+   and `font_metrics_check_fails_when_stale` (the stale branch of `font-metrics.ts --check`).
+- Stays a note, no change: `aria-labelledby` has no fallback when a label lacks an id (`SelectListbox.tsx:135`).
+  Every Select goes through `Field`, which always prints the label id; a later step that renders a Select outside
+  `Field` adds the fallback.
 
 **Reuse** (all provisional — for reuse review):
 - `app/src/components/app-shell.tsx:28-186` (StateWindow 158-186) → LESSON: one state component for empty,
@@ -5932,6 +6025,95 @@ and edge jobs, unchanged and only asserted).
 the one workflow touched. Alex's answer joins `alex-answers.md` as a `mirror-build-stage` row. If he says no, P1.28v
 is withdrawn, P1.28d stays, and the builder findings go to per-CVE trivyignore cards (P1.28x is already merged, book
 edit 2026-10-07-p128x-merged-as-built).
+
+**As built** (#430, merged at 2026-10-07T12:08:15Z as `fa74f1a`; Alex's card "Warn on build-only" at 03:56:37Z and
+his typed "Yes p128v" at 11:45:09Z, alex-answers `mirror-build-stage`). Two lines of the #430 body are wrong (book
+edit 2026-10-07-p128w-mirror-scan-pipefail): "Actions uses pipefail" does not hold for a step with no `shell:` key,
+which P1.28w fixes; and "a bad stage fails before anything is scanned" does not hold, because the stage check runs
+per entry inside the loop, so entries listed before a bad one are scanned first. The job still fails on the bad
+entry, as the record required; no change is booked (a pre-pass over all stages would be a nicety, not a fix).
+
+---
+
+### P1.28w — Make the mirror scan's HIGH warnings fire
+
+**Tags:** [SEC] · **Depends on:** P1.28v (merged, #430) · **Class:** check (`.github/workflows/mirror.yml`,
+`scripts/ci/mirror-scan.test.ts`), neutral to tightening · **Slice:** 1, after P1.28v
+
+Book edit 2026-10-07-p128w-mirror-scan-pipefail. Letter `w` is a further check step after `v` (P1.28's taken letters
+are b, d, q, v and x).
+
+**The gap** (checked on main): the scan step in `mirror.yml` (the `run:` block around lines 46 to 69) has no `shell:`
+key and the workflow has no `defaults.run.shell`, so Actions runs it as `bash -e {0}`, without `pipefail`. The
+build-stage HIGH run is `docker run ... trivy ... | tee -a "$GITHUB_STEP_SUMMARY" || status=$?`; the pipeline's
+status is `tee`'s, so `status` stays 0, the `::warning` branch never fires, and a Trivy error in that run (any exit
+other than 2) is swallowed too. The post-merge mirror run shows 0 annotations although the builder base has eight
+HIGH findings. `scripts/ci/mirror-scan.test.ts:61` runs the script with `bash --noprofile --norc -eo pipefail`,
+which Actions uses only with `shell: bash`, so the test hides the gap. What still holds: the CRITICAL gate (the
+second `docker run`, not piped) fails the job as approved, so nothing ships weaker.
+
+**Changes:**
+1. `shell: bash` on the scan step, so Actions runs `bash --noprofile --norc -eo pipefail {0}`. (`set -o pipefail` at
+   the top of the script or reading `PIPESTATUS[0]` are acceptable equivalents; `shell: bash` is the default because
+   it is declarative and the test can read it.)
+2. The test takes its shell from the workflow: it reads the step's `shell:` key and maps it the way Actions does
+   (none → `bash -e`; `bash` → `bash --noprofile --norc -eo pipefail`), never hard-coding `pipefail`.
+3. One Trivy database download per job: both `docker run` calls mount one cache directory under `$RUNNER_TEMP`
+   (`-v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy"`, or `--cache-dir` on a mounted path). The database source
+   does not change.
+
+**Done when (tests):**
+- `mirror_scan_step_sets_pipefail_shell`: the scan step declares `shell: bash`.
+- The existing build-stage warning test runs under the workflow's own shell. Red evidence: with the `shell:` key
+  removed, it and a new `build_stage_trivy_error_fails` (a stand-in Trivy exits 3 on the HIGH run) both fail.
+- `trivy_runs_share_one_cache_dir`: both `docker run` lines mount the same cache path.
+
+**Alex's word:** a fix toward what Alex approved ("Warn on build-only", 2026-10-07T03:56:37Z), not a loosening. The
+harness classifier on `.github/workflows` still needs his typed line, for example "yes P1.28w mirror.yml"; the
+coordinator asks for it once.
+
+**Image references outside FROM:** the candidate this record raised for architecture is ruled and booked as P1.28u
+below (every stage, no allowlist, `ADD` local only).
+
+---
+
+### P1.28u — Refuse image references outside FROM
+
+**Tags:** [SEC] · **Depends on:** P1.28v (merged, #430); independent of P1.28w · **Class:** product (feature),
+`deployment/images/images.test.ts` only, under the `/deployment/` security-review line (not trusted base, not a check
+path, no `.github/` file) · **Slice:** 1, after P1.28v · **Owner:** Phase 1 (it touches no file P1.29 touches)
+
+Book edits 2026-10-07-p128u-image-refs-outside-from and architecture's 2026-10-07-p128-copy-from-image-ref (which
+wins where they differ). Letter `u` is architecture's suggestion (P1.28's taken letters are b, d, q, v, w and x). No
+word from Alex: a tightening outside `.github/`.
+
+**The gap** (read on main ae87efc): `finalStageProblems` (`images.test.ts` about lines 79 to 96) and the digest, lock
+and allowlist tests (`base_digest_matches_lock`, `from_without_digest_refused`, `from_host_not_allowlisted_refused`)
+read `FROM` lines only. `COPY --from=<image ref>` and `RUN --mount=…,from=<image ref>` pull a whole image that never
+passes through `FROM`, so it bypasses the digest pin, the lock entry, the allowlisted host, the mirror scan and the
+stage label; `ADD <url>` and `ADD <git ref>` fetch external content the same way.
+
+**Rule:**
+- In every stage, a `COPY --from=` value and the `from=` key of every `RUN --mount` (bind or cache) name only an
+  earlier stage's alias (case-insensitive, as BuildKit matches) or an earlier stage's numeric index. Anything else
+  is refused: an image reference, a later or unknown stage, an empty value.
+- `ADD` takes only local sources; a source with `://`, or the git form, is refused.
+- No allowlist: an image that is really needed gets its own `FROM … AS name` stage, which makes it pinned, locked,
+  allowlisted, mirrored, scanned and stage-labelled by the rules that already exist.
+- Parsing fails closed: instructions match case-insensitively, continuation lines are joined (as `runtimeStage`
+  does), `--from` and `from=` are read wherever they sit among the flags, and an instruction the test cannot parse is
+  a failure, not a skip.
+- Build artifacts copied from a build stage into the final stage (the edge's caddy binary) stay allowed; the
+  shipped-image Trivy scan in `images.yml` (fail on HIGH) judges what they contain.
+
+**Done when (tests),** in `deployment/images/images.test.ts`:
+- `copy_from_image_ref_refused`: a full digest-pinned reference, a bare `alpine` and a later stage's name.
+- `run_mount_from_image_ref_refused`: bind and cache mounts, `from=` in any position.
+- `add_remote_source_refused`: an `https://` source and a git source.
+- `copy_from_stage_alias_or_index_allowed`: an alias in any letter case and an earlier numeric index.
+- `instruction_parse_failure_fails`.
+- Every real Dockerfile under `deployment/` (the existing `dockerfiles` list) passes unchanged. A real Dockerfile
+  that fails is a finding to report, never a test to relax.
 
 ---
 

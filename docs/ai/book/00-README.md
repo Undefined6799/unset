@@ -275,7 +275,11 @@ Every step is designed so its code follows these rules, and its tests or CI guar
     which `checkPrTitle` applies to the PR title because it becomes the squash subject); the step book counts it when
     booking. A booked title already too long is shortened by the PR that builds it, whose body names both titles, and
     the step book records it as built; no mass retitle (book edit 2026-10-07-p124b-as-built-and-p124c, amended
-    12:12Z). A human can go from any file to the step that explains it, and back.
+    12:12Z). One full path per record, one per line, and a split is named by its record, never by another ruling's
+    option letter. A PR that creates a workspace also adds its hub note (`docs/ai/notes/area/<name>.md`), so the
+    `notes-hub` warning never lands; docs never change a PR's class, so a trusted PR can carry it too
+    (`infrastructure/seal` stays an accepted warning until the next step that touches it adds its note; book edit
+    2026-10-07-p115-as-built). A human can go from any file to the step that explains it, and back.
 
 ## How the review works
 

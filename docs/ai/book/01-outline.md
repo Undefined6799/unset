@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 119 steps: 98 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 123 steps: 102 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -181,7 +181,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.15m | Audit SQL part 1: schema grants, default privilege, functions (trusted) | [SEC] | P1.15x, P1.15q, P1.12, P1.13 | `phase-1.md` |
 | P1.15d | Audit SQL part 2: tables, seeds, index, triggers, auditor SELECT | [SEC] | P1.15m | `phase-1.md` |
 | P1.15g | Audit SQL part 3: EXECUTE grants on `audit.append`, audit tests (trusted) | [SEC] | P1.15d | `phase-1.md` |
-| P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
+| P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | [SEC], trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
+| P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
@@ -212,7 +213,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24j | Islands, budget-measured | — | P1.24f | `phase-1.md` |
 | P1.24b | Toast and select islands within the JS budget (per-icon drawing modules first) | feature | P1.24j | `phase-1.md` |
 | P1.24c | Toast focus after close, required select stays native, select labels, font-metrics entry check | feature | P1.24b | `phase-1.md` |
-| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
+| P1.25k | Error-page hook in the server kit | [SEC], trusted | P1.04, P1.08 | `phase-1.md` |
+| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -220,6 +222,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28q | images.yml: build, lint, scan, health-check the edge image | check | P1.27q, P1.27 | `phase-1.md` |
 | P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
+| P1.28w | Mirror scan: pipefail shell so build-stage HIGH warnings fire; one Trivy cache | [SEC] | P1.28v | `phase-1.md` |
+| P1.28u | Refuse image references outside FROM: COPY --from, RUN --mount from=, ADD remote | [SEC] | P1.28v | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
@@ -303,6 +307,7 @@ flowchart TD
   P1_15d["P1.15d Audit SQL part 2"]
   P1_15g["P1.15g Audit SQL part 3"]
   P1_15["P1.15 Audit TS workspace"]
+  P1_15s["P1.15s Audit chain tests"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17e["P1.17e Lock log events"]
@@ -331,6 +336,7 @@ flowchart TD
   P1_24j["P1.24j Islands"]
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
+  P1_25k["P1.25k Error-page hook in the kit"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -338,6 +344,8 @@ flowchart TD
   P1_28q["P1.28q edge image scan"]
   P1_28d["P1.28d base entries by stage"]
   P1_28v["P1.28v mirror scan per stage"]
+  P1_28w["P1.28w mirror scan pipefail shell"]
+  P1_28u["P1.28u image refs outside FROM"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_28b["P1.28b Edge leftovers"]
@@ -455,6 +463,7 @@ flowchart TD
   P1_24j --> P1_24b
   P1_24b --> P1_24c
   P1_24k --> P1_25
+  P1_25k --> P1_25
   P1_24c --> P1_26
   P1_25 --> P1_26
   P1_04 --> P1_27
@@ -463,6 +472,8 @@ flowchart TD
   P1_28q --> P1_28
   P1_27 --> P1_28d
   P1_28d --> P1_28v
+  P1_28v --> P1_28w
+  P1_28v --> P1_28u
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -505,6 +516,7 @@ flowchart TD
   P2_11 --> P2_12
   P2_15 --> P2_12
   P1_15 --> P2_12
+  P1_15 --> P1_15s
   P2_06 --> P2_13
   P1_25 --> P2_13
   P2_13 --> P2_13a
@@ -548,7 +560,7 @@ flowchart TD
 
 ## i18n slice — EN/FR catalogs and the locale preference (English first, Alex 2026-10-04 12:58Z)
 
-Depth: **build-ready**. 2 steps, after slice 1 (P2.13a merged) and before the Phase 1 exit (P1.38), which needs both
+Depth: **build-ready**. 3 steps, after slice 1 (P2.13a merged) and before the Phase 1 exit (P1.38), which needs both
 languages; it may run before, beside or after the slice-2 steps. Alex's answer on the step-book card (against the
 recommendation): slice 1 is English only, its screens keeping their English text in one `messages.ts` per feature (plain
 exported constants, no catalog machinery). This slice's **first task** (P1.19 steps 0a–0d) converts those modules into
@@ -572,7 +584,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -581,7 +593,6 @@ Arachnid application, and the Phase 1 exit.
 | P2.13b | graphify code graphs in CI (added, editor pass 2026-10-04 evening; PI-2) | — | P2.13a, P0.07 | `phase-2.md` |
 | P1.14a | `sealTo`: encrypt-only sealing to an offline-held public key (age X25519) | [SEC] | P1.02, P1.14 | `phase-1.md` |
 | P1.15a | Audit retention: segments, retention-checked redaction, erasure by lane | [SEC] | P1.15 | `phase-1.md` |
-| P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
 | P1.18b | `net-guard` forward-proxy mode and the egress proxy for processes that are not ours | [SEC] | P1.18a | `phase-1.md` |
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
@@ -598,7 +609,6 @@ Arachnid application, and the Phase 1 exit.
 flowchart TD
   P1_14a["P1.14a sealTo"]
   P1_15a["P1.15a Audit retention"]
-  P1_15s["P1.15s Audit chain tests"]
   P1_18b["P1.18b net-guard forward-proxy mode and"]
   P1_33["P1.33 Server baseline"]
   P1_33a["P1.33a Retire the 0x40 prototype before"]
@@ -613,7 +623,6 @@ flowchart TD
   P1_34 --> P1_35
   P1_35 --> P1_38
   P1_37a --> P1_38
-  P1_15s --> P1_38
 ```
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
