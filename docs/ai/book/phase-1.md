@@ -4895,8 +4895,9 @@ review-only second PR within the same step).
 
 **Split (book edit 2026-10-07-p124a-split, final 00:09Z):** measured on main 1462b4b the kit components average about
 75 source lines each, so this step's 15 components and up to 6 islands come to about 1,200 to 1,500 lines, over the
-800-line limit even with the islands in a second PR. Three product steps of about 400 lines each (a reason in the PR
-body above that); this section's text specifies all three:
+800-line limit even with the islands in a second PR. Four product steps of about 400 lines each (a reason in the PR
+body above that; P1.24f split from P1.24k by book edit 2026-10-07-p124k-split); this section's text specifies all
+four:
   1. **P1.24a** (deps unchanged; keeps the issue and `card_surface_opaque`): Callout, Card, Table, Progress, Spinner,
      CodeBlock, AsciiBackground.
   2. **P1.24k** (depends on P1.24a; about 450 lines, its body gives the reason): no-JS versions only: Header (details
@@ -5337,7 +5338,9 @@ dockerfile manager bumps only the `FROM` line, so `base_digest_matches_lock` wou
 managers for the lock files. The repeatable procedure:
 1. Take the newest upstream multi-arch index digest of the same tag that is at least 7 days old (P0.08's
    `minimumReleaseAge`); `docker buildx imagetools inspect` shows an OCI index. A younger digest is allowed only when
-   it fixes a HIGH or CRITICAL finding with a fixed version, and the PR body names the CVEs.
+   it fixes a HIGH or CRITICAL finding with a fixed version, and the PR body names the CVEs. The age rule also applies
+   to a first pin and to a variant switch (step book 02:03Z): the cooling-off period guards against a bad or
+   compromised push, and that risk is the same for a first pin.
 2. Change the one digest in four places in one PR: the `FROM` lines, `bases.lock.json`, `mirror.list.json`, and any
    test fixture that pins it.
 3. The PR body shows Trivy on the new digest: zero HIGH or CRITICAL findings with a fixed version, against the old
@@ -5547,8 +5550,16 @@ b, q, r, s and v are taken.
   `runtime_stage_installs_no_os_packages`; kept `runtime_has_no_package_manager`, `dl3026_ignore_only_on_upstream_base`,
   `base_digest_matches_lock`, `from_without_digest_refused` and `from_host_not_allowlisted_refused`.
 
-**Digest:** per "Bumping a pinned base digest" above: the newest multi-arch index digest of `26-trixie-slim` at least
-7 days old, a younger one only for a named HIGH or CRITICAL fix. The PR body shows Trivy (HIGH and CRITICAL,
+**Digest** (ruling, step book 2026-10-07 01:59Z): a switch follows the same 7-day rule as a bump, with no exception
+and nothing waiting on P1.27d. The `26-trixie-slim` index current at booking (`sha256:930557a2…5b33`, pushed
+2026-10-06T05:41Z, Node 26.10.0) is too young. Take the newest `node` trixie-slim multi-arch index on Node 26 pushed
+at least 7 days before the PR opens, which may be on an earlier Node 26 patch release; find it through the tag's
+digest history or an exact-version tag such as `26.9.x-trixie-slim`. The lock and `FROM` lines record the tag the
+digest was taken from (`runtime_base_is_debian_slim` already allows an exact-version tag). Exception: if Trivy shows
+the older index has a fixable HIGH or CRITICAL finding that the current index fixes, take the current index and
+name the CVEs. If no index at least 7 days old can be found or verified, wait: on or after 2026-10-13T05:41Z, take
+`sha256:930557a2…5b33` if it is still the newest index that old. The PR body shows how the digest was chosen and its
+push time, and shows Trivy (HIGH and CRITICAL,
 `--ignore-unfixed`) for the old Alpine pin and the new pin; the bundled npm findings in the mirror scan exist in both
 variants and are named as such, not as new.
 
@@ -5688,6 +5699,16 @@ with an `edge` path segment, and docs. The pins it needs elsewhere land first, h
 **Contents:** the `caddy` and `caddy-builder` entries in `deployment/images/bases.lock.json`;
 `deployment/mirror.list.json`; and `deployment/images/images.test.ts`, whose allowlist widens to
 `docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27).
+
+**Digest age** (step book 2026-10-07 02:03Z, book edit 2026-10-07-p128-split-and-p1b-a1): a first pin follows the
+7-day rule of "Bumping a pinned base digest" in P1.27. The indexes current at booking, `caddy:2.11.7-alpine`
+(`d8542f48…f75f`) and `caddy:2.11.7-builder-alpine` (`80331d37…7c26`), were both pushed at 2026-10-06T05:52Z and are
+too young. Re-pin each tag, judged separately, to the newest 2.11.7 index at least 7 days old, found in the tag's
+digest history. Exception: if Trivy shows the older index has a fixable HIGH or CRITICAL finding that the current
+index fixes, keep the current index and name the CVEs. If 2.11.7 has no index that old, P1.28x waits and does not
+drop to 2.11.6 (the book, ADR 0018 and the plugin skew test, upstream issue #94, are written against 2.11.7); it
+re-pins once each tag has an index 7 days old, which is these digests on or after 2026-10-13T05:52Z if nothing newer
+appears. P1.28 keeps waiting on P1.28x. The PR body gives each digest's push time and how it was chosen.
 
 ---
 
