@@ -6966,8 +6966,8 @@ in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; pr
 **Split three ways** (book edit 2026-10-07-p130s-split-and-p128h, with architecture's
 2026-10-07-p130s-networks-and-caddyfile-reader behind it, which wins where they differ): P1.30s builds the ten
 checks with no new input contract; **P1.30t** builds C17 and **P1.30u** builds C18, below. All three are [SEC],
-product class, slice 1, owned by Phase 2, in the order s, t, u. Steps that depended on P1.30s (P2.13a, P1.34) depend
-on P1.30s, P1.30t and P1.30u.
+product class, slice 1, owned by Phase 2, in the order s, t, u. Steps that depended on P1.30s (P2.13a, P1.34, P2.26a,
+P5.03) depend on P1.30s, P1.30t and P1.30u.
 
 **C21's retirement report** (Phase 2's default, accepted as book text): `docs/human/retirement/retirement-check.json`
 holds `{ "retirement_part_a_complete": true }` and is read with the strict YAML parser. When the file is absent, C21
