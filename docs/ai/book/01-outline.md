@@ -127,7 +127,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 143 steps: 122 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 149 steps: 128 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -221,7 +221,13 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25b | Error-page hook leftovers: documentation addresses, byte cap, no-cache per group, 413 close, Promise type test, request id on the fixed page, private page-taking errorResponse | [SEC], trusted | P1.25k | `phase-1.md` |
 | P1.25h | UI build runners move to the JSX-free shared/ui-build workspace | — | P1.24c | `phase-1.md` |
 | P1.25q | Notes guard: `ui-build` area | check | P1.25h | `phase-1.md` |
-| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h | `phase-1.md` |
+| P1.25w | ui-build budget key and lint row (type-only shared-ui import) | check | P1.25h | `phase-1.md` |
+| P1.25d | jsx-free detector matches resolved shared/ui paths and react-dom | — | P1.25h | `phase-1.md` |
+| P1.25l | Budget check: every island keeps its own lazy chunk | check | P1.25h | `phase-1.md` |
+| P1.25o | CODEOWNERS, lint edges and budget for shared/islands | check [ALEX] | P1.25h | `phase-1.md` |
+| P1.25i | Island runtime moves to the shared/islands workspace | trusted | P1.25o | `phase-1.md` |
+| P1.25u | CODEOWNERS drops the island runtime's old paths | check | P1.25i | `phase-1.md` |
+| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25i | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -364,6 +370,12 @@ flowchart TD
   P1_25b["P1.25b Error-page hook leftovers"]
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
+  P1_25w["P1.25w ui-build budget and lint row"]
+  P1_25d["P1.25d jsx-free detector"]
+  P1_25l["P1.25l Islands keep lazy chunks"]
+  P1_25o["P1.25o Own shared/islands"]
+  P1_25i["P1.25i Island runtime to shared/islands"]
+  P1_25u["P1.25u Drop old island owner paths"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -512,6 +524,13 @@ flowchart TD
   P1_24c --> P1_25h
   P1_25h --> P1_25
   P1_25h --> P1_25q
+  P1_25h --> P1_25w
+  P1_25h --> P1_25d
+  P1_25h --> P1_25l
+  P1_25h --> P1_25o
+  P1_25o --> P1_25i
+  P1_25i --> P1_25u
+  P1_25i --> P1_25
   P1_24c --> P1_26
   P1_25 --> P1_26
   P1_04 --> P1_27

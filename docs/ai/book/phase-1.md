@@ -173,6 +173,12 @@ flowchart LR
   P1_25b["P1.25b error-page hook leftovers"]
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
+  P1_25w["P1.25w ui-build budget and lint row"]
+  P1_25d["P1.25d jsx-free detector"]
+  P1_25l["P1.25l islands keep lazy chunks"]
+  P1_25o["P1.25o own shared/islands ALEX"]
+  P1_25i["P1.25i island runtime to shared/islands"]
+  P1_25u["P1.25u drop old island owner paths"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -243,6 +249,13 @@ flowchart LR
   P1_24c --> P1_25h
   P1_25h --> P1_25
   P1_25h --> P1_25q
+  P1_25h --> P1_25w
+  P1_25h --> P1_25d
+  P1_25h --> P1_25l
+  P1_25h --> P1_25o
+  P1_25o --> P1_25i
+  P1_25i --> P1_25u
+  P1_25i --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
@@ -5478,8 +5491,7 @@ would break DC-2's one-surface rule. The cause is two runtimes in one workspace,
 **Where:** new MIT workspace `shared/ui-build/` (`@unset/shared-ui-build`, exports `"."`): `index.ts`, `package.json`,
 tsconfig, LICENSE, hub note `docs/ai/notes/area/ui-build.md`; `build-tokens.ts`, `font-metrics.ts`, `icons.ts`,
 `tokens.ts` and their tests, moved unchanged from `shared/ui/scripts/`; `scripts/ui/*.ts` importing the new index;
-`shared/ui/index.ts` exporting Header, Footer, SkipLink, Callout, RadioGroup and Button (and later components)
-beside the island plumbing; the workspace and lockfile entries.
+the workspace and lockfile entries. (As built, `shared/ui/index.ts` exports no components; see below.)
 
 **Rules:**
 - The data stays in shared/ui (`icons/icons.json`, `icons/drawings/*.generated.ts`, tokens, fonts); the runners still
@@ -5490,13 +5502,12 @@ beside the island plumbing; the workspace and lockfile entries.
   shared/ui takes no dependency on shared/ui-build, so there is no cycle. The generic `shared` row
   (`.dependency-cruiser.cjs:116`) already covers `shared/ui-build/`, so the MATRIX is unchanged and no MATRIX q or v
   part is booked.
-- The freshness tests (`icon_allowlist_matches_sheet` and the token test) stay with shared/ui, which owns the data,
-  and import the runner through `@unset/shared-ui-build`'s index. The third thread's branch (relayed 12:52Z, to be
-  confirmed against the merged PR) moves them with the runners instead, since keeping them would need a shared/ui to
-  ui-build tsconfig reference and a `tsc -b` cycle; they still read shared/ui's files by path, and
-  `icon_drawing_modules_match_icons_json` moves to `shared/ui/icons/drawings.test.ts`. Its body names this under
-  "unsure". ADR 0016 still names `shared/ui/scripts/tokens.ts`; accepted ADRs are never edited, so it is read with
-  this note: the path is now `shared/ui-build/tokens.ts`.
+- The freshness tests (`icon_allowlist_matches_sheet` and the token test) move with the runners into shared/ui-build
+  (as built, #464): keeping them in shared/ui would need a shared/ui to ui-build tsconfig reference and a `tsc -b`
+  cycle, a build-graph reason the architecture record did not foresee. They still read shared/ui's files by path;
+  `icon_drawing_modules_match_icons_json` moved to `shared/ui/icons/drawings.test.ts`, since it imports only shared/ui
+  files. ADR 0016 still names `shared/ui/scripts/tokens.ts`; accepted ADRs are never edited, so it is read with this
+  note: the path is now `shared/ui-build/tokens.ts`.
 - A pure move counts lightly against the size budget; the body says it is a move with no logic change, and `git diff
   -M` shows the renames.
 
@@ -5504,6 +5515,22 @@ Tests: `ui_build_is_jsx_free` (under `shared/ui-build/`: no `.tsx` file, no `rea
 `@unset/shared-ui` a whole-statement `import type`), `ui_build_entries_run_in_node` against the new index (the
 end-to-end proof that nothing reaches `.tsx` at runtime), the moved runner tests unchanged, and P1.25's component
 imports through `@unset/shared-ui` passing depcruise with no rule change.
+
+**As built** (#464, merged by Alex at 2026-10-07T19:04:01Z as `f893a3f`; book edit 2026-10-07-p125h-ui-build-workspace,
+"Added 14:20Z", verified 19:08Z):
+- The hub note `docs/ai/notes/area/ui-build.md` lists area `ui`, because the notes guard's `AREAS`
+  (`scripts/guards/notes.ts:14`) has no `ui-build`; P1.25q adds it.
+- **The shared/ui index exports no components.** Re-exporting them (c739577) put Header and the header-menu island in
+  boot's static graph: island JS went from 12 files to 7, boot from 69.71 to 71.08 kB gzip, and the build warned
+  `INEFFECTIVE_DYNAMIC_IMPORT`. It was reverted as f4bd852 (ruling 2026-10-07-p125h-boot-chunk). `"sideEffects":
+  ["**/*.css"]` was tried and dropped: boot came out at 69.72 kB against main's 69.71. The island runtime moves out
+  instead (P1.25o, P1.25i, P1.25u), and P1.25 exports components after P1.25i.
+- **The bundle is unchanged from main**, in the check job on #464's final head b64f68f (job 112839200477):
+  `boot-3CIOxxve.js` 222.61 kB, 69.71 kB gzip; six island lines (copy 748, header-menu 810, modal 483, select 1630,
+  tabs 975, toast 808); all island JS 75345 gzip bytes in 12 files (max 76800); no `INEFFECTIVE_DYNAMIC_IMPORT`. The
+  push run on main has no check job, so the PR head's check is the record.
+- Follow-ups: P1.25w, P1.25d, P1.25l, and the island-runtime split P1.25o, P1.25i, P1.25u (book edits
+  2026-10-07-p125w-p125d-ui-build-follow-ups and 2026-10-07-p125l-islands-lazy-chunks).
 
 ---
 
@@ -5522,9 +5549,104 @@ Tests: the guard's area test gains `ui-build`, and the `notes-hub` check finds `
 
 ---
 
+### P1.25w — Measure and fence the ui-build workspace
+Tags: check            Depends on: P1.25h (merged, #464)
+Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups,
+from architecture's 2026-10-07-p125h-follow-ups (N1, N2). Owner: Phase 2. A tightening (N2 restores lint enforcement
+lost in the move), cleared by the coordinator; not a classifier path.
+1. **Budget:** `"shared/ui-build": 800` in `scripts/budgets/budgets.json` and in the duplicate map in
+   `scripts/budgets/check.ts:15-23`, both together; `shared/ui` stays at 2500, no combined key.
+2. **Lint row:** a MATRIX row for `^shared/ui-build/` next to `shared-ui-lexicons` (`.dependency-cruiser.cjs:117`),
+   allowing exactly `^shared/ui-build/`, npm packages, and the `@unset/shared-ui` index as a type-only dependency; no
+   CORE built-ins and no value import of shared/ui. A fixture proves `^(shared/(ui|lexicons)/)` does not match
+   `shared/ui-build/`.
+
+Tests: a `check.test.ts` case counting a `shared/ui-build/` file under its own key; AB-1 fixtures (pass: an internal
+import, a type-only import of the shared-ui index; fail: `node:fs` from shared/ui-build, a value import of the
+shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green and the budget prints a
+`shared/ui-build` line.
+
+---
+
+### P1.25d — Tighten the jsx-free detector's matching
+Tags: —            Depends on: P1.25h (merged, #464)
+Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride P1.25w); book edit
+2026-10-07-p125w-p125d-ui-build-follow-ups (N4). Owner: the third thread. KIT matches any import that resolves into
+`shared/ui/` (the bare specifier, any subpath, any relative path), on the resolved path, not the text; REACT matches
+`react`, `react/*`, `react-dom` and `react-dom/*`; the inline `import { type X }` refusal stays. Tests: one case per
+newly caught form (a subpath, a relative path, `react-dom/client`, `react/jsx-runtime`). Rider option: a PR touching
+`shared/ui-build/` that opens before P1.25d is claimed carries it, with one line in its body, and P1.25d is then
+recorded as built. Defence in depth beside P1.25w's row, so their order does not matter.
+
+---
+
+### P1.25l — Check that every island keeps a lazy chunk
+Tags: check            Depends on: P1.25h (merged, #464)
+Slice 1, check class (`scripts/budgets/island.ts` and its test); book edit 2026-10-07-p125l-islands-lazy-chunks, from
+architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: Phase 2. A tightening that restores the adopted island
+model (plan §5.1), cleared by the coordinator. #464's first build inlined islands into boot and the budget silently
+counted fewer, so the manifest is checked against the source list.
+
+`islandsAreLazyChunks` reads the Vite manifest (the `ManifestChunk` type, `island.ts:16-23`), never the build log, and
+runs in `main` before the size gate; a refusal exits 1 and names the island (and, for rule 3, the entry that reaches
+it). The source list is every `*.island.tsx` under the two island roots the depcruise island rule names
+(`.dependency-cruiser.cjs:55`), passed in as `gzipBytes` is. Each listed island must: 1. have a manifest key whose
+`src` is that file; 2. have `isDynamicEntry: true` and no `isEntry`; 3. not appear in the static closure (`imports`
+only) of any `isEntry` chunk, boot included.
+
+Tests (`islands_are_lazy_chunks`): fail an island statically imported from boot (the #464 shape), an island with no
+manifest chunk, and an island chunk marked `isEntry`; pass today's shape, where boot reaches each island only through
+`dynamicImports`. Done when `npm run check` is green on main and the report still prints one line per island.
+
+---
+
+### P1.25o — Own the island runtime's new paths
+Tags: check, [ALEX]            Depends on: P1.25h (merged, #464)
+Slice 1, check class (`.github/CODEOWNERS`, `scripts/lint/`, `scripts/budgets/`); book edit
+2026-10-07-p125l-islands-lazy-chunks (the split, 14:20Z). Owner: Phase 2. Order: P1.25o, P1.25i, then P1.25u and
+P1.25; P1.25o only adds paths, so no trusted file is ever unowned.
+1. **CODEOWNERS:** add `/shared/islands/` under "Islands and links" and under "Islands props serialiser" (the
+   trusted-base section). Remove nothing.
+2. **The depcruise edges the move needs** (a trusted PR never widens the MATRIX, so they land here first): a row for
+   `^shared/islands/` allowing only itself and npm, no CORE; the shared/ui row and apps/web may import the
+   `@unset/shared-islands` index; the island rule (`.dependency-cruiser.cjs:263-265`) allows `^shared/islands/` beside
+   `^shared/ui/`. AB-1 fixtures: pass a kit import of the islands index; fail `node:fs` from shared/islands and
+   shared/islands importing shared/ui.
+3. **Budgets:** a `"shared/islands"` key in `budgets.json` and in `check.ts`'s duplicate map, the moved lines rounded
+   up to the next hundred, at least 300.
+
+A loosening (coordinator's ruling, 14:11Z): the new trusted-section directory widens what a trusted PR may carry until
+P1.25u narrows it, and the new edges widen what may import what. Phase 2 opens it only after Alex's typed line (for
+example "yes P1.25o CODEOWNERS"), quoted with its time in the PR body. Line: (pending).
+
+---
+
+### P1.25i — Move the island runtime to shared/islands
+Tags: trusted            Depends on: P1.25o
+Slice 1, trusted; book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: the third thread. A new workspace
+`@unset/shared-islands` (`shared/islands/`) whose index holds define, props, readProps and slot, moved with their
+tests (git mv, history kept); `safeHref` stays in shared/ui. `hydrate.ts` imports only `@unset/shared-islands`; the
+kit and each `*.island.tsx` import the islands workspace. Its `docs/ai/notes` hub note rides along, filed under area
+`ui` until a notes-guard area exists (a P1.25q-style check step, which needs Alex's line). Done when `npm run check`
+is green, boot's gzip size is at or below main's, and the island report keeps 12 files and one line per island
+(P1.25l, once merged, enforces the last). Refused: a subpath import for readProps, and P1.25 importing components by
+subpath (DC-2).
+
+---
+
+### P1.25u — Drop the island runtime's old owner paths
+Tags: check            Depends on: P1.25i
+Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: Phase 2. Removes
+`/shared/ui/islands/`, `/shared/ui/src/islands/`, `/shared/ui/islands/props.ts` and
+`/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping `/shared/ui/safe-href.ts`, then confirms
+with `git ls-files` that none of the removed paths exists and that the trusted-base tests pass. A tightening: it
+removes ownership only from paths that no longer exist.
+
+---
+
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25i (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
