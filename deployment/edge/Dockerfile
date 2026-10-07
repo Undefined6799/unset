@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 # The edge image (P1.28; ADR 0018): standard Caddy plus exactly one plugin, github.com/mholt/caddy-ratelimit, built
 # with xcaddy at pinned versions, on the official Caddy Alpine images pinned by index digest
 # (deployment/images/bases.lock.json). Built from deployment/edge as the context; scanned in the images workflow's
