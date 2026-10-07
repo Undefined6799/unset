@@ -89,14 +89,13 @@ function moduleProblem(root: string, walk: Walk, test: string, file: string): st
 }
 
 /** Every unit test that builds an image itself or through a module it reaches, and the allowed unresolved edges the
- * walk met, each printed once. */
+ * walk met. */
 async function imageBuildProblems(root: string): Promise<{ problems: string[]; allowed: string[] }> {
   const walk: Walk = { graph: await importGraph(root), allowed: new Set() };
   const problems = [...walk.graph.keys()]
     .filter((file) => TEST.test(file) && !IMAGE_TEST.test(file))
     .flatMap((file) => buildProblem(root, walk, file) ?? [])
     .sort();
-  for (const edge of walk.allowed) console.log(`unresolved, allowed: ${edge}`);
   return { problems, allowed: [...walk.allowed] };
 }
 
@@ -141,8 +140,11 @@ function tree(files: Record<string, string>): string {
 afterAll(removeFixtures);
 
 describe("image tests", () => {
-  test("image_builds_only_in_image_tests", { timeout: 60_000 }, async () => {
-    expect(await imageBuildProblems(ROOT)).toEqual({ problems: [], allowed: [RENDER_EDGE] });
+  test("image_builds_only_in_image_tests", async () => {
+    const repository = await imageBuildProblems(ROOT);
+    // The allowed edge is printed once, from the repository walk only, so it is visible in the check log.
+    for (const edge of repository.allowed) console.log(`unresolved, allowed: ${edge}`);
+    expect(repository).toEqual({ problems: [], allowed: [RENDER_EDGE] });
     const root = tree({
       "a/spawn.test.ts": `spawnSync("docker", ${JSON.stringify(["buildx", BUILD_WORD, "."])});\n`,
       "a/shell.test.ts": `run("${["docker", BUILD_WORD].join(" ")} -t x .");\n`,
