@@ -2875,7 +2875,7 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `audit.row_hash`,
      `audit.append`, the triggers, auditor SELECT and the default-privileges line; the `grant-matrix.json` and
      `erasure-registry.json` rows. Tests in `tests/integration/postgres/audit.test.ts`: `append_as_admin`,
-     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `append_has_no_pii_parameter`,
+     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `append_has_no_pii_argument`,
      `concurrent_appends`, `audit_flood_does_not_block`, `registry_rows`, and `row_hash_known_answer` (SQL) against a
      vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged. No `REVOKE TRUNCATE`:
      only the owner holds it, and the grants test proves no role does (a default-privileges path that grants it goes
@@ -2884,23 +2884,27 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      reports mixed_grant_change on one 0008, so the class comes from pr-shape, the P1.14m precedent). The SQL above
      ships in three PRs, merged in number order, each leaving main green:
      - **P1.15m** (trusted; P1.15x, P1.15q, P1.12, P1.13), 0008: the `types` and `public` USAGE grants to `audit_owner`,
-       `audit_owner`'s routine default privilege, the four `audit.*` plpgsql functions, the matrix `schemas` and
-       `defaults` lines and the `grants.test.ts` stand-in updates. The default privilege revoking EXECUTE from
+       `audit_owner`'s routine default privilege, the four `audit.*` functions, the matrix `schemas` and
+       `defaults` lines and the `grants.test.ts` stand-in updates. As built (#411, merged 2026-10-07T03:43:30Z, book
+       edit 2026-10-07-p115m-as-built), it also created `tests/integration/postgres/audit.test.ts` with
+       `append_has_no_pii_argument` and `row_hash_known_answer`, and the vector file
+       `tests/integration/postgres/audit-row-hash.vector.json`, which P1.15g does not rewrite. The default privilege revoking EXECUTE from
        PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
-       0008. No 0008 function depends on an audit table (no audit table type in a signature, no `%ROWTYPE`, no
-       `LANGUAGE sql` body).
+       0008. Functions name no audit table in a body that is checked at CREATE time. `lp` and `row_hash` are
+       SQL-standard `RETURN` bodies, and the two that touch tables are plpgsql (no audit table type in a signature,
+       no `%ROWTYPE`).
      - **P1.15d** (feature; P1.15m), 0009 under `SET ROLE audit_owner`: the tables (five under the "No
        address" answer below), the seeds, the `(writer, ts)` index with its PF-1 evidence, the triggers (the
        statement-level one included; none on `event_pii`), auditor's SELECT on the chain, the matrix `audit.chain`
        row and the registry rows (no `event_pii` row).
      - **P1.15g** (trusted, grant migration; P1.15d), 0010: `GRANT EXECUTE ON audit.append` to `web`, `indexer` and
-       `admin` (only they hold it after 0010), the matrix `audit.append` row, and
-       `tests/integration/postgres/audit.test.ts`.
+       `admin` (only they hold it after 0010), the matrix `audit.append` row, and **extends**
+       `tests/integration/postgres/audit.test.ts` (created in P1.15m) with the EXECUTE-grant tests.
      **No audit PII** (P1a-A1 answered "No address", 2026-10-07; book edit 2026-10-06-p115m-tailnet-deferral-steps, architecture 00:20Z):
      `audit.event_pii` goes entirely. In 0008 `audit.append` has no `p_pii` and no step 7, `redact` works on the body
      only, and `erase_subject` has no `event_pii` clause; 0009 creates five tables (`retention_classes`, `actions`,
      `reasons`, `chain`, `event_body`) with no `event_pii` trigger or registry row; the verifier's `full` mode checks
-     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_parameter`. P1.15t is retired (the
+     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_argument`. P1.15t is retired (the
      P1.15q id is reused above for the check step) and `ip-columns.allow.json` stays `[]`. Any future audit PII is
      Alex's decision and an expand migration
      with a new signature. `adm.session.login_ip` and `pds-admin`'s staff addresses (P3.17) are unchanged. The text
@@ -3038,7 +3042,7 @@ Threats: the record of moderator and security actions versus the people and proc
   - T Rows edited with the triggers disabled → the chain verifier and body MACs detect it (`tamper_chain_metadata`,
     `tamper_body`); `migrator` acting as the owner is answered by P3.22's off-box anchor.
   - I Personal data or secrets in free-text audit fields → typed fields, a closed reason list, no PII parameter
-    (`typed_append_rejects_free_text`, `unknown_reason`, `append_has_no_pii_parameter`).
+    (`typed_append_rejects_free_text`, `unknown_reason`, `append_has_no_pii_argument`).
   - D A user-triggered flood blocks operator events → only that class is capped (`audit_flood_does_not_block`).
   - I A per-member sign-in record → no such action exists (`unknown_action`; Alex answer P1a-A2).
 
@@ -3052,7 +3056,7 @@ Done when (tests): (real Postgres)
   - no_direct_insert: `web` runs `INSERT INTO audit.chain …` → `42501`.
   - append_only: as `audit_owner`, `UPDATE`, `DELETE`, `TRUNCATE` on `audit.chain` → raise; `UPDATE` on a side table →
     raise.
-  - append_has_no_pii_parameter: `audit.append` has no `p_pii` argument (replaces `pii_only_admin` and
+  - append_has_no_pii_argument: `audit.append` has no `p_pii` argument (replaces `pii_only_admin` and
     `pii_refused_until_exception_settled`).
   - chain_links: 100 appends across both lanes → `verifyChain` ok in both modes; seqs 1..n contiguous per lane.
   - row_hash_known_answer: fixed inputs → the same 32 bytes from `rowHash` (TS) and `audit.row_hash` (SQL), equal to a
