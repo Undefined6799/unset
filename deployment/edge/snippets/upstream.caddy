@@ -1,0 +1,25 @@
+# Upstream timeouts and headers (P1.28; plan §6.1 Deadlines; invariant 3). Caddy v2.11.7 reverse_proxy and the
+# servers timeouts option (caddyserver/website src/docs/markdown/caddyfile/directives/reverse_proxy.md, "Headers" and
+# "The http transport"; options.md, "timeouts").
+#
+#
+# The upstream gives up after 130 s (limits.json EDGE_UPSTREAM_TIMEOUT_S), above the largest route deadline (120 s,
+# P1.04's deadlineMs cap) and REQUEST_DEADLINE_MS (at most 60 s), so the app's own 503 http.deadline always reaches the
+# client first; the server's write timeout (135 s, in the Caddyfile) sits above it in turn.
+
+# `reverse_proxy` with the client address withheld: the client's own forwarding headers are dropped, so the upstream
+# sees only the edge's socket address (the PDS stores what it is given; P1b-A1, Alex's "Do not forward"). Caddy
+# v2.11.7 sets X-Forwarded-For before applying header_up (reverseproxy.go:909 and 714), so the removal wins; it passes
+# Host and X-Forwarded-Host by default.
+(upstream) {
+	reverse_proxy {args[0]} {
+		header_up -X-Forwarded-For
+		header_up -X-Real-IP
+		header_up -Forwarded
+		header_up X-Forwarded-Proto https
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 130s
+		}
+	}
+}

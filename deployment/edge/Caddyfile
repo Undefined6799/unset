@@ -1,0 +1,56 @@
+# The edge (P1.28): terminates TLS for every public host, writes no client address, path or query to any log, denies
+# the PDS admin surface, limits clients in memory only, and never passes the client address upstream (plan §5.2,
+# §5.7, §6; invariant 3). Read against Caddy v2.11.7 (caddyserver/website src/docs/markdown/caddyfile/options.md).
+{
+	# No admin API and no saved config: the image is read-only and nothing changes at run time.
+	admin off
+	persist_config off
+	# The default (non-access) log (Caddy v2.11.7 options.md "log"): ERROR and above, on stderr, with every address
+	# field deleted. Go's http.Server writes "TLS handshake error from <ip>:<port>" and "http: panic serving
+	# <ip>:<port>" as the message, which a filter cannot touch (`msg` is not filterable, log.md "filter"); Caddy v2.11.7
+	# sends both through the http.stdlib logger (modules/caddyhttp/app.go:482 and 695-713: handshake errors at DEBUG,
+	# panics at ERROR), so that logger is excluded.
+	log default {
+		output stderr
+		level ERROR
+		exclude http.log.access http.stdlib
+		format filter {
+			wrap json
+			fields {
+				remote_ip delete
+				data>remote_ip delete
+				remote_addr delete
+				remote delete
+				client_ip delete
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+				request>headers delete
+				request>uri delete
+				request>tls delete
+				resp_headers delete
+			}
+		}
+	}
+	servers {
+		# No trusted_proxies: nothing sits in front of the edge (P1.34 revisits it for a tunnelled VPS edge).
+		# Above the upstream's 130 s (snippets/upstream.caddy, limits.json).
+		timeouts {
+			read_body 30s
+			write 135s
+			idle 2m
+		}
+	}
+}
+
+import snippets/*.caddy
+
+# The image's own health check (HEALTHCHECK in the Dockerfile): loopback only, never routed from outside, not logged.
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond /health 200
+	respond 404
+}
+
+# One file per enabled public host; each environment mounts its own set (P1.29 dev, P5 production).
+import sites/enabled/*.caddy
