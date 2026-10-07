@@ -5129,7 +5129,7 @@ one that fits the current measure. As built the fix held, so P1.24v is not neede
 
 ### P1.24b — Add the toast and select islands within the JS budget
 Tags: —            Depends on: P1.24j
-Slice 1, feature class (`shared/ui` islands and icon drawings, `scripts/ui/icons.ts`); book edits
+Slice 1, issue #421, feature class (`shared/ui` islands and icon drawings, `scripts/ui/icons.ts`); book edits
 2026-10-07-p124b-and-p124j-as-built and 2026-10-07-p124b-island-icons (architecture's ruling). P1.24j (#419) built
 the copy, header-menu, tabs and modal islands at 72,799 of 76,800 gzip bytes; toast measured 78,206 because
 `Icon.tsx` imports the whole `icons.json` (5,082 gzip bytes), so one close icon shipped all 36 drawings.
@@ -6326,6 +6326,9 @@ dev-seed:
 - `seed_file_mode_0600`.
 - `precheck_refuses_unknown_pds_did`: stub `describeServer` answering a foreign DID → refuses.
 - `dev_down_never_removes_volumes`: the npm script contains no `-v`/`--volumes`.
+- `preflight_matches_compose_config` (P1.30p's, extended in P1.30 core; CI only) passes on `compose.dev.yaml` in
+  this PR (book edit 2026-10-07-p130p-as-built). Any later step adding a compose file (P5.03 and on) inherits it
+  through the glob and names it anyway.
 
 **Reuse** (all provisional — for reuse review):
 - `deploy/compose.yaml:1` (name), `48-49`, `180-182` (hardening) → LESSON.
@@ -6371,6 +6374,12 @@ the `yaml` 2.9.1 strict subset with its refusals, and the redacting `SecretMap`.
 - `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
   `docker compose -f <file> config --format json --no-interpolate` agrees with the parser's normalised view on every
   field the preflight checks. The test may call `docker compose config`; the preflight never does.
+
+**As built** (#416, merged by Alex at 2026-10-07T03:52:55Z; book edit 2026-10-07-p130p-as-built): four files under
+`deployment/preflight/`, 223 source lines, importing only `yaml` and Node built-ins. `compose-parse.ts` sets five of
+the six parser options and omits `maxAliasCount: 0`, and `preflight_matches_compose_config` compares name, service
+set, image and ports on one synthetic fixture. No behavioural gap (every anchor and alias is refused before any
+value conversion, and the parser never calls `toJS`); P1.30 core restores the option and extends the test. No reopen.
 
 ---
 
@@ -6518,7 +6527,17 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 - `preflight_check_throws_fails_closed`.
 - `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
 - `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
-- The parser and `SecretMap` tests are P1.30p's.
+- The parser and `SecretMap` tests are P1.30p's, except two that P1.30 core carries (book edit
+  2026-10-07-p130p-as-built); the body says why the option was missing in P1.30p and that it is restored:
+  - `parser_sets_max_alias_count_zero`: P1.30 core adds `maxAliasCount: 0`, a second layer behind the refusal walk,
+    so the parser matches the six options above. The test asserts the option object, or a document whose only fault
+    is one alias refused by the option rather than the walk, whichever the code allows without reaching into
+    internals.
+  - `preflight_matches_compose_config`, extended: it compares the parser's full view (name, services, image, ports,
+    `env_file`, `environment`, `secrets`, networks) with `docker compose config --format json --no-interpolate`
+    (`--no-interpolate` keeps `${VAR}` literal, so no secret value is printed), over every `compose*.yaml` in the
+    repo found by glob plus the synthetic fixture. Until the first real compose file exists it runs on the fixture
+    alone and says so in its output rather than passing silently.
 - `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
 
 **Reuse** (all provisional — for reuse review):
