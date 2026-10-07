@@ -116,6 +116,14 @@ const MATRIX = [
   { name: "shared", from: { path: "^shared/", pathNot: LEAF_SHARED }, to: [{ path: "^shared/" }, CORE, NPM] },
   { name: "shared-ui-lexicons", from: { path: "^(shared/(ui|lexicons)/)" }, to: [{ path: "^$1" }, NPM] },
   { name: "shared-admin-envelope", from: { path: "^(shared/admin-envelope/)" }, to: [{ path: "^$1" }, CORE] },
+  // The deploy preflight (P1.30; architecture record 2026-10-07-p130-preflight-location-and-yaml): product code under
+  // deployment/, a leaf that reaches only itself, Node built-ins and the yaml parser. It runs verify-images as a
+  // child process, never by import, so no edge to scripts/.
+  {
+    name: "deployment-preflight",
+    from: { path: "^deployment/preflight/" },
+    to: [{ path: "^deployment/preflight/" }, { path: npmPackage("yaml") }, CORE],
+  },
   { name: "tooling", from: { path: TOOLING }, to: [{}] },
 ];
 
