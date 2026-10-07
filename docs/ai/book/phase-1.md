@@ -2834,10 +2834,10 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
   1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, never stacked on P1.15x; and on #126's 0005 and P1.16's
      0006 for migration order only):
      `infrastructure/postgres/migrations/0007_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
-     with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `event_pii`, `audit.row_hash`,
+     with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `audit.row_hash`,
      `audit.append`, the triggers, auditor SELECT and the default-privileges line; the `grant-matrix.json` and
      `erasure-registry.json` rows. Tests in `tests/integration/postgres/audit.test.ts`: `append_as_admin`,
-     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `pii_only_admin`,
+     `writer_denied`, `unknown_action`, `unknown_reason`, `no_direct_insert`, `append_only`, `append_has_no_pii_parameter`,
      `concurrent_appends`, `audit_flood_does_not_block`, `registry_rows`, and `row_hash_known_answer` (SQL) against a
      vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged. No `REVOKE TRUNCATE`:
      only the owner holds it, and the grants test proves no role does (a default-privileges path that grants it goes
@@ -2851,13 +2851,21 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
        PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
        0007. No 0007 function depends on an audit table (no audit table type in a signature, no `%ROWTYPE`, no
        `LANGUAGE sql` body).
-     - **P1.15d** (feature; P1.15m), 0008 under `SET ROLE audit_owner`: the six tables, the seeds, the
-       `(writer, ts)` index with its PF-1 evidence, the three triggers (the statement-level one included),
-       auditor's SELECT on the chain, the matrix `audit.chain` row and both registry rows.
+     - **P1.15d** (feature; P1.15m), 0008 under `SET ROLE audit_owner`: the tables (five under the "No
+       address" answer below), the seeds, the `(writer, ts)` index with its PF-1 evidence, the triggers (the
+       statement-level one included; none on `event_pii`), auditor's SELECT on the chain, the matrix `audit.chain`
+       row and the registry rows (no `event_pii` row).
      - **P1.15g** (trusted, grant migration; P1.15d), 0009: `GRANT EXECUTE ON audit.append` to `web`, `indexer` and
        `admin` (only they hold it after 0009), the matrix `audit.append` row, and
        `tests/integration/postgres/audit.test.ts`.
-     How `p_pii` behaves in this SQL waits on the tailnet deferral record, still a draft pending Alex (P1a-A1).
+     **No audit PII** (P1a-A1 answered "No address", 2026-10-07; book edit 2026-10-06-p115m-tailnet-deferral-steps, architecture 00:20Z):
+     `audit.event_pii` goes entirely. In 0007 `audit.append` has no `p_pii` and no step 7, `redact` works on the body
+     only, and `erase_subject` has no `event_pii` clause; 0008 creates five tables (`retention_classes`, `actions`,
+     `reasons`, `chain`, `event_body`) with no `event_pii` trigger or registry row; the verifier's `full` mode checks
+     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_parameter`. P1.15q and P1.15t are
+     retired and `ip-columns.allow.json` stays `[]`. Any future audit PII is Alex's decision and an expand migration
+     with a new signature. `adm.session.login_ip` and `pds-admin`'s staff addresses (P3.17) are unchanged. The text
+     below is amended to match.
   2. **P1.15** (trusted; depends on P1.15g, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
      `append.ts` (with the TS validation), `rowHash.ts`, `verify.ts`, plus the root `tsconfig.json` reference and the
      package's own lockfile entries as P1.14q permits. Tests: `reason_union_matches_table`,
@@ -2865,7 +2873,6 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      `tamper_chain_metadata`, `tamper_body`. P1.14 and P1.15 each add one trusted workspace alone: two PRs after
      P1.14q, in either order.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-  The tailnet-address exception (P1a-A1) is built as booked and flagged provisional in the PR body.
 Where: `infrastructure/postgres/migrations/0007` to `0009` (P1.15m, P1.15d, P1.15g), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
   (P1.15) + tests; `erasure-registry.json` and `grant-matrix.json` rows (P1.15m to P1.15g)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
@@ -2916,12 +2923,10 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
     seq))` — `subject` is the **target** DID (null when none); `body_text` is the exact UTF-8 text that was MACed (the
     viewer reads it as `body_text::jsonb`; the MAC never depends on Postgres re-printing jsonb the same way after an
     upgrade).
-  - `audit.event_pii(lane, seq, subject types.did, k_pii bytea NOT NULL, pii_text text NOT NULL, PRIMARY KEY (lane, seq))`
-    — `subject` is the person **whose data this row holds**: for `tailnet_ip`, the acting admin's DID, not the target.
-    A row is written only when there is PII; `pii_mac` in the chain is then the MAC of `pii_text`, otherwise the MAC of
-    the empty string under a random key that is discarded.
+  - No `audit.event_pii` (P1a-A1 answered "No address"; see the split above). The chain's `pii_mac` is the MAC of the
+    empty string under a random key that is discarded.
   - `audit.append(p_action text, p_outcome text, p_actor_did types.did, p_actor_key text, p_target types.did, p_reason
-    text, p_case uuid, p_jti text, p_request_id uuid, p_receipt bytea, p_pii jsonb) RETURNS TABLE(lane text, seq bigint,
+    text, p_case uuid, p_jti text, p_request_id uuid, p_receipt bytea) RETURNS TABLE(lane text, seq bigint,
     row_hash bytea)` — `SECURITY DEFINER`, `SET search_path = pg_catalog, audit`, EXECUTE granted to `web`, `indexer`,
     `admin`. `p_actor_did` / `p_actor_key` (a WebAuthn credential id) mean "asserted by the writing process": the
     database cannot verify a session, and says so.
@@ -2932,14 +2937,14 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
     always refused; DELETE only inside P1.15a functions.
   - `auditor` (P1.12 roster): SELECT on `audit.chain` and (P1.15a) `audit.segment` and `audit.redaction_log` only.
   - TS: `AuditAction` union mirroring `audit.actions`; `appendAudit(tx, { action, outcome, actorDid?, actorKey?, target?,
-    reason?, case?, jti?, requestId?, receipt?, pii? }): Promise<{ lane, seq }>` — the only TS entry point; the lane is
+    reason?, case?, jti?, requestId?, receipt? }): Promise<{ lane, seq }>` — the only TS entry point; the lane is
     derived from the action, never chosen by a caller. `outcome` ∈ `attempted | succeeded | failed | denied | unknown`
     (`unknown` for a PDS call that timed out, admin design §7.2). `reason` ∈ `audit.reasons` (admin design §7.4 and the
     additions above).
     `jti` matches `^[A-Za-z0-9_-]{22}$`; `receipt` is a 32-byte hash. Phases 2 and 3 use exactly this shape.
   - `rowHash(…)` in TS and the same computation in SQL (`audit.row_hash(…)`), with the encoding below.
   - `verifyChain(db, lane, mode: "links" | "full", from?)`: `links` checks prev links and `row_hash` from chain rows only
-    (what the `auditor` role can read; P3.22 runs it daily); `full` also checks every surviving side row's MAC (needs
+    (what the `auditor` role can read; P3.22 runs it daily); `full` also checks every surviving body row's MAC (needs
     side-table access; run by the owner's weekly script, admin design §7.3, and by tests).
 
 Row hash encoding (fixed, length-prefixed; `lp(x)` = 2-byte big-endian byte length of the UTF-8 string `x`, then its
@@ -2953,9 +2958,7 @@ Algorithm (`audit.append`, inside the caller's transaction):
   1. `w = session_user`. `a = audit.actions[p_action]`; missing → raise `audit_unknown_action`. `w` not in `a.writers` →
      raise `audit_writer_denied`.
   2. Validate in SQL (not only in TS): `p_outcome` in the set; `p_reason` null or in `audit.reasons`; `p_jti` null or
-     matching its pattern; `p_receipt` null or 32 bytes; `p_pii` null unless `w = 'admin'`, and then exactly
-     `{"tailnet_ip": <text>}` where the text casts to `inet` inside `100.64.0.0/10` or `fd7a:115c:a1e0::/48` (the
-     Tailscale ranges); anything else → raise `audit_bad_input`.
+     matching its pattern; `p_receipt` null or 32 bytes; anything else → raise `audit_bad_input`.
   3. Rate cap per writer **and** rate class: count chain rows with this writer whose action has this `rate_class` in the
      last minute; above the cap (`user_triggered` 300, `system` 600, `operator` 120) → raise `audit_rate_limited`. A
      flood of one class cannot block another (an operator action still succeeds while `user_triggered` is capped).
@@ -2967,25 +2970,22 @@ Algorithm (`audit.append`, inside the caller's transaction):
      p_action, 'outcome', p_outcome, 'target', p_target, 'reason', p_reason, 'case', p_case, 'jti', p_jti, 'request',
      p_request_id, 'receipt', encode(p_receipt, 'hex'))` with nulls stripped, then `::text` once; `k_body =
      gen_random_bytes(32)`; `body_mac = hmac(convert_to(body_text, 'UTF8'), k_body, 'sha256')`.
-  7. PII: if `p_pii` is not null → `pii_text = p_pii::text`, `k_pii = gen_random_bytes(32)`, `pii_mac = hmac(…)`, and the
-     pii row's `subject = p_actor_did` (required non-null when PII is present → else `audit_bad_input`). Else `pii_mac`
-     from an empty string under a discarded random key, and no pii row.
-  8. `row_hash = audit.row_hash(…)` per the encoding. Insert the chain row, the body row (`subject = p_target`), and the
-     pii row if any. Return `(lane, seq, row_hash)`.
+  7. (Removed: no audit PII.) `pii_mac` is the MAC of an empty string under a discarded random key.
+  8. `row_hash = audit.row_hash(…)` per the encoding. Insert the chain row and the body row (`subject = p_target`).
+     Return `(lane, seq, row_hash)`.
   Any exception propagates → the caller's transaction rolls back; per admin design §7.2 the caller treats a failed
   `attempted` write as "stop, do not act".
   `verifyChain(mode)`: read chain rows in `seq` order in batches of 5 000; start `prev` at genesis (or the oldest
   segment's `prev_hash`, P1.15a); for each row: `prev_hash ≠ prev` → `{ok:false, badSeq, reason:"link"}`; recomputed
-  `row_hash` differs → `reason:"hash"`; a seq gap → `reason:"gap"`; in `full` mode, a surviving body or pii row whose MAC
-  does not match → `reason:"body_mac"` / `"pii_mac"`; a missing side row is fine (redacted or no PII).
+  `row_hash` differs → `reason:"hash"`; a seq gap → `reason:"gap"`; in `full` mode, a surviving body row whose MAC
+  does not match → `reason:"body_mac"`; a missing body row is fine (redacted).
 
 Edge cases and failures:
   - Two writers in one lane concurrently → serialised by the advisory lock; seqs contiguous.
   - A `user_triggered` flood → only that class is capped; `operator` and `system` appends continue (and the caller of a
     capped append alerts).
-  - The admin's tailnet address is the one IP the audit holds: a named, narrow exception to invariant 3 (admin writer
-    only, Tailscale ranges only, a redactable side row, kept for `pii_admin`), **provisional pending Alex (P1a-A1)**. The
-    plan and README wording change goes through the coordinator.
+  - The audit holds no IP address: P1a-A1 answered "No address" (Alex, 2026-10-07), so there is no exception to
+    invariant 3 here.
   - `migrator` holds SET on `audit_owner` and could disable the triggers → out of scope for in-database controls; the
     off-box chain-head anchor (P3.22) is the control.
   - A Postgres major upgrade changes jsonb printing → irrelevant: MACs cover the stored `body_text`, never a re-print.
@@ -2996,8 +2996,8 @@ Threats: the record of moderator and security actions versus the people and proc
   - S `web` writes a moderator event → the writer must match the action's lane (`writer_denied`).
   - T Rows edited with the triggers disabled → the chain verifier and body MACs detect it (`tamper_chain_metadata`,
     `tamper_body`); `migrator` acting as the owner is answered by P3.22's off-box anchor.
-  - I Personal data or secrets in free-text audit fields → typed fields, a closed reason list, PII side rows from
-    `admin` only (`typed_append_rejects_free_text`, `unknown_reason`, `pii_only_admin`).
+  - I Personal data or secrets in free-text audit fields → typed fields, a closed reason list, no PII parameter
+    (`typed_append_rejects_free_text`, `unknown_reason`, `append_has_no_pii_parameter`).
   - D A user-triggered flood blocks operator events → only that class is capped (`audit_flood_does_not_block`).
   - I A per-member sign-in record → no such action exists (`unknown_action`; Alex answer P1a-A2).
 
@@ -3011,8 +3011,8 @@ Done when (tests): (real Postgres)
   - no_direct_insert: `web` runs `INSERT INTO audit.chain …` → `42501`.
   - append_only: as `audit_owner`, `UPDATE`, `DELETE`, `TRUNCATE` on `audit.chain` → raise; `UPDATE` on a side table →
     raise.
-  - pii_only_admin: `web` with `p_pii` → `audit_bad_input`; `admin` with `{"tailnet_ip":"100.64.1.2"}` → ok and the pii row's
-    `subject` = the actor DID; `admin` with `{"tailnet_ip":"203.0.113.9"}` → raise; `{"ip":"…"}` → raise.
+  - append_has_no_pii_parameter: `audit.append` has no `p_pii` argument (replaces `pii_only_admin` and
+    `pii_refused_until_exception_settled`).
   - chain_links: 100 appends across both lanes → `verifyChain` ok in both modes; seqs 1..n contiguous per lane.
   - row_hash_known_answer: fixed inputs → the same 32 bytes from `rowHash` (TS) and `audit.row_hash` (SQL), equal to a
     vector committed in the test.
@@ -3025,7 +3025,7 @@ Done when (tests): (real Postgres)
     `audit_rate_limited`), then one `operator` append by `admin` → succeeds.
   - typed_append_rejects_free_text: `appendAudit` with an email, an IP or a JWT in `reason`, `jti` or `target` →
     validation error before SQL (parametrised; admin design §7.1 test).
-  - registry_rows: `audit.event_body.subject` and `audit.event_pii.subject` are in `erasure-registry.json` with strategy
+  - registry_rows: `audit.event_body.subject` is in `erasure-registry.json` with strategy
     `audit_redact`, and the P1.13 test passes.
 
 Reuse: prototype `/home/claude/0x40/app/src/lib/audit.ts:43-66` → REJECT (stdout JSON with IP and UA, free `detail`,
@@ -3040,7 +3040,6 @@ flowchart LR
     C1["chain seq n-1<br/>row_hash"] --> C2["chain seq n<br/>prev_hash = row_hash(n-1)<br/>row_hash = sha256(v1 ‖ lane ‖ seq ‖ ts ‖ action ‖ writer ‖ class ‖ prev ‖ body_mac ‖ pii_mac)"]
   end
   C2 -.-> B["event_body(n)<br/>subject = target DID<br/>k_body, body_text"]
-  C2 -.-> P["event_pii(n)<br/>subject = actor DID<br/>k_pii, pii_text"]
   W["web / indexer / admin<br/>(asserted actor DID)"] -->|"EXECUTE audit.append"| C2
   AU["auditor"] -->|"SELECT chain only"| C2
 ```
@@ -5246,6 +5245,32 @@ reduced default below and the push, sign and attest work is **P1.27s**:
 - If Alex approves the guard change before P1.27q opens, P1.27s's shape (below) lands in P1.27q instead and P1.27s
   lapses.
 
+**Interim base: upstream Node on Alpine by digest until P1.27s** (book edit 2026-10-06-p127-base-by-digest-book-text,
+final; architecture 2026-10-06-p127-upstream-base-by-digest). Alex answered "Yes, digest" at 2026-10-07 00:17Z, and
+in his own words at 00:09Z: "Base image for container will be alpine linux". The mirror exists only once P1.27s can
+push, so until then P1.27 builds from the one official upstream base by digest. This amends the text below:
+- **Goal (amended):** every image a deploy can pull comes from our registry by digest, was scanned, carries an SBOM
+  and SLSA provenance, and is signed with our key; until P1.27s, builds in CI and on dev machines pull the upstream
+  base by digest. Nothing is pushed or signed until P1.27s; Trivy scans the built image.
+- **Base:** `node:26-alpine` for every stage (`deps`, `build`, `runtime`, so build output matches musl), pinned by its
+  multi-arch index digest. `USER 65532:65532`, read-only-friendly, the node HEALTHCHECK and `npm ci --ignore-scripts`
+  are unchanged. `pg` without `pg-native` (ADR 0014) is unaffected; any later native dependency ships a musl build or
+  builds from source in `build`, and its step says so.
+- **Pins:** `deployment/images/bases.lock.json`, shaped `{ "node": { ref, tag: "26-alpine", digest (index), source:
+  "upstream" | "mirror" } }`. `images.lock.json` and the signing ADR move to P1.27s, so the Where line drops
+  `deployment/images.lock.json` and the ADR and gains `bases.lock.json`. `verify-images.ts` is unchanged; it checks
+  every `FROM` digest equals its lock entry, no `FROM` lacks a digest, and every host is on the allowlist (the one
+  official upstream image plus our GHCR namespace).
+- **Hadolint:** each upstream `FROM` is preceded by a reason comment (citing the record, "removed by P1.27s"), then
+  `# hadolint ignore=DL3026` on the line directly above it (v2.15.1 applies an inline ignore to the next line only).
+  Allowed nowhere else; P1.27s removes it.
+- **Tests (added):** `base_digest_matches_lock`, `dl3026_ignore_only_on_upstream_base` (asserts that order),
+  `from_without_digest_refused`, `from_host_not_allowlisted_refused`, `runtime_base_is_alpine` (the tag starts with
+  `26-alpine` in the lock and the Dockerfile). The root `vitest.config.ts` `deployment` project already selects
+  `deployment/images/images.test.ts`; no new project and no q step.
+- **Order:** P1.27; then P1.28, P1.29 and P1.30 on locally built images; then P1.27s (Alex: `packages: write` and the
+  signing environment); P1.27r after launch.
+
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
@@ -5444,6 +5469,12 @@ Tags: [SEC] [ALEX]            Depends on: P1.27q, P1.27, Alex's typed approval o
 Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy job in
   `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests, and
   `scripts/ci/image-workflows.test.ts`. No product file rides with it.
+Interim base (2026-10-06-p127-base-by-digest-book-text, final): P1.27s flips every `FROM` host and the
+  `bases.lock.json` `source` back to the mirror and removes the DL3026 ignores; it brings `images.lock.json` with the
+  first publish and the ADR "image signing: key or keyless", re-decided from current documentation now the repository
+  is public (if keyless wins, Alex's signing-key tick item lapses; the environment, the reviewer and GATE_IF stay).
+  The mirror copy must keep the digests (`mirrored_digest_equals_lock`); if it cannot, that goes back to
+  architecture.
 Size: about 250 lines.
 
 Lapses if Alex approves the guard change before P1.27q opens; the same shape then lands in P1.27q.
@@ -5657,6 +5688,11 @@ on the PDS (P1.30 C12).
 One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
 from `dev:up`, not from CI), so this stays one step.
 
+**musl DNS (architecture 00:13Z, book edit 2026-10-06-p127-base-by-digest-book-text):** P1.29 gains
+`net_guard_resolve_pin_in_image`: the net-guard resolve-and-pin tests run once inside the built Alpine image, as part
+of the local-stack smoke, before the first deploy (musl's resolver differs from glibc's). If P1.29 cannot run it, it
+moves to P1.30's preflight.
+
 **Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.12x, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/compose.dev.yaml`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
@@ -5800,6 +5836,9 @@ dev-seed:
 ---
 
 ### P1.30 — Deploy preflight
+
+The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
+signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
 **Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
@@ -6323,12 +6362,12 @@ Outputs:
         month that is not over, or one already sealed. EXECUTE: `retention`.
       `audit.mark_anchored(p_lane, p_id, p_head_hash)`: sets `anchored_at` only when `p_head_hash` equals the stored
         `head_hash`. EXECUTE: granted by P3.22 to its anchoring job role.
-      `audit.redact(p_lane, p_seq, p_part text CHECK IN ('body','pii'))`: deletes that side row and its key **only if**
+      `audit.redact(p_lane, p_seq)`: deletes that body row and its key **only if**
         the row's class has expired: `retention_classes.counted_from = 'event'` and `now() > chain.ts + keep`; classes
         counted from `case_close` are refused until P3 provides the close date (fail safe: kept). Not expired → raise
         `audit_retention_active`. EXECUTE: `retention`.
       `audit.erase_subject(p_did types.did)`: the GDPR erasure path. Deletes the side rows of lane **`sec` only** where
-        `event_body.subject = p_did` or `event_pii.subject = p_did`, regardless of class (Art. 17 overrides the
+        `event_body.subject = p_did`, regardless of class (Art. 17 overrides the
         security-class retention for the user's own data); never touches lane `mod` (kept until its class ends,
         Art. 17(3)(e), admin design §8). Returns the count. EXECUTE: granted by P3.07 to `migrator`, the owner of the
         definer `core.erase_did`, which calls it; no service role calls it directly.
@@ -6351,7 +6390,7 @@ Edge cases and failures:
   - A segment with any `case_close` row → `max_class_expiry` null → `drop_segment` refuses (kept, fail safe).
   - Erasure of a user who is also the target of moderation rows → their `sec` rows go; `mod` rows stay with their body
     (the moderation record names the target; retention ends it).
-  - Erasure of an admin → `sec` rows where they are the subject go; `mod` rows and their pii rows stay until class end.
+  - Erasure of an admin → `sec` rows where they are the subject go; `mod` rows stay until class end.
   - Dropping segments out of order → refused (only the oldest).
   - The anchor never happened (P3.22 down) → `anchored_at` null → nothing can be dropped (fail safe).
 
@@ -6367,13 +6406,11 @@ Threats: audit personal data versus its retention class and erasure.
 
 Done when (tests): (real Postgres; time moved by inserting rows with past timestamps as the test superuser)
   - redact_refuses_unexpired: a `mod_action` row from yesterday → `audit.redact` raises `audit_retention_active`.
-  - redact_expired_ok: a `security` row older than 1 year → `redact(…,'body')` deletes it; `redaction_log` has the entry;
+  - redact_expired_ok: a `security` row older than 1 year → `redact(…)` deletes it; `redaction_log` has the entry;
     `verifyChain` (`full`) ok.
-  - erase_sec_by_did: rows in both lanes about DID X → `erase_subject(X)` removes X's `sec` body and pii rows; X's `mod`
+  - erase_sec_by_did: rows in both lanes about DID X → `erase_subject(X)` removes X's `sec` body rows; X's `mod`
     rows remain; the count matches.
   - mod_rows_survive_target_erasure: a `mod.takedown` row targeting X → still present with its body after erasure.
-  - pii_subject_is_actor_on_erasure: erasing the target X does not delete the acting admin's pii row; erasing the admin
-    deletes their `sec` pii rows only.
   - seal_and_drop: two sealed, anchored, expired segments → `drop_segment` of the newer refuses; of the older succeeds;
     `verifyChain` from the remaining segment's `prev_hash` → ok.
   - drop_requires_anchor: expired but not anchored → refuses.
@@ -7303,7 +7340,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
   action (plan §6 "no user sign-in records"). Phase 2's `login.success`, `logout.*` audit calls become service-wide
   counters in the daily metrics. P1a-A2 is answered (Alex, 2026-10-03 11:51Z): counts only, no per-user trail.
 - **Phases 2 and 3 (audit API).** Use exactly `appendAudit(tx, { action, outcome, actorDid?, actorKey?, target?, reason?,
-  case?, jti?, requestId?, receipt?, pii? })`; outcomes `attempted | succeeded | failed | denied | unknown`; the lane is
+  case?, jti?, requestId?, receipt? })`; outcomes `attempted | succeeded | failed | denied | unknown`; the lane is
   never passed (phase-2.md's `audit.append(tx, 'sec', …)` and phase-3's `succeeded|failed|unknown` + `error` field are
   aligned to this; `error` is not a field: the outcome and reason code carry it).
 - **P2.05** builds the same-origin interstitial (`/login/continue?r=<single-use id>`, meta refresh + "Continue to <host>"
@@ -7362,8 +7399,8 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 1–2. Dependencies → applied (above).
 3. CI Postgres service → same digest as P1.29.
 4. `migrate` from the `web` image → kept; secrets narrowed (P1.11).
-5. Tailnet IP vs invariant 3 → kept as a named, narrow exception, **provisional pending Alex (P1a-A1)**; restricted to the
-   Tailscale ranges (P1.15).
+5. Tailnet IP vs invariant 3 → dropped: P1a-A1 answered "No address" (Alex, 2026-10-07); the audit holds no PII
+   (P1.15).
 6. MACs in chain rows → kept, plus the row-hash metadata encoding and the stored MAC text.
 7. Chain retention → segments (P1.15a).
 8. Rate-limit key lifetime → consistent (60 s idle buckets, daily salt, memory only); one plan line would help.
@@ -7385,7 +7422,8 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 - **P1a-A1. The admin's tailnet address in the audit.** (a) Keep it as a named exception to "no IPs": admin writer only,
   Tailscale ranges only, a redactable side row, kept for its class (2 years). (b) Drop it and rely on the WebAuthn
   credential id. (c) Record the Tailscale node id instead. *Recommendation (provisional): (a), with the exception written
-  into invariant 3 and plan §6 and a RoPA line.* The book builds (a) meanwhile.
+  into invariant 3 and plan §6 and a RoPA line.* **Answered by Alex 2026-10-07: "No address" (b); `audit.event_pii`
+  is removed entirely (book edit 2026-10-06-p115m-tailnet-deferral-steps).**
 - **P1a-A2. User session history.** (a) No per-user login or logout records at all; counts only. (b) Keep "signed out
   everywhere" and erasure events per DID for 1 year, since they protect the user. *Recommendation (provisional): (a),
   the plan's own rule.* The book builds (a). **Answered by Alex 2026-10-03 11:51Z: (a) counts only, no per-person
@@ -7425,7 +7463,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 
 **P1.01–P1.19**
 1. Plan §6 "no user sign-in records" vs the audit login events → default: none recorded (P1.15).
-2. Invariant 3 and plan §6 need the admin tailnet-address exception written out (P1a-A1).
+2. Invariant 3 and plan §6 need no admin tailnet-address exception for the audit: P1a-A1 answered "No address".
 3. Audit retention needs the segment scheme; "append-only" plus fixed retention is unbuildable without it (P1.15a).
 4. Plan §5.1's CSP text has no rule for leaving the site after a form POST → state the interstitial and
    `form-action 'self'` everywhere (P1.08).
@@ -7472,7 +7510,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 | Finding | Change in round 2 | Status |
 |---|---|---|
 | F1 escape table corrupted | P1.10 rewritten with code points and ASCII only; `props_known_answer`; a test that the source holds no literal separators; P1.09's literal U+2028 replaced. | fixed |
-| F2 audit actor and subjects | `p_actor_did`, `p_actor_key`; `event_body.subject` = target; `event_pii.subject` = the person the PII is about (the actor for `tailnet_ip`); registry strategy `audit_redact`; erasure by lane (`sec` erased, `mod` kept) in P1.15a. | fixed |
+| F2 audit actor and subjects | `p_actor_did`, `p_actor_key`; `event_body.subject` = target (no `event_pii` since P1a-A1's "No address", 2026-10-07); registry strategy `audit_redact`; erasure by lane (`sec` erased, `mod` kept) in P1.15a. | fixed |
 | F3 sign-in records | Session and login events removed from the seed; counters only; P1a-A2. | fixed |
 | F4 audit cap blocks logins | Unauthenticated events never written; caps per writer and rate class; `audit_flood_does_not_block`. | fixed |
 | F5 row hash coverage | Length-prefixed encoding over lane, seq, ts, action, writer, class, prev and MACs; TS/SQL known-answer vector; `tamper_chain_metadata`. | fixed |
@@ -7488,7 +7526,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 | F15 role roster | Full roster in `roles.json` (media, auditor, review, review_egress, backup, retention, legal_hold_reader, …), created now without privileges or passwords; per-class assertions; idempotent `CREATE ROLE`; `current_database()`; `audit_owner` SET membership; connection budget check. | fixed |
 | F16 `idx` vs `index` | `idx` stated as the one name; other files flagged. | fixed here; other files via coordinator |
 | F17 audit API shape | One `appendAudit` shape, outcomes incl. `unknown`, `receipt`; phases 2–3 flagged. | fixed |
-| F18 tailnet IP any inet | Restricted in SQL to Tailscale ranges. | fixed |
+| F18 tailnet IP any inet | Restricted in SQL to Tailscale ranges; superseded 2026-10-07: the audit holds no PII (P1a-A1 "No address"). | fixed |
 | F19 verifier vs `auditor` | `links` mode (chain only, daily, auditor) and `full` mode (side rows, weekly owner script). | fixed |
 | F20 jsonb text as MAC input | `body_text` / `pii_text` stored and MACed. | fixed |
 | F21 net-guard details | `guardedFetch` on `undici.request` with own decompression cap; no redirect interceptor; `all: true` lookup kept; 304 is a status; split into P1.18 / P1.18a / P1.18b. | fixed |

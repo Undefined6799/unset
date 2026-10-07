@@ -211,7 +211,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24j | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
-| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
+| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
