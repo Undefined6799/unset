@@ -1,7 +1,8 @@
-// The font-metrics entry, `node scripts/ui/font-metrics.ts` (P1.21m; architecture record
+// The font-metrics entry, `node scripts/ui/font-metrics.ts [--check]` (P1.21m; architecture record
 // 2026-10-06-p121-token-pipeline-structure.md, points 5 and 6): reads the two web fonts and the fallback fonts'
 // metrics, and writes shared/ui/tokens/font-metrics.json through the pure buildFontMetrics in shared/ui. Run it again
-// only when the fonts change; font_metrics_current fails until then. Neither CI nor `npm run check` runs it.
+// only when the fonts change; font_metrics_current fails until then. `--check` (P1.24c) writes nothing and exits 1
+// when the committed file is stale; ui_build_entries_run_in_node runs it.
 //
 // Dev dependencies (exact-pinned, MIT, generator only, never shipped):
 // - @capsizecss/unpack 4.0.1 reads unitsPerEm, ascent, descent, lineGap and the latin xWidthAvg from a woff2 file
@@ -49,5 +50,10 @@ export async function currentFontMetrics(): Promise<FontMetrics & { $comment: st
 }
 
 if (process.argv[1] === import.meta.filename) {
-  writeFileSync(join(UI, OUTPUT), `${JSON.stringify(await currentFontMetrics(), null, 2)}\n`);
+  const text = `${JSON.stringify(await currentFontMetrics(), null, 2)}\n`;
+  if (!process.argv.includes("--check")) writeFileSync(join(UI, OUTPUT), text);
+  else if (readFileSync(join(UI, OUTPUT), "utf8") !== text) {
+    console.error(`font-metrics: ${OUTPUT} is stale; run node scripts/ui/font-metrics.ts`);
+    process.exitCode = 1;
+  }
 }

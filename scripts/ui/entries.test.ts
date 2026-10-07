@@ -8,7 +8,7 @@ import { expect, test } from "vitest";
 const ROOT = join(import.meta.dirname, "..", "..");
 
 test("ui_build_entries_run_in_node", () => {
-  for (const entry of ["icons.ts", "tokens.ts"]) {
+  for (const entry of ["icons.ts", "tokens.ts", "font-metrics.ts"]) {
     const run = spawnSync(process.execPath, [join("scripts", "ui", entry), "--check"], { cwd: ROOT, encoding: "utf8" });
     expect(run.stderr, entry).not.toMatch(/ERR_UNKNOWN_FILE_EXTENSION/);
     expect(run.status, `${entry}: ${run.stderr}`).toBe(0);
