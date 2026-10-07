@@ -4717,6 +4717,7 @@ the chat bundle (P6.06); the CSP builder itself (P1.08).
 
 ### P1.23d — Bound the island props fuzz test's work
 Tags: [SEC], trusted            Depends on: —
+As built: merged by Alex at 2026-10-07T19:50:07Z as `c9aa116` (#489).
 Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing, from architecture's
 2026-10-07-test-timing-fuzz-and-image-tests. Neutral; the coordinator clears it. Owner: the third thread. Priority: the
 next free slot, ahead of every other step, because it protects every PR's check. Order: P1.23d, P1.28i, P1.28r.
@@ -5592,8 +5593,8 @@ lost in the move), cleared by the coordinator; not a classifier path.
 
 Tests: a `check.test.ts` case counting a `shared/ui-build/` file under its own key; AB-1 fixtures (pass: an internal
 import, a type-only import of the shared-ui index; fail: `node:fs` from shared/ui-build, a value import of the
-shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green and the budget prints a
-`shared/ui-build` line.
+shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green, the budget prints a
+`shared/ui-build` line, and all five fixtures behave as listed.
 
 ---
 
@@ -5675,7 +5676,7 @@ removes ownership only from paths that no longer exist.
 
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25i (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h (and P1.25j if that splits), P1.25i (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
@@ -6881,7 +6882,7 @@ runtime.
 
 ### P1.28h — Add the Caddyfile reader for edge checks
 
-As built: merged by Alex at 2026-10-07T19:02:30Z as `337df28` (#463), with amendments 1 to 4 below.
+As built: merged by Alex at 2026-10-07T19:02:30Z as `337df28` (#463), with points 1 to 4 below.
 
 Booked from architecture's 2026-10-07-p130s-networks-and-caddyfile-reader (point 2) by book edit
 2026-10-07-p130s-split-and-p128h. `edge.test.ts` reads the Caddyfile by regular expressions over text
@@ -6937,6 +6938,26 @@ existing `edge.test.ts` zone tests unchanged and green.
 
 ---
 
+### P1.28i — Split the edge image build into its own tests
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+As built: merged by Alex at 2026-10-07T19:49:03Z as `27cc41d` (#488).
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing. Neutral. Owner: Phase 1, which also holds
+P1.28s on the same file; P1.28i goes first to avoid a conflict (P1.28s does not depend on it).
+- The Docker build part of `deployment/edge/caddyfile.test.ts` (lines 222-236 and its `buildEdgeImage` and docker
+  helpers above them) moves to `deployment/edge/caddyfile.image.test.ts` in the same folder, with the byte-for-byte
+  check unchanged.
+- `tests/integration/deployment/edge/edge.test.ts` also builds the edge image (`buildEdgeImage()`,
+  `edge-container.ts:97`), so it is renamed `edge.image.test.ts` here and P1.28r's guard is green on arrival. The rename
+  rides the trusted PR (its path segment `deployment/edge` matches a trusted folder, `trusted-base.ts:142-150`);
+  `edge-container.ts` stays as a helper.
+- An ASVS row in `docs/human/compliance/asvs-5-l2.md` citing `edge.test.ts` or a moved test name is updated in the
+  same PR.
+
+Done when both image test files run and pass in CI (inside the one `npm test` until P1.28r) and the test count in the
+check log is unchanged.
+
+---
+
 ### P1.28s — Refuse quoted top-level tokens in the Caddyfile
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
 Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
@@ -6957,25 +6978,6 @@ Test: `refuses_quoted_top_level_token`, with two cases, `"(s)" {` and `"localhos
 
 Not booked: a future non-test helper under `deployment/` that needs Node built-ins needs its own MATRIX row first (a
 `scripts/lint` allowance, so Alex's typed line); the step that wants it books it.
-
----
-
-### P1.28i — Split the edge image build into its own tests
-Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
-Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing. Neutral. Owner: Phase 1, which also holds
-P1.28s on the same file; P1.28i goes first to avoid a conflict (P1.28s does not depend on it).
-- The Docker build part of `deployment/edge/caddyfile.test.ts` (lines 222-236 and its `buildEdgeImage` and docker
-  helpers above them) moves to `deployment/edge/caddyfile.image.test.ts` in the same folder, with the byte-for-byte
-  check unchanged.
-- `tests/integration/deployment/edge/edge.test.ts` also builds the edge image (`buildEdgeImage()`,
-  `edge-container.ts:97`), so it is renamed `edge.image.test.ts` here and P1.28r's guard is green on arrival. The rename
-  rides the trusted PR (its path segment `deployment/edge` matches a trusted folder, `trusted-base.ts:142-150`);
-  `edge-container.ts` stays as a helper.
-- An ASVS row in `docs/human/compliance/asvs-5-l2.md` citing `edge.test.ts` or a moved test name is updated in the
-  same PR.
-
-Done when both image test files run and pass in CI (inside the one `npm test` until P1.28r) and the test count in the
-check log is unchanged.
 
 ---
 

@@ -873,7 +873,7 @@ Tags: [SEC]            Depends on: P0.05c (merged, #483)            Plan: rule S
 Where: check paths, kind/build: `scripts/ci/npmrc.test.ts` (new), `scripts/ci/check-job.test.ts`, `.github/CODEOWNERS`
   (the parsed `# checks:` line at :108 gains `/.npmrc`; that line is the SE-6 check-path list), and
   `scripts/guards/change-shape.test.ts` (its pinned check-path list, :221-233, gains `"/.npmrc"`). No product file. A
-  tightening, cleared by the coordinator. Slice 1. Owner: Phase 2, slotted after P1.28r (an order, not a dependency).
+  tightening, cleared by the coordinator. Slice 1. Owner: Phase 2, slotted after P1.28r (an order, not a dependency; board issue #487).
   If the harness refuses Phase 2 on those paths even for a tightening, the line to ask Alex for is "yes .npmrc check
   path scripts/guards", quoted in the PR body if used.
 
@@ -881,9 +881,9 @@ Part 1, the .npmrc pin:
   - `npmrc_is_pinned`: the root `.npmrc`, parsed as key=value lines (comments and blanks skipped), is exactly
     `engine-strict=true`, `save-exact=true`, `fund=false`, `audit-level=high`, `min-release-age=7`,
     `ignore-scripts=true`, `@unset:registry=https://127.0.0.1:9/`. It fails on an unknown or duplicate key, a `${...}`
-    interpolation, or `_auth`, `_authToken` or `//` in a key (the one pinned registry value contains `//` and is
-    matched exactly, so the test does not refuse its own line); a missing `ignore-scripts=true` is named in the
-    failure.
+    interpolation, or any line containing `_auth`, `_authToken` or `//`; the `//` rule applies to keys, which is how
+    `//host/:_authToken` lines are written, because the one pinned registry value contains `//` and is matched
+    exactly, so the test does not refuse its own line. A missing `ignore-scripts=true` is named in the failure.
   - `no_nested_npmrc`: no other `.npmrc` in `git ls-files` outside `node_modules`.
   - check-job.test.ts refuses any `npm_config_*` env (case-insensitive) in `ci.yml` at workflow, job or step level,
     across all jobs.
