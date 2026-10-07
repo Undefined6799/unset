@@ -2,5 +2,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "composite": true, "rootDir": "../..", "outDir": "dist" },
   "include": ["*.ts"],
-  "references": [{ "path": "../../shared/ui" }]
+  "references": [{ "path": "../../shared/ui" }, { "path": "../../shared/ui-build" }]
 }

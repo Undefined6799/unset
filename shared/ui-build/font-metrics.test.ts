@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "vitest";
 import { buildFontMetrics, type FaceMetrics, fallbackFace } from "./font-metrics.ts";
 
-const UI = join(import.meta.dirname, "..");
+const UI = join(import.meta.dirname, "..", "ui");
 const SPACE_GROTESK: FaceMetrics = { unitsPerEm: 1000, ascent: 984, descent: -292, lineGap: 0, xWidthAvg: 488 };
 const ARIAL: FaceMetrics = { unitsPerEm: 2048, ascent: 1854, descent: -434, lineGap: 67, xWidthAvg: 913 };
 

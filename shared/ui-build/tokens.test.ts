@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 import { runTokens, type TokensIo } from "./tokens.ts";
 
-const UI = join(import.meta.dirname, "..");
+const UI = join(import.meta.dirname, "..", "ui");
 const temps: string[] = [];
 afterAll(() => {
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });

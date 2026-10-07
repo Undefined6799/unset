@@ -21,7 +21,7 @@ type PathAttributes = Pick<
   SVGProps<SVGPathElement>,
   "d" | "fill" | "stroke" | "strokeWidth" | "strokeLinecap" | "strokeLinejoin"
 >;
-// The icon build admits only these attributes, with Iconoir's own values (scripts/icons.ts, checked against the sheet).
+// The icon build admits only these attributes, with Iconoir's own values (shared/ui-build/icons.ts, checked against the sheet).
 /** One icon's drawing: its <path> attributes, as icons/drawings/<name>.generated.ts exports them. */
 export type IconPaths = readonly Readonly<PathAttributes>[];
 

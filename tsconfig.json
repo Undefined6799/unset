@@ -22,6 +22,7 @@
     { "path": "shared/http" },
     { "path": "shared/log" },
     { "path": "shared/ui" },
+    { "path": "shared/ui-build" },
     { "path": "tests" }
   ]
 }

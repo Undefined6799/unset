@@ -1,5 +1,5 @@
-// The shared/ui build entries run under plain Node (P1.24b). Node 26.10.0 strips types from .ts files but refuses .tsx
-// with ERR_UNKNOWN_FILE_EXTENSION, so every module shared/ui/index.ts reaches must be .ts. Vitest transforms .tsx
+// The UI build entries run under plain Node (P1.24b). Node 26.10.0 strips types from .ts files but refuses .tsx
+// with ERR_UNKNOWN_FILE_EXTENSION, so every module shared/ui-build/index.ts reaches must be .ts (P1.25h). Vitest transforms .tsx
 // itself, so only a real `node` run catches a .tsx export (P1.24j exported slot.tsx and broke these entries).
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";

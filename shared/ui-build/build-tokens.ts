@@ -5,6 +5,7 @@
 // CSS read for the shapes emitted (MDN, current): @layer, @font-face descriptors `size-adjust`, `ascent-override`,
 // `descent-override`, `line-gap-override` (CSS Fonts 5) and a "lo hi" `font-weight` range for variable fonts
 // (CSS Fonts 4), `color-scheme`, and `prefers-color-scheme` (Media Queries 5).
+import type { FontMetrics } from "@unset/shared-ui";
 
 export class TokenError extends Error {
   readonly code: string;
@@ -13,17 +14,6 @@ export class TokenError extends Error {
     this.code = code;
   }
 }
-
-/** One local fallback face whose metrics are adjusted to match a web font (shared/ui/tokens/font-metrics.json). */
-export type FallbackFace = {
-  suffix: string;
-  local: string;
-  sizeAdjust: string;
-  ascentOverride: string;
-  descentOverride: string;
-  lineGapOverride: string;
-};
-export type FontMetrics = { sources: Record<string, string>; families: Record<string, FallbackFace[]> };
 
 type Token = { name: string; value: unknown };
 type Family = { tokens: Token[] };
