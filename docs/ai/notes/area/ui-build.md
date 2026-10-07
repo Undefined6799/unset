@@ -27,8 +27,9 @@ injected `io`, and the Node entries in `scripts/ui/` bind `node:fs` and sha256 t
   `icon_allowlist_matches_sheet`, `font_metrics_current`) read shared/ui's committed files.
 
 **Rules worth knowing.** Everything `index.ts` reaches loads under plain Node 26, which refuses `.tsx`: no `.tsx`
-file, no `react` import, and shared/ui only through a whole-statement `import type { ... } from "@unset/shared-ui"`
-(`ui_build_is_jsx_free`; `@unset/shared-ui` is a devDependency). shared/ui owns the `FontMetrics` and
+file, no `react` or `react-dom` import, and shared/ui only through a whole-statement `import type { ... } from
+"@unset/shared-ui"` (`ui_build_is_jsx_free`; `@unset/shared-ui` is a devDependency). The check matches imports on where
+they resolve, so a subpath or a relative path into shared/ui counts as reaching it (P1.25d). shared/ui owns the `FontMetrics` and
 `FallbackFace` shapes and takes no dependency on this workspace. `ui_build_entries_run_in_node` runs the entries.
 
 **Links.** Architecture record `2026-10-07-p125-ui-build-workspace.md`, [[ui]].
