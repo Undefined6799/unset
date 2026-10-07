@@ -1,6 +1,6 @@
-// The kit showcase (P1.24, P1.24s, P1.24a, P1.24k, P1.24f; book P1.24 "Where"): every built component in each
-// variant and state, server-rendered with no JS. P1.26's test server serves it for the axe and target-size checks in
-// both themes; no app links it.
+// The kit showcase (P1.24, P1.24s, P1.24a, P1.24k, P1.24f, P1.24j; book P1.24 "Where"): every built component in
+// each variant and state, server-rendered with no JS; with no island renderer provided, every IslandSlot prints its
+// server markup. P1.26's test server serves it for the axe and target-size checks in both themes; no app links it.
 import type { ReactNode } from "react";
 import { AsciiBackground } from "../components/AsciiBackground/AsciiBackground.tsx";
 import { Avatar } from "../components/Avatar/Avatar.tsx";
@@ -214,15 +214,27 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
     />
   ),
   Tabs: (
-    <Tabs
-      label="Install method"
-      selected="npm"
-      hrefFor={(id) => href(`/kit?tab=${id}`)}
-      tabs={[
-        { id: "curl", label: "curl", content: "curl -fsSL unset.sh | sh" },
-        { id: "npm", label: "npm", content: "npm install -g unset" },
-      ]}
-    />
+    <>
+      <Tabs
+        label="Install method"
+        selected="npm"
+        hrefFor={(id) => href(`/kit?tab=${id}`)}
+        tabs={[
+          { id: "curl", label: "curl", content: "curl -fsSL unset.sh | sh" },
+          { id: "npm", label: "npm", content: "npm install -g unset" },
+        ]}
+      />
+      <Tabs
+        label="Profile sections"
+        selected="about"
+        hrefFor={(id) => href(`/kit?section=${id}`)}
+        eager
+        tabs={[
+          { id: "about", label: "about", content: "Videos and captions, nothing else." },
+          { id: "links", label: "links", content: "unset.sh" },
+        ]}
+      />
+    </>
   ),
   Modal: (
     <Modal trigger="Delete draft" fallbackHref={href("/kit/delete")} title="Delete this draft?" tone="danger">

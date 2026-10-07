@@ -1,6 +1,12 @@
 // Server side of an island (P1.23; plan §5.1): render it in place inside a marked container, followed by its props
 // as P1.10's JSON script. The ids come from a per-render counter (i1, i2, …), never from data.
-import { type IslandDefinition, type IslandProps, SerializeError, serializeProps } from "@unset/shared-ui";
+import {
+  type IslandDefinition,
+  type IslandProps,
+  type IslandRenderer,
+  SerializeError,
+  serializeProps,
+} from "@unset/shared-ui";
 import { createContext, createElement, type FunctionComponent, type ReactNode, useContext } from "react";
 
 class IslandError extends Error {
@@ -88,3 +94,15 @@ export function Island({ name, props }: { name: string; props: IslandProps }): R
     </>
   );
 }
+
+/** A kit component's IslandSlot (P1.24j): the island it names must be the one the registry holds under that name. */
+function SlotIsland({ name, island, props }: { name: string; island: IslandDefinition; props: IslandProps }) {
+  const run = useContext(IslandRunContext);
+  if (run !== null && run.registry.get(name) !== island) throw new IslandUnknown(name);
+  return <Island name={name} props={props} />;
+}
+
+/** The renderer the document provides to IslandSlot, so every slot on the page hydrates. */
+export const renderSlot: IslandRenderer = (name, island, props) => (
+  <SlotIsland name={name} island={island} props={props} />
+);

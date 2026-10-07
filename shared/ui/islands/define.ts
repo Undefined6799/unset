@@ -10,11 +10,12 @@ export type PropsSchema<P extends IslandProps> = (value: unknown) => value is P;
 
 /**
  * An island as the registry holds it. defineIsland checks that the component and the schema agree on P; the registry
- * only ever calls the component with props the schema passed, so it keeps the two untyped.
+ * only ever calls the component with props the schema passed. P stays on the definition so IslandSlot can type the
+ * props a kit component passes (P1.24j); `component` is a method, so a typed island is still an IslandDefinition.
  */
-export type IslandDefinition = Readonly<{
-  /** A React function component. Typed loosely so shared/ui does not depend on React. */
-  component: (props: never) => unknown;
+export type IslandDefinition<P extends IslandProps = IslandProps> = Readonly<{
+  /** A React function component. Typed loosely so this module does not depend on React. */
+  component(props: P): unknown;
   propsSchema: (value: unknown) => boolean;
   maxPropsBytes: number;
 }>;
@@ -25,7 +26,7 @@ export const ISLAND_MAX_PROPS_BYTES = 15_360;
 export function defineIsland<P extends IslandProps>(
   component: (props: P) => unknown,
   opts: { propsSchema: PropsSchema<P>; maxPropsBytes?: number },
-): IslandDefinition {
+): IslandDefinition<P> {
   const max = opts.maxPropsBytes ?? ISLAND_MAX_PROPS_BYTES;
   if (!(Number.isInteger(max) && max > 0 && max <= ISLAND_MAX_PROPS_BYTES)) {
     throw new RangeError(`maxPropsBytes must be an integer from 1 to ${ISLAND_MAX_PROPS_BYTES}`);

@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-06
+checked: 2026-10-07
 ---
 # ui
 

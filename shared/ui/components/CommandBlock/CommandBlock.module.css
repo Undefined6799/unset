@@ -6,15 +6,32 @@
   .output {
     margin: 0;
     padding: var(--space-3) var(--space-4);
-    overflow-x: auto;
     background-color: var(--color-surface-raised);
     box-shadow: var(--shadow-1);
     border-radius: var(--radius-xs);
     color: var(--color-ink);
+  }
+
+  /* The command and, once JS runs, the copy button on one line. */
+  .line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+  }
+
+  .command,
+  .output {
+    overflow-x: auto;
     font-family: var(--font-mono);
     font-size: var(--type-code-size);
     line-height: var(--type-code-line);
     white-space: pre;
+  }
+
+  .command {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
   }
 
   .output {
@@ -28,5 +45,33 @@
 
   .prompt {
     user-select: none;
+  }
+
+  /* The copy island's button (P1.24j): COPY, then COPIED in `success` or FAILED in `danger`. */
+  .copy {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .copy:hover {
+    color: var(--color-ink);
+  }
+
+  .copy.copied {
+    color: var(--color-success);
+  }
+
+  .copy.failed {
+    color: var(--color-danger);
   }
 }

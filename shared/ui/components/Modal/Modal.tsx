@@ -1,11 +1,13 @@
 // Modal (P1.24k; sheet components/Modal/README.md, v45): level 4, a dialog on `ground` with a 1px `ink` border over
 // the `scrim`. With no JS the trigger is a link to `fallbackHref`, a full page with the same content, and the native
-// <dialog> stays closed, so it is neither shown nor read. The modal island (P1.24j) opens it with showModal(), which
-// brings the focus trap, Escape and the backdrop from the platform, and returns focus to the trigger.
+// <dialog> stays closed, so it is neither shown nor read. The trigger is the modal island (P1.24j, ModalTrigger.tsx),
+// which opens it with showModal(), bringing the focus trap, Escape and the backdrop from the platform, and returns
+// focus to the trigger.
 import { type ReactNode, useId } from "react";
+import modal from "../../islands/modal.island.tsx";
+import { IslandSlot } from "../../islands/slot.tsx";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
-import { Button } from "../Button/Button.tsx";
 import styles from "./Modal.module.css";
 
 export type ModalProps = {
@@ -26,12 +28,12 @@ export type ModalProps = {
 
 export function Modal({ trigger, fallbackHref, title, children, actions, tone = "default", className }: ModalProps) {
   const titleId = useId();
+  const dialogId = useId();
   return (
     <>
-      <Button as="a" href={fallbackHref}>
-        {trigger}
-      </Button>
+      <IslandSlot name="modal" island={modal} props={{ label: trigger, href: fallbackHref, dialog: dialogId }} />
       <dialog
+        id={dialogId}
         className={classNames(styles.root, className)}
         role={tone === "danger" ? "alertdialog" : undefined}
         aria-labelledby={titleId}

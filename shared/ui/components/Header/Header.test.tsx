@@ -1,7 +1,8 @@
 // Header (P1.24k): the sheet's Header (components/Header/README.md, index.d.ts) as built. Differences from the sheet's
 // d.ts: links take a SafeHref; the action is a link only (no onClick, no JS); the folded menu is a <details> beside
 // the inline nav rather than a JS toggle (book P1.24a, split record 2026-10-07-p124a-split.md); `menuLabel` added.
-// `header_folds_by_container` and the island's Escape run in P1.26's browser harness.
+// The menu is the header-menu island (HeaderMenu.test.tsx). `header_folds_by_container` runs in P1.26's browser
+// harness.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -37,10 +38,10 @@ describe("Header", () => {
     expect(html).toBe(
       `<header class="${styles.root}"><div class="${styles.bar}"><a class="${styles.home}" href="/">` +
         `${renderToStaticMarkup(<Mark width={72} title="unset.sh home" />)}</a>` +
-        `<div class="${styles.wide}">${nav}</div>` +
         `<details class="${styles.menu}"><summary class="${styles.toggle}">menu` +
         `<span class="${styles.caret}" aria-hidden="true"></span></summary>` +
-        `<div class="${styles.panel}">${nav}</div></details></div></header>`,
+        `<div class="${styles.panel}">${nav}</div></details>` +
+        `<div class="${styles.wide}">${nav}</div></div></header>`,
     );
     expect(html).not.toMatch(/<script|\son[a-z]+=/);
   });
