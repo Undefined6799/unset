@@ -8,10 +8,12 @@
     ".": "./index.ts"
   },
   "bin": {
-    "unset-migrate": "./migrate-cli.ts"
+    "unset-migrate": "./migrate-cli.ts",
+    "unset-rewrap": "./rewrap-cli.ts"
   },
   "dependencies": {
     "@unset/infrastructure-net-guard": "*",
+    "@unset/infrastructure-seal": "*",
     "@unset/shared-config": "*",
     "@unset/shared-errors": "*",
     "@unset/shared-log": "*",
