@@ -410,10 +410,12 @@ const PACKAGE_NAME = /^[a-z0-9][a-z0-9+._-]*$/;
  */
 const FINAL_STAGE_COMMANDS = new Set(["rm", "setcap"]);
 /**
- * Amendment 5, layer 1, main's old check on joined instructions: a package-manager name as a word (a hyphen joins a
- * word, so `apk-tools` is a package, not apk). It may appear only as the first word of a removal that passes layer 3.
+ * Amendment 5, layer 1, main's old check on joined instructions: a package-manager name between word boundaries, so a
+ * hyphen ends a word and `apk-tools` or `apk-static` names apk (ruling under amendment 5, 22:57Z, point 1). A match is
+ * exempt only as the first word of a command that passes layer 3, or as a package name after that command's removal
+ * verb; every other match fails.
  */
-const PACKAGE_MANAGER_WORD = /(?<![\w-])(?:apt-get|aptitude|apt|apk|dpkg|rpm|dnf|microdnf|yum)(?![\w-])/g;
+const PACKAGE_MANAGER_WORD = /\b(?:apt-get|aptitude|apt|apk|dpkg|rpm|dnf|microdnf|yum)\b/g;
 const FLOOR = "a package manager is named outside a removal command";
 const basename = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
 
@@ -429,6 +431,18 @@ function removalProblem(name: string, args: string[]): string | undefined {
   }
   const other = args.slice(at + 1).find((word) => !flags.includes(word) && !PACKAGE_NAME.test(word));
   return other === undefined ? undefined : `${name} argument ${other} is not a package name`;
+}
+
+const managerNames = (text: string): number => text.match(PACKAGE_MANAGER_WORD)?.length ?? 0;
+
+/** The package-manager names layer 1 exempts in one command: its first word and package names, when it is a removal. */
+function exemptManagerNames(words: string[]): number {
+  const [command = "", ...args] = words;
+  const name = basename(command);
+  if (!REMOVAL_VERBS.has(name) || commandProblem(words) !== undefined) return 0;
+  const flags = REMOVAL_FLAGS.get(name) ?? [];
+  const packages = args.slice(args.findIndex((word) => !flags.includes(word)) + 1).filter((w) => !flags.includes(w));
+  return managerNames(command) + packages.reduce((sum, word) => sum + managerNames(word), 0);
 }
 
 /** Why one simple command may not run in a shipped image (layers 2 and 3); undefined when it may. */
@@ -496,11 +510,12 @@ function shippedInstructionProblems(instruction: string): string[] {
     const problem = commandProblem(command);
     return problem === undefined ? [] : [problem];
   });
-  const removals = commands.filter(
-    (command) => REMOVAL_VERBS.has(basename(command[0] ?? "")) && commandProblem(command) === undefined,
-  ).length;
-  const named = (exec === undefined ? rest : exec.join(" ")).match(PACKAGE_MANAGER_WORD)?.length ?? 0;
-  return named > removals ? [...problems, FLOOR] : problems;
+  // Count on the joined text, which keeps what parsing drops (assignments), and on the parsed words, which keep what
+  // dropping quotes joins; either exceeding the exempt names fails.
+  const exempt = commands.reduce((sum, command) => sum + exemptManagerNames(command), 0);
+  const inText = managerNames(exec === undefined ? rest : exec.join(" "));
+  const inWords = commands.flat().reduce((sum, word) => sum + managerNames(word), 0);
+  return Math.max(inText, inWords) > exempt ? [...problems, FLOOR] : problems;
 }
 
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
@@ -775,6 +790,12 @@ describe("base images", () => {
         ["apt-get -o Foo=remove install x: apt-get option -o is not allowed", floor],
       ],
       ['RUN ["rm","-f","/usr/bin/apt-get"]', [floor]],
+      // Ruling point 1: a hyphen ends a word, so a name joined to one is still found.
+      ["RUN apk-static add x", [notAllowed("apk-static add x", "apk-static"), floor]],
+      ["RUN /sbin/apk-static add x", [notAllowed("/sbin/apk-static add x", "apk-static"), floor]],
+      ["RUN rm -f /etc/apk-tools.conf", [floor]],
+      ["RUN FOO=apk rm -f /x", [floor]],
+      ['RUN a"pk" del --no-network x && rm -f /sbin/apk', [floor]],
       ["RUN dpkg -r x && rm -rf /usr/bin/dpkg", [floor]],
       // Amendment 3's fixtures.
       ["RUN rm -f /x \\\n  && apk add curl", ["apk add curl: apk may only remove packages", floor]],
