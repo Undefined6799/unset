@@ -7064,8 +7064,8 @@ Slice 1, check class (`scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-t
 architecture's amendment 2 in 2026-10-07-test-timing-fuzz-and-image-tests, asked by the coordinator after P1.28r. A
 tightening; the coordinator clears it, no line from Alex and no classifier path. Owner: Phase 2. It goes before P1.29d,
 which gains it as a dependency. P1.29k is not held (coordinator, 21:39Z): the new rules check the whole repo once they
-land, so they cover P1.29k's files after the fact; if one breaks a rule, P1.28n's own PR goes red, and since it cannot
-fix a product file under SE-6, the fix goes in a small product PR first. That fails closed.
+land, so they cover P1.29k's files after the fact; if a P1.29k file breaks one of them, P1.28n's own PR goes red, and
+since it cannot fix a product file under SE-6, the fix goes in a small product PR first. That fails closed.
 
 - **(a) The CI mode.** `run.ts` `modeFor` uses CI mode when `CI === "true"` or `GITHUB_ACTIONS === "true"`; if
   `GITHUB_ACTIONS` is set and `CI` is not `"true"`, it fails at start, so a `$GITHUB_ENV` rewrite becomes a red check,
@@ -7833,7 +7833,7 @@ the real Dockerfiles on main still pass.
 ---
 
 ### P1.28o — Remove apk-tools from the edge image
-Tags: [SEC], trusted            Depends on: P1.29x
+Tags: [SEC], trusted            Depends on: P1.29x (merged, #507)
 Slice 1, trusted base (`deployment/edge/`); book edit 2026-10-07-p128o-edge-apk-tools (final 22:10Z), from
 architecture's amendment 3, point 4, in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; no word from
 Alex. Owner: Phase 1. It follows P1.29x, which carries amendments 2 and 3 (the Dockerfile kind map and the inverted
