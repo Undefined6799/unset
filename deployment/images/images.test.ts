@@ -5,7 +5,7 @@
 // 2026-10-07-p128-edge-bases-and-ratelimit-adr widened it from Node alone for the edge's Caddy bases) and our GHCR
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
 
@@ -417,7 +417,6 @@ const FINAL_STAGE_COMMANDS = new Set(["rm", "setcap"]);
  */
 const PACKAGE_MANAGER_WORD = /\b(?:apt-get|aptitude|apt|apk|dpkg|rpm|dnf|microdnf|yum)\b/g;
 const FLOOR = "a package manager is named outside a removal command";
-const basename = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
 
 /** Why a package manager's command is not a plain removal (layer 3); undefined when it is one. */
 function removalProblem(name: string, args: string[]): string | undefined {
@@ -429,58 +428,78 @@ function removalProblem(name: string, args: string[]): string | undefined {
   if (verb === undefined || !verbs.includes(verb)) {
     return verb?.startsWith("-") ? `${name} option ${verb} is not allowed` : `${name} may only remove packages`;
   }
-  const other = args.slice(at + 1).find((word) => !flags.includes(word) && !PACKAGE_NAME.test(word));
+  const packages = args.slice(at + 1).filter((word) => !flags.includes(word));
+  // Amendment 6, step A a: apt reads a trailing `+` as install, and `=` pins a version to install.
+  const install = name.startsWith("apt")
+    ? packages.find((word) => word.endsWith("+") || word.includes("="))
+    : undefined;
+  if (install !== undefined) return `${name} argument ${install} asks apt to install`;
+  const other = packages.find((word) => !PACKAGE_NAME.test(word));
   return other === undefined ? undefined : `${name} argument ${other} is not a package name`;
 }
 
-const managerNames = (text: string): number => text.match(PACKAGE_MANAGER_WORD)?.length ?? 0;
+/** One word of a RUN command: as written, and with quotes and backslashes dropped. */
+type Token = { raw: string; word: string };
+/** Amendment 6, step A e: a command is named bare, never by a path or a quoted or escaped spelling. */
+const BARE_NAME = /^[a-z][a-z0-9-]*$/;
+/** Amendment 6, step A e: the only setcap calls each kind's shipped stages make, argument for argument. */
+const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
+  ["edge", [["cap_net_bind_service=+ep", "/usr/bin/caddy"]]], // edge/Dockerfile:26
+  ["node", []],
+]);
 
-/** The package-manager names layer 1 exempts in one command: its first word and package names, when it is a removal. */
-function exemptManagerNames(words: string[]): number {
-  const [command = "", ...args] = words;
-  const name = basename(command);
-  if (!REMOVAL_VERBS.has(name) || commandProblem(words) !== undefined) return 0;
-  const flags = REMOVAL_FLAGS.get(name) ?? [];
-  const packages = args.slice(args.findIndex((word) => !flags.includes(word)) + 1).filter((w) => !flags.includes(w));
-  return managerNames(command) + packages.reduce((sum, word) => sum + managerNames(word), 0);
-}
-
-/** Why one simple command may not run in a shipped image (layers 2 and 3); undefined when it may. */
-function commandProblem(words: string[]): string | undefined {
-  const [command = "", ...args] = words;
-  const name = basename(command);
+/** Why one simple command may not run in a shipped image of this kind (layers 2 and 3); undefined when it may. */
+function commandProblem(command: Token[], kind: Kind | undefined): string | undefined {
+  const words = command.map((token) => token.word);
+  const [first = { raw: "", word: "" }] = command;
+  const [name = "", ...args] = words;
   const shown = words.join(" ");
   if (words.some((word) => /[$`]/.test(word))) return `${shown}: a variable or command substitution hides what runs`;
+  if (/^\w+=/.test(name)) return `${shown}: a leading assignment changes how the command runs`;
+  if (!BARE_NAME.test(first.raw)) return `${shown}: ${first.raw} is not a bare command name`;
   if (REMOVAL_VERBS.has(name)) {
     const problem = removalProblem(name, args);
     return problem === undefined ? undefined : `${shown}: ${problem}`;
   }
+  if (name === "setcap") {
+    const listed = (SETCAP_BY_KIND.get(kind as Kind) ?? []).some((allowed) => isDeepStrictEqual(allowed, args));
+    return listed ? undefined : `${shown}: setcap arguments are not on the ${kind ?? "unknown"} list`;
+  }
   return FINAL_STAGE_COMMANDS.has(name) ? undefined : `${shown}: ${name} is not an allowed final-stage command`;
 }
 
+const managerNames = (text: string): number => text.match(PACKAGE_MANAGER_WORD)?.length ?? 0;
+
 /**
- * A shell-form RUN as simple commands: split on `&&`, `||`, `;`, `|`, `&` and newlines, quotes dropped. A subshell or
- * group keeps its `(` or `{` on the first word, so it is no allowed command.
+ * Layer 1 by position (amendment 6, step A c): the package-manager names in a command's words, other than its first
+ * word and its package names when the command is a removal that passes. A word counts as written and without quotes.
  */
-function shellCommands(script: string): string[][] {
+function unexemptManagerNames(command: Token[], kind: Kind | undefined): number {
+  const [name = "", ...args] = command.map((token) => token.word);
+  const flags = REMOVAL_FLAGS.get(name) ?? [];
+  const removal = REMOVAL_VERBS.has(name) && commandProblem(command, kind) === undefined;
+  const verbAt = args.findIndex((word) => !flags.includes(word)) + 1;
+  return command.reduce((sum, { raw, word }, at) => {
+    const exempt = removal && (at === 0 || (at > verbAt && !flags.includes(word)));
+    return exempt ? sum : sum + Math.max(managerNames(raw), managerNames(word));
+  }, 0);
+}
+
+/**
+ * A shell-form RUN as simple commands: split on `&&`, `||`, `;`, `|`, `&` and newlines. A subshell or group keeps its
+ * `(` or `{` on the first word, so it is no bare command name.
+ */
+function shellCommands(script: string): Token[][] {
   return script
     .split(/&&|\|\||[;|&\n]/)
     .map((command) =>
       command
         .trim()
         .split(/\s+/)
-        .map((word) => word.replaceAll(/["'\\]/g, ""))
-        .filter((word) => word !== ""),
+        .map((raw) => ({ raw, word: raw.replaceAll(/["'\\]/g, "") }))
+        .filter((token) => token.word !== ""),
     )
-    .map((words) =>
-      words.slice(
-        Math.max(
-          0,
-          words.findIndex((word) => !/^\w+=/.test(word)),
-        ),
-      ),
-    )
-    .filter((words) => words.length > 0 && !/^\w+=/.test(words[0] ?? ""));
+    .filter((command) => command.length > 0);
 }
 
 /** An exec-form RUN is one command, its JSON array of strings; undefined when it is not one. */
@@ -493,36 +512,103 @@ function execCommand(json: string): string[] | undefined {
   }
 }
 
+/** Why a RUN's text cannot be read as commands: a heredoc, a substitution, or exec form that is not a string array. */
+function unreadableRun(rest: string): string | undefined {
+  if (HEREDOC.test(rest)) return "heredoc not supported";
+  if (rest.startsWith("[")) return execCommand(rest) === undefined ? "cannot parse exec-form RUN" : undefined;
+  if (/[$`]/.test(rest)) return "a variable or command substitution hides what runs";
+  return /[<>]\(/.test(rest) ? "a process substitution hides what runs" : undefined;
+}
+
 /** Why one shipped instruction may install OS packages; SHELL is refused because it changes what every RUN runs. */
-function shippedInstructionProblems(instruction: string): string[] {
+function shippedInstructionProblems(instruction: string, kind: Kind | undefined): string[] {
   const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
   const keyword = word.toUpperCase();
-  if (keyword === "ONBUILD") return shippedInstructionProblems(args);
+  if (keyword === "ONBUILD") return ["ONBUILD is not allowed"];
   if (keyword === "SHELL") return ["SHELL changes what RUN runs"];
   if (keyword !== "RUN") return [];
-  const { rest } = splitFlags(args);
-  if (HEREDOC.test(rest)) return ["heredoc not supported"];
-  if (!rest.startsWith("[") && /[$`]/.test(rest)) return ["a variable or command substitution hides what runs"];
+  const { flags, rest } = splitFlags(args);
+  const problems = flags.some((flag) => flag.startsWith("--mount"))
+    ? ["RUN --mount may not run in a shipped stage"]
+    : [];
+  const unreadable = unreadableRun(rest);
+  if (unreadable !== undefined) return [...problems, unreadable];
   const exec = rest.startsWith("[") ? execCommand(rest) : undefined;
-  if (rest.startsWith("[") && exec === undefined) return ["cannot parse exec-form RUN"];
-  const commands = exec === undefined ? shellCommands(rest) : [exec];
-  const problems = commands.flatMap((command) => {
-    const problem = commandProblem(command);
-    return problem === undefined ? [] : [problem];
-  });
-  // Count on the joined text, which keeps what parsing drops (assignments), and on the parsed words, which keep what
-  // dropping quotes joins; either exceeding the exempt names fails.
-  const exempt = commands.reduce((sum, command) => sum + exemptManagerNames(command), 0);
-  const inText = managerNames(exec === undefined ? rest : exec.join(" "));
-  const inWords = commands.flat().reduce((sum, word) => sum + managerNames(word), 0);
-  return Math.max(inText, inWords) > exempt ? [...problems, FLOOR] : problems;
+  const commands = exec === undefined ? shellCommands(rest) : [exec.map((word) => ({ raw: word, word }))];
+  for (const command of commands) {
+    const problem = commandProblem(command, kind);
+    if (problem !== undefined) problems.push(problem);
+  }
+  // Layer 1 reads the flags too (amendment 6, step A b); nothing in them is exempt.
+  const named = managerNames(flags.join(" ")) + commands.reduce((sum, c) => sum + unexemptManagerNames(c, kind), 0);
+  return named > 0 ? [...problems, FLOOR] : problems;
+}
+
+const PATH_DIRECTORIES = ["/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin"];
+const PACKAGE_STATE = ["/etc/apt", "/etc/dpkg", "/etc/apk", "/lib/apk", "/etc/ld.so.preload", "/etc/ld.so.conf.d"];
+/** The exact files each kind's shipped stages copy into a PATH directory: the edge's Caddy (edge/Dockerfile:23). */
+const PATH_COPIES_BY_KIND = new Map<Kind, readonly string[]>([
+  ["edge", ["/usr/bin/caddy"]],
+  ["node", []],
+]);
+const within = (path: string, directory: string): boolean =>
+  directory === "/" || path === directory || path.startsWith(`${directory}/`);
+
+/** Why one shipped COPY or ADD destination, resolved against WORKDIR, may not be written; undefined when it may. */
+function destinationProblem(target: string, kind: Kind | undefined): string | undefined {
+  if (PACKAGE_STATE.some((directory) => within(target, directory))) {
+    return `copies into ${target}, package-manager or loader state`;
+  }
+  if (PATH_DIRECTORIES.some((directory) => within(target, directory))) {
+    const listed = (PATH_COPIES_BY_KIND.get(kind as Kind) ?? []).includes(target);
+    return listed ? undefined : `copies into ${target}, a PATH directory not on the list`;
+  }
+  const holds = [...PATH_DIRECTORIES, ...PACKAGE_STATE].some((directory) => within(directory, target));
+  return holds ? `copies into ${target}, which holds a guarded directory` : undefined;
+}
+
+/** Why one COPY or ADD may not run in a shipped stage, its destination resolved against `workdir`. */
+function copyProblem(keyword: string, args: string, workdir: string, kind: Kind | undefined): string | undefined {
+  const { rest } = splitFlags(args);
+  const words = rest.startsWith("[") ? execCommand(rest) : rest.split(/\s+/);
+  const destination = words?.at(-1);
+  if (destination === undefined || words === undefined || words.length < 2) return `cannot parse ${keyword}`;
+  if (/[$`]/.test(destination) || /[$`]/.test(workdir)) return `a variable hides where ${keyword} lands`;
+  return destinationProblem(posix.resolve(workdir, destination), kind);
+}
+
+/**
+ * Where each shipped COPY or ADD lands that it may not (amendment 6, step A e). A destination is resolved against the
+ * WORKDIR in force, and one above a guarded directory fails too, because a copied tree could reach into it.
+ */
+function copyDestinationProblems(dockerfile: string): string[] {
+  const kind = kindOf(dockerfile, lock);
+  let workdir = "/";
+  const problems: string[] = [];
+  for (const { line, text } of shippedInstructions(instructions(dockerfile))) {
+    const [, word = "", args = ""] = INSTRUCTION.exec(text) ?? [];
+    const keyword = word.toUpperCase();
+    if (keyword === "WORKDIR") workdir = posix.resolve(workdir, args.trim().replaceAll(/["']/g, ""));
+    if (keyword !== "COPY" && keyword !== "ADD") continue;
+    const problem = copyProblem(keyword, args, workdir, kind);
+    if (problem !== undefined) problems.push(`line ${line}: ${problem}`);
+  }
+  return problems;
+}
+
+/** Every ONBUILD in a Dockerfile, in any stage. */
+function onbuildProblems(dockerfile: string): string[] {
+  return instructions(dockerfile)
+    .filter(({ text }) => INSTRUCTION.exec(text)?.[1]?.toUpperCase() === "ONBUILD")
+    .map(({ line }) => `line ${line}: ONBUILD is not allowed`);
 }
 
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
 function osPackageProblems(dockerfile: string): string[] {
   try {
+    const kind = kindOf(dockerfile, lock);
     return shippedInstructions(instructions(dockerfile)).flatMap(({ line, text }) =>
-      shippedInstructionProblems(text).map((problem) => `line ${line}: ${problem}`),
+      shippedInstructionProblems(text, kind).map((problem) => `line ${line}: ${problem}`),
     );
   } catch (error) {
     if (!(error instanceof Unparsed)) throw error;
@@ -765,6 +851,12 @@ describe("base images", () => {
     const floor = "a package manager is named outside a removal command";
     const notAllowed = (shown: string, name: string): string =>
       `${shown}: ${name} is not an allowed final-stage command`;
+    const notBare = (shown: string, word: string): string => `${shown}: ${word} is not a bare command name`;
+    const assignment = (shown: string): string => `${shown}: a leading assignment changes how the command runs`;
+    const setcapNotListed = (shown: string, kind: string): string =>
+      `${shown}: setcap arguments are not on the ${kind} list`;
+    const mount = "RUN --mount may not run in a shipped stage";
+    const processSubstitution = "a process substitution hides what runs";
     const execSync = "require('child_process').execSync('apt-get install -y curl')";
     const execFileSync = "require('child_process').execFileSync('apt-get', ['install', 'curl'])";
     const perl = "system('apt-get install -y curl')";
@@ -792,15 +884,47 @@ describe("base images", () => {
       ['RUN ["rm","-f","/usr/bin/apt-get"]', [floor]],
       // Ruling point 1: a hyphen ends a word, so a name joined to one is still found.
       ["RUN apk-static add x", [notAllowed("apk-static add x", "apk-static"), floor]],
-      ["RUN /sbin/apk-static add x", [notAllowed("/sbin/apk-static add x", "apk-static"), floor]],
+      ["RUN /sbin/apk-static add x", [notBare("/sbin/apk-static add x", "/sbin/apk-static"), floor]],
       ["RUN rm -f /etc/apk-tools.conf", [floor]],
-      ["RUN FOO=apk rm -f /x", [floor]],
-      ['RUN a"pk" del --no-network x && rm -f /sbin/apk', [floor]],
+      ["RUN FOO=apk rm -f /x", [assignment("FOO=apk rm -f /x"), floor]],
+      ['RUN a"pk" del --no-network x && rm -f /sbin/apk', [notBare("apk del --no-network x", 'a"pk"'), floor]],
+      // Amendment 6, step A: the coordinator's four gaps.
+      ["RUN apt-get remove -y curl+", ["apt-get remove -y curl+: apt-get argument curl+ asks apt to install", floor]],
+      [
+        'RUN ["apt-get","remove","-y","curl+"]',
+        ["apt-get remove -y curl+: apt-get argument curl+ asks apt to install", floor],
+      ],
+      ["RUN apt purge x+", ["apt purge x+: apt argument x+ asks apt to install", floor]],
+      ["RUN apt-get autoremove x+", ["apt-get autoremove x+: apt-get argument x+ asks apt to install", floor]],
+      [
+        "RUN apt-get remove -y curl=1.0",
+        ["apt-get remove -y curl=1.0: apt-get argument curl=1.0 asks apt to install", floor],
+      ],
+      ["RUN --mount=type=bind,source=/usr/bin/apt-get,target=/usr/local/bin/rm rm install -y curl", [mount, floor]],
+      ["RUN --mount=type=cache,target=/var/cache/x rm -f /x", [mount]],
+      ["RUN --mount=type=cache,target=/x apk del x", [mount]],
+      ["RUN apt-get purge x=1.0", ["apt-get purge x=1.0: apt-get argument x=1.0 asks apt to install", floor]],
+      ["RUN FOO=1 rm -f /x", [assignment("FOO=1 rm -f /x")]],
+      ["RUN <<EOF\nrm -f /x\nEOF", ["heredoc not supported"]],
+      ['RUN a"pk" del x && FOO=apk rm -f /x', [notBare("apk del x", 'a"pk"'), assignment("FOO=apk rm -f /x"), floor]],
+      ["RUN (apk del x)", [notBare("(apk del x)", "(apk"), floor]],
+      // Amendment 6, step A e: bare command names, no leading assignment, no process substitution.
+      ["RUN /tmp/apk del x", [notBare("/tmp/apk del x", "/tmp/apk"), floor]],
+      ["RUN ./rm -f /x", [notBare("./rm -f /x", "./rm")]],
+      ["RUN /usr/local/bin/rm -f /x", [notBare("/usr/local/bin/rm -f /x", "/usr/local/bin/rm")]],
+      ["RUN PATH=/tmp rm -f /x", [assignment("PATH=/tmp rm -f /x")]],
+      ["RUN LD_PRELOAD=/x.so rm -f /x", [assignment("LD_PRELOAD=/x.so rm -f /x")]],
+      ["RUN rm -f <(echo x)", [processSubstitution]],
+      ["RUN rm -f >(cat)", [processSubstitution]],
+      [
+        "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy",
+        [setcapNotListed("setcap cap_net_bind_service=+ep /usr/bin/caddy", "node")],
+      ],
       ["RUN dpkg -r x && rm -rf /usr/bin/dpkg", [floor]],
       // Amendment 3's fixtures.
       ["RUN rm -f /x \\\n  && apk add curl", ["apk add curl: apk may only remove packages", floor]],
       ["RUN apk --no-cache add curl", ["apk --no-cache add curl: apk may only remove packages", floor]],
-      ["RUN /sbin/apk add curl", ["/sbin/apk add curl: apk may only remove packages", floor]],
+      ["RUN /sbin/apk add curl", [notBare("/sbin/apk add curl", "/sbin/apk"), floor]],
       ["RUN apt-get -y install curl", ["apt-get -y install curl: apt-get may only remove packages", floor]],
       ["RUN apk fix", ["apk fix: apk may only remove packages", floor]],
       ["RUN dpkg --unpack x.deb", ["dpkg --unpack x.deb: dpkg option --unpack is not allowed", floor]],
@@ -810,11 +934,11 @@ describe("base images", () => {
       ["RUN $PM add x", [substitution]],
       ['RUN ["apk","add","x"]', ["apk add x: apk may only remove packages", floor]],
       ["RUN nohup apk add x", [notAllowed("nohup apk add x", "nohup"), floor]],
-      ["RUN FOO=1 apk add x", ["apk add x: apk may only remove packages", floor]],
+      ["RUN FOO=1 apk add x", [assignment("FOO=1 apk add x"), floor]],
       ["RUN apk", ["apk: apk may only remove packages", floor]],
       ["RUN apk del --no-network x/y", ["apk del --no-network x/y: apk argument x/y is not a package name", floor]],
       ["RUN yum remove x", ["yum remove x: yum may not run in a shipped image", floor]],
-      ["ONBUILD RUN apk add x", ["apk add x: apk may only remove packages", floor]],
+      ["ONBUILD RUN apk add x", ["ONBUILD is not allowed"]],
       ['SHELL ["/sbin/apk", "add"]', ["SHELL changes what RUN runs"]],
     ] as const) {
       expect(osPackageProblems(`${node}${run}`), run).toEqual(problems.map((problem) => `line 3: ${problem}`));
@@ -825,14 +949,78 @@ describe("base images", () => {
       `line 2: ${floor}`,
     ]);
     expect(osPackageProblems(`FROM ${pinnedNode} AS deps\nRUN apk add x\nFROM ${pinnedNode}`)).toEqual([]);
-    for (const run of [
-      "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\\n    && apk del --no-network curl libcap",
-      "RUN apk del --no-network curl libcap apk-tools",
-      "RUN apt-get purge -y x",
-      "RUN dpkg -r x",
-    ]) {
+    // A build stage keeps RUN --mount.
+    expect(
+      osPackageProblems(`FROM ${pinnedNode} AS deps\nRUN --mount=type=cache,target=/x rm -f /x\nFROM ${pinnedNode}`),
+    ).toEqual([]);
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    expect(
+      osPackageProblems(
+        `${edge}RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\\n    && apk del --no-network curl`,
+      ),
+    ).toEqual([]);
+    expect(osPackageProblems(`${edge}RUN setcap cap_net_admin=+ep /usr/bin/caddy`)).toEqual([
+      `line 2: ${setcapNotListed("setcap cap_net_admin=+ep /usr/bin/caddy", "edge")}`,
+    ]);
+    for (const run of ["RUN apk del --no-network curl libcap apk-tools", "RUN apt-get purge -y x", "RUN dpkg -r x"]) {
       expect(osPackageProblems(`${node}${run}`), run).toEqual([]);
     }
+  });
+
+  test("no_dockerfile_uses_onbuild", () => {
+    // Coordinator, 23:39Z (a tightening): ONBUILD is refused outright, in every stage, so no instruction runs in a later
+    // build that these rules never read.
+    for (const file of dockerfiles) expect(onbuildProblems(read(file)), file).toEqual([]);
+    expect(onbuildProblems(`FROM ${pinnedNode} AS deps\nONBUILD COPY x /x\nFROM ${pinnedNode}`)).toEqual([
+      "line 2: ONBUILD is not allowed",
+    ]);
+    expect(onbuildProblems(`FROM ${pinnedNode}\nonbuild RUN rm -f /x`)).toEqual(["line 2: ONBUILD is not allowed"]);
+  });
+
+  test("shipped_copies_stay_out_of_path_and_package_state", () => {
+    // Amendment 6, step A e: a shipped stage's COPY or ADD lands in no PATH directory, except each kind's exact list,
+    // and never in package-manager state or the dynamic loader's preload and search configuration.
+    for (const file of dockerfiles) expect(copyDestinationProblems(read(file)), file).toEqual([]);
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    const path = (target: string): string => `copies into ${target}, a PATH directory not on the list`;
+    const state = (target: string): string => `copies into ${target}, package-manager or loader state`;
+    const above = (target: string): string => `copies into ${target}, which holds a guarded directory`;
+    for (const [base, copy, problems] of [
+      [node, "COPY x /usr/bin/x", [path("/usr/bin/x")]],
+      [node, "COPY --from=deps /app/x /usr/local/bin/", [path("/usr/local/bin")]],
+      [node, "ADD x /sbin/x", [path("/sbin/x")]],
+      [node, "COPY x /usr/local/bin/", [path("/usr/local/bin")]],
+      [node, "ADD x /etc/ld.so.preload", [state("/etc/ld.so.preload")]],
+      [node, "WORKDIR /usr/bin\nCOPY x x", [path("/usr/bin/x")]],
+      [node, "WORKDIR /usr\nWORKDIR bin\nCOPY x .", [path("/usr/bin")]],
+      [node, 'COPY ["x", "/bin/x"]', [path("/bin/x")]],
+      [node, "COPY x /usr/bin/../sbin/x", [path("/usr/sbin/x")]],
+      [edge, "COPY x /usr/bin/caddy2", [path("/usr/bin/caddy2")]],
+      [node, "COPY x /usr/bin/caddy", [path("/usr/bin/caddy")]],
+      [node, "COPY x /etc/apt/apt.conf.d/99x", [state("/etc/apt/apt.conf.d/99x")]],
+      [node, "COPY x /etc/dpkg/dpkg.cfg.d/x", [state("/etc/dpkg/dpkg.cfg.d/x")]],
+      [edge, "COPY x /etc/apk/repositories", [state("/etc/apk/repositories")]],
+      [edge, "COPY x /lib/apk/db/installed", [state("/lib/apk/db/installed")]],
+      [node, "COPY x /etc/ld.so.preload", [state("/etc/ld.so.preload")]],
+      [node, "COPY x /etc/ld.so.conf.d/x.conf", [state("/etc/ld.so.conf.d/x.conf")]],
+      [node, "COPY rootfs/ /", [above("/")]],
+      [node, "COPY etc/ /etc", [above("/etc")]],
+      [node, "COPY usr/ /usr/", [above("/usr")]],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a JS template.
+      [node, "COPY x ${DEST}", ["a variable hides where COPY lands"]],
+    ] as const) {
+      const lines = copy.split("\n").length;
+      const at = base.split("\n").length - 1 + lines;
+      expect(copyDestinationProblems(`${base}${copy}`), copy).toEqual(
+        problems.map((problem) => `line ${at}: ${problem}`),
+      );
+    }
+    // The edge's own binary is on its list; stages the final one only copies from are not shipped.
+    expect(copyDestinationProblems(`${edge}COPY --from=build /out/caddy /usr/bin/caddy`)).toEqual([]);
+    expect(copyDestinationProblems(`FROM ${pinnedNode} AS deps\nCOPY x /usr/bin/x\nFROM ${pinnedNode}`)).toEqual([]);
   });
 
   test("dl3026_ignore_only_on_upstream_base", () => {
