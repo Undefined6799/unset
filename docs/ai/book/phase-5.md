@@ -1796,7 +1796,7 @@ sequenceDiagram
 ```
 
 ### P5.03 — Deploy by verified digest
-Tags: [SEC]            Depends on: P5.02, P5.02a, P1.30, P2.26a            Plan: §2 rule 23, §5.2 (`docker-rollout`, `migrate`, expand-then-contract), §6.1 SLSA row, admin design §6.3 (human pulls), §11.4
+Tags: [SEC]            Depends on: P5.02, P5.02a, P1.30, P1.30s, P2.26a            Plan: §2 rule 23, §5.2 (`docker-rollout`, `migrate`, expand-then-contract), §6.1 SLSA row, admin design §6.3 (human pulls), §11.4
 Where: `deployment/bin/deploy`, `deployment/deploy/` (pure planning functions plus a thin shell), `deployment/images.lock`, tests
 Size: ~300 source lines, ~320 test lines (less what P2.26a already built)
 

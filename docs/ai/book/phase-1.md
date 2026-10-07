@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28x, P1.28,
-  P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
+  P1.29, P1.30q, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -168,10 +168,14 @@ flowchart LR
   P1_27["P1.27 container images"]
   P1_27d["P1.27d web image on Debian slim"]
   P1_28q["P1.28q images.yml: edge image"]
+  P1_28d["P1.28d base entries labelled by stage"]
+  P1_28v["P1.28v mirror scan per stage [ALEX]"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
-  P1_30["P1.30 deploy preflight"]
+  P1_30q["P1.30q preflight boundary row"]
+  P1_30["P1.30 deploy preflight core"]
+  P1_30s["P1.30s preflight C13–C24"]
   P1_31["P1.31 lexicons package"]
   P1_32["P1.32 permanent choices STOP"]
   P1_33["P1.33 server baseline ALEX"]
@@ -207,6 +211,8 @@ flowchart LR
   P1_27 --> P1_27d
   P1_27 --> P1_28q
   P1_28q --> P1_28
+  P1_27 --> P1_28d
+  P1_28d --> P1_28v
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -214,12 +220,15 @@ flowchart LR
   P1_27 --> P1_29
   P1_28 -.-> P1_29
   P1_27 --> P1_30
+  P1_30q --> P1_30
   P1_29 -.-> P1_30
   P1_01 --> P1_31
   P1_32 -.-> P1_31
   P1_28 --> P1_33
   P1_32 --> P1_33
   P1_30 --> P1_34
+  P1_30 --> P1_30s
+  P1_30s --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_34
@@ -4895,8 +4904,9 @@ review-only second PR within the same step).
 
 **Split (book edit 2026-10-07-p124a-split, final 00:09Z):** measured on main 1462b4b the kit components average about
 75 source lines each, so this step's 15 components and up to 6 islands come to about 1,200 to 1,500 lines, over the
-800-line limit even with the islands in a second PR. Three product steps of about 400 lines each (a reason in the PR
-body above that); this section's text specifies all three:
+800-line limit even with the islands in a second PR. Four product steps of about 400 lines each (a reason in the PR
+body above that; P1.24f split from P1.24k by book edit 2026-10-07-p124k-split); this section's text specifies all
+four:
   1. **P1.24a** (deps unchanged; keeps the issue and `card_surface_opaque`): Callout, Card, Table, Progress, Spinner,
      CodeBlock, AsciiBackground.
   2. **P1.24k** (depends on P1.24a; about 450 lines, its body gives the reason): no-JS versions only: Header (details
@@ -5337,7 +5347,9 @@ dockerfile manager bumps only the `FROM` line, so `base_digest_matches_lock` wou
 managers for the lock files. The repeatable procedure:
 1. Take the newest upstream multi-arch index digest of the same tag that is at least 7 days old (P0.08's
    `minimumReleaseAge`); `docker buildx imagetools inspect` shows an OCI index. A younger digest is allowed only when
-   it fixes a HIGH or CRITICAL finding with a fixed version, and the PR body names the CVEs.
+   it fixes a HIGH or CRITICAL finding with a fixed version, and the PR body names the CVEs. The age rule also applies
+   to a first pin and to a variant switch (step book 02:03Z): the cooling-off period guards against a bad or
+   compromised push, and that risk is the same for a first pin.
 2. Change the one digest in four places in one PR: the `FROM` lines, `bases.lock.json`, `mirror.list.json`, and any
    test fixture that pins it.
 3. The PR body shows Trivy on the new digest: zero HIGH or CRITICAL findings with a fixed version, against the old
@@ -5355,6 +5367,15 @@ managers for the lock files. The repeatable procedure:
   says npm is bundled in the base, that npm is absent from the runtime image (citing the test or the Dockerfile
   line), and "re-check on expiry, bump per 2026-10-07-base-digest-bump-procedure.md". Where the scanner allows it,
   the entry is scoped to the base and mirror scan, not the runtime image scan.
+- **First use of the fallback** (step book 02:05Z): Alex tapped "Ignore 14 days" at 2026-10-07 02:02:20Z for the
+  three fixed HIGH npm CVEs in the upstream Node base that keep main's mirror scan red, with no fixed upstream digest.
+  Id-less maintenance, subject `deps: ignore bundled npm CVEs in node:26 base until 2026-10-21`, label `security`
+  (P1.27b with the same text if pr-shape or the subject check refuses `deps:` on a check-path file). The PR holds only
+  three entries in `.github/trivyignore.yaml`: CVE-2026-102276 and CVE-2026-102278 (brace-expansion 5.0.9) and
+  CVE-2026-19534 (undici 6.28.0), each with the reason text above and `expired_at` 2026-10-21, scoped to the bundled
+  npm paths if Trivy's format allows. If `mirror.yml` does not already read that file, the PR stops and comes back
+  (wiring an ignore file into a workflow is a further check change the card did not name). The body quotes the tap
+  and says the entries cover both variants, since the same npm ships in `26-trixie-slim`.
 
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
@@ -5547,8 +5568,16 @@ b, q, r, s and v are taken.
   `runtime_stage_installs_no_os_packages`; kept `runtime_has_no_package_manager`, `dl3026_ignore_only_on_upstream_base`,
   `base_digest_matches_lock`, `from_without_digest_refused` and `from_host_not_allowlisted_refused`.
 
-**Digest:** per "Bumping a pinned base digest" above: the newest multi-arch index digest of `26-trixie-slim` at least
-7 days old, a younger one only for a named HIGH or CRITICAL fix. The PR body shows Trivy (HIGH and CRITICAL,
+**Digest** (ruling, step book 2026-10-07 01:59Z): a switch follows the same 7-day rule as a bump, with no exception
+and nothing waiting on P1.27d. The `26-trixie-slim` index current at booking (`sha256:930557a2…5b33`, pushed
+2026-10-06T05:41Z, Node 26.10.0) is too young. Take the newest `node` trixie-slim multi-arch index on Node 26 pushed
+at least 7 days before the PR opens, which may be on an earlier Node 26 patch release; find it through the tag's
+digest history or an exact-version tag such as `26.9.x-trixie-slim`. The lock and `FROM` lines record the tag the
+digest was taken from (`runtime_base_is_debian_slim` already allows an exact-version tag). Exception: if Trivy shows
+the older index has a fixable HIGH or CRITICAL finding that the current index fixes, take the current index and
+name the CVEs. If no index at least 7 days old can be found or verified, wait: on or after 2026-10-13T05:41Z, take
+`sha256:930557a2…5b33` if it is still the newest index that old. The PR body shows how the digest was chosen and its
+push time, and shows Trivy (HIGH and CRITICAL,
 `--ignore-unfixed`) for the old Alpine pin and the new pin; the bundled npm findings in the mirror scan exist in both
 variants and are named as such, not as new.
 
@@ -5677,9 +5706,58 @@ minimal `permissions`, nothing pushed or signed until P1.27s.
 
 ---
 
+### P1.28d — Label every base entry with its stage
+
+**Tags:** [SEC] · **Depends on:** P1.27 (merged) · **Class:** feature (neutral: it neither tightens nor loosens a
+check, so it does not wait for Alex) · records 2026-10-07-p128-edge-bases-and-ratelimit-adr (section "Mirror scan of
+build-only images", architecture 02:10Z) and 2026-10-07-p128v-mirror-scan-stage (final 02:12Z)
+
+**Why:** the labels land before P1.28v, because a mirror.yml that requires `stage` must not reach main before every
+entry has one. `bases.lock.json` and `mirror.list.json` are product files, so a check-class PR cannot carry them.
+
+**Where:** every entry in `deployment/images/bases.lock.json` and `deployment/mirror.list.json` gains
+`"stage": "build"` or `"stage": "runtime"` (required, no default); `deployment/images/images.test.ts` gains the tests.
+
+**Tests:** `every_lock_entry_has_stage`; `build_stage_bases_never_in_final_stage` (a `build` entry appears only in a
+non-final Dockerfile stage; the final stage's `FROM` is a `runtime` entry or `scratch`).
+
+**Collision:** P1.27d edits the same two files. Whichever merges second merges main first, and the node entry carries
+`"stage": "runtime"`.
+
+---
+
+### P1.28v — Scan build-only bases at fail-on-critical [ALEX]
+
+**Tags:** [SEC] [ALEX] · **Depends on:** P1.28d and Alex's tap · **Class:** check (a loosening); waiting on Alex's
+word on the card "Should the weekly mirror scan only warn, not fail, on HIGH findings in build-only images, while
+failing on CRITICAL and keeping every shipped image at fail-on-HIGH?" (architecture recommends yes)
+
+**Why:** `caddy:2.11.7-builder-alpine` carries eight fixable HIGH Go standard library findings (Go 1.26.5) in
+`/usr/bin/xcaddy`, fixed in 1.26.6, while `caddy:2.11.7-alpine` and the shipped edge image scan clean (Trivy 0.74.0,
+HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). xcaddy is a build-time CLI fed only our pinned versions and
+checksum-verified modules, in an unprivileged job; the edge image's own Trivy scan reads the built binary's Go build
+info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE ignore entries (the alternative) recur on
+every Go point release and waive a CVE id globally unless scoped by path.
+
+**Where:** `.github/workflows/mirror.yml` reads each entry's `stage` and fails if it is missing. `build` entries scan
+at HIGH and CRITICAL, fail on CRITICAL, and report HIGH in the job summary and annotations; `runtime` entries are
+unchanged (fail on HIGH and CRITICAL); `--ignore-unfixed` throughout. Its tests sit next to the existing workflow
+tests on the check paths, with fixture lock files under the test directory, not the real ones.
+
+**Tests:** `mirror_scan_fails_on_critical_for_build_entries`; `shipped_image_scan_fails_on_high` (the images.yml web
+and edge jobs, unchanged and only asserted).
+
+**Opening:** only after Alex's tap; the body quotes the tap and its time and names `.github/workflows/mirror.yml` as
+the one workflow touched. Alex's answer joins `alex-answers.md` as a `mirror-build-stage` row. If he says no, P1.28v
+is withdrawn, P1.28d stays, and the builder findings go to per-CVE trivyignore cards (P1.28x is already merged, book
+edit 2026-10-07-p128x-merged-as-built).
+
+---
+
 ### P1.28x — Edge pins (non-trusted part of P1.28)
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Class:** feature (product, non-trusted) · record
+**Tags:** [SEC] · **Depends on:** P1.27 · **Status:** merged as built (#391) · **Class:**
+feature (product, non-trusted) · record
 2026-10-07-p128-split-and-p1b-a1.md (final 01:10Z)
 
 **Why:** CODEOWNERS makes `deployment/edge/` trusted base, so the P1.28 PR may carry only `deployment/edge/**`, tests
@@ -5687,7 +5765,25 @@ with an `edge` path segment, and docs. The pins it needs elsewhere land first, h
 
 **Contents:** the `caddy` and `caddy-builder` entries in `deployment/images/bases.lock.json`;
 `deployment/mirror.list.json`; and `deployment/images/images.test.ts`, whose allowlist widens to
-`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27).
+`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27). P1.28d labels
+its entries with `stage`: `caddy` is `runtime`, `caddy-builder` is `build`.
+
+**As built** (book edit 2026-10-07-p128x-merged-as-built): merged on 2026-10-07 by Alex's merge of #391 at
+03:15:25Z (`6f27d64`). `bases.lock.json` pins `caddy` `2.11.7-alpine` at `d8542f48…f75f` and `caddy-builder`
+`2.11.7-builder-alpine` at `80331d37…7c26`, both pushed 2026-10-06T05:52Z, so under 7 days old when merged. This was
+his decision; the book records it and does not reverse it. No entry carries `stage` yet; P1.28d adds it. The earlier
+hold (re-pin to an index 7 days old, "P1.28x waits", P1.28v as a dependency) is superseded and kept only as history in
+2026-10-07-p128-split-and-p1b-a1. The age rule still governs the next change to either Caddy digest (the bump
+procedure in P1.27, from P1.27v or a hand bump); no re-pin is needed just to satisfy the age, and nothing changes when
+the pins reach 7 days on 2026-10-13T05:52Z. P1.28 is unblocked: P1.27, P1.28q and P1.28x are merged.
+
+**Mirror scan until the builder findings are settled:** with `caddy-builder` in `mirror.list.json`, main's mirror scan
+(not required) reports the builder's eight fixable HIGH Go standard-library findings and stays red. The expected route
+is P1.28d now (neutral, no tap), then P1.28v after Alex's tap. Until then the red scan is a known, reported state and
+no reason for an ignore entry. If Alex declines the card: per-CVE trivyignore entries on his card, scoped to the
+builder's xcaddy path if Trivy allows it, with the shortest expiry that covers the next Go point release reaching the
+upstream builder and never more than 90 days; otherwise the scan stays red until a fixed builder index is re-pinned by
+the bump procedure. Nothing is ignored pre-emptively, and the shipped edge image's own scan stays at fail-on-HIGH.
 
 ---
 
@@ -6090,6 +6186,9 @@ dev-seed:
   `pds` service env in `compose.dev.yaml` has `PDS_RATE_LIMITS_ENABLED` present and exactly `false`, and
   `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent. P1.30 C7 still checks the deployed env
   at preflight; nothing deploys before both P1.28 and P1.29 are merged.
+- `pds_device_row_has_no_client_ip` (integration, dev stack; moved from P1.30, book edit 2026-10-07-p130-split): sign
+  in through the edge from a test client, then read the PDS `device` table's `ipAddress` → it equals the edge's
+  internal fixed IP, never the client's. P1.29 is the first step that runs the stack with the edge in front of the PDS.
 - `seed_refuses_non_dev`: ENV=prod → exit 2.
 - `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
 - `seed_never_prints_password`: run against a stub PDS; stdout and stderr contain no generated password.
@@ -6106,23 +6205,55 @@ dev-seed:
 
 ---
 
-### P1.30 — Deploy preflight
+### P1.30q — Allow the deploy preflight in the boundary matrix
+
+Check class (SE-6 `q`; issue #404), `scripts/lint` only (book edit 2026-10-07-p130q-p203e). The dependency-cruiser
+MATRIX has no row for `deployment/`, so every preflight import fails with "not-in-allowed". This step adds one MATRIX
+row, `deployment-preflight`: from `^deployment/preflight/` to only itself, Node built-ins and the `yaml` package, with
+a fixture for it. It enforces architecture's location ruling (2026-10-07-p130-preflight-location-and-yaml).
+
+**Tags:** [SEC] · **Depends on:** — · **Status:** built (#406) · **Plan:** SE-6; guideline §1 (dependency-cruiser
+enforces boundaries)
+
+**Done when (tests):** `deployment_preflight_is_a_leaf`: the preflight may not import `scripts/ci/verify-images.ts`,
+`shared/`, `deployment/images/` or `pg`, and nothing may import it.
+
+If P1.30s ever needs another edge, that edge is a separate `q` step; the row is never widened inside P1.30s
+(02-shared-blocks, editor pass 2026-10-07).
+
+---
+
+### P1.30 — Deploy preflight core, C1–C12
 
 The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
 signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, `SecretMap`,
+the compose parser, the check runner, checks C1–C12 and the debug-logging runbook (C12's failure points to it).
+P1.30s, below, builds C13–C24. This section keeps the full design of all 24 checks; each part's tests are listed
+under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
 
-**Where:** `scripts/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`;
-`docs/human/runbooks/pds-debug-logging.md`; tests.
+**Tags:** [SEC] · **Depends on:** P1.27, P1.30q · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
-**Size:** ~470 source lines, ~470 test lines.
+**Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
+guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
+`docs/human/runbooks/pds-debug-logging.md`; tests. The PR carries no check-path files. `/deployment/preflight/` is a
+candidate for the trusted base later, as a tightening in its own CODEOWNERS PR; unbooked.
+
+**Size:** ~470 source lines and ~470 test lines across P1.30 and P1.30s. Test lines do not count toward the 400
+budget; if P1.30's source lines pass it, the PR body says why.
 
 **Goal:** Before any `compose up` on a server, one command checks the stack against every rule that, if broken,
 would leak data or cannot be fixed later, and refuses to proceed on any failure.
 
 **Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
 files; the network table (P1.29).
+- `images.lock.json` and `cosign.pub` arrive with P1.27s, the network table with P1.29 and the retirement report with
+  P1.33a. Until then the checks that read them FAIL (below); the tests use fixtures for every input, so both parts
+  are green on main without those steps.
+- C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
+  `node scripts/ci/verify-images.ts <lock>` by a fixed path and fixed arguments, with no shell and no config key. The
+  preflight never imports `scripts/` (product code never imports tooling, `scripts/lint/.dependency-cruiser.cjs`).
 
 **Outputs:**
 - `preflight --env dev|prod --compose <file>... → exit 0 (all pass) | 1 (a check failed) | 2 (preflight could not
@@ -6133,8 +6264,25 @@ files; the network table (P1.29).
 - Compose is parsed from YAML by the script itself with interpolation resolved from the env files and the
   SecretMap kept apart — **never** `docker compose config`, which prints interpolated secrets (it leaked in the
   prototype).
+- The parser is `yaml` 2.9.1, already a direct, exact-pinned root devDependency (P0.09b), so the lockfile does not
+  change. If the preflight ever runs from an `npm ci --omit=dev` install, moving it to `dependencies` is a one-line
+  change in the same PR; by default it runs from a full CI checkout before deploy. It parses with
+  `parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, maxAliasCount: 0, strict: true })`
+  and then **refuses**, failing closed with the reason and the line:
+  - more than one document;
+  - any anchor, alias or `<<` merge key;
+  - any explicit tag;
+  - duplicate keys;
+  - top-level `include` and a service `extends`;
+  - `${...}` interpolation in a security-relevant field: `image`, `privileged`, `cap_add`, `security_opt`, `user`,
+    `network_mode`, `pid`, `ipc`, `ports`, `volumes`, `devices`, `read_only`, `environment` keys, `env_file`.
 
-Checks:
+  Everything outside that subset is refused rather than interpreted. JSON compose files are refused: the compose
+  files are reviewed security configuration whose comments carry the reasons rules cite. The risk being managed is
+  parser differential (the preflight reading a file one way and Compose another), so a CI-only test compares the
+  preflight's view with Compose's own reading.
+
+Checks (C1–C12 in P1.30, C13–C24 in P1.30s):
 | Id | Check |
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
@@ -6166,9 +6314,10 @@ Checks:
 ```text
 1. Parse args; unknown flag → exit 2.
 2. Load env files and secrets into SecretMap; unreadable → exit 2 naming the file (not its content).
-3. Parse compose YAML; parse error → exit 2.
+3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
 4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error"
-   (fail closed). Network checks (C3, C4) timeout 30 s each → FAIL.
+   (fail closed). Network checks (C3, C4) timeout 30 s each → FAIL. An input file a check reads that is absent or
+   unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
 5. Any FAIL → exit 1. All PASS → exit 0.
 ```
 
@@ -6179,6 +6328,10 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 
 **Edge cases and failures:**
 - No network for signature verification → C3/C4 FAIL (never pass on unknown).
+- An input a later step brings (lock, `cosign.pub`, network table, retirement report) is missing → that check FAILs,
+  `input missing: <path>`, exit 1. Exit 2 stays reserved for what the algorithm names (bad arguments, unreadable env
+  or secret files, a compose parse error). The only "n/a" passes are C21 on other hostnames, C22 before Phase 4,
+  C23 outside prod and C24 on `.localhost`.
 - An env value interpolated from a secret → the value never leaves SecretMap; the reason names the variable only.
 - `PDS_RECOVERY_DID_KEY` missing on an existing PDS → FAIL; it cannot be retrofitted into existing DID docs (vault
   note `pds-key-custody-and-disaster-recovery`), so the message says so.
@@ -6197,31 +6350,57 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
   - I The preflight prints secrets → SecretMap redaction; never `docker compose config`
     (`preflight_never_prints_secrets`, `secret_map_redacts`, `preflight_does_not_call_docker_compose_config`).
   - S Tokens and envelopes judged against a drifting host clock → C24 (`c24_clock_unsynchronised_fails`).
-  - E A check skipped or erroring is read as a pass → no skip flag; a throwing check fails (`preflight_no_skip_flag`,
-    `preflight_check_throws_fails_closed`).
+  - E A check skipped or erroring is read as a pass → no skip flag; a throwing check fails; a missing input fails
+    (`preflight_no_skip_flag`, `preflight_check_throws_fails_closed`, `missing_input_fails_check_not_run`).
+  - T The preflight approves a file Compose reads differently → strict YAML subset, refusals, and a CI comparison
+    with `docker compose config` (`preflight_refuses_*`, `preflight_matches_compose_config`).
 
 **Done when (tests):**
-- One failing fixture per check C1–C24 → exit 1 with that id; the all-good fixture → exit 0. Named ones:
+- The all-good fixture → exit 0. One failing fixture per check C1–C12 → exit 1 with that id. Named ones:
   `c7_pds_rate_limits_enabled_fails`, `c7_pds_rate_limits_unset_fails`, `c8_any_bypass_var_fails` (`_KEY`, the edge's
-  IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`, `c13_lexicon_authority_did_fails`, `c15_handle_domain_0x40_me_fails`,
-  `c16_confirmation_link_required`, `c17_extra_service_on_pds_network_fails`, `c18_missing_edge_ratelimit_fails`,
-  `c18_forwarded_header_passed_fails`, `c19_moderation_mail_missing_fails`, `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
-  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
-  `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
-  `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
+  IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`.
 - `preflight_never_prints_secrets`: fixture secrets with a canary string → canary absent from all output.
 - `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
 - `preflight_no_skip_flag`: `--skip C3` → exit 2.
 - `preflight_check_throws_fails_closed`.
 - `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
-- `pds_device_row_has_no_client_ip` (integration, dev stack): sign in through the edge from a test client, then
-  read the PDS `device` table's `ipAddress` → it equals the edge's internal fixed IP, never the client's.
+- `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
+- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
+  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
+  `preflight_refuses_interpolation_in_security_fields`: each → exit 2 naming the feature and line.
+- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
+  `docker compose -f <file> config --format json --no-interpolate` agrees with the preflight's normalised view on every
+  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+- `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
 
 **Reuse** (all provisional — for reuse review):
 - Vault notes `pin-image-index-digests`, `pds-key-custody-and-disaster-recovery` → LESSON.
 - Prototype deploy scripts → LESSON at most (they used `docker compose config`).
 
-**Not in this step:** running the deploy (P5.03); backup checks (P5.04).
+**Not in this step:** checks C13–C24 (P1.30s); running the deploy (P5.03); backup checks (P5.04).
+
+---
+
+### P1.30s — Deploy preflight C13–C24
+
+Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 as designed in P1.30's table,
+in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
+
+**Tags:** [SEC] · **Depends on:** P1.30 · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/checks/*.ts` (C13–C24); fixtures; tests.
+
+**Done when (tests):**
+- One failing fixture per check C13–C24 → exit 1 with that id. Named ones: `c13_lexicon_authority_did_fails`,
+  `c15_handle_domain_0x40_me_fails`, `c16_confirmation_link_required`, `c17_extra_service_on_pds_network_fails`,
+  `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, `c19_moderation_mail_missing_fails`,
+  `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
+  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
+  `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
+  `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
+- The all-good fixture, extended to cover all 24 checks → exit 0.
+
+**Not in this step:** anything P1.30 builds.
 
 ---
 
@@ -7071,7 +7250,7 @@ sequenceDiagram
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.33, P1.33a, P0.12, P0.11, P1.29 · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.33, P1.33a, P0.12, P0.11, P1.29 · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `0x40.space`** hosts the lexicon authority account until
