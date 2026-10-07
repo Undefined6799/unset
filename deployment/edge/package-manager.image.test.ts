@@ -7,8 +7,11 @@
 // Deleting apk-tools also purges what only it needed, ca-certificates-bundle among them (Alpine v3.23). Caddy still
 // needs the system roots for ACME: Go reads the first file in its list that exists, and
 // /etc/ssl/certs/ca-certificates.crt comes first (go1.27.1 src/crypto/x509/root_linux.go, certFiles). The base's
-// `ca-certificates` package, which stays, keeps that file, so the second test proves it matches the base byte for byte.
+// `ca-certificates` package, which stays, keeps that file, so the second test proves it matches the base byte for byte,
+// is a regular file, and holds only certificates that parse (architecture amendment in the P1.28o record): a
+// same-as-base comparison alone would accept an empty or truncated upstream file.
 import { spawnSync } from "node:child_process";
+import { X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -33,6 +36,23 @@ function fileIn(image: string, path: string): string {
   const read = docker(["run", "--rm", "--network", "none", "--entrypoint", "cat", image, path]);
   if (read.code !== 0) throw new Error(`reading ${path} failed: ${read.err.slice(-2000)}`);
   return read.out;
+}
+
+const PEM_BLOCK = /-----BEGIN CERTIFICATE-----\n[\s\S]*?\n-----END CERTIFICATE-----/g;
+
+/** Every way a CA bundle fails to be a list of certificates: none at all, or a block that does not parse. */
+function bundleProblems(bundle: string): string[] {
+  const blocks = bundle.match(PEM_BLOCK) ?? [];
+  const problems = blocks.length === 0 ? ["no PEM certificate"] : [];
+  if (blocks.length !== bundle.split("-----BEGIN CERTIFICATE-----").length - 1) problems.push("an unterminated block");
+  for (const [at, block] of blocks.entries()) {
+    try {
+      new X509Certificate(block);
+    } catch {
+      problems.push(`block ${at + 1} does not parse`);
+    }
+  }
+  return problems;
 }
 
 /** Builds deployment/edge/Dockerfile with deployment/edge as the context; the image id. */
@@ -65,7 +85,18 @@ describe("edge image package manager", () => {
   test("edge_image_keeps_ca_bundle", () => {
     const image = buildEdgeImage();
     const base = fileIn(runtimeBase(), CA_BUNDLE);
-    expect(base).toMatch(/-----BEGIN CERTIFICATE-----/);
-    expect(fileIn(image, CA_BUNDLE) === base, CA_BUNDLE).toBe(true);
+    const shipped = fileIn(image, CA_BUNDLE);
+    expect(shipped === base, CA_BUNDLE).toBe(true);
+    expect(bundleProblems(shipped)).toEqual([]);
+    // busybox stat: "regular file", never "symbolic link" to a path a later deletion could remove.
+    const kind = docker(["run", "--rm", "--network", "none", "--entrypoint", "stat", image, "-c", "%F", CA_BUNDLE]);
+    expect(kind.out.trim(), kind.err).toBe("regular file");
+    // The bundle check itself: an empty file, a block cut short and a block that is not a certificate all fail.
+    const one = shipped.match(PEM_BLOCK)?.[0] ?? "";
+    expect(bundleProblems("")).toEqual(["no PEM certificate"]);
+    expect(bundleProblems(`${one}\n${one.slice(0, 200)}`)).toEqual(["an unterminated block"]);
+    expect(bundleProblems(`${one}\n-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n`)).toEqual([
+      "block 2 does not parse",
+    ]);
   }, 600_000);
 });
