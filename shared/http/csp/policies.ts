@@ -31,12 +31,25 @@ function pagePolicy(origins: CspOrigins, images: "with-media" | "self-only"): Di
   };
 }
 
-/** Every group's policy. `profile` has no `script-src` at all: a profile page runs no script (plan §5.4). */
+/**
+ * Every group's policy. `profile` has no `script-src` at all: a profile page runs no script (plan §5.4). `public`
+ * (P1.25: our own zero-JS pages such as / and /terms; architecture record 2026-10-07-p125-public-route-group.md) has
+ * none either, and its images are the build's own (favicons), never user media.
+ */
 export function policiesFor(origins: CspOrigins): Readonly<Record<RouteGroup, Directives>> {
   const assets: Source = { originPath: origins.assets, path: "/assets/" };
   return {
     app: pagePolicy(origins, "with-media"),
     admin: pagePolicy(origins, "self-only"),
+    public: {
+      "default-src": ["'none'"],
+      "img-src": [assets],
+      "style-src": [assets],
+      "font-src": [assets],
+      ...LOCKED,
+      "object-src": ["'none'"],
+      "manifest-src": ["'self'"],
+    },
     profile: {
       "default-src": ["'none'"],
       "img-src": [{ origin: origins.media }],

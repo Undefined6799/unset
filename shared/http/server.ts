@@ -13,7 +13,7 @@ import type { ClientIp } from "./clientIp.ts";
 import { type HttpKitConfig, hostAllowed } from "./config.ts";
 import { headerSets } from "./csp/headers.ts";
 import { createCsrfGate } from "./csrf/gate.ts";
-import { errorResponse, groupForPath } from "./errors.ts";
+import { type ErrorPage, errorResponse, groupForPath, hookedPage } from "./errors.ts";
 import { createHealth, type Readiness } from "./health.ts";
 import { BodyTooLarge, limitBody } from "./limits/bodyLimit.ts";
 import { hasDidEntry, type PolicyTable } from "./limits/policy.ts";
@@ -38,6 +38,8 @@ export type ServerOptions = {
   onClose?: readonly CloseHook[];
   /** The group for errors before a route matched; the admin server is all `admin`. Default: by path prefix. */
   errorGroup?: RouteGroup;
+  /** The interface's error page; without it, or when it fails, page groups get the kit's fixed page. */
+  errorPage?: ErrorPage;
   now?: () => number;
   exit?: (code: number) => void;
 };
@@ -145,8 +147,9 @@ export function createServer(options: ServerOptions) {
   });
 
   const errorGroup = (path: string) => options.errorGroup ?? groupForPath(path);
-  const fail = (code: ErrorCode, group: RouteGroup, headers?: Record<string, string>) =>
-    errorResponse(code, group, headers);
+  /** The error response for `code`; `reqId` is passed where the code can be `internal.error`. */
+  const fail = (code: ErrorCode, group: RouteGroup, headers?: Record<string, string>, reqId?: string) =>
+    errorResponse(code, group, headers, options.errorPage && hookedPage(options.errorPage, log, reqId));
 
   /** Step 2: a missing host is 400, one not in HTTP_ALLOWED_HOSTS is 421. `/health` skips it (probes). */
   function hostProblem(request: Request, rawPath: string): ErrorCode | undefined {
@@ -219,7 +222,7 @@ export function createServer(options: ServerOptions) {
       for (const [name, value] of Object.entries(securityHeaders[group])) out.headers.set(name, value);
       return out;
     } catch {
-      const fallback = fail("internal.error", "static");
+      const fallback = errorResponse("internal.error", "static"); // never the hook: this fallback cannot fail
       for (const [name, value] of Object.entries(securityHeaders.static)) fallback.headers.set(name, value);
       return fallback;
     }
@@ -232,7 +235,12 @@ export function createServer(options: ServerOptions) {
    * Steps 7–11 in order: bodyLimit → rateLimitIp → csrf (P1.07) → session → rateLimitDid. A response means the
    * request stops here; otherwise the request to hand on, its body counted against the limit.
    */
-  async function admit(route: Route, request: Request, clientIp: ClientIp | null): Promise<Admitted | Response> {
+  async function admit(
+    route: Route,
+    request: Request,
+    clientIp: ClientIp | null,
+    reqId: string,
+  ): Promise<Admitted | Response> {
     let admitted: Admitted = { request, exceeded: () => false };
     if (route.method === "POST") {
       const limited = limitBody(request, route.bodyLimit ?? config.HTTP_BODY_LIMIT_BYTES);
@@ -248,7 +256,7 @@ export function createServer(options: ServerOptions) {
     if (session === null) {
       // Fail closed: a session-only route never runs, and is never limited as "no DID, no limit".
       log.error("ratelimit.no_session", { route: route.path });
-      return fail("internal.error", route.group);
+      return fail("internal.error", route.group, undefined, reqId);
     }
     return rateLimited(route, { did: session.did }) ?? admitted;
   }
@@ -260,7 +268,7 @@ export function createServer(options: ServerOptions) {
     const clientIp = route.path === "/health" ? null : clientIpOf(request.headers, peer);
     let exceeded = () => false;
     const admitThenHandle = async (): Promise<Response> => {
-      const admitted = await admit(route, request, clientIp);
+      const admitted = await admit(route, request, clientIp, reqId);
       if (admitted instanceof Response) return admitted;
       exceeded = admitted.exceeded;
       return route.handler({ request: admitted.request, clientIp, params, deadline, reqId });
@@ -281,9 +289,9 @@ export function createServer(options: ServerOptions) {
       return fail("http.deadline", route.group);
     } catch (error) {
       if (exceeded() || error instanceof BodyTooLarge) return tooLarge(route.group);
-      if (error instanceof AppError) return fail(error.code, route.group);
+      if (error instanceof AppError) return fail(error.code, route.group, undefined, reqId);
       log.logError(error);
-      return fail("internal.error", route.group);
+      return fail("internal.error", route.group, undefined, reqId);
     }
   }
 

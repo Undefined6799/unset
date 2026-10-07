@@ -12,7 +12,7 @@ type CspConfig = Pick<
   "UNSET_ENV" | "PUBLIC_ORIGIN" | "MEDIA_ORIGIN" | "ASSETS_BASE" | "DEV_VITE_ORIGIN"
 >;
 
-const GROUPS: readonly RouteGroup[] = ["app", "profile", "static", "media", "admin", "api"];
+const GROUPS: readonly RouteGroup[] = ["app", "public", "profile", "static", "media", "admin", "api"];
 const PERMISSIONS =
   "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), browsing-topics=()";
 

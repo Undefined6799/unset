@@ -3,7 +3,7 @@
 import type { ClientIp } from "./clientIp.ts";
 import { GET_MUTATION_EXCEPTIONS } from "./csrf/exceptions.ts";
 
-export type RouteGroup = "app" | "profile" | "static" | "media" | "admin" | "api";
+export type RouteGroup = "app" | "public" | "profile" | "static" | "media" | "admin" | "api";
 export type RouteMethod = "GET" | "HEAD" | "POST";
 
 /** What a handler sees: the request, the decoded path parameters, the request deadline and the request id. */
@@ -52,7 +52,7 @@ export type Route = Readonly<{
 }>;
 
 const METHODS: readonly RouteMethod[] = ["GET", "HEAD", "POST"];
-const GROUPS: readonly RouteGroup[] = ["app", "profile", "static", "media", "admin", "api"];
+const GROUPS: readonly RouteGroup[] = ["app", "public", "profile", "static", "media", "admin", "api"];
 const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/;
 /** The deadline range: 120 s leaves room inside the edge's 130 s upstream timeout (P1.28; plan §6.1). */
 const MIN_DEADLINE_MS = 1000;

@@ -6,7 +6,7 @@ import { cspOrigins, securityHeaders } from "./headers.ts";
 import { policiesFor } from "./policies.ts";
 import { configOrigin, type Source } from "./sources.ts";
 
-const GROUPS: readonly RouteGroup[] = ["app", "profile", "static", "media", "admin", "api"];
+const GROUPS: readonly RouteGroup[] = ["app", "public", "profile", "static", "media", "admin", "api"];
 const PROD = {
   UNSET_ENV: "prod",
   PUBLIC_ORIGIN: "https://unset.sh",
@@ -73,6 +73,25 @@ describe("csp policies", () => {
       expect(directive(csp, "script-src")).toBeUndefined();
       expect(directive(csp, "default-src")).toBe("default-src 'none'");
     }
+  });
+
+  test("public_policy_has_no_script_src", () => {
+    // P1.25: the zero-JS public pages (architecture record 2026-10-07-p125-public-route-group.md).
+    for (const [, csp] of [...built(PROD), ...built(DEV)].filter(([g]) => g === "public")) {
+      expect(directive(csp, "script-src")).toBeUndefined();
+      expect(directive(csp, "default-src")).toBe("default-src 'none'");
+      expect(csp).not.toContain("'unsafe-");
+    }
+  });
+
+  test("public_policy_img_src_assets_only", () => {
+    const own = Object.fromEntries(built(PROD)).public;
+    expect(directive(own, "img-src")).toBe("img-src https://unset.sh/assets/");
+    expect(directive(own, "manifest-src")).toBe("manifest-src 'self'");
+    expect(directive(own, "object-src")).toBe("object-src 'none'");
+    const split = buildCsp(policiesFor(cspOrigins({ ...PROD, ASSETS_BASE: "https://static.unset.sh/assets/" })).public);
+    expect(directive(split, "img-src")).toBe("img-src https://static.unset.sh/assets/");
+    expect(split).not.toContain("unsetcdn.net");
   });
 
   test("media_group", () => {

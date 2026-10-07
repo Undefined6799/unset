@@ -1,8 +1,9 @@
 // The server kit against in-process requests (P1.04k; the P1.04 test list except the two that need entrypoints).
-import { AppError } from "@unset/shared-errors";
+import { AppError, type ErrorCode } from "@unset/shared-errors";
 import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
 import type { HttpKitConfig } from "./config.ts";
+import type { ErrorPage } from "./errors.ts";
 import { defineRoute, type RouteSpec } from "./routes.ts";
 import { createServer, type ServerOptions } from "./server.ts";
 
@@ -624,5 +625,182 @@ describe("limits", () => {
     const text = lines.join("\n");
     expect(text).not.toMatch(/[0-9a-f]{64}/i);
     expect(text).not.toMatch(/[A-Za-z0-9+/_-]{43,}/);
+  });
+});
+
+describe("error page hook", () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  type Seen = { code: string; ctx: { group: string; reqId?: string } };
+  const spy = (render: (code: string, ctx: Seen["ctx"]) => unknown = (code) => `<p>designed ${code}</p>`) => {
+    const seen: Seen[] = [];
+    const errorPage = ((code: string, ctx: Seen["ctx"]) => {
+      seen.push({ code, ctx: { ...ctx } });
+      return render(code, ctx);
+    }) as ErrorPage;
+    return { seen, errorPage };
+  };
+  const throwing = (code: ErrorCode) => () => {
+    throw new AppError(code);
+  };
+  const routes = [
+    page({ method: "GET", path: "/boom", handler: throwing("internal.error") }),
+    page({ method: "GET", path: "/@:handle", group: "profile", handler: throwing("http.not_found") }),
+    page({ method: "GET", path: "/terms", group: "public", handler: throwing("http.not_found") }),
+    page({ method: "GET", path: "/limited", handler: throwing("http.rate_limited") }),
+    page({ method: "POST", path: "/form" }),
+    defineRoute({
+      method: "GET",
+      path: "/api/x",
+      group: "api",
+      rateLimit: "page",
+      session: "none",
+      handler: throwing("http.not_found"),
+    }),
+    defineRoute({
+      method: "GET",
+      path: "/media/x",
+      group: "media",
+      rateLimit: "page",
+      session: "none",
+      handler: throwing("http.not_found"),
+    }),
+    page({
+      method: "GET",
+      path: "/spent",
+      handler: () => {
+        const spent = new Response("x");
+        void spent.body?.getReader(); // a locked body cannot be copied, so securing it throws
+        return spent;
+      },
+    }),
+  ];
+
+  test("error_page_hook_renders_page_groups", async () => {
+    const { seen, errorPage } = spy();
+    const { request } = kit({ routes, errorPage });
+    expect(await (await request("/nothing")).text()).toBe("<p>designed http.not_found</p>");
+    expect(await (await request("/@a")).text()).toBe("<p>designed http.not_found</p>");
+    const admin = kit({ routes, errorPage, errorGroup: "admin" });
+    expect(await (await admin.request("/nothing")).text()).toBe("<p>designed http.not_found</p>");
+    expect(await (await request("/terms")).text()).toBe("<p>designed http.not_found</p>");
+    expect(seen.map((s) => s.ctx.group)).toEqual(["app", "profile", "admin", "public"]);
+    seen.length = 0;
+    expect(await (await request("/api/x")).json()).toEqual({ error: "http.not_found" });
+    expect(await (await request("/media/x")).text()).toBe("");
+    expect(await (await request("/assets/x")).text()).toBe("");
+    expect(seen).toEqual([]);
+  });
+
+  test("error_page_hook_receives_no_request_data", async () => {
+    const { seen, errorPage } = spy();
+    const { request, records } = kit({ routes, errorPage });
+    const headers = { cookie: "__Host-theme=dark", "accept-language": "fr" };
+    await request("/nothing?q=secret-query", { headers });
+    await request("/boom?q=secret-query", { headers });
+    await request("/form", { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
+    const reqIds = records()
+      .filter((r) => r.event === "http.request")
+      .map((r) => r.reqId);
+    expect(seen).toEqual([
+      { code: "http.not_found", ctx: { group: "app" } },
+      { code: "internal.error", ctx: { group: "app", reqId: reqIds[1] } },
+      { code: "http.unsupported_media_type", ctx: { group: "app" } },
+    ]);
+    expect(JSON.stringify(seen)).not.toMatch(/secret|nothing|theme|fr/);
+  });
+
+  test("error_page_hook_throw_falls_back", async () => {
+    const { request: plain } = kit({ routes });
+    const fixed = await plain("/nothing");
+    const { request, records } = kit({
+      routes,
+      errorPage: () => {
+        throw new Error("render blew up with private text");
+      },
+    });
+    const response = await request("/nothing");
+    expect(response.status).toBe(404);
+    expect([...response.headers]).toEqual([...fixed.headers]);
+    const body = await response.text();
+    expect(body).toBe(await fixed.text());
+    expect(body).not.toContain("private text");
+    expect(records().filter((r) => r.event === "error")).toHaveLength(1);
+    expect(JSON.stringify(records())).not.toContain("private text");
+  });
+
+  test("error_page_hook_non_string_or_oversize_falls_back", async () => {
+    const fixed = await (await kit({ routes }).request("/nothing")).text();
+    for (const result of [undefined, 42, Promise.resolve("<p>late</p>"), "x".repeat(256 * 1024 + 1)]) {
+      const { request, records } = kit({ routes, errorPage: spy(() => result).errorPage });
+      const response = await request("/nothing");
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe(fixed);
+      expect(records().filter((r) => r.event === "error")).toHaveLength(1);
+    }
+    const { request } = kit({ routes, errorPage: spy(() => "x".repeat(256 * 1024)).errorPage });
+    expect((await (await request("/nothing")).text()).length).toBe(256 * 1024);
+  });
+
+  test("error_page_hook_keeps_kit_headers", async () => {
+    const { errorPage } = spy();
+    const hooked = kit({ routes, errorPage });
+    const plain = kit({ routes });
+    const policies = { ...POLICIES, page: [{ capacity: 1, refillPerSec: 0.001, scope: "ip" }] } as const;
+    const once = [page({ method: "GET", path: "/once" })];
+    const sends: [string, RequestInit?][] = [["/nothing"], ["/boom"], ["/", { method: "PUT" }]];
+    for (const [path, init] of sends) {
+      const a = await hooked.request(path, init);
+      const b = await plain.request(path, init);
+      expect(a.status, path).toBe(b.status);
+      for (const name of ["content-type", "cache-control", "allow", "content-security-policy", "x-frame-options"]) {
+        expect(a.headers.get(name), `${path} ${name}`).toBe(b.headers.get(name));
+      }
+      expect(a.headers.get("content-security-policy"), path).toBeTruthy();
+    }
+    const limited = kit({ routes: once, policies, errorPage });
+    await limited.request("/once");
+    const over = await limited.request("/once");
+    expect(over.status).toBe(429);
+    expect(over.headers.get("retry-after")).toMatch(/^\d+$/);
+    expect(await over.text()).toBe("<p>designed http.rate_limited</p>");
+  });
+
+  test("internal_error_body_has_kit_request_id", async () => {
+    const { request, records } = kit({
+      routes,
+      errorPage: spy((code, ctx) => `<p>${code} ${ctx.reqId ?? "-"}</p>`).errorPage,
+    });
+    const body = await (await request("/boom")).text();
+    const reqId = records().find((r) => r.event === "http.request")?.reqId;
+    expect(reqId).toMatch(UUID);
+    expect(body).toBe(`<p>internal.error ${reqId}</p>`);
+    for (const path of ["/nothing", "/limited"]) {
+      expect(await (await request(path)).text(), path).toMatch(/ -<\/p>$/);
+    }
+  });
+
+  test("not_found_body_identical_across_requests", async () => {
+    for (const errorPage of [undefined, spy().errorPage]) {
+      const { request } = kit({ routes, ...(errorPage ? { errorPage } : {}) });
+      const a = await request("/one?x=1", { headers: { cookie: "a=b", "accept-language": "fr" } });
+      const b = await request("/two/three?y=%3Cz%3E", { headers: { "accept-language": "en" } });
+      expect(a.status).toBe(404);
+      expect(await a.text()).toBe(await b.text());
+      expect(a.headers.get("cache-control")).toBe("no-cache");
+      expect(b.headers.get("cache-control")).toBe("no-cache");
+    }
+    const { request } = kit({ routes });
+    expect((await request("/api/x")).headers.get("cache-control")).toBe("no-store");
+    expect((await request("/", { method: "PUT" })).headers.get("cache-control")).toBe("no-store");
+    expect((await request("/boom")).headers.get("cache-control")).toBe("no-store");
+  });
+
+  test("secured_fallback_never_calls_hook", async () => {
+    const { seen, errorPage } = spy();
+    const { request } = kit({ routes, errorPage });
+    const response = await request("/spent");
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("");
+    expect(seen).toEqual([]);
   });
 });
