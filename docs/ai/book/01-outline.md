@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 160 steps: 139 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 162 steps: 141 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -233,6 +233,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25d | jsx-free detector matches resolved shared/ui paths and react-dom | — | P1.25h | `phase-1.md` |
 | P1.25r | jsx-free test parses with oxc (vite parseSync): string floor, no loading primitives, realpathed relatives | — | P1.25d | `phase-1.md` |
 | P1.25l | Budget check: every island keeps its own lazy chunk | check | P1.25h | `phase-1.md` |
+| P1.25s | jsx-free test: contains-floor, eval/Function/vm loaders, named type imports only | [SEC] | P1.25r | `phase-1.md` |
 | P1.25o | CODEOWNERS, lint edges and budget for shared/islands | check [ALEX] | P1.25h | `phase-1.md` |
 | P1.25i | Island runtime moves to the shared/islands workspace | trusted | P1.25o | `phase-1.md` |
 | P1.25u | CODEOWNERS drops the island runtime's old paths | check | P1.25i | `phase-1.md` |
@@ -262,7 +263,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
 | P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
-| P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
+| P1.28e | One edge config reader and site rules in deployment/edge (trusted) | [SEC] | P1.28h | `phase-1.md` |
+| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -392,6 +394,7 @@ flowchart TD
   P1_25x["P1.25x ui-build plan default test"]
   P1_25d["P1.25d jsx-free detector"]
   P1_25r["P1.25r jsx-free test parses with oxc"]
+  P1_25s["P1.25s jsx-free second regression"]
   P1_25l["P1.25l Islands keep lazy chunks"]
   P1_25o["P1.25o Own shared/islands"]
   P1_25i["P1.25i Island runtime to shared/islands"]
@@ -411,6 +414,7 @@ flowchart TD
   P1_28["P1.28 Edge Caddy"]
   P1_28b["P1.28b Edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
+  P1_28e["P1.28e One edge config reader"]
   P1_28s["P1.28s Quoted top-level tokens refused"]
   P1_28i["P1.28i Edge image builds in image tests"]
   P1_28j["P1.28j Edge image tests drop runIf"]
@@ -556,6 +560,7 @@ flowchart TD
   P1_25w --> P1_25x
   P1_25h --> P1_25d
   P1_25d --> P1_25r
+  P1_25r --> P1_25s
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
@@ -665,6 +670,8 @@ flowchart TD
   P1_30t --> P2_13a
   P1_30 --> P1_30u
   P1_28h --> P1_30u
+  P1_28h --> P1_28e
+  P1_28e --> P1_30u
   P1_30u --> P2_13a
   P1_03 --> P1_04k
   P1_03 --> P1_03w

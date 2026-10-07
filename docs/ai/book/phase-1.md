@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -178,6 +178,7 @@ flowchart LR
   P1_25x["P1.25x ui-build plan default test"]
   P1_25d["P1.25d jsx-free detector"]
   P1_25r["P1.25r jsx-free test parses with oxc"]
+  P1_25s["P1.25s jsx-free second regression"]
   P1_25l["P1.25l islands keep lazy chunks"]
   P1_25o["P1.25o own shared/islands ALEX"]
   P1_25i["P1.25i island runtime to shared/islands"]
@@ -197,6 +198,7 @@ flowchart LR
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
+  P1_28e["P1.28e one edge config reader"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -264,6 +266,7 @@ flowchart LR
   P1_25w --> P1_25x
   P1_25h --> P1_25d
   P1_25d --> P1_25r
+  P1_25r --> P1_25s
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
@@ -336,6 +339,8 @@ flowchart LR
   P1_30t --> P1_34
   P1_30 --> P1_30u
   P1_28h --> P1_30u
+  P1_28h --> P1_28e
+  P1_28e --> P1_30u
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -5659,7 +5664,12 @@ recorded as built. Defence in depth beside P1.25w's row, so their order does not
 
 ### P1.25r — Close the jsx-free test's regression
 Tags: —            Depends on: P1.25d (merged, #512)
-As built: merged by Alex at 2026-10-07T23:07:29Z as `5681a4f` (#520).
+As built: merged by Alex at 2026-10-07T23:07:29Z as `5681a4f` (#520; issue #518). It regressed below main again: `eval`
+and `Function` holding `import("@unset/shared-ui")` pass, where main's text count refused them, and the type exception
+also accepts `import type * as K` and `import type K`. Its subpath fixture uses `@unset/shared-ui/index.ts`, not the
+`/sub` named below; both are subpaths, and the book line stays. Not pinned: a file holding both an `import type` and a
+value import of the index is refused by the logic, but no fixture covers it. Dead code: the workspace-link branch at
+`jsx-free.test.ts:88-92`. P1.25s fixes all of these.
 Slice 1, product class (`shared/ui-build/jsx-free.test.ts`, plus the two nits below); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (P1.25r, text final 23:00Z), from architecture's N4 amendment in
 2026-10-07-p125h-follow-ups. Owner: the third thread, in its next slot, ahead of P1.25l. A tightening, cleared by the
@@ -5697,10 +5707,11 @@ every red fixture fails, every green one passes, and the real `shared/ui-build` 
 
 ### P1.25l — Check that every island keeps a lazy chunk
 Tags: check            Depends on: P1.25h (merged, #464)
+As built: merged by Alex at 2026-10-07T23:21:28Z as `1bd6c0d` (#523).
 Slice 1, check class (`scripts/budgets/island.ts` and its test); book edit 2026-10-07-p125l-islands-lazy-chunks, from
-architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: Phase 2. A tightening that restores the adopted island
-model (plan §5.1), cleared by the coordinator. #464's first build inlined islands into boot and the budget silently
-counted fewer, so the manifest is checked against the source list.
+architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: the third thread (moved from Phase 2 by the coordinator at
+22:38Z). A tightening that restores the adopted island model (plan §5.1), cleared by the coordinator. #464's first build
+inlined islands into boot and the budget silently counted fewer, so the manifest is checked against the source list.
 
 `islandsAreLazyChunks` reads the Vite manifest (the `ManifestChunk` type, `island.ts:16-23`), never the build log, and
 runs in `main` before the size gate; a refusal exits 1 and names the island (and, for rule 3, the entry that reaches
@@ -5712,6 +5723,39 @@ only) of any `isEntry` chunk, boot included.
 Tests (`islands_are_lazy_chunks`): fail an island statically imported from boot (the #464 shape), an island with no
 manifest chunk, and an island chunk marked `isEntry`; pass today's shape, where boot reaches each island only through
 `dynamicImports`. Done when `npm run check` is green on main and the report still prints one line per island.
+
+---
+
+### P1.25s — Close the jsx-free test's second regression
+Tags: [SEC]            Depends on: P1.25r (merged, #520)
+Slice 1, issue #525, product (`shared/ui-build/jsx-free.test.ts`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups
+(amendment 3, 23:30Z), from the coordinator's check of #520 and architecture's second note under N4 in
+2026-10-07-p125h-follow-ups (23:25Z). A tightening; the coordinator clears it, no word from Alex. Owner: the third
+thread, after P1.25l (#523).
+
+1. **The floor:** any parsed string or template literal whose value contains `@unset/shared-ui` as a whole specifier
+   fails, wherever it sits. "Whole" means followed by the end, `/`, a quote, or a character that cannot appear in a
+   package name, so `@unset/shared-uix` still passes. This replaces "equals or starts with"; the only exception is the
+   exact specifier of an allowed type import (item 3).
+2. **LOADERS** gains `eval`, called directly and indirectly as `(0, eval)`; `Function`, both called and constructed; and
+   any import of `vm` or `node:vm`.
+3. **The type exception** applies only when every specifier is a named ImportSpecifier
+   (`import type { A, B } from "@unset/shared-ui"`). `import type * as K` and `import type K` fail, as on main.
+4. **Pin every check:** realpath, the node_modules segment, `import =`, createRequire, eval, Function and vm, and the
+   contains-floor each get at least one red fixture that only it catches, so removing the check turns a test red. The PR
+   body lists each check with its pinning fixture. The dead branch at :88-92 is removed, not pinned.
+5. **The node_modules test** works on `relative(HERE, target)`, not the absolute target: a checkout whose own path
+   contains `node_modules` must not refuse every import.
+
+Fixtures: red, `eval('import("@unset/shared-ui")')` and `(0, eval)(…)`;
+`Function('return import("@unset/shared-ui")')()` and `new Function(…)`; `import vm from "node:vm"` with
+`vm.runInThisContext(…)`; `setTimeout('…@unset/shared-ui…')` (floor only); `import type * as K from "@unset/shared-ui"`
+and `import type K from "@unset/shared-ui"`; one file holding `import type { X }` and a value import of the index.
+Green: a checkout path containing `node_modules` (relative-path test); `"@unset/shared-uix"`;
+`import type { A, B } from "@unset/shared-ui"`.
+
+Done when `npm run check` is green, every red fixture fails for its stated check, and the PR body shows the
+check-to-fixture table.
 
 ---
 
@@ -5751,11 +5795,11 @@ subpath (DC-2).
 
 ### P1.25u — Drop the island runtime's old owner paths
 Tags: check            Depends on: P1.25i
-Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: Phase 2. Removes
-`/shared/ui/islands/`, `/shared/ui/src/islands/`, `/shared/ui/islands/props.ts` and
-`/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping `/shared/ui/safe-href.ts`, then confirms
-with `git ls-files` that none of the removed paths exists and that the trusted-base tests pass. A tightening: it
-removes ownership only from paths that no longer exist.
+Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: the third thread
+(moved from Phase 2 by the coordinator at 22:38Z). Removes `/shared/ui/islands/`, `/shared/ui/src/islands/`,
+`/shared/ui/islands/props.ts` and `/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping
+`/shared/ui/safe-href.ts`, then confirms with `git ls-files` that none of the removed paths exists and that the
+trusted-base tests pass. A tightening: it removes ownership only from paths that no longer exist.
 
 ---
 
@@ -7467,15 +7511,69 @@ all-good fixture still exits 0.
 
 ---
 
+### P1.28e — Share one edge config reader and the site rules
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+Slice 1, issue #524, trusted (`deployment/edge/caddyfile.ts`, with the matching tests `edge.test.ts`,
+`caddyfile.test.ts` and `caddyfile.image.test.ts`); book edit 2026-10-07-p128e-edge-config-reader (final 23:25Z), from
+architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader. Neutral to tightening; the
+coordinator clears it, no word from Alex. Owner: Phase 2, which raised it and owns P1.30u, its only consumer, so the two
+run back to back. It goes before P1.30u, which gains it as a dependency; P1.30u's riders a to d do not wait for it.
+Phase 1's queue (P1.29r, P1.28y, P1.29d) stays as it is; P1.28y also touches the edge, and whichever lands second merges
+main in, neither waiting on the other.
+
+**What:**
+1. **`readEdgeConfig(edgeDir, sitesDir, env)`** in `deployment/edge/caddyfile.ts` resolves exactly the shipped
+   Caddyfile's two import lines, `snippets/*.caddy` and `sites/enabled/*.caddy`, matched by their literal text, and
+   expands each glob in byte order, as Caddy does. Every other file import is refused, and so is a glob that matches
+   nothing. `{$PDS_HOST}`, `{$PDS_UPSTREAM}` and `{$ACME_EMAIL}` come from `env`, with the reader's existing shape
+   checks. Entries of `sitesDir` must be `*.caddy` regular files or symlinks; each symlink, realpathed, must land inside
+   `deployment/edge/sites/` and be a regular `*.caddy` file. A subdirectory, another extension, a dangling link and a
+   link that leaves `deployment/edge/sites/` all fail.
+2. **`edgeSiteProblems(config, env)`** replaces edge.test.ts's private `zoneCoverageProblems` (:69) and adds the
+   header_up check (amendment 7 point 3). **Trigger:** the rule applies to every site whose parsed tree has any
+   `reverse_proxy`. **Route:** such a site has exactly one plain route, whose first handler is the `pds-ratelimit`
+   snippet's `rate_limit`, and every `reverse_proxy` of the site is inside it. **Rate limits:** no other `rate_limit`
+   anywhere in the site. **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and
+   `-Forwarded` (ADR 0018). **A site with no upstream** is exempt by that fact, not by its name; it must bind loopback
+   only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
+3. **Switch the tests:** `edge.test.ts` and `caddyfile.image.test.ts` (shippedConfig) switch to both functions, and both
+   hand expansions are deleted. The image test still proves byte for byte that the image carries the repo's Caddyfile
+   and snippets.
+
+Fixtures: red, a second site with a proxy and no route; a proxy outside the route; a missing header_up; a public site
+with no upstream; a symlink out of `sites/`; a subdirectory in `sitesDir`; a non-`.caddy` entry; a dangling link; an
+extra file import; a glob that matches nothing. Green: the shipped edge with `sites/enabled` linking to
+`sites/pds.caddy`, plus the health site on loopback. (Amendment 7's sixth red fixture, a mount over
+`/etc/caddy/Caddyfile`, is a compose fact only C18 reads, so it sits in P1.30u.)
+
+Done when `npm run check` is green, every red fixture fails with its stated reason, and no Caddyfile expansion remains
+outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` with its output in the PR body.
+
+**Not in this step:** the preflight (`deployment/preflight/`) and the compose mount rules (P1.30u).
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
-Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h). C18 imports `deployment/edge/caddyfile.ts` (P1.28h);
-there is no second reader in `deployment/preflight/` (architecture refused one: the same parser differential it
-ruled out for YAML).
+Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
+23:25Z). C18 calls `readEdgeConfig` and `edgeSiteProblems` from `deployment/edge/caddyfile.ts` (P1.28e). A second reader
+in `deployment/preflight/` stays refused, because two parsers of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
+
+**What C18 reads:** the Caddyfile and `snippets/*.caddy` from the repo's `deployment/edge/`; the `sites/enabled`
+directory that is the source of the compose edge service's bind mount at `/etc/caddy/sites/enabled`, which must be a
+directory inside `deployment/edge/` whose entries follow P1.28e's symlink rules; and the env from `serviceEnv("edge")`.
+The edge service mounts nothing else at or under `/etc/caddy`: a file, a directory, or a parent such as `/etc/caddy` or
+`/etc` each fails. No edge service, no such mount, or an empty directory gives `input missing: <path>`.
+
+**The import fork:** the depcruise matrix needs a row that lets `deployment/preflight` import
+`deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
+a loosening and needs Alex's typed line (for example "yes P1.30u preflight imports edge reader"); the coordinator asks
+him before C18 is built. If he declines, C18 runs the reader as a CLI by fixed path, the same as verify-images, and no
+lint row is added. The PR body says which path it took and quotes his line.
 
 **Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
 a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
@@ -7491,10 +7589,13 @@ d. C12's `LOG_LEVEL` allowlist, even with SMTP set (debug logs carry personal da
 If these take P1.30u past about 550 lines, they split out as **P1.30b** (leftovers, feature, depends on P1.30s) and
 P1.30u stays C18 alone.
 
-**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, and the riders' tests;
-the all-good fixture, now covering all 24 checks, exits 0.
+**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`,
+`c18_mount_over_caddyfile_fails`, `c18_mount_over_etc_caddy_parent_fails`, `c18_sites_symlink_out_of_repo_fails`,
+`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, and the riders' tests; fixtures carry a compose
+file; the all-good fixture, now covering all 24 checks, exits 0. C18 fails with "input missing" on every real run until
+P1.29 adds compose.dev.yaml. That is expected, because the preflight is not a gate yet.
 
-**Not in this step:** any change to `deployment/edge/` (P1.28h owns the reader).
+**Not in this step:** any change to `deployment/edge/` (P1.28e owns the reader and the site rules).
 
 ---
 
@@ -7873,6 +7974,7 @@ dev-seed:
 
 ### P1.29r — Close the final-stage package rule's regression
 Tags: [SEC]            Depends on: P1.29x (merged, #507)
+As built: merged by Alex at 2026-10-07T23:18:03Z as `739ad43` (#519).
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p129r-final-stage-rule-regression (final
 22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z), with amendment 1
 (23:05Z) from architecture's 22:57Z note under amendment 5. A tightening; the coordinator clears it, no word from Alex.
