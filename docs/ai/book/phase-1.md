@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28s,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28r,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -162,6 +162,7 @@ flowchart LR
   P1_21["P1.21 token pipeline"]
   P1_22["P1.22 base styles, theme, locale"]
   P1_23["P1.23 island runtime"]
+  P1_23d["P1.23d props fuzz test bounded"]
   P1_24["P1.24 UI kit: gate + primitives"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
   P1_24k["P1.24k UI kit: chrome, no-JS"]
@@ -195,6 +196,8 @@ flowchart LR
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
   P1_28s["P1.28s quoted top-level tokens refused"]
+  P1_28i["P1.28i edge image builds in image tests"]
+  P1_28r["P1.28r images project after unit tests"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
   P1_29w["P1.29w discover and scan every image ALEX"]
@@ -292,6 +295,10 @@ flowchart LR
   P1_28 --> P1_28b
   P1_28b --> P1_28h
   P1_28h --> P1_28s
+  P1_28h --> P1_28i
+  P1_28i --> P1_28r
+  P1_28r --> P1_29k
+  P1_28r --> P1_29d
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -4708,6 +4715,27 @@ the chat bundle (P6.06); the CSP builder itself (P1.08).
 
 ---
 
+### P1.23d — Bound the island props fuzz test's work
+Tags: [SEC], trusted            Depends on: —
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing, from architecture's
+2026-10-07-test-timing-fuzz-and-image-tests. Neutral; the coordinator clears it. Owner: the third thread. Priority: the
+next free slot, ahead of every other step, because it protects every PR's check. Order: P1.23d, P1.28i, P1.28r.
+
+**Where:** `shared/ui/islands/props.fuzz.test.ts` (trusted base, CODEOWNERS:50-51, 118-119), or the same file under
+`shared/islands/` if P1.25i has moved the island runtime by then.
+
+**What:** one check per run instead of one `expect` per serialized character (one precompiled regex over the output,
+or one pass collecting the offending positions), with the breaker set unchanged and a failure that shows the offending
+substring and its index; explicit bounds on every arbitrary (strings `maxLength` 256, `maxDepth` 4, arrays `maxLength`
+16; larger only if the test stays under half of 5000 ms on a loaded runner); `numRuns` stays 10,000, with no fixed
+seed. Refused: a raised timeout, a retry, a skip, fewer runs or a fixed seed.
+
+Test: `props_breaker_examples_fail` (every known breaker makes the new check fail: `</script`, `<!--`, and U+2028 and
+U+2029 if they are in the set, with mixed case where the set is case-insensitive). Done when `npm run check` is green
+and the fuzz file's time in the check log is under 2500 ms.
+
+---
+
 ### P1.23f — CSS scope function (product split of P1.23v)
 Tags: —            Depends on: —            Plan: ADR 0015
 Where: `scripts/ui/css-scope.ts` (a tool under the P1.21 ruling, not a check folder): sha256 over the repo-relative
@@ -6399,6 +6427,8 @@ entry, as the record required; no change is booked (a pre-pass over all stages w
 
 ### P1.28w — Make the mirror scan's HIGH warnings fire
 
+**As built:** merged by Alex at 2026-10-07T19:28:15Z as `f6addc0` (#480).
+
 **Tags:** [SEC] · **Depends on:** P1.28v (merged, #430) · **Class:** check (`.github/workflows/mirror.yml`,
 `scripts/ci/mirror-scan.test.ts`), neutral to tightening · **Slice:** 1, after P1.28v
 
@@ -6481,6 +6511,7 @@ stage label; `ADD <url>` and `ADD <git ref>` fetch external content the same way
 
 ### P1.28c — Drop the edge Dockerfile's syntax line
 Tags: [SEC], trusted            Depends on: P1.28u (merged, #449)
+As built: merged by Alex at 2026-10-07T19:15:07Z as `e72000a` (#479).
 Slice 1, trusted base; book edit 2026-10-07-p128c-p128t-reader-gaps, from architecture's
 2026-10-07-p128u-reader-gaps. Letter `c`: glue ahead of P1.28t (P1.28's taken letters are b, d, h, q, u, v, w and
 x). Owner: the third thread. It removes line 1 (`# syntax=docker/dockerfile:1`) of `deployment/edge/Dockerfile` and
@@ -6492,7 +6523,7 @@ word from Alex: a tightening, no `.github/` path.
 ---
 
 ### P1.28t — Close the Dockerfile reader's gaps
-Tags: [SEC]            Depends on: P1.28c
+Tags: [SEC]            Depends on: P1.28c (merged, #479)
 Slice 1, feature, `deployment/images/images.test.ts` only, under the `/deployment/` security-review line; book edit
 2026-10-07-p128c-p128t-reader-gaps, with architecture's 2026-10-07-p128u-reader-gaps (amending
 2026-10-07-p128-copy-from-image-ref), which wins where they differ. Owner: Phase 1. Rule: where BuildKit's exact
@@ -6850,6 +6881,8 @@ runtime.
 
 ### P1.28h — Add the Caddyfile reader for edge checks
 
+As built: merged by Alex at 2026-10-07T19:02:30Z as `337df28` (#463), with amendments 1 to 4 below.
+
 Booked from architecture's 2026-10-07-p130s-networks-and-caddyfile-reader (point 2) by book edit
 2026-10-07-p130s-split-and-p128h. `edge.test.ts` reads the Caddyfile by regular expressions over text
 (`zoneCoverageProblems`, line 42; `zones`, line 27), and P1.30u's C18 must read the same file at the deploy gate. Two
@@ -6905,7 +6938,7 @@ existing `edge.test.ts` zone tests unchanged and green.
 ---
 
 ### P1.28s — Refuse quoted top-level tokens in the Caddyfile
-Tags: [SEC], trusted            Depends on: P1.28h
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
 Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
 5 in 2026-10-07-p130s-networks-and-caddyfile-reader, which withdrew the move of the edge integration tests. P1.28s keeps
 its id and carries only the rider. Owner: Phase 1. No word from Alex: a tightening.
@@ -6927,6 +6960,51 @@ Not booked: a future non-test helper under `deployment/` that needs Node built-i
 
 ---
 
+### P1.28i — Split the edge image build into its own tests
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing. Neutral. Owner: Phase 1, which also holds
+P1.28s on the same file; P1.28i goes first to avoid a conflict (P1.28s does not depend on it).
+- The Docker build part of `deployment/edge/caddyfile.test.ts` (lines 222-236 and its `buildEdgeImage` and docker
+  helpers above them) moves to `deployment/edge/caddyfile.image.test.ts` in the same folder, with the byte-for-byte
+  check unchanged.
+- `tests/integration/deployment/edge/edge.test.ts` also builds the edge image (`buildEdgeImage()`,
+  `edge-container.ts:97`), so it is renamed `edge.image.test.ts` here and P1.28r's guard is green on arrival. The rename
+  rides the trusted PR (its path segment `deployment/edge` matches a trusted folder, `trusted-base.ts:142-150`);
+  `edge-container.ts` stays as a helper.
+- An ASVS row in `docs/human/compliance/asvs-5-l2.md` citing `edge.test.ts` or a moved test name is updated in the
+  same PR.
+
+Done when both image test files run and pass in CI (inside the one `npm test` until P1.28r) and the test count in the
+check log is unchanged.
+
+---
+
+### P1.28r — Run image tests after the unit tests
+Tags: [SEC], check            Depends on: P1.28i
+Slice 1, check class (root `vitest.config.ts`, `scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing.
+Neutral; the coordinator clears it; not workflow-gated. Owner: Phase 2 or the third thread, whichever has a slot
+first. It goes before P1.29k and P1.29d, which depend on it and name their image tests `*.image.test.ts` from the
+start; P1.29w does not wait, because its scan is in `images.yml`. Landing the include pattern first, matching nothing,
+is not taken.
+- Root `vitest.config.ts` gains an `images` project including `**/*.image.test.{ts,tsx,mts,cts}`; every existing
+  project, `tests/integration` included, excludes that pattern; the images project has no Postgres global setup.
+- `scripts/test/run.ts` runs the unit projects first, then `--project images`, and fails if either fails. The
+  every-file-ran and no-skips rules apply to both runs; the CI-only condition and run.ts's local skip exception are
+  unchanged and not widened.
+- **The guard `image_builds_only_in_image_tests`** (scripts/test): a test file, or a helper it imports, that runs an
+  image build (`docker build`, `docker buildx build`, or the known wrapper `buildEdgeImage`) must be named
+  `*.image.test.ts`. It matches builds, not every `docker` call: `docker run`, `inspect`, `logs` and `rm` in
+  `tests/support/postgres.ts` and the integration Postgres tests, `docker compose config` in
+  `deployment/preflight/compose-parse.test.ts`, and the fake `docker` in `preflight.test.ts` stay in their unit
+  projects. Moving container runs is a separate question, not booked. Fixtures: a unit test with a `docker build`
+  spawn fails; a unit test importing a build wrapper fails; an image test with a build passes; a unit test with
+  `docker run` passes.
+
+Done when `npm test` prints the unit run, then the images run, and the `props.fuzz` margin no longer shares the runner
+with an xcaddy compile.
+
+---
+
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
 **Split into ten parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
@@ -6943,8 +7021,8 @@ whole stack's spec; each part carries its share. Steps that depended on P1.29 (P
 on **P1.29t**, the last part, which implies the rest. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v,
 P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
-   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged;
-   Phase 1):
+   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged,
+   and P1.28r, so its image test is `*.image.test.ts` from the start; Phase 1):
    - `deployment/images/migrate.Dockerfile`, a separate Dockerfile. A second APP would need a second final stage
      chosen by `--target`, which escapes the "last stage ships" tests; `node-app.Dockerfile` keeps refusing any APP
      but web. It uses the same locked node base by digest (no new lock entry), stages `deps` (`npm ci
@@ -6986,23 +7064,24 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    - **`scan`**, the aggregate and the one stable name: `needs: [discover, scan-image]`, `if: always()`, green only
      when both are `success` (skipped, cancelled or failed is red).
    - **Ignore files are data in the script, never a convention:** every image gets `/dev/null` except one exact map,
-     `IGNOREFILES = { node: ".github/trivyignore.yaml" }`, which the test pins. "Use `<name>.trivyignore` when it
+     `IGNOREFILES = { "node-app": ".github/trivyignore.yaml" }`, which the test pins. "Use `<name>.trivyignore` when it
      exists" is refused. P1.29v empties the map; any later entry is a loosening that needs Alex's card and line.
    - **Triggers:** `images.yml` has no `paths:` filter today (`images.yml:7`) and keeps none.
 
    Tests (replacing `every_dockerfile_has_scan_job`): `list_dockerfiles_matches_images_discovery` (the script's set
-   against a live walk of `deployment/`; today exactly {edge, node}) and `list_dockerfiles_refuses_bad_entries` (an
-   empty tree, a bad name and a path outside `deployment/` fail; a Dockerfile-named file under `node_modules` is
-   ignored). Alex's typed line "yes P1.29w every shipped image" covers this design (asked 18:57Z); line: (pending).
-   Order: it lands before P1.29k and P1.29d, so each new image is scanned from its first PR and neither edits
-   `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not waiting on Alex's line; discovery picks a
-   merged migrate image up when P1.29w lands). A check step pinning the exact image set after each new image is
-   optional, at the coordinator's call. It also amends P1.27r: the required check becomes `scan`.
+   against a live walk of `deployment/`; today exactly {edge, node-app}, the name being the Dockerfile's stem) and
+   `list_dockerfiles_refuses_bad_entries` (an empty tree, a bad name and a path outside `deployment/` fail; a
+   Dockerfile-named file under `node_modules` is ignored). Alex's typed line "yes P1.29w every shipped image" covers
+   this design (asked 18:57Z); line: (pending). Order: it lands before P1.29k and P1.29d, so each new image is scanned
+   from its first PR and neither edits `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not
+   waiting on Alex's line; discovery picks a merged migrate image up when P1.29w lands). A check step pinning the
+   exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
+   check becomes `scan`.
 4. **P1.29v "Skip stripped files in the mirror scan"** ([ALEX] [SEC], check: `.github/workflows/mirror.yml`,
    `.github/trivyignore.yaml`, the mirror-scan test, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x
    and P1.28w, which both touch `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list
    from the lock and passes `--skip-files` for exactly those paths, on that entry only; the three npm entries leave
-   `trivyignore.yaml`; the `node` entry leaves `IGNOREFILES` and the test pins the map as empty; the test proves a
+   `trivyignore.yaml`; the `"node-app"` entry leaves `IGNOREFILES` and the test pins the map as empty; the test proves a
    declared path is skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files),
    answered on Alex's card:
    - Question: "Let the mirror scan skip files our own images delete, like gosu and npm?"
@@ -7013,7 +7092,8 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
    stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v; Phase 1):
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v and P1.28r;
+   Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -8659,7 +8739,9 @@ the private keys are needed only for a later PLC operation (adding the backup ke
    the guard against publishing under the wrong account.
 7. Turn on e-mail 2FA for the account on the PDS /account page. Its codes, like its reset links, go out through the
    real SMTP provider (no Mailpit, book edit 2026-10-07-no-mailpit), so the provider is set up before this step (Alex's timing to
-   confirm).
+   confirm), and Alex's mailbox joins host access as a root of trust: anyone who controls it can reset the account or
+   pass its email 2FA (book edit 2026-10-07-no-mailpit, added 19:45Z). No new control is booked; whether that mailbox
+   needs its own second factor is Alex's choice.
 8. Send the agent: the DID, goat plc history output, the publish output with CIDs.
 ```
 
@@ -8709,7 +8791,9 @@ fits in the run's budget (the workflow's `timeout-minutes: 5`, set by this step;
 - `permission-set-update.md`: the only way to change the set — an `[ALEX]` PR changing the schema and consent text
   (P1.31 flag), Alex publishes with goat, the PR updates the lock, the monitor goes green.
 - `dev-pds-admin-custody.md` (with P1.34): who holds the dev PDS admin password and host shell (Alex only), why
-  (it can take over the authority), and that nobody else is given them until P5.02a completes.
+  (it can take over the authority), and that nobody else is given them until P5.02a completes. It also says the
+  account's 2FA codes and reset links reach Alex's mailbox through the SMTP provider, so that mailbox is a root of trust
+  alongside host access (book edit 2026-10-07-no-mailpit).
 
 **Edge cases and failures:**
 - Offline **public** key not at hand at step 2 → stop (do not create the account without it at index 0; adding it

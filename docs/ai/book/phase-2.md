@@ -3759,7 +3759,8 @@ Algorithm (experiment protocol; each item: steps → pass → fail and what chan
       probed with a separate throwaway set NSID, never by removing the live set's TXT.
 
 Edge cases and failures:
-  - Screenshots must use a test account with no real email address (mail catcher domain) → no PII in the repo.
+  - Screenshots must use a test account with no real email address (an RFC 2606 `example.com` address on the local
+    stack, where mail is dropped) → no PII in the repo.
   - No item touches production (none exists); the ADR's digest is the dev PDS's, and P5.12 re-runs items 1–6 on the
     production digest.
   - Any **stop** above → P2.26 cannot pass; the book is revised first.
@@ -3777,7 +3778,7 @@ Not in this step: any app-side account screen (only if item 5 fails, in new step
 Diagram: none.
 
 ### P2.26 — Phase 2 exit
-Tags: (none)            Depends on: P2.23, P2.24, P2.13a, P1.38            Plan: §8 Phase 2 "Exit"; §6.1 gates; §7 "dependency counts recorded at each phase exit"
+Tags: (none)            Depends on: P2.23, P2.24, P2.13a, P1.38, P1.29h            Plan: §8 Phase 2 "Exit"; §6.1 gates; §7 "dependency counts recorded at each phase exit"
 Where: `tests/e2e/phase-2.exit.spec.ts` (Playwright on a production build against `compose.dev`),
   `tests/integration/authz/web-matrix.test.ts` (findings F-27), `docs/human/phase-exits/phase-2.md`
 Size: ~0 source lines, ~260 test lines, one report
@@ -3785,16 +3786,18 @@ Size: ~0 source lines, ~260 test lines, one report
 Goal: Prove the exit criteria at the top of this file on the development stack, and record the measurements the plan asks
 for at each phase exit.
 
-Inputs: every Phase 2 step merged; compose.dev with the dev PDS, `pds-admin`, `media`, mail catcher.
+Inputs: every Phase 2 step merged; compose.dev with the dev PDS, `pds-admin`, `media` (no mail service, book edit
+  2026-10-07-no-mailpit).
 Outputs: the passing exit spec in CI (nightly and on demand), and `docs/human/phase-exits/phase-2.md` with: test counts
   (discovered = executed), per-package line counts against budgets, direct and transitive dependency counts, the P2.24 ADR
   link, the Lighthouse and axe summaries, and the manual keyboard pass record.
 
 Algorithm (the exit spec, in order; each numbered block is one Playwright test with its own fresh accounts):
   1. `exit.signup_with_invite`: seeded member issues an invite (`/invite`) → new browser opens `/join?invite=<code>` →
-     `POST /signup` → on the dev PDS fills handle, email (mail catcher), password, invite code → back on `unset.sh/welcome`
-     → age (adult date) → terms → chat placeholder → `/verify-email` shows unconfirmed → confirm on the PDS `/account` with
-     the code from the mail catcher → `/verify-email` shows confirmed → `/me`.
+     `POST /signup` → on the dev PDS fills handle, email (an `example.com` address), password, invite code → back on
+     `unset.sh/welcome` → age (adult date) → terms → chat placeholder → `/verify-email` shows unconfirmed → confirm on
+     the PDS `/account` with the code read with P1.29h's read-only token reader on the local stack → `/verify-email`
+     shows confirmed → `/me`.
   2. `exit.repo_empty_while_draft`: edit display name, bio, add three sections, reorder, delete one, upload an avatar
      (`FINGERPRINT_CHECK=fake`) → the `draft_media` row records `checked_by = 'fake'` and the hashes → `listRecords` for `sh.unset.profile`, `sh.unset.section` and `app.bsky.actor.profile`
      on the user's repo return zero records.

@@ -822,7 +822,7 @@ Diagram: none.
 ---
 
 ### P0.05b — Drop the lint rerun from the test suite (book edit 2026-10-07-p005b-lint-rerun)
-Tags: —            Depends on: — (merged, #469)            Plan: rule SE-6; architecture's 2026-10-07-lint-clean-repo-duplicate
+Tags: —            Depends on: —            Plan: rule SE-6; architecture's 2026-10-07-lint-clean-repo-duplicate
 Where: check paths, kind/build: `scripts/lint/depcruise.test.ts` and a test in `scripts/ci/`. No `.github/` or
   `scripts/guards/` file. Neutral (the set of refused inputs is unchanged), so Alex's word is not needed. Slice 1 (it
   unblocks every slice-1 PR). Owner: Phase 2, first in the slot queue.
@@ -838,6 +838,8 @@ Done when (tests):
     the step or the job. Red evidence: a workflow copy with the lint step removed, moved after `npm test`, or given
     `continue-on-error` fails it.
 
+As built: merged by Alex at 2026-10-07T19:05:26Z as `233e1a0` (#469); P0.05c then pinned the gate it relies on.
+
 Watch item, not booked: if the real-repo half of `depcruise_cruised_nonzero` nears the 5 s limit, it is dropped for
 the same reason and its fixture half stays; the step book then books a one-line follow-on under P0.05 with no new
 ruling.
@@ -846,6 +848,7 @@ ruling.
 
 ### P0.05c — Pin the check job's lint and test gate (book edit 2026-10-07-p005c-check-job-gate)
 Tags: —            Depends on: P0.05b (merged, #469)            Plan: rule SE-6; architecture's 2026-10-07-check-job-gate-pinning
+As built: merged by Alex at 2026-10-07T19:30:48Z as `4a3b15b` (#483).
 Where: check paths, kind/build: `scripts/ci/check-job.test.ts` only. A tightening; no `.github/` file, so Alex's word is
   not needed. Slice 1. Owner: Phase 2. #469's verification found that an `if:` on the lint step, or a weakened job
   `if:`, could skip the gate silently.
@@ -862,6 +865,34 @@ Done when (tests): `check_job_if_exact`, `check_job_gate_steps_exact`, `check_jo
 bump passes, `checkout@v7` fails, a different action path fails). Maintenance: a later intended change to those steps,
 scripts or `if:` edits this test in the same PR; such a PR is check class, and if it weakens anything it needs Alex's
 word.
+
+---
+
+### P0.05d — Pin the root .npmrc and the check job's uses ref (book edit 2026-10-07-p005d-npmrc-and-uses-ref)
+Tags: [SEC]            Depends on: P0.05c (merged, #483)            Plan: rule SE-6; architecture's 2026-10-07-npmrc-pin-and-uses-ref
+Where: check paths, kind/build: `scripts/ci/npmrc.test.ts` (new), `scripts/ci/check-job.test.ts`, `.github/CODEOWNERS`
+  (the parsed `# checks:` line at :108 gains `/.npmrc`; that line is the SE-6 check-path list), and
+  `scripts/guards/change-shape.test.ts` (its pinned check-path list, :221-233, gains `"/.npmrc"`). No product file. A
+  tightening, cleared by the coordinator. Slice 1. Owner: Phase 2, slotted after P1.28r (an order, not a dependency).
+  If the harness refuses Phase 2 on those paths even for a tightening, the line to ask Alex for is "yes .npmrc check
+  path scripts/guards", quoted in the PR body if used.
+
+Part 1, the .npmrc pin:
+  - `npmrc_is_pinned`: the root `.npmrc`, parsed as key=value lines (comments and blanks skipped), is exactly
+    `engine-strict=true`, `save-exact=true`, `fund=false`, `audit-level=high`, `min-release-age=7`,
+    `ignore-scripts=true`, `@unset:registry=https://127.0.0.1:9/`. It fails on an unknown or duplicate key, a `${...}`
+    interpolation, or `_auth`, `_authToken` or `//` in a key (the one pinned registry value contains `//` and is
+    matched exactly, so the test does not refuse its own line); a missing `ignore-scripts=true` is named in the
+    failure.
+  - `no_nested_npmrc`: no other `.npmrc` in `git ls-files` outside `node_modules`.
+  - check-job.test.ts refuses any `npm_config_*` env (case-insensitive) in `ci.yml` at workflow, job or step level,
+    across all jobs.
+Part 2, the uses ref: `normalised` (check-job.test.ts:64-67) splits on the last `@` and requires both halves; the path
+  equals the pinned path and the ref matches `^[0-9a-f]{40}$`. A missing `@`, an empty ref, a tag or a short SHA
+  fails; fixtures cover a bare path and a tag.
+
+Note for the Renovate thread, not this step: `npm ci` runs with ignore-scripts, so a dependency needing a postinstall
+fails by design; the fix is a reviewed per-package `npm rebuild <pkg>` step, never dropping the flag.
 
 ---
 

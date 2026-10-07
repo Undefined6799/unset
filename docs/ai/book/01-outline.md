@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 31 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b and P0.05c added 2026-10-07).
+Depth: **build-ready**. 32 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -33,6 +33,7 @@ Depth: **build-ready**. 31 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.05 | Lint stack: Biome CSS rules, dependency-cruiser on the swc parser, file-size and line-budget warnings | — | P0.04 | `phase-0.md` |
 | P0.05b | Remove the duplicate lint run; check job runs lint before tests | — | — | `phase-0.md` |
 | P0.05c | Check job gate pinned: exact if, gate steps, env, root scripts, alias-free ci.yml | — | P0.05b | `phase-0.md` |
+| P0.05d | Root .npmrc pinned and a check path; check job uses-ref must be a 40-hex SHA | [SEC] | P0.05c | `phase-0.md` |
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
 | P0.07 | CI workflow: pinned images and actions, full gate set, secrets and OIDC bound to `main` | [SEC] [ALEX] (tail: required checks) | P0.06 | `phase-0.md` |
 | P0.08 | Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard | [SEC] [ALEX] (tail: app install) | P0.07 | `phase-0.md` |
@@ -68,6 +69,7 @@ flowchart TD
   P0_05["P0.05 Lint stack"]
   P0_05b["P0.05b Lint rerun dropped"]
   P0_05c["P0.05c Check job gate pinned"]
+  P0_05d["P0.05d .npmrc and uses ref pinned"]
   P0_06["P0.06 Repo guards as Vitest tests"]
   P0_07["P0.07 CI workflow"]
   P0_08["P0.08 Renovate replaces Dependabot"]
@@ -97,6 +99,7 @@ flowchart TD
   P0_03 --> P0_04
   P0_04 --> P0_05
   P0_05b --> P0_05c
+  P0_05c --> P0_05d
   P0_05 --> P0_06
   P0_06 --> P0_07
   P0_07 --> P0_08
@@ -130,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 149 steps: 128 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 152 steps: 131 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -204,6 +207,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.22 | Base styles and theme, English only (server-applied, no cookie variation on public pages; the locale half is P1.22b) | [SEC] | P1.21, P1.21l, P1.21m, P1.07, P1.09 | `phase-1.md` |
 | P1.23q | Island budget and its dependency-cruiser rule (check part of P1.23; SE-6 `q`) | [SEC] | P1.20, P1.08 | `phase-1.md` |
 | P1.23 | Island runtime | [SEC] | P1.23q, P1.20, P1.08, P1.22 | `phase-1.md` |
+| P1.23d | Props fuzz test: one check per run, bounded sizes, breaker examples | [SEC], trusted | — | `phase-1.md` |
 | P1.23r | Style-prop lint and island CI wiring (check part of P1.23, after it) | [SEC] | P1.23 | `phase-1.md` |
 | P1.23f | CSS scope function (product split of P1.23v) | — | — | `phase-1.md` |
 | P1.23v | CSS Modules check config: Vitest scoped names, TOOLING widened to app Vite configs | [SEC] [ALEX] | P1.23f | `phase-1.md` |
@@ -247,17 +251,19 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
 | P1.28s | Caddyfile reader refuses quoted top-level tokens | [SEC], trusted | P1.28h | `phase-1.md` |
+| P1.28i | Edge image builds move to *.image.test.ts (caddyfile, edge integration) | [SEC], trusted | P1.28h | `phase-1.md` |
+| P1.28r | Vitest images project run after the unit projects; image-build guard | [SEC] | P1.28i | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
 | P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
-| P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
+| P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Lock entries declare stripped paths, proven deleted in every final stage | [SEC] | P1.29k | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
-| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v | `phase-1.md` |
+| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
@@ -353,6 +359,7 @@ flowchart TD
   P1_21m["P1.21m Font metrics"]
   P1_22["P1.22 Base styles"]
   P1_23["P1.23 Island runtime"]
+  P1_23d["P1.23d Props fuzz test bounded"]
   P1_23r["P1.23r Style lint and island CI"]
   P1_23f["P1.23f CSS scope function"]
   P1_23v["P1.23v CSS Modules check config"]
@@ -395,6 +402,8 @@ flowchart TD
   P1_28b["P1.28b Edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
   P1_28s["P1.28s Quoted top-level tokens refused"]
+  P1_28i["P1.28i Edge image builds in image tests"]
+  P1_28r["P1.28r Images project after unit tests"]
   P1_29k["P1.29k Migrate image, syncRolePasswords"]
   P1_29x["P1.29x Stripped paths declared"]
   P1_29w["P1.29w Discover and scan every image"]
@@ -554,6 +563,10 @@ flowchart TD
   P1_28 --> P1_28b
   P1_28b --> P1_28h
   P1_28h --> P1_28s
+  P1_28h --> P1_28i
+  P1_28i --> P1_28r
+  P1_28r --> P1_29k
+  P1_28r --> P1_29d
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -744,7 +757,7 @@ Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.22 | Privacy switches as a state machine | [SEC] (Q-A, Q-D provisional; Q-B, Q-C, Q-E answered) | P2.21, P2.07 | `phase-2.md` |
 | P2.23 | Publish and unpublish | [SEC] | P2.21, P2.22, P1.31, P2.07 | `phase-2.md` |
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34 | `phase-2.md` |
-| P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38 | `phase-2.md` |
+| P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
 | P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
