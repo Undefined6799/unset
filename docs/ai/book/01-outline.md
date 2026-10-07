@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 113 steps: 93 from `phase-1.md`, 20 from `phase-2.md` (including the
+Depth: **build-ready**. 115 steps: 94 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -221,7 +221,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature) | [SEC] | P1.27, P1.28v | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
-| P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27 | `phase-1.md` |
+| P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
+| P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q | `phase-1.md` |
 | P1.30s | Deploy preflight C13–C24 | [SEC] | P1.30 | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
@@ -236,7 +237,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
 | P2.03x | Session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
-| P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x | `phase-2.md` |
+| P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
+| P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01 | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
@@ -333,6 +335,7 @@ flowchart TD
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_29["P1.29 Development stack"]
+  P1_30q["P1.30q preflight boundary row"]
   P1_30["P1.30 Deploy preflight core"]
   P1_30s["P1.30s Deploy preflight C13–C24"]
   P1_32["P1.32 Permanent choices"]
@@ -348,6 +351,7 @@ flowchart TD
   P2_02x["P2.02x verifyHandle export"]
   P2_03q["P2.03q session store trusted path"]
   P2_03x["P2.03x session table and timeouts"]
+  P2_03e["P2.03e session log events"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_04["P2.04 OAuth client"]
   P2_05["P2.05 Login"]
@@ -456,6 +460,7 @@ flowchart TD
   P1_11p --> P1_29
   P1_28 --> P1_29
   P1_27 --> P1_30
+  P1_30q --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
   P1_18 --> P2_01
@@ -464,6 +469,7 @@ flowchart TD
   P1_15g --> P2_03x
   P2_03q --> P2_03
   P2_03x --> P2_03
+  P2_03e --> P2_03
   P1_14 --> P2_04
   P1_14d --> P2_04
   P1_17 --> P2_04

@@ -690,8 +690,16 @@ Contents:
 Done when (tests): the P1.12 grant-matrix test and the P1.13 did-columns test pass with the new table.
 If pr-shape reports trusted or mixed, the PR stops and asks the step book; it does not split itself.
 
+### P2.03e — Add the session store log events (prelude to P2.03)
+Tags: —            Depends on: —            Plan: §6.1; book edit 2026-10-07-p130q-p203e
+Where: `shared/log/` only (issue #405): EVENTS entries `session.touch_failed` and `session.sweep` plus their EVENTS
+  test rows. Feature class.
+Done when (tests): `logger_session_events`.
+Why: a shared/log EVENTS entry precedes the PR that logs it (the P1.17e pattern). P2.03x logs nothing and is
+  unchanged.
+
 ### P2.03 — Session store and lifecycle
-Tags: [SEC]            Depends on: P2.03q, P2.03x            Plan: §2 rule 7; §5.3 "Sessions"
+Tags: [SEC]            Depends on: P2.03q, P2.03x, P2.03e            Plan: §2 rule 7; §5.3 "Sessions"
 Trusted class; never opens before P2.03q merges (book edit 2026-10-07-p203-repath; architecture
 2026-10-07-p203-session-store-trusted).
 Where: `infrastructure/postgres/session/store.ts` with its tests in that folder (following `singleUse/`);

@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
-  P1.29, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29, P1.30q, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -173,6 +173,7 @@ flowchart LR
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
+  P1_30q["P1.30q preflight boundary row"]
   P1_30["P1.30 deploy preflight core"]
   P1_30s["P1.30s preflight C13–C24"]
   P1_31["P1.31 lexicons package"]
@@ -220,6 +221,7 @@ flowchart LR
   P1_27 --> P1_29
   P1_28 -.-> P1_29
   P1_27 --> P1_30
+  P1_30q --> P1_30
   P1_29 -.-> P1_30
   P1_01 --> P1_31
   P1_32 -.-> P1_31
@@ -6196,6 +6198,23 @@ dev-seed:
 
 ---
 
+### P1.30q — Allow the deploy preflight in the boundary matrix
+
+Check class (SE-6 `q`; issue #404), `scripts/lint` only (book edit 2026-10-07-p130q-p203e). The dependency-cruiser
+MATRIX has no row for `deployment/`, so every preflight import fails with "not-in-allowed". This step adds one MATRIX
+row, `deployment-preflight`: from `^deployment/preflight/` to only itself, Node built-ins and the `yaml` package, with
+a fixture for it. It enforces architecture's location ruling (2026-10-07-p130-preflight-location-and-yaml).
+
+**Tags:** [SEC] · **Depends on:** — · **Plan:** SE-6; guideline §1 (dependency-cruiser enforces boundaries)
+
+**Done when (tests):** `deployment_preflight_is_a_leaf`: the preflight may not import `scripts/ci/verify-images.ts`,
+`shared/`, `deployment/images/` or `pg`, and nothing may import it.
+
+If P1.30s ever needs another edge, that edge is a separate `q` step; the row is never widened inside P1.30s
+(02-shared-blocks, editor pass 2026-10-07).
+
+---
+
 ### P1.30 — Deploy preflight core, C1–C12
 
 The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
@@ -6206,7 +6225,7 @@ the compose parser, the check runner, checks C1–C12 and the debug-logging runb
 P1.30s, below, builds C13–C24. This section keeps the full design of all 24 checks; each part's tests are listed
 under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+**Tags:** [SEC] · **Depends on:** P1.27, P1.30q · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
 **Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
 guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
