@@ -5642,6 +5642,7 @@ shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run c
 
 ### P1.25x — Pin the ui-build plan default with a test
 Tags: —            Depends on: P1.25w (merged, #516)
+As built: merged by Alex at 2026-10-07T23:54:19Z as `bdb3723` (#526).
 Slice 1, issue #521, check class (`scripts/budgets/`, `scripts/lint/`); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (amendment 2, 23:08Z), from the coordinator's check of #516. Owner: Phase 2.
 A tightening, cleared by the coordinator; not a classifier path, because it changes tests only.
