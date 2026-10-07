@@ -6,6 +6,7 @@
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
@@ -13,15 +14,22 @@ const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf
 const DOCKERFILE = "images/node-app.Dockerfile";
 /** The migrate CLI's image (P1.29k; architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 1). */
 const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
-/** The images built on the locked Node base, each held to the Node runtime rules below. */
-const NODE_DOCKERFILES = [MIGRATE_DOCKERFILE, DOCKERFILE];
 
 /**
  * What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. `stage` says
  * whether the base may become a shipped image (`runtime`) or only builds one (`build`); it is required (P1.28d, book
- * edit 2026-10-07-p128v-mirror-scan-stage), so the mirror scan can tell them apart (P1.28v).
+ * edit 2026-10-07-p128v-mirror-scan-stage), so the mirror scan can tell them apart (P1.28v). `stripped` lists the
+ * absolute paths every image built on the base deletes in its final stage (P1.29x; architecture record
+ * 2026-10-07-p129-postgres-image-and-stripped-paths), so the mirror scan may skip exactly those (P1.29v).
  */
-type Base = { ref: string; tag: string; digest: string; source: "upstream" | "mirror"; stage: Stage };
+type Base = {
+  ref: string;
+  tag: string;
+  digest: string;
+  source: "upstream" | "mirror";
+  stage: Stage;
+  stripped?: string[];
+};
 type Stage = "build" | "runtime";
 type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
@@ -54,12 +62,10 @@ function baseProblems(dockerfile: string, lock: Lock): string[] {
   return images.flatMap((image) => {
     const pinned = PINNED.exec(image);
     if (pinned === null) return [`FROM ${image} is not pinned by digest`];
-    const [, ref = "", , digest = ""] = pinned;
+    const [, ref = ""] = pinned;
     if (!allowed(ref)) return [`FROM ${image} is not from an allowed host`];
-    const locked = Object.values(lock).filter((base) => base.ref === ref);
-    if (locked.length === 0) return [`FROM ${image} has no lock entry`];
-    if (locked.some((base) => base.digest === digest)) return [];
-    return [`FROM ${image} differs from the lock digest ${locked.map((base) => base.digest).join(" or ")}`];
+    if (!Object.values(lock).some((base) => base.ref === ref)) return [`FROM ${image} has no lock entry`];
+    return lockEntriesOf(image, lock).length > 0 ? [] : [`FROM ${image} matches no lock entry by tag and digest`];
   });
 }
 
@@ -78,11 +84,8 @@ function stageProblems(lock: Lock, list: MirrorEntry[]): string[] {
   return [...locked, ...listed];
 }
 
-/**
- * What the final stage is built FROM, following stage names back to their base: a `build` base may only feed earlier
- * stages, so the shipped image is a `runtime` base or `scratch`.
- */
-function finalStageProblems(dockerfile: string, lock: Lock): string[] {
+/** The image the final stage is built FROM, following stage names back to their base; undefined with no FROM. */
+function finalFrom(dockerfile: string): string | undefined {
   const stageBase = new Map<string, string>();
   let last: string | undefined;
   for (const line of dockerfile.split("\n")) {
@@ -92,12 +95,71 @@ function finalStageProblems(dockerfile: string, lock: Lock): string[] {
     last = stageBase.get(image) ?? image;
     if (stage !== undefined) stageBase.set(stage, last);
   }
+  return last;
+}
+
+/**
+ * Every lock entry, by name, that a pinned image reference names exactly: ref, tag and digest (amendment 4), so the
+ * runtime digest under a build entry's tag names no entry. One image may be listed more than once.
+ */
+function lockEntriesOf(image: string, lock: Lock): [string, Base][] {
+  const [, ref, tag, digest] = PINNED.exec(image) ?? [];
+  return Object.entries(lock).filter(([, b]) => b.ref === ref && b.tag === tag && b.digest === digest);
+}
+
+/** The runtime lock entry the final stage builds on, by name; undefined for scratch, a build base or no entry. */
+function finalEntry(dockerfile: string, lock: Lock): string | undefined {
+  return lockEntriesOf(finalFrom(dockerfile) ?? "", lock).find(([, b]) => b.stage === "runtime")?.[0];
+}
+
+/** A `build` base may only feed earlier stages, so the shipped image is a `runtime` base or `scratch`. */
+function finalStageProblems(dockerfile: string, lock: Lock): string[] {
+  const last = finalFrom(dockerfile);
   if (last === undefined) return ["the Dockerfile has no FROM"];
   if (last === "scratch") return [];
-  const ref = PINNED.exec(last)?.[1];
-  const base = Object.values(lock).find((b) => b.ref === ref && last?.endsWith(`@${b.digest}`));
-  if (base === undefined) return [`final FROM ${last} has no lock entry`];
-  return base.stage === "runtime" ? [] : [`final FROM ${last} is a ${base.stage} base`];
+  const entries = lockEntriesOf(last, lock);
+  if (entries.length === 0) return [`final FROM ${last} has no lock entry`];
+  return entries.some(([, b]) => b.stage === "runtime") ? [] : [`final FROM ${last} is a build base`];
+}
+
+/**
+ * Lock entries that share a ref (the edge's caddy-builder and caddy) are matched together by `baseProblems`, so they
+ * must not widen what a FROM may name (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, amendment
+ * 2): entries naming one image (ref and digest) agree on everything but `stage`, and one tag never has two digests.
+ */
+function sharedRefProblems(lock: Lock): string[] {
+  const entries = Object.entries(lock);
+  return entries.flatMap(([name, { stage: _, ...base }], at) =>
+    entries.slice(at + 1).flatMap(([other, { stage: __, ...next }]) => {
+      if (next.ref !== base.ref) return [];
+      if (next.digest !== base.digest) {
+        return next.tag === base.tag
+          ? [`lock entries ${name} and ${other} give ${base.ref}:${base.tag} two digests`]
+          : [];
+      }
+      return isDeepStrictEqual(base, next) ? [] : [`lock entries ${name} and ${other} name one image but differ`];
+    }),
+  );
+}
+
+/**
+ * What each image is, by its final stage's runtime lock entry, so the rules for a kind reach every image of that kind
+ * (amendment 2): a Dockerfile on any other entry, scratch included, fails `every_dockerfile_has_a_known_kind` rather
+ * than falling out of every kind's rules. P1.29d adds `postgres`. The edge kind has no package-manager rule yet: its
+ * Caddy Alpine runtime keeps apk (amendment 3, point 4), which a separate trusted step removes.
+ */
+type Kind = "node" | "edge";
+const KIND_BY_FINAL_ENTRY = new Map<string, Kind>([
+  ["node", "node"],
+  ["caddy", "edge"],
+]);
+const kindOf = (dockerfile: string, lock: Lock): Kind | undefined =>
+  KIND_BY_FINAL_ENTRY.get(finalEntry(dockerfile, lock) ?? "");
+
+function kindProblems(files: Record<string, string>, lock: Lock): string[] {
+  return Object.entries(files).flatMap(([file, text]) =>
+    kindOf(text, lock) === undefined ? [`${file} builds on no known kind of image`] : [],
+  );
 }
 
 /**
@@ -283,6 +345,172 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
   return problems;
 }
 
+/** The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&` or `;`. */
+function finalStageRemovals(dockerfile: string): Set<string> {
+  const all = instructions(dockerfile);
+  const finalFromAt = all.findLastIndex((step) => /^FROM\s/i.test(step.text));
+  const removed = new Set<string>();
+  for (const { text } of all.slice(finalFromAt + 1)) {
+    if (!/^RUN\s/i.test(text)) continue;
+    for (const command of text.replace(/^RUN\s+/i, "").split(/&&|;/)) {
+      const [rm, flags, ...paths] = command.trim().split(/\s+/);
+      if (rm === "rm" && flags === "-rf") for (const path of paths) removed.add(path);
+    }
+  }
+  return removed;
+}
+
+type Instruction = { line: number; text: string };
+
+/** The instructions that become the image: the final stage's, after those of each stage it builds on by name. */
+function shippedInstructions(all: Instruction[]): Instruction[] {
+  const declared: { from: string; alias: string | undefined; body: Instruction[] }[] = [];
+  for (const step of all) {
+    const from = FROM.exec(step.text);
+    if (from !== null) declared.push({ from: (from[1] ?? "").toLowerCase(), alias: from[2]?.toLowerCase(), body: [] });
+    else declared.at(-1)?.body.push(step);
+  }
+  const shipped: Instruction[] = [];
+  for (let at = declared.length - 1; at >= 0; ) {
+    const stage = declared[at] as (typeof declared)[number];
+    shipped.unshift(...stage.body);
+    at = declared.findLastIndex((earlier, index) => index < at && earlier.alias === stage.from);
+  }
+  return shipped;
+}
+
+/**
+ * The only verbs a shipped image may run a package manager with (architecture record
+ * 2026-10-07-p129-migrate-image-and-run-only-images, amendment 3): removal. A list of install verbs could be dodged by
+ * flag order, a full path or a synonym, so anything that is not removal fails, no verb included.
+ */
+const REMOVAL_VERBS = new Map<string, readonly string[]>([
+  ["apk", ["del"]],
+  ["apt", ["remove", "purge", "autoremove"]],
+  ["apt-get", ["remove", "purge", "autoremove"]],
+  ["dpkg", ["-r", "-P", "--remove", "--purge"]],
+  ...["aptitude", "rpm", "dnf", "microdnf", "yum"].map((tool): [string, readonly string[]] => [tool, []]),
+]);
+/** Commands that run a command they are given or build, which this reader cannot see: every shell, not only `-c`. */
+const INDIRECT = new Set(["sh", "bash", "ash", "dash", "zsh", "eval", "xargs", "env", "busybox", "source", "."]);
+const basename = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
+
+/** Why one simple command may not run in a shipped image; undefined when it may. */
+function commandProblem(words: string[]): string | undefined {
+  const [command = "", ...args] = words;
+  const name = basename(command);
+  const shown = words.join(" ");
+  if (words.some((word) => /[$`]/.test(word))) return `${shown}: a variable or command substitution hides what runs`;
+  if (INDIRECT.has(name)) return `${shown}: ${name} runs a command this test cannot read`;
+  const verbs = REMOVAL_VERBS.get(name);
+  if (verbs === undefined) {
+    // A package manager handed to another command (nohup, timeout, find -exec) is refused; rm only deletes it.
+    return name !== "rm" && args.some((word) => REMOVAL_VERBS.has(basename(word)))
+      ? `${shown}: runs a package manager through ${name}`
+      : undefined;
+  }
+  const verb = name === "dpkg" ? args[0] : args.find((word) => !word.startsWith("-"));
+  if (verbs.length === 0) return `${shown}: ${name} may not run in a shipped image`;
+  return verb !== undefined && verbs.includes(verb) ? undefined : `${shown}: ${name} may only remove packages`;
+}
+
+/** A shell-form RUN as simple commands: split on `&&`, `||`, `;`, `|`, `&`, newlines and parentheses, quotes dropped. */
+function shellCommands(script: string): string[][] {
+  return script
+    .split(/&&|\|\||[;|&\n(){}!]/)
+    .map((command) =>
+      command
+        .trim()
+        .split(/\s+/)
+        .map((word) => word.replaceAll(/["'\\]/g, ""))
+        .filter((word) => word !== ""),
+    )
+    .map((words) =>
+      words.slice(
+        Math.max(
+          0,
+          words.findIndex((word) => !/^\w+=/.test(word)),
+        ),
+      ),
+    )
+    .filter((words) => words.length > 0 && !/^\w+=/.test(words[0] ?? ""));
+}
+
+/** An exec-form RUN is one command, its JSON array of strings; undefined when it is not one. */
+function execCommand(json: string): string[] | undefined {
+  try {
+    const words: unknown = JSON.parse(json);
+    return Array.isArray(words) && words.every((word) => typeof word === "string") ? words : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Why one shipped instruction may install OS packages; SHELL is refused because it changes what every RUN runs. */
+function shippedInstructionProblems(instruction: string): string[] {
+  const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
+  const keyword = word.toUpperCase();
+  if (keyword === "ONBUILD") return shippedInstructionProblems(args);
+  if (keyword === "SHELL") return ["SHELL changes what RUN runs"];
+  if (keyword !== "RUN") return [];
+  const { rest } = splitFlags(args);
+  if (HEREDOC.test(rest)) return ["heredoc not supported"];
+  if (!rest.startsWith("[") && /[$`]/.test(rest)) return ["a variable or command substitution hides what runs"];
+  const commands = rest.startsWith("[") ? [execCommand(rest)] : shellCommands(rest);
+  return commands.flatMap((command) => {
+    if (command === undefined) return ["cannot parse exec-form RUN"];
+    const problem = commandProblem(command);
+    return problem === undefined ? [] : [problem];
+  });
+}
+
+/** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
+function osPackageProblems(dockerfile: string): string[] {
+  try {
+    return shippedInstructions(instructions(dockerfile)).flatMap(({ line, text }) =>
+      shippedInstructionProblems(text).map((problem) => `line ${line}: ${problem}`),
+    );
+  } catch (error) {
+    if (!(error instanceof Unparsed)) throw error;
+    return [`line ${error.line}: ${error.message}`];
+  }
+}
+
+const STRIPPED_PATH = /^\/[\w.@+-]+(?:\/[\w.@+-]+)*$/;
+
+/** Every way a lock entry's `stripped` list is malformed: empty, a path twice, or a path not absolute and literal. */
+function strippedListProblems(name: string, declared: string[]): string[] {
+  const problems = declared.length === 0 ? [`lock entry ${name} has an empty stripped list`] : [];
+  if (new Set(declared).size !== declared.length) problems.push(`lock entry ${name} lists a stripped path twice`);
+  for (const path of declared) {
+    if (!STRIPPED_PATH.test(path) || path.split("/").includes("..")) {
+      problems.push(`lock entry ${name}: stripped path ${path} is not an absolute path without wildcards`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Every stripped path a lock entry declares that is malformed, or that an image built on that base keeps: each
+ * Dockerfile whose final stage builds on the entry must delete each declared path with `rm -rf` in that stage, and a
+ * path is declared only when at least one final stage builds on the entry (P1.29x).
+ */
+function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
+  const problems: string[] = [];
+  for (const [name, { stripped }] of Object.entries(lock)) {
+    if (stripped === undefined) continue;
+    problems.push(...strippedListProblems(name, stripped));
+    const users = Object.entries(files).filter(([, text]) => finalEntry(text, lock) === name);
+    if (users.length === 0) problems.push(`lock entry ${name} declares stripped paths but no final stage builds on it`);
+    for (const [file, text] of users) {
+      const removed = finalStageRemovals(text);
+      const kept = stripped.filter((path) => !removed.has(path));
+      problems.push(...kept.map((path) => `${file} keeps ${path}, which lock entry ${name} declares stripped`));
+    }
+  }
+  return problems.sort();
+}
+
 /** Every Dockerfile under deployment/ (the web image's and, from P1.28, the edge's), so a new image is covered too. */
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
@@ -291,6 +519,11 @@ const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
 const dockerfile = read(DOCKERFILE);
 const lock = JSON.parse(read("images/bases.lock.json")) as Lock;
 const NODE = lock.node as Base;
+/**
+ * The images whose final stage builds on the locked Node base, found from `dockerfiles` rather than listed, so a new
+ * Node image is held to the Node runtime rules below without editing this test.
+ */
+const nodeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "node");
 const pinnedNode = `docker.io/library/node:${NODE.tag}@${NODE.digest}`;
 
 describe("base images", () => {
@@ -301,8 +534,17 @@ describe("base images", () => {
     }
     const other = `sha256:${"1".repeat(64)}`;
     expect(baseProblems(`FROM docker.io/library/node:${NODE.tag}@${other} AS build`, lock)).toEqual([
-      `FROM docker.io/library/node:${NODE.tag}@${other} differs from the lock digest ${NODE.digest}`,
+      `FROM docker.io/library/node:${NODE.tag}@${other} matches no lock entry by tag and digest`,
     ]);
+    // Amendment 4: a FROM matches its entry on ref, tag and digest, so the runtime digest under the builder's tag (or
+    // no tag) is no entry at all.
+    const runtime = lock.caddy as Base;
+    const builder = lock["caddy-builder"] as Base;
+    for (const image of [`${runtime.ref}:${builder.tag}@${runtime.digest}`, `${runtime.ref}@${runtime.digest}`]) {
+      expect(baseProblems(`FROM ${image}`, lock), image).toEqual([
+        `FROM ${image} matches no lock entry by tag and digest`,
+      ]);
+    }
     // A later stage may build on an earlier one by name; only real images are checked.
     expect(baseProblems(`FROM ${pinnedNode} AS build\nFROM build AS test`, lock)).toEqual([]);
   });
@@ -338,6 +580,7 @@ describe("base images", () => {
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
+      stripped: ["/usr/local/lib/node_modules/npm", "/usr/local/lib/node_modules/corepack"],
     });
     // The edge's bases (P1.28): Caddy's builder and runtime images, both Alpine, both by index digest.
     // The builder only builds the edge binary; the runtime image is what ships.
@@ -355,23 +598,145 @@ describe("base images", () => {
     }
   });
 
+  test("stripped_paths_removed_in_every_final_stage", () => {
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    expect(strippedProblems(files, lock)).toEqual([]);
+    const npm = "/usr/local/lib/node_modules/npm";
+    const corepack = "/usr/local/lib/node_modules/corepack";
+    const declared: Lock = { node: { ...NODE, stripped: [npm, corepack] } };
+    const both = `RUN rm -rf ${npm} \\\n  ${corepack}\n`;
+    expect(strippedProblems({ ok: `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n${both}` }, declared)).toEqual([]);
+    expect(
+      strippedProblems(
+        {
+          "one.Dockerfile": `FROM ${pinnedNode}\nRUN rm -rf ${npm}\n`,
+          "early.Dockerfile": `FROM ${pinnedNode} AS deps\n${both}FROM ${pinnedNode}\n`,
+          "chained.Dockerfile": `FROM ${pinnedNode} AS base\nFROM base\nRUN true && rm -rf ${npm} && rm -f ${corepack}\n`,
+        },
+        declared,
+      ),
+    ).toEqual([
+      `chained.Dockerfile keeps ${corepack}, which lock entry node declares stripped`,
+      `early.Dockerfile keeps ${corepack}, which lock entry node declares stripped`,
+      `early.Dockerfile keeps ${npm}, which lock entry node declares stripped`,
+      `one.Dockerfile keeps ${corepack}, which lock entry node declares stripped`,
+    ]);
+    expect(strippedProblems({}, declared)).toEqual([
+      "lock entry node declares stripped paths but no final stage builds on it",
+    ]);
+    expect(
+      strippedProblems(
+        { ok: `FROM ${pinnedNode}\n` },
+        { node: { ...NODE, stripped: ["/opt/yarn-*", "usr/x", "/a/../b"] } },
+      ),
+    ).toEqual([
+      "lock entry node: stripped path /a/../b is not an absolute path without wildcards",
+      "lock entry node: stripped path /opt/yarn-* is not an absolute path without wildcards",
+      "lock entry node: stripped path usr/x is not an absolute path without wildcards",
+      "ok keeps /a/../b, which lock entry node declares stripped",
+      "ok keeps /opt/yarn-*, which lock entry node declares stripped",
+      "ok keeps usr/x, which lock entry node declares stripped",
+    ]);
+    expect(strippedProblems({ ok: `FROM ${pinnedNode}\n` }, { node: { ...NODE, stripped: [] } })).toEqual([
+      "lock entry node has an empty stripped list",
+    ]);
+    expect(
+      strippedProblems({ ok: `FROM ${pinnedNode}\n${both}` }, { node: { ...NODE, stripped: [npm, npm] } }),
+    ).toEqual(["lock entry node lists a stripped path twice"]);
+  });
+
+  test("every_dockerfile_has_a_known_kind", () => {
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    expect(kindProblems(files, lock)).toEqual([]);
+    expect(kindOf(read("edge/Dockerfile"), lock)).toBe("edge");
+    const builder = lock["caddy-builder"] as Base;
+    const build = `${builder.ref}:${builder.tag}@${builder.digest}`;
+    // A runtime entry outside the map (here a Postgres base before P1.29d adds it) fails, as do scratch and a build base.
+    const postgres: Base = { ...NODE, ref: "docker.io/library/postgres", tag: "18-trixie" };
+    const pinnedPostgres = `${postgres.ref}:${postgres.tag}@${postgres.digest}`;
+    expect(
+      kindProblems(
+        {
+          "pg.Dockerfile": `FROM ${pinnedPostgres}`,
+          "scratch.Dockerfile": "FROM scratch",
+          "b.Dockerfile": `FROM ${build}`,
+        },
+        { ...lock, postgres },
+      ),
+    ).toEqual([
+      "pg.Dockerfile builds on no known kind of image",
+      "scratch.Dockerfile builds on no known kind of image",
+      "b.Dockerfile builds on no known kind of image",
+    ]);
+  });
+
+  test("node_kind_includes_current_images", () => {
+    // A floor, not an exact list: a new Dockerfile on the Node base joins the set without editing this test.
+    expect(nodeDockerfiles).toEqual(expect.arrayContaining([DOCKERFILE, MIGRATE_DOCKERFILE]));
+    expect(nodeDockerfiles).not.toContain("edge/Dockerfile");
+  });
+
+  test("shared_ref_entries_agree", () => {
+    expect(sharedRefProblems(lock)).toEqual([]);
+    const runtime = lock.caddy as Base;
+    // One image listed as both a build and a runtime base is fine while the two agree on everything else.
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, stage: "build" } })).toEqual([]);
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, stage: "build", source: "mirror" } })).toEqual([
+      "lock entries a and b name one image but differ",
+    ]);
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, tag: "other" } })).toEqual([
+      "lock entries a and b name one image but differ",
+    ]);
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, digest: `sha256:${"1".repeat(64)}` } })).toEqual([
+      `lock entries a and b give ${runtime.ref}:${runtime.tag} two digests`,
+    ]);
+  });
+
   test("runtime_base_is_debian_slim", () => {
     // Alex, 2026-10-07 01:29:53Z, "Debian slim" (P1.27d): the web image runs on Debian trixie slim. Every stage uses the
     // one locked base.
     expect(NODE.ref).toBe("docker.io/library/node");
     expect(NODE.tag).toMatch(/^26(?:\.\d+){0,2}-[a-z]+-slim$/);
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       for (const image of fromImages(read(file))) expect(image, file).toBe(pinnedNode);
     }
   });
 
   test("runtime_stage_installs_no_os_packages", () => {
-    // No stage installs OS packages, so no apt or apk line needs version pins (DL3008, DL3018) and the runtime holds
-    // only what the base ships. The edge is not a Node image: it removes setcap's packages (deployment/edge/Dockerfile).
-    for (const file of NODE_DOCKERFILES) {
-      for (const line of read(file).split("\n")) {
-        expect(line, `${file}: ${line}`).not.toMatch(/^\s*RUN\b.*\b(?:apt-get|apt|apk|dpkg)\b/);
-      }
+    // Amendment 3: in the stages an image ships, a package manager may only remove, read on joined instructions.
+    for (const file of dockerfiles) expect(osPackageProblems(read(file)), file).toEqual([]);
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    const substitution = "a variable or command substitution hides what runs";
+    for (const [run, problem] of [
+      ["RUN true \\\n  && apk add curl", "apk add curl: apk may only remove packages"],
+      ["RUN apk --no-cache add curl", "apk --no-cache add curl: apk may only remove packages"],
+      ["RUN /sbin/apk add curl", "/sbin/apk add curl: apk may only remove packages"],
+      ["RUN apt-get -y install curl", "apt-get -y install curl: apt-get may only remove packages"],
+      ["RUN apk fix", "apk fix: apk may only remove packages"],
+      ["RUN dpkg --unpack x.deb", "dpkg --unpack x.deb: dpkg may only remove packages"],
+      ['RUN sh -c "apk add x"', "sh -c apk add x: sh runs a command this test cannot read"],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a JS template.
+      ["RUN ${PM} add x", substitution],
+      ["RUN $PM add x", substitution],
+      ['RUN ["apk","add","x"]', "apk add x: apk may only remove packages"],
+      ["RUN nohup apk add x", "nohup apk add x: runs a package manager through nohup"],
+      ["RUN FOO=1 apk add x", "apk add x: apk may only remove packages"],
+      ["RUN apk", "apk: apk may only remove packages"],
+      ["RUN yum remove x", "yum remove x: yum may not run in a shipped image"],
+      ["ONBUILD RUN apk add x", "apk add x: apk may only remove packages"],
+      ['SHELL ["/sbin/apk", "add"]', "SHELL changes what RUN runs"],
+    ]) {
+      expect(osPackageProblems(`${node}${run}`), run).toEqual([`line 3: ${problem}`]);
+    }
+    // Stages the final one builds on by name ship too; a stage it only copies from does not.
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN apk add x\nFROM base`)).toHaveLength(1);
+    expect(osPackageProblems(`FROM ${pinnedNode} AS deps\nRUN apk add x\nFROM ${pinnedNode}`)).toEqual([]);
+    for (const run of [
+      "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\\n    && apk del --no-network curl libcap",
+      "RUN apt-get purge -y x",
+      "RUN dpkg -r x && rm -rf /usr/bin/dpkg",
+    ]) {
+      expect(osPackageProblems(`${node}${run}`), run).toEqual([]);
     }
   });
 
@@ -418,8 +783,16 @@ describe("base images", () => {
     const ship = `${runtime.ref}:${runtime.tag}@${runtime.digest}`;
     // The edge's shape: the builder feeds a stage the runtime image copies from.
     expect(finalStageProblems(`FROM ${build} AS b\nFROM ${ship}\nCOPY --from=b /out /app`, lock)).toEqual([]);
+    // The final FROM's ref (docker.io/library/caddy) is shared with a runtime entry, but its digest matches only the
+    // build entry, so it fails (amendment 2); the same image listed as both build and runtime may ship.
     expect(finalStageProblems(`FROM ${ship} AS b\nFROM ${build}`, lock)).toEqual([
       `final FROM ${build} is a build base`,
+    ]);
+    expect(finalStageProblems(`FROM ${build}`, { b: builder, r: { ...builder, stage: "runtime" } })).toEqual([]);
+    // Amendment 4: the builder's tag on the runtime digest resolves to no entry, so it cannot pass as the runtime base.
+    const crossed = `${runtime.ref}:${builder.tag}@${runtime.digest}`;
+    expect(finalStageProblems(`FROM ${build} AS b\nFROM ${crossed}`, lock)).toEqual([
+      `final FROM ${crossed} has no lock entry`,
     ]);
     expect(finalStageProblems(`FROM ${build} AS b\nFROM b AS c\nFROM c`, lock)).toEqual([
       `final FROM ${build} is a build base`,
@@ -588,7 +961,7 @@ describe("runtime stage", () => {
   });
 
   test("image_has_no_dev_deps", () => {
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       expect(read(file), file).toMatch(/^RUN npm ci --ignore-scripts --omit=dev$/m);
       const copies = runtimeStage(read(file)).filter(
         (line) => line.startsWith("COPY ") && line.includes("node_modules"),
@@ -598,7 +971,7 @@ describe("runtime stage", () => {
   });
 
   test("runtime_has_no_package_manager", () => {
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       const text = read(file);
       const stage = runtimeStage(text);
       const removal = stage.find((line) => line.startsWith("RUN rm -rf ")) ?? "";

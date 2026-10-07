@@ -4,7 +4,8 @@
     "tag": "26-trixie-slim",
     "digest": "sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
     "source": "upstream",
-    "stage": "runtime"
+    "stage": "runtime",
+    "stripped": ["/usr/local/lib/node_modules/npm", "/usr/local/lib/node_modules/corepack"]
   },
   "caddy-builder": {
     "ref": "docker.io/library/caddy",
