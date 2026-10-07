@@ -93,6 +93,11 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("shared/admin-envelope/a.ts", "node:crypto"),
     edge("shared/admin-envelope/a.ts", "./b.ts"),
   ],
+  "deployment-preflight": [
+    edge("deployment/preflight/a.ts", "./checks/b.ts"),
+    edge("deployment/preflight/a.ts", "yaml"),
+    edge("deployment/preflight/a.ts", "node:child_process"),
+  ],
   tooling: [
     edge("tests/integration/a.test.ts", "../../scripts/guards/files.ts"),
     edge("infrastructure/arachnid/fingerprint-check.test.ts", "./fingerprint-check.fake.ts"),
@@ -376,6 +381,20 @@ describe("allowlist matrix", () => {
       edge("domains/identity/a.ts", "../../shared/http/index.ts"),
       edge("infrastructure/storage/a.ts", "../audit/index.ts"),
       edge("shared/ui/a.ts", "../config/index.ts"),
+    );
+  });
+
+  test("deployment_preflight_is_a_leaf", async () => {
+    // P1.30q: the preflight reaches only itself, Node built-ins and the yaml parser; it runs verify-images as a child
+    // process, never by import, and nothing outside it imports it.
+    await expectFail(
+      "not-in-allowed",
+      edge("deployment/preflight/a.ts", "../../scripts/ci/verify-images.ts"),
+      edge("deployment/preflight/a.ts", "../../shared/config/index.ts"),
+      edge("deployment/preflight/a.ts", "../images/b.ts"),
+      edge("deployment/preflight/a.ts", "pg"),
+      edge("deployment/images/a.ts", "../preflight/b.ts"),
+      edge("interfaces/http/a.ts", "../../deployment/preflight/b.ts"),
     );
   });
 
