@@ -7851,10 +7851,10 @@ dev-seed:
 ### P1.29r — Close the final-stage package rule's regression
 Tags: [SEC]            Depends on: P1.29x (merged, #507)
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p129r-final-stage-rule-regression (final
-22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z). A tightening;
-the coordinator clears it, no word from Alex. Owner: Phase 1, the next Phase 1 slot. It goes before P1.29d, which gains
-it as a dependency. It is separate from P1.28y: if both are built together they may share a PR, but P1.29r does not wait
-for it.
+22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z), with amendment 1
+(23:05Z) from architecture's 22:57Z note under amendment 5. A tightening; the coordinator clears it, no word from Alex.
+Owner: Phase 1, the next Phase 1 slot. It goes before P1.29d, which gains it as a dependency. It is separate from
+P1.28y: if both are built together they may share a PR, but P1.29r does not wait for it.
 
 **Why:** after #507, four node-kind final-stage RUNs that main refused before now pass: `node -e` with `execSync`
 running `apt-get install`; `perl -e` running `system`; `node -e` with `execFileSync`; and `apt-get -c remove install -y
@@ -7864,20 +7864,29 @@ rule must only ever tighten.
 **What:** three layers, each applied to final stages and to the named stages a final stage builds on.
 1. **Floor.** Main's old word check returns, on joined instructions in shell and exec form: any final-stage RUN that
    contains `apk`, `apt`, `apt-get`, `aptitude`, `dpkg`, `rpm`, `dnf`, `microdnf` or `yum` as a word anywhere fails. The
-   only exception is a match that is the first word of a parsed command which passes layer 3.
+   floor keeps main's `\b` semantics: a hyphen ends a word, so `apk-tools`, `apk-static` and `apt-get-foo` all match. A
+   match is exempt only by position: (a) it is the first word of a parsed command that passes layer 3, or (b) it is an
+   argument after that same command's removal verb and matches the package-name pattern (`apk del … apk-tools`). Every
+   other match fails. `rm` of a package manager's files fails the floor, so #507's old green
+   `dpkg -r x && rm -rf /usr/bin/dpkg` is now red. If a current final stage does this, the PR states it under "What I am
+   unsure about" with file and line, and the removal uses the package manager's own verb.
 2. **A command allowlist.** Every simple command's first word (its basename) must be in an exact set,
    `FINAL_STAGE_COMMANDS`: exactly the commands today's final stages use (expected: roughly rm, mkdir, chown, chmod, ln,
    setcap, plus the package managers under layer 3), each listed in the PR body with its file and line. Every shell,
    interpreter (node, perl, python, ruby, php, lua, awk) and launcher fails. Adding a command later is a product PR that
-   states it under "What I am unsure about".
+   states it under "What I am unsure about". Subshells and parentheses fail rather than being split. `true` and `echo`
+   fail unless a current final stage uses them, in which case they are listed with file and line.
 3. **Removal options from an allowlist.** Only these value-less flags may come before the verb: apk `--no-network`,
    `--purge`, `--no-cache`, `-q`; apt-get and apt `-y`, `-q`, `--purge`, `--auto-remove`, `--no-install-recommends`;
    dpkg none. After the verb, arguments must be package names matching `^[a-z0-9][a-z0-9+._-]*$`, or the same allowed
    flags.
 
-Fixtures: red, the four inputs above; `ksh -c 'apk add x'`; `node -e "require('child_process').execSync('ap'+'t-get
-install x')"`, which only layer 2 catches; `apt-get -o Foo=remove install x`; a package-manager name in an exec-form
-argument. Green: `apk del --no-network curl libcap apk-tools` (the edge after P1.28o) and `apt-get purge -y x`.
+Fixtures: red, the four inputs above; `ksh -c 'apk add x'`;
+`node -e "require('child_process').execSync('ap'+'t-get install x')"`, which only layer 2 catches;
+`apt-get -o Foo=remove install x`; a package-manager name in an exec-form argument; and, from amendment 1,
+`apk-static add x` and `/sbin/apk-static add x` (both fail on the floor and on layer 2),
+`dpkg -r x && rm -rf /usr/bin/dpkg` (floor), and a subshell, `(apk del x)` (layer 2). Green:
+`apk del --no-network curl libcap apk-tools` (the edge after P1.28o) and `apt-get purge -y x`.
 
 Done when `npm run check` is green with every red fixture failing for the stated layer and the green ones passing, and
 the real Dockerfiles on main still pass.
