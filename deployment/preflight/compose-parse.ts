@@ -87,6 +87,23 @@ function reader(file: string, lines: LineCounter): Reader {
 export function parseCompose(text: string, file: string): Compose {
   const lines = new LineCounter();
   const r = reader(file, lines);
+  const doc = strictDocument(text, file, lines, r);
+  const root = doc.contents;
+  if (!isMap(root)) return r.fail(root, "the file is not a mapping");
+  if (root.has("include")) r.fail(root.get("include", true), "include");
+  const name = root.get("name", true);
+  if (name !== undefined) r.noDollar(name, "name");
+  const servicesNode = root.get("services", true);
+  if (!isMap(servicesNode)) return r.fail(servicesNode, "services is not a mapping");
+  return {
+    name: name === undefined ? null : r.text(name, "name"),
+    services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value)),
+    secretFiles: secretFiles(r, root.get("secrets", true)),
+  };
+}
+
+/** One YAML document in the strict subset: no second document, error, alias, anchor, explicit tag or merge key. */
+function strictDocument(text: string, file: string, lines: LineCounter, r: Reader): Document {
   const docs = parseAllDocuments(text, { ...OPTIONS, lineCounter: lines });
   if (!Array.isArray(docs) || docs.length !== 1) throw new ParseError(`${file}: not exactly one YAML document`);
   const [doc] = docs as [(typeof docs)[number]];
@@ -103,18 +120,7 @@ export function parseCompose(text: string, file: string): Compose {
     },
   });
   refuseAliasesByOption(doc, file);
-  const root = doc.contents;
-  if (!isMap(root)) return r.fail(root, "the file is not a mapping");
-  if (root.has("include")) r.fail(root.get("include", true), "include");
-  const name = root.get("name", true);
-  if (name !== undefined) r.noDollar(name, "name");
-  const servicesNode = root.get("services", true);
-  if (!isMap(servicesNode)) return r.fail(servicesNode, "services is not a mapping");
-  return {
-    name: name === undefined ? null : r.text(name, "name"),
-    services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value)),
-    secretFiles: secretFiles(r, root.get("secrets", true)),
-  };
+  return doc;
 }
 
 /**
