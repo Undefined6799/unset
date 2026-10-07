@@ -1,8 +1,8 @@
 {
   "node": {
     "ref": "docker.io/library/node",
-    "tag": "26-alpine",
-    "digest": "sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80",
+    "tag": "26-trixie-slim",
+    "digest": "sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
     "source": "upstream"
   },
   "caddy-builder": {

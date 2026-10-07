@@ -1,6 +1,6 @@
 [
   {
-    "source": "docker.io/library/node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80",
+    "source": "docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
     "mirror": "ghcr.io/undefined6799/mirror/node"
   },
   {
