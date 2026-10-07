@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 30 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b added 2026-10-07).
+Depth: **build-ready**. 31 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b and P0.05c added 2026-10-07).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -32,6 +32,7 @@ Depth: **build-ready**. 30 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.04 | Toolchain: TypeScript 7, Node 26, Vitest only, `.npmrc`, "discovered equals executed" | — | P0.03 | `phase-0.md` |
 | P0.05 | Lint stack: Biome CSS rules, dependency-cruiser on the swc parser, file-size and line-budget warnings | — | P0.04 | `phase-0.md` |
 | P0.05b | Remove the duplicate lint run; check job runs lint before tests | — | — | `phase-0.md` |
+| P0.05c | Check job gate pinned: exact if, gate steps, env, root scripts, alias-free ci.yml | — | P0.05b | `phase-0.md` |
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
 | P0.07 | CI workflow: pinned images and actions, full gate set, secrets and OIDC bound to `main` | [SEC] [ALEX] (tail: required checks) | P0.06 | `phase-0.md` |
 | P0.08 | Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard | [SEC] [ALEX] (tail: app install) | P0.07 | `phase-0.md` |
@@ -66,6 +67,7 @@ flowchart TD
   P0_04["P0.04 Toolchain"]
   P0_05["P0.05 Lint stack"]
   P0_05b["P0.05b Lint rerun dropped"]
+  P0_05c["P0.05c Check job gate pinned"]
   P0_06["P0.06 Repo guards as Vitest tests"]
   P0_07["P0.07 CI workflow"]
   P0_08["P0.08 Renovate replaces Dependabot"]
@@ -94,6 +96,7 @@ flowchart TD
   P0_02 --> P0_03
   P0_03 --> P0_04
   P0_04 --> P0_05
+  P0_05b --> P0_05c
   P0_05 --> P0_06
   P0_06 --> P0_07
   P0_07 --> P0_08
@@ -252,10 +255,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
 | P1.29x | Lock entries declare stripped paths, proven deleted in every final stage | [SEC] | P1.29k | `phase-1.md` |
-| P1.29w | images.yml scans every shipped image through a discovery matrix | [SEC] [ALEX] | P1.29k | `phase-1.md` |
-| P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w | `phase-1.md` |
+| P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
+| P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.11p, P1.28, P1.30t | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
@@ -394,7 +397,7 @@ flowchart TD
   P1_28s["P1.28s Quoted top-level tokens refused"]
   P1_29k["P1.29k Migrate image, syncRolePasswords"]
   P1_29x["P1.29x Stripped paths declared"]
-  P1_29w["P1.29w Scan every shipped image"]
+  P1_29w["P1.29w Discover and scan every image"]
   P1_29v["P1.29v Mirror scan skips stripped"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
@@ -598,7 +601,8 @@ flowchart TD
   P1_26 --> P2_13a
   P1_29k --> P1_29
   P1_29k --> P1_29x
-  P1_29k --> P1_29w
+  P1_29w --> P1_29v
+  P1_29w --> P1_29
   P1_29x --> P1_29v
   P1_28w --> P1_29v
   P1_29v --> P1_29d
@@ -1315,7 +1319,7 @@ After launch (not a gate; L.00 keeps the list in `launch-gate.md`, "Post-launch 
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
-| P1.27r | Make `images` a required check (split from P1.27q; deferred until after launch) | [SEC] [ALEX] | P1.27q, L.06 | `phase-1.md` |
+| P1.27r | Make `scan` a required check (split from P1.27q; deferred until after launch) | [SEC] [ALEX] | P1.27q, L.06, P1.29w | `phase-1.md` |
 
 ## Phase order
 

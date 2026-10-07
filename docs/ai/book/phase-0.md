@@ -353,9 +353,9 @@ Algorithm (the runbook Alex follows, as soon as the agent reports P0.02 step 5):
         methods: Squash. Alex alone merges, by written rule (`CLAUDE.md`).
      c. Require status checks to pass: "Require branches to be up to date before merging" **off** (architecture
         2026-10-06, reversing P0-A8); add every name in `.github/required-checks.json` as it stands on `main` (today
-        check, secrets, audit, actionlint, semgrep and pr-shape; the file is authoritative, and `images` is not added,
-        P1.27r), each with source **GitHub Actions** chosen in the picker (not "any source"), so no other app can post
-        a green context.
+        check, secrets, audit, actionlint, semgrep and pr-shape; the file is authoritative, and the image scan
+        (`scan`) is not added, P1.27r), each with source **GitHub Actions** chosen in the picker (not "any source"),
+        so no other app can post a green context.
      d. Require signed commits: **on**. Under squash-only merging GitHub creates and signs the commit that lands on
         `main`; unsigned commits on agent branches do not matter. P0.14 drill D checks the merged commit is verified;
         if it is not, Alex turns this off and P0-A3 is asked.
@@ -822,7 +822,7 @@ Diagram: none.
 ---
 
 ### P0.05b — Drop the lint rerun from the test suite (book edit 2026-10-07-p005b-lint-rerun)
-Tags: —            Depends on: —            Plan: rule SE-6; architecture's 2026-10-07-lint-clean-repo-duplicate
+Tags: —            Depends on: — (merged, #469)            Plan: rule SE-6; architecture's 2026-10-07-lint-clean-repo-duplicate
 Where: check paths, kind/build: `scripts/lint/depcruise.test.ts` and a test in `scripts/ci/`. No `.github/` or
   `scripts/guards/` file. Neutral (the set of refused inputs is unchanged), so Alex's word is not needed. Slice 1 (it
   unblocks every slice-1 PR). Owner: Phase 2, first in the slot queue.
@@ -841,6 +841,27 @@ Done when (tests):
 Watch item, not booked: if the real-repo half of `depcruise_cruised_nonzero` nears the 5 s limit, it is dropped for
 the same reason and its fixture half stays; the step book then books a one-line follow-on under P0.05 with no new
 ruling.
+
+---
+
+### P0.05c — Pin the check job's lint and test gate (book edit 2026-10-07-p005c-check-job-gate)
+Tags: —            Depends on: P0.05b (merged, #469)            Plan: rule SE-6; architecture's 2026-10-07-check-job-gate-pinning
+Where: check paths, kind/build: `scripts/ci/check-job.test.ts` only. A tightening; no `.github/` file, so Alex's word is
+  not needed. Slice 1. Owner: Phase 2. #469's verification found that an `if:` on the lint step, or a weakened job
+  `if:`, could skip the gate silently.
+
+Pins: the check job's `if:` equals today's exact string; the steps from the first through `npm test` are an exact
+sequence of full mappings (`uses` compared by action path, the ref only shape-checked as 40 hex characters); no
+`defaults` at workflow or job level and no workflow-level `env`, and the check job's `env` keys are exactly `BASE_SHA`
+and `RENOVATE_IMAGE`; the root `package.json` `lint`, `test`, `typecheck` and `guards` scripts are exact strings, with
+no npm lifecycle scripts (`pre*`, `post*`, `prepare` and the like); `ci.yml` is parsed with `uniqueKeys`, refusing
+anchors, aliases, merge keys and duplicate keys.
+
+Done when (tests): `check_job_if_exact`, `check_job_gate_steps_exact`, `check_job_no_defaults_or_extra_env`,
+`root_package_scripts_pinned`, `ci_workflow_has_no_aliases_or_duplicate_keys`, each with red fixtures (a checkout SHA
+bump passes, `checkout@v7` fails, a different action path fails). Maintenance: a later intended change to those steps,
+scripts or `if:` edits this test in the same PR; such a PR is check class, and if it weakens anything it needs Alex's
+word.
 
 ---
 

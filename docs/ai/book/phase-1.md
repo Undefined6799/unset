@@ -197,7 +197,7 @@ flowchart LR
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
-  P1_29w["P1.29w scan every shipped image ALEX"]
+  P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
@@ -275,7 +275,8 @@ flowchart LR
   P1_27 --> P1_29k
   P1_29k --> P1_29
   P1_29k --> P1_29x
-  P1_29k --> P1_29w
+  P1_29w --> P1_29v
+  P1_29w --> P1_29
   P1_29x --> P1_29v
   P1_28w --> P1_29v
   P1_29v --> P1_29d
@@ -6222,12 +6223,15 @@ book; it does not split itself.
 
 ---
 
-### P1.27r — Make `images` a required check (split from P1.27q; deferred until after launch)
-Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, Alex's typed words in the building thread allowing the guard-file
-  edit            Plan: §7 (CI); rule SE-6
-Where: check paths only, kind/build: `"images"` in `.github/required-checks.json`, the matching line in
-  `scripts/guards/workflow-pins.test.ts`, and the `images` entry in `scripts/docs/change-shape-config.test.ts` if
-  P1.27q left it out. Nothing else rides with it.
+### P1.27r — Make `scan` a required check (split from P1.27q; deferred until after launch)
+Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, P1.29w and `scan` green on main, Alex's typed words in the
+  building thread allowing the guard-file edit            Plan: §7 (CI); rule SE-6
+Amended by P1.29w (book edit 2026-10-07-p129-postgres-split, 19:15Z): the required check is the aggregate job `scan`
+  in place of `images`, never the per-image `scan-image (<name>)` names, which change as images come and go. Alex's
+  ruleset setting adds `scan` with source GitHub Actions, as P0.03 does for the other checks.
+Where: check paths only, kind/build: `"scan"` in `.github/required-checks.json`, the matching line in
+  `scripts/guards/workflow-pins.test.ts`, and the `scan` entry in `scripts/docs/change-shape-config.test.ts`. Nothing
+  else rides with it.
 Size: under 20 lines.
 
 Why a step of its own: the required check is a tightening, independent of the `packages: write` question (P1.27s), so
@@ -6236,13 +6240,12 @@ it lands on Alex's word, whichever way he answers that question.
 Deferred until after launch (Alex, 2026-10-06 12:08Z in the Phase 2 thread: "Wait before making image check mandatory,
 we can look into it after launch"). No step before launch depends on it, P1.30 and P2.13a included; it is the first
 entry of L.00's post-launch follow-up list in `launch-gate.md`, and L.00 does not gate launch on it. P1.27 (the
-Dockerfile) does not wait for it.
-Interim rule until it merges: a hand-off of a PR that touches `deployment/images/` reports the `images` result. If that
-PR itself turns `images` red (a Trivy finding, a hadolint error, a failed build), it is fixed like any other failure
-the PR causes, since a known-vulnerable image is still a security finding. A skipped `images` run, or one that has not
-reported, does not block the hand-off.
+Dockerfile) does not wait for it. Interim rule until it merges: a hand-off of a PR that touches `deployment/` reports
+the `scan` result (`images` until P1.29w lands). If that PR itself turns it red (a Trivy finding, a hadolint error, a
+failed build), it is fixed like any other failure the PR causes, since a known-vulnerable image is still a security
+finding. A skipped run, or one that has not reported, does not block the hand-off.
 
-Done when (tests): the existing `workflow-pins` test, updated; `required_checks_include_images` (the required list and
+Done when (tests): the existing `workflow-pins` test, updated; `required_checks_include_scan` (the required list and
 the workflow job name agree).
 
 ---
@@ -6937,8 +6940,8 @@ with Go 1.24.6 (one CRITICAL, CVE-2025-68121, and 21 HIGH, fixed in Go but in no
 gosu-free image, and the mirror scan must skip only paths our images provably delete; the running-stack tests need
 the whole stack in CI; and the single step was well over the ~550-line split line. The text below this note is the
 whole stack's spec; each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend
-on **P1.29t**, the last part, which implies the rest. Order: P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a,
-P1.29h, P1.29s, P1.29t.
+on **P1.29t**, the last part, which implies the rest. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v,
+P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
    `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged;
    Phase 1):
@@ -6969,26 +6972,47 @@ P1.29h, P1.29s, P1.29t.
    test; the node entry's npm and corepack paths, exactly the ones `node-app.Dockerfile` and `migrate.Dockerfile`
    delete. Test: `stripped_paths_removed_in_every_final_stage` (every Dockerfile on that base deletes every declared
    path in its final stage; a declared path no final stage deletes fails).
-3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`,
-   `scripts/ci/image-workflows.test.ts`; depends on P1.29k only; Phase 2): `images.yml` builds and scans every
-   Dockerfile under `deployment/` through a matrix fed by the same discovery as `images.test.ts`, at HIGH and
-   CRITICAL with `--ignore-unfixed`; new jobs (migrate, and postgres once P1.29d adds it) scan with `--ignorefile
-   /dev/null`; the node job keeps its ignore file until P1.29v removes the npm entries. Test:
-   `every_dockerfile_has_scan_job`. A tightening, but `.github/workflows` needs Alex's typed line (for example "yes
-   P1.29w every shipped image"). The migrate image must not wait unscanned behind P1.29v's card, and the matrix picks
-   up `postgres.Dockerfile` by itself.
+3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`, a new
+   `scripts/ci/list-dockerfiles.ts` and its test; depends on nothing open; Phase 2; rewritten 19:15Z on architecture's
+   2026-10-07-p129w-scan-matrix-discovery). The matrix is discovered at run time, so a Dockerfile that exists is
+   scanned:
+   - **`discover`** runs `scripts/ci/list-dockerfiles.ts`, which prints a JSON array of `{ "name", "dockerfile",
+     "ignorefile" }` to `$GITHUB_OUTPUT`, one per Dockerfile under `deployment/`, by `images.test.ts`'s discovery
+     rule. It fails on an empty list, on a name not matching `^[a-z0-9-]+$`, and on a path outside `deployment/`.
+     Values reach `run:` lines only through `env:`, never `${{ }}` in a script; `contents: read`, no secrets.
+   - **`scan-image`**: a matrix from `fromJSON(needs.discover.outputs.images)`, `fail-fast: false`; each image is built
+     and scanned by Trivy at HIGH and CRITICAL with `--ignore-unfixed` and `--ignorefile "$IGNOREFILE"`; the job name
+     includes the image name.
+   - **`scan`**, the aggregate and the one stable name: `needs: [discover, scan-image]`, `if: always()`, green only
+     when both are `success` (skipped, cancelled or failed is red).
+   - **Ignore files are data in the script, never a convention:** every image gets `/dev/null` except one exact map,
+     `IGNOREFILES = { node: ".github/trivyignore.yaml" }`, which the test pins. "Use `<name>.trivyignore` when it
+     exists" is refused. P1.29v empties the map; any later entry is a loosening that needs Alex's card and line.
+   - **Triggers:** `images.yml` has no `paths:` filter today (`images.yml:7`) and keeps none.
+
+   Tests (replacing `every_dockerfile_has_scan_job`): `list_dockerfiles_matches_images_discovery` (the script's set
+   against a live walk of `deployment/`; today exactly {edge, node}) and `list_dockerfiles_refuses_bad_entries` (an
+   empty tree, a bad name and a path outside `deployment/` fail; a Dockerfile-named file under `node_modules` is
+   ignored). Alex's typed line "yes P1.29w every shipped image" covers this design (asked 18:57Z); line: (pending).
+   Order: it lands before P1.29k and P1.29d, so each new image is scanned from its first PR and neither edits
+   `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not waiting on Alex's line; discovery picks a
+   merged migrate image up when P1.29w lands). A check step pinning the exact image set after each new image is
+   optional, at the coordinator's call. It also amends P1.27r: the required check becomes `scan`.
 4. **P1.29v "Skip stripped files in the mirror scan"** ([ALEX] [SEC], check: `.github/workflows/mirror.yml`,
-   `.github/trivyignore.yaml`, the mirror-scan test; depends on P1.29x and P1.28w, which both touch `mirror.yml`;
-   Phase 2): `mirror.yml` reads each entry's `stripped` list from the lock and passes `--skip-files` for exactly those
-   paths, on that entry only; the three npm entries leave `trivyignore.yaml`; the test proves a declared path is
-   skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files), so it needs Alex's
-   card ("Let the mirror scan skip files our images delete (gosu in Postgres, npm in Node), with a test that every
-   listed file is deleted and the shipped images still scanned in full?"; options "Skip stripped files",
-   recommended, or "Per-CVE ignores") and his typed line naming the change and branch (for example "yes P1.29v
-   mirror.yml"). If he picks per-CVE ignores, P1.29v becomes a P1.27b-style ignore carrier with the gosu entries
-   path-scoped to `usr/local/bin/gosu`, and P1.29x's declarations stay as documentation its test proves. A new stage
-   kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do ship) are
-   rejected.
+   `.github/trivyignore.yaml`, the mirror-scan test, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x
+   and P1.28w, which both touch `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list
+   from the lock and passes `--skip-files` for exactly those paths, on that entry only; the three npm entries leave
+   `trivyignore.yaml`; the `node` entry leaves `IGNOREFILES` and the test pins the map as empty; the test proves a
+   declared path is skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files),
+   answered on Alex's card:
+   - Question: "Let the mirror scan skip files our own images delete, like gosu and npm?"
+   - Answer: "Skip stripped files"
+   - Tapped: 2026-10-07T18:56:42Z (consequence line: "The mirror scan skips only listed files we delete. A test proves
+     each is gone, and shipped images are scanned in full.")
+
+   It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
+   stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
+   ship) are rejected.
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
@@ -7006,19 +7030,20 @@ P1.29h, P1.29s, P1.29t.
    file (65532 for our Node images, 999 for postgres, never "any non-zero"), `postgres_test_image_matches_lock`, and
    `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
    after.
-6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.11p,
-   P1.28, P1.30t): `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`,
-   `user` never 0 or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root),
-   migrate, web and edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing
-   waits for P1.27s); `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json`
-   for postgres, migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside
-   `deployment/edge/`, following the edge test fixture's pattern. Tests: the static compose and env tests below that
-   do not name the PDS; `compose_images_match_lock` (every `image:` in `deployment/` compose files is a lock entry or
-   one of web, edge, migrate and postgres, with no exception); `compose_postgres_never_root`;
-   `compose_postgres_tmpfs_for_socket`; `compose_dev_networks_match_table`, which imports P1.30t's exported
-   comparison; and `preflight_matches_compose_config` on `compose.dev.yaml` (CI only). Landing P1.29 first on
-   today's test pin is refused: it would need an exception in `compose_images_match_lock` or a dev Postgres starting
-   as root with gosu, a weakening to remove later. The cost: P1.29 waits on Alex's P1.29v card and line.
+6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
+   P1.11p, P1.28, P1.30t, so no image is composed before every image is scanned): `deployment/compose.dev.yaml` with
+   postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0 or root, tmpfs at
+   `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and edge (built
+   locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
+   `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json` for postgres,
+   migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside `deployment/edge/`,
+   following the edge test fixture's pattern. Tests: the static compose and env tests below that do not name the PDS;
+   `compose_images_match_lock` (every `image:` in `deployment/` compose files is a lock entry or one of web, edge,
+   migrate and postgres, with no exception); `compose_postgres_never_root`; `compose_postgres_tmpfs_for_socket`;
+   `compose_dev_networks_match_table`, which imports P1.30t's exported comparison; and
+   `preflight_matches_compose_config` on `compose.dev.yaml` (CI only). Landing P1.29 first on today's test pin is
+   refused: it would need an exception in `compose_images_match_lock` or a dev Postgres starting as root with gosu, a
+   weakening to remove later. The cost: P1.29 waits on Alex's P1.29v and P1.29w lines.
 7. **P1.29a "Add the PDS to the dev stack"** ([ALEX] [SEC]; depends on P1.29; Alex's card answered "Allow pinned",
    2026-10-07T13:00:19Z, quoted in the body): the exact vendor allowlist entry `ghcr.io/bluesky-social/pds` (never
    the host or namespace); its lock and mirror entries with `stage: "runtime"` (a run-only image runs as shipped, so
@@ -7060,7 +7085,7 @@ P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
@@ -8634,7 +8659,7 @@ the private keys are needed only for a later PLC operation (adding the backup ke
    the guard against publishing under the wrong account.
 7. Turn on e-mail 2FA for the account on the PDS /account page. Its codes, like its reset links, go out through the
    real SMTP provider (no Mailpit, book edit 2026-10-07-no-mailpit), so the provider is set up before this step (Alex's timing to
-   confirm) and Alex's mailbox joins host access as a root of trust (dev-pds-admin-custody.md says so).
+   confirm).
 8. Send the agent: the DID, goat plc history output, the publish output with CIDs.
 ```
 
