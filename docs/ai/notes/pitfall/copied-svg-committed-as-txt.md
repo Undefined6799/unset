@@ -4,7 +4,7 @@ type: pitfall
 status: current
 areas: ["[[ui]]", "[[ci]]"]
 summary: "Biome 2.5.15 lints .svg files as HTML, so copied third-party SVGs and sheet files are committed with a .txt suffix."
-code: [shared/ui/icons/svg, shared/ui/scripts/icons.ts]
+code: [shared/ui/icons/svg, shared/ui-build/icons.ts]
 sources: [docs/ai/book/phase-1.md]
 importance: normal
 related: ["[[ui]]"]
@@ -20,7 +20,7 @@ then fail `npm run lint` on style rules we cannot fix without changing the bytes
 
 **The rule.** Third-party data we copy and must keep byte-identical goes in with a `.txt` suffix:
 `shared/ui/icons/svg/<name>.svg.txt`, and the design sheet's `bundle.js.txt` and `*.d.ts.txt`. These files are
-provenance only: never served by the assets route and never imported. `shared/ui/scripts/icons.ts` reads them, checks
+provenance only: never served by the assets route and never imported. `shared/ui-build/icons.ts` reads them, checks
 them against the sheet's ICONS data, and generates `icons.json` and the per-icon `drawings/` modules, which are
 what the Icon component and `IconDrawing` use.
 
