@@ -92,6 +92,43 @@ ALTER TABLE app.x ENABLE ROW LEVEL SECURITY;`;
     });
   });
 
+  test("trusted_file_with_set_role_is_trusted", () => {
+    // P1.15q: a trusted migration creates its functions as their owner, so SET ROLE and RESET ROLE may ride with it.
+    const sql =
+      "SET ROLE audit_owner;\nALTER DEFAULT PRIVILEGES FOR ROLE audit_owner REVOKE EXECUTE ON ROUTINES FROM PUBLIC;\nRESET ROLE;";
+    expect(verdict({ sql, others: [GRANTS_TEST] })).toEqual({ ok: true, touched: true });
+    expect(verdict({ sql, others: [FEATURE] })).toEqual({ ok: false, outside: [FEATURE] });
+  });
+
+  test("set_role_with_feature_statement_still_mixed", () => {
+    const sql =
+      "SET ROLE audit_owner;\nCREATE TABLE app.y (id bigint);\nGRANT USAGE ON SCHEMA app TO api;\nRESET ROLE;";
+    expect(verdict({ sql, others: [] })).toEqual({ ok: false, outside: [`${NEW_SQL} (mixed_grant_change)`] });
+  });
+
+  test("set_role_only_file_not_trusted", () => {
+    expect(verdict({ sql: "SET ROLE audit_owner;\nRESET ROLE;", others: [FEATURE] })).toEqual({
+      ok: true,
+      touched: false,
+    });
+  });
+
+  test("set_role_with_extra_tokens_unclassified", () => {
+    // Only the exact two forms are left out; any other spelling still counts against a trusted file.
+    const grant = "GRANT USAGE ON SCHEMA app TO api;";
+    for (const role of [
+      "SET ROLE audit_owner NOWAIT;",
+      "SET ROLE audit_owner, web;",
+      'SET ROLE "audit_owner";',
+      "set role audit_owner;",
+      "SET LOCAL ROLE audit_owner;",
+    ])
+      expect(verdict({ sql: `${role}\n${grant}`, others: [] }), role).toEqual({
+        ok: false,
+        outside: [`${NEW_SQL} (mixed_grant_change)`],
+      });
+  });
+
   test("grant_parse_unparseable_fails", () => {
     const sql = "DO $$ BEGIN EXECUTE 'GR' || 'ANT SELECT ON app.account TO api'; END $$;";
     expect(verdict({ sql, others: [FEATURE] })).toEqual({ ok: false, outside: [FEATURE] });
