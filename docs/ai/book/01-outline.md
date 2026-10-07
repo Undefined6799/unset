@@ -181,7 +181,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.15m | Audit SQL part 1: schema grants, default privilege, functions (trusted) | [SEC] | P1.15x, P1.15q, P1.12, P1.13 | `phase-1.md` |
 | P1.15d | Audit SQL part 2: tables, seeds, index, triggers, auditor SELECT | [SEC] | P1.15m | `phase-1.md` |
 | P1.15g | Audit SQL part 3: EXECUTE grants on `audit.append`, audit tests (trusted) | [SEC] | P1.15d | `phase-1.md` |
-| P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
+| P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | [SEC], trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
 | P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
@@ -551,7 +551,7 @@ flowchart TD
 
 ## i18n slice — EN/FR catalogs and the locale preference (English first, Alex 2026-10-04 12:58Z)
 
-Depth: **build-ready**. 2 steps, after slice 1 (P2.13a merged) and before the Phase 1 exit (P1.38), which needs both
+Depth: **build-ready**. 3 steps, after slice 1 (P2.13a merged) and before the Phase 1 exit (P1.38), which needs both
 languages; it may run before, beside or after the slice-2 steps. Alex's answer on the step-book card (against the
 recommendation): slice 1 is English only, its screens keeping their English text in one `messages.ts` per feature (plain
 exported constants, no catalog machinery). This slice's **first task** (P1.19 steps 0a–0d) converts those modules into

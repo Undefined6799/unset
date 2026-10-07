@@ -122,6 +122,7 @@ flowchart TD
   P115d --> P115g["P1.15g audit EXECUTE grants [SEC]"]
   P115g --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
+  P115 --> P115s["P1.15s audit chain tests"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P103 --> P117e["P1.17e lock log events"]
   P111 --> P117["P1.17 advisory lock"]
@@ -190,6 +191,7 @@ flowchart LR
   P1_37["P1.37 legal paperwork 1 ALEX"]
   P1_37a["P1.37a Arachnid application ALEX"]
   P1_38["P1.38 Phase 1 exit"]
+  P1_15s["P1.15s audit chain tests"]
 
   P1_04 --> P1_20
   P1_10 --> P1_20
@@ -250,6 +252,7 @@ flowchart LR
   P0_12 -.-> P1_35
   P0_07 --> P1_36
   P1_26 --> P1_38
+  P1_15s -.-> P1_38
   P1_19 --> P1_22b["P1.22b locale (i18n slice)"]
   P1_22 --> P1_22b
   P1_26 --> P1_22b
