@@ -21,19 +21,24 @@ checked: 2026-10-07
 - `scripts/`: pure build functions (tokens, contrast, font metrics, icons). The Node entries that call them live in
   `scripts/ui/`. Each generated file has a freshness test.
 - `src/tokens.css`, `src/base.css`, `src/layers.css`: generated tokens and base styles.
-- `icons/`: the 36 Iconoir 7.12.1 icons, copied byte for byte, plus the generated `icons.json` allowlist.
-  `components/Icon/` renders them. No icon npm package and nothing fetched at runtime (decision 33).
+- `icons/`: the 36 Iconoir 7.12.1 icons, copied byte for byte, plus the generated `icons.json` allowlist and one
+  generated `drawings/<name>.generated.ts` per icon. `components/Icon/` renders them: pages use `<Icon name>`;
+  islands use `IconDrawing` with the one drawing module they need, because `icons.json` is about 5 KB gzip and would
+  not fit the island budget. No icon npm package and nothing fetched at runtime (decision 33).
 - `components/<Name>/`: the kit, one folder per sheet component (TSX, `.module.css` in `@layer components`, test).
   They render on the server with no JS; field parts shared by Input, Textarea, Select, Checkbox and RadioGroup are in
   `components/Input/field.tsx`. `css-modules.d.ts` types the class maps. `showcase/` renders every built component
   for P1.26's axe and target-size checks. `index.ts` does not export the components yet; their first consumer does.
-- `islands/`: what an island file exports, and the props serialiser. `src/islands/readProps.ts` reads props in the
-  browser.
+- `islands/`: what an island file exports, the props serialiser, `IslandSlot` (how a kit component places an island)
+  and the kit's `*.island.tsx` files; each island's component sits beside its kit component. `src/islands/readProps.ts`
+  reads props in the browser.
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
 
 **Rules worth knowing.** `shared/ui` imports no Node built-in (dependency-cruiser), so file access arrives as an
-argument. The 0x40 "v2e" look is superseded; follow only the design sheet.
+argument. Everything `index.ts` reaches must be `.ts`, never `.tsx`: the Node entries in `scripts/ui/` import it, and
+Node strips types from `.ts` only (`ui_build_entries_run_in_node`). The 0x40 "v2e" look is superseded; follow only
+the design sheet.
 
 **Links.** ADR 0016 (design source), [[web]].
