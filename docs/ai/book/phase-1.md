@@ -175,7 +175,9 @@ flowchart LR
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
   P1_25w["P1.25w ui-build budget and lint row"]
+  P1_25x["P1.25x ui-build plan default test"]
   P1_25d["P1.25d jsx-free detector"]
+  P1_25r["P1.25r jsx-free test parses with oxc"]
   P1_25l["P1.25l islands keep lazy chunks"]
   P1_25o["P1.25o own shared/islands ALEX"]
   P1_25i["P1.25i island runtime to shared/islands"]
@@ -259,7 +261,9 @@ flowchart LR
   P1_25h --> P1_25
   P1_25h --> P1_25q
   P1_25h --> P1_25w
+  P1_25w --> P1_25x
   P1_25h --> P1_25d
+  P1_25d --> P1_25r
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
@@ -5600,11 +5604,13 @@ Tests: the guard's area test gains `ui-build`, and the `notes-hub` check finds `
 
 ### P1.25w — Measure and fence the ui-build workspace
 Tags: check            Depends on: P1.25h (merged, #464)
+As built: merged by Alex at 2026-10-07T22:53:43Z as `edc165b` (#516).
 Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups,
 from architecture's 2026-10-07-p125h-follow-ups (N1, N2). Owner: Phase 2. A tightening (N2 restores lint enforcement
 lost in the move), cleared by the coordinator; not a classifier path.
-1. **Budget:** `"shared/ui-build": 800` in `scripts/budgets/budgets.json` and in the duplicate map in
-   `scripts/budgets/check.ts:15-23`, both together; `shared/ui` stays at 2500, no combined key.
+1. **Budget:** `"shared/ui-build": 800` in `scripts/budgets/budgets.json` and in `PLAN_DEFAULTS` in
+   `scripts/budgets/check.ts:13-25` (the `shared/ui-build` key is at :24), both together; `shared/ui` stays at 2500, no
+   combined key.
 2. **Lint row:** a MATRIX row for `^shared/ui-build/` next to `shared-ui-lexicons` (`.dependency-cruiser.cjs:117`),
    allowing exactly `^shared/ui-build/`, npm packages, and the `@unset/shared-ui` index as a type-only dependency; no
    CORE built-ins and no value import of shared/ui. A fixture proves `^(shared/(ui|lexicons)/)` does not match
@@ -5617,9 +5623,30 @@ shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run c
 
 ---
 
+### P1.25x — Pin the ui-build plan default with a test
+Tags: —            Depends on: P1.25w (merged, #516)
+Slice 1, issue #521, check class (`scripts/budgets/`, `scripts/lint/`); book edit
+2026-10-07-p125w-p125d-ui-build-follow-ups (amendment 2, 23:08Z), from the coordinator's check of #516. Owner: Phase 2.
+A tightening, cleared by the coordinator; not a classifier path, because it changes tests only.
+
+**Why:** reverting the `shared/ui-build` key at `scripts/budgets/check.ts:24` leaves every test green. The comment at
+`check.test.ts:148-149` says the plan defaults carry the same number as budgets.json, but nothing asserts this.
+1. In `scripts/budgets/check.test.ts`, give `shared/ui-build` a budgets.json value above 800 with no reason, and expect
+   the "raised to" warning. With the key removed, the test must fail.
+2. In `scripts/lint/depcruise.test.ts`, drop the relative value import of the index at :396-397; the stricter :393
+   already asserts that edge (cosmetic).
+
+Done when `npm run check` is green and the new test fails locally with the :24 key removed; the PR body states the
+failing output.
+
+---
+
 ### P1.25d — Tighten the jsx-free detector's matching
 Tags: —            Depends on: P1.25h (merged, #464)
-As built: merged by Alex at 2026-10-07T22:37:20Z as `cbc2f20` (#512).
+As built: merged by Alex at 2026-10-07T22:37:20Z as `cbc2f20` (#512). Its matcher read only strings after `from` or
+`import`, so `createRequire(...)("@unset/shared-ui")`, `require()` in a `.cts` file, an `import()` of a const, and an
+import hidden by a stray quote in an earlier comment all pass where main refused them; relative specifiers were not
+realpathed (main missed that too). It regressed below main; P1.25r fixes it.
 Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride P1.25w); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (N4). Owner: the third thread. KIT matches any import that resolves into
 `shared/ui/` (the bare specifier, any subpath, any relative path), on the resolved path, not the text; REACT matches
@@ -5627,6 +5654,44 @@ Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride 
 newly caught form (a subpath, a relative path, `react-dom/client`, `react/jsx-runtime`). Rider option: a PR touching
 `shared/ui-build/` that opens before P1.25d is claimed carries it, with one line in its body, and P1.25d is then
 recorded as built. Defence in depth beside P1.25w's row, so their order does not matter.
+
+---
+
+### P1.25r — Close the jsx-free test's regression
+Tags: —            Depends on: P1.25d (merged, #512)
+As built: merged by Alex at 2026-10-07T23:07:29Z as `5681a4f` (#520).
+Slice 1, product class (`shared/ui-build/jsx-free.test.ts`, plus the two nits below); book edit
+2026-10-07-p125w-p125d-ui-build-follow-ups (P1.25r, text final 23:00Z), from architecture's N4 amendment in
+2026-10-07-p125h-follow-ups. Owner: the third thread, in its next slot, ahead of P1.25l. A tightening, cleared by the
+coordinator.
+
+Parse each scanned file with oxc through vite's `parseSync`, never with regexes (typescript 7.0.2 has no in-process
+parser; vite is pinned exactly and `scripts/budgets/count-glue-lines.ts:9` and `:47` already parse this way, so no
+dependency is added). The language comes from the file extension (`ts`, `tsx`, `mts`, `cts`); a parse error fails the
+test for that file and never counts as "no imports found".
+1. **Floor:** any string literal or no-substitution template literal whose value is exactly `@unset/shared-ui`, or that
+   value followed by `/`, fails wherever it appears (the parser ignores comments and JSX text). The one exception is
+   main's: a whole `import type { … } from "@unset/shared-ui"` with exactly the index specifier. Refused as on main:
+   `export type … from`, a type-only import from a subpath or a relative path into shared/ui, and the inline
+   `import { type X }`.
+2. **Loading primitives** are refused in ui-build sources: `require`, `createRequire`, `module.require`, and `import()`
+   with a non-literal argument. A runner that needs one states it under "What I am unsure about" and it is ruled on,
+   never exempted in code.
+3. **Relative specifiers** are resolved, and realpathed when the target exists; the target must stay inside
+   `shared/ui-build/`. A target under `node_modules/` or `shared/ui/` fails, and so does one that does not exist.
+4. **The react/jsx-runtime and JSX checks** keep their intent, now on the parsed tree.
+
+Nits that ride along: wrap `docs/ai/notes/area/ui-build.md:32` (129 characters) to the note's 120; make the comment at
+`jsx-free.test.ts:94` say react-markdown is "named like react", not "named like the kit".
+
+Tests: red fixtures `createRequire(...)("@unset/shared-ui")`, `require()` in a `.cts` file, a specifier in a const then
+`import(n)`, a stray quote in an earlier comment hiding a following import, a relative path through `node_modules`,
+`import()` of a variable, `` `@unset/shared-ui` `` as a template literal, `export type { X } from "@unset/shared-ui"`,
+`import type { X } from "@unset/shared-ui/sub"`, and a file that does not parse; green fixtures
+`import type { X } from "@unset/shared-ui"`, a comment containing `'` before a legitimate relative import, the string
+`"@unset/shared-uix"` (the floor matches the exact name or a path under it, not any prefix), and a comment holding
+`@unset/shared-ui` and a stray quote that yields no Literal (the parser proof). Done when `npm run check` is green,
+every red fixture fails, every green one passes, and the real `shared/ui-build` sources still pass.
 
 ---
 
@@ -7809,10 +7874,10 @@ dev-seed:
 ### P1.29r — Close the final-stage package rule's regression
 Tags: [SEC]            Depends on: P1.29x (merged, #507)
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p129r-final-stage-rule-regression (final
-22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z). A tightening;
-the coordinator clears it, no word from Alex. Owner: Phase 1, the next Phase 1 slot. It goes before P1.29d, which gains
-it as a dependency. It is separate from P1.28y: if both are built together they may share a PR, but P1.29r does not wait
-for it.
+22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z), with amendment 1
+(23:05Z) from architecture's 22:57Z note under amendment 5. A tightening; the coordinator clears it, no word from Alex.
+Owner: Phase 1, the next Phase 1 slot. It goes before P1.29d, which gains it as a dependency. It is separate from
+P1.28y: if both are built together they may share a PR, but P1.29r does not wait for it.
 
 **Why:** after #507, four node-kind final-stage RUNs that main refused before now pass: `node -e` with `execSync`
 running `apt-get install`; `perl -e` running `system`; `node -e` with `execFileSync`; and `apt-get -c remove install -y
@@ -7822,20 +7887,29 @@ rule must only ever tighten.
 **What:** three layers, each applied to final stages and to the named stages a final stage builds on.
 1. **Floor.** Main's old word check returns, on joined instructions in shell and exec form: any final-stage RUN that
    contains `apk`, `apt`, `apt-get`, `aptitude`, `dpkg`, `rpm`, `dnf`, `microdnf` or `yum` as a word anywhere fails. The
-   only exception is a match that is the first word of a parsed command which passes layer 3.
+   floor keeps main's `\b` semantics: a hyphen ends a word, so `apk-tools`, `apk-static` and `apt-get-foo` all match. A
+   match is exempt only by position: (a) it is the first word of a parsed command that passes layer 3, or (b) it is an
+   argument after that same command's removal verb and matches the package-name pattern (`apk del … apk-tools`). Every
+   other match fails. `rm` of a package manager's files fails the floor, so #507's old green
+   `dpkg -r x && rm -rf /usr/bin/dpkg` is now red. If a current final stage does this, the PR states it under "What I am
+   unsure about" with file and line, and the removal uses the package manager's own verb.
 2. **A command allowlist.** Every simple command's first word (its basename) must be in an exact set,
    `FINAL_STAGE_COMMANDS`: exactly the commands today's final stages use (expected: roughly rm, mkdir, chown, chmod, ln,
    setcap, plus the package managers under layer 3), each listed in the PR body with its file and line. Every shell,
    interpreter (node, perl, python, ruby, php, lua, awk) and launcher fails. Adding a command later is a product PR that
-   states it under "What I am unsure about".
+   states it under "What I am unsure about". Subshells and parentheses fail rather than being split. `true` and `echo`
+   fail unless a current final stage uses them, in which case they are listed with file and line.
 3. **Removal options from an allowlist.** Only these value-less flags may come before the verb: apk `--no-network`,
    `--purge`, `--no-cache`, `-q`; apt-get and apt `-y`, `-q`, `--purge`, `--auto-remove`, `--no-install-recommends`;
    dpkg none. After the verb, arguments must be package names matching `^[a-z0-9][a-z0-9+._-]*$`, or the same allowed
    flags.
 
-Fixtures: red, the four inputs above; `ksh -c 'apk add x'`; `node -e "require('child_process').execSync('ap'+'t-get
-install x')"`, which only layer 2 catches; `apt-get -o Foo=remove install x`; a package-manager name in an exec-form
-argument. Green: `apk del --no-network curl libcap apk-tools` (the edge after P1.28o) and `apt-get purge -y x`.
+Fixtures: red, the four inputs above; `ksh -c 'apk add x'`;
+`node -e "require('child_process').execSync('ap'+'t-get install x')"`, which only layer 2 catches;
+`apt-get -o Foo=remove install x`; a package-manager name in an exec-form argument; and, from amendment 1,
+`apk-static add x` and `/sbin/apk-static add x` (both fail on the floor and on layer 2),
+`dpkg -r x && rm -rf /usr/bin/dpkg` (floor), and a subshell, `(apk del x)` (layer 2). Green:
+`apk del --no-network curl libcap apk-tools` (the edge after P1.28o) and `apt-get purge -y x`.
 
 Done when `npm run check` is green with every red fixture failing for the stated layer and the green ones passing, and
 the real Dockerfiles on main still pass.
