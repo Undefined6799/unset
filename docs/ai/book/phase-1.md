@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
-  P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -173,7 +173,8 @@ flowchart LR
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
-  P1_30["P1.30 deploy preflight"]
+  P1_30["P1.30 deploy preflight core"]
+  P1_30s["P1.30s preflight C13–C24"]
   P1_31["P1.31 lexicons package"]
   P1_32["P1.32 permanent choices STOP"]
   P1_33["P1.33 server baseline ALEX"]
@@ -225,6 +226,8 @@ flowchart LR
   P1_28 --> P1_33
   P1_32 --> P1_33
   P1_30 --> P1_34
+  P1_30 --> P1_30s
+  P1_30s --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_34
@@ -6174,6 +6177,9 @@ dev-seed:
   `pds` service env in `compose.dev.yaml` has `PDS_RATE_LIMITS_ENABLED` present and exactly `false`, and
   `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent. P1.30 C7 still checks the deployed env
   at preflight; nothing deploys before both P1.28 and P1.29 are merged.
+- `pds_device_row_has_no_client_ip` (integration, dev stack; moved from P1.30, book edit 2026-10-07-p130-split): sign
+  in through the edge from a test client, then read the PDS `device` table's `ipAddress` → it equals the edge's
+  internal fixed IP, never the client's. P1.29 is the first step that runs the stack with the edge in front of the PDS.
 - `seed_refuses_non_dev`: ENV=prod → exit 2.
 - `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
 - `seed_never_prints_password`: run against a stub PDS; stdout and stderr contain no generated password.
@@ -6190,23 +6196,37 @@ dev-seed:
 
 ---
 
-### P1.30 — Deploy preflight
+### P1.30 — Deploy preflight core, C1–C12
 
 The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
 signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
+Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, `SecretMap`,
+the compose parser, the check runner, checks C1–C12 and the debug-logging runbook (C12's failure points to it).
+P1.30s, below, builds C13–C24. This section keeps the full design of all 24 checks; each part's tests are listed
+under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
+
 **Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
-**Where:** `scripts/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`;
-`docs/human/runbooks/pds-debug-logging.md`; tests.
+**Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
+guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
+`docs/human/runbooks/pds-debug-logging.md`; tests. The PR carries no check-path files. `/deployment/preflight/` is a
+candidate for the trusted base later, as a tightening in its own CODEOWNERS PR; unbooked.
 
-**Size:** ~470 source lines, ~470 test lines.
+**Size:** ~470 source lines and ~470 test lines across P1.30 and P1.30s. Test lines do not count toward the 400
+budget; if P1.30's source lines pass it, the PR body says why.
 
 **Goal:** Before any `compose up` on a server, one command checks the stack against every rule that, if broken,
 would leak data or cannot be fixed later, and refuses to proceed on any failure.
 
 **Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
 files; the network table (P1.29).
+- `images.lock.json` and `cosign.pub` arrive with P1.27s, the network table with P1.29 and the retirement report with
+  P1.33a. Until then the checks that read them FAIL (below); the tests use fixtures for every input, so both parts
+  are green on main without those steps.
+- C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
+  `node scripts/ci/verify-images.ts <lock>` by a fixed path and fixed arguments, with no shell and no config key. The
+  preflight never imports `scripts/` (product code never imports tooling, `scripts/lint/.dependency-cruiser.cjs`).
 
 **Outputs:**
 - `preflight --env dev|prod --compose <file>... → exit 0 (all pass) | 1 (a check failed) | 2 (preflight could not
@@ -6217,8 +6237,25 @@ files; the network table (P1.29).
 - Compose is parsed from YAML by the script itself with interpolation resolved from the env files and the
   SecretMap kept apart — **never** `docker compose config`, which prints interpolated secrets (it leaked in the
   prototype).
+- The parser is `yaml` 2.9.1, already a direct, exact-pinned root devDependency (P0.09b), so the lockfile does not
+  change. If the preflight ever runs from an `npm ci --omit=dev` install, moving it to `dependencies` is a one-line
+  change in the same PR; by default it runs from a full CI checkout before deploy. It parses with
+  `parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: true, merge: false, maxAliasCount: 0, strict: true })`
+  and then **refuses**, failing closed with the reason and the line:
+  - more than one document;
+  - any anchor, alias or `<<` merge key;
+  - any explicit tag;
+  - duplicate keys;
+  - top-level `include` and a service `extends`;
+  - `${...}` interpolation in a security-relevant field: `image`, `privileged`, `cap_add`, `security_opt`, `user`,
+    `network_mode`, `pid`, `ipc`, `ports`, `volumes`, `devices`, `read_only`, `environment` keys, `env_file`.
 
-Checks:
+  Everything outside that subset is refused rather than interpreted. JSON compose files are refused: the compose
+  files are reviewed security configuration whose comments carry the reasons rules cite. The risk being managed is
+  parser differential (the preflight reading a file one way and Compose another), so a CI-only test compares the
+  preflight's view with Compose's own reading.
+
+Checks (C1–C12 in P1.30, C13–C24 in P1.30s):
 | Id | Check |
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
@@ -6250,9 +6287,10 @@ Checks:
 ```text
 1. Parse args; unknown flag → exit 2.
 2. Load env files and secrets into SecretMap; unreadable → exit 2 naming the file (not its content).
-3. Parse compose YAML; parse error → exit 2.
+3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
 4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error"
-   (fail closed). Network checks (C3, C4) timeout 30 s each → FAIL.
+   (fail closed). Network checks (C3, C4) timeout 30 s each → FAIL. An input file a check reads that is absent or
+   unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
 5. Any FAIL → exit 1. All PASS → exit 0.
 ```
 
@@ -6263,6 +6301,10 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 
 **Edge cases and failures:**
 - No network for signature verification → C3/C4 FAIL (never pass on unknown).
+- An input a later step brings (lock, `cosign.pub`, network table, retirement report) is missing → that check FAILs,
+  `input missing: <path>`, exit 1. Exit 2 stays reserved for what the algorithm names (bad arguments, unreadable env
+  or secret files, a compose parse error). The only "n/a" passes are C21 on other hostnames, C22 before Phase 4,
+  C23 outside prod and C24 on `.localhost`.
 - An env value interpolated from a secret → the value never leaves SecretMap; the reason names the variable only.
 - `PDS_RECOVERY_DID_KEY` missing on an existing PDS → FAIL; it cannot be retrofitted into existing DID docs (vault
   note `pds-key-custody-and-disaster-recovery`), so the message says so.
@@ -6281,31 +6323,57 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
   - I The preflight prints secrets → SecretMap redaction; never `docker compose config`
     (`preflight_never_prints_secrets`, `secret_map_redacts`, `preflight_does_not_call_docker_compose_config`).
   - S Tokens and envelopes judged against a drifting host clock → C24 (`c24_clock_unsynchronised_fails`).
-  - E A check skipped or erroring is read as a pass → no skip flag; a throwing check fails (`preflight_no_skip_flag`,
-    `preflight_check_throws_fails_closed`).
+  - E A check skipped or erroring is read as a pass → no skip flag; a throwing check fails; a missing input fails
+    (`preflight_no_skip_flag`, `preflight_check_throws_fails_closed`, `missing_input_fails_check_not_run`).
+  - T The preflight approves a file Compose reads differently → strict YAML subset, refusals, and a CI comparison
+    with `docker compose config` (`preflight_refuses_*`, `preflight_matches_compose_config`).
 
 **Done when (tests):**
-- One failing fixture per check C1–C24 → exit 1 with that id; the all-good fixture → exit 0. Named ones:
+- The all-good fixture → exit 0. One failing fixture per check C1–C12 → exit 1 with that id. Named ones:
   `c7_pds_rate_limits_enabled_fails`, `c7_pds_rate_limits_unset_fails`, `c8_any_bypass_var_fails` (`_KEY`, the edge's
-  IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`, `c13_lexicon_authority_did_fails`, `c15_handle_domain_0x40_me_fails`,
-  `c16_confirmation_link_required`, `c17_extra_service_on_pds_network_fails`, `c18_missing_edge_ratelimit_fails`,
-  `c18_forwarded_header_passed_fails`, `c19_moderation_mail_missing_fails`, `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
-  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
-  `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
-  `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
+  IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`.
 - `preflight_never_prints_secrets`: fixture secrets with a canary string → canary absent from all output.
 - `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
 - `preflight_no_skip_flag`: `--skip C3` → exit 2.
 - `preflight_check_throws_fails_closed`.
 - `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
-- `pds_device_row_has_no_client_ip` (integration, dev stack): sign in through the edge from a test client, then
-  read the PDS `device` table's `ipAddress` → it equals the edge's internal fixed IP, never the client's.
+- `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
+- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
+  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
+  `preflight_refuses_interpolation_in_security_fields`: each → exit 2 naming the feature and line.
+- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
+  `docker compose -f <file> config --format json --no-interpolate` agrees with the preflight's normalised view on every
+  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+- `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
 
 **Reuse** (all provisional — for reuse review):
 - Vault notes `pin-image-index-digests`, `pds-key-custody-and-disaster-recovery` → LESSON.
 - Prototype deploy scripts → LESSON at most (they used `docker compose config`).
 
-**Not in this step:** running the deploy (P5.03); backup checks (P5.04).
+**Not in this step:** checks C13–C24 (P1.30s); running the deploy (P5.03); backup checks (P5.04).
+
+---
+
+### P1.30s — Deploy preflight C13–C24
+
+Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 as designed in P1.30's table,
+in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
+
+**Tags:** [SEC] · **Depends on:** P1.30 · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/checks/*.ts` (C13–C24); fixtures; tests.
+
+**Done when (tests):**
+- One failing fixture per check C13–C24 → exit 1 with that id. Named ones: `c13_lexicon_authority_did_fails`,
+  `c15_handle_domain_0x40_me_fails`, `c16_confirmation_link_required`, `c17_extra_service_on_pds_network_fails`,
+  `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, `c19_moderation_mail_missing_fails`,
+  `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
+  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
+  `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
+  `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
+- The all-good fixture, extended to cover all 24 checks → exit 0.
+
+**Not in this step:** anything P1.30 builds.
 
 ---
 
@@ -7155,7 +7223,7 @@ sequenceDiagram
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.33, P1.33a, P0.12, P0.11, P1.29 · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.33, P1.33a, P0.12, P0.11, P1.29 · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `0x40.space`** hosts the lexicon authority account until

@@ -1839,7 +1839,7 @@ Not in this step: the profile editor (P2.21); privacy switch actions (P2.22); ex
 Diagram: none.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
-Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P2.01a, P2.01m            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
+Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P1.30s, P2.01a, P2.01m            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
 Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` dev stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation
@@ -3794,7 +3794,7 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.30s, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`
