@@ -39,6 +39,8 @@ hostCheck, trustedProxy, securityHeaders, methodCheck, contentTypeCheck, bodyLim
 - `errors.ts`: every error response by code and group. An interface may pass `errorPage` (P1.25k) for the page
   groups' body only: it gets the shown code, the group and, for `internal.error`, the kit's request id, never request
   data. On a throw, a non-string or a body over 256 KiB the kit uses its fixed page; the status and headers stay the kit's.
+  The fixed page shows the request id on `internal.error` (UUID shape only). The exported `errorResponse` takes no
+  page; only `fail()` renders pages, through `kitErrorResponse`, which the index does not export (P1.25b).
 
 **Watch out.** `shared/http` is trusted base (CODEOWNERS); its PRs carry only trusted files and their tests.
 

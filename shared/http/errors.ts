@@ -49,29 +49,45 @@ export function hookedPage(errorPage: ErrorPage, log: Pick<Logger, "logError">, 
   };
 }
 
-/** The fixed page with the code and a link home: the fallback when the interface has no error page or it fails. */
-function errorPage(code: ErrorCode): string {
+/** The kit's own request id shape (randomUUID). The fixed page does no escaping, so this check is its escape. */
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The fixed page with the code and a link home: the fallback when the interface has no error page or it fails. An
+ * `internal.error` page carries the request id, so support can match it to `http.request` (P1.25k addendum, point 1).
+ */
+function errorPage(code: ErrorCode, reqId: string | undefined): string {
   const message = code in ERROR_MESSAGES ? ERROR_MESSAGES[code as keyof typeof ERROR_MESSAGES] : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Error</title></head><body><h1>${message}</h1><p>${code}</p><p><a href="/">Home</a></p></body></html>`;
+  const id =
+    code === "internal.error" && reqId !== undefined && REQUEST_ID.test(reqId) ? `<p>Request id: ${reqId}</p>` : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Error</title></head><body><h1>${message}</h1><p>${code}</p>${id}<p><a href="/">Home</a></p></body></html>`;
+}
+
+/** The response for `code` in `group`, with the kit's fixed page: HTML for pages, JSON for the API, else empty. */
+export function errorResponse(code: ErrorCode, group: RouteGroup, headers: Record<string, string> = {}): Response {
+  return kitErrorResponse(code, group, headers);
 }
 
 /**
- * The response for `code` in `group`: HTML for pages, JSON for the API, an empty body for media and static. A page
- * group's body is `page(shown)` when that gives one, else the fixed page. A page 404 is `no-cache`: its body depends on
- * the group alone, so there is nothing per-user to keep (P1.25k record, point 2); every other error is `no-store`.
+ * errorResponse as the kit's fail() calls it, with the guarded error page (hookedPage) and the request id. shared/http's
+ * index does not export it, so every page renderer passes through hookedPage's try/catch and byte cap (P1.25k
+ * addendum, point 2). A page group's body is `page(shown)` when that gives one, else the fixed page. A page 404 is
+ * `no-cache`: its body depends on the group alone, so there is nothing per-user to keep (P1.25k record, point 2);
+ * every other error is `no-store`.
  */
-export function errorResponse(
+export function kitErrorResponse(
   code: ErrorCode,
   group: RouteGroup,
   headers: Record<string, string> = {},
   page?: (shown: ErrorCode, group: PageGroup) => string | undefined,
+  reqId?: string,
 ): Response {
   const shown: ErrorCode = ERROR_CODES[code].public ? code : "internal.error";
   const cache = shown === "http.not_found" && isPageGroup(group) ? "no-cache" : "no-store";
   const init = { status: ERROR_CODES[shown].status, headers: { "cache-control": cache, ...headers } };
   if (group === "api") return Response.json({ error: shown }, init);
   if (!isPageGroup(group)) return new Response(null, init);
-  return new Response(page?.(shown, group) ?? errorPage(shown), {
+  return new Response(page?.(shown, group) ?? errorPage(shown, reqId), {
     ...init,
     headers: { ...init.headers, "content-type": "text/html; charset=utf-8" },
   });

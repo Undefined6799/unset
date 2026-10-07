@@ -13,7 +13,7 @@ import type { ClientIp } from "./clientIp.ts";
 import { type HttpKitConfig, hostAllowed } from "./config.ts";
 import { headerSets } from "./csp/headers.ts";
 import { createCsrfGate } from "./csrf/gate.ts";
-import { type ErrorPage, errorResponse, groupForPath, hookedPage } from "./errors.ts";
+import { type ErrorPage, errorResponse, groupForPath, hookedPage, kitErrorResponse } from "./errors.ts";
 import { createHealth, type Readiness } from "./health.ts";
 import { BodyTooLarge, limitBody } from "./limits/bodyLimit.ts";
 import { hasDidEntry, type PolicyTable } from "./limits/policy.ts";
@@ -149,7 +149,7 @@ export function createServer(options: ServerOptions) {
   const errorGroup = (path: string) => options.errorGroup ?? groupForPath(path);
   /** The error response for `code`; `reqId` is passed where the code can be `internal.error`. */
   const fail = (code: ErrorCode, group: RouteGroup, headers?: Record<string, string>, reqId?: string) =>
-    errorResponse(code, group, headers, options.errorPage && hookedPage(options.errorPage, log, reqId));
+    kitErrorResponse(code, group, headers, options.errorPage && hookedPage(options.errorPage, log, reqId), reqId);
 
   /** Step 2: a missing host is 400, one not in HTTP_ALLOWED_HOSTS is 421. `/health` skips it (probes). */
   function hostProblem(request: Request, rawPath: string): ErrorCode | undefined {

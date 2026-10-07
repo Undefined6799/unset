@@ -3,7 +3,7 @@ import { AppError, type ErrorCode } from "@unset/shared-errors";
 import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
 import type { HttpKitConfig } from "./config.ts";
-import type { ErrorPage } from "./errors.ts";
+import { type ErrorPage, errorResponse, kitErrorResponse } from "./errors.ts";
 import { defineRoute, type RouteSpec } from "./routes.ts";
 import { createServer, type ServerOptions } from "./server.ts";
 
@@ -449,16 +449,16 @@ describe("trusted proxy", () => {
 
   test("handler_gets_client_ip", async () => {
     const { keys, request } = seen();
-    await request("/who", { peer: "10.0.0.2", headers: { "x-forwarded-for": "1.1.1.1, 9.9.9.9" } });
-    await request("/who", { peer: "203.0.113.7", headers: { "x-forwarded-for": "9.9.9.9" } });
-    await request("/who", { headers: { "x-forwarded-for": "9.9.9.9" } });
-    expect(keys).toEqual(["9.9.9.9", null, null]);
+    await request("/who", { peer: "10.0.0.2", headers: { "x-forwarded-for": "198.51.100.1, 192.0.2.9" } });
+    await request("/who", { peer: "203.0.113.7", headers: { "x-forwarded-for": "192.0.2.9" } });
+    await request("/who", { headers: { "x-forwarded-for": "192.0.2.9" } });
+    expect(keys).toEqual(["192.0.2.9", null, null]);
   });
 
   test("untrusted_peer_logged_once_per_minute", async () => {
     let clock = 0;
     const { request, records } = kit({ routes: [page({ method: "GET", path: "/who" })], now: () => clock });
-    const untrusted = () => request("/who", { peer: "203.0.113.7", headers: { "x-forwarded-for": "9.9.9.9" } });
+    const untrusted = () => request("/who", { peer: "203.0.113.7", headers: { "x-forwarded-for": "192.0.2.9" } });
     await untrusted();
     await untrusted();
     clock = 60_000;
@@ -466,13 +466,13 @@ describe("trusted proxy", () => {
     const lines = records().filter((r) => r.event === "proxy.untrusted_peer");
     expect(lines).toHaveLength(2);
     expect(JSON.stringify(records())).not.toContain("203.0.113.7");
-    expect(JSON.stringify(records())).not.toContain("9.9.9.9");
+    expect(JSON.stringify(records())).not.toContain("192.0.2.9");
   });
 
   test("health_reads_no_request_input", async () => {
     // /health answers status, service and commit only, whatever the request carries; it reads no client identity.
     const { request } = kit();
-    const forged = { "x-forwarded-for": "9.9.9.9", cookie: "s=1", authorization: "Bearer x" };
+    const forged = { "x-forwarded-for": "192.0.2.9", cookie: "s=1", authorization: "Bearer x" };
     const plain = await request("/health");
     const loud = await request("/health?who=1", { peer: "203.0.113.7", host: "evil.example", headers: forged });
     expect(await loud.json()).toEqual(await plain.json());
@@ -573,7 +573,7 @@ describe("limits", () => {
   test("rate_limit_429_with_retry_after", async () => {
     const login = page({ method: "GET", path: "/login", rateLimit: "login" });
     const { request } = kit({ routes: [login], policies: LIMITED });
-    const peer = { peer: "10.0.0.2", headers: { "x-forwarded-for": "9.9.9.9" } };
+    const peer = { peer: "10.0.0.2", headers: { "x-forwarded-for": "192.0.2.9" } };
     expect((await request("/login", peer)).status).toBe(200);
     expect((await request("/login", peer)).status).toBe(200);
     const denied = await request("/login", peer);
@@ -621,7 +621,7 @@ describe("limits", () => {
     const login = page({ method: "GET", path: "/login", rateLimit: "login" });
     const { request, lines } = kit({ routes: [login], policies: LIMITED });
     for (let i = 0; i < 5; i += 1)
-      await request("/login", { peer: "10.0.0.2", headers: { "x-forwarded-for": "9.9.9.9" } });
+      await request("/login", { peer: "10.0.0.2", headers: { "x-forwarded-for": "192.0.2.9" } });
     const text = lines.join("\n");
     expect(text).not.toMatch(/[0-9a-f]{64}/i);
     expect(text).not.toMatch(/[A-Za-z0-9+/_-]{43,}/);
@@ -793,6 +793,89 @@ describe("error page hook", () => {
     expect((await request("/api/x")).headers.get("cache-control")).toBe("no-store");
     expect((await request("/", { method: "PUT" })).headers.get("cache-control")).toBe("no-store");
     expect((await request("/boom")).headers.get("cache-control")).toBe("no-store");
+  });
+
+  test("error_page_hook_cap_counts_bytes", async () => {
+    const fixed = await (await kit({ routes }).request("/nothing")).text();
+    const wide = "é".repeat(128 * 1024 + 1); // under 256 Ki characters, over 256 KiB in UTF-8
+    expect(wide.length).toBeLessThan(256 * 1024);
+    const { request, records } = kit({ routes, errorPage: spy(() => wide).errorPage });
+    expect(await (await request("/nothing")).text()).toBe(fixed);
+    expect(records().filter((r) => r.event === "error")).toHaveLength(1);
+  });
+
+  test("not_found_no_cache_in_every_page_group", async () => {
+    for (const errorPage of [undefined, spy().errorPage]) {
+      const hook = errorPage ? { errorPage } : {};
+      const { request } = kit({ routes, ...hook });
+      const admin = kit({ routes, ...hook, errorGroup: "admin" });
+      const sent = [
+        await request("/nothing"),
+        await request("/@a"),
+        await request("/terms"),
+        await admin.request("/x"),
+      ];
+      for (const response of sent) {
+        expect(response.status).toBe(404);
+        expect(response.headers.get("cache-control")).toBe("no-cache");
+      }
+    }
+  });
+
+  test("payload_too_large_closes_connection", async () => {
+    const form = { "content-type": "application/x-www-form-urlencoded", "content-length": "70000" };
+    for (const errorPage of [undefined, spy().errorPage]) {
+      const { request } = kit({
+        routes: [page({ method: "POST", path: "/form" })],
+        ...(errorPage ? { errorPage } : {}),
+      });
+      const response = await request("/form", { method: "POST", headers: form });
+      expect(response.status).toBe(413);
+      expect(response.headers.get("connection")).toBe("close");
+    }
+  });
+
+  test("error_page_hook_promise_is_type_error", () => {
+    // @ts-expect-error: the hook is synchronous; a Promise-returning render is refused by type.
+    const asyncPage: ErrorPage = async (code: ErrorCode) => `<p>${code}</p>`;
+    expect(typeof asyncPage).toBe("function");
+  });
+
+  test("fixed_page_carries_request_id", async () => {
+    const { request, records } = kit({ routes });
+    const body = await (await request("/boom")).text();
+    const reqId = records().find((r) => r.event === "http.request")?.reqId;
+    expect(reqId).toMatch(UUID);
+    expect(body).toContain(`<p>Request id: ${reqId}</p>`);
+    for (const path of ["/nothing", "/limited"]) {
+      expect(await (await request(path)).text(), path).not.toContain("Request id");
+    }
+  });
+
+  test("fallback_page_carries_request_id", async () => {
+    const { request, records } = kit({
+      routes,
+      errorPage: () => {
+        throw new Error("render failed");
+      },
+    });
+    const body = await (await request("/boom")).text();
+    const reqId = records().find((r) => r.event === "http.request")?.reqId;
+    expect(reqId).toMatch(UUID);
+    expect(body).toContain(`<p>Request id: ${reqId}</p>`);
+  });
+
+  test("fixed_page_refuses_request_id_not_uuid_shaped", async () => {
+    const body = await kitErrorResponse("internal.error", "app", {}, undefined, "<script>x</script>").text();
+    expect(body).not.toContain("script");
+    expect(body).not.toContain("Request id");
+  });
+
+  test("error_response_public_signature_has_no_page", () => {
+    expect(errorResponse.length).toBe(2);
+    // @ts-expect-error: the exported errorResponse takes no page renderer; only the kit's fail() renders pages.
+    const response = errorResponse("http.not_found", "app", {}, () => "<p>unguarded</p>");
+    expect(response.status).toBe(404);
   });
 
   test("secured_fallback_never_calls_hook", async () => {
