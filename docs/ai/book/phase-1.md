@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b, P1.28h,
-  P1.29k, P1.29, P1.29a, P1.29s, P1.29t, P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29, P1.29a, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -260,7 +260,7 @@ flowchart LR
   P1_30q --> P1_30
   P1_30q --> P1_30p
   P1_30p --> P1_30
-  P1_29 -.-> P1_30
+  P1_30 -.-> P1_29
   P1_01 --> P1_31
   P1_32 -.-> P1_31
   P1_28 --> P1_33
@@ -2984,23 +2984,10 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      without `SET ROLE`, so the test does not prove the documented path; and `chain.test.ts:89-91` calls the
      superuser-only `session_replication_role = replica` edit an owner's attack (an owner would use `ALTER TABLE ...
      DISABLE TRIGGER`). Nothing in production changed; P1.15b fixes both.
-  4. **P1.15b** (feature, slice 1 beside P1.15s; depends on P1.15s, merged #434; book edits
-     2026-10-07-p115s-as-built-and-p115b and architecture's 2026-10-07-p115b-keep-set-role): verify the audit chain
-     through `SET ROLE`, in `tests/integration/audit/chain.test.ts` (and the hub note if needed); no trusted or check
-     path. Letter `b`: leftovers of P1.15 and P1.15s. Changes: (1) `verifyAsOwner` connects as a test-only login role
-     that is a `NOINHERIT` member of `audit_owner` (`WITH SET TRUE, INHERIT FALSE`, the shape migrator holds at
-     0003:65) and runs `SET ROLE audit_owner` before `verify`, as `audit.test.ts` does; `audit_owner` stays NOLOGIN
-     and no production login role is created; (2) the `tamper` comment says what it is, a superuser edit behind the
-     triggers; (3) new `tamper_as_owner_disable_trigger_detected`: as the owner, `ALTER TABLE ... DISABLE TRIGGER`,
-     edit a row, re-enable, and `verify full` reports it; (4) the body shows the booked red run (`verify` stubbed to
-     ok, every tamper test fails). Tests: `verifier_login_role_needs_set_role`, `verifier_without_set_role_is_denied`
-     (the same login role without `SET ROLE` is refused on the chain read, proving the NOINHERIT shape), the new
-     tamper test, and the existing tamper tests under the new role. Architecture refused the `IN ROLE` (inheriting)
-     form: under inheritance `current_user` stays the login role, so a green test there says nothing certain about
-     the `SET ROLE` path production uses, and a NOINHERIT member holds nothing until a visible `SET ROLE`. No word
-     from Alex: tests only, a tightening.
+  4. **P1.15b**: verify the audit chain through `SET ROLE`; its own section follows P1.15's.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-  None depends on P1.15s except P1.38 and P1.15b, so the tamper tests exist before Phase 1 closes.
+  Of these, only P1.38 depends on P1.15s, so the tamper tests exist before Phase 1 closes; P1.15b depends on P1.15s,
+  and nothing depends on P1.15b.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
   `infrastructure/audit/{index.ts,actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) +
   `rowHash.test.ts`; `tests/integration/audit/chain.test.ts`, the `tests/tsconfig.json` reference and
@@ -3177,6 +3164,43 @@ flowchart LR
   W["web / indexer / admin<br/>(asserted actor DID)"] -->|"EXECUTE audit.append"| C2
   AU["auditor"] -->|"SELECT chain only"| C2
 ```
+
+---
+
+### P1.15b — Verify the audit chain through SET ROLE
+Tags: [SEC]            Depends on: P1.15s (merged, #434)
+Slice 1 beside P1.15s, feature class: `tests/integration/audit/chain.test.ts` and, if needed, the hub note; no trusted
+or check path. Book edits 2026-10-07-p115s-as-built-and-p115b and architecture's 2026-10-07-p115b-keep-set-role.
+Letter `b`: leftovers of P1.15 and P1.15s (P1.15's taken letters are d, g, m, q, s and x). Owner: Phase 1; by the
+next-step rule it comes before P1.28u, and the two touch different files. Nothing depends on it. No word from Alex:
+tests only, a tightening.
+
+**Why:** `chain.test.ts:193` creates a test-only login role `IN ROLE audit_owner`. With default `INHERIT` it holds the
+owner's rights without `SET ROLE`, so the test does not prove the path `audit.test.ts` and the hub note describe.
+The body of #434 disclosed it under security review (TE-2); `audit_owner` stays NOLOGIN and the container is
+throwaway, so nothing in production changed. And `chain.test.ts:89-91` calls the superuser-only
+`session_replication_role = replica` edit an owner's attack; an owner would use `ALTER TABLE ... DISABLE TRIGGER`.
+
+**Changes:**
+1. `verifyAsOwner` connects as a test-only login role that is a `NOINHERIT` member of `audit_owner` (`WITH SET TRUE,
+   INHERIT FALSE`, the shape migrator holds at 0003:65) and runs `SET ROLE audit_owner` before `verify`, as
+   `audit.test.ts` does. A check proves the login role alone cannot read `event_body` before `SET ROLE`.
+2. The `tamper` comment says what it is: a superuser edit behind the triggers.
+3. New `tamper_as_owner_disable_trigger_detected`: as the owner (after `SET ROLE`), `ALTER TABLE ... DISABLE
+   TRIGGER`, edit a row, re-enable, and `verify full` reports it.
+4. The body shows the booked red run: `verify` stubbed to ok, and every tamper test fails.
+
+**Architecture's ruling (keep SET ROLE):** production will use `SET ROLE`: migrator is the only role holding
+`audit_owner` today, `WITH SET TRUE, INHERIT FALSE`, and the weekly owner script will follow the same pattern. Under
+inheritance `current_user` stays the login role; under `SET ROLE` it becomes `audit_owner`, so anything reading
+`current_user`, ownership, `pg_has_role` or default privileges can pass in one form and fail in the other. A
+NOINHERIT member holds nothing until a visible `SET ROLE` (least privilege), and test roles are the template a later
+production role is copied from. **TE-2 is not affected:** the role is test-only, `audit_owner` stays NOLOGIN, no
+production login role is created, and the weekly script's own role remains the later step it is today.
+
+Tests: `verifier_login_role_needs_set_role`, `verifier_without_set_role_is_denied` (the same login role without `SET
+ROLE` is refused on the chain read, proving the NOINHERIT shape), `tamper_as_owner_disable_trigger_detected`, and the
+existing tamper tests under the new role.
 
 ---
 
@@ -6312,7 +6336,8 @@ refer you to the atproto docs" and at 00:57:59Z "Seems like the pds is public to
 - On the PDS route the edge strips `X-Forwarded-For`, `X-Real-IP` and `Forwarded`, both inbound and as Caddy sets
   them by default, because the PDS trusts private-network peers (`pds_route_strips_forwarded_headers`).
 - `PDS_RATE_LIMITS_ENABLED=false` is set explicitly, with no bypass, in P1.29's `compose.dev.yaml` (its test
-  `pds_rate_limits_disabled_explicitly` lives in P1.29, book edit 2026-10-07-p128-rate-limit-test-to-p129).
+  `pds_rate_limits_disabled_explicitly` lives in P1.29a, book edits 2026-10-07-p128-rate-limit-test-to-p129 and
+  2026-10-07-p129-split).
 - caddy-ratelimit takes over with per-address zones by traffic class (sync, firehose connections, identity, account
   and auth strict, global), one test each.
 - Recorded gaps: per-account write limits keyed by DID (revisit before open sign-up) and concurrent firehose
@@ -6585,7 +6610,7 @@ runtime.
 
 ---
 
-### P1.28h — Caddyfile reader for edge checks
+### P1.28h — Add the Caddyfile reader for edge checks
 
 Booked from architecture's 2026-10-07-p130s-networks-and-caddyfile-reader (point 2) by book edit
 2026-10-07-p130s-split-and-p128h. `edge.test.ts` reads the Caddyfile by regular expressions over text
@@ -6632,7 +6657,7 @@ last part, which implies all five.
      `node_modules`, `shared/` and `infrastructure/postgres/`, never `apps/`, `interfaces/`, `domains/`, `scripts/`,
      `tests/` or `deployment/`. Uid 65532; npm, yarn, corepack and pnpm stripped; no OS packages; `ENTRYPOINT
      ["node", "infrastructure/postgres/migrate-cli.ts"]`; no EXPOSE or HEALTHCHECK (one-shot); read-only root in
-     compose; the migrator credentials only.
+     compose; the migrator credentials only. `mirror.yml` is unchanged: it already scans every mirror-list entry.
    - The `syncRolePasswords` wiring in `migrate-cli.ts`, after migrations, as the P1.12x binding requires.
    - `images.test.ts`: the web image's runtime tests become per-Dockerfile (`runtime_has_no_package_manager`,
      `runtime_stage_installs_no_os_packages`, the USER check, and the base and digest tests over every `dockerfiles`
@@ -6660,7 +6685,8 @@ last part, which implies all five.
    `docker.io/axllent/mailpit`, never a host or namespace); their lock and mirror entries with `stage: "runtime"`
    (a run-only image runs as shipped, so it takes the fail-on-HIGH gate; Phase 1's default of leaving them
    unscanned until P1.27s is refused) and the full age rule; Mailpit's `"devOnly": true`; the `pds` and `mailpit`
-   services, with the PDS env names checked against the pinned PDS release's own env source (cited in the body);
+   services, with the PDS env names checked against the pinned PDS release's own env source (cited in the body;
+   npm `@atproto/pds` latest was 0.5.37 when the split was recorded);
    their rows in `networks.dev.json`, with `compose_dev_networks_match_table` passing. Tests:
    `pds_rate_limits_disabled_explicitly` (moved here: it reads the `pds` service's env, which first exists in this
    part; still a static read, in the PR that writes the env line), `dev_only_image_never_in_prod_compose_or_from`,
@@ -6676,15 +6702,16 @@ last part, which implies all five.
    measures it, and it needs Alex's typed line.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
-2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29 gains
-`net_guard_resolve_pin_in_image`. The deployed image must hold the SSRF guarantee: run the net-guard resolve-and-pin
-tests once inside the built runtime image before the first deploy, and once per base bump. If P1.29 cannot run it, it
-moves to P1.30's preflight.
+2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries
+`net_guard_resolve_pin_in_image` (book edit 2026-10-07-p129-split). The deployed image must hold the SSRF guarantee:
+run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
+bump. If P1.29t cannot run it, it moves to the preflight.
 
 **Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
-**Where:** `deployment/compose.dev.yaml`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
-`scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests.
+**Where:** `deployment/images/migrate.Dockerfile` (P1.29k); `deployment/compose.dev.yaml`;
+`deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
+`scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests (each part carries its share, above).
 
 **Size:** ~230 lines of YAML, ~220 script lines, ~250 test lines.
 
@@ -6809,11 +6836,13 @@ dev-seed:
 - `pds_env_pinned`: every PDS variable listed above has the stated value or is absent as stated.
 - `pds_rate_limits_disabled_explicitly` (moved from P1.28, book edit 2026-10-07-p128-rate-limit-test-to-p129): the
   `pds` service env in `compose.dev.yaml` has `PDS_RATE_LIMITS_ENABLED` present and exactly `false`, and
-  `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent. P1.30 C7 still checks the deployed env
-  at preflight; nothing deploys before both P1.28 and P1.29 are merged.
+  `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent (P1.29a, where the `pds` service first
+  exists). P1.30 C7 still checks the deployed env at preflight; nothing deploys before P1.28 and every P1.29 part are
+  merged.
 - `pds_device_row_has_no_client_ip` (integration, dev stack; moved from P1.30, book edit 2026-10-07-p130-split): sign
   in through the edge from a test client, then read the PDS `device` table's `ipAddress` → it equals the edge's
-  internal fixed IP, never the client's. P1.29 is the first step that runs the stack with the edge in front of the PDS.
+  internal fixed IP, never the client's. P1.29t (book edit 2026-10-07-p129-split) is the first step that runs the
+  stack with the edge in front of the PDS.
 - `seed_refuses_non_dev`: ENV=prod → exit 2.
 - `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
 - `seed_never_prints_password`: run against a stub PDS; stdout and stderr contain no generated password.
@@ -6883,12 +6912,12 @@ No reopen.
 The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
 signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
-Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, the check
-runner, the injected verifier, checks C1–C12 and the debug-logging runbook (C12's failure points to it). P1.30p,
-above, builds the strict compose parser and `SecretMap` (book edit 2026-10-07-p130p-parser-split: P1.30 core measured
-777 changed source lines, and the parser carries the parser-differential threat, so it gets its own review). P1.30s,
-below, builds C13–C24. P1.30's body says why it is over 400 lines (one runner and twelve checks with shared types,
-measured at 554). This section keeps the full design of all 24 checks; each part's tests are listed
+Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, the check runner,
+the injected verifier, checks C1–C12 and the debug-logging runbook (C12's failure points to it). P1.30p, above, builds
+the strict compose parser and `SecretMap` (book edit 2026-10-07-p130p-parser-split: P1.30 core measured 777 changed
+source lines, and the parser carries the parser-differential threat, so it gets its own review). P1.30s, below, builds
+C13–C24 except C17 (P1.30t) and C18 (P1.30u). P1.30's body says why it is over 400 lines (one runner and twelve checks
+with shared types, measured at 554). This section keeps the full design of all 24 checks; each part's tests are listed
 under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
 
 **Tags:** [SEC] · **Depends on:** P1.27, P1.30q, P1.30p · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
@@ -6942,7 +6971,7 @@ files; the network table (P1.29).
   parser differential (the preflight reading a file one way and Compose another), so a CI-only test compares the
   preflight's view with Compose's own reading.
 
-Checks (C1–C12 in P1.30, C13–C24 in P1.30s):
+Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in P1.30u):
 | Id | Check |
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
@@ -6977,9 +7006,9 @@ Checks (C1–C12 in P1.30, C13–C24 in P1.30s):
    file (not its content); a missing or wrongly-moded secret file is a C9 failure, exit 1 "input missing" (secret
    files are only stat-checked, never loaded; as built, #435).
 3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
-4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error"
-   (fail closed). Network checks (C3, C4) timeout 30 s each → FAIL. An input file a check reads that is absent or
-   unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
+4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error" (fail closed).
+   Network checks (C3, C4, C5) timeout 30 s each → FAIL (C5's as built, #435). An input file a check reads that is
+   absent or unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
 5. Any FAIL → exit 1. All PASS → exit 0.
 ```
 
@@ -7043,7 +7072,8 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
     printed. It runs over every `compose*.yaml` in the
     repo found by glob plus the synthetic fixture. Until the first real compose file exists it runs on the fixture
     alone and says so in its output rather than passing silently.
-- `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
+- `pds_device_row_has_no_client_ip` moved to P1.29, and with its split to P1.29t (book edits 2026-10-07-p130-split
+  and 2026-10-07-p129-split).
 
 **Reuse** (all provisional — for reuse review):
 - Vault notes `pin-image-index-digests`, `pds-key-custody-and-disaster-recovery` → LESSON.
@@ -7060,11 +7090,11 @@ security-review path `docs/human/runbooks/pds-debug-logging.md` (the rule alread
 for a missing secret file is right, and step 2 above is narrowed to match. C5 gained the 30 s network timeout, a
 tightening. The C8 test addresses ride on P1.30s.
 
-**Not in this step:** checks C13–C24 (P1.30s); running the deploy (P5.03); backup checks (P5.04).
+**Not in this step:** checks C13–C24 (P1.30s, P1.30t, P1.30u); running the deploy (P5.03); backup checks (P5.04).
 
 ---
 
-### P1.30s — Deploy preflight C13–C24 except C17 and C18
+### P1.30s — Add the preflight's remaining ten checks
 
 Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 as designed in P1.30's table,
 in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
@@ -7072,14 +7102,15 @@ in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; pr
 **Split three ways** (book edit 2026-10-07-p130s-split-and-p128h, with architecture's
 2026-10-07-p130s-networks-and-caddyfile-reader behind it, which wins where they differ): P1.30s builds the ten
 checks with no new input contract; **P1.30t** builds C17 and **P1.30u** builds C18, below. All three are [SEC],
-product class, slice 1, owned by Phase 2, in the order s, t, u. Steps that depended on P1.30s (P2.13a, P1.34, P2.26a,
+product class, slice 1, owned by Phase 2, in the order s, t, u. No word from Alex: nothing is loosened. No
+part stacks on an unmerged PR. Steps that depended on P1.30s (P2.13a, P1.34, P2.26a,
 P5.03) depend on P1.30s, P1.30t and P1.30u.
 
 **C21's retirement report** (Phase 2's default, accepted as book text): `docs/human/retirement/retirement-check.json`
 holds `{ "retirement_part_a_complete": true }` and is read with the strict YAML parser. When the file is absent, C21
 fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The retirement step writes the file.
 
-**Tags:** [SEC] · **Depends on:** P1.30 · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/*.ts` (C13–C24 except C17 and C18); fixtures; tests.
 
@@ -7102,7 +7133,7 @@ stand-in, and the test's behaviour is unchanged.
 
 ---
 
-### P1.30t — Deploy preflight C17: compose networks against the table
+### P1.30t — Check compose networks against a table
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from architecture's
 2026-10-07-p130s-networks-and-caddyfile-reader, point 1). The strict subset governs which YAML constructs are
@@ -7134,7 +7165,7 @@ all-good fixture still exits 0.
 
 ---
 
-### P1.30u — Deploy preflight C18: edge rate-limit zones through the Caddyfile reader
+### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h). C18 imports `deployment/edge/caddyfile.ts` (P1.28h);
 there is no second reader in `deployment/preflight/` (architecture refused one: the same parser differential it

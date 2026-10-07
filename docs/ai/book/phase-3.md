@@ -95,7 +95,7 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P1.18 | `guardedRequest(policy, {url, method, headers?, body?, timeoutMs, maxBytes, accept?}) → {status, headers, body}` and `guardedFetch(policy, defaults)` (on `undici.request`); policies `fixed` and one `public` policy (`atproto`) whose internal-host exception is our own PDS (P1.18a); errors `NetGuardError.code` `egress.*`; P1.18b proxy mode and the `egress-public` proxy for Tap |
 | P1.22 | locale and theme resolution; on public pages: theme by `prefers-color-scheme`, locale by `Accept-Language` with a URL override (plan §5.4 "Caching") |
 | P1.28 | Caddy config with log filter; admin-auth XRPC denied |
-| P1.29 | `compose.dev.yaml` with Postgres, dev PDS (`.0x40.space`), seeded accounts |
+| P1.29t | the dev stack, tested (P1.29k to P1.29t): `compose.dev.yaml` with Postgres, dev PDS (`.0x40.space`), seeded accounts |
 | P1.30 | deploy preflight (this phase adds checks) |
 | P1.31 | `lexicons.validate(nsid, value) → ok \| ValidationError`; lexicon `key` types; NSID constants |
 | P1.33 | Tailscale with Tailnet Lock; `admin` reachable on the host's tailnet address only |

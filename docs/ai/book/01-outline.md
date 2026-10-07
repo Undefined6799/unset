@@ -128,7 +128,7 @@ flowchart TD
 Depth: **build-ready**. 133 steps: 112 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
-interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
+interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
 non-obvious step is here (seal for the OAuth tokens, audit for P2.12's age-gate row, limits for login, the UI shell, the edge in front of the PDS, the set JSON for the scope strings, the onboarding and email gates)
 are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 
@@ -231,17 +231,17 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
-| P1.29k | Migrate image (separate Dockerfile), syncRolePasswords wiring, postgres in the lock | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.11p, P1.28, P1.30t | `phase-1.md` |
-| P1.29a | PDS and Mailpit vendor images and services in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a | `phase-1.md` |
-| P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
 | P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
+| P1.29k | Migrate image (separate Dockerfile), syncRolePasswords wiring, postgres in the lock | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.11p, P1.28, P1.30t | `phase-1.md` |
+| P1.29a | PDS and Mailpit vendor images and services in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a | `phase-1.md` |
+| P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
