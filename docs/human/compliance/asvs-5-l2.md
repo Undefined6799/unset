@@ -45,7 +45,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V1.1.2 | The application performs output encoding and escaping either as a final step before being … | open |  | — |
 | V1.2.1 | Output encoding for an HTTP response, HTML document, or XML document is relevant for the … | covered | `test:apps/web/render.test.tsx#island_props_xss_escaped`, `test:apps/web/render.test.tsx#document_no_inline_script_or_style`, `guard:inner-html` | P2.20 |
 | V1.2.2 | When dynamically building URLs, untrusted data is encoded according to its context (e.g. … | partial | `test:shared/http/returnPath.fuzz.test.ts#fuzz_same_origin`, `step:P2.20` | P2.20 |
-| V1.2.3 | Output encoding or escaping is used when dynamically building JavaScript content … | covered | `test:shared/ui/islands/props.test.ts#escapes_html_breakers`, `test:shared/ui/islands/props.fuzz.test.ts#fuzz_no_breakers` | — |
+| V1.2.3 | Output encoding or escaping is used when dynamically building JavaScript content … | covered | `test:shared/ui/islands/props.test.ts#escapes_html_breakers`, `test:shared/ui/islands/props.fuzz.test.ts#fuzz_no_breakers`, `test:shared/ui/islands/props.fuzz.test.ts#props_breaker_examples_fail` | — |
 | V1.2.4 | Data selection or database queries (e.g., SQL, HQL, NoSQL, Cypher) use parameterized … | open |  | — |
 | V1.2.5 | The application protects against OS command injection and that operating system calls use … | open |  | — |
 | V1.2.6 | The application protects against LDAP injection vulnerabilities, or that specific … | n/a | n/a: no LDAP anywhere in the system | — |
