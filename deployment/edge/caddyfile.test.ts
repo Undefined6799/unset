@@ -1,10 +1,10 @@
 // P1.28h: the Caddyfile reader refuses what it does not model and expands same-file snippets the way Caddy does
 // (architecture record 2026-10-07-p130s-networks-and-caddyfile-reader, point 2), and agrees with `caddy adapt` on the
 // shipped config (caddyfile_reader_matches_caddy_adapt, below).
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
-import { buildEdgeImage, docker, EDGE, PDS_HOST } from "../../tests/integration/deployment/edge/edge-container.ts";
+import { afterAll, describe, expect, test } from "vitest";
 import { type Directive, readCaddyfile } from "./caddyfile.ts";
 
 const ENV = { PDS_HOST: "pds.unset.test", PDS_UPSTREAM: "upstream:3000" };
@@ -172,14 +172,68 @@ describe("caddyfile reader", () => {
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
 // by the built edge image (`caddy adapt`, Caddy v2.11.7). CI only, like the edge integration tests that build the same
-// image; `npm test` locally skips it unless CI is set.
+// image; `npm test` locally skips it unless CI is set, and in CI a missing Docker fails it. The test builds and runs
+// the image itself with node built-ins (architecture amendment 3 to 2026-10-07-p130s-networks-and-caddyfile-reader):
+// a trusted test owns its inputs, and first proves the image holds the repository's config byte for byte.
+const EDGE = import.meta.dirname;
+const PDS_HOST = "pds.unset.test";
+const built: string[] = [];
+
+function docker(args: readonly string[]): { code: number; out: string; err: string } {
+  const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
+}
+
+/** Builds deployment/edge/Dockerfile with deployment/edge as the context; the image id. */
+function buildEdgeImage(): string {
+  const result = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE]);
+  if (result.code !== 0) throw new Error(`edge image build failed: ${result.err.slice(-2000)}`);
+  built.push(result.out.trim());
+  return result.out.trim();
+}
+
+/** The config files the image holds under /etc/caddy, by their repository path under deployment/edge. */
+function imageConfig(image: string): Record<string, string> {
+  const listed = docker(["run", "--rm", "--entrypoint", "ls", image, "/etc/caddy/snippets"]);
+  if (listed.code !== 0) throw new Error(`listing the image's snippets failed: ${listed.err.slice(-2000)}`);
+  const files = [
+    "Caddyfile",
+    "sites/pds.caddy",
+    ...listed.out
+      .split("\n")
+      .filter((f) => f !== "")
+      .map((f) => `snippets/${f}`),
+  ];
+  return Object.fromEntries(
+    files.map((file) => {
+      const read = docker(["run", "--rm", "--entrypoint", "cat", image, `/etc/caddy/${file}`]);
+      if (read.code !== 0) throw new Error(`reading /etc/caddy/${file} failed: ${read.err.slice(-2000)}`);
+      return [file, read.out];
+    }),
+  );
+}
+
 describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
+  afterAll(() => {
+    for (const image of built) docker(["rmi", "-f", image]);
+  });
 
   test.runIf(process.env.CI)(
     "caddyfile_reader_matches_caddy_adapt",
     () => {
-      const theirs = adapt(buildEdgeImage(), env);
+      const image = buildEdgeImage();
+      const repository = Object.fromEntries(
+        [
+          "Caddyfile",
+          "sites/pds.caddy",
+          ...readdirSync(join(EDGE, "snippets"))
+            .sort()
+            .map((f) => `snippets/${f}`),
+        ].map((file) => [file, readFileSync(join(EDGE, file), "utf8")]),
+      );
+      expect(imageConfig(image)).toStrictEqual(repository);
+      const theirs = adapt(image, env);
       const ours = readCaddyfile(shippedConfig(), env);
       expect(ours.sites.flatMap((site) => site.addresses.map(hostOf)).sort()).toEqual(adaptedHosts(theirs).sort());
       const route = ours.sites
