@@ -2415,8 +2415,8 @@ Diagram: none.
 
 ### P2.16b — PDQ hasher (one module for images and video frames)
 
-Alpine images (Alex 2026-10-07 00:09Z; book edit 2026-10-06-p127-base-by-digest-book-text): if the hasher is native,
-it must ship a musl build or build from source in the image's `build` stage; checked when this step resumes.
+Debian slim images (Alex 2026-10-07 01:29Z; book edit 2026-10-07-p127d-node-debian-slim): the hasher builds against
+glibc; the earlier musl build note is dropped.
 
 One step (SE-6 recount, 2026-10-05 01:43Z): `scripts/fetch-pdq-vectors.ts` fetches reference data and decides no pass
 or fail, so this stays one step.
