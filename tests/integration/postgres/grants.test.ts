@@ -337,14 +337,14 @@ describe("grants", () => {
   });
 
   test("audit_routines_execute_exact", () => {
-    // Architecture record 2026-10-06-p115m-tailnet-pii-deferred (i): after 0008 no role but the owner may run an audit
-    // function; 0010 (P1.15g) grants audit.append to its writers.
+    // Architecture record 2026-10-06-p115m-tailnet-pii-deferred (i): 0008 left every audit function to its owner; 0010
+    // (P1.15g) grants audit.append to its writers and nothing else.
     const query =
       "SELECT string_agg(p.proname || ' ' || a.grantee::regrole::text, ',' " +
       "ORDER BY p.proname, a.grantee::regrole::text) FROM pg_proc p, " +
       "aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE p.pronamespace = 'audit'::regnamespace " +
       "AND a.privilege_type = 'EXECUTE' AND a.grantee <> p.proowner";
-    expect(postgres.sql("unset", query)).toBe("");
+    expect(postgres.sql("unset", query)).toBe("append admin,append indexer,append web");
   });
 
   test("api_cannot_read_app", async () => {
