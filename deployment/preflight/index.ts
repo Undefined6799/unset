@@ -13,16 +13,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { CHECKS } from "./checks/index.ts";
-import type { Check, Env, Inputs, ManifestKind, Outcome, Verifier } from "./checks/types.ts";
+import type { Check, Env, Inputs, ManifestKind, Outcome, Run, Verifier } from "./checks/types.ts";
+
+export type { Run };
+
 import { type Compose, type EnvValue, ParseError, parseCompose, parseEnvFile, type Service } from "./compose-parse.ts";
 import { SecretMap } from "./secret-map.ts";
 
-/** A process run with fixed arguments and no shell; the only way the preflight reaches the network. */
-export type Run = (
-  file: string,
-  args: string[],
-  signal: AbortSignal,
-) => Promise<{ code: number; stdout: string; stderr: string }>;
 export type Deps = {
   /** The repository root: the lock, the cosign key and the verify-images CLI are read below it. */
   root: string;
@@ -36,6 +33,7 @@ export type Deps = {
 export type Result = { code: 0 | 1 | 2; lines: string[] };
 
 const NETWORK_TIMEOUT_MS = 30_000;
+const RETIREMENT_REPORT = "docs/human/retirement/retirement-check.json";
 const INDEX_REF = /^[a-z0-9./-]+(?::[\w.-]+)?@sha256:[0-9a-f]{64}$/;
 
 const readTextOrNull = (path: string): string | null => {
@@ -130,6 +128,8 @@ function loadInputs(argv: string[], deps: Deps): Inputs {
     cosignKeyPath: join(deps.root, "deployment/cosign.pub"),
     verify: verifier(deps),
     manifestKind: manifestKind(deps),
+    run: deps.run,
+    retirementReportPath: join(deps.root, RETIREMENT_REPORT),
     readText,
     stat: deps.stat ?? statOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,
@@ -195,7 +195,13 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
 const run: Run = (file, args, signal) =>
   new Promise((done) => {
     execFile(file, args, { signal, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
-      done({ code: error === null ? 0 : 1, stdout, stderr: error !== null && stderr === "" ? "run failed" : stderr });
+      const missing = (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
+      done({
+        code: error === null ? 0 : 1,
+        stdout,
+        stderr: error !== null && stderr === "" ? "run failed" : stderr,
+        ...(missing ? { missing } : {}),
+      });
     });
   });
 

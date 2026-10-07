@@ -10,6 +10,12 @@ export type VerifyResult = { ok: true } | { ok: false; failures: string[] };
 export type Verifier = (lockPath: string, signal: AbortSignal) => Promise<VerifyResult>;
 /** The media type of a reference's top-level manifest, read from the registry. */
 export type ManifestKind = (ref: string, signal: AbortSignal) => Promise<string>;
+/** A process run with fixed arguments and no shell. `missing` is true when the command is not installed. */
+export type Run = (
+  file: string,
+  args: string[],
+  signal: AbortSignal,
+) => Promise<{ code: number; stdout: string; stderr: string; missing?: boolean }>;
 
 export type Inputs = {
   env: Env;
@@ -22,6 +28,10 @@ export type Inputs = {
   cosignKeyPath: string;
   verify: Verifier;
   manifestKind: ManifestKind;
+  /** Host commands (C24); production runs them by fixed name and arguments, tests pass a fake. */
+  run: Run;
+  /** The committed retirement-check report (P1.33a) that C21 reads. */
+  retirementReportPath: string;
   readText: (path: string) => string | null;
   stat: (path: string) => Stats | null;
   uid: number;

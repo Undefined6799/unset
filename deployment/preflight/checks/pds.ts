@@ -7,7 +7,7 @@ import { type Check, fail, type Inputs, type Outcome, pass } from "./types.ts";
 function pdsEnv(inputs: Inputs): SecretMap | null {
   return inputs.serviceEnv.get("pds") ?? null;
 }
-function withPds(run: (env: SecretMap, inputs: Inputs) => Outcome): Check["run"] {
+export function withPds(run: (env: SecretMap, inputs: Inputs) => Outcome): Check["run"] {
   return (inputs) => {
     const env = pdsEnv(inputs);
     return env === null ? fail("no pds service") : run(env, inputs);
