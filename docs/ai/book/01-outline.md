@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 107 steps: 89 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 108 steps: 90 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -207,8 +207,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24 | UI kit, part 1a: Button, Link, Tag, Mark, SectionHeading, Kbd and the form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.24i, P1.24h, P1.23c | `phase-1.md` |
 | P1.24s | UI kit, part 1b: Avatar, Switch, SkipLink, MediaFrame, DescriptionList, Pagination | — | P1.24i, P1.24h, P1.23c | `phase-1.md` |
 | P1.24a | UI kit 2a: zero-JS blocks (added step; split 2026-10-07) | — | P1.24, P1.24s, P1.24q, P1.23, P1.23r | `phase-1.md` |
-| P1.24k | UI kit 2b: chrome and feed, no-JS | — | P1.24a | `phase-1.md` |
-| P1.24j | Islands, budget-measured | — | P1.24k | `phase-1.md` |
+| P1.24k | UI kit 2b: chrome, no-JS | — | P1.24a | `phase-1.md` |
+| P1.24f | UI kit 2c: feed and feedback, no-JS | — | P1.24k | `phase-1.md` |
+| P1.24j | Islands, budget-measured | — | P1.24f | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24j | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
@@ -314,7 +315,8 @@ flowchart TD
   P1_24["P1.24 UI kit"]
   P1_24s["P1.24s UI kit part 1b"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
-  P1_24k["P1.24k UI kit: chrome and feed"]
+  P1_24k["P1.24k UI kit: chrome"]
+  P1_24f["P1.24f UI kit: feed and feedback"]
   P1_24j["P1.24j Islands"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
@@ -426,7 +428,8 @@ flowchart TD
   P1_23r --> P1_24i
   P1_23r --> P1_24a
   P1_24a --> P1_24k
-  P1_24k --> P1_24j
+  P1_24k --> P1_24f
+  P1_24f --> P1_24j
   P1_24k --> P1_25
   P1_24j --> P1_26
   P1_25 --> P1_26

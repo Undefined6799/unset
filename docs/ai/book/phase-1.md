@@ -160,7 +160,8 @@ flowchart LR
   P1_23["P1.23 island runtime"]
   P1_24["P1.24 UI kit: gate + primitives"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
-  P1_24k["P1.24k UI kit: chrome and feed, no-JS"]
+  P1_24k["P1.24k UI kit: chrome, no-JS"]
+  P1_24f["P1.24f UI kit: feed and feedback, no-JS"]
   P1_24j["P1.24j islands, budget-measured"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
@@ -195,7 +196,8 @@ flowchart LR
   P1_23 -.-> P1_24a
   P1_24 --> P1_25
   P1_24a --> P1_24k
-  P1_24k --> P1_24j
+  P1_24k --> P1_24f
+  P1_24f --> P1_24j
   P1_24k -.-> P1_25
   P1_24j -.-> P1_26
   P1_08 --> P1_25
@@ -4688,8 +4690,8 @@ and the inventory check decides CI, so it is a guard. Steps, in order (`b` stays
    Input, Textarea, Checkbox, RadioGroup, Select.
 5. **P1.24s, UI kit part 1b** (depends on P1.24i and P1.23c, plus P1.24h if any of its components links): Avatar, Switch,
    SkipLink, MediaFrame, DescriptionList, Pagination.
-6. P1.24a (zero-JS blocks), P1.24k (chrome and feed, no-JS), P1.24j (islands), then P1.24b if the budget ruling
-   requires it (book edit 2026-10-07-p124a-split).
+6. P1.24a (zero-JS blocks), P1.24k (chrome, no-JS), P1.24f (feed and feedback, no-JS), P1.24j (islands), then P1.24b
+   if the budget ruling requires it (book edits 2026-10-07-p124a-split and 2026-10-07-p124k-split).
 These PRs add only the server-rendered showcase markup; `components_axe_clean` and `components_target_size` run in
 P1.26's harness. `card_surface_opaque` moves to P1.24a with Card.
 
@@ -4897,10 +4899,15 @@ review-only second PR within the same step).
 body above that); this section's text specifies all three:
   1. **P1.24a** (deps unchanged; keeps the issue and `card_surface_opaque`): Callout, Card, Table, Progress, Spinner,
      CodeBlock, AsciiBackground.
-  2. **P1.24k** (depends on P1.24a): no-JS versions only: Header (details and summary, container query), Footer, Tabs
-     (link fallback), Modal (`fallbackHref` link), Toast (printed by the server, close link), CommandBlock (no button
-     without JavaScript), NewPosts and the FeedMore markup; then `inventory_all_built`.
-  3. **P1.24j** (depends on P1.24k): the islands in order of need (copy, header-menu, tabs, modal, toast, select),
+  2. **P1.24k** (depends on P1.24a; about 450 lines, its body gives the reason): no-JS versions only: Header (details
+     and summary, container query), Footer, Tabs (link fallback), Modal (`fallbackHref` link), with their SSR unit
+     tests.
+  2b. **P1.24f** (depends on P1.24k; about 370 lines; split from P1.24k by book edit 2026-10-07-p124k-split, because
+     P1.24k as built reached 823 changed source lines, over the 800-line gate): no-JS versions only: Toast (printed
+     by the server, close link), CommandBlock (no button without JavaScript), NewPosts and the FeedMore markup, with
+     their SSR unit tests; then `inventory_all_built`, which moves here because the inventory is complete only after
+     this part.
+  3. **P1.24j** (depends on P1.24f): the islands in order of need (copy, header-menu, tabs, modal, toast, select),
      measuring the island budget after each and stopping at the last that fits the 76,800-byte total
      (2026-10-06-p123-shape measure-first rule); the rest go to P1.24b.
   SSR unit tests cover every component's no-JS behaviour here. The Playwright tests (commandblock copy and denied,
@@ -5707,7 +5714,8 @@ refer you to the atproto docs" and at 00:57:59Z "Seems like the pds is public to
 (architecture record 2026-10-07-p1b-a1-pds-no-forwarded-address; book edit 2026-10-07-p128-split-and-p1b-a1):
 - On the PDS route the edge strips `X-Forwarded-For`, `X-Real-IP` and `Forwarded`, both inbound and as Caddy sets
   them by default, because the PDS trusts private-network peers (`pds_route_strips_forwarded_headers`).
-- `PDS_RATE_LIMITS_ENABLED=false` is set explicitly, with no bypass (`pds_rate_limits_disabled_explicitly`).
+- `PDS_RATE_LIMITS_ENABLED=false` is set explicitly, with no bypass, in P1.29's `compose.dev.yaml` (its test
+  `pds_rate_limits_disabled_explicitly` lives in P1.29, book edit 2026-10-07-p128-rate-limit-test-to-p129).
 - caddy-ratelimit takes over with per-address zones by traffic class (sync, firehose connections, identity, account
   and auth strict, global), one test each.
 - Recorded gaps: per-account write limits keyed by DID (revisit before open sign-up) and concurrent firehose
@@ -5812,16 +5820,31 @@ takes admin Basic auth).
   4. Explicitly allowed and tested because lexicon resolution depends on them: `com.atproto.sync.getRecord`,
      `com.atproto.repo.getRecord`, `com.atproto.repo.describeRepo`, `com.atproto.identity.resolveHandle`,
      `com.atproto.server.describeServer`, `_health`.
-- `ratelimit.caddy` (memory only; the plugin's distributed mode is off, so nothing is written to disk or shared):
-  zones keyed by `{remote_host}`, provisional numbers chosen to mirror the PDS's own defaults
-  (`pds/src/api/.../rate-limits` and `createSession`'s limits), adjusted in review:
-  | Zone | Match | Limit per client address |
-  |---|---|---|
-  | `auth` | `/oauth/*`, `/account*`, `/xrpc/com.atproto.server.createSession`, `…server.refreshSession`, `…server.requestPasswordReset`, `…server.resetPassword` | 30 per 5 min |
-  | `signup` | `/xrpc/com.atproto.server.createAccount` | 10 per hour |
-  | `global` | everything on the PDS host | 3000 per 5 min |
-  Under P1b-A1 the zones also cover sync, firehose connections and identity, one test each; their numbers are set
-  in review alongside the provisional ones above.
+- `ratelimit.caddy` (memory only; the plugin's distributed mode is off, so nothing is written to disk or shared).
+  Zone values (architecture, 2026-10-07 01:52Z, record 2026-10-07-p1b-a1-pds-no-forwarded-address): every zone is
+  keyed per client address, IPv4 per address and IPv6 per /64 (`ipv6_prefix 64`), held in memory only. They are
+  starting points; later tuning is a P1.28 follow-up, not a ruling.
+  | Zone | Limit per client address |
+  |---|---|
+  | global, every PDS route | 3000 per 5 minutes |
+  | sync (`com.atproto.sync.*` except blobs and the firehose) | 1500 per 5 minutes |
+  | blobs, reading (`getBlob`) | 600 per 5 minutes |
+  | blobs, uploading (`uploadBlob`) | 60 per 5 minutes |
+  | firehose (`subscribeRepos`) | 6 new connections per minute **and** 60 per hour |
+  | identity and discovery (`resolveHandle`, `describeServer`, `/.well-known/atproto-did`, `/xrpc/_health`) | 300 per 5 minutes |
+  | createSession | 30 per 5 minutes **and** 300 per day |
+  | createAccount | 10 per hour |
+  | password reset, email confirm and email update requests | 5 per hour |
+  | OAuth sign-in (the authorize sign-in POST) | 30 per 5 minutes |
+  | OAuth token | 120 per 5 minutes |
+  - Paired limits use two zones on the same matcher. Sync requests count against both their own zone and global;
+    every PDS-bound request matches at least the global zone.
+  - Firehose is tightened from 20 per minute: with no concurrency cap (a recorded gap; caddy-ratelimit counts
+    requests, not open connections), the pair bounds how many sockets one address accumulates while relay
+    reconnects keep working. Relays are not allowlisted by address.
+  - createSession matches the PDS's own two limits, keyed per address. createAccount stays tight while sign-up is
+    invite-only (`PDS_INVITE_REQUIRED=true`). The OAuth token endpoint is higher because clients refresh on it.
+    Blob uploads also keep the PDS's own body size limit.
   Over the limit → 429 with `Retry-After`; nothing logged except the access-log line (no address).
 - Upstream (`reverse_proxy` on every site): `header_up -X-Forwarded-For`, `header_up -X-Real-IP`,
   `header_up -Forwarded`, `header_up X-Forwarded-Proto https`, `header_up X-Forwarded-Host {host}`; upstream
@@ -5886,8 +5909,9 @@ takes admin Basic auth).
 - `edge_strips_client_address_headers`: client sends `X-Forwarded-For: 1.2.3.4`, `X-Real-IP`, `Forwarded` →
   upstream sees none of them.
 - `edge_rate_limit_auth_zone`: 31st request → 429 with `Retry-After`; other address unaffected.
-- One zone test each for sync, firehose connections and identity (P1b-A1).
-- `pds_route_strips_forwarded_headers` and `pds_rate_limits_disabled_explicitly` (P1b-A1).
+- One test per zone in the table above, asserting that the limit trips and that requests below it pass (P1b-A1).
+- `pds_route_without_zone_fails`: a Caddyfile test that no PDS route lacks a `rate_limit` zone (P1b-A1).
+- `pds_route_strips_forwarded_headers` (P1b-A1).
 - `edge_from_matches_lock`: the edge Dockerfile's `FROM` lines equal the `caddy` and `caddy-builder` lock entries
   (P1.28x).
 - `edge_logs_no_client_address`: the built Caddy with the shipped Caddyfile; from 127.0.0.2 with a spoofed
@@ -6062,6 +6086,10 @@ dev-seed:
 - `postgres_only_on_internal_networks`; `compose_dev_only_edge_publishes` (plus Mailpit on 127.0.0.1).
 - `mailpit_localhost_only`.
 - `pds_env_pinned`: every PDS variable listed above has the stated value or is absent as stated.
+- `pds_rate_limits_disabled_explicitly` (moved from P1.28, book edit 2026-10-07-p128-rate-limit-test-to-p129): the
+  `pds` service env in `compose.dev.yaml` has `PDS_RATE_LIMITS_ENABLED` present and exactly `false`, and
+  `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent. P1.30 C7 still checks the deployed env
+  at preflight; nothing deploys before both P1.28 and P1.29 are merged.
 - `seed_refuses_non_dev`: ENV=prod → exit 2.
 - `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
 - `seed_never_prints_password`: run against a stub PDS; stdout and stderr contain no generated password.
