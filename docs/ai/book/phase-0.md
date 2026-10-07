@@ -808,7 +808,8 @@ Done when (tests): (`scripts/budgets/check.test.ts`, `scripts/lint/depcruise.tes
     process with `UNSET_ENV=prod` and the config that selects each fake, under a Node module-resolve hook that records
     every resolved URL → exit ≠ 0 with `config.fake_in_prod` and no `*.fake.ts` URL recorded; with `UNSET_ENV=dev` the
     fixture loads its fake (the test proves it examined more than zero composition roots: the fixture counts).
-  - lint_clean_repo: `npm run lint` on the real tree exits 0.
+  - check_job_runs_lint_before_tests (replaces lint_clean_repo, P0.05b): the required `check` job runs `npm run lint`
+    before `npm test`, with no `continue-on-error`; that step is what proves the real tree lints clean.
 
 Reuse: Biome 2.5.15 → USE (bootstrap pin; `noExcessiveLinesPerFile` with `maxLines`/`skipBlankLines` exists in its
 schema). dependency-cruiser + `@swc/core` → USE (plan §7 names dependency-cruiser; swc is its own supported parser;
@@ -817,6 +818,29 @@ established tool). Stylelint → REJECT (plan §7). Provisional — for reuse re
 Not in this step: the GritQL token plugin, `useLayeredStyles`, CSS size budget (P1.21); workspace `tsconfig` references
 (P1.01); repo guards (P0.06).
 Diagram: none.
+
+---
+
+### P0.05b — Drop the lint rerun from the test suite (book edit 2026-10-07-p005b-lint-rerun)
+Tags: —            Depends on: —            Plan: rule SE-6; architecture's 2026-10-07-lint-clean-repo-duplicate
+Where: check paths, kind/build: `scripts/lint/depcruise.test.ts` and a test in `scripts/ci/`. No `.github/` or
+  `scripts/guards/` file. Neutral (the set of refused inputs is unchanged), so Alex's word is not needed. Slice 1 (it
+  unblocks every slice-1 PR). Owner: Phase 2, first in the slot queue.
+
+The bug: `lint_clean_repo` (`scripts/lint/depcruise.test.ts:130-133`) spawns `npm run lint`, a third copy of what the
+required `check` job's own `npm run lint` step (`ci.yml:52`, before `npm test`) and `depcruise_cruised_nonzero`
+already refuse, and it timed out at vitest's 5 s default under load on #464. No timeout bump, retry or skip.
+
+Done when (tests):
+  - `lint_clean_repo` is removed, and P0.05's list names `check_job_runs_lint_before_tests` in its place.
+  - `check_job_runs_lint_before_tests` (in `scripts/ci/`, beside the other workflow-reading tests): the `check` job has
+    a step whose `run` is exactly `npm run lint`, ordered before the `npm test` step, with no `continue-on-error` on
+    the step or the job. Red evidence: a workflow copy with the lint step removed, moved after `npm test`, or given
+    `continue-on-error` fails it.
+
+Watch item, not booked: if the real-repo half of `depcruise_cruised_nonzero` nears the 5 s limit, it is dropped for
+the same reason and its fixture half stays; the step book then books a one-line follow-on under P0.05 with no new
+ruling.
 
 ---
 

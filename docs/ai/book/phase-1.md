@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28s,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -188,6 +188,7 @@ flowchart LR
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
+  P1_28s["P1.28s quoted top-level tokens refused"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
   P1_29w["P1.29w scan every shipped image ALEX"]
@@ -276,6 +277,7 @@ flowchart LR
   P1_29s --> P1_29t
   P1_28 --> P1_28b
   P1_28b --> P1_28h
+  P1_28h --> P1_28s
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -6738,15 +6740,65 @@ P1.28 · No word from Alex: a tightening, nothing is loosened
 
 **Goal:** a small reader that tokenises the Caddyfile the way Caddy does (words, quotes, `{ }` blocks, newlines, `#`
 comments, `import` of snippets defined in the same file) into sites, blocks and directives. Any token it does not
-understand fails, never skips: environment placeholders, heredocs, and imports of files or globs included.
-`edge.test.ts` switches `zoneCoverageProblems` and `zones` to it, with today's expectations unchanged.
+understand fails, never skips: heredocs and imports of files or globs included. `edge.test.ts` switches
+`zoneCoverageProblems` and `zones` to it, with today's expectations unchanged.
+
+**As built on #463, amended by architecture** (2026-10-07-p130s-networks-and-caddyfile-reader, amendments 1 to 5,
+13:40Z to 19:15Z; points 1 to 4 ride #463 before it merges, and nothing is loosened):
+1. The lexer handles `\"` inside double quotes and trailing-backslash continuations; the `edge.test.ts` helpers accept a
+   matcher-less route only and a single `rate_limit` block. These stand.
+2. `{$NAME}` placeholders are substituted from one exported allowlist, `ENV_NAMES` (`PDS_HOST`, `PDS_UPSTREAM`,
+   `ACME_EMAIL`; adding one is a trusted change). An unknown name, the `{$NAME:default}` form and a missing value
+   fail. Each value is shape-checked first (`PDS_HOST` a hostname, `PDS_UPSTREAM` `host:port`, `ACME_EMAIL` an
+   address), and any value holding whitespace, `{`, `}`, `"`, `` ` ``, `#`, `\` or a newline fails; substitution goes
+   into the single token after lexing, never re-lexed. Runtime placeholders (`{env.X}`, `{http.*}`) are refused where a
+   directive name or matcher could be, and as argument words only where our files already use them.
+3. Directives come from an allowlist per level (global options, site block, route block, snippet), exactly what our
+   Caddyfiles use today; adding one is a trusted change in the PR that needs it. Refused outright: named routes
+   (`&(name)` and `invoke`), any quoted token in directive-name position (`"import"` included), and `handle` or
+   `route` blocks at a level our files do not use.
+4. `caddyfile_reader_matches_caddy_adapt` makes its own two Docker calls with node built-ins (build the edge image
+   with fixed arguments, run `caddy adapt`, remove the image in `afterAll`), and first compares the image's
+   `/etc/caddy/Caddyfile`, snippets and sites byte for byte with the repo files. No Docker in CI fails it, never skips.
+   It imports only node built-ins, vitest and `./caddyfile.ts`.
+5. Amendment 5 (19:15Z) withdraws the move of the edge integration tests (amendments 2 and 4): dependency-cruiser
+   refuses Node built-ins in non-test files under `deployment/` (TOOLING, `.dependency-cruiser.cjs:48`, covers only
+   `^(scripts|tests)/` and `*.test.ts`), and widening it would be a loosening for tidiness. The helpers and fixtures
+   stay in `tests/`, the adapt test keeps the inline calls of point 4, and P1.28s carries only the quoted top-level
+   token rider.
 
 **Done when (tests):** `caddyfile_reader_unknown_token_fails`, `caddyfile_reader_resolves_snippet_imports`,
 `caddyfile_reader_refuses_file_imports`, `caddyfile_reader_matches_caddy_adapt` (CI only, built edge image: for the
 repo's Caddyfile, the reader's sites, route order, imports and `rate_limit` zones agree with `caddy adapt --adapter
-caddyfile` JSON), and the existing `edge.test.ts` zone tests unchanged and green.
+caddyfile` JSON), `placeholder_unknown_name_fails`, `placeholder_default_form_fails`,
+`placeholder_value_with_syntax_fails` (a value of `x }\nhandle {`), `unknown_directive_fails`,
+`named_route_and_invoke_refused`, `quoted_directive_name_refused`, `directive_outside_its_level_fails`, and the
+existing `edge.test.ts` zone tests unchanged and green.
 
 **Not in this step:** C18 (P1.30u); any change to the Caddyfile itself.
+
+---
+
+### P1.28s — Refuse quoted top-level tokens in the Caddyfile
+Tags: [SEC], trusted            Depends on: P1.28h
+Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
+5 in 2026-10-07-p130s-networks-and-caddyfile-reader, which withdrew the move of the edge integration tests. P1.28s keeps
+its id and carries only the rider. Owner: Phase 1. No word from Alex: a tightening.
+
+**Where:** `deployment/edge/caddyfile.ts` and `deployment/edge/caddyfile.test.ts`. Nothing moves; the helpers and
+fixtures stay in `tests/`.
+
+**What:** the reader refuses any top-level block whose first token was quoted, and the error names the line. It does
+not try to decide which reading Caddy would take: Caddy probably reads `"(s)" {` as a snippet definition, which has not
+been checked against Caddy's source, and today it fails closed only because a later `import s` is refused. The image's
+real Caddyfile has no quoted top-level token, so #463's adapt test and its byte-for-byte check stay green. The ASVS rows
+V2.4.1, V13.4.5 and V16.2.5 are not edited; if one describes this refusal, it gains the new test name in the same PR,
+and nothing else changes (a `docs/human/` file rides a trusted PR, `trusted-base.ts:142-150`).
+
+Test: `refuses_quoted_top_level_token`, with two cases, `"(s)" {` and `"localhost" {`.
+
+Not booked: a future non-test helper under `deployment/` that needs Node built-ins needs its own MATRIX row first (a
+`scripts/lint` allowance, so Alex's typed line); the step that wants it books it.
 
 ---
 

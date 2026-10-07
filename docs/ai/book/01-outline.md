@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 29 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06).
+Depth: **build-ready**. 30 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b added 2026-10-07).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -31,6 +31,7 @@ Depth: **build-ready**. 29 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.03 | Ruleset on `main` (applied 2026-10-06, ADR 0017; deferred before that, decision 41), repository Actions settings, CODEOWNERS with security-review paths | [ALEX] [SEC] | P0.02 (its push, step 5; not the reconcile PR) | `phase-0.md` |
 | P0.04 | Toolchain: TypeScript 7, Node 26, Vitest only, `.npmrc`, "discovered equals executed" | — | P0.03 | `phase-0.md` |
 | P0.05 | Lint stack: Biome CSS rules, dependency-cruiser on the swc parser, file-size and line-budget warnings | — | P0.04 | `phase-0.md` |
+| P0.05b | Remove the duplicate lint run; check job runs lint before tests | — | — | `phase-0.md` |
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
 | P0.07 | CI workflow: pinned images and actions, full gate set, secrets and OIDC bound to `main` | [SEC] [ALEX] (tail: required checks) | P0.06 | `phase-0.md` |
 | P0.08 | Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard | [SEC] [ALEX] (tail: app install) | P0.07 | `phase-0.md` |
@@ -64,6 +65,7 @@ flowchart TD
   P0_03["P0.03 Ruleset on main"]
   P0_04["P0.04 Toolchain"]
   P0_05["P0.05 Lint stack"]
+  P0_05b["P0.05b Lint rerun dropped"]
   P0_06["P0.06 Repo guards as Vitest tests"]
   P0_07["P0.07 CI workflow"]
   P0_08["P0.08 Renovate replaces Dependabot"]
@@ -125,7 +127,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 142 steps: 121 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 143 steps: 122 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -235,6 +237,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
+| P1.28s | Caddyfile reader refuses quoted top-level tokens | [SEC], trusted | P1.28h | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
@@ -376,6 +379,7 @@ flowchart TD
   P1_28["P1.28 Edge Caddy"]
   P1_28b["P1.28b Edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
+  P1_28s["P1.28s Quoted top-level tokens refused"]
   P1_29k["P1.29k Migrate image, syncRolePasswords"]
   P1_29x["P1.29x Stripped paths declared"]
   P1_29w["P1.29w Scan every shipped image"]
@@ -527,6 +531,7 @@ flowchart TD
   P1_28 --> P1_29
   P1_28 --> P1_28b
   P1_28b --> P1_28h
+  P1_28h --> P1_28s
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
