@@ -3255,6 +3255,7 @@ denials to their error code.
 
 ### P1.15c — Pin the audit chain denials to code 42501
 Tags: [SEC]            Depends on: P1.15b (merged, #453)
+As built: merged by Alex at 2026-10-07T20:58:20Z as `49f5a64` (#491).
 Slice 1, feature, `tests/integration/audit/chain.test.ts` only; book edit 2026-10-07-p115b-as-built-and-p115c. Letter
 `c`: glue on P1.15b (P1.15's taken letters are b, d, g, m, q, s and x). Owner: Phase 1. `chain.test.ts:213` and
 `:221-225` match `/permission denied/` on the message, which also fires on a missing schema `USAGE`, so the test would
@@ -6525,6 +6526,7 @@ word from Alex: a tightening, no `.github/` path.
 
 ### P1.28t — Close the Dockerfile reader's gaps
 Tags: [SEC]            Depends on: P1.28c (merged, #479)
+As built: merged by Alex at 2026-10-07T21:00:26Z as `38db567` (#493).
 Slice 1, feature, `deployment/images/images.test.ts` only, under the `/deployment/` security-review line; book edit
 2026-10-07-p128c-p128t-reader-gaps, with architecture's 2026-10-07-p128u-reader-gaps (amending
 2026-10-07-p128-copy-from-image-ref), which wins where they differ. Owner: Phase 1. Rule: where BuildKit's exact
