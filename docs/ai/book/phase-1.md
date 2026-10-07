@@ -170,6 +170,7 @@ flowchart LR
   P1_24c["P1.24c toast focus, required select, labels"]
   P1_25k["P1.25k error-page hook in the kit"]
   P1_25h["P1.25h UI build runners to shared/ui-build"]
+  P1_25q["P1.25q ui-build notes area"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -230,6 +231,7 @@ flowchart LR
   P1_25k --> P1_25
   P1_24c --> P1_25h
   P1_25h --> P1_25
+  P1_25h --> P1_25q
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
@@ -5359,14 +5361,12 @@ the page groups. `documentPrefs(group)` already gives public behaviour to any gr
 cookie and sends no `Vary: Cookie`, and theme.ts keeps its signature. `groupForPath` is unchanged: unmatched paths
 stay `app`, and the three routes declare `group: "public"` at registration (P1.25). Neither `profile` (its `img-src`
 is fixed to the media origin by plan line 658, which only Alex can change) nor `app` (a script-src three zero-JS pages
-do not need) fits. It is not a loosening: a group stricter than `app`, with no existing policy changed. It rides in
-this step if the size rule allows (both are `shared/http`, trusted), and the hook's page groups then gain `public`.
-Otherwise it goes first in its own trusted part, **P1.25j "Add the public page group to the server kit"** ([SEC],
-trusted, `shared/http` only, depends on P1.08, slice 1; `j` is a kit-part letter); P1.25 then depends on P1.25j as
-well, and the board creates its issue only if the split happens. Tests, in whichever kit PR carries it:
-`public_policy_has_no_script_src` (no `script-src`, no `'unsafe-*'`), the `public` snapshot in `policies.test.ts`, and
-`public_policy_img_src_assets_only` (`img-src` exactly the assets path). This supersedes the unbooked per-page
-`script-src 'none'` candidate the split record first noted.
+do not need) fits. It is not a loosening: a group stricter than `app`, with no existing policy changed. It landed in
+this step: #445 (merged 2026-10-07, `78e9033`) adds `public` to `shared/http/csp/policies.ts` with the hook's page
+groups, so the fallback trusted part P1.25j ("Add the public page group to the server kit") is not needed and not
+booked. Tests, as booked for whichever kit PR carried it: `public_policy_has_no_script_src` (no `script-src`, no
+`'unsafe-*'`), the `public` snapshot in `policies.test.ts`, and `public_policy_img_src_assets_only` (`img-src` exactly
+the assets path). This supersedes the unbooked per-page `script-src 'none'` candidate the split record first noted.
 
 ---
 
@@ -5374,7 +5374,7 @@ well, and the board creates its issue only if the split happens. Tests, in which
 Tags: —            Depends on: P1.24c (merged; it last touched the entries test and `font-metrics.ts`)
 Slice 1, feature class; book edit 2026-10-07-p125h-ui-build-workspace and architecture's
 2026-10-07-p125-ui-build-workspace as amended 13:10Z (which wins where they differ). Letter `h`: helper part; P1.25's
-taken letters are k and j (j reserved as P1.25k's fallback). Owned by the third thread, before P1.25.
+taken letters are k and j (j was P1.25k's fallback, not needed). Owned by the third thread, before P1.25.
 
 **Why:** DC-2 (`scripts/lint/.dependency-cruiser.cjs:184-195`) lets anything outside a shared workspace reach it only
 through its one `index.ts`. `shared/ui/index.ts` exports the island plumbing and the Node build runners (`runIcons`,
@@ -5398,7 +5398,12 @@ beside the island plumbing; the workspace and lockfile entries.
   (`.dependency-cruiser.cjs:116`) already covers `shared/ui-build/`, so the MATRIX is unchanged and no q or v part is
   booked.
 - The freshness tests (`icon_allowlist_matches_sheet` and the token test) stay with shared/ui, which owns the data,
-  and import the runner through `@unset/shared-ui-build`'s index.
+  and import the runner through `@unset/shared-ui-build`'s index. The third thread's branch (relayed 12:52Z, to be
+  confirmed against the merged PR) moves them with the runners instead, since keeping them would need a shared/ui to
+  ui-build tsconfig reference and a `tsc -b` cycle; they still read shared/ui's files by path, and
+  `icon_drawing_modules_match_icons_json` moves to `shared/ui/icons/drawings.test.ts`. Its body names this under
+  "unsure". ADR 0016 still names `shared/ui/scripts/tokens.ts`; accepted ADRs are never edited, so it is read with
+  this note: the path is now `shared/ui-build/tokens.ts`.
 - A pure move counts lightly against the size budget; the body says it is a move with no logic change, and `git diff
   -M` shows the renames.
 
@@ -5409,9 +5414,24 @@ imports through `@unset/shared-ui` passing depcruise with no rule change.
 
 ---
 
+### P1.25q — Add ui-build to the notes guard's areas
+Tags: —            Depends on: P1.25h
+Slice 1, check class (`scripts/guards/notes.ts` and its test); book edit 2026-10-07-p125h-ui-build-workspace (P1.25q
+section, 13:12Z). Letter `q`: the check part that follows P1.25h. The notes guard's `AREAS`
+(`scripts/guards/notes.ts:14`) has no `ui-build`, so P1.25h's hub note `docs/ai/notes/area/ui-build.md` lists area
+`ui` until this step adds `ui-build` and moves the note's area (docs never change a PR's class). Neutral: one area
+name is added and nothing the guard refuses today is let through, but the harness classifier on `scripts/guards/`
+still needs Alex's typed line (for example "yes P1.25q notes.ts"). Owner: the third thread, when that line arrives.
+P1.25 does not depend on it: the hub note works under `ui` until then.
+
+Tests: the guard's area test gains `ui-build`, and the `notes-hub` check finds `area/ui-build.md` for
+`shared/ui-build`.
+
+---
+
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h (and P1.25j if the `public` group splits out of P1.25k) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
@@ -5440,7 +5460,7 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
   feed page renders **no footer**, and the footer's links and slot move into the `Header` menu (sheet v44; used by
   P3.12 and P4.21/P4.22).
 - Route groups in Phase 1: `/`, `/terms`, `/privacy` and every error page are **public** (no cookie read, no `Vary:
-  Cookie`). The three pages register with the kit's `group: "public"` (P1.25k or P1.25j): no `script-src`, `img-src`
+  Cookie`). The three pages register with the kit's `group: "public"` (P1.25k, #445): no `script-src`, `img-src`
   the assets path only. Error pages render through the kit's hook, so they are anonymous by construction: the hook
   receives only the code, the kit's group and, for 500, the kit's `reqId`. The hook's `group` is the kit's header
   group, not P1.22's app/public page group. The only `app` page in Phase 1 is the test page `/__test/app` (test server
