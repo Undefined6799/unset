@@ -5602,6 +5602,7 @@ Tests: the guard's area test gains `ui-build`, and the `notes-hub` check finds `
 
 ### P1.25w — Measure and fence the ui-build workspace
 Tags: check            Depends on: P1.25h (merged, #464)
+As built: merged by Alex at 2026-10-07T22:53:43Z as `edc165b` (#516).
 Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups,
 from architecture's 2026-10-07-p125h-follow-ups (N1, N2). Owner: Phase 2. A tightening (N2 restores lint enforcement
 lost in the move), cleared by the coordinator; not a classifier path.
