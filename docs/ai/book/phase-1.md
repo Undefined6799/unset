@@ -175,6 +175,7 @@ flowchart LR
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
   P1_25w["P1.25w ui-build budget and lint row"]
+  P1_25x["P1.25x ui-build plan default test"]
   P1_25d["P1.25d jsx-free detector"]
   P1_25r["P1.25r jsx-free test parses with oxc"]
   P1_25l["P1.25l islands keep lazy chunks"]
@@ -260,6 +261,7 @@ flowchart LR
   P1_25h --> P1_25
   P1_25h --> P1_25q
   P1_25h --> P1_25w
+  P1_25w --> P1_25x
   P1_25h --> P1_25d
   P1_25d --> P1_25r
   P1_25h --> P1_25l
@@ -5618,6 +5620,24 @@ Tests: a `check.test.ts` case counting a `shared/ui-build/` file under its own k
 import, a type-only import of the shared-ui index; fail: `node:fs` from shared/ui-build, a value import of the
 shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green, the budget prints a
 `shared/ui-build` line, and all five fixtures behave as listed.
+
+---
+
+### P1.25x — Pin the ui-build plan default with a test
+Tags: —            Depends on: P1.25w (merged, #516)
+Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups
+(amendment 2, 23:08Z), from the coordinator's check of #516. Owner: Phase 2. A tightening, cleared by the coordinator;
+not a classifier path, because it changes tests only.
+
+**Why:** reverting the `shared/ui-build` key at `scripts/budgets/check.ts:24` leaves every test green. The comment at
+`check.test.ts:148-149` says the plan defaults carry the same number as budgets.json, but nothing asserts this.
+1. In `scripts/budgets/check.test.ts`, give `shared/ui-build` a budgets.json value above 800 with no reason, and expect
+   the "raised to" warning. With the key removed, the test must fail.
+2. In `scripts/lint/depcruise.test.ts`, drop the relative value import of the index at :396-397; the stricter :393
+   already asserts that edge (cosmetic).
+
+Done when `npm run check` is green and the new test fails locally with the :24 key removed; the PR body states the
+failing output.
 
 ---
 
