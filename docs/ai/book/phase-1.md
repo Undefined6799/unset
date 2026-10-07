@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28, P1.28b,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28x, P1.28, P1.28b,
   P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -174,6 +174,7 @@ flowchart LR
   P1_28q["P1.28q images.yml: edge image"]
   P1_28d["P1.28d base entries labelled by stage"]
   P1_28v["P1.28v mirror scan per stage [ALEX]"]
+  P1_28w["P1.28w mirror scan pipefail shell"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
@@ -223,6 +224,7 @@ flowchart LR
   P1_28q --> P1_28
   P1_27 --> P1_28d
   P1_28d --> P1_28v
+  P1_28v --> P1_28w
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -6006,6 +6008,58 @@ and edge jobs, unchanged and only asserted).
 the one workflow touched. Alex's answer joins `alex-answers.md` as a `mirror-build-stage` row. If he says no, P1.28v
 is withdrawn, P1.28d stays, and the builder findings go to per-CVE trivyignore cards (P1.28x is already merged, book
 edit 2026-10-07-p128x-merged-as-built).
+
+**As built** (#430, merged at 2026-10-07T12:08:15Z as `fa74f1a`; Alex's card "Warn on build-only" at 03:56:37Z and
+his typed "Yes p128v" at 11:45:09Z, alex-answers `mirror-build-stage`). Two lines of the #430 body are wrong (book
+edit 2026-10-07-p128w-mirror-scan-pipefail): "Actions uses pipefail" does not hold for a step with no `shell:` key,
+which P1.28w fixes; and "a bad stage fails before anything is scanned" does not hold, because the stage check runs
+per entry inside the loop, so entries listed before a bad one are scanned first. The job still fails on the bad
+entry, as the record required; no change is booked (a pre-pass over all stages would be a nicety, not a fix).
+
+---
+
+### P1.28w — Make the mirror scan's HIGH warnings fire
+
+**Tags:** [SEC] · **Depends on:** P1.28v (merged, #430) · **Class:** check (`.github/workflows/mirror.yml`,
+`scripts/ci/mirror-scan.test.ts`), neutral to tightening · **Slice:** 1, after P1.28v
+
+Book edit 2026-10-07-p128w-mirror-scan-pipefail. Letter `w` is a further check step after `v` (P1.28's taken letters
+are b, d, q, v and x).
+
+**The gap** (checked on main): the scan step in `mirror.yml` (the `run:` block around lines 46 to 69) has no `shell:`
+key and the workflow has no `defaults.run.shell`, so Actions runs it as `bash -e {0}`, without `pipefail`. The
+build-stage HIGH run is `docker run ... trivy ... | tee -a "$GITHUB_STEP_SUMMARY" || status=$?`; the pipeline's
+status is `tee`'s, so `status` stays 0, the `::warning` branch never fires, and a Trivy error in that run (any exit
+other than 2) is swallowed too. The post-merge mirror run shows 0 annotations although the builder base has eight
+HIGH findings. `scripts/ci/mirror-scan.test.ts:61` runs the script with `bash --noprofile --norc -eo pipefail`,
+which Actions uses only with `shell: bash`, so the test hides the gap. What still holds: the CRITICAL gate (the
+second `docker run`, not piped) fails the job as approved, so nothing ships weaker.
+
+**Changes:**
+1. `shell: bash` on the scan step, so Actions runs `bash --noprofile --norc -eo pipefail {0}`. (`set -o pipefail` at
+   the top of the script or reading `PIPESTATUS[0]` are acceptable equivalents; `shell: bash` is the default because
+   it is declarative and the test can read it.)
+2. The test takes its shell from the workflow: it reads the step's `shell:` key and maps it the way Actions does
+   (none → `bash -e`; `bash` → `bash --noprofile --norc -eo pipefail`), never hard-coding `pipefail`.
+3. One Trivy database download per job: both `docker run` calls mount one cache directory under `$RUNNER_TEMP`
+   (`-v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy"`, or `--cache-dir` on a mounted path). The database source
+   does not change.
+
+**Done when (tests):**
+- `mirror_scan_step_sets_pipefail_shell`: the scan step declares `shell: bash`.
+- The existing build-stage warning test runs under the workflow's own shell. Red evidence: with the `shell:` key
+  removed, it and a new `build_stage_trivy_error_fails` (a stand-in Trivy exits 3 on the HIGH run) both fail.
+- `trivy_runs_share_one_cache_dir`: both `docker run` lines mount the same cache path.
+
+**Alex's word:** a fix toward what Alex approved ("Warn on build-only", 2026-10-07T03:56:37Z), not a loosening. The
+harness classifier on `.github/workflows` still needs his typed line, for example "yes P1.28w mirror.yml"; the
+coordinator asks for it once.
+
+**For architecture (candidate, not booked):** `deployment/images/images.test.ts` matches `FROM` lines only. A
+`COPY --from=<external image>` or a `RUN --mount=from=<external image>` into the final stage could bring a build-only
+base's files into a shipped image without a `FROM`. Whether the test must also refuse those (or require their image
+to be a pinned, scanned runtime base) is a structure and security question for architecture; the step book books it
+after the ruling.
 
 ---
 
