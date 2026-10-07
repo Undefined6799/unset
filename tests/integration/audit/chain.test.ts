@@ -223,6 +223,30 @@ describe("audit chain", () => {
       /permission denied/,
     );
   });
+
+  // P1.15c: the message alone also matches a missing schema USAGE, so the denials are pinned to SQLSTATE 42501
+  // (insufficient_privilege), as tests/integration/postgres/audit.test.ts pins its own.
+  test("verifier_denial_is_42501", async () => {
+    expect(await deniedAs((client) => client.query("SELECT count(*) FROM audit.event_body"))).toBe("42501");
+    expect(await deniedAs((client) => verifyChain(client, "mod", "links"))).toBe("42501");
+  });
+
+  test("verifier_denied_on_table_with_schema_usage", async () => {
+    // With USAGE on the schema, what is refused is the table privilege itself, not the way into the schema.
+    owner();
+    postgres.sql("unset", "GRANT USAGE ON SCHEMA audit TO audit_verifier");
+    try {
+      for (const table of ["event_body", "chain"]) {
+        const denied = await deniedAs((client) => client.query(`SELECT count(*) FROM audit.${table}`), table);
+        expect(denied, table).toBe("42501");
+        expect(lastDenial, table).toMatch(new RegExp(`permission denied for table ${table}`));
+      }
+      expect(await deniedAs((client) => verifyChain(client, "mod", "links"))).toBe("42501");
+      expect(lastDenial).toMatch(/permission denied for table chain/);
+    } finally {
+      postgres.sql("unset", "REVOKE USAGE ON SCHEMA audit FROM audit_verifier");
+    }
+  });
 });
 
 /**
@@ -256,6 +280,27 @@ function owner(): Pool {
     pools.push(ownerPool);
   }
   return ownerPool;
+}
+
+/** The message of the last refusal `deniedAs` saw. */
+let lastDenial = "";
+
+/**
+ * Runs `fn` as the verifier login role without SET ROLE and returns the SQLSTATE it was refused with, from the error
+ * or the cause a wrapper (withClient, AuditError) carries; fails if `fn` succeeds.
+ */
+async function deniedAs(fn: (client: PoolClient) => Promise<unknown>, label = "query"): Promise<string | undefined> {
+  try {
+    await withClient(owner(), null, fn);
+  } catch (error) {
+    let at: unknown = error;
+    while (at instanceof Error && (at as { code?: unknown }).code === undefined && at.cause !== undefined)
+      at = at.cause;
+    lastDenial = at instanceof Error ? at.message : "";
+    const code = (at as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  }
+  return expect.fail(`${label} was not refused`);
 }
 
 /** Runs `fn` as audit_owner through the verifier's SET ROLE, and resets the role before the client goes back. */
