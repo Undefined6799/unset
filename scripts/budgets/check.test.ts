@@ -159,6 +159,16 @@ test("ui_build_counted_under_its_own_key", () => {
   expect(out).toContain("::warning title=line-budget::shared/ui-build 900/800");
 });
 
+test("ui_build_plan_default_pinned", () => {
+  // P1.25x: the plan defaults carry shared/ui-build at 800, so raising it without a reason warns.
+  const root = tree({ "scripts/budgets/budgets.json": JSON.stringify({ "shared/ui-build": 900 }) });
+  const out: string[] = [];
+  expect(main(root, (line) => out.push(line))).toBe(0);
+  expect(out).toContain(
+    "::warning title=line-budget::shared/ui-build raised to 900 above the plan's 800 without a reason",
+  );
+});
+
 test("summary_unwritable_still_exits_zero", () => {
   const root = tree({
     "interfaces/media/a.ts": lines(12),
