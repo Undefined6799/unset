@@ -3,7 +3,7 @@ import { AppError, type ErrorCode } from "@unset/shared-errors";
 import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
 import type { HttpKitConfig } from "./config.ts";
-import type { ErrorPage } from "./errors.ts";
+import { type ErrorPage, errorResponse, kitErrorResponse } from "./errors.ts";
 import { defineRoute, type RouteSpec } from "./routes.ts";
 import { createServer, type ServerOptions } from "./server.ts";
 
@@ -839,6 +839,43 @@ describe("error page hook", () => {
     // @ts-expect-error: the hook is synchronous; a Promise-returning render is refused by type.
     const asyncPage: ErrorPage = async (code: ErrorCode) => `<p>${code}</p>`;
     expect(typeof asyncPage).toBe("function");
+  });
+
+  test("fixed_page_carries_request_id", async () => {
+    const { request, records } = kit({ routes });
+    const body = await (await request("/boom")).text();
+    const reqId = records().find((r) => r.event === "http.request")?.reqId;
+    expect(reqId).toMatch(UUID);
+    expect(body).toContain(`<p>Request id: ${reqId}</p>`);
+    for (const path of ["/nothing", "/limited"]) {
+      expect(await (await request(path)).text(), path).not.toContain("Request id");
+    }
+  });
+
+  test("fallback_page_carries_request_id", async () => {
+    const { request, records } = kit({
+      routes,
+      errorPage: () => {
+        throw new Error("render failed");
+      },
+    });
+    const body = await (await request("/boom")).text();
+    const reqId = records().find((r) => r.event === "http.request")?.reqId;
+    expect(reqId).toMatch(UUID);
+    expect(body).toContain(`<p>Request id: ${reqId}</p>`);
+  });
+
+  test("fixed_page_refuses_request_id_not_uuid_shaped", async () => {
+    const body = await kitErrorResponse("internal.error", "app", {}, undefined, "<script>x</script>").text();
+    expect(body).not.toContain("script");
+    expect(body).not.toContain("Request id");
+  });
+
+  test("error_response_public_signature_has_no_page", () => {
+    expect(errorResponse.length).toBe(2);
+    // @ts-expect-error: the exported errorResponse takes no page renderer; only the kit's fail() renders pages.
+    const response = errorResponse("http.not_found", "app", {}, () => "<p>unguarded</p>");
+    expect(response.status).toBe(404);
   });
 
   test("secured_fallback_never_calls_hook", async () => {
