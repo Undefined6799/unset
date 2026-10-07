@@ -95,6 +95,168 @@ function finalStageProblems(dockerfile: string, lock: Lock): string[] {
   return base.stage === "runtime" ? [] : [`final FROM ${last} is a ${base.stage} base`];
 }
 
+/**
+ * Images and URLs named outside FROM (P1.28u; architecture record 2026-10-07-p128-copy-from-image-ref): `COPY --from=`
+ * and a `RUN --mount` `from=` may name only an earlier stage, by alias (case-insensitive, as BuildKit matches it) or
+ * index, and `ADD` takes local sources only. An image that is really needed gets its own `FROM … AS name` stage, so
+ * every rule above applies to it; there is no allowlist. Read against the Dockerfile reference (docs.docker.com/
+ * reference/dockerfile, "COPY --from", "RUN --mount", "ADD"). Anything this reader cannot parse is a problem, never a skip.
+ */
+const INSTRUCTIONS = new Set(
+  "ADD ARG CMD COPY ENTRYPOINT ENV EXPOSE FROM HEALTHCHECK LABEL MAINTAINER ONBUILD RUN SHELL STOPSIGNAL USER VOLUME WORKDIR".split(
+    " ",
+  ),
+);
+
+/** A reason the reader could not parse the Dockerfile; `line` when it is known where the problem was found. */
+class Unparsed extends Error {
+  readonly line: number | undefined;
+  constructor(message: string, line?: number) {
+    super(message);
+    this.line = line;
+  }
+}
+
+const INSTRUCTION = /^([A-Za-z]+)(?:\s+(.*))?$/;
+const HEREDOC = /<<-?\s*["']?[A-Za-z_]/;
+
+/** Logical instructions with the line each starts on: comment lines dropped, `\` continuations joined. */
+function instructions(text: string): { line: number; text: string }[] {
+  const out: { line: number; text: string }[] = [];
+  let open: { line: number; text: string } | undefined;
+  for (const [at, raw] of text.split("\n").entries()) {
+    const line = raw.trim();
+    if (/^#\s*escape\s*=/i.test(line)) throw new Unparsed("parser directive escape not supported", at + 1);
+    if (line === "" || line.startsWith("#")) continue;
+    const body = line.endsWith("\\") ? line.slice(0, -1).trimEnd() : line;
+    open = open === undefined ? { line: at + 1, text: body } : { line: open.line, text: `${open.text} ${body}` };
+    if (!line.endsWith("\\")) {
+      out.push(open);
+      open = undefined;
+    }
+  }
+  if (open !== undefined) out.push(open);
+  return out;
+}
+
+/** The leading `--flag` words of an instruction's arguments, and the rest. */
+function splitFlags(args: string): { flags: string[]; rest: string } {
+  const flags: string[] = [];
+  let rest = args;
+  for (let match = /^(--\S*)\s*/.exec(rest); match !== null; match = /^(--\S*)\s*/.exec(rest)) {
+    flags.push(match[1] as string);
+    rest = rest.slice(match[0].length);
+  }
+  return { flags, rest };
+}
+
+/** Whether a name is an earlier stage's alias or index. */
+type Earlier = (name: string) => boolean;
+
+function fromFlagProblems(keyword: string, flags: string[], earlier: Earlier): string[] {
+  return flags
+    .filter((flag) => flag.startsWith("--from"))
+    .flatMap((flag) => {
+      const from = /^--from=(.*)$/.exec(flag)?.[1];
+      if (from === undefined) throw new Unparsed(`cannot parse ${keyword} flag --from`);
+      return earlier(from) ? [] : [`${keyword} --from=${from} is not an earlier stage`];
+    });
+}
+
+/** Each `--mount` is comma-separated key=value pairs; `from=` may sit anywhere among them. Quotes are not read. */
+function mountProblems(flags: string[], earlier: Earlier): string[] {
+  return flags
+    .filter((flag) => flag.startsWith("--mount"))
+    .flatMap((flag) => {
+      const mount = /^--mount=([^"']*)$/.exec(flag)?.[1];
+      if (mount === undefined) throw new Unparsed("cannot parse RUN --mount");
+      return mount.split(",").flatMap((part) => {
+        const [key, ...value] = part.split("=");
+        const from = value.join("=");
+        return key === "from" && !earlier(from) ? [`RUN --mount from=${from} is not an earlier stage`] : [];
+      });
+    });
+}
+
+/** ADD's sources (every argument but the destination, shell or JSON form) that are a URL or a git repository. */
+function addSourceProblems(rest: string): string[] {
+  let args: unknown;
+  try {
+    args = rest.startsWith("[") ? JSON.parse(rest) : rest.split(/\s+/);
+  } catch {
+    throw new Unparsed("cannot parse ADD sources");
+  }
+  if (!Array.isArray(args) || args.length < 2 || !args.every((a) => typeof a === "string" && a !== "")) {
+    throw new Unparsed("cannot parse ADD sources");
+  }
+  return (args.slice(0, -1) as string[])
+    .filter((source) => source.includes("://") || /^git@/.test(source) || /\.git(?:#|$)/.test(source))
+    .map((source) => `ADD ${source} is not a local source`);
+}
+
+/** What one instruction after the first FROM names outside FROM; ONBUILD's instruction is held to the same rule. */
+function instructionProblems(keyword: string, args: string, earlier: Earlier): string[] {
+  if (keyword === "ONBUILD") {
+    const [, inner, rest = ""] = INSTRUCTION.exec(args) ?? [];
+    if (inner === undefined) throw new Unparsed("cannot parse ONBUILD");
+    return instructionProblems(inner.toUpperCase(), rest, earlier);
+  }
+  if (!["RUN", "COPY", "ADD"].includes(keyword)) return [];
+  if (HEREDOC.test(args)) throw new Unparsed("heredoc not supported");
+  const { flags, rest } = splitFlags(args);
+  if (keyword === "RUN") return mountProblems(flags, earlier);
+  return [...fromFlagProblems(keyword, flags, earlier), ...(keyword === "ADD" ? addSourceProblems(rest) : [])];
+}
+
+/** The stages declared so far: each FROM enters one, and `earlier` answers for the stage being read. */
+function stages() {
+  const aliases = new Map<string, number>();
+  let current = -1;
+  return {
+    started: (): boolean => current >= 0,
+    enter(instruction: string): void {
+      const from = FROM.exec(instruction);
+      if (from === null) throw new Unparsed("cannot parse FROM");
+      current += 1;
+      if (from[2] !== undefined) aliases.set(from[2].toLowerCase(), current);
+    },
+    earlier: (name: string): boolean => {
+      const index = /^\d+$/.test(name) ? Number(name) : aliases.get(name.toLowerCase());
+      return index !== undefined && index < current;
+    },
+  };
+}
+
+/** One instruction: FROM enters a stage; anything else before the first FROM but ARG is unparseable. */
+function readInstruction(stage: ReturnType<typeof stages>, instruction: string): string[] {
+  const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
+  const keyword = word.toUpperCase();
+  if (!INSTRUCTIONS.has(keyword)) throw new Unparsed(`unknown instruction ${keyword || instruction}`);
+  if (keyword === "FROM") {
+    stage.enter(instruction);
+    return [];
+  }
+  if (!stage.started() && keyword !== "ARG") throw new Unparsed(`${keyword} before the first FROM`);
+  return instructionProblems(keyword, args, stage.earlier);
+}
+
+/** Every image or URL named outside FROM, and the first instruction this reader cannot parse; empty when there is none. */
+function referenceProblems(text: string): string[] {
+  const problems: string[] = [];
+  const stage = stages();
+  let line = 0;
+  try {
+    for (const instruction of instructions(text)) {
+      line = instruction.line;
+      problems.push(...readInstruction(stage, instruction.text).map((problem) => `line ${line}: ${problem}`));
+    }
+  } catch (error) {
+    if (!(error instanceof Unparsed)) throw error;
+    return [...problems, `line ${error.line ?? line}: ${error.message}`];
+  }
+  return stage.started() ? problems : ["the Dockerfile has no FROM"];
+}
+
 /** Every Dockerfile under deployment/ (the web image's and, from P1.28, the edge's), so a new image is covered too. */
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
@@ -252,6 +414,95 @@ describe("base images", () => {
     expect(finalStageProblems(`FROM ${ship.replace(runtime.digest, `sha256:${"1".repeat(64)}`)}`, lock)).toEqual([
       `final FROM ${ship.replace(runtime.digest, `sha256:${"1".repeat(64)}`)} has no lock entry`,
     ]);
+  });
+});
+
+describe("references outside FROM", () => {
+  const node = pinnedNode;
+  const twoStages = `FROM ${node} AS build\nFROM ${node}\n`;
+
+  test("copy_from_image_ref_refused", () => {
+    for (const ref of [node, "alpine", "later"]) {
+      expect(referenceProblems(`${twoStages}COPY --from=${ref} /a /b\nFROM ${node} AS later\n`), ref).toEqual([
+        `line 3: COPY --from=${ref} is not an earlier stage`,
+      ]);
+    }
+    // The flag may sit after another flag, and an empty value or the stage itself is no earlier stage either.
+    expect(referenceProblems(`${twoStages}COPY --chown=1:1 --from=${node} /a /b`)).toEqual([
+      `line 3: COPY --from=${node} is not an earlier stage`,
+    ]);
+    expect(referenceProblems(`FROM ${node} AS self\nCOPY --from=self /a /b\nCOPY --from= /a /b`)).toEqual([
+      "line 2: COPY --from=self is not an earlier stage",
+      "line 3: COPY --from= is not an earlier stage",
+    ]);
+  });
+
+  test("run_mount_from_image_ref_refused", () => {
+    for (const mount of [
+      `type=bind,from=${node},target=/x`,
+      `target=/x,type=cache,from=alpine`,
+      `from=alpine,type=bind,source=/,target=/x`,
+    ]) {
+      const from = /from=([^,]*)/.exec(mount)?.[1];
+      expect(referenceProblems(`${twoStages}RUN --network=none --mount=${mount} true`), mount).toEqual([
+        `line 3: RUN --mount from=${from} is not an earlier stage`,
+      ]);
+    }
+    expect(
+      referenceProblems(`${twoStages}RUN --mount=type=cache,target=/c --mount=type=bind,from=build,target=/x true`),
+    ).toEqual([]);
+  });
+
+  test("add_remote_source_refused", () => {
+    for (const source of [
+      "https://example.com/tool.tar.gz",
+      "git@example.com:owner/repo.git",
+      "https://example.com/owner/repo.git#main",
+      "example.com/owner/repo.git#v1",
+    ]) {
+      expect(referenceProblems(`FROM ${node}\nADD ${source} /opt/`), source).toEqual([
+        `line 2: ADD ${source} is not a local source`,
+      ]);
+    }
+    expect(referenceProblems(`FROM ${node}\nADD ["local.tar", "https://example.com/x", "/opt/"]`)).toEqual([
+      "line 2: ADD https://example.com/x is not a local source",
+    ]);
+    expect(referenceProblems(`FROM ${node}\nADD --chown=1:1 local.tar other/ /opt/`)).toEqual([]);
+  });
+
+  test("copy_from_stage_alias_or_index_allowed", () => {
+    const text = `FROM ${node} AS Build\nFROM ${node} AS deps\nFROM ${node}\nCOPY --from=build /a /a\nCOPY --from=BUILD /a /a\nCOPY \\\n  --from=1 /b /b\nCOPY --from=0 /c /c`;
+    expect(referenceProblems(text)).toEqual([]);
+    // An index names a stage by position: the current and later ones are not earlier stages.
+    expect(referenceProblems(`${twoStages}COPY --from=1 /a /b\nCOPY --from=2 /a /b`)).toEqual([
+      "line 3: COPY --from=1 is not an earlier stage",
+      "line 4: COPY --from=2 is not an earlier stage",
+    ]);
+  });
+
+  test("instruction_parse_failure_fails", () => {
+    for (const [text, problem] of [
+      [`COPY --from=x /a /b\nFROM ${node}`, "line 1: COPY before the first FROM"],
+      [`FROM ${node}\nFETCH https://example.com/x /y`, "line 2: unknown instruction FETCH"],
+      [`FROM ${node}\nCOPY --from build /a /b`, "line 2: cannot parse COPY flag --from"],
+      [`FROM ${node}\nRUN --mount=type=bind,"from=x",target=/y true`, "line 2: cannot parse RUN --mount"],
+      [`FROM ${node}\nADD ["unclosed /opt/`, "line 2: cannot parse ADD sources"],
+      [`FROM ${node}\nCOPY <<EOF /x\nhello\nEOF`, "line 2: heredoc not supported"],
+      [`# escape=\`\nFROM ${node}`, "line 1: parser directive escape not supported"],
+      [`FROM ${node} AS a b`, "line 1: cannot parse FROM"],
+      ["", "the Dockerfile has no FROM"],
+    ] as const) {
+      expect(referenceProblems(text), text).toEqual([problem]);
+    }
+    // ONBUILD carries its instruction into a later build, so the inner one is held to the same rule.
+    expect(referenceProblems(`FROM ${node}\nONBUILD COPY --from=alpine /a /b`)).toEqual([
+      "line 2: COPY --from=alpine is not an earlier stage",
+    ]);
+  });
+
+  test("real_dockerfiles_name_images_only_in_from", () => {
+    expect(dockerfiles).toEqual(["edge/Dockerfile", "images/node-app.Dockerfile"]);
+    for (const file of dockerfiles) expect(referenceProblems(read(file)), file).toEqual([]);
   });
 });
 
