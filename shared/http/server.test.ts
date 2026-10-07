@@ -645,6 +645,7 @@ describe("error page hook", () => {
   const routes = [
     page({ method: "GET", path: "/boom", handler: throwing("internal.error") }),
     page({ method: "GET", path: "/@:handle", group: "profile", handler: throwing("http.not_found") }),
+    page({ method: "GET", path: "/terms", group: "public", handler: throwing("http.not_found") }),
     page({ method: "GET", path: "/limited", handler: throwing("http.rate_limited") }),
     page({ method: "POST", path: "/form" }),
     defineRoute({
@@ -681,7 +682,8 @@ describe("error page hook", () => {
     expect(await (await request("/@a")).text()).toBe("<p>designed http.not_found</p>");
     const admin = kit({ routes, errorPage, errorGroup: "admin" });
     expect(await (await admin.request("/nothing")).text()).toBe("<p>designed http.not_found</p>");
-    expect(seen.map((s) => s.ctx.group)).toEqual(["app", "profile", "admin"]);
+    expect(await (await request("/terms")).text()).toBe("<p>designed http.not_found</p>");
+    expect(seen.map((s) => s.ctx.group)).toEqual(["app", "profile", "admin", "public"]);
     seen.length = 0;
     expect(await (await request("/api/x")).json()).toEqual({ error: "http.not_found" });
     expect(await (await request("/media/x")).text()).toBe("");

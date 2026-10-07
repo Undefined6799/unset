@@ -15,9 +15,9 @@ export function groupForPath(path: string): RouteGroup {
 }
 
 /** The groups whose errors are HTML pages, and the only ones an interface's error page renders for. */
-export type PageGroup = "app" | "profile" | "admin";
+export type PageGroup = "app" | "public" | "profile" | "admin";
 export const isPageGroup = (group: RouteGroup): group is PageGroup =>
-  group === "app" || group === "profile" || group === "admin";
+  group === "app" || group === "public" || group === "profile" || group === "admin";
 
 /**
  * An interface's error page (P1.25k; architecture record 2026-10-07-p125k-error-page-hook.md): the HTML body for an

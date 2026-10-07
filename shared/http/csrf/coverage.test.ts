@@ -30,7 +30,7 @@ const CONFIG: HttpKitConfig = {
   ASSETS_BASE: "",
   DEV_VITE_ORIGIN: "",
 };
-const GROUPS: readonly RouteGroup[] = ["app", "profile", "media", "admin", "api"];
+const GROUPS: readonly RouteGroup[] = ["app", "public", "profile", "media", "admin", "api"];
 
 /** Each interface's committed route table (kept fresh by its routes.manifest.test.ts, F-27). */
 function manifests(): [string, RouteInfo[]][] {
