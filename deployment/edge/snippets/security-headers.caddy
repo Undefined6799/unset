@@ -1,0 +1,15 @@
+# Response headers every public host gets (P1.28). HSTS without preload until Alex decides. The app sets its own CSP
+# (P1.08); a host without an app CSP imports strict-csp as well.
+(security-headers) {
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		?Referrer-Policy no-referrer
+		-Server
+		-Via
+	}
+}
+
+(strict-csp) {
+	header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+}

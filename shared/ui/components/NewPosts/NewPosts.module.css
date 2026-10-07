@@ -1,0 +1,52 @@
+/* NewPosts (P1.24f; sheet components/NewPosts/README.md, v45): full width, sticky under the header (`z-sticky`), on
+   `surface-raised` over a 1px `line-strong` rule, at least 44px tall; SHOW is a 40px target in the `label` style. It
+   slides up 160ms when hidden, with no slide under reduced motion. */
+@layer components {
+  .root {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border-bottom: 1px solid var(--color-line-strong);
+    background-color: var(--color-surface-raised);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    transition: translate 160ms ease-out;
+  }
+
+  .inline {
+    position: static;
+  }
+
+  .hidden {
+    translate: 0 -100%;
+    visibility: hidden;
+  }
+
+  .show {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 40px;
+    color: var(--color-ink);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      transition: none;
+    }
+  }
+}

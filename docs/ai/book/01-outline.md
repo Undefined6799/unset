@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 108 steps: 90 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 115 steps: 94 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -216,10 +216,14 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.27d | Switch the web image base to Debian slim (`node:26-trixie-slim`, Alex 2026-10-07 01:29Z) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28q | images.yml: build, lint, scan, health-check the edge image | check | P1.27q, P1.27 | `phase-1.md` |
-| P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature) | [SEC] | P1.27 | `phase-1.md` |
+| P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
+| P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
+| P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
-| P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
+| P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
+| P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q | `phase-1.md` |
+| P1.30s | Deploy preflight C13–C24 | [SEC] | P1.30 | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -231,7 +235,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
-| P2.03 | Session store and lifecycle | [SEC] | P1.12 | `phase-2.md` |
+| P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
+| P2.03x | Session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
+| P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
+| P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01 | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
@@ -241,7 +248,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P2.01a, P2.01m | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29, P1.30, P1.30s, P2.01a, P2.01m | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -323,10 +330,14 @@ flowchart TD
   P1_27["P1.27 Container images"]
   P1_27d["P1.27d Web image on Debian slim"]
   P1_28q["P1.28q edge image scan"]
+  P1_28d["P1.28d base entries by stage"]
+  P1_28v["P1.28v mirror scan per stage"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_29["P1.29 Development stack"]
-  P1_30["P1.30 Deploy preflight"]
+  P1_30q["P1.30q preflight boundary row"]
+  P1_30["P1.30 Deploy preflight core"]
+  P1_30s["P1.30s Deploy preflight C13–C24"]
   P1_32["P1.32 Permanent choices"]
   P1_31["P1.31 Lexicons package"]
   P1_37["P1.37 Legal paperwork"]
@@ -338,6 +349,9 @@ flowchart TD
   P2_01a["P2.01a Identity network adapter"]
   P2_02["P2.02 verifyHandledid"]
   P2_02x["P2.02x verifyHandle export"]
+  P2_03q["P2.03q session store trusted path"]
+  P2_03x["P2.03x session table and timeouts"]
+  P2_03e["P2.03e session log events"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_04["P2.04 OAuth client"]
   P2_05["P2.05 Login"]
@@ -437,17 +451,24 @@ flowchart TD
   P1_27 --> P1_27d
   P1_27 --> P1_28q
   P1_28q --> P1_28
+  P1_27 --> P1_28d
+  P1_28d --> P1_28v
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
   P1_11p --> P1_29
   P1_28 --> P1_29
   P1_27 --> P1_30
+  P1_30q --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
   P1_18 --> P2_01
   P2_01 --> P2_02
-  P1_12 --> P2_03
+  P1_12 --> P2_03x
+  P1_15g --> P2_03x
+  P2_03q --> P2_03
+  P2_03x --> P2_03
+  P2_03e --> P2_03
   P1_14 --> P2_04
   P1_14d --> P2_04
   P1_17 --> P2_04
@@ -479,6 +500,8 @@ flowchart TD
   P1_26 --> P2_13a
   P1_29 --> P2_13a
   P1_30 --> P2_13a
+  P1_30 --> P1_30s
+  P1_30s --> P2_13a
   P1_03 --> P1_04k
   P1_03 --> P1_03w
   P1_03 --> P1_04l
@@ -549,7 +572,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.33, P1.33a, P0.12, P0.11, P1.29 | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.33, P1.33a, P0.12, P0.11, P1.29 | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
@@ -602,7 +625,7 @@ Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34 | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38 | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.11p, P1.33 | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.30s, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
@@ -949,7 +972,7 @@ Depth: **detail by risk; P5.00 refines** (contract parts in full, algorithms a r
 | P5.07g | `web` grants on the legal-hold buffer definers, for P5.07b (SE-6) | [SEC] [MOD] | P5.00, P4.07 | `phase-5.md` |
 | P5.07b | Real fingerprint check: Arachnid Shield spike and client, image transmission buffer, image legal hold | [SPIKE] [SEC] [MOD] | P5.07g, P5.02, P2.16, P2.16b, P1.14a, P1.18b, P3.16c, P4.03, P4.06, P4.07, P1.37a (approved) | `phase-5.md` |
 | P5.02a | Production PDS on `unset.ac` and lexicon authority migration | [ALEX] [SEC] | P5.02, P1.35, P5.07b (decision 23) | `phase-5.md` |
-| P5.03 | Deploy by verified digest (grows P2.26a) | [SEC] | P5.02, P5.02a, P1.30, P2.26a | `phase-5.md` |
+| P5.03 | Deploy by verified digest (grows P2.26a) | [SEC] | P5.02, P5.02a, P1.30, P1.30s, P2.26a | `phase-5.md` |
 | P5.08 | Admin v1.1: statements of reasons and notice-form handling | [SEC] [MOD] | P4.13, P5.07 | `phase-5.md` |
 | P5.08a | Blob and record takedown: the bytes stop everywhere we serve them | [SEC] [MOD] | P5.08 | `phase-5.md` |
 | P5.08b | GDPR cases, erasure that does not depend on the firehose, and the legal-hold rule | [SEC] [MOD] | P5.08 | `phase-5.md` |

@@ -271,3 +271,10 @@ their own, but no step may rebuild them.
 - Section 11 gains the column-list grant rule for registry tables (plan §5.2 at `9c54e52`; SE-6; P1.12 tests). Every
   step that creates a table with a registry row follows it; Phases 3–6 cite this section where their text is
   hypothesis.
+
+### Editor pass (2026-10-07, boundary matrix rows)
+
+- A step that creates code in a new top-level folder, or a new subfolder with no row in the dependency-cruiser MATRIX,
+  books the matrix row as its own `q` part first, with a leaf or edge test that encodes the folder's allowed imports.
+  The feature PR never widens the matrix. First use: P1.30q for `deployment/preflight/` (book edit
+  2026-10-07-p130q-p203e).

@@ -1,0 +1,13 @@
+# The PDS host (P1.28). Its name and upstream come from the environment (P1.29 dev, P5 production); neither has a
+# default, so a missing value fails at start.
+{$PDS_HOST} {
+	import tls
+	import access-log
+	import pds-route-class
+	import security-headers
+	route {
+		import pds-ratelimit
+		import xrpc-guard
+		import upstream {$PDS_UPSTREAM}
+	}
+}

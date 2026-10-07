@@ -1,0 +1,13 @@
+# The access log's route class (P1.28; rule SE-7; R3-16): a closed set of names, never a capture of a user segment.
+# First match wins; anything else is `other`. Caddy v2.11.7 map and log_append directives
+# (caddyserver/website src/docs/markdown/caddyfile/directives/map.md, log_append.md).
+(pds-route-class) {
+	map {http.request.orig_uri} {route_class} {
+		~^/xrpc/(_health|[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)+)(?:\?[^#]*)?$ "xrpc:${1}"
+		~^/oauth/ oauth
+		~^/\.well-known/ well-known
+		~^/health(?:\?[^#]*)?$ health
+		default other
+	}
+	log_append route_class {route_class}
+}
