@@ -1,6 +1,8 @@
 // P1.12p follow-up: role password sync against real Postgres (infrastructure/postgres/roles.ts through its index). It runs
 // on its own container through tests/support/postgres.ts, like grants.test.ts: role passwords are cluster-global, so
-// setting web's here must never reach the shared integration cluster other test files log in to.
+// setting web's here must never reach the shared integration cluster other test files log in to. P1.29k: the migrate
+// service's run (`migrateThenSyncPasswords`, what `unset-migrate` calls with /run/secrets) against the same container:
+// migrations first, then the role passwords, and no password when they fail.
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +11,9 @@ import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   createPool,
+  type MigrateServiceResult,
   migrate,
+  migrateThenSyncPasswords,
   type PasswordSyncResult,
   syncRolePasswords,
   withClient,
@@ -22,6 +26,8 @@ const secretsDir = mkdtempSync(join(tmpdir(), "unset-role-passwords-"));
 /** Every password this file sets, to look for in the server log at the end. */
 const used: string[] = [];
 const results: PasswordSyncResult[] = [];
+/** Every log line and result of the migrate service runs. */
+const serviceLog: string[] = [];
 let postgres: PostgresContainer;
 
 function connection(user: string, password: string) {
@@ -37,6 +43,25 @@ function newPasswords(...roles: string[]): Record<string, string> {
     writeFileSync(join(secretsDir, `pg_${role}_password`), `${passwords[role]}\n`);
   }
   return passwords;
+}
+
+/** The migrate service's run with this file's secrets folder; the CLI passes /run/secrets instead. */
+async function migrateService(): Promise<MigrateServiceResult> {
+  const result = await migrateThenSyncPasswords({
+    connection: connection("migrator", migratorPassword),
+    dir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
+    root: REPOSITORY,
+    log: createLogger({
+      service: "migrate",
+      commit: "0".repeat(40),
+      env: "test",
+      write: (line) => serviceLog.push(line),
+    }),
+    retryDelaysMs: [],
+    secretsDir,
+  });
+  serviceLog.push(JSON.stringify(result));
+  return result;
 }
 
 async function sync(roster?: { name: string; passwordFrom: string | null }[]): Promise<PasswordSyncResult> {
@@ -125,9 +150,38 @@ describe("role passwords on postgres", () => {
     expect(await login("web", before.web ?? "")).toBe("ok");
   });
 
+  test("migrate_service_syncs_passwords_after_migrations", async () => {
+    const before = newPasswords("web", "api", "indexer");
+    expect(await sync()).toMatchObject({ ok: true });
+    const after = newPasswords("web", "api", "indexer");
+    expect(await migrateService()).toEqual({ ok: true });
+    for (const role of ["web", "api", "indexer"]) expect(await login(role, after[role] ?? "")).toBe("ok");
+    expect(await login("web", before.web ?? "")).toBe("28P01");
+  });
+
+  test("migrate_service_failed_migration_syncs_nothing", async () => {
+    const before = newPasswords("web", "api", "indexer");
+    expect(await sync()).toMatchObject({ ok: true });
+    newPasswords("web", "api", "indexer");
+    // An applied migration that no longer matches its file: migrate refuses with exit 2 before touching anything.
+    const checksum = postgres.sql("unset", "SELECT checksum FROM public.schema_migrations WHERE version = 1");
+    expect(checksum).toMatch(/^[0-9a-f]{64}$/);
+    postgres.sql("unset", "UPDATE public.schema_migrations SET checksum = 'edited' WHERE version = 1");
+    try {
+      expect(await migrateService()).toMatchObject({
+        ok: false,
+        step: "migrate",
+        failure: { exit: 2, reason: "checksum_mismatch", version: 1 },
+      });
+    } finally {
+      postgres.sql("unset", `UPDATE public.schema_migrations SET checksum = '${checksum}' WHERE version = 1`);
+    }
+    for (const role of ["web", "api", "indexer"]) expect(await login(role, before[role] ?? "")).toBe("ok");
+  });
+
   test("password_never_logged", () => {
     const logs = spawnSync("docker", ["logs", postgres.name], { encoding: "utf8" });
-    const text = `${logs.stdout}${logs.stderr}${JSON.stringify(results)}`;
+    const text = `${logs.stdout}${logs.stderr}${JSON.stringify(results)}${serviceLog.join("")}`;
     expect(used.length).toBeGreaterThan(0);
     expect(used.filter((password) => text.includes(password))).toEqual([]);
   });

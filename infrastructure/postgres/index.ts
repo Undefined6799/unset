@@ -12,7 +12,15 @@ export {
   type LockPool,
   withAdvisoryLock,
 } from "./lock.ts";
-export { MIGRATE_LOCK_ID, type MigrateFailure, type MigrateOptions, type MigrateResult, migrate } from "./migrate.ts";
+export {
+  MIGRATE_LOCK_ID,
+  type MigrateFailure,
+  type MigrateOptions,
+  type MigrateResult,
+  type MigrateServiceResult,
+  migrate,
+  migrateThenSyncPasswords,
+} from "./migrate.ts";
 export {
   acquire,
   checkConnectionBudget,

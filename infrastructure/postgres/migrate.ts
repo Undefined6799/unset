@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { Logger } from "@unset/shared-log";
 import pg from "pg";
 import type { Connection } from "./config.ts";
+import { type PasswordSyncResult, syncRolePasswords } from "./roles.ts";
 import { type LintProblem, lintMigration, type Phase } from "./sqlLint.ts";
 import { inTransaction } from "./tx.ts";
 
@@ -218,4 +219,22 @@ function report(log: Logger, result: MigrateResult): MigrateResult {
     log.info("migrate.done", { count: result.applied.length });
   }
   return result;
+}
+
+export type MigrateServiceResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly step: "migrate"; readonly failure: MigrateFailure }
+  | { readonly ok: false; readonly step: "passwords"; readonly failure: Exclude<PasswordSyncResult, { ok: true }> };
+
+/**
+ * The `migrate` service's run (P1.29k, the P1.12x binding): the migrations, then the roster roles' passwords from
+ * `secretsDir`, never the passwords when a migration fails. The CLI passes the fixed /run/secrets.
+ */
+export async function migrateThenSyncPasswords(
+  options: MigrateOptions & { readonly secretsDir: string },
+): Promise<MigrateServiceResult> {
+  const migrated = await migrate(options);
+  if (!migrated.ok) return { ok: false, step: "migrate", failure: migrated };
+  const synced = await syncRolePasswords({ connection: options.connection, secretsDir: options.secretsDir });
+  return synced.ok ? { ok: true } : { ok: false, step: "passwords", failure: synced };
 }

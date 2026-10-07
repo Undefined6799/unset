@@ -1,12 +1,12 @@
 // P1.11: the Postgres connection settings, read through the migrate CLI schema, and the sslmode mapping. P1.11p: the
-// pool fields and the private CA file.
-import { mkdtempSync, writeFileSync } from "node:fs";
+// pool fields and the private CA file. P1.29k: the CLI reads role passwords only from the fixed /run/secrets.
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigError, defineConfig, loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
 import { connectionOf, lockPoolFields, poolFields, postgresFields } from "./config.ts";
-import { migrateConfig } from "./migrate-cli.ts";
+import { migrateConfig, ROLE_PASSWORDS_DIR } from "./migrate-cli.ts";
 
 const passwordFile = join(mkdtempSync(join(tmpdir(), "unset-migrate-cli-")), "pg_migrator_password");
 writeFileSync(passwordFile, "a-test-password-of-enough-bytes\n");
@@ -101,5 +101,16 @@ describe("pool config", () => {
     // A CA file only means something with the checks on.
     expect(() => loadPool({ PG_SSLROOTCERT: caFile })).toThrow(ConfigError);
     expect(() => loadPool({ PG_SSLMODE: "verify-full", PG_SSLROOTCERT: "relative/ca.pem" })).toThrow(ConfigError);
+  });
+});
+
+describe("migrate CLI password folder", () => {
+  test("migrate_cli_reads_passwords_only_from_run_secrets", () => {
+    // A constant, never configuration (architecture amendment 2026-10-07-p129-migrate-image-and-run-only-images, 1).
+    expect(ROLE_PASSWORDS_DIR).toBe("/run/secrets");
+    expect(Object.keys(migrateConfig.fields).filter((key) => /SECRET|PASSWORDS?_DIR|ROLE/.test(key))).toEqual([]);
+    const source = readFileSync(join(import.meta.dirname, "migrate-cli.ts"), "utf8");
+    expect(source.match(/secretsDir:[^,\n]*/g)).toEqual(["secretsDir: ROLE_PASSWORDS_DIR"]);
+    expect(source).not.toMatch(/process\.env/);
   });
 });
