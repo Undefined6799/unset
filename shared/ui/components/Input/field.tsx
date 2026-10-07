@@ -14,6 +14,8 @@ export type FieldMessages = {
 
 export type FieldIds = {
   control: string;
+  /** The visible label's id, for a control drawn by an island that names itself with aria-labelledby (P1.24c). */
+  label: string;
   hint: string | undefined;
   error: string | undefined;
   /** Spread onto the control (or the group, for radios). */
@@ -30,6 +32,7 @@ export function fieldIds(control: string, label: ReactNode, { hint, error }: Fie
   const describedBy = [hintId, errorId].filter((id) => id !== undefined).join(" ");
   return {
     control,
+    label: `${control}-label`,
     hint: hintId,
     error: errorId,
     aria: {
@@ -68,7 +71,7 @@ export function Field({
 }: FieldMessages & { ids: FieldIds; label: string; className: string; children: ReactNode }) {
   return (
     <div className={className}>
-      <label className={styles.label} htmlFor={ids.control}>
+      <label id={ids.label} className={styles.label} htmlFor={ids.control}>
         {label}
       </label>
       {children}
