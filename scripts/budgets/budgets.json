@@ -7,5 +7,6 @@
   "interfaces/review": 2500,
   "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
   "infrastructure/net-guard": 400,
-  "shared/ui": 2500
+  "shared/ui": 2500,
+  "shared/ui-build": 800
 }

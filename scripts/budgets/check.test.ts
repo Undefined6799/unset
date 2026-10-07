@@ -140,7 +140,23 @@ test("budgets_match_plan", () => {
     "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
     "infrastructure/net-guard": 400,
     "shared/ui": 2500,
+    "shared/ui-build": 800,
   });
+});
+
+test("ui_build_counted_under_its_own_key", () => {
+  // P1.25w (architecture ruling 2026-10-07-p125h-follow-ups, N1): the moved runners are measured on their own, never
+  // under shared/ui, and the plan defaults carry the same number as budgets.json.
+  const root = tree({ "shared/ui/a.ts": lines(10), "shared/ui-build/a.ts": lines(900) });
+  expect(check(root, { "shared/ui": 2500, "shared/ui-build": 800 })).toEqual([
+    { key: "shared/ui-build", lines: 900, max: 800, level: "warning" },
+  ]);
+  expect(check(root, { "shared/ui": 9 })).toEqual([{ key: "shared/ui", lines: 10, max: 9, level: "warning" }]);
+  const out: string[] = [];
+  const budgets = JSON.parse(readFileSync(join(import.meta.dirname, "budgets.json"), "utf8"));
+  const real = tree({ "shared/ui-build/a.ts": lines(900), "scripts/budgets/budgets.json": JSON.stringify(budgets) });
+  expect(main(real, (line) => out.push(line), join(real, "summary.md"))).toBe(0);
+  expect(out).toContain("::warning title=line-budget::shared/ui-build 900/800");
 });
 
 test("summary_unwritable_still_exits_zero", () => {

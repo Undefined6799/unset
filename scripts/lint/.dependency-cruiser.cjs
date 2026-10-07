@@ -48,7 +48,7 @@ const APP_BUILD_CONFIG = "^apps/[^/]+/vite\\.config\\.ts$";
 const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|tsx|mts|cts)$|${APP_BUILD_CONFIG}`;
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
-const LEAF_SHARED = "^shared/(ui|lexicons|admin-envelope)/";
+const LEAF_SHARED = "^shared/(ui|ui-build|lexicons|admin-envelope)/";
 // A module under infrastructure/ or shared/ and the one file others may import from it (rule DC-2).
 const WORKSPACE_WITH_INDEX = "(?:infrastructure|shared)/[^/]+/";
 const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
@@ -115,6 +115,13 @@ const MATRIX = [
   },
   { name: "shared", from: { path: "^shared/", pathNot: LEAF_SHARED }, to: [{ path: "^shared/" }, CORE, NPM] },
   { name: "shared-ui-lexicons", from: { path: "^(shared/(ui|lexicons)/)" }, to: [{ path: "^$1" }, NPM] },
+  // The UI build runners (P1.25h moved them; P1.25w, architecture ruling 2026-10-07-p125h-follow-ups N2): pure by
+  // design, IO injected by scripts/ui, so no Node built-in, and shared/ui only as types through its index.
+  {
+    name: "shared-ui-build",
+    from: { path: "^shared/ui-build/" },
+    to: [{ path: "^shared/ui-build/" }, { path: "^shared/ui/index\\.ts$", dependencyTypes: ["type-only"] }, NPM],
+  },
   { name: "shared-admin-envelope", from: { path: "^(shared/admin-envelope/)" }, to: [{ path: "^$1" }, CORE] },
   // The deploy preflight (P1.30; architecture record 2026-10-07-p130-preflight-location-and-yaml): product code under
   // deployment/, a leaf that reaches only itself, Node built-ins and the yaml parser. It runs verify-images as a
