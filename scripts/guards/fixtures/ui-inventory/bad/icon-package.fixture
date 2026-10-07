@@ -1,0 +1,4 @@
+// fixture: apps/web/src/Like.tsx findings=2
+import { Heart } from "iconoir-react";
+import { FaHeart } from "react-icons/fa";
+export const Like = () => <Heart />;
