@@ -60,6 +60,11 @@
           "routines": {
             "migrator": ["EXECUTE"]
           }
+        },
+        "audit_owner": {
+          "routines": {
+            "audit_owner": ["EXECUTE"]
+          }
         }
       }
     },
@@ -102,6 +107,7 @@
       "grants": {
         "admin": ["USAGE"],
         "api": ["USAGE"],
+        "audit_owner": ["USAGE"],
         "indexer": ["USAGE"],
         "web": ["USAGE"]
       }
