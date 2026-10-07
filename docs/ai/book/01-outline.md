@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 155 steps: 134 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 156 steps: 135 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -254,6 +254,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28s | Caddyfile reader refuses quoted top-level tokens | [SEC], trusted | P1.28h | `phase-1.md` |
 | P1.28j | Edge image tests drop their CI-only runIf | [SEC], trusted | P1.28i | `phase-1.md` |
 | P1.28r | Vitest images project run after the unit projects, gated once in run.ts; image-build guard | [SEC] | P1.28i, P1.28j | `phase-1.md` |
+| P1.28n | Image test gate: GITHUB_ACTIONS mode, resolved imports in the build guard, listed-file check in CI | [SEC] | P1.28r | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
@@ -262,11 +263,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
-| P1.29x | Lock entries declare stripped paths, proven deleted in every final stage | [SEC] | P1.29k | `phase-1.md` |
+| P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
 | P1.28o | Edge runtime drops apk-tools; image test proves no package manager | [SEC], trusted | P1.29x | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
-| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r | `phase-1.md` |
+| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
@@ -408,6 +409,7 @@ flowchart TD
   P1_28i["P1.28i Edge image builds in image tests"]
   P1_28j["P1.28j Edge image tests drop runIf"]
   P1_28r["P1.28r Images project after unit tests"]
+  P1_28n["P1.28n Image test gate gaps closed"]
   P1_29k["P1.29k Migrate image, syncRolePasswords"]
   P1_29x["P1.29x Stripped paths declared"]
   P1_28o["P1.28o Edge drops apk-tools"]
@@ -575,6 +577,8 @@ flowchart TD
   P1_28j --> P1_28r
   P1_28r --> P1_29k
   P1_28r --> P1_29d
+  P1_28r --> P1_28n
+  P1_28n --> P1_29d
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p

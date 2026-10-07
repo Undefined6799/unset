@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -199,6 +199,7 @@ flowchart LR
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
   P1_28r["P1.28r images project after unit tests"]
+  P1_28n["P1.28n image test gate gaps closed"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
   P1_28o["P1.28o edge drops apk-tools"]
@@ -307,6 +308,8 @@ flowchart LR
   P1_28j --> P1_28r
   P1_28r --> P1_29k
   P1_28r --> P1_29d
+  P1_28r --> P1_28n
+  P1_28n --> P1_29d
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -7047,6 +7050,28 @@ CI the images run shows N files, 0 skipped.
 
 ---
 
+### P1.28n — Close the image test gate's three gaps
+Tags: [SEC], check            Depends on: P1.28r (merged, #499)
+Slice 1, check class (`scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing, amendment 2 (21:45Z), from
+architecture's amendment 2 in 2026-10-07-test-timing-fuzz-and-image-tests, asked by the coordinator after P1.28r. A
+tightening; the coordinator clears it, no line from Alex and no classifier path. Owner: Phase 2. It goes before P1.29d,
+which gains it as a dependency. P1.29k is not held (coordinator, 21:39Z): the new rules check the whole repo once they
+land, so they cover P1.29k's files after the fact; if one breaks a rule, P1.28n's own PR goes red, and since it cannot
+fix a product file under SE-6, the fix goes in a small product PR first. That fails closed.
+
+- **(a) The CI mode.** `run.ts` `modeFor` uses CI mode when `CI === "true"` or `GITHUB_ACTIONS === "true"`; if
+  `GITHUB_ACTIONS` is set and `CI` is not `"true"`, it fails at start, so a `$GITHUB_ENV` rewrite becomes a red check,
+  not a silent skip of the image tests. Tests: `ci_mode_from_github_actions`, `inconsistent_ci_env_fails`.
+- **(b) Import resolution.** `image_builds_only_in_image_tests` resolves imports with dependency-cruiser's resolver, or
+  with `ts.resolveModuleName` and the root tsconfig, covering extensionless imports, `.js` to `.ts`, `index` and
+  `@unset/*` imports; an unresolvable relative or workspace import fails. Four fixtures, one per import form.
+- **(c) Listed files in CI.** In CI mode, `toRun = listed` (run.ts:288 at db046bf), and a file that is listed but not
+  discovered fails again. Test: `listed_but_undiscovered_file_fails_in_ci`.
+
+Done when `npm run check` is green and the CI log shows the images run in CI mode.
+
+---
+
 ### P1.30q — Allow the deploy preflight in the boundary matrix
 
 Check class (SE-6 `q`; issue #404), `scripts/lint` only (book edit 2026-10-07-p130q-p203e). The dependency-cruiser
@@ -7455,15 +7480,44 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
      (CI only: the image run with no environment exits 78), `migrate_cli_reads_passwords_only_from_run_secrets`, a
      test that the CLI calls `syncRolePasswords` after `migrate()` and not when migrations fail, and the
      per-Dockerfile runtime tests. It and P1.28t are separate PRs; whichever lands second merges main.
-   - As built: merged by Alex at 2026-10-07T21:52:36Z as `322b498` (#504). Its hard-coded `NODE_DOCKERFILES` list
-     (`deployment/images/images.test.ts:17`) is replaced in P1.29x, under amendments 2 and 3 of
-     2026-10-07-p129-migrate-image-and-run-only-images.
+   - **As built (#504, merged by Alex at 2026-10-07T21:52:36Z as `322b498`).** The per-Dockerfile runtime tests ran over
+     a hard-coded `NODE_DOCKERFILES` (images.test.ts:17), not over every `dockerfiles` entry as this text said, and the
+     PR did not report it under "What I am unsure about". P1.29x replaces the list with the kind map (architecture's
+     2026-10-07-p129-migrate-image-and-run-only-images, amendment 2).
 2. **P1.29x "Declare the paths our images strip"** (feature, security-review: `bases.lock.json`, `images.test.ts`;
    depends on P1.29k; Phase 1; no word from Alex: it declares and proves, and nothing reads the field yet; `x` is the
-   product half of the check step, SE-6): an optional `stripped` array on each lock entry, read by the lock schema
-   test; the node entry's npm and corepack paths, exactly the ones `node-app.Dockerfile` and `migrate.Dockerfile`
-   delete. Test: `stripped_paths_removed_in_every_final_stage` (every Dockerfile on that base deletes every declared
-   path in its final stage; a declared path no final stage deletes fails).
+   product half of the check step, SE-6; widened by architecture's 2026-10-07-p129-migrate-image-and-run-only-images,
+   amendments 2 to 4):
+   - **Stripped paths.** An optional `stripped` array on each lock entry, read by the lock schema test. The node entry
+     lists its npm and corepack paths, exactly the ones `node-app.Dockerfile` and `migrate.Dockerfile` delete. Test:
+     `stripped_paths_removed_in_every_final_stage` (every Dockerfile on that base deletes every declared path in its
+     final stage; a declared path no final stage deletes fails).
+   - **Every image has a known kind.** Each Dockerfile maps to exactly one kind through its final stage's lock entry, in
+     an exact map (`KIND_BY_FINAL_ENTRY = { node: "node", caddy: "edge" }`; P1.29d adds `postgres`). Any other final
+     entry fails, a `scratch` final included (`every_dockerfile_has_a_known_kind`). A derived "final stage is on the
+     node entry" set is refused.
+   - **Node rules over every node-kind Dockerfile:** `runtime_has_no_package_manager` (npm, yarn, corepack, pnpm),
+     `image_has_no_dev_deps`, `runtime_base_is_debian_slim`. Floor test `node_kind_includes_current_images`: at least
+     web and migrate.
+   - **Generic rules over every Dockerfile:** `runtime_stage_installs_no_os_packages`, the numeric non-root USER check,
+     the base and digest tests, `build_stage_bases_never_in_final_stage`.
+   - **Lock matching.** A FROM matches its lock entry by full identity (ref, tag and digest) wherever the FROM carries
+     them, so a final stage resolves to exactly one entry. Entries naming the same image (ref plus digest) agree on
+     everything except `stage`. One ref:tag never maps to two digests (`shared_ref_entries_agree`). Fixture: a final
+     stage whose ref matches only a build entry fails.
+   - **Final stages may only remove packages.** `runtime_stage_installs_no_os_packages` reads final-stage RUN
+     instructions joined, in shell and exec form. It splits shell form on `&&`, `||`, `;`, `|` and newlines. A command
+     whose first word's basename is a package manager is allowed only with a removal verb: apk `del`; apt and apt-get
+     `remove`, `purge`, `autoremove`; dpkg `-r`, `-P`, `--remove`, `--purge`. aptitude, rpm, dnf, microdnf and yum are
+     never allowed.
+   - **No indirection in a final stage:** `$` or a backtick anywhere in a shell-form RUN; any shell as a command; any
+     `env`; `source`, `.` and `SHELL`; a package manager passed as an argument. The named stages the final stage builds
+     on are read too. A later need is stated under "What I am unsure about" and ruled on, never exempted in code.
+   - **Fixtures.** Fail: a continuation-line `apk add`; `apk --no-cache add`; `/sbin/apk add`; `apt-get -y install`;
+     `apk fix`; `dpkg --unpack`; `sh -c "apk add x"`; `$PM add x`; exec-form `["apk","add","x"]`. Pass: a
+     continuation-line `apk del --no-network curl libcap`; `apt-get purge -y x`.
+   - **Lands before P1.29d,** so the Postgres image arrives into the kind map.
+   - As built: merged by Alex at 2026-10-07T22:25:11Z as `dcda576` (#507).
 3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`, a new
    `scripts/ci/list-dockerfiles.ts` and its test; depends on nothing open; Phase 2; rewritten 19:15Z on architecture's
    2026-10-07-p129w-scan-matrix-discovery). The matrix is discovered at run time, so a Dockerfile that exists is
@@ -7506,8 +7560,8 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
    stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v and P1.28r;
-   Phase 1):
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r and
+   P1.28n; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -7524,6 +7578,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    file (65532 for our Node images, 999 for postgres, never "any non-zero"), `postgres_test_image_matches_lock`, and
    `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
    after.
+   It adds `postgres` to `KIND_BY_FINAL_ENTRY` (P1.29x), with the generic rules applying to it.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
    P1.11p, P1.28, P1.30t, P1.30n, so no image is composed before every image is scanned):
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
@@ -7760,6 +7815,13 @@ That file is product class, so a trusted PR cannot carry it. It rides the next p
 `images.test.ts` after P1.28o merges (P1.29d is the likely carrier); if none is open within a day of P1.28o merging, it
 becomes a small product step of its own, and the coordinator asks for it. Either way it is a tightening, with no line
 from Alex.
+
+If P1.28o chooses a scratch or distroless final stage rather than removing apk-tools, a small product step lands first
+in `images.test.ts` to add that kind: no shell and no package manager present, a numeric non-root USER, and the binary
+copied from a named build stage only. P1.28o, as a trusted PR, cannot add the kind itself, and a scratch final stage
+fails `every_dockerfile_has_a_known_kind` today (architecture's amendment 4, point 3, in
+2026-10-07-p129-migrate-image-and-run-only-images; book edit 2026-10-07-p129x-kinds-and-removal-verbs). If it removes
+apk-tools, the edge stays kind `edge` and no extra step is needed.
 
 ---
 
