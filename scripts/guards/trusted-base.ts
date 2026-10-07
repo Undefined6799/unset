@@ -111,6 +111,14 @@ export function isDocumentation(path: string, docs: DocFacts): boolean {
   return LICENCE.test(path) || path.endsWith(".md") || (MANIFEST.test(path) && docs.licenceOnly.has(path));
 }
 
+/**
+ * `SET ROLE <name>` and a bare `RESET ROLE`, exactly as written, only switch the session's role, so a trusted migration
+ * may create its objects as their owner (ruling P1.15q, 2026-10-07). Every other neutral statement, other spellings of
+ * these two included, still makes a trusted file mixed, and a file holding only these is not trusted.
+ */
+const ROLE_SWITCH = /^(?:SET ROLE [a-z_][a-z0-9_]*|RESET ROLE)$/;
+const isRoleSwitch = (f: GrantFinding): boolean => f.kind === "neutral" && ROLE_SWITCH.test(f.statement);
+
 /** A path under a parsed path is classified by its grant findings; any other path by the patterns. */
 function kindOf(
   path: string,
@@ -121,7 +129,7 @@ function kindOf(
 ) {
   // A parsed path is judged by its findings first: the grant guard reads every file under migrations/, docs included.
   if (parsedPaths.some((parsed) => matchesPattern(path, parsed))) {
-    const kinds = new Set(findings.filter((f) => f.path === path).map((f) => f.kind === "trusted"));
+    const kinds = new Set(findings.filter((f) => f.path === path && !isRoleSwitch(f)).map((f) => f.kind === "trusted"));
     if (kinds.has(true) && kinds.has(false)) return { kind: "mixed" as Kind, folder: "postgres" };
     return { kind: (kinds.has(true) ? "trusted" : "feature") as Kind, folder: "postgres" };
   }
