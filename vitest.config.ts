@@ -21,6 +21,10 @@ const PROJECTS = [
   "tests/e2e",
 ];
 
+// Image tests build or run container images; they form their own project, which scripts/test/run.ts starts after
+// the unit projects in CI and leaves out locally (P1.28r). No other project selects them.
+const IMAGE_TESTS = "**/*.image.test.{ts,tsx,mts,cts}";
+
 // The integration project's one Postgres (P1.11t): started once per run, only when that project runs.
 const GLOBAL_SETUP: Record<string, { globalSetup: string }> = {
   "tests/integration": { globalSetup: "tests/integration/setup/pg.setup.ts" },
@@ -37,9 +41,17 @@ export default defineConfig({
     passWithNoTests: false,
     allowOnly: false,
     retry: 0,
-    projects: PROJECTS.map((name) => ({
-      extends: true,
-      test: { name, include: [`${name}/**/*.test.{ts,tsx,mts,cts}`], ...(GLOBAL_SETUP[name] ?? {}) },
-    })),
+    projects: [
+      ...PROJECTS.map((name) => ({
+        extends: true,
+        test: {
+          name,
+          include: [`${name}/**/*.test.{ts,tsx,mts,cts}`],
+          exclude: [...exclude, IMAGE_TESTS],
+          ...(GLOBAL_SETUP[name] ?? {}),
+        },
+      })),
+      { extends: true, test: { name: "images", include: [IMAGE_TESTS], exclude } },
+    ],
   },
 });

@@ -22,6 +22,7 @@
     "guards": "vitest run scripts/guards",
     "notes:index": "node scripts/guards/notes.ts",
     "test": "node scripts/test/run.ts",
+    "test:images": "node scripts/test/run.ts --images",
     "budgets": "node scripts/budgets/check.ts",
     "semgrep:fixtures": "node scripts/lint/semgrep-fixtures.ts run"
   },

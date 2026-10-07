@@ -7,8 +7,11 @@ import {
   compare,
   discoverByGlob,
   executedFiles,
+  imagesPlan,
   LIST_ARGS,
+  type Mode,
   main,
+  modeFor,
   skippedCases,
   skippedOnly,
   strayTestFiles,
@@ -46,11 +49,15 @@ const report = (files: Record<string, Case["status"][]>): VitestJsonReport => ({
 const none = new Set<string>();
 
 /** Runs main() quietly and returns its exit code and what it printed to stderr. */
-async function runMain(root: string): Promise<{ code: number; err: string }> {
+async function runMain(
+  root: string,
+  mode: Mode = "local",
+  dockerReady = () => true,
+): Promise<{ code: number; err: string }> {
   const lines: string[] = [];
   const err = vi.spyOn(console, "error").mockImplementation((...a) => void lines.push(a.join(" ")));
   try {
-    return { code: await main({ root, config: CONFIG, quiet: true }), err: lines.join("\n") };
+    return { code: await main({ root, config: CONFIG, quiet: true, mode, dockerReady }), err: lines.join("\n") };
   } finally {
     err.mockRestore();
   }
@@ -174,6 +181,63 @@ describe("end to end with real Vitest", { timeout: 60_000 }, () => {
     expect(tsc.status).not.toBe(0);
     expect(tsc.stdout).toContain("scripts/a.test.mts");
     expect(tsc.stdout).toContain("scripts/b.test.tsx");
+  });
+});
+
+// P1.28r: run.ts alone decides whether the images project runs (step book 2026-10-07
+// p123d-p128i-p128r-test-timing, amendment 1).
+describe("images project", { timeout: 60_000 }, () => {
+  const glob = ["deployment/e/b.image.test.ts", "domains/x/a.test.ts", "tests/integration/c.image.test.ts"];
+  const FAILING = 'import { expect, test } from "vitest";\ntest("no", () => expect(1).toBe(2));\n';
+
+  test("ci_runs_image_project", async () => {
+    expect(modeFor({ CI: "true" }, [])).toBe("ci");
+    const plan = imagesPlan("ci", glob);
+    expect(plan.runs).toEqual([["--project=!images"], ["--project=images"]]);
+    expect(plan.expected).toEqual(glob);
+    expect(plan.problem).toBeNull();
+    const units = { "domains/x/a.test.ts": PASSING };
+    expect((await runMain(fixture({ ...units, "domains/x/b.image.test.ts": PASSING }, true), "ci")).code).toBe(0);
+    const failing = await runMain(fixture({ ...units, "domains/x/b.image.test.ts": FAILING }, true), "ci");
+    expect(failing.code).toBe(1);
+    // The no-skip rule holds inside the images run too.
+    const body = `${PASSING}test.skip("later", () => {});\n`;
+    const skipped = await runMain(fixture({ ...units, "domains/x/b.image.test.ts": body }, true), "ci");
+    expect(skipped.code).toBe(1);
+    expect(skipped.err).toContain("domains/x/b.image.test.ts > later");
+  });
+
+  test("local_reports_images_not_run", async () => {
+    expect(modeFor({}, [])).toBe("local");
+    expect(modeFor({ CI: "false" }, [])).toBe("local");
+    expect(modeFor({}, ["--images"])).toBe("images");
+    expect(() => modeFor({}, ["--image"])).toThrow("unknown argument --image");
+    const plan = imagesPlan("local", glob);
+    expect(plan.runs).toEqual([["--project=!images"]]);
+    expect(plan.expected).toEqual(["domains/x/a.test.ts"]);
+    expect(plan.notRun).toBe("images project: not run locally (2 files; CI runs them; npm run test:images to run)");
+    // A failing image test is not started, and is reported neither as not executed nor as skipped.
+    const root = fixture({ "domains/x/a.test.ts": PASSING, "domains/x/b.image.test.ts": FAILING }, true);
+    const { code, err } = await runMain(root);
+    expect(code).toBe(0);
+    expect(err).toContain("images project: not run locally (1 file; CI runs them; npm run test:images to run)");
+    expect(err).not.toContain("notExecuted");
+    // The opt-in runs only the images project under CI's rules, and needs Docker.
+    expect(imagesPlan("images", glob).runs).toEqual([["--project=images"]]);
+    expect((await runMain(root, "images")).code).toBe(1);
+    const noDocker = await runMain(root, "images", () => false);
+    expect(noDocker.code).toBe(1);
+    expect(noDocker.err).toContain("npm run test:images needs Docker");
+  });
+
+  test("empty_images_project_fails_in_ci", async () => {
+    const problem = "the images project has no *.image.test.ts file to run";
+    expect(imagesPlan("ci", ["domains/x/a.test.ts"]).problem).toBe(problem);
+    expect(imagesPlan("images", ["domains/x/a.test.ts"]).problem).toBe(problem);
+    expect(imagesPlan("local", ["domains/x/a.test.ts"]).problem).toBeNull();
+    const { code, err } = await runMain(fixture({ "domains/x/a.test.ts": PASSING }, true), "ci");
+    expect(code).toBe(1);
+    expect(err).toContain(problem);
   });
 });
 
