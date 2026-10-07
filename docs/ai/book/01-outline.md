@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 133 steps: 112 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 142 steps: 121 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -184,6 +184,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | [SEC], trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
 | P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
 | P1.15b | Audit chain tests: verify through SET ROLE, owner DISABLE TRIGGER tamper | [SEC] | P1.15s | `phase-1.md` |
+| P1.15c | Audit chain tests: denials pinned to 42501, schema-USAGE variant | [SEC] | P1.15b | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
@@ -215,6 +216,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24b | Toast and select islands within the JS budget (per-icon drawing modules first) | feature | P1.24j | `phase-1.md` |
 | P1.24c | Toast focus after close, required select stays native, select labels, font-metrics entry check | feature | P1.24b | `phase-1.md` |
 | P1.25k | Error-page hook in the server kit | [SEC], trusted | P1.04, P1.08 | `phase-1.md` |
+| P1.25b | Error-page hook leftovers: documentation addresses, byte cap, no-cache per group, 413 close, Promise type test, request id on the fixed page, private page-taking errorResponse | [SEC], trusted | P1.25k | `phase-1.md` |
 | P1.25h | UI build runners move to the JSX-free shared/ui-build workspace | — | P1.24c | `phase-1.md` |
 | P1.25q | Notes guard: `ui-build` area | check | P1.25h | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h | `phase-1.md` |
@@ -227,6 +229,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
 | P1.28w | Mirror scan: pipefail shell so build-stage HIGH warnings fire; one Trivy cache | [SEC] | P1.28v | `phase-1.md` |
 | P1.28u | Refuse image references outside FROM: COPY --from, RUN --mount from=, ADD remote | [SEC] | P1.28v | `phase-1.md` |
+| P1.28c | Remove the edge Dockerfile's syntax directive | [SEC], trusted | P1.28u | `phase-1.md` |
+| P1.28t | Dockerfile reader: ADD refused, case-insensitive mount keys and flags, syntax and escape refused, list as floor | [SEC] | P1.28c | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
@@ -237,10 +241,15 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
-| P1.29k | Migrate image (separate Dockerfile), syncRolePasswords wiring, postgres in the lock | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.11p, P1.28, P1.30t | `phase-1.md` |
-| P1.29a | PDS and Mailpit vendor images and services in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a | `phase-1.md` |
+| P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
+| P1.29x | Lock entries declare stripped paths, proven deleted in every final stage | [SEC] | P1.29k | `phase-1.md` |
+| P1.29w | images.yml scans every shipped image through a discovery matrix | [SEC] [ALEX] | P1.29k | `phase-1.md` |
+| P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w | `phase-1.md` |
+| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.11p, P1.28, P1.30t | `phase-1.md` |
+| P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
+| P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
 | P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
@@ -262,7 +271,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04 | `phase-2.md` |
 | P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06 | `phase-2.md` |
-| P2.11 | Email-verify gate | [SEC] | P2.06, P2.07 | `phase-2.md` |
+| P2.11 | Email-verify gate | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
@@ -319,6 +328,7 @@ flowchart TD
   P1_15["P1.15 Audit TS workspace"]
   P1_15s["P1.15s Audit chain tests"]
   P1_15b["P1.15b Verify through SET ROLE"]
+  P1_15c["P1.15c Denials pinned to 42501"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17e["P1.17e Lock log events"]
@@ -348,6 +358,7 @@ flowchart TD
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
   P1_25k["P1.25k Error-page hook in the kit"]
+  P1_25b["P1.25b Error-page hook leftovers"]
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
   P1_25["P1.25 App shell and error pages"]
@@ -359,13 +370,20 @@ flowchart TD
   P1_28v["P1.28v mirror scan per stage"]
   P1_28w["P1.28w mirror scan pipefail shell"]
   P1_28u["P1.28u image refs outside FROM"]
+  P1_28c["P1.28c edge syntax line dropped"]
+  P1_28t["P1.28t Dockerfile reader gaps"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_28b["P1.28b Edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
-  P1_29k["P1.29k Migrate image, postgres locked"]
+  P1_29k["P1.29k Migrate image, syncRolePasswords"]
+  P1_29x["P1.29x Stripped paths declared"]
+  P1_29w["P1.29w Scan every shipped image"]
+  P1_29v["P1.29v Mirror scan skips stripped"]
+  P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
-  P1_29a["P1.29a PDS and Mailpit"]
+  P1_29a["P1.29a PDS in the dev stack"]
+  P1_29h["P1.29h Local email-token reader"]
   P1_29s["P1.29s Dev seed and precheck"]
   P1_29t["P1.29t Running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
@@ -486,6 +504,7 @@ flowchart TD
   P1_04 --> P1_25k
   P1_08 --> P1_25k
   P1_25k --> P1_25
+  P1_25k --> P1_25b
   P1_24c --> P1_25h
   P1_25h --> P1_25
   P1_25h --> P1_25q
@@ -499,6 +518,8 @@ flowchart TD
   P1_28d --> P1_28v
   P1_28v --> P1_28w
   P1_28v --> P1_28u
+  P1_28u --> P1_28c
+  P1_28c --> P1_28t
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -544,6 +565,7 @@ flowchart TD
   P1_15 --> P2_12
   P1_15 --> P1_15s
   P1_15s --> P1_15b
+  P1_15b --> P1_15c
   P2_06 --> P2_13
   P1_25 --> P2_13
   P2_13 --> P2_13a
@@ -551,8 +573,17 @@ flowchart TD
   P2_12 --> P2_13a
   P1_26 --> P2_13a
   P1_29k --> P1_29
+  P1_29k --> P1_29x
+  P1_29k --> P1_29w
+  P1_29x --> P1_29v
+  P1_28w --> P1_29v
+  P1_29v --> P1_29d
+  P1_29d --> P1_29
   P1_30t --> P1_29
   P1_29 --> P1_29a
+  P1_29a --> P1_29h
+  P1_29h --> P1_29s
+  P1_29h --> P2_11
   P1_29a --> P1_29s
   P1_29a --> P1_29t
   P1_29s --> P1_29t

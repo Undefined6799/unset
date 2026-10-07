@@ -1586,7 +1586,7 @@ Not in this step: ending PDS browser sessions (the user does it at the PDS); cha
 Diagram: see "State diagram: app session lifecycle".
 
 ### P2.11 — Email-verify gate
-Tags: [SEC]            Depends on: P2.06, P2.07            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"
+Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"
 Where: `domains/identity/auth/gates.ts` (`requireSession`, `requireVerified`), `interfaces/http/routes/verify-email.ts`,
   `apps/web/screens/VerifyEmail.tsx`, catalogs
 Size: ~120 source lines, ~200 test lines
@@ -1627,9 +1627,10 @@ Edge cases and failures:
   - PDS down while the cache says true and fresh → pass; cache says false/null → `/verify-email` shows `unavailable`.
   - Foreign PDS without a `/account` page → `PdsAccountLink` points to the issuer origin with neutral wording.
   - `/verify-email?confirmed=1` crafted link → same as no parameter.
-  - Mail delivery is the PDS's (P1.29 `PDS_EMAIL_SMTP_URL`): on a throwaway stack, Mailpit catches it; a tester on the
-    shared dev PDS cannot read Mailpit, so the closed test track needs real SMTP on the dev PDS before the first invite
-    (P2.25 checklist item; phase-1-part2 note 13). Without it, this gate never passes for a tester.
+  - Mail delivery is the PDS's (P1.29a `PDS_EMAIL_SMTP_URL`). There is no Mailpit (book edit 2026-10-07-no-mailpit):
+    on a `local` or test stack mail is dropped, and tests read the confirmation token with P1.29h's reader and call the
+    real `confirmEmail`; the deployed dev PDS has real SMTP from P1.34 on. Without real SMTP, this gate never passes
+    for a tester.
   - Re-consent loop guard: if the user returns from re-consent and the grant still lacks `account:email`, P2.06 denies with
     `login.scope_insufficient` (no loop).
 
@@ -1893,7 +1894,8 @@ Goal: prove the first slice works end to end, check its architecture against the
 was learned, and fix problems before any other slice is built (guideline §12).
 
 Inputs: every slice-1 step merged (`01-outline.md`, "Slice 1"); P1.29's `local` env (`PDS_HOSTNAME=pds.unset.localhost`,
-  never reachable from outside) with an account seeded by `dev-seed`; Mailpit for the verification mail; P1.26's
+  never reachable from outside) with an account seeded by `dev-seed`; P1.29h's token reader for the verification
+  (no Mailpit); P1.26's
   Playwright and axe harness; P0.05's dependency-cruiser rules.
 Outputs:
   - `tests/e2e/slice-1.spec.ts`: one scenario per theme, in English (slice 1 is English only; the i18n slice adds French).
@@ -1909,7 +1911,8 @@ Algorithm:
   1. Bring up the `local` stack (`compose.dev.yaml` with the `local` env, profile `app`); seed one account.
   2. Run the scenario: `/login` → handle of the seeded account → the local PDS's sign-in page → consent (the fallback
      scope set is expected until P1.35 publishes the permission set; P2.05 logs `oauth.scope_fallback_used`) →
-     `/oauth/callback` → onboarding (age, terms) → email verification through Mailpit → `/me` shows the verified handle
+     `/oauth/callback` → onboarding (age, terms) → email verification (`requestEmailConfirmation`, P1.29h's
+     reader, the real `confirmEmail`) → `/me` shows the verified handle
      and the DID in mono and the "Set up your profile" placeholder → Sign out → `/me` redirects to `/login?next=/me`.
   3. Assert on the way: every response carries the P1.08 CSP and security headers; session cookies are `__Host-`
      cookies with no `Domain=`; the OAuth state, session and token rows are sealed (`types.sealed`); no IP address or
@@ -3712,9 +3715,10 @@ Size: ~0 source lines; ~60 lines of runbook and ADR; one Playwright script (~120
 Goal: Decide with evidence that the unpatched, branded PDS `/account` and sign-in pages can be the only account surface,
 so `account-manager` and `pds-gatekeeper` stay dropped.
 
-Inputs: the dev PDS (P1.29, made fit for authority by P1.34/P1.35) at the pinned image digest — there is no production PDS
-  before Phase 5 (decision 20), so every item runs on the dev PDS and P5.12 re-runs items 1–6 against production (the ADR
-  says so); Mailpit on the dev stack (P1.29, `PDS_EMAIL_SMTP_URL`; E15 is settled); P2.15 legal URLs; the design sheet's colours and logo.
+Inputs: the dev PDS (P1.29a, made fit for authority by P1.34/P1.35) at the pinned image digest — there is no
+  production PDS before Phase 5 (decision 20), so every item runs on the dev PDS and P5.12 re-runs items 1–6 against
+  production (the ADR says so); real SMTP on the dev PDS (P1.29a `PDS_EMAIL_SMTP_URL`, no Mailpit; E15 is settled);
+  P2.15 legal URLs; the design sheet's colours and logo.
 Outputs: the ADR with one row per item below (result, evidence path, PDS image digest, date), the screenshots, and
   Alex's written acceptance of the branding.
 
@@ -3977,11 +3981,12 @@ Algorithm (checklist for Alex; the agent prepares 0, Alex does 1–6, the agent 
   1. Decide the tester list (≤ 10, no EU/UK/AU residents while the rule is on).
   2. Confirm the dev stack is reachable for testers (E16), deployed with P2.26a's `deploy <commit>` at the Phase 2 exit
      commit (decision 35 D5), and `TEST_TRACK_BANNER=on`.
-  2a. Configure real SMTP on the dev PDS (P1.29 `PDS_EMAIL_SMTP_URL`, P1.30 check C11), using the provider Alex picked
+  2a. Confirm real SMTP on the dev PDS (set up before P1.34; P1.29a `PDS_EMAIL_SMTP_URL`, P1.30 check C11), using the
+     provider Alex picked
      from the team's shortlist (Alex answer 21: a paid sending service hosted in Canada or the EU; the RoPA names it,
      P1.36), and send one confirmation mail to
-     Alex's own address **before the first invite**: testers cannot read Mailpit, and P2.11's email gate never passes
-     without real mail (phase-1-part2 note 13).
+     Alex's own address **before the first invite**: there is no Mailpit (book edit 2026-10-07-no-mailpit), and P2.11's
+     email gate never passes for a tester without real mail (phase-1-part2 note 13).
   3. Issue one invite per tester from Alex's own account through `/invite`; each tester creates their own dev-PDS
      account with it, after the notice.
   4. Confirm `FINGERPRINT_CHECK=fake` on the dev stack and that the README's sentence about the stand-in check is shown.
@@ -4064,7 +4069,9 @@ coordinator's to route. Round 2 status is given per item.
 - **E13 — "Abandoned drafts: 30 days".** Now Q-E, answered by Alex 2026-10-03 11:57Z: the whole unpublished profile
   draft is deleted 30 days after its last edit (P2.18 sweeper, P2.21 notice, P2.15 retention line).
 - **E14 — `dangerouslySetInnerHTML` exception unused.** Unchanged; the lint exception can be removed.
-- **E15 — Mail catcher.** Settled by P1.29 (Mailpit, `PDS_EMAIL_SMTP_URL`); P2.24 and P2.26 reference it.
+- **E15 — Mail catcher.** Settled by P1.29 (Mailpit, `PDS_EMAIL_SMTP_URL`), then replaced by book edit
+  2026-10-07-no-mailpit: no catcher; local stacks drop mail and tests use P1.29h's token reader; P2.24 and P2.26
+  reference it.
 - **E16 — Test-track hosting and identities.** Now P2-A3, answered by Alex 2026-10-03 11:54Z (testers create dev-PDS
   accounts after a plain notice; the wipe closes them). A public dev hostname for `web` is still needed (the `client_id`
   must be fetchable by any tester's PDS); a dev-PDS account is a permanent public `did:plc`.

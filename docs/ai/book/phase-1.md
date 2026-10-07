@@ -56,14 +56,14 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b, P1.28h,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29, P1.29a, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h,
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
   Where a slice-1 step below says "catalog text", "catalog key" or "EN/FR", read "the feature's messages module" and
   "English"; its tests that name both languages run in English until the i18n slice adds French.
-  The development PDS for slice 1 is P1.29's **`local`** stack (`pds.unset.localhost`, never reachable from outside),
+  The development PDS for slice 1 is P1.29a's **`local`** stack (`pds.unset.localhost`, never reachable from outside),
   so slice 1 needs none of the homelab, Tailscale or lexicon-authority steps.
 - **i18n slice** (after P2.13a is merged, before P1.38): **P1.19** (its first task converts every slice-1 messages
   module into the EN/FR catalogs) and **P1.22b** (the locale half of P1.22, and French in P1.26's matrix). P1.19's text
@@ -124,6 +124,7 @@ flowchart TD
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P115 --> P115s["P1.15s audit chain tests"]
   P115s --> P115b["P1.15b verify through SET ROLE"]
+  P115b --> P115c["P1.15c denials pinned to 42501"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P103 --> P117e["P1.17e lock log events"]
   P111 --> P117["P1.17 advisory lock"]
@@ -169,6 +170,7 @@ flowchart LR
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
   P1_25k["P1.25k error-page hook in the kit"]
+  P1_25b["P1.25b error-page hook leftovers"]
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
   P1_25["P1.25 app shell, error pages"]
@@ -180,13 +182,20 @@ flowchart LR
   P1_28v["P1.28v mirror scan per stage [ALEX]"]
   P1_28w["P1.28w mirror scan pipefail shell"]
   P1_28u["P1.28u image refs outside FROM"]
+  P1_28c["P1.28c edge syntax line dropped"]
+  P1_28t["P1.28t Dockerfile reader gaps"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
-  P1_29k["P1.29k migrate image, postgres locked"]
+  P1_29k["P1.29k migrate image, syncRolePasswords"]
+  P1_29x["P1.29x stripped paths declared"]
+  P1_29w["P1.29w scan every shipped image ALEX"]
+  P1_29v["P1.29v mirror scan skips stripped ALEX"]
+  P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
-  P1_29a["P1.29a PDS and Mailpit ALEX"]
+  P1_29a["P1.29a PDS in the dev stack ALEX"]
+  P1_29h["P1.29h local email-token reader"]
   P1_29s["P1.29s dev seed and precheck"]
   P1_29t["P1.29t running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
@@ -229,6 +238,7 @@ flowchart LR
   P1_04 --> P1_25k
   P1_08 --> P1_25k
   P1_25k --> P1_25
+  P1_25k --> P1_25b
   P1_24c --> P1_25h
   P1_25h --> P1_25
   P1_25h --> P1_25q
@@ -242,15 +252,25 @@ flowchart LR
   P1_28d --> P1_28v
   P1_28v --> P1_28w
   P1_28v --> P1_28u
+  P1_28u --> P1_28c
+  P1_28c --> P1_28t
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
   P1_11 --> P1_29
   P1_27 --> P1_29k
   P1_29k --> P1_29
+  P1_29k --> P1_29x
+  P1_29k --> P1_29w
+  P1_29x --> P1_29v
+  P1_28w --> P1_29v
+  P1_29v --> P1_29d
+  P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
   P1_29 --> P1_29a
+  P1_29a --> P1_29h
+  P1_29h --> P1_29s
   P1_29a --> P1_29s
   P1_29a --> P1_29t
   P1_29s --> P1_29t
@@ -2986,8 +3006,8 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      DISABLE TRIGGER`). Nothing in production changed; P1.15b fixes both.
   4. **P1.15b**: verify the audit chain through `SET ROLE`; its own section follows P1.15's.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-  Of these, only P1.38 depends on P1.15s, so the tamper tests exist before Phase 1 closes; P1.15b depends on P1.15s,
-  and nothing depends on P1.15b.
+  P1.38 waits for P1.15s, so the tamper tests exist before Phase 1 closes. P1.15b and P1.15c are follow-ons on the
+  same test file that no other step waits for.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
   `infrastructure/audit/{index.ts,actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) +
   `rowHash.test.ts`; `tests/integration/audit/chain.test.ts`, the `tests/tsconfig.json` reference and
@@ -3201,6 +3221,24 @@ production login role is created, and the weekly script's own role remains the l
 Tests: `verifier_login_role_needs_set_role`, `verifier_without_set_role_is_denied` (the same login role without `SET
 ROLE` is refused on the chain read, proving the NOINHERIT shape), `tamper_as_owner_disable_trigger_detected`, and the
 existing tamper tests under the new role.
+
+**As built** (#453, merged by Alex at 2026-10-07T12:56:02Z as `8d498cd`; book edit
+2026-10-07-p115b-as-built-and-p115c): the role is created `LOGIN NOINHERIT` with `GRANT audit_owner ... WITH INHERIT
+FALSE, SET TRUE`; both denials (the `event_body` read and `verifyChain` on links) are asserted before `SET ROLE`; the
+new tamper test finds the tamper; the hub note changed, as allowed; the red evidence was a local run. P1.15c pins the
+denials to their error code.
+
+---
+
+### P1.15c — Pin the audit chain denials to code 42501
+Tags: [SEC]            Depends on: P1.15b (merged, #453)
+Slice 1, feature, `tests/integration/audit/chain.test.ts` only; book edit 2026-10-07-p115b-as-built-and-p115c. Letter
+`c`: glue on P1.15b (P1.15's taken letters are b, d, g, m, q, s and x). Owner: Phase 1. `chain.test.ts:213` and
+`:221-225` match `/permission denied/` on the message, which also fires on a missing schema `USAGE`, so the test would
+pass even if the table privilege were wrongly granted. Both denials assert SQLSTATE `42501` (`insufficient_privilege`),
+as `tests/integration/postgres/audit.test.ts:170,172` does, and a variant grants the login role `USAGE` on schema
+`audit` and is still refused on the table, pinning the denial to the table privilege. Tests: `verifier_denial_is_42501`
+and `verifier_denied_on_table_with_schema_usage`.
 
 ---
 
@@ -5356,15 +5394,16 @@ book's adopted behaviour, narrowed, and the hook is an extension point inside th
      the existing `log.logError` (stack path-only); the hook is never called twice and the error's text never
      reaches the body.
    - `secured()`'s catch never calls the hook: the last-resort 500 stays the fixed static page.
-2. **404 gets `no-cache`**, for `http.not_found` in the app, profile and admin groups only. Every other error (405
+2. **404 gets `no-cache`**, for `http.not_found` in the page groups only: app, profile, admin and public (public as
+   built, #445). Every other error (405
    included) and every api, media and static response stays `no-store`. Safe because the 404 body depends only on
    the group.
 3. **The request id in the 500 body only:** the kit's `reqId` (never taken from a request header) goes in the body of
    `internal.error` responses, not 4xx and not `http.deadline`. No `x-request-id` header until a booked step asks.
 
 **Done when (tests),** in `shared/http/server.test.ts`:
-- `error_page_hook_renders_page_groups`: app, profile and admin use the hook's body; api, media and static never call
-  it.
+- `error_page_hook_renders_page_groups`: app, profile, admin and public use the hook's body; api, media and static
+  never call it.
 - `error_page_hook_receives_no_request_data`: a spy records only the code, the group and, for 500, the reqId.
 - `error_page_hook_throw_falls_back`: today's fixed page, same status and headers, one logError line, no error text.
 - `error_page_hook_non_string_or_oversize_falls_back`.
@@ -5394,6 +5433,34 @@ the assets path). This supersedes the unbooked per-page `script-src 'none'` cand
 
 ---
 
+### P1.25b — Finish the error-page hook's leftovers
+Tags: [SEC], trusted            Depends on: P1.25k (merged, #445)
+Slice 1, trusted base (`/shared/http/`); book edit 2026-10-07-pds-image-answer-and-p125k-riders, with architecture's
+13:20Z addendum in 2026-10-07-p125k-error-page-hook. Letter `b`: leftovers of P1.25k (P1.25's taken letters are h, j
+reserved, k and q). Owner: the third thread, after P1.28c; it must merge before any later kit step touches
+`server.test.ts`. Not paired with P1.28c: different subjects in different trusted areas. No word from Alex.
+
+**Where:** `shared/http/errors.ts`, `shared/http/server.ts`, `shared/http/index.ts` if its exports change, and
+`shared/http/server.test.ts`.
+
+**What:**
+1. Documentation addresses: `server.test.ts:452-624` uses the routable `1.1.1.1` and `9.9.9.9` as client stand-ins
+   (9 uses); they move to documentation ranges such as `192.0.2.1` and `198.51.100.1`. Behaviour unchanged.
+2. The kit's fixed page carries the request id too, for `internal.error` with a known `reqId` matching the UUID shape
+   (`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/`); otherwise the line is omitted. The fixed
+   template does no escaping, so the shape check is the escape. Point 3 of P1.25k then holds on every path.
+3. `errorResponse`'s exported signature goes back to `(code, group, headers)`; it is called outside the kit
+   (`interfaces/http/routes/assets.ts:19`, `prefs.ts:29`). The page-taking variant is module-private, used only by
+   `fail()` through `hookedPage`, so every renderer passes the try/catch and the 256 KiB cap.
+
+Tests: `error_page_hook_cap_counts_bytes` (a multibyte body under 256 KiB in characters but over it in bytes falls
+back), `not_found_no_cache_in_every_page_group` (profile, admin and public), `payload_too_large_closes_connection`
+(413 sends `connection: close`), `error_page_hook_promise_is_type_error` (a `@ts-expect-error` on a
+Promise-returning hook), `fixed_page_carries_request_id` (no hook), `fallback_page_carries_request_id` (a throwing
+hook), and `error_response_public_signature_has_no_page`.
+
+---
+
 ### P1.25h — Move the UI build runners to shared/ui-build
 Tags: —            Depends on: P1.24c (merged; it last touched the entries test and `font-metrics.ts`)
 Slice 1, feature class; book edit 2026-10-07-p125h-ui-build-workspace and architecture's
@@ -5419,8 +5486,8 @@ beside the island plumbing; the workspace and lockfile entries.
   with a whole-statement `import type { … } from "@unset/shared-ui"` (the inline `import { type X }` is refused: it
   can leave a runtime import behind). `@unset/shared-ui` is a devDependency of `@unset/shared-ui-build`, types only;
   shared/ui takes no dependency on shared/ui-build, so there is no cycle. The generic `shared` row
-  (`.dependency-cruiser.cjs:116`) already covers `shared/ui-build/`, so the MATRIX is unchanged and no q or v part is
-  booked.
+  (`.dependency-cruiser.cjs:116`) already covers `shared/ui-build/`, so the MATRIX is unchanged and no MATRIX q or v
+  part is booked.
 - The freshness tests (`icon_allowlist_matches_sheet` and the token test) stay with shared/ui, which owns the data,
   and import the runner through `@unset/shared-ui-build`'s index. The third thread's branch (relayed 12:52Z, to be
   confirmed against the merged PR) moves them with the runners instead, since keeping them would need a shared/ui to
@@ -5439,7 +5506,7 @@ imports through `@unset/shared-ui` passing depcruise with no rule change.
 ---
 
 ### P1.25q — Add ui-build to the notes guard's areas
-Tags: —            Depends on: P1.25h
+Tags: check            Depends on: P1.25h
 Slice 1, check class (`scripts/guards/notes.ts` and its test); book edit 2026-10-07-p125h-ui-build-workspace (P1.25q
 section, 13:12Z). Letter `q`: the check part that follows P1.25h. The notes guard's `AREAS`
 (`scripts/guards/notes.ts:14`) has no `ui-build`, so P1.25h's hub note `docs/ai/notes/area/ui-build.md` lists area
@@ -5558,6 +5625,11 @@ under a "Riders from P1.24c" heading):
    `select_label_click_disabled_no_focus`.
 2. Untested branches get tests: `toast_close_without_main_leaves_focus` (the no-`#main` branch, `ToastClose.tsx:43`)
    and `font_metrics_check_fails_when_stale` (the stale branch of `font-metrics.ts --check`).
+3. Prefs uses the hook (book edit 2026-10-07-pds-image-answer-and-p125k-riders; architecture's 13:20Z addendum):
+   `interfaces/http/routes/prefs.ts:29` returns `errorResponse("prefs.invalid", "app")` directly, so that error shows
+   the kit's fixed page, not the designed shell. It throws the matching `AppError` instead, and the kit renders the
+   page through the hook. Test: `prefs_error_renders_through_kit`. (The static 404 in `assets.ts` stays: the static
+   group has no body.)
 - Stays a note, no change: `aria-labelledby` has no fallback when a label lacks an id (`SelectListbox.tsx:135`).
   Every Select goes through `Field`, which always prints the label id; a later step that renders a Select outside
   `Field` adds the fallback.
@@ -5846,8 +5918,9 @@ committed lockfile; a cosign key pair generated by Alex (checklist below).
   `/health`; `ENTRYPOINT ["node", "dist/<app>/server.js"]`; labels `org.opencontainers.image.source`,
   `.revision`, `.created` (from `SOURCE_DATE_EPOCH`).
 - `mirror.list.json`: each upstream image compose or the Dockerfile uses (Node base, PDS, Postgres, Caddy, Tap,
-  Mailpit, CoreDNS) as `{ "source": "<registry/name>@sha256:<index digest>", "mirror": "ghcr.io/<owner>/mirror/<name>" }`,
-  digests chosen in the PR that adds or bumps them (Renovate proposes, a human reviews).
+  CoreDNS; no Mailpit, book edit 2026-10-07-no-mailpit) as `{ "source": "<registry/name>@sha256:<index digest>",
+  "mirror": "ghcr.io/<owner>/mirror/<name>" }`, digests chosen in the PR that adds or bumps them (Renovate proposes, a
+  human reviews).
 - `mirror.yml` (on change to `mirror.list.json`, and weekly for the scan only): for each entry, `crane copy` by
   digest into the private mirror (all platforms of the index) → Trivy scan of the mirrored digest → syft SBOM →
   `cosign sign --key env://COSIGN_PRIVATE_KEY --tlog-upload=false <mirror>@<digest>` → `cosign attest
@@ -6279,6 +6352,44 @@ stage label; `ADD <url>` and `ADD <git ref>` fetch external content the same way
 
 ---
 
+### P1.28c — Drop the edge Dockerfile's syntax line
+Tags: [SEC], trusted            Depends on: P1.28u (merged, #449)
+Slice 1, trusted base; book edit 2026-10-07-p128c-p128t-reader-gaps, from architecture's
+2026-10-07-p128u-reader-gaps. Letter `c`: glue ahead of P1.28t (P1.28's taken letters are b, d, h, q, u, v, w and
+x). Owner: the third thread. It removes line 1 (`# syntax=docker/dockerfile:1`) of `deployment/edge/Dockerfile` and
+changes nothing else; the file uses no `--mount`, heredoc, `--link`, `--parents`, `--exclude` or `ADD`, so the
+built-in frontend builds it. Proof in the body: the images workflow's edge job builds the same image without the
+line, and Trivy is unchanged. It must land before P1.28t, whose directive refusal would turn CI red on this file. No
+word from Alex: a tightening, no `.github/` path.
+
+---
+
+### P1.28t — Close the Dockerfile reader's gaps
+Tags: [SEC]            Depends on: P1.28c
+Slice 1, feature, `deployment/images/images.test.ts` only, under the `/deployment/` security-review line; book edit
+2026-10-07-p128c-p128t-reader-gaps, with architecture's 2026-10-07-p128u-reader-gaps (amending
+2026-10-07-p128-copy-from-image-ref), which wins where they differ. Owner: Phase 1. Rule: where BuildKit's exact
+behaviour is unconfirmed, the reader refuses more, never less. A guard fix to a merged step gets its own review
+rather than riding a large feature PR. Nothing in the repo is exploitable today; this closes gaps. No word from Alex.
+1. **ADD is refused outright**, in every stage and in ONBUILD: its extra powers (URLs, git refs including any
+   `user@host:path`, automatic tar extraction) all bring in unpinned content, and variables defeat any text check of
+   its source. `addSourceProblems` becomes "ADD is not allowed; use COPY" (hadolint DL3020).
+2. **Mount keys and instruction flags in any letter case:** each `--mount` key is lower-cased before comparison, and
+   `--FROM=` is read as `--from=` rather than skipped. Quotes in a mount value stay unparsed, so they fail.
+3. **The `syntax` and `escape` parser directives are refused** (`^#\s*(syntax|escape)\s*=`, case-insensitive, on any
+   comment line before the first instruction): `syntax` pulls an unpinned, unscanned frontend image outside FROM, and
+   `escape` would make our reader and BuildKit join lines differently. A later need for a newer frontend is a new
+   question with a lock entry, not an exception here.
+4. **The Dockerfile list is a floor:** `real_dockerfiles_name_images_only_in_from` asserts that discovery contains the
+   known Dockerfiles and checks every one it finds, so P1.29k and P1.29d add files without editing the test.
+
+Tests: `add_refused` (a local path, `${SRC}`, `deploy@example.com:o/r`, a URL and the JSON form, all refused),
+`mount_from_key_any_case_refused` (`FROM=img`, `From=img`, `fRoM=img`), `syntax_directive_refused`,
+`escape_directive_refused`, and the floor form of `real_dockerfiles_name_images_only_in_from`. With P1.29k: separate
+PRs; whichever lands second merges main.
+
+---
+
 ### P1.28x — Edge pins (non-trusted part of P1.28)
 
 **Tags:** [SEC] · **Depends on:** P1.27 · **Status:** merged as built (#391) · **Class:**
@@ -6620,7 +6731,8 @@ one reader lands first, in the trusted base, and C18 imports it. Letter `h`: hel
 q, u, v, w and x. Phase 1 owns it, after P1.15b and before P1.28u; it touches no file either of those touches, and
 Phase 2 needs it merged before P1.30u.
 
-**Tags:** [SEC], trusted (only `deployment/edge/` files and their tests) · **Depends on:** P1.28b · **Plan:** as P1.28
+**Tags:** [SEC], trusted (only `deployment/edge/` files and their tests) · **Depends on:** P1.28b (merged) · **Plan:** as
+P1.28 · No word from Alex: a tightening, nothing is loosened
 
 **Where:** `deployment/edge/caddyfile.ts`; `deployment/edge/edge.test.ts`; tests.
 
@@ -6640,66 +6752,133 @@ caddyfile` JSON), and the existing `edge.test.ts` zone tests unchanged and green
 
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
-**Split into five parts** (book edit 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h, with
-architecture's 2026-10-07-p129-migrate-image-and-run-only-images behind it, which wins where they differ; every part
-is slice 1). Why: nothing calls `syncRolePasswords` yet (`migrate-cli.ts` runs `migrate()` only, and the P1.12p and
-P1.12x binding says P1.29 wires it in after migrations); the PDS and Mailpit are vendor images, each a loosening Alex
-decides on its own card; the two running-stack tests need the whole stack in CI; and the single step plus the migrate
-image and the lock work is well over the ~550-line split line. The text below this note is the whole stack's spec;
-each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend on **P1.29t**, the
-last part, which implies all five.
-1. **P1.29k "Add the migrate image and lock postgres"** (product, security-review: `/deployment/` and
-   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged):
+**Split into ten parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
+2026-10-07-p129-postgres-split; 2026-10-07-no-mailpit; architecture's 2026-10-07-p129-migrate-image-and-run-only-images
+with its 13:15Z amendment, 2026-10-07-p129-postgres-image-and-stripped-paths and
+2026-10-07-pds-mail-se7-and-local-verification, which win where they differ; every part is slice 1). Why: nothing calls
+`syncRolePasswords` yet (`migrate-cli.ts` runs `migrate()` only, and the P1.12p and P1.12x binding says P1.29 wires it
+in after migrations); the PDS is a vendor image Alex allowed on his card ("Allow pinned", 2026-10-07T13:00:19Z);
+Mailpit is out (his "Leave it out", 13:05:20Z); every official postgres 18 image ships `/usr/local/bin/gosu` built
+with Go 1.24.6 (one CRITICAL, CVE-2025-68121, and 21 HIGH, fixed in Go but in no image yet), so we ship our own
+gosu-free image, and the mirror scan must skip only paths our images provably delete; the running-stack tests need
+the whole stack in CI; and the single step was well over the ~550-line split line. The text below this note is the
+whole stack's spec; each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend
+on **P1.29t**, the last part, which implies the rest. Order: P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a,
+P1.29h, P1.29s, P1.29t.
+1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
+   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged;
+   Phase 1):
    - `deployment/images/migrate.Dockerfile`, a separate Dockerfile. A second APP would need a second final stage
      chosen by `--target`, which escapes the "last stage ships" tests; `node-app.Dockerfile` keeps refusing any APP
      but web. It uses the same locked node base by digest (no new lock entry), stages `deps` (`npm ci
-     --ignore-scripts --omit=dev`) and `runtime`, and no build stage. The runtime copies only `package.json`, prod
-     `node_modules`, `shared/` and `infrastructure/postgres/`, never `apps/`, `interfaces/`, `domains/`, `scripts/`,
-     `tests/` or `deployment/`. Uid 65532; npm, yarn, corepack and pnpm stripped; no OS packages; `ENTRYPOINT
-     ["node", "infrastructure/postgres/migrate-cli.ts"]`; no EXPOSE or HEALTHCHECK (one-shot); read-only root in
-     compose; the migrator credentials only. `mirror.yml` is unchanged: it already scans every mirror-list entry.
-   - The `syncRolePasswords` wiring in `migrate-cli.ts`, after migrations, as the P1.12x binding requires.
+     --ignore-scripts --omit=dev`) and `runtime`, and no build stage. The runtime copies exactly `package.json`,
+     prod `node_modules`, `shared/`, `infrastructure/postgres/` and `infrastructure/net-guard/` (net-guard is the
+     single address classifier, so it is copied, never duplicated), never `apps/`, `interfaces/`, `domains/`,
+     `scripts/`, `tests/` or `deployment/`. Uid 65532; npm, yarn, corepack and pnpm stripped; no OS packages;
+     `ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]`; no EXPOSE or HEALTHCHECK (one-shot);
+     read-only root in compose; the migrator credentials only.
+   - The `syncRolePasswords` wiring in `migrate-cli.ts`, after migrations, as the P1.12x binding requires. The
+     password directory is a security constant, not config: the CLI passes the fixed `/run/secrets` (where Compose
+     mounts secrets) and the config schema has no `PG_ROLE_PASSWORDS_DIR` key, so no environment change can redirect
+     it; integration tests call the exported functions with a temp folder, and only CI checks the real path against
+     the built image with a real secrets mount.
    - `images.test.ts`: the web image's runtime tests become per-Dockerfile (`runtime_has_no_package_manager`,
      `runtime_stage_installs_no_os_packages`, the USER check, and the base and digest tests over every `dockerfiles`
      entry).
-   - Postgres (`docker.io/library/postgres`, official, under Alex's official-images rule) joins `LIBRARY_IMAGES`, the
-     lock (a new key by name at `images.test.ts:143`, exact, never a pattern) and the mirror list with `stage:
-     "runtime"`, under the full age rule, with push times and Trivy in the body. `tests/support/postgres.ts` reads
-     `POSTGRES_IMAGE` from the lock instead of its own constant.
-   - Tests: `migrate_image_copies_only_its_paths`, `migrate_image_boots_to_config_check` (CI only: the image run with
-     no environment exits 78), `postgres_test_image_matches_lock`, a test that the CLI calls `syncRolePasswords`
-     after `migrate()` and not when migrations fail, and the per-Dockerfile runtime tests. It must pass P1.28u's
-     rules if P1.28u merges first, and P1.28u must pass on `migrate.Dockerfile` if it merges second.
-2. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.11p, P1.28,
-   P1.30t): `deployment/compose.dev.yaml` with postgres (by `ref:tag@digest` exactly as in the lock), migrate, web and
-   edge (both built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for
-   P1.27s); `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json` for
-   postgres, migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside
+   - Tests: `migrate_image_copies_only_its_paths` (that exact five-entry list), `migrate_image_boots_to_config_check`
+     (CI only: the image run with no environment exits 78), `migrate_cli_reads_passwords_only_from_run_secrets`, a
+     test that the CLI calls `syncRolePasswords` after `migrate()` and not when migrations fail, and the
+     per-Dockerfile runtime tests. It and P1.28t are separate PRs; whichever lands second merges main.
+2. **P1.29x "Declare the paths our images strip"** (feature, security-review: `bases.lock.json`, `images.test.ts`;
+   depends on P1.29k; Phase 1; no word from Alex: it declares and proves, and nothing reads the field yet; `x` is the
+   product half of the check step, SE-6): an optional `stripped` array on each lock entry, read by the lock schema
+   test; the node entry's npm and corepack paths, exactly the ones `node-app.Dockerfile` and `migrate.Dockerfile`
+   delete. Test: `stripped_paths_removed_in_every_final_stage` (every Dockerfile on that base deletes every declared
+   path in its final stage; a declared path no final stage deletes fails).
+3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`,
+   `scripts/ci/image-workflows.test.ts`; depends on P1.29k only; Phase 2): `images.yml` builds and scans every
+   Dockerfile under `deployment/` through a matrix fed by the same discovery as `images.test.ts`, at HIGH and
+   CRITICAL with `--ignore-unfixed`; new jobs (migrate, and postgres once P1.29d adds it) scan with `--ignorefile
+   /dev/null`; the node job keeps its ignore file until P1.29v removes the npm entries. Test:
+   `every_dockerfile_has_scan_job`. A tightening, but `.github/workflows` needs Alex's typed line (for example "yes
+   P1.29w every shipped image"). The migrate image must not wait unscanned behind P1.29v's card, and the matrix picks
+   up `postgres.Dockerfile` by itself.
+4. **P1.29v "Skip stripped files in the mirror scan"** ([ALEX] [SEC], check: `.github/workflows/mirror.yml`,
+   `.github/trivyignore.yaml`, the mirror-scan test; depends on P1.29x and P1.28w, which both touch `mirror.yml`;
+   Phase 2): `mirror.yml` reads each entry's `stripped` list from the lock and passes `--skip-files` for exactly those
+   paths, on that entry only; the three npm entries leave `trivyignore.yaml`; the test proves a declared path is
+   skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files), so it needs Alex's
+   card ("Let the mirror scan skip files our images delete (gosu in Postgres, npm in Node), with a test that every
+   listed file is deleted and the shipped images still scanned in full?"; options "Skip stripped files",
+   recommended, or "Per-CVE ignores") and his typed line naming the change and branch (for example "yes P1.29v
+   mirror.yml"). If he picks per-CVE ignores, P1.29v becomes a P1.27b-style ignore carrier with the gosu entries
+   path-scoped to `usr/local/bin/gosu`, and P1.29x's declarations stay as documentation its test proves. A new stage
+   kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do ship) are
+   rejected.
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v; Phase 1):
+   `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
+   `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
+   are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
+   never starts as root has no use for it, and if anything ever starts it as root, the entrypoint's gosu call fails
+   instead of running Postgres as root. Postgres (`docker.io/library/postgres`, official) joins `LIBRARY_IMAGES`, the
+   lock (`stripped: ["/usr/local/bin/gosu"]`, a new key by name at `images.test.ts:143`) and the mirror list as a
+   runtime entry, at `fc973eb9` (tag 18-trixie, pushed 2026-10-06T07:10Z) under the age-rule exception (it fixes
+   OpenSSL CVE-2026-75804 and CVE-2026-84782 and pcre2 CVE-2026-103111; the body names them with both push times),
+   or newer under the age rule. `tests/support/postgres.ts` reads the lock entry; tests keep running the upstream
+   image as root with gosu, test-only. Runbook line: a bind-mounted data directory must be owned by 999 before first
+   start (a named volume takes 999 from the image; one created under the old root start is already 999). The init
+   scripts in `deployment/postgres/init/` need no change: the official entrypoint already runs them as postgres.
+   Tests: `postgres_image_strips_gosu`, `postgres_image_runs_as_postgres_uid`, the per-Dockerfile `USER` check by
+   file (65532 for our Node images, 999 for postgres, never "any non-zero"), `postgres_test_image_matches_lock`, and
+   `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
+   after.
+6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.11p,
+   P1.28, P1.30t): `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`,
+   `user` never 0 or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root),
+   migrate, web and edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing
+   waits for P1.27s); `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json`
+   for postgres, migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside
    `deployment/edge/`, following the edge test fixture's pattern. Tests: the static compose and env tests below that
-   do not name the PDS or Mailpit; `compose_images_match_lock` (every `image:` in `deployment/` compose files is a
-   lock entry or one of web, edge and migrate); `compose_dev_networks_match_table`, which imports P1.30t's exported
-   comparison; and `preflight_matches_compose_config` on `compose.dev.yaml` (CI only).
-3. **P1.29a "Add the PDS and Mailpit to the dev stack"** ([ALEX] [SEC]; depends on P1.29 and Alex's two card
-   answers, one image per card, asked by the coordinator and quoted in the body; architecture recommends yes for
-   both, Mailpit as dev only): the exact vendor allowlist entries (`ghcr.io/bluesky-social/pds`,
-   `docker.io/axllent/mailpit`, never a host or namespace); their lock and mirror entries with `stage: "runtime"`
-   (a run-only image runs as shipped, so it takes the fail-on-HIGH gate; Phase 1's default of leaving them
-   unscanned until P1.27s is refused) and the full age rule; Mailpit's `"devOnly": true`; the `pds` and `mailpit`
-   services, with the PDS env names checked against the pinned PDS release's own env source (cited in the body;
-   npm `@atproto/pds` latest was 0.5.37 when the split was recorded);
-   their rows in `networks.dev.json`, with `compose_dev_networks_match_table` passing. Tests:
-   `pds_rate_limits_disabled_explicitly` (moved here: it reads the `pds` service's env, which first exists in this
-   part; still a static read, in the PR that writes the env line), `dev_only_image_never_in_prod_compose_or_from`,
-   and the remaining static PDS and Mailpit compose tests. If Alex refuses the PDS image, this part stops and comes
-   back to the step book (the alternative is building a PDS image from `@atproto/pds` on our node base, a larger
-   step).
-4. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a): `scripts/dev-seed.ts` and
+   do not name the PDS; `compose_images_match_lock` (every `image:` in `deployment/` compose files is a lock entry or
+   one of web, edge, migrate and postgres, with no exception); `compose_postgres_never_root`;
+   `compose_postgres_tmpfs_for_socket`; `compose_dev_networks_match_table`, which imports P1.30t's exported
+   comparison; and `preflight_matches_compose_config` on `compose.dev.yaml` (CI only). Landing P1.29 first on
+   today's test pin is refused: it would need an exception in `compose_images_match_lock` or a dev Postgres starting
+   as root with gosu, a weakening to remove later. The cost: P1.29 waits on Alex's P1.29v card and line.
+7. **P1.29a "Add the PDS to the dev stack"** ([ALEX] [SEC]; depends on P1.29; Alex's card answered "Allow pinned",
+   2026-10-07T13:00:19Z, quoted in the body): the exact vendor allowlist entry `ghcr.io/bluesky-social/pds` (never
+   the host or namespace); its lock and mirror entries with `stage: "runtime"` (a run-only image runs as shipped, so
+   it takes the fail-on-HIGH gate; leaving it unscanned until P1.27s is refused) and the full age rule; the `pds`
+   service, with the PDS env names checked against the pinned PDS release's own env source (cited in the body; npm
+   `@atproto/pds` latest was 0.5.37 when the split was recorded); its rows in `networks.dev.json`, with
+   `compose_dev_networks_match_table` passing. No Mailpit, no `mail` network and no dev-only image. On `local`,
+   `PDS_EMAIL_SMTP_URL`, `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` are unset, so the PDS's
+   nodemailer `jsonTransport` drops mail; it also logs the whole message (recipient and tokens) at debug level
+   ("Intended to send email", `dist/mailer/index.js:79-81` and `dist/mailer/moderation.js:16-18` in 0.5.37), so
+   mail may stay unset only with logging off. Tests: `pds_rate_limits_disabled_explicitly` (moved here: it reads the
+   `pds` service's env, which first exists in this part; still a static read, in the PR that writes the env line);
+   `pds_mail_unset_only_with_logging_off` (if any SMTP variable is unset, `LOG_ENABLED` is exactly `false` and
+   `LOG_LEVEL` is absent or exactly one of `info`, `warn`, `error`, `fatal`, `silent`; its comment cites the file and
+   line of that log call in the pinned release, re-read on every PDS bump, and if a bump moves the log to info the
+   rule becomes "`LOG_ENABLED=false`, full stop"; no log filter); and the remaining static PDS compose tests.
+8. **P1.29h "Read the local PDS email token in tests"** ([SEC], feature: `tests/support/`, plus the `compose.dev.yaml`
+   change that bind-mounts the local PDS data under the repo's ignored local directory and that ignore line; depends
+   on P1.29a; Phase 1): slice 1's email gate uses the real `requestEmailConfirmation` and `confirmEmail` flow and
+   simulates only the inbox. The reader uses built-in `node:sqlite`, read-only, with no new dependency; reads one
+   row, the email token for one account by its DID; refuses unless the PDS is on loopback and belongs to the local
+   Compose project or a per-run test stack and the database file is inside that stack's own data directory; throws on
+   schema drift, naming the pinned PDS version; and never prints or logs the token. An admin "mark confirmed" step is
+   refused as an admin bypass, and real SMTP on developer machines is refused. Tests:
+   `email_token_reader_fails_on_unknown_schema`, `local_confirm_uses_real_endpoint`,
+   `email_token_reader_refuses_non_local`, `email_token_reader_read_only`. P1.29s and P2.11 depend on it.
+9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring and their tests
-   below. `dev-seed` creates accounts through the dev PDS, so it needs P1.29a; `dev-precheck` travels with it.
-5. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s): `pds_device_row_has_no_client_ip`
-   (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
-   that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
-   measures it, and it needs Alex's typed line.
+   below. `dev-seed` creates accounts through the dev PDS and, on `local` only, confirms their email through P1.29h's
+   reader and the real `confirmEmail`; `dev-precheck` travels with it.
+10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s): `pds_device_row_has_no_client_ip`
+    (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
+    that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
+    measures it, and it needs Alex's typed line.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries
@@ -6707,16 +6886,16 @@ last part, which implies all five.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
-**Where:** `deployment/images/migrate.Dockerfile` (P1.29k); `deployment/compose.dev.yaml`;
+**Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
 `scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests (each part carries its share, above).
 
 **Size:** ~230 lines of YAML, ~220 script lines, ~250 test lines.
 
 **Goal:** One command brings up a hardened development stack — Postgres, migrator, the dev PDS minting
-`.0x40.space` handles, the edge, a mail catcher — on networks where only the edge can reach the PDS's HTTP port,
+`.0x40.space` handles, the edge — on networks where only the edge can reach the PDS's HTTP port,
 and seeds test accounts without printing a secret and without ever touching the lexicon authority.
 
 **Inputs:** P1.11 migrator image and Postgres settings; P1.27 images and lock; P1.28 edge image and config; the dev
@@ -6739,10 +6918,9 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   | `edge` | not internal; fixed subnet (e.g. `172.30.10.0/24`); fixed IPs | edge `.2`, pds `.3` (and `web` `.4` from Phase 2) |
   | `pds_egress` | not internal | pds only (outbound HTTPS: PLC, DID and handle resolution, OAuth client metadata, other permission sets, AppView) |
   | `db` | `internal: true` | postgres, migrate (and `web` from Phase 2) |
-  | `mail` | `internal: true` | pds, mailpit |
   | `tap` | `internal: true` | tap and its DB (profile `tap`) |
   | `tap_egress` | not internal | tap only (reaches the dev PDS through its public name and the edge, like any outside consumer) |
-  Only the edge publishes ports. Mailpit's UI is published on `127.0.0.1:8025` only.
+  Only the edge publishes ports.
 - Services:
   - `postgres` (networks `db`; no published port; data volume mounted at the PG 18 data path confirmed and recorded
     by P1.11 in `docs/human/db/migrations.md`; the same image digest as CI's Postgres service).
@@ -6762,15 +6940,16 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
     - `LOG_ENABLED=false` (the PDS logs every request header when on; see P1.30 C12 and the debugging runbook);
     - `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true` (plan §5.3; the variable exists, `pds/src/config/env.ts:92`);
     - `PDS_DEV_MODE` absent; `PDS_LEXICON_AUTHORITY_DID` absent (it would redirect resolution of every NSID);
-    - `PDS_EMAIL_SMTP_URL` → Mailpit (`smtp://mailpit:1025`) in pure dev; real SMTP before the closed test track
-      (P2.25; see Notes, SMTP provider). Provider settled by Alex (2026-10-03): a paid sending service hosted in
-      Canada or the EU; the team shortlists providers and Alex picks one before P2.25 step 2a;
-    - `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` set (Mailpit in pure dev), so moderation
-      receipts and alerts are never dropped silently (P1.30 C19; phase-3 PI-6).
+    - `PDS_EMAIL_SMTP_URL`: unset on `local` (mail dropped, `pds_mail_unset_only_with_logging_off`, P1.29a); real
+      SMTP on the `dev` env before P1.34, whose e-mail 2FA codes and reset links now go out through it (book edit
+      2026-10-07-no-mailpit; the earlier pick is Alex's timing to confirm). Provider settled by Alex (2026-10-03): a
+      paid sending service hosted in Canada or the EU; the team shortlists providers and Alex picks one;
+    - `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS`: unset on `local` like the mail URL; set on
+      `dev`, so moderation receipts and alerts are never dropped silently there (P1.30 C19; phase-3 PI-6).
   - `tap` (profile `tap`; dynamic mode pointed at the dev PDS; provisional until the P3.01 spike decides).
   - `edge` (P1.28 image; ports 80 and 443 published on the host's tailnet address in pure dev, or on the public
     interface only when P1.34 opens outside access).
-  - `mailpit`; `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand).
+  - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand).
 - `dev-precheck` (run by `npm run dev:up` before `docker compose up`): refuses when `0x40.space` answers
   `describeServer` with a DID that is neither the expected dev PDS DID nor absent (protects against the old
   prototype PDS), when the env names a production host, and when `preflight --env dev` (P1.30) fails.
@@ -6803,7 +6982,6 @@ dev-seed:
 
 **Edge cases and failures:**
 - Secrets file mode not 0600 → P1.30 C9 refuses; `dev-seed` also refuses.
-- Port 8025 bound on all interfaces by mistake → `mailpit_localhost_only` fails.
 - The old prototype PDS still answering on `0x40.space` → precheck refuses (P1.33a must complete before P1.34).
 - Postgres not healthy within 60 s → `migrate` never starts; compose reports unhealthy; no partial seed.
 - A container added to the `edge` network without a review → `compose_dev_networks_match_table` fails.
@@ -6816,8 +6994,9 @@ dev-seed:
   - S A container next to the PDS forges a client address (the PDS trusts every private address as a proxy) → only the
     edge (and `web`) share a network with the PDS (`compose_dev_networks_match_table`,
     `postgres_only_on_internal_networks`).
-  - E A dev service exposed to the LAN or the internet → only the edge publishes; Mailpit on 127.0.0.1
-    (`compose_dev_only_edge_publishes`, `mailpit_localhost_only`).
+  - E A dev service exposed to the LAN or the internet → only the edge publishes (`compose_dev_only_edge_publishes`).
+  - I Mail tokens in PDS debug logs while SMTP is unset → logging off and `LOG_LEVEL` allowlisted
+    (`pds_mail_unset_only_with_logging_off`).
   - E A container escapes or escalates → `cap_drop: ALL`, `no-new-privileges`, non-root (`compose_dev_hardening`).
   - D One container starves the host → memory, CPU and pids limits, heap below the limit (`compose_dev_limits`).
   - T The seed touches the lexicon authority or a foreign PDS → refused (`seed_refuses_while_authority_hosted`,
@@ -6831,8 +7010,7 @@ dev-seed:
 - `compose_dev_limits`: every service has `mem_limit`, `cpus` and `pids_limit`; every service built from our Node image
   has a `--max-old-space-size` at most 0.75 × its `mem_limit` (a fixture without one, or with 90 %, fails).
 - `compose_dev_networks_match_table`: each service's networks equal the table; `internal: true` where listed.
-- `postgres_only_on_internal_networks`; `compose_dev_only_edge_publishes` (plus Mailpit on 127.0.0.1).
-- `mailpit_localhost_only`.
+- `postgres_only_on_internal_networks`; `compose_dev_only_edge_publishes`.
 - `pds_env_pinned`: every PDS variable listed above has the stated value or is absent as stated.
 - `pds_rate_limits_disabled_explicitly` (moved from P1.28, book edit 2026-10-07-p128-rate-limit-test-to-p129): the
   `pds` service env in `compose.dev.yaml` has `PDS_RATE_LIMITS_ENABLED` present and exactly `false`, and
@@ -6984,15 +7162,15 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C8 | no variable matching `PDS_RATE_LIMIT_BYPASS_*` (`_IPS`, `_KEY`, any future one) is set in any env, any phase; present, even empty → FAIL (no bypass key, no bypass IPs; a bypass IP is also a trusted proxy, and the PDS silently truncates a CIDR to its network address, `pds/src/config/config.ts:246-248`) |
 | C9 | every referenced secret file exists, is non-empty, mode 0600, owned by the deploy user |
 | C10 | published ports: only the edge publishes 80/443; any other published port binds 127.0.0.1 |
-| C11 | SMTP: `PDS_EMAIL_SMTP_URL` present; in prod not Mailpit; scheme `smtps`, or `smtp` with STARTTLS required |
-| C12 | PDS `LOG_ENABLED` unset or `false` (when on, `pino-http` logs `remoteAddress`, `remotePort` and every request header except `authorization`/`dpop`, `pds/src/logger.ts:40-58`) |
+| C11 | SMTP: `PDS_EMAIL_SMTP_URL` present; never Mailpit (book edit 2026-10-07-no-mailpit); scheme `smtps`, or `smtp` with STARTTLS required |
+| C12 | PDS `LOG_ENABLED` unset or `false`, and `LOG_LEVEL` absent or exactly one of `info`, `warn`, `error`, `fatal`, `silent` (rider on P1.30u, book edit 2026-10-07-no-mailpit) (when on, `pino-http` logs `remoteAddress`, `remotePort` and every request header except `authorization`/`dpop`, `pds/src/logger.ts:40-58`) |
 | C13 | `PDS_LEXICON_AUTHORITY_DID` absent (it redirects resolution of **every** NSID to one DID, `pds/src/context.ts:412-419`) |
 | C14 | `PDS_DEV_MODE` absent or `false` |
-| C15 | `PDS_SERVICE_HANDLE_DOMAINS` set explicitly: `.0x40.space` in dev; never contains `.0x40.me` |
+| C15 | `PDS_SERVICE_HANDLE_DOMAINS` set explicitly: exactly `.0x40.space` in dev (as built, #452); never contains `.0x40.me` |
 | C16 | `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true` (plan §5.3: "the deploy preflight fails otherwise") |
-| C17 | networks: only services in the env's network table share a network with the PDS; `db` and `mail` are `internal: true` |
+| C17 | networks: only services in the env's network table share a network with the PDS; `db` is `internal: true` (no `mail` network, book edit 2026-10-07-no-mailpit) |
 | C18 | edge: the Caddy site for the PDS host (and every site with an upstream) imports `ratelimit.caddy` and carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (read from the config the edge image or mount serves); with C7 and C12 this is plan §5.2's "three settings" |
-| C19 | moderation mail (phase-3 PI-6): `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` present; same scheme rule as C11 (Mailpit allowed in dev only). Without them the PDS drops every moderation receipt, alert and digest silently |
+| C19 | moderation mail (phase-3 PI-6): `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` present; same scheme rule as C11 (Mailpit never allowed). Without them the PDS drops every moderation receipt, alert and digest silently |
 | C20 | `PDS_MOD_SERVICE_*` absent (phase-5 F4: only `PDS_REPORT_SERVICE_*` may be set, from Phase 5) |
 | C21 | when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL. Other hostnames skip it (PASS "n/a") |
 | C22 | when the env sets `VIDEO_MASTER_MAX_BYTES` (Phase 4 on): `PDS_BLOB_UPLOAD_LIMIT` is set and ≥ it (the PDS default is 5 MB; phase-4-part1 note 10); before Phase 4, PASS "n/a" |
@@ -7007,8 +7185,8 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
    files are only stat-checked, never loaded; as built, #435).
 3. Parse compose YAML in the strict subset; parse error or a refused feature → exit 2 naming the feature and line.
 4. Run C1..C24 in order; each returns PASS or FAIL(reason); a check that throws → FAIL "check error" (fail closed).
-   Network checks (C3, C4, C5) timeout 30 s each → FAIL (C5's as built, #435). An input file a check reads that is
-   absent or unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
+   Network checks (C3, C4, C5) timeout 30 s each → FAIL (C5 and C24 as built, #435 and #452). An input file a check
+   reads that is absent or unreadable → that check FAILs with `input missing: <path>` (never PASS, never "n/a").
 5. Any FAIL → exit 1. All PASS → exit 0.
 ```
 
@@ -7034,8 +7212,8 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 **Threats:** what a deploy is allowed to start.
   - T An unsigned or unlisted image deployed → digest, signature and provenance checks (C2–C5; their failing
     fixtures).
-  - I A deploy setting that leaks data (PDS logging on, client address forwarded, Mailpit in prod) → C7, C11, C12, C18
-    (`c12_log_enabled_fails`, `c18_forwarded_header_passed_fails`).
+  - I A deploy setting that leaks data (PDS logging on or at debug, client address forwarded, Mailpit anywhere) → C7,
+    C11, C12, C18 (`c12_log_enabled_fails`, `c18_forwarded_header_passed_fails`).
   - E A rate-limit bypass key or IP, dev mode, or an admin-wide lexicon redirect → C8, C13, C14
     (`c8_any_bypass_var_fails`, `c13_lexicon_authority_did_fails`).
   - I The preflight prints secrets → SecretMap redaction; never `docker compose config`
@@ -7096,8 +7274,8 @@ tightening. The C8 test addresses ride on P1.30s.
 
 ### P1.30s — Add the preflight's remaining ten checks
 
-Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 as designed in P1.30's table,
-in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
+Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 except C17 and C18 as designed
+in P1.30's table, in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
 
 **Split three ways** (book edit 2026-10-07-p130s-split-and-p128h, with architecture's
 2026-10-07-p130s-networks-and-caddyfile-reader behind it, which wins where they differ): P1.30s builds the ten
@@ -7116,13 +7294,20 @@ fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The ret
 
 **Done when (tests):**
 - One failing fixture per check C13–C24 except C17 and C18 → exit 1 with that id. Named ones:
-  `c13_lexicon_authority_did_fails`, `c15_handle_domain_0x40_me_fails`, `c16_confirmation_link_required`,
+  `c13_lexicon_authority_did_fails`, `c14_dev_mode_fails`, `c15_handle_domain_0x40_me_fails`,
+  `c16_confirmation_link_required`,
   `c19_moderation_mail_missing_fails`,
   `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
   `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
   `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
   `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
 - The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
+
+**As built** (#452, merged by Alex at 2026-10-07T12:55:18Z as `2d6f9f8`; book edit 2026-10-07-p130s-as-built): C24
+runs under the 30 s network timeout (`checks/host.ts:40`), a tightening; C15 in dev requires exactly one entry,
+`.0x40.space` (`settings.ts:143`), stricter than booked and accepted; the `Run` type lives in `checks/types.ts`; ASVS
+V13.4.2 is covered; the c14 test is `c14_dev_mode_fails`; the red evidence was a local run (11 failures), acceptable
+when CI cannot show it. Its stale comments (`checks/index.ts:10`, `index.ts:7-8`) are fixed in P1.30t.
 
 **Rider from P1.30 as built** (book edit 2026-10-07-p130-as-built): the C8 bypass-IP values in
 `preflight.test.ts:184-186` (`172.30.10.x`, copied from P1.29's planned network table) change to a documentation
@@ -7140,7 +7325,7 @@ Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from archit
 refused, not which fields are read, so reading `services.*.networks` and the top-level `networks` widens the fields,
 not the constructs.
 
-**Tags:** [SEC] · **Depends on:** P1.30 · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/` (the parser's network fields, C17, the exported comparison); fixtures; tests.
 
@@ -7175,8 +7360,22 @@ ruled out for YAML).
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
-**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`; the all-good
-fixture, now covering all 24 checks, exits 0.
+**Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
+a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
+   `0X40.space` or `0x40.space.` reads as n/a). Test: `c21_hostname_case_and_trailing_dot`.
+b. Secret values never in output (`settings.ts:10` and `host.ts:15` take raw values out of the SecretMap; no reason
+   prints one today). Test: `failure_reasons_never_contain_secret_values`, every check run with one sentinel in every
+   SecretMap entry, on passing and failing fixtures, and no output line holds it. A type guard is optional.
+c. Untested branches: `c22_non_integer_video_max_fails`, `c23_no_service_sets_fingerprint_check`,
+   `c24_time_tool_exit_nonzero_fails` (`timedatectl` or `chronyc` exits non-zero), `c15_subdomain_entry_refused`
+   (for example `x.0x40.me`).
+d. C12's `LOG_LEVEL` allowlist, even with SMTP set (debug logs carry personal data beyond mail). Test:
+   `c12_log_level_outside_allowlist_fails`.
+If these take P1.30u past about 550 lines, they split out as **P1.30b** (leftovers, feature, depends on P1.30s) and
+P1.30u stays C18 alone.
+
+**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, and the riders' tests;
+the all-good fixture, now covering all 24 checks, exits 0.
 
 **Not in this step:** any change to `deployment/edge/` (P1.28h owns the reader).
 
@@ -8117,8 +8316,8 @@ D. Dev PDS fit for the authority
 
 **Agent prepares and verifies:**
 - `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no bypass key or IPs),
-  public edge ports. Mail: Mailpit stays acceptable **only** while no invite goes to anyone but Alex; the closed
-  test track (P2.25) needs real SMTP first (P2.11's e-mail gate cannot pass through Mailpit) — Notes, SMTP provider.
+  public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit); the provider is set
+  up before P1.34 — Notes, SMTP provider.
 - Hairpin check: `curl https://0x40.space/xrpc/_health` from inside the compose network (from a throwaway
   container on `tap_egress`). If it fails (router has no NAT loopback), add split-horizon resolution for the
   containers that need it (`extra_hosts: 0x40.space:<edge fixed IP>` on `web` and `tap`), never on the PDS. The
@@ -8259,8 +8458,9 @@ the private keys are needed only for a later PLC operation (adding the backup ke
 6. Publish from the operator machine: goat lex publish for every schema and the permission set. goat checks the
    _lexicon DNS for the current account first (lex_publish.go:19-50); NEVER pass --skip-dns-check — the check is
    the guard against publishing under the wrong account.
-7. Turn on e-mail 2FA for the account on the PDS /account page. Its codes, like its reset links, land in Mailpit
-   on the homelab, so host access stays the root of trust (dev-pds-admin-custody.md says so).
+7. Turn on e-mail 2FA for the account on the PDS /account page. Its codes, like its reset links, go out through the
+   real SMTP provider (no Mailpit, book edit 2026-10-07-no-mailpit), so the provider is set up before this step (Alex's timing to
+   confirm) and Alex's mailbox joins host access as a root of trust (dev-pds-admin-custody.md says so).
 8. Send the agent: the DID, goat plc history output, the publish output with CIDs.
 ```
 
@@ -8780,7 +8980,7 @@ part or a choice was made among the reviewer's options, the reason is given.
 | F3 | Fixed | P1.29, P1.30 (C7, C8) | Bypass list empty in Phase 1, never the edge; any `/` refused; `PDS_RATE_LIMITS_ENABLED=true` and no bypass key checked. |
 | F4 | Fixed (P1b-A3 default) | P1.27, P1.30 (C3, C4); P1b-A3 | cosign key pair with `--tlog-upload=false`, key in a protected environment or KMS, verification with `--key`; GitHub attestations only in addition if available; lock PR opened with a GitHub App token (or committed by Alex); GHCR read token named. |
 | F5 | Fixed | P1.35, P1.34 probe, P1.28 | `goat account create --recovery-key`; local handle first, then `update-handle`; `_lexicon` TXT before `lex publish`, never `--skip-dns-check`; `sync.getRecord` with proof / `LexResolver` everywhere; exactly one `did=` line; the "offline key unavailable" case corrected. |
-| F6 | Fixed | P1.34, P1.35, P1.29; Notes 12, 15, 17 | Only Alex holds the dev PDS admin password and host shell; Alex issues the authority invite; `dev-seed` refuses once the authority is hosted; P2.25 and P3.16 changes noted; 2FA on the account with its Mailpit caveat. |
+| F6 | Fixed | P1.34, P1.35, P1.29; Notes 12, 15, 17 | Only Alex holds the dev PDS admin password and host shell; Alex issues the authority invite; `dev-seed` refuses once the authority is hosted; P2.25 and P3.16 changes noted; 2FA on the account with its mail caveat (real SMTP, no Mailpit). |
 | F7 | Fixed (P1b-A2 default) | P1.34, P1.35; P1b-A2 | 99.5 % replaced by durability and integrity requirements; best-effort 15-min probe outside private minutes (default a public probe-only repo; the reviewer's "free external uptime service" option was not made the default because it adds a third party for no gain over a public repo); gaps counted separately. |
 | F8 | Fixed | P1.31, P1.35; Notes 14, 18 | Set grows in place behind an `[ALEX]` flag; removal refused; never a new set NSID; CID change is a security incident with a runbook; EN/FR consent text drafted for Alex; scope-prefix and `inheritAud` checks. |
 | F9 | Fixed | P1.20, P1.23 | Config plugins count as glue, declarative config capped at 80 lines; React runtime and headroom reported, >60 KB goes to Alex; hydration in three engines; `/neg` style-attribute control and a JSX `style` lint; `renderToString` stated; verdict test recomputes from raw reports. |
