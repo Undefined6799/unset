@@ -2,8 +2,9 @@
 // draft: the classes are the kit's (`visually-hidden`, no `us-` prefix); nothing else.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import close from "../../icons/drawings/close.generated.ts";
 import data from "../../icons/icons.json" with { type: "json" };
-import { Icon } from "./Icon.tsx";
+import { Icon, IconDrawing } from "./Icon.tsx";
 
 describe("Icon", () => {
   it("icon_renders_inline", () => {
@@ -34,5 +35,16 @@ describe("Icon", () => {
     expect(html).toMatch(/^<svg class="x" width="20"/);
     expect(html).toMatch(/aria-hidden="true"/);
     expect(html.endsWith('</svg><span class="visually-hidden">Like</span>')).toBe(true);
+  });
+
+  it("icon_drawing_matches_icon_markup", () => {
+    for (const size of [16, 20, 24] as const)
+      for (const label of [{}, { label: "Dismiss" }]) {
+        const drawn = renderToStaticMarkup(<IconDrawing paths={close} size={size} {...label} className="x" />);
+        expect(drawn, `${size} ${JSON.stringify(label)}`).toBe(
+          renderToStaticMarkup(<Icon name="close" size={size} {...label} className="x" />),
+        );
+      }
+    expect(renderToStaticMarkup(<IconDrawing paths={close} />)).toBe(renderToStaticMarkup(<Icon name="close" />));
   });
 });

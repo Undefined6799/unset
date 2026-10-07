@@ -4,7 +4,7 @@
 // placed by IslandSlot: with no JS there is no button and the command stays selectable.
 import { useId } from "react";
 import copy from "../../islands/copy.island.tsx";
-import { IslandSlot } from "../../islands/slot.tsx";
+import { IslandSlot } from "../../islands/slot.ts";
 import { Tag } from "../Tag/Tag.tsx";
 import styles from "./CommandBlock.module.css";
 

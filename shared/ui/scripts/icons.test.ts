@@ -2,9 +2,9 @@
 // 20:10Z): the committed Iconoir files equal the sheet's ICONS data, the sheet's bundle is parsed and never run, and
 // nothing outside the element and attribute allowlist gets through.
 import { createHash } from "node:crypto";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 import { ICONOIR_VERSION, type IconsIo, parseSvg, runIcons, sheetDrawings } from "./icons.ts";
 
@@ -29,7 +29,10 @@ const fileIo = (root: string): IconsIo => ({
       .update(readFileSync(join(root, path)))
       .digest("hex"),
   list: (dir) => readdirSync(join(root, dir)),
-  writeText: (path, text) => writeFileSync(join(root, path), text),
+  writeText: (path, text) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), text);
+  },
 });
 const run = (root: string, args: string[]) => {
   const lines: string[] = [];
@@ -55,6 +58,34 @@ test("icon_allowlist_matches_sheet", () => {
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
+});
+
+test("icon_drawing_modules_match_icons_json", async () => {
+  const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
+  const names = Object.keys(json.drawings).sort();
+  expect(readdirSync(join(UI, "icons/drawings")).sort()).toEqual(names.map((n) => `${n}.generated.ts`));
+  for (const name of names) {
+    const drawing = (await import(`../icons/drawings/${name}.generated.ts`)).default;
+    expect(drawing, name).toEqual(json.drawings[name]);
+    expect(Object.isFrozen(drawing) && drawing.every(Object.isFrozen), name).toBe(true);
+  }
+});
+
+test("icon_drawing_module_missing_or_extra_fails", () => {
+  const missing = copy();
+  rmSync(join(missing, "icons/drawings/close.generated.ts"));
+  expect(code(run(missing, ["--check"]))).toEqual(["icons.stale"]);
+  expect(run(missing, []).code).toBe(0);
+  expect(run(missing, ["--check"]).code).toBe(0);
+
+  const edited = copy();
+  writeFileSync(join(edited, "icons/drawings/close.generated.ts"), "export default [];\n");
+  expect(code(run(edited, ["--check"]))).toEqual(["icons.stale"]);
+
+  const extra = copy();
+  writeFileSync(join(extra, "icons/drawings/arrow.generated.ts"), "export default [];\n");
+  expect(code(run(extra, ["--check"]))).toEqual(["icons.stale"]);
+  expect(code(run(extra, []))).toEqual(["icons.stale"]);
 });
 
 test("icon_check_detects_stale_output", () => {

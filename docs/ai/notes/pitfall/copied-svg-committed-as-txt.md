@@ -10,7 +10,7 @@ importance: normal
 related: ["[[ui]]"]
 replaced_by: null
 tags: [pitfall, ui, ci]
-checked: 2026-10-06
+checked: 2026-10-07
 ---
 # Copied SVGs are committed as .svg.txt
 
@@ -21,7 +21,8 @@ then fail `npm run lint` on style rules we cannot fix without changing the bytes
 **The rule.** Third-party data we copy and must keep byte-identical goes in with a `.txt` suffix:
 `shared/ui/icons/svg/<name>.svg.txt`, and the design sheet's `bundle.js.txt` and `*.d.ts.txt`. These files are
 provenance only: never served by the assets route and never imported. `shared/ui/scripts/icons.ts` reads them, checks
-them against the sheet's ICONS data, and generates `icons.json`, which is what the Icon component uses.
+them against the sheet's ICONS data, and generates `icons.json` and the per-icon `drawings/` modules, which are
+what the Icon component and `IconDrawing` use.
 
 **Do not** fix it by excluding the folder in `biome.json`: that is a check-path change and weakens lint for any real
 SVG added later.

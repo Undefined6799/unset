@@ -1,6 +1,8 @@
 // Icon (P1.24i; plan §7, decision 33): one of the sheet's 36 Iconoir 7.12.1 icons, drawn inline on the server from
 // icons/icons.json (zero JS, no <img>, no CSP change). The drawing is always aria-hidden; meaning comes from a word
 // beside it or from `label`, a visually hidden span (never role="img"). Sized by the sheet's three sizes.
+// Islands draw with `IconDrawing` and one generated module from icons/drawings/, so they never bundle every drawing
+// (P1.24b; architecture record 2026-10-07-p124b-island-icons.md); both render through the one `Drawing` below.
 import type { SVGProps } from "react";
 import data from "../../icons/icons.json" with { type: "json" };
 
@@ -20,9 +22,22 @@ type PathAttributes = Pick<
   "d" | "fill" | "stroke" | "strokeWidth" | "strokeLinecap" | "strokeLinejoin"
 >;
 // The icon build admits only these attributes, with Iconoir's own values (scripts/icons.ts, checked against the sheet).
-const drawings = data.drawings as Readonly<Record<IconName, readonly PathAttributes[]>>;
+/** One icon's drawing: its <path> attributes, as icons/drawings/<name>.generated.ts exports them. */
+export type IconPaths = readonly Readonly<PathAttributes>[];
 
-export function Icon({ name, size = 20, label, className }: IconProps) {
+export type IconDrawingProps = Omit<IconProps, "name"> & { paths: IconPaths };
+
+export function Icon({ name, ...rest }: IconProps) {
+  // Read inside the function, not at module level, so a bundle that uses only IconDrawing drops icons.json.
+  return <Drawing paths={(data.drawings as Readonly<Record<IconName, IconPaths>>)[name]} {...rest} />;
+}
+
+/** For islands: the same markup as `Icon`, from a drawing module the island imports by itself. */
+export function IconDrawing(props: IconDrawingProps) {
+  return <Drawing {...props} />;
+}
+
+function Drawing({ paths, size = 20, label, className }: IconDrawingProps) {
   return (
     <>
       <svg
@@ -35,7 +50,7 @@ export function Icon({ name, size = 20, label, className }: IconProps) {
         aria-hidden="true"
         focusable="false"
       >
-        {drawings[name].map((attributes, index) => (
+        {paths.map((attributes, index) => (
           // The list is fixed per icon and never reordered, so its position is a stable key.
           // biome-ignore lint/suspicious/noArrayIndexKey: static drawing
           <path key={index} {...attributes} />

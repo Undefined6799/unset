@@ -31,6 +31,11 @@
     pointer-events: auto;
   }
 
+  /* The toast island closes the toast in place with the hidden attribute, which display: flex would override. */
+  .toast[hidden] {
+    display: none;
+  }
+
   .text {
     color: var(--color-ink);
   }

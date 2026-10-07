@@ -1,7 +1,9 @@
 // Select (P1.24; sheet components/Select/README.md, v45): the native <select>, styled like Input with a ▾ caret.
-// It works with no JS and posts with its form; the sheet's listbox, drawn by the kit, is an island in P1.24a that
-// takes over from this one when it loads.
+// It works with no JS and posts with its form; the sheet's listbox is the select island (P1.24b), placed by
+// IslandSlot, which takes over from this one when it loads and keeps it as the form value.
 import { useId } from "react";
+import select from "../../islands/select.island.tsx";
+import { IslandSlot } from "../../islands/slot.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Field, type FieldMessages, fieldIds } from "../Input/field.tsx";
 import inputStyles from "../Input/Input.module.css";
@@ -53,6 +55,7 @@ export function Select(props: SelectProps) {
         <span className={styles.caret} aria-hidden="true">
           ▾
         </span>
+        <IslandSlot name="select" island={select} props={{ select: ids.control }} />
       </span>
     </Field>
   );

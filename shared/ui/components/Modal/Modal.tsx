@@ -5,7 +5,7 @@
 // focus to the trigger.
 import { type ReactNode, useId } from "react";
 import modal from "../../islands/modal.island.tsx";
-import { IslandSlot } from "../../islands/slot.tsx";
+import { IslandSlot } from "../../islands/slot.ts";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import styles from "./Modal.module.css";

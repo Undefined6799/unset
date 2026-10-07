@@ -1,5 +1,5 @@
 // Select (P1.24): the sheet's Select (components/Select/README.md, index.d.ts) as built. Differences from the sheet:
-// the native <select> only (the listbox island is P1.24a), so the open list is the system's; no `value`/`onChange`
+// the native <select> with no JS (the listbox island, P1.24b, is in SelectListbox.test.tsx); no `value`/`onChange`
 // (no JS); `label` is required.
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";

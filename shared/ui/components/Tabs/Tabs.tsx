@@ -6,7 +6,7 @@
 // attribute, so the island can switch them in place. Hiding is not a security boundary: an eager panel holds only
 // what the viewer may see on this request and is cheap to render; anything else uses the default mode.
 import { type ReactNode, useId } from "react";
-import { IslandSlot } from "../../islands/slot.tsx";
+import { IslandSlot } from "../../islands/slot.ts";
 import tabsIsland from "../../islands/tabs.island.tsx";
 import type { SafeHref } from "../../safe-href.ts";
 import styles from "./Tabs.module.css";
