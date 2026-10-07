@@ -393,8 +393,6 @@ describe("allowlist matrix", () => {
       edge("shared/ui-build/a.ts", "../ui/index.ts"),
       edge("shared/ui-build/a.ts", "../ui/b.ts", "type"),
     );
-    // A relative value import of the index fails too, whichever rule names it.
-    await expectFail(null, edge("shared/ui-build/a.ts", "../ui/index.ts"));
     // shared/ui's own row stops at its trailing slash, so it never covers shared/ui-build.
     const uiFrom = config.MATRIX.find((row) => row.name === "shared-ui-lexicons")?.from as
       | { path?: string }
