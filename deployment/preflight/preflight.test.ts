@@ -1,6 +1,6 @@
 // P1.30, P1.30s and P1.30t: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -289,6 +289,18 @@ describe("preflight", () => {
     expect(failed(unset.lines)).toEqual([]);
   });
 
+  test("c12_log_level_outside_allowlist_fails", async () => {
+    // LOG_LEVEL is absent or one of five levels; debug and trace log personal data even with logging off for requests.
+    for (const level of ["debug", "trace", "INFO", ""]) {
+      expect(await expectOnly("C12", { pdsEnv: { LOG_LEVEL: level } })).toBe(
+        "FAIL C12 LOG_LEVEL is not info, warn, error, fatal or silent",
+      );
+    }
+    for (const level of ["info", "warn", "error", "fatal", "silent"]) {
+      expect(failed((await check({ pdsEnv: { LOG_LEVEL: level } })).lines)).toEqual([]);
+    }
+  });
+
   test("environment_overrides_env_file_and_interpolates_dotenv", async () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not a JS template.
     const compose = COMPOSE.replace("      PDS_HOSTNAME:", "      LOG_ENABLED: ${LOG}\n      PDS_HOSTNAME:");
@@ -350,6 +362,29 @@ describe("preflight", () => {
   });
 });
 
+const SENTINEL = "sentinel-5d2e-never-printed";
+/** Every variable name a check quotes, so a check that starts reading a new one is covered without editing a list. */
+function checkedNames(): string[] {
+  const dir = join(import.meta.dirname, "checks");
+  const names = new Set(Object.keys(PDS_ENV));
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts"))) {
+    for (const [, name] of readFileSync(join(dir, file), "utf8").matchAll(/"([A-Z][A-Z0-9_]{3,})"/g)) {
+      if (name !== undefined) names.add(name);
+    }
+  }
+  return [...names];
+}
+/** The all-good compose with `env` in both the pds and the web service's environment. */
+function inEnvironment(env: Record<string, string>): string {
+  const lines = Object.entries(env)
+    .map(([k, v]) => `      ${k}: "${v}"`)
+    .join("\n");
+  return COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", lines).replace(
+    "      FINGERPRINT_CHECK: arachnid",
+    lines,
+  );
+}
+
 describe("preflight C13 to C24 (P1.30s)", () => {
   const withEnv = (lines: string) => COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", lines);
   const host = (name: string) => withEnv(`      PDS_HOSTNAME: ${name}`);
@@ -401,6 +436,65 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     await expectOnly("C21", { compose: old, report: twice });
     const done = await check({ compose: old, report: '{"retirement_part_a_complete": true}' });
     expect(failed(done.lines)).toEqual([]);
+  });
+
+  test("c21_hostname_case_and_trailing_dot", async () => {
+    // A hostname is case-insensitive and may end in one root dot, so these name the old host too.
+    for (const name of ["0X40.space", "0x40.SPACE", "0x40.space."]) {
+      expect(await expectOnly("C21", { compose: host(name) })).toMatch(/input missing: .*retirement-check\.json$/);
+    }
+    expect((await check({ compose: host("pds.0x40.space") })).lines).toContain("PASS C21 n/a");
+  });
+
+  test("c15_subdomain_entry_refused", async () => {
+    await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,x.0x40.me" } });
+    await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".x.0x40.me" } });
+  });
+
+  test("c22_non_integer_video_max_fails", async () => {
+    for (const max of ["2e9", "-1", "0x10", "1.5"]) {
+      const compose = withEnv(`      PDS_HOSTNAME: pds.example.test\n      VIDEO_MASTER_MAX_BYTES: "${max}"`);
+      expect(await expectOnly("C22", { compose, pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: "4000000000" } })).toBe(
+        "FAIL C22 VIDEO_MASTER_MAX_BYTES is not an integer",
+      );
+    }
+  });
+
+  test("c23_no_service_sets_fingerprint_check", async () => {
+    const compose = COMPOSE.replace("    environment:\n      FINGERPRINT_CHECK: arachnid\n", "");
+    expect(await expectOnly("C23", { compose })).toBe("FAIL C23 no service sets FINGERPRINT_CHECK=arachnid");
+  });
+
+  test("c24_time_tool_exit_nonzero_fails", async () => {
+    const exit = { code: 1, stdout: "", stderr: "" };
+    expect(await expectOnly("C24", {}, "prod", { run: fakeRun({ ntp: exit }).run })).toBe(
+      "FAIL C24 timedatectl failed",
+    );
+    expect(await expectOnly("C24", {}, "prod", { run: fakeRun({ chrony: exit }).run })).toBe(
+      "FAIL C24 chronyc tracking failed",
+    );
+  });
+
+  test("failure_reasons_never_contain_secret_values", async () => {
+    // Every variable a check names gets the sentinel, alone and appended to its good value, in the PDS env file and
+    // in the pds and web services' environment; with the passing stack too, no output line may hold it.
+    const names = checkedNames();
+    const each = (value: (name: string) => string) => Object.fromEntries(names.map((n) => [n, value(n)]));
+    const alone = each(() => SENTINEL);
+    const appended = each((n) => `${PDS_ENV[n] ?? ""}${SENTINEL}`);
+    const passing = {
+      PDS_ADMIN_PASSWORD: `${SENTINEL}-${"x".repeat(16)}`,
+      PDS_EMAIL_SMTP_URL: `smtps://user:${SENTINEL}@mail.example.test:465`,
+      PDS_MODERATION_EMAIL_SMTP_URL: `smtps://user:${SENTINEL}@mail.example.test:465`,
+    };
+    const good = await check({ pdsEnv: passing });
+    expect(failed(good.lines)).toEqual([]);
+    const bad = ["prod", "dev"].flatMap((env) =>
+      [alone, appended].flatMap((pdsEnv) => [check({ pdsEnv }, env), check({ compose: inEnvironment(pdsEnv) }, env)]),
+    );
+    const outputs = await Promise.all(bad);
+    expect(outputs.map(({ code }) => code)).toEqual(outputs.map(() => 1));
+    for (const { lines } of [good, ...outputs]) expect(lines.join("\n")).not.toContain(SENTINEL);
   });
 
   test("c22_blob_limit_below_master_fails", async () => {

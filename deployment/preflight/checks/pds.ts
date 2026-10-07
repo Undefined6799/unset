@@ -113,13 +113,20 @@ export const c11: Check = {
   }),
 };
 
+/** Pino levels at info or above, and silent; debug and trace log personal data beyond request headers. */
+const LOG_LEVELS = new Set(["info", "warn", "error", "fatal", "silent"]);
+
 /** C12: PDS request logging off; when on it logs client addresses and every request header (runbook
- * docs/human/runbooks/pds-debug-logging.md is the only way to turn it on). */
+ * docs/human/runbooks/pds-debug-logging.md is the only way to turn it on). LOG_LEVEL stays at info or above. */
 export const c12: Check = {
   id: "C12",
-  run: withPds((env) =>
-    !env.has("LOG_ENABLED") || equals(env, "LOG_ENABLED", "false")
-      ? pass()
-      : fail("LOG_ENABLED is on; see docs/human/runbooks/pds-debug-logging.md"),
-  ),
+  run: withPds((env) => {
+    if (env.has("LOG_ENABLED") && !equals(env, "LOG_ENABLED", "false")) {
+      return fail("LOG_ENABLED is on; see docs/human/runbooks/pds-debug-logging.md");
+    }
+    if (env.has("LOG_LEVEL") && !env.use("LOG_LEVEL", (v) => LOG_LEVELS.has(v ?? ""))) {
+      return fail("LOG_LEVEL is not info, warn, error, fatal or silent");
+    }
+    return pass();
+  }),
 };
