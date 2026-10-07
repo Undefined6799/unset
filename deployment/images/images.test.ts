@@ -359,6 +359,122 @@ function finalStageRemovals(dockerfile: string): Set<string> {
   return removed;
 }
 
+type Instruction = { line: number; text: string };
+
+/** The instructions that become the image: the final stage's, after those of each stage it builds on by name. */
+function shippedInstructions(all: Instruction[]): Instruction[] {
+  const declared: { from: string; alias: string | undefined; body: Instruction[] }[] = [];
+  for (const step of all) {
+    const from = FROM.exec(step.text);
+    if (from !== null) declared.push({ from: (from[1] ?? "").toLowerCase(), alias: from[2]?.toLowerCase(), body: [] });
+    else declared.at(-1)?.body.push(step);
+  }
+  const shipped: Instruction[] = [];
+  for (let at = declared.length - 1; at >= 0; ) {
+    const stage = declared[at] as (typeof declared)[number];
+    shipped.unshift(...stage.body);
+    at = declared.findLastIndex((earlier, index) => index < at && earlier.alias === stage.from);
+  }
+  return shipped;
+}
+
+/**
+ * The only verbs a shipped image may run a package manager with (architecture record
+ * 2026-10-07-p129-migrate-image-and-run-only-images, amendment 3): removal. A list of install verbs could be dodged by
+ * flag order, a full path or a synonym, so anything that is not removal fails, no verb included.
+ */
+const REMOVAL_VERBS = new Map<string, readonly string[]>([
+  ["apk", ["del"]],
+  ["apt", ["remove", "purge", "autoremove"]],
+  ["apt-get", ["remove", "purge", "autoremove"]],
+  ["dpkg", ["-r", "-P", "--remove", "--purge"]],
+  ...["aptitude", "rpm", "dnf", "microdnf", "yum"].map((tool): [string, readonly string[]] => [tool, []]),
+]);
+/** Commands that run a command they are given or build, which this reader cannot see: every shell, not only `-c`. */
+const INDIRECT = new Set(["sh", "bash", "ash", "dash", "zsh", "eval", "xargs", "env", "busybox", "source", "."]);
+const basename = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
+
+/** Why one simple command may not run in a shipped image; undefined when it may. */
+function commandProblem(words: string[]): string | undefined {
+  const [command = "", ...args] = words;
+  const name = basename(command);
+  const shown = words.join(" ");
+  if (words.some((word) => /[$`]/.test(word))) return `${shown}: a variable or command substitution hides what runs`;
+  if (INDIRECT.has(name)) return `${shown}: ${name} runs a command this test cannot read`;
+  const verbs = REMOVAL_VERBS.get(name);
+  if (verbs === undefined) {
+    // A package manager handed to another command (nohup, timeout, find -exec) is refused; rm only deletes it.
+    return name !== "rm" && args.some((word) => REMOVAL_VERBS.has(basename(word)))
+      ? `${shown}: runs a package manager through ${name}`
+      : undefined;
+  }
+  const verb = name === "dpkg" ? args[0] : args.find((word) => !word.startsWith("-"));
+  if (verbs.length === 0) return `${shown}: ${name} may not run in a shipped image`;
+  return verb !== undefined && verbs.includes(verb) ? undefined : `${shown}: ${name} may only remove packages`;
+}
+
+/** A shell-form RUN as simple commands: split on `&&`, `||`, `;`, `|`, `&`, newlines and parentheses, quotes dropped. */
+function shellCommands(script: string): string[][] {
+  return script
+    .split(/&&|\|\||[;|&\n(){}!]/)
+    .map((command) =>
+      command
+        .trim()
+        .split(/\s+/)
+        .map((word) => word.replaceAll(/["'\\]/g, ""))
+        .filter((word) => word !== ""),
+    )
+    .map((words) =>
+      words.slice(
+        Math.max(
+          0,
+          words.findIndex((word) => !/^\w+=/.test(word)),
+        ),
+      ),
+    )
+    .filter((words) => words.length > 0 && !/^\w+=/.test(words[0] ?? ""));
+}
+
+/** An exec-form RUN is one command, its JSON array of strings; undefined when it is not one. */
+function execCommand(json: string): string[] | undefined {
+  try {
+    const words: unknown = JSON.parse(json);
+    return Array.isArray(words) && words.every((word) => typeof word === "string") ? words : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Why one shipped instruction may install OS packages; SHELL is refused because it changes what every RUN runs. */
+function shippedInstructionProblems(instruction: string): string[] {
+  const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
+  const keyword = word.toUpperCase();
+  if (keyword === "ONBUILD") return shippedInstructionProblems(args);
+  if (keyword === "SHELL") return ["SHELL changes what RUN runs"];
+  if (keyword !== "RUN") return [];
+  const { rest } = splitFlags(args);
+  if (HEREDOC.test(rest)) return ["heredoc not supported"];
+  if (!rest.startsWith("[") && /[$`]/.test(rest)) return ["a variable or command substitution hides what runs"];
+  const commands = rest.startsWith("[") ? [execCommand(rest)] : shellCommands(rest);
+  return commands.flatMap((command) => {
+    if (command === undefined) return ["cannot parse exec-form RUN"];
+    const problem = commandProblem(command);
+    return problem === undefined ? [] : [problem];
+  });
+}
+
+/** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
+function osPackageProblems(dockerfile: string): string[] {
+  try {
+    return shippedInstructions(instructions(dockerfile)).flatMap(({ line, text }) =>
+      shippedInstructionProblems(text).map((problem) => `line ${line}: ${problem}`),
+    );
+  } catch (error) {
+    if (!(error instanceof Unparsed)) throw error;
+    return [`line ${error.line}: ${error.message}`];
+  }
+}
+
 const STRIPPED_PATH = /^\/[\w.@+-]+(?:\/[\w.@+-]+)*$/;
 
 /** Every way a lock entry's `stripped` list is malformed: empty, a path twice, or a path not absolute and literal. */
@@ -577,12 +693,40 @@ describe("base images", () => {
   });
 
   test("runtime_stage_installs_no_os_packages", () => {
-    // No stage installs OS packages, so no apt or apk line needs version pins (DL3008, DL3018) and the runtime holds
-    // only what the base ships. The edge is not a Node image: it removes setcap's packages (deployment/edge/Dockerfile).
-    for (const file of nodeDockerfiles) {
-      for (const line of read(file).split("\n")) {
-        expect(line, `${file}: ${line}`).not.toMatch(/^\s*RUN\b.*\b(?:apt-get|apt|apk|dpkg)\b/);
-      }
+    // Amendment 3: in the stages an image ships, a package manager may only remove, read on joined instructions.
+    for (const file of dockerfiles) expect(osPackageProblems(read(file)), file).toEqual([]);
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    const substitution = "a variable or command substitution hides what runs";
+    for (const [run, problem] of [
+      ["RUN true \\\n  && apk add curl", "apk add curl: apk may only remove packages"],
+      ["RUN apk --no-cache add curl", "apk --no-cache add curl: apk may only remove packages"],
+      ["RUN /sbin/apk add curl", "/sbin/apk add curl: apk may only remove packages"],
+      ["RUN apt-get -y install curl", "apt-get -y install curl: apt-get may only remove packages"],
+      ["RUN apk fix", "apk fix: apk may only remove packages"],
+      ["RUN dpkg --unpack x.deb", "dpkg --unpack x.deb: dpkg may only remove packages"],
+      ['RUN sh -c "apk add x"', "sh -c apk add x: sh runs a command this test cannot read"],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a JS template.
+      ["RUN ${PM} add x", substitution],
+      ["RUN $PM add x", substitution],
+      ['RUN ["apk","add","x"]', "apk add x: apk may only remove packages"],
+      ["RUN nohup apk add x", "nohup apk add x: runs a package manager through nohup"],
+      ["RUN FOO=1 apk add x", "apk add x: apk may only remove packages"],
+      ["RUN apk", "apk: apk may only remove packages"],
+      ["RUN yum remove x", "yum remove x: yum may not run in a shipped image"],
+      ["ONBUILD RUN apk add x", "apk add x: apk may only remove packages"],
+      ['SHELL ["/sbin/apk", "add"]', "SHELL changes what RUN runs"],
+    ]) {
+      expect(osPackageProblems(`${node}${run}`), run).toEqual([`line 3: ${problem}`]);
+    }
+    // Stages the final one builds on by name ship too; a stage it only copies from does not.
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN apk add x\nFROM base`)).toHaveLength(1);
+    expect(osPackageProblems(`FROM ${pinnedNode} AS deps\nRUN apk add x\nFROM ${pinnedNode}`)).toEqual([]);
+    for (const run of [
+      "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\\n    && apk del --no-network curl libcap",
+      "RUN apt-get purge -y x",
+      "RUN dpkg -r x && rm -rf /usr/bin/dpkg",
+    ]) {
+      expect(osPackageProblems(`${node}${run}`), run).toEqual([]);
     }
   });
 
