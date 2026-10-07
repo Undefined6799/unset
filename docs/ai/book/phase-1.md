@@ -5707,6 +5707,7 @@ every red fixture fails, every green one passes, and the real `shared/ui-build` 
 
 ### P1.25l — Check that every island keeps a lazy chunk
 Tags: check            Depends on: P1.25h (merged, #464)
+As built: merged by Alex at 2026-10-07T23:21:28Z as `1bd6c0d` (#523).
 Slice 1, check class (`scripts/budgets/island.ts` and its test); book edit 2026-10-07-p125l-islands-lazy-chunks, from
 architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: Phase 2. A tightening that restores the adopted island
 model (plan §5.1), cleared by the coordinator. #464's first build inlined islands into boot and the budget silently
@@ -7973,6 +7974,7 @@ dev-seed:
 
 ### P1.29r — Close the final-stage package rule's regression
 Tags: [SEC]            Depends on: P1.29x (merged, #507)
+As built: merged by Alex at 2026-10-07T23:18:03Z as `739ad43` (#519).
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p129r-final-stage-rule-regression (final
 22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z), with amendment 1
 (23:05Z) from architecture's 22:57Z note under amendment 5. A tightening; the coordinator clears it, no word from Alex.
