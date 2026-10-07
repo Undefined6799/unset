@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b,
   P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -123,6 +123,7 @@ flowchart TD
   P115g --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P115 --> P115s["P1.15s audit chain tests"]
+  P115s --> P115b["P1.15b verify through SET ROLE"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P103 --> P117e["P1.17e lock log events"]
   P111 --> P117["P1.17 advisory lock"]
@@ -195,6 +196,7 @@ flowchart LR
   P1_37a["P1.37a Arachnid application ALEX"]
   P1_38["P1.38 Phase 1 exit"]
   P1_15s["P1.15s audit chain tests"]
+  P1_15b["P1.15b verify through SET ROLE"]
 
   P1_04 --> P1_20
   P1_10 --> P1_20
@@ -259,6 +261,7 @@ flowchart LR
   P0_07 --> P1_36
   P1_26 --> P1_38
   P1_15s -.-> P1_38
+  P1_15s --> P1_15b
   P1_19 --> P1_22b["P1.22b locale (i18n slice)"]
   P1_22 --> P1_22b
   P1_26 --> P1_22b
@@ -2949,8 +2952,31 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      PR's class, so P1.15s stays feature. Red evidence: each tamper test fails with `verify` stubbed to report ok.
      Widening `trusted-base.ts` to let a trusted PR carry the reference line would be a loosening of a check gate and
      is not booked; if the split recurs, the step book can propose it as its own check-class step for Alex.
+     **As built** (#434, merged by Alex at 2026-10-07T12:14:07Z as `57631d6`; book edit
+     2026-10-07-p115s-as-built-and-p115b): the body showed the missing-module failure instead of the booked red run
+     (P1.15b shows it); it called two carried records "not yet carried" (once carried, a body cites the
+     `docs/ai/book/` path); its "AI notes: none needed" was wrong, though the hub note is in. `chain.test.ts:193`
+     creates a test-only login role `IN ROLE audit_owner`, which with default `INHERIT` holds the owner's rights
+     without `SET ROLE`, so the test does not prove the documented path; and `chain.test.ts:89-91` calls the
+     superuser-only `session_replication_role = replica` edit an owner's attack (an owner would use `ALTER TABLE ...
+     DISABLE TRIGGER`). Nothing in production changed; P1.15b fixes both.
+  4. **P1.15b** (feature, slice 1 beside P1.15s; depends on P1.15s, merged #434; book edits
+     2026-10-07-p115s-as-built-and-p115b and architecture's 2026-10-07-p115b-keep-set-role): verify the audit chain
+     through `SET ROLE`, in `tests/integration/audit/chain.test.ts` (and the hub note if needed); no trusted or check
+     path. Letter `b`: leftovers of P1.15 and P1.15s. Changes: (1) `verifyAsOwner` connects as a test-only login role
+     that is a `NOINHERIT` member of `audit_owner` (`WITH SET TRUE, INHERIT FALSE`, the shape migrator holds at
+     0003:65) and runs `SET ROLE audit_owner` before `verify`, as `audit.test.ts` does; `audit_owner` stays NOLOGIN
+     and no production login role is created; (2) the `tamper` comment says what it is, a superuser edit behind the
+     triggers; (3) new `tamper_as_owner_disable_trigger_detected`: as the owner, `ALTER TABLE ... DISABLE TRIGGER`,
+     edit a row, re-enable, and `verify full` reports it; (4) the body shows the booked red run (`verify` stubbed to
+     ok, every tamper test fails). Tests: `verifier_login_role_needs_set_role`, `verifier_without_set_role_is_denied`
+     (the same login role without `SET ROLE` is refused on the chain read, proving the NOINHERIT shape), the new
+     tamper test, and the existing tamper tests under the new role. Architecture refused the `IN ROLE` (inheriting)
+     form: under inheritance `current_user` stays the login role, so a green test there says nothing certain about
+     the `SET ROLE` path production uses, and a NOINHERIT member holds nothing until a visible `SET ROLE`. No word
+     from Alex: tests only, a tightening.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-  None depends on P1.15s except P1.38, so the tamper tests exist before Phase 1 closes.
+  None depends on P1.15s except P1.38 and P1.15b, so the tamper tests exist before Phase 1 closes.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
   `infrastructure/audit/{index.ts,actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) +
   `rowHash.test.ts`; `tests/integration/audit/chain.test.ts`, the `tests/tsconfig.json` reference and

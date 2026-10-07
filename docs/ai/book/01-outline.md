@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 123 steps: 102 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 124 steps: 103 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -183,6 +183,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.15g | Audit SQL part 3: EXECUTE grants on `audit.append`, audit tests (trusted) | [SEC] | P1.15d | `phase-1.md` |
 | P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | [SEC], trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
 | P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
+| P1.15b | Audit chain tests: verify through SET ROLE, owner DISABLE TRIGGER tamper | [SEC] | P1.15s | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
@@ -308,6 +309,7 @@ flowchart TD
   P1_15g["P1.15g Audit SQL part 3"]
   P1_15["P1.15 Audit TS workspace"]
   P1_15s["P1.15s Audit chain tests"]
+  P1_15b["P1.15b Verify through SET ROLE"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17e["P1.17e Lock log events"]
@@ -517,6 +519,7 @@ flowchart TD
   P2_15 --> P2_12
   P1_15 --> P2_12
   P1_15 --> P1_15s
+  P1_15s --> P1_15b
   P2_06 --> P2_13
   P1_25 --> P2_13
   P2_13 --> P2_13a
