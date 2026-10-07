@@ -1,12 +1,4 @@
 // Shared UI (MIT). P1.10: the island props serialiser (server) and reader (client).
-// P1.25h: the kit components the app shell renders (P1.25). The build runners live in @unset/shared-ui-build, so
-// this index may reach .tsx; Node never loads it.
-export { Button, type ButtonProps } from "./components/Button/Button.tsx";
-export { Callout, type CalloutProps } from "./components/Callout/Callout.tsx";
-export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
-export { Header, type HeaderProps } from "./components/Header/Header.tsx";
-export { RadioGroup, type RadioGroupProps, type RadioOption } from "./components/RadioGroup/RadioGroup.tsx";
-export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 // P1.23: what an island file exports.
 export {
   defineIsland,
