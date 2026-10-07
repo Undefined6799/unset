@@ -114,12 +114,27 @@ export function compare(
   };
 }
 
-/** The mode the command line and environment ask for; `--images` is the only argument. */
+/**
+ * The mode the command line and environment ask for; `--images` is the only argument. An earlier CI step can rewrite
+ * CI through $GITHUB_ENV but not GITHUB_ACTIONS, so either one means CI, and GITHUB_ACTIONS without CI=true is
+ * refused rather than read as a local run (architecture amendment 2, 2026-10-07).
+ */
 export function modeFor(env: Record<string, string | undefined>, args: readonly string[]): Mode {
   const unknown = args.find((arg) => arg !== "--images");
   if (unknown !== undefined) throw new Error(`unknown argument ${unknown}`);
+  if (env.GITHUB_ACTIONS !== undefined && env.CI !== "true") {
+    throw new Error("CI environment is inconsistent: GITHUB_ACTIONS is set and CI is not true");
+  }
   if (args.includes("--images")) return "images";
-  return env.CI === "true" ? "ci" : "local";
+  return env.CI === "true" || env.GITHUB_ACTIONS === "true" ? "ci" : "local";
+}
+
+/** The listed files whose run is checked: in CI every listed file, so one the glob missed still fails; otherwise
+ * only the files this mode starts. */
+export function filesToRun(mode: Mode, listed: string[], expected: string[]): string[] {
+  if (mode === "ci") return listed;
+  const starts = new Set(expected);
+  return listed.filter((f) => starts.has(f));
 }
 
 /** What one mode runs. A mode that runs the images project needs at least one image test, so it can never pass
@@ -277,7 +292,6 @@ export async function main(given: RunOptions): Promise<number> {
       report.testResults.push(...result.report.testResults);
       if (status === 0) status = result.status;
     }
-    const expected = new Set(plan.expected);
     const outcome = compare(
       glob,
       listed,
@@ -285,7 +299,7 @@ export async function main(given: RunOptions): Promise<number> {
       skippedOnly(root, report),
       skippedCases(root, report),
       strayTestFiles(root),
-      listed.filter((f) => expected.has(f)),
+      filesToRun(options.mode, listed, plan.expected),
     );
     if (plan.notRun !== null) console.error(`\n${plan.notRun}`);
     if (!printOutcome(outcome)) return 1;
@@ -298,6 +312,12 @@ export async function main(given: RunOptions): Promise<number> {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const root = process.cwd();
-  const mode = modeFor(process.env, process.argv.slice(2));
+  let mode: Mode;
+  try {
+    mode = modeFor(process.env, process.argv.slice(2));
+  } catch (error) {
+    console.error((error as Error).message);
+    process.exit(1);
+  }
   process.exit(await main({ root, config: join(root, "vitest.config.ts"), mode }));
 }
