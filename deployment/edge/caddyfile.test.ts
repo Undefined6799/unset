@@ -106,6 +106,12 @@ describe("caddyfile reader", () => {
     expect(() => read('site {\n\t"respond" 200\n}')).toThrow('quoted directive name "respond"');
   });
 
+  test("refuses_quoted_top_level_token", () => {
+    // Quoted, `(s)` could be a snippet definition or a site address; the reader does not guess which Caddy takes.
+    expect(() => read('"(s)" {\n\tbind 127.0.0.1\n}\nsite {\n}')).toThrow('line 1: quoted top-level token "(s)"');
+    expect(() => read('site {\n}\n"localhost" {\n}')).toThrow('line 3: quoted top-level token "localhost"');
+  });
+
   test("directive_outside_its_level_fails", () => {
     expect(() => read("site {\n\thandle {\n\t\trespond 200\n\t}\n}")).toThrow("handle is not allowed in site");
     expect(() => read("site {\n\troute {\n\t\troute {\n\t\t}\n\t}\n}")).toThrow("route is not allowed in route");

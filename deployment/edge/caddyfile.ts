@@ -15,7 +15,8 @@
 //   value, the two read the same. `{$NAME:default}` fails.
 // - Other placeholders: only the runtime ones our files use, each under the directives that use it (PLACEHOLDERS).
 // - `import` expands only a snippet `(name) { … }` defined earlier in the same text, with `{args[N]}` replaced
-//   (importer.go). File and glob imports, named routes (`&(name)`, `invoke`) and quoted directive names fail.
+//   (importer.go). File and glob imports, named routes (`&(name)`, `invoke`), quoted directive names and a quoted
+//   first token at the top level fail.
 // - Directives come from an allowlist per block (DIRECTIVES): what our files use today, nothing more. Adding one is a
 //   trusted change in the same PR as the Caddyfile line that needs it.
 
@@ -98,6 +99,8 @@ export function readCaddyfile(text: string, env: Env): Caddyfile {
   while (at < lines.length) {
     const line = lines[at] as Line;
     const [first, ...rest] = line.tokens as [Token, ...Token[]];
+    // Quoted, a first token like "(s)" reads as a snippet or as a site address; we do not decide which Caddy takes.
+    if (first.quoted) fail(first.line, `quoted top-level token "${first.text}" is not supported`);
     if (isImport(line)) {
       lines.splice(at, 1, ...expand(line, expander));
       continue;
