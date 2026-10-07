@@ -14,15 +14,29 @@ const shared = {
   oxc: { jsx: { runtime: "automatic", importSource: "react", development: false } },
   css: { modules: { generateScopedName: scopedName } },
 };
+// The styles entry imports each CSS Module as `<file>?styles-entry` (src/styles.ts). Vite's CSS plugin has already
+// collected that module's CSS for the chunk; this empties its JS (the class-name map, which no page loads) and keeps
+// the module so the CSS stays in the build (vite 8.3.1 vite:css-post returns `moduleSideEffects: false` for a CSS
+// Module, dist/node/chunks/node.js:29755; rolldown 1.2.12 lets a later transform hook's `moduleSideEffects` win). A
+// query is part of the module id, so an island importing the same file gets the ordinary module with its map.
+const STYLES_ENTRY_ONLY = {
+  name: "unset:styles-entry-css-only",
+  enforce: "post",
+  transform(_code: string, id: string) {
+    if (!id.endsWith(".module.css?styles-entry")) return null;
+    return { code: "", map: null, moduleSideEffects: "no-treeshake" };
+  },
+};
 const browser = {
   ...shared,
+  plugins: [STYLES_ENTRY_ONLY],
   build: {
     outDir: "dist/client",
     emptyOutDir: true,
     manifest: true,
     rolldownOptions: {
       input: { boot: "src/islands/runtime/bootstrap.ts", styles: "src/styles.ts" },
-      // Keeps the styles entry's export, and with it every CSS Module import (and so its CSS) in the build.
+      // An entry keeps its exports, and with them any CSS Module it exports (scripts/ui/web-css.test.ts builds one).
       preserveEntrySignatures: "exports-only",
     },
   },
