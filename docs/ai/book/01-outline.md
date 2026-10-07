@@ -125,10 +125,10 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 131 steps: 110 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 133 steps: 112 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
-interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
+interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
 non-obvious step is here (seal for the OAuth tokens, audit for P2.12's age-gate row, limits for login, the UI shell, the edge in front of the PDS, the set JSON for the scope strings, the onboarding and email gates)
 are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 
@@ -215,7 +215,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24b | Toast and select islands within the JS budget (per-icon drawing modules first) | feature | P1.24j | `phase-1.md` |
 | P1.24c | Toast focus after close, required select stays native, select labels, font-metrics entry check | feature | P1.24b | `phase-1.md` |
 | P1.25k | Error-page hook in the server kit | [SEC], trusted | P1.04, P1.08 | `phase-1.md` |
-| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k | `phase-1.md` |
+| P1.25h | UI build runners move to the JSX-free shared/ui-build workspace | — | P1.24c | `phase-1.md` |
+| P1.25q | Notes guard: `ui-build` area | check | P1.25h | `phase-1.md` |
+| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -229,17 +231,17 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
-| P1.29k | Migrate image (separate Dockerfile), syncRolePasswords wiring, postgres in the lock | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.11p, P1.28, P1.30t | `phase-1.md` |
-| P1.29a | PDS and Mailpit vendor images and services in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a | `phase-1.md` |
-| P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
 | P1.30 | Deploy preflight core, C1–C12 | [SEC] | P1.27, P1.30q, P1.30p | `phase-1.md` |
 | P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
+| P1.29k | Migrate image (separate Dockerfile), syncRolePasswords wiring, postgres in the lock | [SEC] | P1.27, P1.12p, P1.12x | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.11p, P1.28, P1.30t | `phase-1.md` |
+| P1.29a | PDS and Mailpit vendor images and services in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a | `phase-1.md` |
+| P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -346,6 +348,8 @@ flowchart TD
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
   P1_25k["P1.25k Error-page hook in the kit"]
+  P1_25h["P1.25h UI build runners to shared/ui-build"]
+  P1_25q["P1.25q ui-build notes area"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -479,7 +483,12 @@ flowchart TD
   P1_24j --> P1_24b
   P1_24b --> P1_24c
   P1_24k --> P1_25
+  P1_04 --> P1_25k
+  P1_08 --> P1_25k
   P1_25k --> P1_25
+  P1_24c --> P1_25h
+  P1_25h --> P1_25
+  P1_25h --> P1_25q
   P1_24c --> P1_26
   P1_25 --> P1_26
   P1_04 --> P1_27
@@ -656,7 +665,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 19 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
+Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
