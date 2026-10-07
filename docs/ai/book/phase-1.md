@@ -176,6 +176,7 @@ flowchart LR
   P1_25q["P1.25q ui-build notes area"]
   P1_25w["P1.25w ui-build budget and lint row"]
   P1_25d["P1.25d jsx-free detector"]
+  P1_25r["P1.25r jsx-free test parses with oxc"]
   P1_25l["P1.25l islands keep lazy chunks"]
   P1_25o["P1.25o own shared/islands ALEX"]
   P1_25i["P1.25i island runtime to shared/islands"]
@@ -260,6 +261,7 @@ flowchart LR
   P1_25h --> P1_25q
   P1_25h --> P1_25w
   P1_25h --> P1_25d
+  P1_25d --> P1_25r
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
@@ -5619,7 +5621,10 @@ shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run c
 
 ### P1.25d — Tighten the jsx-free detector's matching
 Tags: —            Depends on: P1.25h (merged, #464)
-As built: merged by Alex at 2026-10-07T22:37:20Z as `cbc2f20` (#512).
+As built: merged by Alex at 2026-10-07T22:37:20Z as `cbc2f20` (#512). Its matcher read only strings after `from` or
+`import`, so `createRequire(...)("@unset/shared-ui")`, `require()` in a `.cts` file, an `import()` of a const, and an
+import hidden by a stray quote in an earlier comment all pass where main refused them; relative specifiers were not
+realpathed (main missed that too). It regressed below main; P1.25r fixes it.
 Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride P1.25w); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (N4). Owner: the third thread. KIT matches any import that resolves into
 `shared/ui/` (the bare specifier, any subpath, any relative path), on the resolved path, not the text; REACT matches
@@ -5627,6 +5632,43 @@ Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride 
 newly caught form (a subpath, a relative path, `react-dom/client`, `react/jsx-runtime`). Rider option: a PR touching
 `shared/ui-build/` that opens before P1.25d is claimed carries it, with one line in its body, and P1.25d is then
 recorded as built. Defence in depth beside P1.25w's row, so their order does not matter.
+
+---
+
+### P1.25r — Close the jsx-free test's regression
+Tags: —            Depends on: P1.25d (merged, #512)
+Slice 1, product class (`shared/ui-build/jsx-free.test.ts`, plus the two nits below); book edit
+2026-10-07-p125w-p125d-ui-build-follow-ups (P1.25r, text final 23:00Z), from architecture's N4 amendment in
+2026-10-07-p125h-follow-ups. Owner: the third thread, in its next slot, ahead of P1.25l. A tightening, cleared by the
+coordinator.
+
+Parse each scanned file with oxc through vite's `parseSync`, never with regexes (typescript 7.0.2 has no in-process
+parser; vite is pinned exactly and `scripts/budgets/count-glue-lines.ts:9` and `:47` already parse this way, so no
+dependency is added). The language comes from the file extension (`ts`, `tsx`, `mts`, `cts`); a parse error fails the
+test for that file and never counts as "no imports found".
+1. **Floor:** any string literal or no-substitution template literal whose value is exactly `@unset/shared-ui`, or that
+   value followed by `/`, fails wherever it appears (the parser ignores comments and JSX text). The one exception is
+   main's: a whole `import type { … } from "@unset/shared-ui"` with exactly the index specifier. Refused as on main:
+   `export type … from`, a type-only import from a subpath or a relative path into shared/ui, and the inline
+   `import { type X }`.
+2. **Loading primitives** are refused in ui-build sources: `require`, `createRequire`, `module.require`, and `import()`
+   with a non-literal argument. A runner that needs one states it under "What I am unsure about" and it is ruled on,
+   never exempted in code.
+3. **Relative specifiers** are resolved, and realpathed when the target exists; the target must stay inside
+   `shared/ui-build/`. A target under `node_modules/` or `shared/ui/` fails, and so does one that does not exist.
+4. **The react/jsx-runtime and JSX checks** keep their intent, now on the parsed tree.
+
+Nits that ride along: wrap `docs/ai/notes/area/ui-build.md:32` (129 characters) to the note's 120; make the comment at
+`jsx-free.test.ts:94` say react-markdown is "named like react", not "named like the kit".
+
+Tests: red fixtures `createRequire(...)("@unset/shared-ui")`, `require()` in a `.cts` file, a specifier in a const then
+`import(n)`, a stray quote in an earlier comment hiding a following import, a relative path through `node_modules`,
+`import()` of a variable, `` `@unset/shared-ui` `` as a template literal, `export type { X } from "@unset/shared-ui"`,
+`import type { X } from "@unset/shared-ui/sub"`, and a file that does not parse; green fixtures
+`import type { X } from "@unset/shared-ui"`, a comment containing `'` before a legitimate relative import, the string
+`"@unset/shared-uix"` (the floor matches the exact name or a path under it, not any prefix), and a comment holding
+`@unset/shared-ui` and a stray quote that yields no Literal (the parser proof). Done when `npm run check` is green,
+every red fixture fails, every green one passes, and the real `shared/ui-build` sources still pass.
 
 ---
 

@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 158 steps: 137 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 159 steps: 138 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -230,6 +230,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25q | Notes guard: `ui-build` area | check | P1.25h | `phase-1.md` |
 | P1.25w | ui-build budget key and lint row (type-only shared-ui import) | check | P1.25h | `phase-1.md` |
 | P1.25d | jsx-free detector matches resolved shared/ui paths and react-dom | — | P1.25h | `phase-1.md` |
+| P1.25r | jsx-free test parses with oxc (vite parseSync): string floor, no loading primitives, realpathed relatives | — | P1.25d | `phase-1.md` |
 | P1.25l | Budget check: every island keeps its own lazy chunk | check | P1.25h | `phase-1.md` |
 | P1.25o | CODEOWNERS, lint edges and budget for shared/islands | check [ALEX] | P1.25h | `phase-1.md` |
 | P1.25i | Island runtime moves to the shared/islands workspace | trusted | P1.25o | `phase-1.md` |
@@ -388,6 +389,7 @@ flowchart TD
   P1_25q["P1.25q ui-build notes area"]
   P1_25w["P1.25w ui-build budget and lint row"]
   P1_25d["P1.25d jsx-free detector"]
+  P1_25r["P1.25r jsx-free test parses with oxc"]
   P1_25l["P1.25l Islands keep lazy chunks"]
   P1_25o["P1.25o Own shared/islands"]
   P1_25i["P1.25i Island runtime to shared/islands"]
@@ -550,6 +552,7 @@ flowchart TD
   P1_25h --> P1_25q
   P1_25h --> P1_25w
   P1_25h --> P1_25d
+  P1_25d --> P1_25r
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
