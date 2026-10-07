@@ -4,7 +4,16 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { buildEdgeImage, docker, EDGE, type Edge, type ProbeStep, startEdge } from "./edge-container.ts";
+import {
+  buildEdgeImage,
+  docker,
+  EDGE,
+  type Edge,
+  logsWhen,
+  type ProbeStep,
+  pullProbeImage,
+  startEdge,
+} from "./edge-container.ts";
 import { timeoutProblems } from "./timeouts.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
@@ -63,6 +72,7 @@ const FORWARDED = ["x-forwarded-for", "x-real-ip", "forwarded"];
 const reached = (path: string, from: number) => edge.seen.slice(from).some((seen) => seen.rawPath === path);
 
 beforeAll(async () => {
+  pullProbeImage();
   image = buildEdgeImage();
   edge = await startEdge(image);
 }, 600_000);
@@ -134,7 +144,7 @@ describe("edge", () => {
   test("edge_strips_client_address_headers", async () => {
     const from = edge.seen.length;
     const path = "/xrpc/com.atproto.server.describeServer?strip";
-    await send(path, { "x-forwarded-for": "1.2.3.4", "x-real-ip": "1.2.3.4", forwarded: "for=1.2.3.4" });
+    await send(path, { "x-forwarded-for": "192.0.2.10", "x-real-ip": "192.0.2.10", forwarded: "for=192.0.2.10" });
     const seen = edge.seen.slice(from).find((s) => s.rawPath === path);
     expect(seen).toBeDefined();
     for (const header of ["x-forwarded-for", "x-real-ip", "forwarded"]) {
@@ -149,9 +159,9 @@ describe("edge", () => {
     const from = edge.seen.length;
     await send("/xrpc/com.atproto.server.describeServer?default");
     await send("/xrpc/com.atproto.server.describeServer?cased", {
-      "X-Forwarded-For": "1.2.3.4, 5.6.7.8",
-      "X-REAL-IP": "1.2.3.4",
-      FORWARDED: "for=1.2.3.4;proto=http",
+      "X-Forwarded-For": "192.0.2.10, 192.0.2.20",
+      "X-REAL-IP": "192.0.2.10",
+      FORWARDED: "for=192.0.2.10;proto=http",
     });
     const seen = edge.seen.slice(from);
     expect(seen.length).toBe(2);
@@ -269,11 +279,17 @@ describe("edge", () => {
     // No metrics endpoint answers: the admin API is off and the health site serves /health only.
     expect(adminApi?.statuses).toEqual([-1]);
     expect(health?.statuses).toEqual([404]);
-    const { stdout, stderr } = edge.logs();
+    // Wait until both lines are written, so the address check below reads the logs that carry them.
+    const { stdout, stderr } = await logsWhen(
+      edge,
+      ({ stdout, stderr }) => stderr.includes('"status":502') && stdout.includes('"status":429'),
+    );
     expect(stderr).toContain('"status":502');
     expect(stdout).toContain('"status":429');
     for (const address of ["127.0.0.2", "203.0.113.9"]) expect(`${stdout}\n${stderr}`).not.toContain(address);
-  });
+    // The probe image is pulled in beforeAll and every new probe connection has a 1 s connect deadline. The test took
+    // at most 581 ms over six local runs (P1.28b PR); 10 s leaves room for a shared CI runner.
+  }, 10_000);
 
   // One test per zone (architecture's values, limits.json): from its own loopback address, every request below the
   // limit passes and the next one gets 429 with Retry-After (the guard against caddy-ratelimit #94). The long-window
