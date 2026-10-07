@@ -15,11 +15,15 @@ const inventory = JSON.parse(readFileSync(join(import.meta.dirname, "..", "inven
   { status: string }
 >;
 
-/** Links and buttons whose only content is an icon: what is left after the drawings are removed is their name. */
+/** Links and buttons whose only content is an icon: what is left after the drawings are removed is their name. A
+ * drawing named by its own aria-label (the Mark, role="img") counts as its name. */
 function unlabelledControls(html: string): string[] {
   const controls = html.match(/<(a|button)\b[^>]*>[\s\S]*?<\/\1>/g) ?? [];
   return controls.filter((control) => {
-    const text = control.replace(/<svg\b[\s\S]*?<\/svg>/g, "").replace(/<[^>]+>/g, "");
+    const text = control
+      .replace(/<svg\b[^>]*\baria-label="([^"]*)"[\s\S]*?<\/svg>/g, "$1")
+      .replace(/<svg\b[\s\S]*?<\/svg>/g, "")
+      .replace(/<[^>]+>/g, "");
     return text.trim() === "";
   });
 }

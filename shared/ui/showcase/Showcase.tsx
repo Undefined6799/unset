@@ -1,4 +1,4 @@
-// The kit showcase (P1.24, P1.24s, P1.24a; book P1.24 "Where"): every built component in each variant and state, server-rendered
+// The kit showcase (P1.24, P1.24s, P1.24a, P1.24k; book P1.24 "Where"): every built component in each variant and state, server-rendered
 // with no JS. P1.26's test server serves it for the axe and target-size checks in both themes; no app links it.
 import type { ReactNode } from "react";
 import { AsciiBackground } from "../components/AsciiBackground/AsciiBackground.tsx";
@@ -9,12 +9,15 @@ import { Card } from "../components/Card/Card.tsx";
 import { Checkbox } from "../components/Checkbox/Checkbox.tsx";
 import { CodeBlock } from "../components/CodeBlock/CodeBlock.tsx";
 import { DescriptionList } from "../components/DescriptionList/DescriptionList.tsx";
+import { Footer } from "../components/Footer/Footer.tsx";
+import { Header } from "../components/Header/Header.tsx";
 import { Icon } from "../components/Icon/Icon.tsx";
 import { Input } from "../components/Input/Input.tsx";
 import { Kbd } from "../components/Kbd/Kbd.tsx";
 import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
 import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
+import { Modal } from "../components/Modal/Modal.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
@@ -24,6 +27,7 @@ import { SkipLink } from "../components/SkipLink/SkipLink.tsx";
 import { Spinner } from "../components/Spinner/Spinner.tsx";
 import { Switch } from "../components/Switch/Switch.tsx";
 import { Table } from "../components/Table/Table.tsx";
+import { Tabs } from "../components/Tabs/Tabs.tsx";
 import { Tag } from "../components/Tag/Tag.tsx";
 import { Textarea } from "../components/Textarea/Textarea.tsx";
 import { type SafeHref, safeHref } from "../safe-href.ts";
@@ -184,6 +188,41 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
     <AsciiBackground seed={3} rows={12} fadeFrom="left">
       <Card title="Over the field">Text on the field sits inside a card.</Card>
     </AsciiBackground>
+  ),
+  Header: (
+    <Header
+      nav={[
+        { label: "Home", href: href("/"), current: true },
+        { label: "Explore", href: href("/explore") },
+      ]}
+      action={{ label: "Sign in", href: href("/signin") }}
+    />
+  ),
+  Footer: (
+    <Footer
+      columns={[
+        { title: "Project", links: [{ label: "About", href: href("/about") }] },
+        { title: "Protocol", links: [{ label: "AT Protocol", href: href("https://atproto.com/"), external: true }] },
+      ]}
+      note="© 2026 unset.sh"
+      meta="v0.1.0"
+    />
+  ),
+  Tabs: (
+    <Tabs
+      label="Install method"
+      selected="npm"
+      hrefFor={(id) => href(`/kit?tab=${id}`)}
+      tabs={[
+        { id: "curl", label: "curl", content: "curl -fsSL unset.sh | sh" },
+        { id: "npm", label: "npm", content: "npm install -g unset" },
+      ]}
+    />
+  ),
+  Modal: (
+    <Modal trigger="Delete draft" fallbackHref={href("/kit/delete")} title="Delete this draft?" tone="danger">
+      The video and its caption are removed for good.
+    </Modal>
   ),
 };
 

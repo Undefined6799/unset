@@ -1,0 +1,35 @@
+/* Modal (P1.24k; sheet components/Modal/README.md, v45): at most 440px wide, space-6 padding, no shadow. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    width: calc(100% - var(--space-8));
+    max-width: 440px;
+    padding: var(--space-6);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-0);
+    background-color: var(--color-ground);
+    color: var(--color-ink);
+  }
+
+  .root::backdrop {
+    background-color: var(--color-scrim);
+  }
+
+  .title {
+    margin: 0;
+  }
+
+  .body {
+    margin-top: var(--space-3);
+    color: var(--color-ink-muted);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+}
