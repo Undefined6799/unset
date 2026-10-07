@@ -2,7 +2,11 @@
 // was selected by the include, ran at least one passing or failing test, and
 // skipped nothing. In the prototype 20 of 47 UI test files silently never ran
 // (PLAN.md §2 rule 27; engineering rule TE-4).
-import { spawn } from "node:child_process";
+//
+// Image tests (`*.image.test.ts`, the `images` project) are decided here once, by environment (P1.28r; step book
+// 2026-10-07 p123d-p128i-p128r-test-timing, amendment 1): with CI=true they run after the unit projects; locally they
+// are not started and one line says so; `npm run test:images` runs only them, under CI's rules.
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -10,6 +14,8 @@ import { pathToFileURL } from "node:url";
 import { sourceFiles } from "../guards/files.ts";
 
 const TEST_FILE = /\.test\.(?:ts|tsx|mts|cts)$/;
+const IMAGE_TEST_FILE = /\.image\.test\.(?:ts|tsx|mts|cts)$/;
+const IMAGES_PROJECT = "images";
 const STRAY_SPEC = /\.spec\.[cm]?[jt]sx?$/;
 const STRAY_JS_TEST = /\.test\.(?:js|mjs|cjs|jsx)$/;
 const E2E_DIR = "tests/e2e/";
@@ -32,8 +38,19 @@ export type Outcome = {
   skippedCases: string[];
   stray: string[];
 };
-/** `quiet` keeps Vitest's own output off the terminal (the end-to-end tests of this file). */
-export type RunOptions = { root: string; config: string; quiet?: boolean };
+/** Which projects run: all of them (CI), all but images (local), or images only (`npm run test:images`). */
+export type Mode = "ci" | "local" | "images";
+/** `quiet` keeps Vitest's own output off the terminal, and `dockerReady` replaces the Docker probe (the end-to-end
+ * tests of this file). */
+export type RunOptions = {
+  root: string;
+  config: string;
+  mode: Mode;
+  quiet?: boolean;
+  dockerReady?: () => boolean;
+};
+/** The Vitest runs for one mode, in order; the files they must run; the local not-run line; why the mode cannot run. */
+export type ImagesPlan = { runs: string[][]; expected: string[]; notRun: string | null; problem: string | null };
 
 const toPosix = (root: string, file: string): string =>
   (isAbsolute(file) ? relative(root, file) : file).split(sep).join("/");
@@ -77,6 +94,7 @@ export function skippedCases(root: string, report: VitestJsonReport): string[] {
     .sort();
 }
 
+/** `toRun` is the listed files this run starts; the rest are reported only if no include selects them. */
 export function compare(
   glob: string[],
   listed: string[],
@@ -84,19 +102,54 @@ export function compare(
   skipped: Set<string>,
   cases: string[],
   stray: string[],
+  toRun: string[] = listed,
 ): Outcome {
   const listedSet = new Set(listed);
   return {
     notListed: glob.filter((f) => !listedSet.has(f)).sort(),
-    notExecuted: listed.filter((f) => !executed.has(f) && !skipped.has(f)).sort(),
+    notExecuted: toRun.filter((f) => !executed.has(f) && !skipped.has(f)).sort(),
     allSkipped: [...skipped].sort(),
     skippedCases: [...cases].sort(),
     stray: [...stray].sort(),
   };
 }
 
+/** The mode the command line and environment ask for; `--images` is the only argument. */
+export function modeFor(env: Record<string, string | undefined>, args: readonly string[]): Mode {
+  const unknown = args.find((arg) => arg !== "--images");
+  if (unknown !== undefined) throw new Error(`unknown argument ${unknown}`);
+  if (args.includes("--images")) return "images";
+  return env.CI === "true" ? "ci" : "local";
+}
+
+/** What one mode runs. A mode that runs the images project needs at least one image test, so it can never pass
+ * by collecting nothing. */
+export function imagesPlan(mode: Mode, glob: string[]): ImagesPlan {
+  const images = glob.filter((f) => IMAGE_TEST_FILE.test(f));
+  const units = [`--project=!${IMAGES_PROJECT}`];
+  const imageRun = [`--project=${IMAGES_PROJECT}`];
+  if (mode === "local") {
+    const count = `${images.length} file${images.length === 1 ? "" : "s"}`;
+    const notRun = `images project: not run locally (${count}; CI runs them; npm run test:images to run)`;
+    return {
+      runs: [units],
+      expected: glob.filter((f) => !IMAGE_TEST_FILE.test(f)),
+      notRun: images.length === 0 ? null : notRun,
+      problem: null,
+    };
+  }
+  const problem = images.length === 0 ? "the images project has no *.image.test.ts file to run" : null;
+  if (mode === "images") return { runs: [imageRun], expected: images, notRun: null, problem };
+  return { runs: [units, imageRun], expected: glob, notRun: null, problem };
+}
+
+/** `docker info` succeeds: the daemon is reachable. */
+function dockerReady(): boolean {
+  return spawnSync("docker", ["info"], { stdio: "ignore", timeout: LIST_TIMEOUT_MS }).status === 0;
+}
+
 /** The argument vector for one Vitest command, run with the current Node. */
-export function vitestArgs(args: readonly string[], options: RunOptions): string[] {
+export function vitestArgs(args: readonly string[], options: Pick<RunOptions, "root" | "config">): string[] {
   return [VITEST_BIN, ...args, "--root", options.root, "--config", options.config];
 }
 
@@ -160,9 +213,10 @@ export async function listByVitest(options: RunOptions): Promise<string[] | null
 
 async function runVitest(
   options: RunOptions,
+  projects: readonly string[],
   outputFile: string,
 ): Promise<{ status: number; report: VitestJsonReport } | null> {
-  const args = ["run", "--reporter=default", "--reporter=json", `--outputFile=${outputFile}`];
+  const args = ["run", ...projects, "--reporter=default", "--reporter=json", `--outputFile=${outputFile}`];
   const run = await vitest(args, options, RUN_TIMEOUT_MS, options.quiet ? "pipe" : "inherit");
   if (run.timedOut) return null;
   try {
@@ -202,13 +256,28 @@ export async function main(given: RunOptions): Promise<number> {
     console.error("No test files discovered.");
     return 1;
   }
+  const plan = imagesPlan(options.mode, glob);
+  if (plan.problem !== null) {
+    console.error(plan.problem);
+    return 1;
+  }
+  if (options.mode === "images" && !(options.dockerReady ?? dockerReady)()) {
+    console.error("npm run test:images needs Docker, and `docker info` failed.");
+    return 1;
+  }
   const listed = await listByVitest(options);
   if (listed === null) return 1;
   const scratch = mkdtempSync(join(tmpdir(), "unset-test-"));
   try {
-    const result = await runVitest(options, join(scratch, "vitest.json"));
-    if (result === null) return 1;
-    const { report } = result;
+    const report: VitestJsonReport = { testResults: [] };
+    let status = 0;
+    for (const [i, projects] of plan.runs.entries()) {
+      const result = await runVitest(options, projects, join(scratch, `vitest-${i}.json`));
+      if (result === null) return 1;
+      report.testResults.push(...result.report.testResults);
+      if (status === 0) status = result.status;
+    }
+    const expected = new Set(plan.expected);
     const outcome = compare(
       glob,
       listed,
@@ -216,10 +285,12 @@ export async function main(given: RunOptions): Promise<number> {
       skippedOnly(root, report),
       skippedCases(root, report),
       strayTestFiles(root),
+      listed.filter((f) => expected.has(f)),
     );
+    if (plan.notRun !== null) console.error(`\n${plan.notRun}`);
     if (!printOutcome(outcome)) return 1;
-    if (result.status === 0) console.error(`\nAll ${glob.length} discovered test files ran.`);
-    return result.status;
+    if (status === 0) console.error(`\nAll ${plan.expected.length} test files this run selects ran.`);
+    return status;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -227,5 +298,6 @@ export async function main(given: RunOptions): Promise<number> {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const root = process.cwd();
-  process.exit(await main({ root, config: join(root, "vitest.config.ts") }));
+  const mode = modeFor(process.env, process.argv.slice(2));
+  process.exit(await main({ root, config: join(root, "vitest.config.ts"), mode }));
 }
