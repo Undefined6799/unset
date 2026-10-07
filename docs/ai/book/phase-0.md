@@ -353,9 +353,9 @@ Algorithm (the runbook Alex follows, as soon as the agent reports P0.02 step 5):
         methods: Squash. Alex alone merges, by written rule (`CLAUDE.md`).
      c. Require status checks to pass: "Require branches to be up to date before merging" **off** (architecture
         2026-10-06, reversing P0-A8); add every name in `.github/required-checks.json` as it stands on `main` (today
-        check, secrets, audit, actionlint, semgrep and pr-shape; the file is authoritative, and `images` is not added,
-        P1.27r), each with source **GitHub Actions** chosen in the picker (not "any source"), so no other app can post
-        a green context.
+        check, secrets, audit, actionlint, semgrep and pr-shape; the file is authoritative, and the image scan
+        (`scan`) is not added, P1.27r), each with source **GitHub Actions** chosen in the picker (not "any source"),
+        so no other app can post a green context.
      d. Require signed commits: **on**. Under squash-only merging GitHub creates and signs the commit that lands on
         `main`; unsigned commits on agent branches do not matter. P0.14 drill D checks the merged commit is verified;
         if it is not, Alex turns this off and P0-A3 is asked.
@@ -808,7 +808,8 @@ Done when (tests): (`scripts/budgets/check.test.ts`, `scripts/lint/depcruise.tes
     process with `UNSET_ENV=prod` and the config that selects each fake, under a Node module-resolve hook that records
     every resolved URL → exit ≠ 0 with `config.fake_in_prod` and no `*.fake.ts` URL recorded; with `UNSET_ENV=dev` the
     fixture loads its fake (the test proves it examined more than zero composition roots: the fixture counts).
-  - lint_clean_repo: `npm run lint` on the real tree exits 0.
+  - check_job_runs_lint_before_tests (replaces lint_clean_repo, P0.05b): the required `check` job runs `npm run lint`
+    before `npm test`, with no `continue-on-error`; that step is what proves the real tree lints clean.
 
 Reuse: Biome 2.5.15 → USE (bootstrap pin; `noExcessiveLinesPerFile` with `maxLines`/`skipBlankLines` exists in its
 schema). dependency-cruiser + `@swc/core` → USE (plan §7 names dependency-cruiser; swc is its own supported parser;
@@ -817,6 +818,81 @@ established tool). Stylelint → REJECT (plan §7). Provisional — for reuse re
 Not in this step: the GritQL token plugin, `useLayeredStyles`, CSS size budget (P1.21); workspace `tsconfig` references
 (P1.01); repo guards (P0.06).
 Diagram: none.
+
+---
+
+### P0.05b — Drop the lint rerun from the test suite (book edit 2026-10-07-p005b-lint-rerun)
+Tags: —            Depends on: —            Plan: rule SE-6; architecture's 2026-10-07-lint-clean-repo-duplicate
+Where: check paths, kind/build: `scripts/lint/depcruise.test.ts` and a test in `scripts/ci/`. No `.github/` or
+  `scripts/guards/` file. Neutral (the set of refused inputs is unchanged), so Alex's word is not needed. Slice 1 (it
+  unblocks every slice-1 PR). Owner: Phase 2, first in the slot queue.
+
+The bug: `lint_clean_repo` (`scripts/lint/depcruise.test.ts:130-133`) spawns `npm run lint`, a third copy of what the
+required `check` job's own `npm run lint` step (`ci.yml:52`, before `npm test`) and `depcruise_cruised_nonzero`
+already refuse, and it timed out at vitest's 5 s default under load on #464. No timeout bump, retry or skip.
+
+Done when (tests):
+  - `lint_clean_repo` is removed, and P0.05's list names `check_job_runs_lint_before_tests` in its place.
+  - `check_job_runs_lint_before_tests` (in `scripts/ci/`, beside the other workflow-reading tests): the `check` job has
+    a step whose `run` is exactly `npm run lint`, ordered before the `npm test` step, with no `continue-on-error` on
+    the step or the job. Red evidence: a workflow copy with the lint step removed, moved after `npm test`, or given
+    `continue-on-error` fails it.
+
+As built: merged by Alex at 2026-10-07T19:05:26Z as `233e1a0` (#469); P0.05c then pinned the gate it relies on.
+
+Watch item, not booked: if the real-repo half of `depcruise_cruised_nonzero` nears the 5 s limit, it is dropped for
+the same reason and its fixture half stays; the step book then books a one-line follow-on under P0.05 with no new
+ruling.
+
+---
+
+### P0.05c — Pin the check job's lint and test gate (book edit 2026-10-07-p005c-check-job-gate)
+Tags: —            Depends on: P0.05b (merged, #469)            Plan: rule SE-6; architecture's 2026-10-07-check-job-gate-pinning
+As built: merged by Alex at 2026-10-07T19:30:48Z as `4a3b15b` (#483).
+Where: check paths, kind/build: `scripts/ci/check-job.test.ts` only. A tightening; no `.github/` file, so Alex's word is
+  not needed. Slice 1. Owner: Phase 2. #469's verification found that an `if:` on the lint step, or a weakened job
+  `if:`, could skip the gate silently.
+
+Pins: the check job's `if:` equals today's exact string; the steps from the first through `npm test` are an exact
+sequence of full mappings (`uses` compared by action path, the ref only shape-checked as 40 hex characters); no
+`defaults` at workflow or job level and no workflow-level `env`, and the check job's `env` keys are exactly `BASE_SHA`
+and `RENOVATE_IMAGE`; the root `package.json` `lint`, `test`, `typecheck` and `guards` scripts are exact strings, with
+no npm lifecycle scripts (`pre*`, `post*`, `prepare` and the like); `ci.yml` is parsed with `uniqueKeys`, refusing
+anchors, aliases, merge keys and duplicate keys.
+
+Done when (tests): `check_job_if_exact`, `check_job_gate_steps_exact`, `check_job_no_defaults_or_extra_env`,
+`root_package_scripts_pinned`, `ci_workflow_has_no_aliases_or_duplicate_keys`, each with red fixtures (a checkout SHA
+bump passes, `checkout@v7` fails, a different action path fails). Maintenance: a later intended change to those steps,
+scripts or `if:` edits this test in the same PR; such a PR is check class, and if it weakens anything it needs Alex's
+word.
+
+---
+
+### P0.05d — Pin the root .npmrc and the check job's uses ref (book edit 2026-10-07-p005d-npmrc-and-uses-ref)
+Tags: [SEC]            Depends on: P0.05c (merged, #483)            Plan: rule SE-6; architecture's 2026-10-07-npmrc-pin-and-uses-ref
+Where: check paths, kind/build: `scripts/ci/npmrc.test.ts` (new), `scripts/ci/check-job.test.ts`, `.github/CODEOWNERS`
+  (the parsed `# checks:` line at :108 gains `/.npmrc`; that line is the SE-6 check-path list), and
+  `scripts/guards/change-shape.test.ts` (its pinned check-path list, :221-233, gains `"/.npmrc"`). No product file. A
+  tightening, cleared by the coordinator. Slice 1. Owner: Phase 2, slotted after P1.28r (an order, not a dependency).
+  If the harness refuses Phase 2 on those paths even for a tightening, the line to ask Alex for is "yes .npmrc check
+  path scripts/guards", quoted in the PR body if used.
+
+Part 1, the .npmrc pin:
+  - `npmrc_is_pinned`: the root `.npmrc`, parsed as key=value lines (comments and blanks skipped), is exactly
+    `engine-strict=true`, `save-exact=true`, `fund=false`, `audit-level=high`, `min-release-age=7`,
+    `ignore-scripts=true`, `@unset:registry=https://127.0.0.1:9/`. It fails on an unknown or duplicate key, a `${...}`
+    interpolation, or `_auth`, `_authToken` or `//` in a key (the one pinned registry value contains `//` and is
+    matched exactly, so the test does not refuse its own line); a missing `ignore-scripts=true` is named in the
+    failure.
+  - `no_nested_npmrc`: no other `.npmrc` in `git ls-files` outside `node_modules`.
+  - check-job.test.ts refuses any `npm_config_*` env (case-insensitive) in `ci.yml` at workflow, job or step level,
+    across all jobs.
+Part 2, the uses ref: `normalised` (check-job.test.ts:64-67) splits on the last `@` and requires both halves; the path
+  equals the pinned path and the ref matches `^[0-9a-f]{40}$`. A missing `@`, an empty ref, a tag or a short SHA
+  fails; fixtures cover a bare path and a tag.
+
+Note for the Renovate thread, not this step: `npm ci` runs with ignore-scripts, so a dependency needing a postinstall
+fails by design; the fix is a reviewed per-package `npm rebuild <pkg>` step, never dropping the flag.
 
 ---
 

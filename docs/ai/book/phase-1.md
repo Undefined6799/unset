@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28r,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -162,6 +162,7 @@ flowchart LR
   P1_21["P1.21 token pipeline"]
   P1_22["P1.22 base styles, theme, locale"]
   P1_23["P1.23 island runtime"]
+  P1_23d["P1.23d props fuzz test bounded"]
   P1_24["P1.24 UI kit: gate + primitives"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
   P1_24k["P1.24k UI kit: chrome, no-JS"]
@@ -173,6 +174,12 @@ flowchart LR
   P1_25b["P1.25b error-page hook leftovers"]
   P1_25h["P1.25h UI build runners to shared/ui-build"]
   P1_25q["P1.25q ui-build notes area"]
+  P1_25w["P1.25w ui-build budget and lint row"]
+  P1_25d["P1.25d jsx-free detector"]
+  P1_25l["P1.25l islands keep lazy chunks"]
+  P1_25o["P1.25o own shared/islands ALEX"]
+  P1_25i["P1.25i island runtime to shared/islands"]
+  P1_25u["P1.25u drop old island owner paths"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -188,9 +195,12 @@ flowchart LR
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
+  P1_28s["P1.28s quoted top-level tokens refused"]
+  P1_28i["P1.28i edge image builds in image tests"]
+  P1_28r["P1.28r images project after unit tests"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
-  P1_29w["P1.29w scan every shipped image ALEX"]
+  P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
@@ -242,6 +252,13 @@ flowchart LR
   P1_24c --> P1_25h
   P1_25h --> P1_25
   P1_25h --> P1_25q
+  P1_25h --> P1_25w
+  P1_25h --> P1_25d
+  P1_25h --> P1_25l
+  P1_25h --> P1_25o
+  P1_25o --> P1_25i
+  P1_25i --> P1_25u
+  P1_25i --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
@@ -261,7 +278,8 @@ flowchart LR
   P1_27 --> P1_29k
   P1_29k --> P1_29
   P1_29k --> P1_29x
-  P1_29k --> P1_29w
+  P1_29w --> P1_29v
+  P1_29w --> P1_29
   P1_29x --> P1_29v
   P1_28w --> P1_29v
   P1_29v --> P1_29d
@@ -276,6 +294,11 @@ flowchart LR
   P1_29s --> P1_29t
   P1_28 --> P1_28b
   P1_28b --> P1_28h
+  P1_28h --> P1_28s
+  P1_28h --> P1_28i
+  P1_28i --> P1_28r
+  P1_28r --> P1_29k
+  P1_28r --> P1_29d
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -4692,6 +4715,27 @@ the chat bundle (P6.06); the CSP builder itself (P1.08).
 
 ---
 
+### P1.23d — Bound the island props fuzz test's work
+Tags: [SEC], trusted            Depends on: —
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing, from architecture's
+2026-10-07-test-timing-fuzz-and-image-tests. Neutral; the coordinator clears it. Owner: the third thread. Priority: the
+next free slot, ahead of every other step, because it protects every PR's check. Order: P1.23d, P1.28i, P1.28r.
+
+**Where:** `shared/ui/islands/props.fuzz.test.ts` (trusted base, CODEOWNERS:50-51, 118-119), or the same file under
+`shared/islands/` if P1.25i has moved the island runtime by then.
+
+**What:** one check per run instead of one `expect` per serialized character (one precompiled regex over the output,
+or one pass collecting the offending positions), with the breaker set unchanged and a failure that shows the offending
+substring and its index; explicit bounds on every arbitrary (strings `maxLength` 256, `maxDepth` 4, arrays `maxLength`
+16; larger only if the test stays under half of 5000 ms on a loaded runner); `numRuns` stays 10,000, with no fixed
+seed. Refused: a raised timeout, a retry, a skip, fewer runs or a fixed seed.
+
+Test: `props_breaker_examples_fail` (every known breaker makes the new check fail: `</script`, `<!--`, and U+2028 and
+U+2029 if they are in the set, with mixed case where the set is case-insensitive). Done when `npm run check` is green
+and the fuzz file's time in the check log is under 2500 ms.
+
+---
+
 ### P1.23f — CSS scope function (product split of P1.23v)
 Tags: —            Depends on: —            Plan: ADR 0015
 Where: `scripts/ui/css-scope.ts` (a tool under the P1.21 ruling, not a check folder): sha256 over the repo-relative
@@ -5476,8 +5520,7 @@ would break DC-2's one-surface rule. The cause is two runtimes in one workspace,
 **Where:** new MIT workspace `shared/ui-build/` (`@unset/shared-ui-build`, exports `"."`): `index.ts`, `package.json`,
 tsconfig, LICENSE, hub note `docs/ai/notes/area/ui-build.md`; `build-tokens.ts`, `font-metrics.ts`, `icons.ts`,
 `tokens.ts` and their tests, moved unchanged from `shared/ui/scripts/`; `scripts/ui/*.ts` importing the new index;
-`shared/ui/index.ts` exporting Header, Footer, SkipLink, Callout, RadioGroup and Button (and later components)
-beside the island plumbing; the workspace and lockfile entries.
+the workspace and lockfile entries. (As built, `shared/ui/index.ts` exports no components; see below.)
 
 **Rules:**
 - The data stays in shared/ui (`icons/icons.json`, `icons/drawings/*.generated.ts`, tokens, fonts); the runners still
@@ -5488,13 +5531,12 @@ beside the island plumbing; the workspace and lockfile entries.
   shared/ui takes no dependency on shared/ui-build, so there is no cycle. The generic `shared` row
   (`.dependency-cruiser.cjs:116`) already covers `shared/ui-build/`, so the MATRIX is unchanged and no MATRIX q or v
   part is booked.
-- The freshness tests (`icon_allowlist_matches_sheet` and the token test) stay with shared/ui, which owns the data,
-  and import the runner through `@unset/shared-ui-build`'s index. The third thread's branch (relayed 12:52Z, to be
-  confirmed against the merged PR) moves them with the runners instead, since keeping them would need a shared/ui to
-  ui-build tsconfig reference and a `tsc -b` cycle; they still read shared/ui's files by path, and
-  `icon_drawing_modules_match_icons_json` moves to `shared/ui/icons/drawings.test.ts`. Its body names this under
-  "unsure". ADR 0016 still names `shared/ui/scripts/tokens.ts`; accepted ADRs are never edited, so it is read with
-  this note: the path is now `shared/ui-build/tokens.ts`.
+- The freshness tests (`icon_allowlist_matches_sheet` and the token test) move with the runners into shared/ui-build
+  (as built, #464): keeping them in shared/ui would need a shared/ui to ui-build tsconfig reference and a `tsc -b`
+  cycle, a build-graph reason the architecture record did not foresee. They still read shared/ui's files by path;
+  `icon_drawing_modules_match_icons_json` moved to `shared/ui/icons/drawings.test.ts`, since it imports only shared/ui
+  files. ADR 0016 still names `shared/ui/scripts/tokens.ts`; accepted ADRs are never edited, so it is read with this
+  note: the path is now `shared/ui-build/tokens.ts`.
 - A pure move counts lightly against the size budget; the body says it is a move with no logic change, and `git diff
   -M` shows the renames.
 
@@ -5502,6 +5544,22 @@ Tests: `ui_build_is_jsx_free` (under `shared/ui-build/`: no `.tsx` file, no `rea
 `@unset/shared-ui` a whole-statement `import type`), `ui_build_entries_run_in_node` against the new index (the
 end-to-end proof that nothing reaches `.tsx` at runtime), the moved runner tests unchanged, and P1.25's component
 imports through `@unset/shared-ui` passing depcruise with no rule change.
+
+**As built** (#464, merged by Alex at 2026-10-07T19:04:01Z as `f893a3f`; book edit 2026-10-07-p125h-ui-build-workspace,
+"Added 14:20Z", verified 19:08Z):
+- The hub note `docs/ai/notes/area/ui-build.md` lists area `ui`, because the notes guard's `AREAS`
+  (`scripts/guards/notes.ts:14`) has no `ui-build`; P1.25q adds it.
+- **The shared/ui index exports no components.** Re-exporting them (c739577) put Header and the header-menu island in
+  boot's static graph: island JS went from 12 files to 7, boot from 69.71 to 71.08 kB gzip, and the build warned
+  `INEFFECTIVE_DYNAMIC_IMPORT`. It was reverted as f4bd852 (ruling 2026-10-07-p125h-boot-chunk). `"sideEffects":
+  ["**/*.css"]` was tried and dropped: boot came out at 69.72 kB against main's 69.71. The island runtime moves out
+  instead (P1.25o, P1.25i, P1.25u), and P1.25 exports components after P1.25i.
+- **The bundle is unchanged from main**, in the check job on #464's final head b64f68f (job 112839200477):
+  `boot-3CIOxxve.js` 222.61 kB, 69.71 kB gzip; six island lines (copy 748, header-menu 810, modal 483, select 1630,
+  tabs 975, toast 808); all island JS 75345 gzip bytes in 12 files (max 76800); no `INEFFECTIVE_DYNAMIC_IMPORT`. The
+  push run on main has no check job, so the PR head's check is the record.
+- Follow-ups: P1.25w, P1.25d, P1.25l, and the island-runtime split P1.25o, P1.25i, P1.25u (book edits
+  2026-10-07-p125w-p125d-ui-build-follow-ups and 2026-10-07-p125l-islands-lazy-chunks).
 
 ---
 
@@ -5520,9 +5578,104 @@ Tests: the guard's area test gains `ui-build`, and the `notes-hub` check finds `
 
 ---
 
+### P1.25w — Measure and fence the ui-build workspace
+Tags: check            Depends on: P1.25h (merged, #464)
+Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups,
+from architecture's 2026-10-07-p125h-follow-ups (N1, N2). Owner: Phase 2. A tightening (N2 restores lint enforcement
+lost in the move), cleared by the coordinator; not a classifier path.
+1. **Budget:** `"shared/ui-build": 800` in `scripts/budgets/budgets.json` and in the duplicate map in
+   `scripts/budgets/check.ts:15-23`, both together; `shared/ui` stays at 2500, no combined key.
+2. **Lint row:** a MATRIX row for `^shared/ui-build/` next to `shared-ui-lexicons` (`.dependency-cruiser.cjs:117`),
+   allowing exactly `^shared/ui-build/`, npm packages, and the `@unset/shared-ui` index as a type-only dependency; no
+   CORE built-ins and no value import of shared/ui. A fixture proves `^(shared/(ui|lexicons)/)` does not match
+   `shared/ui-build/`.
+
+Tests: a `check.test.ts` case counting a `shared/ui-build/` file under its own key; AB-1 fixtures (pass: an internal
+import, a type-only import of the shared-ui index; fail: `node:fs` from shared/ui-build, a value import of the
+shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run check` is green and the budget prints a
+`shared/ui-build` line.
+
+---
+
+### P1.25d — Tighten the jsx-free detector's matching
+Tags: —            Depends on: P1.25h (merged, #464)
+Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride P1.25w); book edit
+2026-10-07-p125w-p125d-ui-build-follow-ups (N4). Owner: the third thread. KIT matches any import that resolves into
+`shared/ui/` (the bare specifier, any subpath, any relative path), on the resolved path, not the text; REACT matches
+`react`, `react/*`, `react-dom` and `react-dom/*`; the inline `import { type X }` refusal stays. Tests: one case per
+newly caught form (a subpath, a relative path, `react-dom/client`, `react/jsx-runtime`). Rider option: a PR touching
+`shared/ui-build/` that opens before P1.25d is claimed carries it, with one line in its body, and P1.25d is then
+recorded as built. Defence in depth beside P1.25w's row, so their order does not matter.
+
+---
+
+### P1.25l — Check that every island keeps a lazy chunk
+Tags: check            Depends on: P1.25h (merged, #464)
+Slice 1, check class (`scripts/budgets/island.ts` and its test); book edit 2026-10-07-p125l-islands-lazy-chunks, from
+architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: Phase 2. A tightening that restores the adopted island
+model (plan §5.1), cleared by the coordinator. #464's first build inlined islands into boot and the budget silently
+counted fewer, so the manifest is checked against the source list.
+
+`islandsAreLazyChunks` reads the Vite manifest (the `ManifestChunk` type, `island.ts:16-23`), never the build log, and
+runs in `main` before the size gate; a refusal exits 1 and names the island (and, for rule 3, the entry that reaches
+it). The source list is every `*.island.tsx` under the two island roots the depcruise island rule names
+(`.dependency-cruiser.cjs:55`), passed in as `gzipBytes` is. Each listed island must: 1. have a manifest key whose
+`src` is that file; 2. have `isDynamicEntry: true` and no `isEntry`; 3. not appear in the static closure (`imports`
+only) of any `isEntry` chunk, boot included.
+
+Tests (`islands_are_lazy_chunks`): fail an island statically imported from boot (the #464 shape), an island with no
+manifest chunk, and an island chunk marked `isEntry`; pass today's shape, where boot reaches each island only through
+`dynamicImports`. Done when `npm run check` is green on main and the report still prints one line per island.
+
+---
+
+### P1.25o — Own the island runtime's new paths
+Tags: check, [ALEX]            Depends on: P1.25h (merged, #464)
+Slice 1, check class (`.github/CODEOWNERS`, `scripts/lint/`, `scripts/budgets/`); book edit
+2026-10-07-p125l-islands-lazy-chunks (the split, 14:20Z). Owner: Phase 2. Order: P1.25o, P1.25i, then P1.25u and
+P1.25; P1.25o only adds paths, so no trusted file is ever unowned.
+1. **CODEOWNERS:** add `/shared/islands/` under "Islands and links" and under "Islands props serialiser" (the
+   trusted-base section). Remove nothing.
+2. **The depcruise edges the move needs** (a trusted PR never widens the MATRIX, so they land here first): a row for
+   `^shared/islands/` allowing only itself and npm, no CORE; the shared/ui row and apps/web may import the
+   `@unset/shared-islands` index; the island rule (`.dependency-cruiser.cjs:263-265`) allows `^shared/islands/` beside
+   `^shared/ui/`. AB-1 fixtures: pass a kit import of the islands index; fail `node:fs` from shared/islands and
+   shared/islands importing shared/ui.
+3. **Budgets:** a `"shared/islands"` key in `budgets.json` and in `check.ts`'s duplicate map, the moved lines rounded
+   up to the next hundred, at least 300.
+
+A loosening (coordinator's ruling, 14:11Z): the new trusted-section directory widens what a trusted PR may carry until
+P1.25u narrows it, and the new edges widen what may import what. Phase 2 opens it only after Alex's typed line (for
+example "yes P1.25o CODEOWNERS"), quoted with its time in the PR body. Line: (pending).
+
+---
+
+### P1.25i — Move the island runtime to shared/islands
+Tags: trusted            Depends on: P1.25o
+Slice 1, trusted; book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: the third thread. A new workspace
+`@unset/shared-islands` (`shared/islands/`) whose index holds define, props, readProps and slot, moved with their
+tests (git mv, history kept); `safeHref` stays in shared/ui. `hydrate.ts` imports only `@unset/shared-islands`; the
+kit and each `*.island.tsx` import the islands workspace. Its `docs/ai/notes` hub note rides along, filed under area
+`ui` until a notes-guard area exists (a P1.25q-style check step, which needs Alex's line). Done when `npm run check`
+is green, boot's gzip size is at or below main's, and the island report keeps 12 files and one line per island
+(P1.25l, once merged, enforces the last). Refused: a subpath import for readProps, and P1.25 importing components by
+subpath (DC-2).
+
+---
+
+### P1.25u — Drop the island runtime's old owner paths
+Tags: check            Depends on: P1.25i
+Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: Phase 2. Removes
+`/shared/ui/islands/`, `/shared/ui/src/islands/`, `/shared/ui/islands/props.ts` and
+`/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping `/shared/ui/safe-href.ts`, then confirms
+with `git ls-files` that none of the removed paths exists and that the trusted-base tests pass. A tightening: it
+removes ownership only from paths that no longer exist.
+
+---
+
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25i (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
@@ -6098,12 +6251,15 @@ book; it does not split itself.
 
 ---
 
-### P1.27r — Make `images` a required check (split from P1.27q; deferred until after launch)
-Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, Alex's typed words in the building thread allowing the guard-file
-  edit            Plan: §7 (CI); rule SE-6
-Where: check paths only, kind/build: `"images"` in `.github/required-checks.json`, the matching line in
-  `scripts/guards/workflow-pins.test.ts`, and the `images` entry in `scripts/docs/change-shape-config.test.ts` if
-  P1.27q left it out. Nothing else rides with it.
+### P1.27r — Make `scan` a required check (split from P1.27q; deferred until after launch)
+Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, P1.29w and `scan` green on main, Alex's typed words in the
+  building thread allowing the guard-file edit            Plan: §7 (CI); rule SE-6
+Amended by P1.29w (book edit 2026-10-07-p129-postgres-split, 19:15Z): the required check is the aggregate job `scan`
+  in place of `images`, never the per-image `scan-image (<name>)` names, which change as images come and go. Alex's
+  ruleset setting adds `scan` with source GitHub Actions, as P0.03 does for the other checks.
+Where: check paths only, kind/build: `"scan"` in `.github/required-checks.json`, the matching line in
+  `scripts/guards/workflow-pins.test.ts`, and the `scan` entry in `scripts/docs/change-shape-config.test.ts`. Nothing
+  else rides with it.
 Size: under 20 lines.
 
 Why a step of its own: the required check is a tightening, independent of the `packages: write` question (P1.27s), so
@@ -6112,13 +6268,12 @@ it lands on Alex's word, whichever way he answers that question.
 Deferred until after launch (Alex, 2026-10-06 12:08Z in the Phase 2 thread: "Wait before making image check mandatory,
 we can look into it after launch"). No step before launch depends on it, P1.30 and P2.13a included; it is the first
 entry of L.00's post-launch follow-up list in `launch-gate.md`, and L.00 does not gate launch on it. P1.27 (the
-Dockerfile) does not wait for it.
-Interim rule until it merges: a hand-off of a PR that touches `deployment/images/` reports the `images` result. If that
-PR itself turns `images` red (a Trivy finding, a hadolint error, a failed build), it is fixed like any other failure
-the PR causes, since a known-vulnerable image is still a security finding. A skipped `images` run, or one that has not
-reported, does not block the hand-off.
+Dockerfile) does not wait for it. Interim rule until it merges: a hand-off of a PR that touches `deployment/` reports
+the `scan` result (`images` until P1.29w lands). If that PR itself turns it red (a Trivy finding, a hadolint error, a
+failed build), it is fixed like any other failure the PR causes, since a known-vulnerable image is still a security
+finding. A skipped run, or one that has not reported, does not block the hand-off.
 
-Done when (tests): the existing `workflow-pins` test, updated; `required_checks_include_images` (the required list and
+Done when (tests): the existing `workflow-pins` test, updated; `required_checks_include_scan` (the required list and
 the workflow job name agree).
 
 ---
@@ -6272,6 +6427,8 @@ entry, as the record required; no change is booked (a pre-pass over all stages w
 
 ### P1.28w — Make the mirror scan's HIGH warnings fire
 
+**As built:** merged by Alex at 2026-10-07T19:28:15Z as `f6addc0` (#480).
+
 **Tags:** [SEC] · **Depends on:** P1.28v (merged, #430) · **Class:** check (`.github/workflows/mirror.yml`,
 `scripts/ci/mirror-scan.test.ts`), neutral to tightening · **Slice:** 1, after P1.28v
 
@@ -6354,6 +6511,7 @@ stage label; `ADD <url>` and `ADD <git ref>` fetch external content the same way
 
 ### P1.28c — Drop the edge Dockerfile's syntax line
 Tags: [SEC], trusted            Depends on: P1.28u (merged, #449)
+As built: merged by Alex at 2026-10-07T19:15:07Z as `e72000a` (#479).
 Slice 1, trusted base; book edit 2026-10-07-p128c-p128t-reader-gaps, from architecture's
 2026-10-07-p128u-reader-gaps. Letter `c`: glue ahead of P1.28t (P1.28's taken letters are b, d, h, q, u, v, w and
 x). Owner: the third thread. It removes line 1 (`# syntax=docker/dockerfile:1`) of `deployment/edge/Dockerfile` and
@@ -6365,7 +6523,7 @@ word from Alex: a tightening, no `.github/` path.
 ---
 
 ### P1.28t — Close the Dockerfile reader's gaps
-Tags: [SEC]            Depends on: P1.28c
+Tags: [SEC]            Depends on: P1.28c (merged, #479)
 Slice 1, feature, `deployment/images/images.test.ts` only, under the `/deployment/` security-review line; book edit
 2026-10-07-p128c-p128t-reader-gaps, with architecture's 2026-10-07-p128u-reader-gaps (amending
 2026-10-07-p128-copy-from-image-ref), which wins where they differ. Owner: Phase 1. Rule: where BuildKit's exact
@@ -6723,6 +6881,8 @@ runtime.
 
 ### P1.28h — Add the Caddyfile reader for edge checks
 
+As built: merged by Alex at 2026-10-07T19:02:30Z as `337df28` (#463), with amendments 1 to 4 below.
+
 Booked from architecture's 2026-10-07-p130s-networks-and-caddyfile-reader (point 2) by book edit
 2026-10-07-p130s-split-and-p128h. `edge.test.ts` reads the Caddyfile by regular expressions over text
 (`zoneCoverageProblems`, line 42; `zones`, line 27), and P1.30u's C18 must read the same file at the deploy gate. Two
@@ -6738,15 +6898,110 @@ P1.28 · No word from Alex: a tightening, nothing is loosened
 
 **Goal:** a small reader that tokenises the Caddyfile the way Caddy does (words, quotes, `{ }` blocks, newlines, `#`
 comments, `import` of snippets defined in the same file) into sites, blocks and directives. Any token it does not
-understand fails, never skips: environment placeholders, heredocs, and imports of files or globs included.
-`edge.test.ts` switches `zoneCoverageProblems` and `zones` to it, with today's expectations unchanged.
+understand fails, never skips: heredocs and imports of files or globs included. `edge.test.ts` switches
+`zoneCoverageProblems` and `zones` to it, with today's expectations unchanged.
+
+**As built on #463, amended by architecture** (2026-10-07-p130s-networks-and-caddyfile-reader, amendments 1 to 5,
+13:40Z to 19:15Z; points 1 to 4 ride #463 before it merges, and nothing is loosened):
+1. The lexer handles `\"` inside double quotes and trailing-backslash continuations; the `edge.test.ts` helpers accept a
+   matcher-less route only and a single `rate_limit` block. These stand.
+2. `{$NAME}` placeholders are substituted from one exported allowlist, `ENV_NAMES` (`PDS_HOST`, `PDS_UPSTREAM`,
+   `ACME_EMAIL`; adding one is a trusted change). An unknown name, the `{$NAME:default}` form and a missing value
+   fail. Each value is shape-checked first (`PDS_HOST` a hostname, `PDS_UPSTREAM` `host:port`, `ACME_EMAIL` an
+   address), and any value holding whitespace, `{`, `}`, `"`, `` ` ``, `#`, `\` or a newline fails; substitution goes
+   into the single token after lexing, never re-lexed. Runtime placeholders (`{env.X}`, `{http.*}`) are refused where a
+   directive name or matcher could be, and as argument words only where our files already use them.
+3. Directives come from an allowlist per level (global options, site block, route block, snippet), exactly what our
+   Caddyfiles use today; adding one is a trusted change in the PR that needs it. Refused outright: named routes
+   (`&(name)` and `invoke`), any quoted token in directive-name position (`"import"` included), and `handle` or
+   `route` blocks at a level our files do not use.
+4. `caddyfile_reader_matches_caddy_adapt` makes its own two Docker calls with node built-ins (build the edge image
+   with fixed arguments, run `caddy adapt`, remove the image in `afterAll`), and first compares the image's
+   `/etc/caddy/Caddyfile`, snippets and sites byte for byte with the repo files. No Docker in CI fails it, never skips.
+   It imports only node built-ins, vitest and `./caddyfile.ts`.
+5. Amendment 5 (19:15Z) withdraws the move of the edge integration tests (amendments 2 and 4): dependency-cruiser
+   refuses Node built-ins in non-test files under `deployment/` (TOOLING, `.dependency-cruiser.cjs:48`, covers only
+   `^(scripts|tests)/` and `*.test.ts`), and widening it would be a loosening for tidiness. The helpers and fixtures
+   stay in `tests/`, the adapt test keeps the inline calls of point 4, and P1.28s carries only the quoted top-level
+   token rider.
 
 **Done when (tests):** `caddyfile_reader_unknown_token_fails`, `caddyfile_reader_resolves_snippet_imports`,
 `caddyfile_reader_refuses_file_imports`, `caddyfile_reader_matches_caddy_adapt` (CI only, built edge image: for the
 repo's Caddyfile, the reader's sites, route order, imports and `rate_limit` zones agree with `caddy adapt --adapter
-caddyfile` JSON), and the existing `edge.test.ts` zone tests unchanged and green.
+caddyfile` JSON), `placeholder_unknown_name_fails`, `placeholder_default_form_fails`,
+`placeholder_value_with_syntax_fails` (a value of `x }\nhandle {`), `unknown_directive_fails`,
+`named_route_and_invoke_refused`, `quoted_directive_name_refused`, `directive_outside_its_level_fails`, and the
+existing `edge.test.ts` zone tests unchanged and green.
 
 **Not in this step:** C18 (P1.30u); any change to the Caddyfile itself.
+
+---
+
+### P1.28s — Refuse quoted top-level tokens in the Caddyfile
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
+5 in 2026-10-07-p130s-networks-and-caddyfile-reader, which withdrew the move of the edge integration tests. P1.28s keeps
+its id and carries only the rider. Owner: Phase 1. No word from Alex: a tightening.
+
+**Where:** `deployment/edge/caddyfile.ts` and `deployment/edge/caddyfile.test.ts`. Nothing moves; the helpers and
+fixtures stay in `tests/`.
+
+**What:** the reader refuses any top-level block whose first token was quoted, and the error names the line. It does
+not try to decide which reading Caddy would take: Caddy probably reads `"(s)" {` as a snippet definition, which has not
+been checked against Caddy's source, and today it fails closed only because a later `import s` is refused. The image's
+real Caddyfile has no quoted top-level token, so #463's adapt test and its byte-for-byte check stay green. The ASVS rows
+V2.4.1, V13.4.5 and V16.2.5 are not edited; if one describes this refusal, it gains the new test name in the same PR,
+and nothing else changes (a `docs/human/` file rides a trusted PR, `trusted-base.ts:142-150`).
+
+Test: `refuses_quoted_top_level_token`, with two cases, `"(s)" {` and `"localhost" {`.
+
+Not booked: a future non-test helper under `deployment/` that needs Node built-ins needs its own MATRIX row first (a
+`scripts/lint` allowance, so Alex's typed line); the step that wants it books it.
+
+---
+
+### P1.28i — Split the edge image build into its own tests
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing. Neutral. Owner: Phase 1, which also holds
+P1.28s on the same file; P1.28i goes first to avoid a conflict (P1.28s does not depend on it).
+- The Docker build part of `deployment/edge/caddyfile.test.ts` (lines 222-236 and its `buildEdgeImage` and docker
+  helpers above them) moves to `deployment/edge/caddyfile.image.test.ts` in the same folder, with the byte-for-byte
+  check unchanged.
+- `tests/integration/deployment/edge/edge.test.ts` also builds the edge image (`buildEdgeImage()`,
+  `edge-container.ts:97`), so it is renamed `edge.image.test.ts` here and P1.28r's guard is green on arrival. The rename
+  rides the trusted PR (its path segment `deployment/edge` matches a trusted folder, `trusted-base.ts:142-150`);
+  `edge-container.ts` stays as a helper.
+- An ASVS row in `docs/human/compliance/asvs-5-l2.md` citing `edge.test.ts` or a moved test name is updated in the
+  same PR.
+
+Done when both image test files run and pass in CI (inside the one `npm test` until P1.28r) and the test count in the
+check log is unchanged.
+
+---
+
+### P1.28r — Run image tests after the unit tests
+Tags: [SEC], check            Depends on: P1.28i
+Slice 1, check class (root `vitest.config.ts`, `scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing.
+Neutral; the coordinator clears it; not workflow-gated. Owner: Phase 2 or the third thread, whichever has a slot
+first. It goes before P1.29k and P1.29d, which depend on it and name their image tests `*.image.test.ts` from the
+start; P1.29w does not wait, because its scan is in `images.yml`. Landing the include pattern first, matching nothing,
+is not taken.
+- Root `vitest.config.ts` gains an `images` project including `**/*.image.test.{ts,tsx,mts,cts}`; every existing
+  project, `tests/integration` included, excludes that pattern; the images project has no Postgres global setup.
+- `scripts/test/run.ts` runs the unit projects first, then `--project images`, and fails if either fails. The
+  every-file-ran and no-skips rules apply to both runs; the CI-only condition and run.ts's local skip exception are
+  unchanged and not widened.
+- **The guard `image_builds_only_in_image_tests`** (scripts/test): a test file, or a helper it imports, that runs an
+  image build (`docker build`, `docker buildx build`, or the known wrapper `buildEdgeImage`) must be named
+  `*.image.test.ts`. It matches builds, not every `docker` call: `docker run`, `inspect`, `logs` and `rm` in
+  `tests/support/postgres.ts` and the integration Postgres tests, `docker compose config` in
+  `deployment/preflight/compose-parse.test.ts`, and the fake `docker` in `preflight.test.ts` stay in their unit
+  projects. Moving container runs is a separate question, not booked. Fixtures: a unit test with a `docker build`
+  spawn fails; a unit test importing a build wrapper fails; an image test with a build passes; a unit test with
+  `docker run` passes.
+
+Done when `npm test` prints the unit run, then the images run, and the `props.fuzz` margin no longer shares the runner
+with an xcaddy compile.
 
 ---
 
@@ -6763,11 +7018,11 @@ with Go 1.24.6 (one CRITICAL, CVE-2025-68121, and 21 HIGH, fixed in Go but in no
 gosu-free image, and the mirror scan must skip only paths our images provably delete; the running-stack tests need
 the whole stack in CI; and the single step was well over the ~550-line split line. The text below this note is the
 whole stack's spec; each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend
-on **P1.29t**, the last part, which implies the rest. Order: P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a,
-P1.29h, P1.29s, P1.29t.
+on **P1.29t**, the last part, which implies the rest. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v,
+P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
-   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged;
-   Phase 1):
+   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged,
+   and P1.28r, so its image test is `*.image.test.ts` from the start; Phase 1):
    - `deployment/images/migrate.Dockerfile`, a separate Dockerfile. A second APP would need a second final stage
      chosen by `--target`, which escapes the "last stage ships" tests; `node-app.Dockerfile` keeps refusing any APP
      but web. It uses the same locked node base by digest (no new lock entry), stages `deps` (`npm ci
@@ -6795,27 +7050,50 @@ P1.29h, P1.29s, P1.29t.
    test; the node entry's npm and corepack paths, exactly the ones `node-app.Dockerfile` and `migrate.Dockerfile`
    delete. Test: `stripped_paths_removed_in_every_final_stage` (every Dockerfile on that base deletes every declared
    path in its final stage; a declared path no final stage deletes fails).
-3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`,
-   `scripts/ci/image-workflows.test.ts`; depends on P1.29k only; Phase 2): `images.yml` builds and scans every
-   Dockerfile under `deployment/` through a matrix fed by the same discovery as `images.test.ts`, at HIGH and
-   CRITICAL with `--ignore-unfixed`; new jobs (migrate, and postgres once P1.29d adds it) scan with `--ignorefile
-   /dev/null`; the node job keeps its ignore file until P1.29v removes the npm entries. Test:
-   `every_dockerfile_has_scan_job`. A tightening, but `.github/workflows` needs Alex's typed line (for example "yes
-   P1.29w every shipped image"). The migrate image must not wait unscanned behind P1.29v's card, and the matrix picks
-   up `postgres.Dockerfile` by itself.
+3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`, a new
+   `scripts/ci/list-dockerfiles.ts` and its test; depends on nothing open; Phase 2; rewritten 19:15Z on architecture's
+   2026-10-07-p129w-scan-matrix-discovery). The matrix is discovered at run time, so a Dockerfile that exists is
+   scanned:
+   - **`discover`** runs `scripts/ci/list-dockerfiles.ts`, which prints a JSON array of `{ "name", "dockerfile",
+     "ignorefile" }` to `$GITHUB_OUTPUT`, one per Dockerfile under `deployment/`, by `images.test.ts`'s discovery
+     rule. It fails on an empty list, on a name not matching `^[a-z0-9-]+$`, and on a path outside `deployment/`.
+     Values reach `run:` lines only through `env:`, never `${{ }}` in a script; `contents: read`, no secrets.
+   - **`scan-image`**: a matrix from `fromJSON(needs.discover.outputs.images)`, `fail-fast: false`; each image is built
+     and scanned by Trivy at HIGH and CRITICAL with `--ignore-unfixed` and `--ignorefile "$IGNOREFILE"`; the job name
+     includes the image name.
+   - **`scan`**, the aggregate and the one stable name: `needs: [discover, scan-image]`, `if: always()`, green only
+     when both are `success` (skipped, cancelled or failed is red).
+   - **Ignore files are data in the script, never a convention:** every image gets `/dev/null` except one exact map,
+     `IGNOREFILES = { "node-app": ".github/trivyignore.yaml" }`, which the test pins. "Use `<name>.trivyignore` when it
+     exists" is refused. P1.29v empties the map; any later entry is a loosening that needs Alex's card and line.
+   - **Triggers:** `images.yml` has no `paths:` filter today (`images.yml:7`) and keeps none.
+
+   Tests (replacing `every_dockerfile_has_scan_job`): `list_dockerfiles_matches_images_discovery` (the script's set
+   against a live walk of `deployment/`; today exactly {edge, node-app}, the name being the Dockerfile's stem) and
+   `list_dockerfiles_refuses_bad_entries` (an empty tree, a bad name and a path outside `deployment/` fail; a
+   Dockerfile-named file under `node_modules` is ignored). Alex's typed line "yes P1.29w every shipped image" covers
+   this design (asked 18:57Z); line: (pending). Order: it lands before P1.29k and P1.29d, so each new image is scanned
+   from its first PR and neither edits `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not
+   waiting on Alex's line; discovery picks a merged migrate image up when P1.29w lands). A check step pinning the
+   exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
+   check becomes `scan`.
 4. **P1.29v "Skip stripped files in the mirror scan"** ([ALEX] [SEC], check: `.github/workflows/mirror.yml`,
-   `.github/trivyignore.yaml`, the mirror-scan test; depends on P1.29x and P1.28w, which both touch `mirror.yml`;
-   Phase 2): `mirror.yml` reads each entry's `stripped` list from the lock and passes `--skip-files` for exactly those
-   paths, on that entry only; the three npm entries leave `trivyignore.yaml`; the test proves a declared path is
-   skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files), so it needs Alex's
-   card ("Let the mirror scan skip files our images delete (gosu in Postgres, npm in Node), with a test that every
-   listed file is deleted and the shipped images still scanned in full?"; options "Skip stripped files",
-   recommended, or "Per-CVE ignores") and his typed line naming the change and branch (for example "yes P1.29v
-   mirror.yml"). If he picks per-CVE ignores, P1.29v becomes a P1.27b-style ignore carrier with the gosu entries
-   path-scoped to `usr/local/bin/gosu`, and P1.29x's declarations stay as documentation its test proves. A new stage
-   kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do ship) are
-   rejected.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v; Phase 1):
+   `.github/trivyignore.yaml`, the mirror-scan test, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x
+   and P1.28w, which both touch `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list
+   from the lock and passes `--skip-files` for exactly those paths, on that entry only; the three npm entries leave
+   `trivyignore.yaml`; the `"node-app"` entry leaves `IGNOREFILES` and the test pins the map as empty; the test proves a
+   declared path is skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files),
+   answered on Alex's card:
+   - Question: "Let the mirror scan skip files our own images delete, like gosu and npm?"
+   - Answer: "Skip stripped files"
+   - Tapped: 2026-10-07T18:56:42Z (consequence line: "The mirror scan skips only listed files we delete. A test proves
+     each is gone, and shipped images are scanned in full.")
+
+   It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
+   stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
+   ship) are rejected.
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v and P1.28r;
+   Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -6832,19 +7110,20 @@ P1.29h, P1.29s, P1.29t.
    file (65532 for our Node images, 999 for postgres, never "any non-zero"), `postgres_test_image_matches_lock`, and
    `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
    after.
-6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.11p,
-   P1.28, P1.30t): `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`,
-   `user` never 0 or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root),
-   migrate, web and edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing
-   waits for P1.27s); `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json`
-   for postgres, migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside
-   `deployment/edge/`, following the edge test fixture's pattern. Tests: the static compose and env tests below that
-   do not name the PDS; `compose_images_match_lock` (every `image:` in `deployment/` compose files is a lock entry or
-   one of web, edge, migrate and postgres, with no exception); `compose_postgres_never_root`;
-   `compose_postgres_tmpfs_for_socket`; `compose_dev_networks_match_table`, which imports P1.30t's exported
-   comparison; and `preflight_matches_compose_config` on `compose.dev.yaml` (CI only). Landing P1.29 first on
-   today's test pin is refused: it would need an exception in `compose_images_match_lock` or a dev Postgres starting
-   as root with gosu, a weakening to remove later. The cost: P1.29 waits on Alex's P1.29v card and line.
+6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
+   P1.11p, P1.28, P1.30t, so no image is composed before every image is scanned): `deployment/compose.dev.yaml` with
+   postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0 or root, tmpfs at
+   `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and edge (built
+   locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
+   `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json` for postgres,
+   migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside `deployment/edge/`,
+   following the edge test fixture's pattern. Tests: the static compose and env tests below that do not name the PDS;
+   `compose_images_match_lock` (every `image:` in `deployment/` compose files is a lock entry or one of web, edge,
+   migrate and postgres, with no exception); `compose_postgres_never_root`; `compose_postgres_tmpfs_for_socket`;
+   `compose_dev_networks_match_table`, which imports P1.30t's exported comparison; and
+   `preflight_matches_compose_config` on `compose.dev.yaml` (CI only). Landing P1.29 first on today's test pin is
+   refused: it would need an exception in `compose_images_match_lock` or a dev Postgres starting as root with gosu, a
+   weakening to remove later. The cost: P1.29 waits on Alex's P1.29v and P1.29w lines.
 7. **P1.29a "Add the PDS to the dev stack"** ([ALEX] [SEC]; depends on P1.29; Alex's card answered "Allow pinned",
    2026-10-07T13:00:19Z, quoted in the body): the exact vendor allowlist entry `ghcr.io/bluesky-social/pds` (never
    the host or namespace); its lock and mirror entries with `stage: "runtime"` (a run-only image runs as shipped, so
@@ -6886,7 +7165,7 @@ P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
@@ -8460,7 +8739,9 @@ the private keys are needed only for a later PLC operation (adding the backup ke
    the guard against publishing under the wrong account.
 7. Turn on e-mail 2FA for the account on the PDS /account page. Its codes, like its reset links, go out through the
    real SMTP provider (no Mailpit, book edit 2026-10-07-no-mailpit), so the provider is set up before this step (Alex's timing to
-   confirm) and Alex's mailbox joins host access as a root of trust (dev-pds-admin-custody.md says so).
+   confirm), and Alex's mailbox joins host access as a root of trust: anyone who controls it can reset the account or
+   pass its email 2FA (book edit 2026-10-07-no-mailpit, added 19:45Z). No new control is booked; whether that mailbox
+   needs its own second factor is Alex's choice.
 8. Send the agent: the DID, goat plc history output, the publish output with CIDs.
 ```
 
@@ -8510,7 +8791,9 @@ fits in the run's budget (the workflow's `timeout-minutes: 5`, set by this step;
 - `permission-set-update.md`: the only way to change the set — an `[ALEX]` PR changing the schema and consent text
   (P1.31 flag), Alex publishes with goat, the PR updates the lock, the monitor goes green.
 - `dev-pds-admin-custody.md` (with P1.34): who holds the dev PDS admin password and host shell (Alex only), why
-  (it can take over the authority), and that nobody else is given them until P5.02a completes.
+  (it can take over the authority), and that nobody else is given them until P5.02a completes. It also says the
+  account's 2FA codes and reset links reach Alex's mailbox through the SMTP provider, so that mailbox is a root of trust
+  alongside host access (book edit 2026-10-07-no-mailpit).
 
 **Edge cases and failures:**
 - Offline **public** key not at hand at step 2 → stop (do not create the account without it at index 0; adding it
