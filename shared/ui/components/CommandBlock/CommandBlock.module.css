@@ -1,0 +1,32 @@
+/* CommandBlock (P1.24f; sheet components/CommandBlock/README.md, v45): level 1, `surface-raised`, `shadow-1`,
+   `radius-xs`, no border; space-3 top and bottom, space-4 either side. Long commands scroll, never wrap. The prompt
+   cannot be selected, so a manual copy takes only the command. */
+@layer components {
+  .line,
+  .output {
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    background-color: var(--color-surface-raised);
+    box-shadow: var(--shadow-1);
+    border-radius: var(--radius-xs);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    white-space: pre;
+  }
+
+  .output {
+    margin-top: calc(var(--space-1) / 2);
+  }
+
+  .prompt,
+  .comment {
+    color: var(--color-ink-muted);
+  }
+
+  .prompt {
+    user-select: none;
+  }
+}

@@ -1,5 +1,6 @@
-// The kit showcase (P1.24, P1.24s, P1.24a, P1.24k; book P1.24 "Where"): every built component in each variant and state, server-rendered
-// with no JS. P1.26's test server serves it for the axe and target-size checks in both themes; no app links it.
+// The kit showcase (P1.24, P1.24s, P1.24a, P1.24k, P1.24f; book P1.24 "Where"): every built component in each
+// variant and state, server-rendered with no JS. P1.26's test server serves it for the axe and target-size checks in
+// both themes; no app links it.
 import type { ReactNode } from "react";
 import { AsciiBackground } from "../components/AsciiBackground/AsciiBackground.tsx";
 import { Avatar } from "../components/Avatar/Avatar.tsx";
@@ -8,7 +9,9 @@ import { Callout } from "../components/Callout/Callout.tsx";
 import { Card } from "../components/Card/Card.tsx";
 import { Checkbox } from "../components/Checkbox/Checkbox.tsx";
 import { CodeBlock } from "../components/CodeBlock/CodeBlock.tsx";
+import { CommandBlock } from "../components/CommandBlock/CommandBlock.tsx";
 import { DescriptionList } from "../components/DescriptionList/DescriptionList.tsx";
+import { FeedMore } from "../components/FeedMore/FeedMore.tsx";
 import { Footer } from "../components/Footer/Footer.tsx";
 import { Header } from "../components/Header/Header.tsx";
 import { Icon } from "../components/Icon/Icon.tsx";
@@ -18,6 +21,7 @@ import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
 import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
 import { Modal } from "../components/Modal/Modal.tsx";
+import { NewPosts } from "../components/NewPosts/NewPosts.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
@@ -30,6 +34,7 @@ import { Table } from "../components/Table/Table.tsx";
 import { Tabs } from "../components/Tabs/Tabs.tsx";
 import { Tag } from "../components/Tag/Tag.tsx";
 import { Textarea } from "../components/Textarea/Textarea.tsx";
+import { Toast } from "../components/Toast/Toast.tsx";
 import { type SafeHref, safeHref } from "../safe-href.ts";
 
 const href = (raw: string) => safeHref(raw, ["https:", "path"]) as SafeHref;
@@ -223,6 +228,28 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
     <Modal trigger="Delete draft" fallbackHref={href("/kit/delete")} title="Delete this draft?" tone="danger">
       The video and its caption are removed for good.
     </Modal>
+  ),
+  Toast: (
+    <>
+      <Toast inline closeHref={href("/kit")}>
+        profile saved
+      </Toast>
+      <Toast inline tone="err">
+        couldn't save, try again
+      </Toast>
+    </>
+  ),
+  CommandBlock: (
+    <CommandBlock command="unset login alex.example" output={["# checking the handle", "[ok] signed in"]} />
+  ),
+  NewPosts: <NewPosts inline count={3} href={href("/kit")} />,
+  FeedMore: (
+    <>
+      <FeedMore older={href("/kit?cursor=next")} />
+      <FeedMore state="loading" />
+      <FeedMore state="end" />
+      <FeedMore state="error" older={href("/kit?cursor=next")} />
+    </>
   ),
 };
 
