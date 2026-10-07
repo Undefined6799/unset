@@ -1,0 +1,25 @@
+/* FeedMore (P1.24f; sheet components/FeedMore/README.md, v45): one centred mono line under the feed. */
+@layer components {
+  .root {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-6) 0;
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 40px;
+    color: var(--color-ink);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+  }
+}

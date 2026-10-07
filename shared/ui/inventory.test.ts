@@ -93,3 +93,10 @@ test("icon_approval_recorded", () => {
   const icon = items(readFileSync(STOP_ITEMS, "utf8")).find((i) => i.name === "Icon");
   expect(icon?.approval?.slice(1)).toEqual(["2026-10-03", "18:02", "34"]);
 });
+
+test("inventory_all_built", () => {
+  // P1.24f finishes the kit: every sheet piece is built, except a stop item, which stays as it is until Alex rules.
+  const statuses = Object.values(inventory).map((entry) => entry.status);
+  expect(statuses.filter((status) => status !== "built" && status !== "stop")).toEqual([]);
+  expect(statuses.filter((status) => status === "built")).toHaveLength(33);
+});

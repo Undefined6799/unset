@@ -53,7 +53,7 @@
     "sheetSha256": "ffa951b13f0d174a9afb72b8fd170ba4b971406043396586584cd2e8f380ab6f",
     "props": "CommandBlockProps",
     "variants": [],
-    "status": "p1.24f"
+    "status": "built"
   },
   "DescriptionList": {
     "sheet": "sheet/components/DescriptionList/README.md",
@@ -67,7 +67,7 @@
     "sheetSha256": "1cdd6724fada302ea35e50c902e5db28740f358f9ad8bca518c79fe06e0d8646",
     "props": "FeedMoreProps",
     "variants": ["state=idle", "state=loading", "state=end", "state=error"],
-    "status": "p1.24f"
+    "status": "built"
   },
   "Footer": {
     "sheet": "sheet/components/Footer/README.md",
@@ -137,7 +137,7 @@
     "sheetSha256": "5495a0162714dd03509584768e5d3329c24ae8c84ee00b68e8f28c3790d5c7c3",
     "props": "NewPostsProps",
     "variants": [],
-    "status": "p1.24f"
+    "status": "built"
   },
   "Pagination": {
     "sheet": "sheet/components/Pagination/README.md",
@@ -228,6 +228,6 @@
     "sheetSha256": "cc5827000458a7892b58c48ebfbfcf22d99a049efb7f3530c503b265193b2f5c",
     "props": "ToastProps",
     "variants": ["tone=ok", "tone=err", "tone=info"],
-    "status": "p1.24f"
+    "status": "built"
   }
 }
