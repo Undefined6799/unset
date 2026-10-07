@@ -13,6 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { CHECKS } from "./checks/index.ts";
+import { undeclaredNetworks } from "./checks/networks.ts";
 import type { Check, Env, Inputs, ManifestKind, Outcome, Run, Verifier } from "./checks/types.ts";
 
 export type { Run };
@@ -104,12 +105,8 @@ function loadCompose(files: string[], readText: (path: string) => string | null)
     secretPaths.push(...compose.secretFiles.map((path) => resolve(dirname(file), path)));
   }
   const compose: Compose = { name, services: services.map((s) => s.service), networks, secretFiles: secretPaths };
-  // `docker compose config` accepts a network no file defines; `up` would then fail, so it cannot run here either.
-  for (const network of compose.services.flatMap((s) => s.networks)) {
-    if (network !== "default" && !networks.some((n) => n.name === network)) {
-      throw new CannotRun(`network ${network} is not defined`);
-    }
-  }
+  const [undeclared] = undeclaredNetworks(compose);
+  if (undeclared !== undefined) throw new CannotRun(undeclared);
   return { compose, services, secretPaths };
 }
 

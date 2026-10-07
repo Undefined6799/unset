@@ -27,9 +27,20 @@ export function parseNetworkTable(text: string, file: string): NetworkTable {
   );
 }
 
+/**
+ * Every service network no file defines. `docker compose config` accepts one and `up` then fails, so loadCompose
+ * refuses it too.
+ */
+export function undeclaredNetworks(compose: Pick<Compose, "services" | "networks">): string[] {
+  const used = [...new Set(compose.services.flatMap((service) => service.networks))];
+  return used
+    .filter((network) => network !== "default" && !compose.networks.some((n) => n.name === network))
+    .map((network) => `network ${network} is not defined`);
+}
+
 /** Every difference between Compose's networks and the table; none means they agree. */
 export function networkTableProblems(compose: Pick<Compose, "services" | "networks">, table: NetworkTable): string[] {
-  const problems: string[] = [];
+  const problems = undeclaredNetworks(compose);
   for (const network of networksOf(compose)) {
     const row = table.get(network.name);
     if (row === undefined) {
