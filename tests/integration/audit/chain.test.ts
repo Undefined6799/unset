@@ -16,7 +16,14 @@ import {
   appendAudit,
   verifyChain,
 } from "../../../infrastructure/audit/index.ts";
-import { createPool, migrate, type Pool, withClient, withTransaction } from "../../../infrastructure/postgres/index.ts";
+import {
+  createPool,
+  migrate,
+  type Pool,
+  type PoolClient,
+  withClient,
+  withTransaction,
+} from "../../../infrastructure/postgres/index.ts";
 import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -86,7 +93,10 @@ function poolAs(role: Role): Pool {
 
 const append = (role: "web" | "admin", event: AuditEvent) =>
   withTransaction(as[role], null, (client) => appendAudit(client, event));
-/** As the superuser behind the triggers, the way an attacker holding the owner's rights would edit a row. */
+/**
+ * A superuser edit behind the triggers: `session_replication_role` is superuser-only, so this is the strongest attacker
+ * the chain is meant to expose. An owner's own edit (DISABLE TRIGGER) is tamper_as_owner_disable_trigger_detected.
+ */
 const tamper = (statement: string) =>
   postgres.sql("unset", `BEGIN; SET LOCAL session_replication_role = replica; ${statement}; COMMIT;`);
 const lines = (query: string) => postgres.sql("unset", query).split("\n").filter(Boolean);
@@ -181,16 +191,52 @@ describe("audit chain", () => {
     tamper("DELETE FROM audit.event_body WHERE lane = 'mod' AND seq = 3");
     await expect(verifyAsOwner("mod", "full")).resolves.toEqual({ ok: true, last: 50 });
   });
+
+  test("tamper_as_owner_disable_trigger_detected", async () => {
+    // What the owner could do: it owns the tables, so it may switch the append-only trigger off around an edit.
+    await asOwner(async (client) => {
+      await client.query("BEGIN");
+      await client.query("ALTER TABLE audit.event_body DISABLE TRIGGER event_body_append_only");
+      await client.query(
+        "UPDATE audit.event_body SET body_text = replace(body_text, 'spam', 'other') WHERE lane = 'mod' AND seq = 5",
+      );
+      await client.query("ALTER TABLE audit.event_body ENABLE TRIGGER event_body_append_only");
+      await client.query("COMMIT");
+    });
+    await expect(verifyAsOwner("mod", "full")).resolves.toEqual({ ok: false, badSeq: 5, reason: "body_mac" });
+  });
+
+  test("verifier_login_role_needs_set_role", async () => {
+    // NOINHERIT: the login role holds none of the owner's rights until it says SET ROLE (architecture record
+    // 2026-10-07-p115b-keep-set-role, as migrator holds audit_owner in 0003).
+    await withClient(owner(), null, async (client) => {
+      await expect(client.query("SELECT count(*) FROM audit.event_body")).rejects.toThrow(/permission denied/);
+      await client.query("SET ROLE audit_owner");
+      const { rows } = await client.query("SELECT current_user AS who, count(*)::int AS n FROM audit.event_body");
+      await client.query("RESET ROLE");
+      expect(rows[0]).toMatchObject({ who: "audit_owner" });
+    });
+  });
+
+  test("verifier_without_set_role_is_denied", async () => {
+    await expect(withClient(owner(), null, (client) => verifyChain(client, "mod", "links"))).rejects.toThrow(
+      /permission denied/,
+    );
+  });
 });
 
-/** As a login member of audit_owner: the body rows are the owner's alone (admin design 7.3's weekly `full` run). */
+/**
+ * The weekly `full` run's shape (admin design 7.3): a login role that is a NOINHERIT member of audit_owner, the body
+ * rows' only reader, and runs SET ROLE audit_owner before anything else. audit_owner itself stays NOLOGIN.
+ */
 let ownerPool: Pool | undefined;
-function verifyAsOwner(lane: "mod" | "sec", mode: "links" | "full") {
+function owner(): Pool {
   if (ownerPool === undefined) {
     const password = randomPassword();
     postgres.sql(
       "postgres",
-      `CREATE ROLE audit_verifier LOGIN PASSWORD '${password}' IN ROLE audit_owner; GRANT CONNECT ON DATABASE unset TO audit_verifier`,
+      `CREATE ROLE audit_verifier LOGIN NOINHERIT PASSWORD '${password}'; ` +
+        "GRANT audit_owner TO audit_verifier WITH INHERIT FALSE, SET TRUE; GRANT CONNECT ON DATABASE unset TO audit_verifier",
     );
     ownerPool = createPool({
       connection: {
@@ -209,5 +255,20 @@ function verifyAsOwner(lane: "mod" | "sec", mode: "links" | "full") {
     });
     pools.push(ownerPool);
   }
-  return withClient(ownerPool, null, (client) => verifyChain(client, lane, mode));
+  return ownerPool;
 }
+
+/** Runs `fn` as audit_owner through the verifier's SET ROLE, and resets the role before the client goes back. */
+function asOwner<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  return withClient(owner(), null, async (client) => {
+    await client.query("SET ROLE audit_owner");
+    try {
+      return await fn(client);
+    } finally {
+      await client.query("RESET ROLE");
+    }
+  });
+}
+
+const verifyAsOwner = (lane: "mod" | "sec", mode: "links" | "full") =>
+  asOwner((client) => verifyChain(client, lane, mode));
