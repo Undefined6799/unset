@@ -64,6 +64,13 @@ function stringValue(node: Node): string | undefined {
   return (node.quasis as { value: { cooked: string } }[])[0]?.value.cooked;
 }
 
+/** The text the floor reads: a string's value, or each piece of a template, substitutions or not. */
+function floorTexts(node: Node): string[] {
+  if (node.type !== "TemplateElement") return [stringValue(node) ?? ""];
+  const { cooked, raw } = node.value as { cooked: string | null; raw: string };
+  return [cooked ?? "", raw];
+}
+
 /** The parsed tree of `path`, or the reason it cannot be read; a file that does not parse is never "no imports". */
 function parsed(path: string, text: string): { program: unknown } | { problem: string } {
   const settings = PARSE[extname(path)];
@@ -141,8 +148,7 @@ function fileProblems({ path, text }: Source, dir: string): string[] {
   const allowed = new Set<unknown>();
   for (const node of nodes(tree.program)) problems.push(...nodeProblems(path, node, dir, allowed));
   for (const node of nodes(tree.program)) {
-    const value = stringValue(node);
-    if (value !== undefined && NAMES_KIT.test(value) && !allowed.has(node)) {
+    if (floorTexts(node).some((text) => NAMES_KIT.test(text)) && !allowed.has(node)) {
       problems.push(`${path}: names ${KIT} other than as the specifier of an "import type { … }" of its index`);
     }
   }
@@ -296,6 +302,12 @@ test("ui_build_jsx_free_check_pins_each_check", () => {
     ["vm", 'import vm from "node:vm";\nvm.runInThisContext("1 + 1");\n', ['a.ts: imports "node:vm"']],
     ["vm, bare", 'const vm = await import("vm");\n', ['a.ts: imports "vm"']],
     ["contains-floor", "setTimeout('import(\"@unset/shared-ui\")', 0);\n", [floor]],
+    [
+      "contains-floor, template with a substitution",
+      // The fixture's own template has a substitution; "$" is split off so this file holds no placeholder.
+      '(() => {}).constructor(`return import("@unset/shared-ui")$' + '{""}`)();\n',
+      [floor],
+    ],
     ["named type imports only", 'import type * as K from "@unset/shared-ui";\n', [floor]],
     ["named type imports only", 'import type K from "@unset/shared-ui";\n', [floor]],
   ];
