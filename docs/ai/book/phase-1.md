@@ -7517,6 +7517,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
      `apk fix`; `dpkg --unpack`; `sh -c "apk add x"`; `$PM add x`; exec-form `["apk","add","x"]`. Pass: a
      continuation-line `apk del --no-network curl libcap`; `apt-get purge -y x`.
    - **Lands before P1.29d,** so the Postgres image arrives into the kind map.
+   - As built: merged by Alex at 2026-10-07T22:25:11Z as `dcda576` (#507).
 3. **P1.29w "Scan every shipped image in CI"** ([ALEX] [SEC], check: `.github/workflows/images.yml`, a new
    `scripts/ci/list-dockerfiles.ts` and its test; depends on nothing open; Phase 2; rewritten 19:15Z on architecture's
    2026-10-07-p129w-scan-matrix-discovery). The matrix is discovered at run time, so a Dockerfile that exists is
