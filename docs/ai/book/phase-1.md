@@ -5606,8 +5606,9 @@ As built: merged by Alex at 2026-10-07T22:53:43Z as `edc165b` (#516).
 Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups,
 from architecture's 2026-10-07-p125h-follow-ups (N1, N2). Owner: Phase 2. A tightening (N2 restores lint enforcement
 lost in the move), cleared by the coordinator; not a classifier path.
-1. **Budget:** `"shared/ui-build": 800` in `scripts/budgets/budgets.json` and in the duplicate map in
-   `scripts/budgets/check.ts:15-23`, both together; `shared/ui` stays at 2500, no combined key.
+1. **Budget:** `"shared/ui-build": 800` in `scripts/budgets/budgets.json` and in `PLAN_DEFAULTS` in
+   `scripts/budgets/check.ts:13-25` (the `shared/ui-build` key is at :24), both together; `shared/ui` stays at 2500, no
+   combined key.
 2. **Lint row:** a MATRIX row for `^shared/ui-build/` next to `shared-ui-lexicons` (`.dependency-cruiser.cjs:117`),
    allowing exactly `^shared/ui-build/`, npm packages, and the `@unset/shared-ui` index as a type-only dependency; no
    CORE built-ins and no value import of shared/ui. A fixture proves `^(shared/(ui|lexicons)/)` does not match
