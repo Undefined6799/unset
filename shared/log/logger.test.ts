@@ -187,6 +187,20 @@ describe("logger", () => {
     ]);
   });
 
+  test("logger_session_events", () => {
+    // P2.03 logs a failed touch with the error class as `kind` and the sweep with its count; a cookie value or a DID
+    // in `kind` is replaced.
+    const { log, records } = capture();
+    log.warn("session.touch_failed", { kind: "TypeError" });
+    log.info("session.sweep", { count: 3 });
+    log.warn("session.touch_failed", { kind: "did:plc:abc" });
+    expect(records().map((r) => [r.event, r.kind, r.count])).toEqual([
+      ["session.touch_failed", "TypeError", undefined],
+      ["session.sweep", undefined, 3],
+      ["session.touch_failed", "[kind]", undefined],
+    ]);
+  });
+
   test("logger_sqlstate_is_a_code_only", () => {
     // A message or anything else in the sqlstate field is replaced, so error text cannot leak through it.
     const { log, records } = capture();
