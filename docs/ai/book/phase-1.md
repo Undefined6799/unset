@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -201,6 +201,7 @@ flowchart LR
   P1_28r["P1.28r images project after unit tests"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
+  P1_28o["P1.28o edge drops apk-tools"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
@@ -283,6 +284,7 @@ flowchart LR
   P1_29w --> P1_29v
   P1_29w --> P1_29
   P1_29x --> P1_29v
+  P1_29x --> P1_28o
   P1_28w --> P1_29v
   P1_29v --> P1_29d
   P1_29d --> P1_29
@@ -301,6 +303,7 @@ flowchart LR
   P1_28h --> P1_28s
   P1_28h --> P1_28i
   P1_28i --> P1_28j
+  P1_28i --> P1_28r
   P1_28j --> P1_28r
   P1_28r --> P1_29k
   P1_28r --> P1_29d
@@ -5486,6 +5489,7 @@ the assets path). This supersedes the unbooked per-page `script-src 'none'` cand
 
 ### P1.25b — Finish the error-page hook's leftovers
 Tags: [SEC], trusted            Depends on: P1.25k (merged, #445)
+As built: merged by Alex at 2026-10-07T21:51:37Z as `9cdca36` (#503).
 Slice 1, trusted base (`/shared/http/`); book edit 2026-10-07-pds-image-answer-and-p125k-riders, with architecture's
 13:20Z addendum in 2026-10-07-p125k-error-page-hook. Letter `b`: leftovers of P1.25k (P1.25's taken letters are h, j
 reserved, k and q). Owner: the third thread, after P1.28c; it must merge before any later kit step touches
@@ -6967,6 +6971,7 @@ check log is unchanged.
 
 ### P1.28s — Refuse quoted top-level tokens in the Caddyfile
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+As built: merged by Alex at 2026-10-07T21:25:52Z as `8f09537` (#498).
 Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
 5 in 2026-10-07-p130s-networks-and-caddyfile-reader, which withdrew the move of the edge integration tests. P1.28s keeps
 its id and carries only the rider. Owner: Phase 1. No word from Alex: a tightening.
@@ -7006,6 +7011,7 @@ P1.28j, then P1.28r, back to back (architecture, 20:06Z).
 
 ### P1.28r — Run image tests after the unit tests
 Tags: [SEC], check            Depends on: P1.28i (merged, #488), P1.28j (merged, #496)
+As built: merged by Alex at 2026-10-07T21:26:22Z as `db046bf` (#499).
 Slice 1, check class (root `vitest.config.ts`, `scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing,
 with its amendment 1 (20:10Z), from architecture's amendment 1 in 2026-10-07-test-timing-fuzz-and-image-tests.
 Neutral, leaning to a tightening; the coordinator clears it, no line from Alex; not workflow-gated. Owner: Phase 2
@@ -7321,6 +7327,8 @@ stand-in, and the test's behaviour is unchanged.
 
 ### P1.30t — Check compose networks against a table
 
+As built: merged by Alex at 2026-10-07T20:59:06Z as `b3c6911` (#492).
+
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from architecture's
 2026-10-07-p130s-networks-and-caddyfile-reader, point 1). The strict subset governs which YAML constructs are
 refused, not which fields are read, so reading `services.*.networks` and the top-level `networks` widens the fields,
@@ -7384,6 +7392,7 @@ the all-good fixture, now covering all 24 checks, exits 0.
 
 ### P1.30n — Refuse compose network names in the preflight
 Tags: [SEC]            Depends on: P1.30t (merged, #492)
+As built: merged by Alex at 2026-10-07T21:49:21Z as `ca71670` (#501).
 Slice 1, product (`deployment/preflight/`); book edit 2026-10-07-p130n-network-names (final 20:15Z), from
 architecture's amendment 6 in 2026-10-07-p130s-networks-and-caddyfile-reader, after the coordinator's verification of
 P1.30t (#492). A tightening; the coordinator clears it, no word from Alex. Owner: Phase 2. Board issue #495. It must
@@ -7446,6 +7455,9 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
      (CI only: the image run with no environment exits 78), `migrate_cli_reads_passwords_only_from_run_secrets`, a
      test that the CLI calls `syncRolePasswords` after `migrate()` and not when migrations fail, and the
      per-Dockerfile runtime tests. It and P1.28t are separate PRs; whichever lands second merges main.
+   - As built: merged by Alex at 2026-10-07T21:52:36Z as `322b498` (#504). Its hard-coded `NODE_DOCKERFILES` list
+     (`deployment/images/images.test.ts:17`) is replaced in P1.29x, under amendments 2 and 3 of
+     2026-10-07-p129-migrate-image-and-run-only-images.
 2. **P1.29x "Declare the paths our images strip"** (feature, security-review: `bases.lock.json`, `images.test.ts`;
    depends on P1.29k; Phase 1; no word from Alex: it declares and proves, and nothing reads the field yet; `x` is the
    product half of the check step, SE-6): an optional `stripped` array on each lock entry, read by the lock schema
@@ -7718,6 +7730,36 @@ dev-seed:
 - `deploy/secrets/pds.env.example` → LESSON: its SMTP warning.
 
 **Not in this step:** production compose (P5.02/P5.03); Tap decisions (P3.01); real SMTP (P2.25 prerequisite).
+
+---
+
+### P1.28o — Remove apk-tools from the edge image
+Tags: [SEC], trusted            Depends on: P1.29x
+Slice 1, trusted base (`deployment/edge/`); book edit 2026-10-07-p128o-edge-apk-tools (final 22:10Z), from
+architecture's amendment 3, point 4, in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; no word from
+Alex. Owner: Phase 1. It follows P1.29x, which carries amendments 2 and 3 (the Dockerfile kind map and the inverted
+package-manager rule); after P1.29x, the edge's `apk del` is the one allowed removal verb.
+
+**The finding:** `deployment/edge/Dockerfile:27` runs `apk del --no-network curl libcap` in the `runtime` stage (FROM
+at :20). That proves `apk` is present in the final stage, and deleting curl and libcap leaves apk-tools behind, so the
+Caddy runtime carries a package manager.
+
+**What:** preferred, remove `apk-tools` in the same final-stage RUN, after the other deletions (for example
+`apk del --no-network curl libcap apk-tools`, or a second `apk del` as the last command in that RUN); after that RUN,
+nothing may call `apk`. Fallback, only if removing apk-tools breaks the image: a scratch or distroless final stage with
+the static caddy binary. The PR body says which it chose, and why.
+
+Test: an image test in a `*.image.test.ts` file under `deployment/edge/` (P1.28r's rule), in the images project, shows
+`apk` is absent from the built edge image: `/sbin/apk` does not exist and `apk` is not on PATH.
+
+Done when the edge image builds, the existing edge image tests and the adapt byte check stay green, and the new test
+passes in CI.
+
+**After it lands:** the edge kind gains `runtime_has_no_package_manager` (apk) in `deployment/images/images.test.ts`.
+That file is product class, so a trusted PR cannot carry it. It rides the next product PR that touches
+`images.test.ts` after P1.28o merges (P1.29d is the likely carrier); if none is open within a day of P1.28o merging, it
+becomes a small product step of its own, and the coordinator asks for it. Either way it is a tightening, with no line
+from Alex.
 
 ---
 
