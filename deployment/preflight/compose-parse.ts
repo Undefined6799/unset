@@ -6,7 +6,17 @@
 // while Compose reads it another (preflight_matches_compose_config checks the rest against Compose in CI).
 // yaml 2.9.1 (node_modules/yaml, docs at eemeli.org/yaml): parseAllDocuments, visit, LineCounter.
 // Compose: compose-spec 05-services.md ("ports", "env_file", "Env_file format") and 12-interpolation.md.
-import { isMap, isScalar, isSeq, LineCounter, type Node, parseAllDocuments, type Scalar, visit } from "yaml";
+import {
+  type Document,
+  isMap,
+  isScalar,
+  isSeq,
+  LineCounter,
+  type Node,
+  parseAllDocuments,
+  type Scalar,
+  visit,
+} from "yaml";
 
 /** A published port; `hostIp` null binds every interface, `published` null lets the engine pick the host port. */
 export type Port = { hostIp: string | null; published: string | null; target: string };
@@ -92,6 +102,7 @@ export function parseCompose(text: string, file: string): Compose {
       if (isScalar(pair.key) && pair.key.value === "<<") r.fail(pair.key, "merge key");
     },
   });
+  refuseAliasesByOption(doc, file);
   const root = doc.contents;
   if (!isMap(root)) return r.fail(root, "the file is not a mapping");
   if (root.has("include")) r.fail(root.get("include", true), "include");
@@ -104,6 +115,19 @@ export function parseCompose(text: string, file: string): Compose {
     services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value)),
     secretFiles: secretFiles(r, root.get("secrets", true)),
   };
+}
+
+/**
+ * The second layer behind the walk's alias refusal (P1.30 core): yaml reads `maxAliasCount` only as a `toJS` option,
+ * never as a parse option (yaml 2.9.1 dist/doc/Document.js:293), and with 0 it resolves no alias at all
+ * (dist/nodes/Alias.js:24). Converting once here makes the limit real even if the walk ever misses an alias.
+ */
+export function refuseAliasesByOption(doc: Document, file: string): void {
+  try {
+    doc.toJS({ maxAliasCount: 0 });
+  } catch (error) {
+    throw new ParseError(`${file}: alias (${error instanceof Error ? error.message : "refused"})`);
+  }
 }
 
 function service(r: Reader, name: string, spec: unknown): Service {
