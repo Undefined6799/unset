@@ -87,16 +87,26 @@ describe("base images", () => {
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
-      tag: expect.stringMatching(/^26-alpine/),
+      tag: expect.stringMatching(/^26(?:\.\d+){0,2}-[a-z]+-slim$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
     });
   });
 
-  test("runtime_base_is_alpine", () => {
-    // Alex, 2026-10-07 00:09Z: the containers run on Alpine Linux. Every stage uses the one locked base.
-    expect(NODE.tag.startsWith("26-alpine"), NODE.tag).toBe(true);
+  test("runtime_base_is_debian_slim", () => {
+    // Alex, 2026-10-07 01:29:53Z, "Debian slim" (P1.27d): the web image runs on Debian trixie slim. Every stage uses the
+    // one locked base.
+    expect(NODE.ref).toBe("docker.io/library/node");
+    expect(NODE.tag).toMatch(/^26(?:\.\d+){0,2}-[a-z]+-slim$/);
     for (const image of fromImages(dockerfile)) expect(image, image).toBe(pinnedNode);
+  });
+
+  test("runtime_stage_installs_no_os_packages", () => {
+    // No stage installs OS packages, so no apt or apk line needs version pins (DL3008, DL3018) and the runtime holds
+    // only what the base ships.
+    for (const line of dockerfile.split("\n")) {
+      expect(line, line).not.toMatch(/^\s*RUN\b.*\b(?:apt-get|apt|apk|dpkg)\b/);
+    }
   });
 
   test("dl3026_ignore_only_on_upstream_base", () => {
