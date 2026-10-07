@@ -21,10 +21,10 @@ type Job = { if?: unknown; env?: Record<string, unknown>; defaults?: unknown; st
 type Workflow = { env?: unknown; defaults?: unknown; jobs?: Record<string, Job> };
 
 const CHECK_IF = "github.event_name != 'pull_request' || github.event.pull_request.draft == false";
-/** Every step from the first through `npm test`, in order; `uses` is the action path, its ref checked for shape. */
+/** Every step from the first through `npm test`, in order; `uses` is the action path and a 40-hex ref (`@<sha>`). */
 const GATE_STEPS: Step[] = [
-  { uses: "actions/checkout", with: { "persist-credentials": false, "fetch-depth": 0 } },
-  { uses: "actions/setup-node", with: { "node-version-file": ".nvmrc", cache: "npm" } },
+  { uses: "actions/checkout@<sha>", with: { "persist-credentials": false, "fetch-depth": 0 } },
+  { uses: "actions/setup-node@<sha>", with: { "node-version-file": ".nvmrc", cache: "npm" } },
   { run: "npm ci" },
   { run: "npm run typecheck" },
   { run: "npm run lint" },
@@ -60,11 +60,16 @@ function readWorkflow(text: string): { workflow: Workflow; problems: string[] } 
 
 const checkJob = (text: string): Job => readWorkflow(text).workflow.jobs?.check ?? {};
 
-/** A step with its `uses` split: the path stays, a 40-hex ref becomes `@sha`, any other ref stays as written. */
+/**
+ * A step with its `uses` split on the last `@`: a 40-hex ref becomes `@<sha>`, so Renovate's SHA bumps compare equal.
+ * Anything else (no `@`, an empty ref, a tag, a short SHA) stays as written and so never matches the pinned step.
+ */
 function normalised(step: Step): Step {
   if (typeof step.uses !== "string") return step;
-  const [path, ref = ""] = step.uses.split("@");
-  return { ...step, uses: /^[0-9a-f]{40}$/.test(ref) ? path : step.uses };
+  const at = step.uses.lastIndexOf("@");
+  const path = step.uses.slice(0, at);
+  const ref = step.uses.slice(at + 1);
+  return at > 0 && /^[0-9a-f]{40}$/.test(ref) ? { ...step, uses: `${path}@<sha>` } : step;
 }
 
 const ifProblems = (text: string): string[] =>
@@ -87,6 +92,22 @@ function envProblems(text: string): string[] {
   if (job.defaults !== undefined) problems.push("check job defaults");
   const keys = Object.keys(job.env ?? {}).sort();
   if (JSON.stringify(keys) !== JSON.stringify(CHECK_ENV)) problems.push(`check job env keys: ${keys.join(", ")}`);
+  return problems;
+}
+
+/** Every `npm_config_*` env key in ci.yml (any case), at workflow, job or step level in any job: npm reads them as config. */
+function npmConfigEnvProblems(text: string): string[] {
+  const { workflow } = readWorkflow(text);
+  const npmConfig = (where: string, env: unknown): string[] =>
+    Object.keys(typeof env === "object" && env !== null ? env : {})
+      .filter((key) => /^npm_config_/i.test(key))
+      .map((key) => `${where} sets ${key}`);
+  const problems = npmConfig("the workflow", workflow.env);
+  for (const [id, job] of Object.entries(workflow.jobs ?? {})) {
+    problems.push(...npmConfig(`job ${id}`, job.env));
+    for (const [i, step] of (job.steps ?? []).entries())
+      problems.push(...npmConfig(`job ${id} step ${i + 1}`, step.env));
+  }
   return problems;
 }
 
@@ -169,6 +190,10 @@ describe("check job", () => {
     const differ = ["the gate steps differ from the pinned sequence"];
     for (const red of [
       edited(CHECKOUT, "actions/checkout@v7"),
+      edited(CHECKOUT, "actions/checkout"),
+      edited(CHECKOUT, "actions/checkout@"),
+      edited(CHECKOUT, "actions/checkout@3d3c42e"),
+      edited(CHECKOUT, `actions/checkout@${"f".repeat(40)}@v7`),
       edited(CHECKOUT, `someone/checkout@${"f".repeat(40)}`),
       edited(LINT, "      - run: npm run lint\n        if: false\n"),
       edited(TEST, "      - run: npm test\n        shell: sh\n"),
@@ -197,6 +222,23 @@ describe("check job", () => {
     expect(envProblems(edited("    env:\n", "    env:\n      npm_config_script_shell: /bin/true\n"))).toEqual([
       "check job env keys: BASE_SHA, RENOVATE_IMAGE, npm_config_script_shell",
     ]);
+  });
+
+  // P0.05d: npm reads any npm_config_* variable as config, which could undo .npmrc (ignore-scripts, the @unset registry)
+  // in whichever job sets it; none may, in any job.
+  test("ci_workflow_sets_no_npm_config_env", () => {
+    expect(npmConfigEnvProblems(CI)).toEqual([]);
+    expect(
+      npmConfigEnvProblems(
+        edited("permissions: {}\n", "permissions: {}\nenv:\n  NPM_CONFIG_IGNORE_SCRIPTS: 'false'\n"),
+      ),
+    ).toEqual(["the workflow sets NPM_CONFIG_IGNORE_SCRIPTS"]);
+    expect(npmConfigEnvProblems(edited("    env:\n", "    env:\n      npm_config_script_shell: /bin/true\n"))).toEqual([
+      "job check sets npm_config_script_shell",
+    ]);
+    const step =
+      "jobs:\n  audit:\n    steps:\n      - run: npm ci\n        env:\n          Npm_Config_Registry: https://registry.example\n";
+    expect(npmConfigEnvProblems(step)).toEqual(["job audit step 1 sets Npm_Config_Registry"]);
   });
 
   test("root_package_scripts_pinned", () => {
