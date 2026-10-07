@@ -1,4 +1,4 @@
-// P1.30: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
+// P1.30 and P1.30s: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +19,7 @@ const RECOVERY_KEY = `did:key:z${base58([0xe7, 0x01, 0x02, ...Array.from({ lengt
 const digest = (c: string) => `sha256:${c.repeat(64)}`;
 const EDGE = `ghcr.io/undefined6799/edge@${digest("a")}`;
 const PDS = `ghcr.io/undefined6799/mirror/pds@${digest("b")}`;
+const WEB = `ghcr.io/undefined6799/web@${digest("d")}`;
 const CANARY = "canary-7f3c-never-printed";
 
 const PDS_ENV: Record<string, string> = {
@@ -29,6 +30,10 @@ const PDS_ENV: Record<string, string> = {
   PDS_RATE_LIMITS_ENABLED: "false",
   PDS_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
   LOG_ENABLED: "false",
+  PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test",
+  PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
+  PDS_MODERATION_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
+  PDS_MODERATION_EMAIL_ADDRESS: "moderation@example.test",
 };
 const COMPOSE = `name: unset-prod
 services:
@@ -40,6 +45,10 @@ services:
     env_file: pds.env
     environment:
       PDS_HOSTNAME: pds.example.test
+  web:
+    image: ${WEB}
+    environment:
+      FINGERPRINT_CHECK: arachnid
 secrets:
   db_password:
     file: secrets/db_password
@@ -47,16 +56,37 @@ secrets:
 const LOCK = {
   edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
   pds: { ref: PDS, origin: "upstream", upstreamSource: "docker.io/example/pds", verify: "cosign-key" },
+  web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
 };
+const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
+const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".0x40.space" };
+const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"].concat([
+  "C13",
+  "C14",
+  "C15",
+  "C16",
+  "C19",
+  "C20",
+  "C21",
+  "C22",
+  "C23",
+  "C24",
+]);
 
-type Stack = { compose?: string; pdsEnv?: Record<string, string | null>; lock?: object | null; dotEnv?: string };
+type Stack = {
+  compose?: string;
+  pdsEnv?: Record<string, string | null>;
+  lock?: object | null;
+  dotEnv?: string;
+  report?: string;
+};
 const dirs: string[] = [];
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 });
 
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
-function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv }: Stack = {}) {
+function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report }: Stack = {}) {
   const root = mkdtempSync(join(tmpdir(), "preflight-"));
   dirs.push(root);
   mkdirSync(join(root, "deployment/secrets"), { recursive: true });
@@ -71,14 +101,28 @@ function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv }: Stack = 
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
+  if (report !== undefined) {
+    mkdirSync(join(root, "docs/human/retirement"), { recursive: true });
+    writeFileSync(join(root, "docs/human/retirement/retirement-check.json"), report);
+  }
   return { root, file: join(root, "deployment/compose.yaml") };
 }
 
-/** The process runner double: verify-images passes, every manifest is an OCI index, and every call is recorded. */
-function fakeRun(answers: { verify?: { code: number; stderr: string }; mediaType?: string } = {}) {
+type Answer = { code: number; stdout: string; stderr: string; missing?: boolean };
+type Answers = { verify?: { code: number; stderr: string }; mediaType?: string; ntp?: Answer; chrony?: Answer };
+const ok = (stdout: string): Answer => ({ code: 0, stdout, stderr: "" });
+const notInstalled: Answer = { code: 1, stdout: "", stderr: "run failed", missing: true };
+const SYNCED = ok("yes\n");
+const TRACKING = (offset: string) => ok(`Stratum         : 3\nSystem time     : ${offset} seconds fast of NTP time\n`);
+
+/** The process runner double: verify-images passes, every manifest is an OCI index, the clock is synchronised, and
+ * every call is recorded. */
+function fakeRun(answers: Answers = {}) {
   const calls: string[][] = [];
   const run: Run = async (file, args) => {
     calls.push([file, ...args]);
+    if (file === "timedatectl") return answers.ntp ?? SYNCED;
+    if (file === "chronyc") return answers.chrony ?? TRACKING("0.000006523");
     if (file === "docker") {
       const mediaType = answers.mediaType ?? "application/vnd.oci.image.index.v1+json";
       return { code: 0, stdout: JSON.stringify({ mediaType }), stderr: "" };
@@ -103,9 +147,7 @@ async function expectOnly(id: string, s: Stack, env = "prod", deps: Partial<Deps
 describe("preflight", () => {
   test("preflight_all_good_passes", async () => {
     const result = await check();
-    expect(result.lines.map((l) => l.split(" ").slice(0, 2).join(" "))).toEqual(
-      Array.from({ length: 12 }, (_, i) => `PASS C${i + 1}`),
-    );
+    expect(result.lines.map((l) => l.split(" ").slice(0, 2).join(" "))).toEqual(IDS.map((id) => `PASS ${id}`));
     expect(result.code).toBe(0);
   });
 
@@ -147,8 +189,9 @@ describe("preflight", () => {
       new Promise((done) => signal.addEventListener("abort", () => done({ code: 1, stdout: "", stderr: "" })));
     const result = await check({}, "prod", { run, timeoutMs: 20 });
     // C4 shares C3's verifier run, so it fails on that run's aborted answer rather than its own clock.
-    expect(failed(result.lines)).toEqual(["C3", "C4", "C5"]);
-    expect(result.lines.filter((l) => l.endsWith("timed out")).map((l) => l.split(" ")[1])).toEqual(["C3", "C5"]);
+    expect(failed(result.lines)).toEqual(["C3", "C4", "C5", "C24"]);
+    const timedOut = result.lines.filter((l) => l.endsWith("timed out")).map((l) => l.split(" ")[1]);
+    expect(timedOut).toEqual(["C3", "C5", "C24"]);
   });
 
   test("c6_recovery_key_fails", async () => {
@@ -162,9 +205,8 @@ describe("preflight", () => {
   test("c7_settings_fail", async () => {
     await expectOnly("C7", { pdsEnv: { PDS_INVITE_REQUIRED: "false" } });
     await expectOnly("C7", { pdsEnv: { PDS_ADMIN_PASSWORD: "short" } });
-    const dev = COMPOSE.replace("name: unset-prod", "name: unset-dev");
-    await expectOnly("C7", { compose: dev, pdsEnv: { PDS_CRAWLERS: "https://bsky.network" } }, "dev");
-    await expectOnly("C7", { compose: dev, pdsEnv: { PDS_CRAWLERS: null } }, "dev");
+    await expectOnly("C7", { compose: DEV, pdsEnv: { ...DEV_ENV, PDS_CRAWLERS: "https://bsky.network" } }, "dev");
+    await expectOnly("C7", { compose: DEV, pdsEnv: { ...DEV_ENV, PDS_CRAWLERS: null } }, "dev");
   });
 
   test("c7_pds_rate_limits_enabled_fails", async () => {
@@ -224,8 +266,10 @@ describe("preflight", () => {
     });
     const tls = await check({ pdsEnv: { PDS_EMAIL_SMTP_URL: "smtp://mail.example.test:587?requireTLS=true" } });
     expect(failed(tls.lines)).toEqual([]);
-    const dev = COMPOSE.replace("name: unset-prod", "name: unset-dev");
-    const mailpit = await check({ compose: dev, pdsEnv: { PDS_EMAIL_SMTP_URL: "smtp://mailpit:1025" } }, "dev");
+    const mailpit = await check(
+      { compose: DEV, pdsEnv: { ...DEV_ENV, PDS_EMAIL_SMTP_URL: "smtp://mailpit:1025" } },
+      "dev",
+    );
     expect(failed(mailpit.lines)).toEqual([]);
   });
 
@@ -247,6 +291,8 @@ describe("preflight", () => {
       check(),
       check({ pdsEnv: { PDS_ADMIN_PASSWORD: CANARY } }),
       check({ pdsEnv: { PDS_EMAIL_SMTP_URL: `smtp://user:${CANARY}@mail.example.test` } }),
+      check({ pdsEnv: { PDS_MODERATION_EMAIL_SMTP_URL: `smtp://user:${CANARY}@mail.example.test` } }),
+      check({ pdsEnv: { PDS_LEXICON_AUTHORITY_DID: CANARY, PDS_MOD_SERVICE_URL: CANARY } }),
       check({ pdsEnv: { PDS_RATE_LIMIT_BYPASS_KEY: CANARY } }),
       check({ pdsEnv: { PDS_RECOVERY_DID_KEY: CANARY } }),
       check({}, "prod", { checks: [{ id: "CX", run: () => Promise.reject(new Error(CANARY)) }] }),
@@ -291,5 +337,98 @@ describe("preflight", () => {
     expect(result.lines[0]).toMatch(/^ERROR cannot read .*absent\.env$/);
     const loose = await check({ pdsEnv: { PDS_HOSTNAME: '"quoted"' } });
     expect(loose.code).toBe(2);
+  });
+});
+
+describe("preflight C13 to C24 (P1.30s)", () => {
+  const withEnv = (lines: string) => COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", lines);
+  const host = (name: string) => withEnv(`      PDS_HOSTNAME: ${name}`);
+
+  test("c13_lexicon_authority_did_fails", async () => {
+    await expectOnly("C13", { pdsEnv: { PDS_LEXICON_AUTHORITY_DID: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" } });
+    await expectOnly("C13", { pdsEnv: { PDS_LEXICON_AUTHORITY_DID: "" } });
+  });
+
+  test("c14_dev_mode_fails", async () => {
+    await expectOnly("C14", { pdsEnv: { PDS_DEV_MODE: "true" } });
+    await expectOnly("C14", { pdsEnv: { PDS_DEV_MODE: "1" } });
+    expect(failed((await check({ pdsEnv: { PDS_DEV_MODE: "false" } })).lines)).toEqual([]);
+  });
+
+  test("c15_handle_domain_0x40_me_fails", async () => {
+    await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,.0x40.me" } });
+    await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: null } });
+    await expectOnly("C15", { compose: DEV, pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test" } }, "dev");
+    expect(failed((await check({ compose: DEV, pdsEnv: DEV_ENV }, "dev")).lines)).toEqual([]);
+  });
+
+  test("c16_confirmation_link_required", async () => {
+    await expectOnly("C16", { pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: null } });
+    await expectOnly("C16", { pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "false" } });
+  });
+
+  test("c19_moderation_mail_missing_fails", async () => {
+    await expectOnly("C19", { pdsEnv: { PDS_MODERATION_EMAIL_SMTP_URL: null } });
+    await expectOnly("C19", { pdsEnv: { PDS_MODERATION_EMAIL_ADDRESS: null } });
+    await expectOnly("C19", { pdsEnv: { PDS_MODERATION_EMAIL_SMTP_URL: "smtp://mailpit:1025" } });
+    const dev = { ...DEV_ENV, PDS_MODERATION_EMAIL_SMTP_URL: "smtp://mailpit:1025" };
+    expect(failed((await check({ compose: DEV, pdsEnv: dev }, "dev")).lines)).toEqual([]);
+  });
+
+  test("c20_mod_service_set_fails", async () => {
+    await expectOnly("C20", { pdsEnv: { PDS_MOD_SERVICE_URL: "https://mod.example.test" } });
+    await expectOnly("C20", { pdsEnv: { PDS_MOD_SERVICE_DID: "did:web:mod.example.test" } });
+    expect(failed((await check({ pdsEnv: { PDS_REPORT_SERVICE_URL: "https://r.example.test" } })).lines)).toEqual([]);
+  });
+
+  test("c21_part_a_incomplete_fails", async () => {
+    const old = host("0x40.space");
+    expect(await expectOnly("C21", { compose: old })).toMatch(/input missing: .*retirement-check\.json$/);
+    await expectOnly("C21", { compose: old, report: '{"retirement_part_a_complete": false}' });
+    await expectOnly("C21", { compose: old, report: '{"retirement_part_a_complete": "true"}' });
+    // Duplicate keys are refused by the strict reader rather than read as the last one.
+    const twice = '{"retirement_part_a_complete": false, "retirement_part_a_complete": true}';
+    await expectOnly("C21", { compose: old, report: twice });
+    const done = await check({ compose: old, report: '{"retirement_part_a_complete": true}' });
+    expect(failed(done.lines)).toEqual([]);
+  });
+
+  test("c22_blob_limit_below_master_fails", async () => {
+    const master = withEnv("      PDS_HOSTNAME: pds.example.test\n      VIDEO_MASTER_MAX_BYTES: 2000000000");
+    await expectOnly("C22", { compose: master });
+    await expectOnly("C22", { compose: master, pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: "1999999999" } });
+    expect(failed((await check({ compose: master, pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: "2000000000" } })).lines)).toEqual(
+      [],
+    );
+    expect((await check()).lines).toContain("PASS C22 n/a");
+  });
+
+  test("c23_prod_fake_fingerprint_fails", async () => {
+    await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake") });
+    await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FAKE_FINGERPRINT_LIST: x") });
+    const both = COMPOSE.replace(
+      "FINGERPRINT_CHECK: arachnid",
+      "FINGERPRINT_CHECK: arachnid\n      FAKE_FINGERPRINT_LIST: x",
+    );
+    await expectOnly("C23", { compose: both });
+    const dev = await check(
+      { compose: DEV.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake"), pdsEnv: DEV_ENV },
+      "dev",
+    );
+    expect(dev.lines).toContain("PASS C23 n/a");
+  });
+
+  test("c24_clock_unsynchronised_fails", async () => {
+    await expectOnly("C24", {}, "prod", { run: fakeRun({ ntp: ok("no\n") }).run });
+    await expectOnly("C24", {}, "prod", { run: fakeRun({ chrony: TRACKING("2.500000000") }).run });
+    await expectOnly("C24", {}, "prod", { run: fakeRun({ ntp: notInstalled }).run });
+    await expectOnly("C24", {}, "prod", { run: fakeRun({ chrony: ok("System time : soon\n") }).run });
+    // chrony is optional; a .localhost stack (an agent's throwaway one) asks the host nothing.
+    expect(failed((await check({}, "prod", { run: fakeRun({ chrony: notInstalled }).run })).lines)).toEqual([]);
+    const local = fakeRun({ ntp: ok("no\n") });
+    expect((await check({ compose: host("pds.localhost") }, "prod", { run: local.run })).lines).toContain(
+      "PASS C24 n/a",
+    );
+    expect(local.calls.some(([file]) => file === "timedatectl")).toBe(false);
   });
 });

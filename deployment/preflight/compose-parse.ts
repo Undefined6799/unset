@@ -102,6 +102,12 @@ export function parseCompose(text: string, file: string): Compose {
   };
 }
 
+/** A small data file (the retirement report, JSON being YAML 1.2) read under the same strict subset as Compose. */
+export function parseStrictData(text: string, file: string): unknown {
+  const lines = new LineCounter();
+  return strictDocument(text, file, lines, reader(file, lines)).toJS();
+}
+
 /** One YAML document in the strict subset: no second document, error, alias, anchor, explicit tag or merge key. */
 function strictDocument(text: string, file: string, lines: LineCounter, r: Reader): Document {
   const docs = parseAllDocuments(text, { ...OPTIONS, lineCounter: lines });
