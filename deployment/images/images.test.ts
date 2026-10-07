@@ -6,6 +6,7 @@
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
@@ -13,8 +14,6 @@ const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf
 const DOCKERFILE = "images/node-app.Dockerfile";
 /** The migrate CLI's image (P1.29k; architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 1). */
 const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
-/** The images built on the locked Node base, each held to the Node runtime rules below. */
-const NODE_DOCKERFILES = [MIGRATE_DOCKERFILE, DOCKERFILE];
 
 /**
  * What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. `stage` says
@@ -101,10 +100,15 @@ function finalFrom(dockerfile: string): string | undefined {
   return last;
 }
 
-/** The lock entry, by name, that a pinned image reference names exactly; undefined for anything else. */
-function lockEntryOf(image: string, lock: Lock): [string, Base] | undefined {
+/** Every lock entry, by name, that a pinned image reference names exactly; one image may be listed more than once. */
+function lockEntriesOf(image: string, lock: Lock): [string, Base][] {
   const ref = PINNED.exec(image)?.[1];
-  return Object.entries(lock).find(([, b]) => b.ref === ref && image.endsWith(`@${b.digest}`));
+  return Object.entries(lock).filter(([, b]) => b.ref === ref && image.endsWith(`@${b.digest}`));
+}
+
+/** The runtime lock entry the final stage builds on, by name; undefined for scratch, a build base or no entry. */
+function finalEntry(dockerfile: string, lock: Lock): string | undefined {
+  return lockEntriesOf(finalFrom(dockerfile) ?? "", lock).find(([, b]) => b.stage === "runtime")?.[0];
 }
 
 /** A `build` base may only feed earlier stages, so the shipped image is a `runtime` base or `scratch`. */
@@ -112,9 +116,49 @@ function finalStageProblems(dockerfile: string, lock: Lock): string[] {
   const last = finalFrom(dockerfile);
   if (last === undefined) return ["the Dockerfile has no FROM"];
   if (last === "scratch") return [];
-  const base = lockEntryOf(last, lock)?.[1];
-  if (base === undefined) return [`final FROM ${last} has no lock entry`];
-  return base.stage === "runtime" ? [] : [`final FROM ${last} is a ${base.stage} base`];
+  const entries = lockEntriesOf(last, lock);
+  if (entries.length === 0) return [`final FROM ${last} has no lock entry`];
+  return entries.some(([, b]) => b.stage === "runtime") ? [] : [`final FROM ${last} is a build base`];
+}
+
+/**
+ * Lock entries that share a ref (the edge's caddy-builder and caddy) are matched together by `baseProblems`, so they
+ * must not widen what a FROM may name (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, amendment
+ * 2): entries naming one image (ref and digest) agree on everything but `stage`, and one tag never has two digests.
+ */
+function sharedRefProblems(lock: Lock): string[] {
+  const entries = Object.entries(lock);
+  return entries.flatMap(([name, { stage: _, ...base }], at) =>
+    entries.slice(at + 1).flatMap(([other, { stage: __, ...next }]) => {
+      if (next.ref !== base.ref) return [];
+      if (next.digest !== base.digest) {
+        return next.tag === base.tag
+          ? [`lock entries ${name} and ${other} give ${base.ref}:${base.tag} two digests`]
+          : [];
+      }
+      return isDeepStrictEqual(base, next) ? [] : [`lock entries ${name} and ${other} name one image but differ`];
+    }),
+  );
+}
+
+/**
+ * What each image is, by its final stage's runtime lock entry, so the rules for a kind reach every image of that kind
+ * (amendment 2): a Dockerfile on any other entry, scratch included, fails `every_dockerfile_has_a_known_kind` rather
+ * than falling out of every kind's rules. P1.29d adds `postgres`. The edge kind has no package-manager rule yet: its
+ * Caddy Alpine runtime keeps apk (amendment 3, point 4), which a separate trusted step removes.
+ */
+type Kind = "node" | "edge";
+const KIND_BY_FINAL_ENTRY = new Map<string, Kind>([
+  ["node", "node"],
+  ["caddy", "edge"],
+]);
+const kindOf = (dockerfile: string, lock: Lock): Kind | undefined =>
+  KIND_BY_FINAL_ENTRY.get(finalEntry(dockerfile, lock) ?? "");
+
+function kindProblems(files: Record<string, string>, lock: Lock): string[] {
+  return Object.entries(files).flatMap(([file, text]) =>
+    kindOf(text, lock) === undefined ? [`${file} builds on no known kind of image`] : [],
+  );
 }
 
 /**
@@ -339,7 +383,7 @@ function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
   for (const [name, { stripped }] of Object.entries(lock)) {
     if (stripped === undefined) continue;
     problems.push(...strippedListProblems(name, stripped));
-    const users = Object.entries(files).filter(([, text]) => lockEntryOf(finalFrom(text) ?? "", lock)?.[0] === name);
+    const users = Object.entries(files).filter(([, text]) => finalEntry(text, lock) === name);
     if (users.length === 0) problems.push(`lock entry ${name} declares stripped paths but no final stage builds on it`);
     for (const [file, text] of users) {
       const removed = finalStageRemovals(text);
@@ -358,6 +402,11 @@ const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
 const dockerfile = read(DOCKERFILE);
 const lock = JSON.parse(read("images/bases.lock.json")) as Lock;
 const NODE = lock.node as Base;
+/**
+ * The images whose final stage builds on the locked Node base, found from `dockerfiles` rather than listed, so a new
+ * Node image is held to the Node runtime rules below without editing this test.
+ */
+const nodeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "node");
 const pinnedNode = `docker.io/library/node:${NODE.tag}@${NODE.digest}`;
 
 describe("base images", () => {
@@ -470,12 +519,59 @@ describe("base images", () => {
     ).toEqual(["lock entry node lists a stripped path twice"]);
   });
 
+  test("every_dockerfile_has_a_known_kind", () => {
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    expect(kindProblems(files, lock)).toEqual([]);
+    expect(kindOf(read("edge/Dockerfile"), lock)).toBe("edge");
+    const builder = lock["caddy-builder"] as Base;
+    const build = `${builder.ref}:${builder.tag}@${builder.digest}`;
+    // A runtime entry outside the map (here a Postgres base before P1.29d adds it) fails, as do scratch and a build base.
+    const postgres: Base = { ...NODE, ref: "docker.io/library/postgres", tag: "18-trixie" };
+    const pinnedPostgres = `${postgres.ref}:${postgres.tag}@${postgres.digest}`;
+    expect(
+      kindProblems(
+        {
+          "pg.Dockerfile": `FROM ${pinnedPostgres}`,
+          "scratch.Dockerfile": "FROM scratch",
+          "b.Dockerfile": `FROM ${build}`,
+        },
+        { ...lock, postgres },
+      ),
+    ).toEqual([
+      "pg.Dockerfile builds on no known kind of image",
+      "scratch.Dockerfile builds on no known kind of image",
+      "b.Dockerfile builds on no known kind of image",
+    ]);
+  });
+
+  test("node_kind_includes_current_images", () => {
+    // A floor, not an exact list: a new Dockerfile on the Node base joins the set without editing this test.
+    expect(nodeDockerfiles).toEqual(expect.arrayContaining([DOCKERFILE, MIGRATE_DOCKERFILE]));
+    expect(nodeDockerfiles).not.toContain("edge/Dockerfile");
+  });
+
+  test("shared_ref_entries_agree", () => {
+    expect(sharedRefProblems(lock)).toEqual([]);
+    const runtime = lock.caddy as Base;
+    // One image listed as both a build and a runtime base is fine while the two agree on everything else.
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, stage: "build" } })).toEqual([]);
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, stage: "build", source: "mirror" } })).toEqual([
+      "lock entries a and b name one image but differ",
+    ]);
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, tag: "other" } })).toEqual([
+      "lock entries a and b name one image but differ",
+    ]);
+    expect(sharedRefProblems({ a: runtime, b: { ...runtime, digest: `sha256:${"1".repeat(64)}` } })).toEqual([
+      `lock entries a and b give ${runtime.ref}:${runtime.tag} two digests`,
+    ]);
+  });
+
   test("runtime_base_is_debian_slim", () => {
     // Alex, 2026-10-07 01:29:53Z, "Debian slim" (P1.27d): the web image runs on Debian trixie slim. Every stage uses the
     // one locked base.
     expect(NODE.ref).toBe("docker.io/library/node");
     expect(NODE.tag).toMatch(/^26(?:\.\d+){0,2}-[a-z]+-slim$/);
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       for (const image of fromImages(read(file))) expect(image, file).toBe(pinnedNode);
     }
   });
@@ -483,7 +579,7 @@ describe("base images", () => {
   test("runtime_stage_installs_no_os_packages", () => {
     // No stage installs OS packages, so no apt or apk line needs version pins (DL3008, DL3018) and the runtime holds
     // only what the base ships. The edge is not a Node image: it removes setcap's packages (deployment/edge/Dockerfile).
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       for (const line of read(file).split("\n")) {
         expect(line, `${file}: ${line}`).not.toMatch(/^\s*RUN\b.*\b(?:apt-get|apt|apk|dpkg)\b/);
       }
@@ -533,9 +629,12 @@ describe("base images", () => {
     const ship = `${runtime.ref}:${runtime.tag}@${runtime.digest}`;
     // The edge's shape: the builder feeds a stage the runtime image copies from.
     expect(finalStageProblems(`FROM ${build} AS b\nFROM ${ship}\nCOPY --from=b /out /app`, lock)).toEqual([]);
+    // The final FROM's ref (docker.io/library/caddy) is shared with a runtime entry, but its digest matches only the
+    // build entry, so it fails (amendment 2); the same image listed as both build and runtime may ship.
     expect(finalStageProblems(`FROM ${ship} AS b\nFROM ${build}`, lock)).toEqual([
       `final FROM ${build} is a build base`,
     ]);
+    expect(finalStageProblems(`FROM ${build}`, { b: builder, r: { ...builder, stage: "runtime" } })).toEqual([]);
     expect(finalStageProblems(`FROM ${build} AS b\nFROM b AS c\nFROM c`, lock)).toEqual([
       `final FROM ${build} is a build base`,
     ]);
@@ -703,7 +802,7 @@ describe("runtime stage", () => {
   });
 
   test("image_has_no_dev_deps", () => {
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       expect(read(file), file).toMatch(/^RUN npm ci --ignore-scripts --omit=dev$/m);
       const copies = runtimeStage(read(file)).filter(
         (line) => line.startsWith("COPY ") && line.includes("node_modules"),
@@ -713,7 +812,7 @@ describe("runtime stage", () => {
   });
 
   test("runtime_has_no_package_manager", () => {
-    for (const file of NODE_DOCKERFILES) {
+    for (const file of nodeDockerfiles) {
       const text = read(file);
       const stage = runtimeStage(text);
       const removal = stage.find((line) => line.startsWith("RUN rm -rf ")) ?? "";
