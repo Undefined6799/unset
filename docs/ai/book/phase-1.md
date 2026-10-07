@@ -301,6 +301,7 @@ flowchart LR
   P1_28h --> P1_28s
   P1_28h --> P1_28i
   P1_28i --> P1_28j
+  P1_28i --> P1_28r
   P1_28j --> P1_28r
   P1_28r --> P1_29k
   P1_28r --> P1_29d
@@ -6967,6 +6968,7 @@ check log is unchanged.
 
 ### P1.28s — Refuse quoted top-level tokens in the Caddyfile
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+As built: merged by Alex at 2026-10-07T21:25:52Z as `8f09537` (#498).
 Slice 1, trusted base; book edit 2026-10-07-p128s-edge-tests-move (final section, 19:20Z), from architecture's amendment
 5 in 2026-10-07-p130s-networks-and-caddyfile-reader, which withdrew the move of the edge integration tests. P1.28s keeps
 its id and carries only the rider. Owner: Phase 1. No word from Alex: a tightening.
@@ -7006,6 +7008,7 @@ P1.28j, then P1.28r, back to back (architecture, 20:06Z).
 
 ### P1.28r — Run image tests after the unit tests
 Tags: [SEC], check            Depends on: P1.28i (merged, #488), P1.28j (merged, #496)
+As built: merged by Alex at 2026-10-07T21:26:22Z as `db046bf` (#499).
 Slice 1, check class (root `vitest.config.ts`, `scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing,
 with its amendment 1 (20:10Z), from architecture's amendment 1 in 2026-10-07-test-timing-fuzz-and-image-tests.
 Neutral, leaning to a tightening; the coordinator clears it, no line from Alex; not workflow-gated. Owner: Phase 2
@@ -7320,6 +7323,8 @@ stand-in, and the test's behaviour is unchanged.
 ---
 
 ### P1.30t — Check compose networks against a table
+
+As built: merged by Alex at 2026-10-07T20:59:06Z as `b3c6911` (#492).
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from architecture's
 2026-10-07-p130s-networks-and-caddyfile-reader, point 1). The strict subset governs which YAML constructs are
