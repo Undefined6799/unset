@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28q, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -116,6 +116,7 @@ flowchart TD
   P111 --> P115x["P1.15x lint: TRUNCATE trigger event [ALEX]"]
   P113 --> P115m["P1.15m audit SQL [SEC]"]
   P115x --> P115m
+  P115q["P1.15q pr-shape: SET ROLE in trusted files [ALEX]"] --> P115m
   P115m --> P115d["P1.15d audit tables"]
   P115d --> P115g["P1.15g audit EXECUTE grants [SEC]"]
   P115g --> P115["P1.15 audit chain [SEC]"]
@@ -163,6 +164,7 @@ flowchart LR
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
+  P1_28q["P1.28q images.yml: edge image"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
   P1_30["P1.30 deploy preflight"]
@@ -197,6 +199,8 @@ flowchart LR
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
+  P1_27 --> P1_28q
+  P1_28q --> P1_28
   P1_27 --> P1_28
   P1_11 --> P1_29
   P1_27 --> P1_29
@@ -2672,7 +2676,8 @@ Outputs:
   - Contexts are not free strings. (P1.14d) `sealed-columns.json` in `infrastructure/postgres` lists every column of
     type `types.sealed` as `{ "<schema>.<table>.<column>": { "rowKey": "<column whose value identifies the row>" } }`.
     `SealedColumnId` is `keyof` that JSON, typed in `infrastructure/postgres` with no generator, and wraps seal's
-    generic `sealContext`. `sealContext(column: SealedColumnId, rowKey: string): SealContext` returns the
+    generic `sealContext`. `sealedContext(column: SealedColumnId, rowKey: string): SealContext` (named apart from
+    seal's own `sealContext`, book edit 2026-10-07-p114d-names) returns the
     branded string `"<schema>.<table>.<column>|<rowKey>"`; `rowKey` must be non-empty printable ASCII without `|`.
     Two call sites can therefore never share or drift on a context.
   - `seal(plaintext: Uint8Array, context: SealContext): string` and `unseal(sealed: string, context: SealContext):
@@ -2711,7 +2716,8 @@ Outputs:
   - (P1.14d) Domain `types.sealed AS text CHECK (VALUE ~ '^s1\.[a-z0-9]{1,16}\.')`; `sealed-columns.test.ts` compares the
     `pg_catalog` columns of type `types.sealed` with the entries without a `form` (the P1.13 method), and checks that
     every entry with a `form` names an existing `text` or `bytea` column that is not `types.sealed`.
-  - (P1.14d, in `infrastructure/postgres`) `rewrapAll(db, { batchSize = 500 })`: for each registered column: `SELECT … WHERE split_part(col,'.',2) <> $active
+  - (P1.14d, in `infrastructure/postgres`) `rewrapAll(pool, keyring, { batchSize = 500 })` (the keyring is passed in;
+    the CLI builds it from the secret store; book edit 2026-10-07-p114d-names): for each registered column: `SELECT … WHERE split_part(col,'.',2) <> $active
     LIMIT $batch FOR UPDATE SKIP LOCKED`, rewrap, `UPDATE`, commit per batch; returns counts per kid.
     `rewrapAll --check <kid>` exits 1 while any row still uses that kid. Run by the operator after adding a key; a key is
     removed from the keyring only after `--check` passes (runbook text in P5.06).
@@ -2761,10 +2767,10 @@ Done when (tests):
   - roundtrip: seal/unseal 0 bytes, 1 byte, 1 MiB → equal.
   - too_large: 1 MiB + 1 → `seal.too_large`.
   - fresh_dek_and_iv: sealing the same plaintext twice → different outputs.
-  - context_bound: seal with `sealContext(colA, "1")`, unseal with `sealContext(colA, "2")` or `sealContext(colB, "1")` →
+  - context_bound: seal with `sealedContext(colA, "1")`, unseal with `sealedContext(colA, "2")` or `sealedContext(colB, "1")` →
     `auth_failed`.
   - context_is_branded: `seal(bytes, "free string")` is a type error (`// @ts-expect-error`).
-  - context_rowkey_rules: `sealContext(colA, "")` and `sealContext(colA, "a|b")` → throw.
+  - context_rowkey_rules: `sealedContext(colA, "")` and `sealedContext(colA, "a|b")` → throw.
   - tamper_each_part: flip one bit in each of parts 2–5 → `auth_failed` or `format` (parametrised); never a plaintext.
   - unknown_kid: value with kid `zz` → `unknown_kid`.
   - rotation: keyring {k1 active} seal; then {k2 active, k1} → unseal works; `rewrap` → value now `s1.k2.…` and unseals;
@@ -2831,7 +2837,17 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      trigger, a `-- do this BEFORE` line then `TRUNCATE t;`, `CREATE TRIGGER x BEFORE UPDATE OF c OR TRUNCATE ON t`,
      and `CREATE TRIGGER x AFTER INSERT ON t EXECUTE FUNCTION f('TRUNCATE')`. A loosening: it opens only with
      Alex's typed word naming the change and the branch, quoted in the PR body.
-  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, never stacked on P1.15x; and on #126's 0005 and P1.16's
+  0b. **P1.15q** (check path, [ALEX]; depends on nothing; architecture 00:24Z, book edit 2026-10-06-p115m-tailnet-deferral-steps): pr-shape refuses
+     0007 and 0009 with `mixed_grant_change`, because `SET ROLE` and `RESET ROLE` are neutral findings and
+     `scripts/guards/trusted-base.ts`'s `kindOf` counts any neutral finding in a trusted file as mixed. In
+     `trusted-base.ts` and its tests only, `kindOf` leaves out exactly two findings when judging trusted versus mixed:
+     an exact `SET ROLE <ident>` and a bare `RESET ROLE`. Every other neutral finding still counts, and a file holding
+     only `SET ROLE` stays not trusted. Fixtures: `trusted_file_with_set_role_is_trusted`,
+     `set_role_with_feature_statement_still_mixed`, `set_role_only_file_not_trusted`,
+     `set_role_with_extra_tokens_unclassified`; the P0.09m fixture is unchanged. 0007 and 0009 each end with
+     `RESET ROLE`. A loosening: it opens only after Alex's word on the card naming P1.15q is verified. (The id reuses
+     the lapsed, never-issued allow-entry draft.)
+  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, P1.15q, never stacked on P1.15x; and on #126's 0005 and P1.16's
      0006 for migration order only):
      `infrastructure/postgres/migrations/0007_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
      with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `audit.row_hash`,
@@ -2845,7 +2861,7 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      **Three-way split** (book edit 2026-10-06-p115m-tailnet-deferral-steps, split section final 00:03Z; local pr-shape
      reports mixed_grant_change on one 0007, so the class comes from pr-shape, the P1.14m precedent). The SQL above
      ships in three PRs, merged in number order, each leaving main green:
-     - **P1.15m** (trusted; P1.15x, P1.12, P1.13), 0007: the `types` and `public` USAGE grants to `audit_owner`,
+     - **P1.15m** (trusted; P1.15x, P1.15q, P1.12, P1.13), 0007: the `types` and `public` USAGE grants to `audit_owner`,
        `audit_owner`'s routine default privilege, the four `audit.*` plpgsql functions, the matrix `schemas` and
        `defaults` lines and the `grants.test.ts` stand-in updates. The default privilege revoking EXECUTE from
        PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
@@ -2917,14 +2933,14 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
     `legal_hold_closed` (phase-3 editor; the list is P3.07's). Later
     steps add codes by migration; the TS `AuditReason` union mirrors the table (test `reason_union_matches_table`).
   - `audit.chain(lane text, seq bigint, ts timestamptz NOT NULL, action text NOT NULL REFERENCES audit.actions, writer name
-    NOT NULL, retention_class text NOT NULL, body_mac bytea NOT NULL, pii_mac bytea NOT NULL, prev_hash bytea NOT NULL,
+    NOT NULL, retention_class text NOT NULL, body_mac bytea NOT NULL, prev_hash bytea NOT NULL,
     row_hash bytea NOT NULL, PRIMARY KEY (lane, seq))`; index on `(writer, ts)`.
   - `audit.event_body(lane, seq, subject types.did, k_body bytea NOT NULL, body_text text NOT NULL, PRIMARY KEY (lane,
     seq))` — `subject` is the **target** DID (null when none); `body_text` is the exact UTF-8 text that was MACed (the
     viewer reads it as `body_text::jsonb`; the MAC never depends on Postgres re-printing jsonb the same way after an
     upgrade).
-  - No `audit.event_pii` (P1a-A1 answered "No address"; see the split above). The chain's `pii_mac` is the MAC of the
-    empty string under a random key that is discarded.
+  - No `audit.event_pii` (P1a-A1 answered "No address"; see the split above), and no `pii_mac` in the chain
+    (architecture 00:24Z).
   - `audit.append(p_action text, p_outcome text, p_actor_did types.did, p_actor_key text, p_target types.did, p_reason
     text, p_case uuid, p_jti text, p_request_id uuid, p_receipt bytea) RETURNS TABLE(lane text, seq bigint,
     row_hash bytea)` — `SECURITY DEFINER`, `SET search_path = pg_catalog, audit`, EXECUTE granted to `web`, `indexer`,
@@ -2950,7 +2966,9 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
 Row hash encoding (fixed, length-prefixed; `lp(x)` = 2-byte big-endian byte length of the UTF-8 string `x`, then its
 bytes):
   `row_hash = sha256( "unset.audit.v1" ‖ 0x00 ‖ lp(lane) ‖ u64be(seq) ‖ i64be(ts as microseconds since the Unix epoch) ‖
-  lp(action) ‖ lp(writer) ‖ lp(retention_class) ‖ prev_hash (32 bytes) ‖ body_mac (32) ‖ pii_mac (32) )`.
+  lp(action) ‖ lp(writer) ‖ lp(retention_class) ‖ prev_hash (32 bytes) ‖ body_mac (32) )`. (`pii_mac` left the
+  encoding with `event_pii`, architecture 00:24Z; the committed vector is regenerated, and P1.15g's and P1.15's
+  `row_hash_known_answer` use the new one.)
   So editing any chain column (an early-redaction trick through `retention_class`, a relabelled action, a moved time)
   breaks the hash even after the side rows are gone.
 
@@ -2970,7 +2988,7 @@ Algorithm (`audit.append`, inside the caller's transaction):
      p_action, 'outcome', p_outcome, 'target', p_target, 'reason', p_reason, 'case', p_case, 'jti', p_jti, 'request',
      p_request_id, 'receipt', encode(p_receipt, 'hex'))` with nulls stripped, then `::text` once; `k_body =
      gen_random_bytes(32)`; `body_mac = hmac(convert_to(body_text, 'UTF8'), k_body, 'sha256')`.
-  7. (Removed: no audit PII.) `pii_mac` is the MAC of an empty string under a discarded random key.
+  7. (Removed: no audit PII and no `pii_mac`.)
   8. `row_hash = audit.row_hash(…)` per the encoding. Insert the chain row and the body row (`subject = p_target`).
      Return `(lane, seq, row_hash)`.
   Any exception propagates → the caller's transaction rolls back; per admin design §7.2 the caller treats a failed
@@ -3037,7 +3055,7 @@ Diagram:
 ```mermaid
 flowchart LR
   subgraph lane["lane 'sec' (lane 'mod' identical, own lock)"]
-    C1["chain seq n-1<br/>row_hash"] --> C2["chain seq n<br/>prev_hash = row_hash(n-1)<br/>row_hash = sha256(v1 ‖ lane ‖ seq ‖ ts ‖ action ‖ writer ‖ class ‖ prev ‖ body_mac ‖ pii_mac)"]
+    C1["chain seq n-1<br/>row_hash"] --> C2["chain seq n<br/>prev_hash = row_hash(n-1)<br/>row_hash = sha256(v1 ‖ lane ‖ seq ‖ ts ‖ action ‖ writer ‖ class ‖ prev ‖ body_mac)"]
   end
   C2 -.-> B["event_body(n)<br/>subject = target DID<br/>k_body, body_text"]
   W["web / indexer / admin<br/>(asserted actor DID)"] -->|"EXECUTE audit.append"| C2
@@ -5511,9 +5529,28 @@ depend on it: the preflight is tested against an injected verifier and fails clo
 
 ---
 
+### P1.28q — Edge image in images.yml (check step before P1.28)
+
+**Tags:** [SEC] · **Depends on:** P1.27q, P1.27 · **Class:** check paths (SE-6), kind/build · record
+2026-10-07-p128q-edge-image-scan.md (final 00:42Z)
+
+**Why:** this book says P1.27 scans the edge image as a first-party image, but `images.yml` (P1.27q) builds, scans
+and health-checks only `deployment/images/node-app.Dockerfile` with `APP=web`. Editing
+`.github/workflows/images.yml` is check class, so the change cannot ride in P1.28.
+
+**Contents:** `.github/workflows/images.yml` only. It adds `deployment/edge/Dockerfile` to the build, hadolint,
+Trivy (HIGH and CRITICAL, no ignore) and the health check, under the same rules as node-app: actions pinned by SHA,
+minimal `permissions`, nothing pushed or signed until P1.27s.
+
+**Class:** a tightening (one more image is scanned); cleared by the coordinator at 00:40Z, so no Alex word is needed.
+
+**Note:** the edge base follows record 2026-10-07-p128-edge-bases-and-ratelimit-adr.md.
+
+---
+
 ### P1.28 — Edge (Caddy)
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §5.2 (edge; PDS admin XRPC never public), §5.7 (Synapse/MAS precedent: no client IP upstream, per-IP limits at the edge), §6 (logs: no IP, no user agent), §5.3 (PDS); review 04-infra; fable 06
+**Tags:** [SEC] · **Depends on:** P1.27, P1.28q · **Plan:** §5.2 (edge; PDS admin XRPC never public), §5.7 (Synapse/MAS precedent: no client IP upstream, per-IP limits at the edge), §6 (logs: no IP, no user agent), §5.3 (PDS); review 04-infra; fable 06
 
 **Where:** `deployment/edge/Caddyfile`; `deployment/edge/sites/{app.caddy, pds.caddy}`; `deployment/edge/snippets/{log.caddy,
 security-headers.caddy, xrpc-guard.caddy, ratelimit.caddy, tls.caddy, upstream.caddy}`; `deployment/edge/limits.json`; `deployment/edge/Dockerfile` (Caddy built
@@ -5546,6 +5583,39 @@ takes admin Basic auth).
   non-root with `cap_net_bind_service` only. It is a first-party image, so P1.27 scans, signs and locks it.
   (Standard Caddy has no rate limiter; this is the plugin Caddy's own docs point to. Licence Apache-2.0; the
   reuse reviewer confirms maintenance.)
+  The xcaddy build also fetches Go modules, a second upstream fetch, pinned as follows (record
+  2026-10-07-p128-edge-bases-and-ratelimit-adr.md):
+  - `xcaddy build v2.x.y --with github.com/mholt/caddy-ratelimit@<pseudo-version of the pinned commit>`;
+  - `GOFLAGS=-mod=readonly`;
+  - the checksum database stays on (default `GOSUMDB`);
+  - `GOPROXY` is the default proxy.golang.org;
+  - `GONOSUMDB`, `GONOSUMCHECK`, `GOINSECURE` and `-insecure` are never set.
+- **ADR 0018 (caddy-ratelimit)** lands in this step's PR. It is written from the plugin repository at the pinned
+  commit, with URLs and the date it was read (DO-3), and shows:
+  1. Identity and pin: the module path, the full commit SHA and its Go pseudo-version, the module's `go.sum`
+     lines, the Caddy version built against, and the plugin's declared minimum Caddy version.
+  2. Licence: the SPDX id read from LICENSE at that commit (Apache-2.0 expected; verified, not assumed), one line
+     on compatibility with our AGPL-3.0 image, and the licences of any Go modules it adds beyond Caddy's own.
+  3. Maintenance, as dated facts: maintainer or org, last commit date, whether tagged releases exist (if none,
+     say so: we pin a pseudo-version), open issue count and any open security issue, and the README's own status
+     quoted if it calls itself experimental. Then a one-line judgement and the trigger to revisit it (for example
+     "no commit in 12 months" or "a Caddy major version").
+  4. What it does and replaces: edge rate limiting per zone, before requests reach the app. It replaces nothing;
+     the app's own limits stay as the inner layer, so no later step drops them as "covered at the edge".
+  5. Invariant 3: zones keyed on `{remote_host}` hold client addresses in memory only. Distributed mode (shared
+     storage) is not configured, nothing logs the key, and the access log has no client address field (cite
+     `log.caddy` above).
+  6. Failure modes: plugin absent → a Caddyfile using `rate_limit` fails to adapt and Caddy refuses to start
+     (fail closed); limit hit → 429 with `Retry-After`; memory → how zones evict, with a bound or sizing note
+     (`window`, `events`, key cardinality under a flood); restart → counters reset, accepted.
+  7. Supply chain: the built binary is in the image SBOM (syft reads Go build info) and scanned by Trivy's
+     gobinary analyser; no outbound calls at runtime.
+  8. Exit plan: if the plugin is abandoned or a CVE goes unfixed, drop the directive, rely on the app limits, and
+     pick a replacement through the reuse checklist; it names the step that would do it.
+  9. Alternatives, one line each: Caddy core alone (no rate limiter), app-only limits, a separate proxy such as
+     HAProxy's stick tables.
+
+  The PR body carries the reuse check as a short tick list for points 1, 2, 3 and 5, each with its evidence link.
 - `Caddyfile` global: `admin off`; no `trusted_proxies` (nothing sits in front of the edge; if a VPS edge with a
   tunnel is ever added, P1.34's CGNAT branch revisits this); default logger configured (below);
   `import sites/enabled/*`.
@@ -5667,6 +5737,12 @@ takes admin Basic auth).
 - `edge_admin_api_off`; `edge_security_headers`: HSTS, nosniff, no `Server`.
 - `edge_image_plugins_exact`: `caddy list-modules` in the image shows standard modules plus `http.handlers.rate_limit`
   and nothing else non-standard.
+- `edge_caddyfile_validates`: `caddy validate` in the built image passes on the shipped Caddyfile.
+- `edge_dockerfile_pins_caddy_and_plugin`: the Dockerfile pins the Caddy version and the plugin's pseudo-version,
+  sets `GOFLAGS=-mod=readonly`, and sets none of `GONOSUMDB`, `GONOSUMCHECK`, `GOINSECURE` or `-insecure`; a
+  fixture missing either pin, or setting any of them, fails.
+- `edge_ratelimit_memory_only`: the Caddyfile and its snippets have no `distributed` block and no storage for
+  `rate_limit`; a fixture with either fails.
 - `edge_timeout_above_every_deadline` (plan §6.1 Deadlines): the adapted Caddy JSON has `response_header_timeout`
   equal to `limits.json`'s `EDGE_UPSTREAM_TIMEOUT_S` on every `reverse_proxy`, and the server `write` timeout is
   larger; every `deadlineMs` in every `interfaces/*/routes.manifest.json` (P1.04) and the maximum of
@@ -5676,7 +5752,7 @@ takes admin Basic auth).
 **Reuse** (all provisional — for reuse review):
 - `deploy/traefik/dynamic.yml:1-60` → REJECT: routes admin XRPC publicly (lines 31-40).
 - `github.com/mholt/caddy-ratelimit` → USE candidate (pinned commit; reuse reviewer confirms licence and
-  maintenance).
+  maintenance against ADR 0018's points 1 to 3 and 5).
 
 **Not in this step:** the app host's site config (Phase 2); the PDS's own settings (P1.29, P1.30); `LOG_ENABLED`
 on the PDS (P1.30 C12).
@@ -7350,7 +7426,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
   `last_seen_at` touch on its own connection, outside the handler's read-only transaction.
 - **P2.14, P3.11** call `claim(db, purpose, { issuer, externalId }, …)` (P1.16): a `jti` is unique per issuer. P3.11's
   `api`-side `jti` table (the `api` role cannot read `app`) keys on `iss` too.
-- **P2.16, P4.07** use `sealTo("legal_hold", bytes, sealContext(column, rowKey))` from P1.14a; phase-4-part1's
+- **P2.16, P4.07** use `sealTo("legal_hold", bytes, sealedContext(column, rowKey))` from P1.14a; phase-4-part1's
   `seal.encryptTo(pubKeyId, bytes)` and `seal.encrypt(keyId, bytes)` / `seal.decrypt(envelope)` names (no context) become
   `sealTo(…, context)` and P1.14's `seal(plaintext, context)` / `unseal(sealed, context)`. Held **media files** larger
   than 1 MiB are not covered by `sealTo`; P4.07 must say how held media bytes are stored (for example, a held copy in a
