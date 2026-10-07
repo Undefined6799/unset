@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28q, P1.28x, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28x, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -165,6 +165,7 @@ flowchart LR
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
+  P1_27d["P1.27d web image on Debian slim"]
   P1_28q["P1.28q images.yml: edge image"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
@@ -201,6 +202,7 @@ flowchart LR
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
+  P1_27 --> P1_27d
   P1_27 --> P1_28q
   P1_28q --> P1_28
   P1_27 --> P1_28x
@@ -5268,18 +5270,25 @@ reduced default below and the push, sign and attest work is **P1.27s**:
 - If Alex approves the guard change before P1.27q opens, P1.27s's shape (below) lands in P1.27q instead and P1.27s
   lapses.
 
-**Interim base: upstream Node on Alpine by digest until P1.27s** (book edit 2026-10-06-p127-base-by-digest-book-text,
-final; architecture 2026-10-06-p127-upstream-base-by-digest). Alex answered "Yes, digest" at 2026-10-07 00:17Z, and
-in his own words at 00:09Z: "Base image for container will be alpine linux". The mirror exists only once P1.27s can
-push, so until then P1.27 builds from the one official upstream base by digest. This amends the text below:
+**Interim base: upstream Node on Debian slim by digest until P1.27s (Alex, 01:29Z)** (book edit
+2026-10-06-p127-base-by-digest-book-text, final; architecture 2026-10-06-p127-upstream-base-by-digest; base changed by
+architecture 2026-10-07-p127-node-base-debian-slim and book edit 2026-10-07-p127d-node-debian-slim). Alex answered "Yes,
+digest" at 2026-10-07 00:17Z. He first chose Alpine at 00:09Z ("Base image for container will be alpine linux"),
+then asked at 01:26:43Z "Is it too late to revert docker image to debian slim?" and tapped "Debian slim" at 01:29:53Z
+on the card "Switch the web image base from Alpine back to Debian slim (P1.27)?"; P1.27d makes that change in code.
+The mirror exists only once P1.27s can push, so until then P1.27 builds from the one official upstream base by
+digest. This amends the text below:
 - **Goal (amended):** every image a deploy can pull comes from our registry by digest, was scanned, carries an SBOM
   and SLSA provenance, and is signed with our key; until P1.27s, builds in CI and on dev machines pull the upstream
   base by digest. Nothing is pushed or signed until P1.27s; Trivy scans the built image.
-- **Base:** `node:26-alpine` for every stage (`deps`, `build`, `runtime`, so build output matches musl), pinned by its
-  multi-arch index digest. `USER 65532:65532`, read-only-friendly, the node HEALTHCHECK and `npm ci --ignore-scripts`
-  are unchanged. `pg` without `pg-native` (ADR 0014) is unaffected; any later native dependency ships a musl build or
-  builds from source in `build`, and its step says so.
-- **Pins:** `deployment/images/bases.lock.json`, shaped `{ "node": { ref, tag: "26-alpine", digest (index), source:
+- **Base:** `node:26-trixie-slim`, pinned by its multi-arch index digest in every stage (`deps`, `build`, `runtime`).
+  The runtime stage runs no `apt-get install`; a build stage that needs a package pins its exact version (hadolint
+  DL3008, never ignored) and removes the apt lists in the same layer. apt and dpkg stay in the image, so Trivy can
+  inventory OS packages. The runtime stage's package-manager strip covers npm, npx, yarn, `yarnpkg`, corepack and
+  pnpm, in Node's bin directory, `/usr/local/lib/node_modules` and `/opt/yarn-*`. `USER 65532:65532`,
+  read-only-friendly, the node HEALTHCHECK and `npm ci --ignore-scripts` are unchanged. A new Debian codename is its
+  own reviewed bump.
+- **Pins:** `deployment/images/bases.lock.json`, shaped `{ "node": { ref, tag: "26-trixie-slim", digest (index), source:
   "upstream" | "mirror" } }`. `images.lock.json` and the signing ADR move to P1.27s, so the Where line drops
   `deployment/images.lock.json` and the ADR and gains `bases.lock.json`. `verify-images.ts` is unchanged; it checks
   every `FROM` digest equals its lock entry, no `FROM` lacks a digest, and every host is on the allowlist (the one
@@ -5288,8 +5297,11 @@ push, so until then P1.27 builds from the one official upstream base by digest. 
   `# hadolint ignore=DL3026` on the line directly above it (v2.15.1 applies an inline ignore to the next line only).
   Allowed nowhere else; P1.27s removes it.
 - **Tests (added):** `base_digest_matches_lock`, `dl3026_ignore_only_on_upstream_base` (asserts that order),
-  `from_without_digest_refused`, `from_host_not_allowlisted_refused`, `runtime_base_is_alpine` (the tag starts with
-  `26-alpine` in the lock and the Dockerfile). The root `vitest.config.ts` `deployment` project already selects
+  `from_without_digest_refused`, `from_host_not_allowlisted_refused`, `runtime_has_no_package_manager`,
+  `runtime_base_is_debian_slim` (every Node `FROM` is `docker.io/library/node` with a tag matching
+  `^26(\.\d+){0,2}-[a-z]+-slim$`, its digest equals the lock entry, and the built image has `ID=debian`), and
+  `runtime_stage_installs_no_os_packages` (no `apt-get install` or `apt install` in the runtime stage). The root
+  `vitest.config.ts` `deployment` project already selects
   `deployment/images/images.test.ts`; no new project and no q step.
 - **Order:** P1.27; then P1.28, P1.29 and P1.30 on locally built images; then P1.27s (Alex: `packages: write` and the
   signing environment); P1.27r after launch.
@@ -5299,8 +5311,9 @@ official" at 2026-10-07 00:54Z on the card "Until our private mirror exists, may
 Docker images, Alpine where offered, pinned by digest?". This generalises the Node-only interim base above:
 - **Which images:** every container build (node-app, edge, and the dev-stack services P1.28 to P1.30 build or run)
   may use any `docker.io/library/*` official image.
-- **Variant:** the Alpine variant wherever the official image offers one; where it does not, the official default,
-  and the PR body says no Alpine variant exists.
+- **Variant** (amended by 2026-10-07-p127d-node-debian-slim, Alex 01:29Z): Debian slim for Node; Alpine where offered
+  for every other official base; where neither applies, the official default, and the PR body says so. Caddy is
+  unchanged.
 - **Pinning:** each image by its multi-arch index digest, recorded in `deployment/images/bases.lock.json`, in
   `deployment/mirror.list.json` (so P1.27s mirrors it by digest), and in the `from_host_not_allowlisted_refused`
   allowlist, which names `docker.io/library` plus each image, never a wildcard registry. The DL3026 reason line and
@@ -5309,7 +5322,7 @@ Docker images, Alpine where offered, pinned by digest?". This generalises the No
   ruling per image.
 - **End:** P1.27s flips every image to the mirror by the same digest (`mirrored_digest_equals_lock`).
 - **Tests:** `base_digest_matches_lock` and `from_without_digest_refused` apply to every Dockerfile and compose
-  image; `runtime_base_is_alpine` applies to node-app, and other images assert Alpine only where the lock says the
+  image; `runtime_base_is_debian_slim` applies to node-app, and other images assert Alpine only where the lock says the
   official image offers it.
 
 **Bumping a pinned base digest** (book edit 2026-10-07-base-digest-bump-procedure, final 01:05Z). P0.08's Renovate
@@ -5322,13 +5335,13 @@ managers for the lock files. The repeatable procedure:
    test fixture that pins it.
 3. The PR body shows Trivy on the new digest: zero HIGH or CRITICAL findings with a fixed version, against the old
    digest's list.
-4. Run `base_digest_matches_lock`, `runtime_base_is_alpine` and the images test locally.
+4. Run `base_digest_matches_lock`, `runtime_base_is_debian_slim` and the images test locally.
 - **Who bumps:** until P1.27v merges, an agent may hand-bump under this procedure; once it merges, bumps are
   Renovate's and Alex merges them, and agents hand-bump only for a security finding Renovate has not yet opened.
 - **Id:** a hand bump is maintenance, not a book step, so it takes no step id. Subject `deps: bump <image>:<tag> index
   digest` (Renovate's `deps` convention), with the `security` label when it fixes CVEs. Phase 2 first confirms that
   pr-shape and the commit-subject check accept a `deps:` subject, as they must for Renovate PRs; if they reject it,
-  the first bump rides as **P1.27b** ("bump node:26-alpine digest for CVE fixes") and an id-less maintenance class
+  the first bump rides as **P1.27b** ("bump node:26-trixie-slim digest for CVE fixes") and an id-less maintenance class
   goes to the step book.
 - **No fixed upstream digest:** a time-boxed `.trivyignore.yaml` entry per CVE (`id`, `reason`, `expires`), a
   loosening that needs Alex's card, expiring in 14 days (well under the 90-day cap), then re-checked. The reason
@@ -5503,6 +5516,47 @@ prototype's `deploy/pds/Dockerfile` sed patch is REJECTED).
 
 ---
 
+### P1.27d — Switch the web image base to Debian slim
+
+**Tags:** [SEC] · **Depends on:** P1.27 (merged) · **Class:** feature (every file is product) · records
+2026-10-07-p127-node-base-debian-slim (architecture, 01:35Z) and 2026-10-07-p127d-node-debian-slim (final 01:38Z)
+
+**Why:** Alex asked at 2026-10-07 01:26:43Z "Is it too late to revert docker image to debian slim?" and tapped "Debian
+slim" at 01:29:53Z on the card "Switch the web image base from Alpine back to Debian slim (P1.27)?". The PR body
+quotes both, with their times. The letter `d` marks a non-trusted follow-on that changes the merged P1.27's output;
+b, q, r, s and v are taken.
+
+**Where:**
+- The Dockerfile's three Node stages (`deps`, `build`, `runtime`) become
+  `docker.io/library/node:26-trixie-slim@sha256:<index digest>`, the same digest in every stage; the DL3026 reason
+  comment and ignore line stay directly above each `FROM`.
+- Any `apk` line in a build stage becomes `apt-get install --no-install-recommends` with exact versions (DL3008), the
+  apt lists removed in the same layer. The runtime stage installs nothing.
+- The package-manager strip also covers `/opt/yarn-*` and `yarnpkg`.
+- `bases.lock.json`: the node entry gets tag `26-trixie-slim`, the new digest and `"source": "upstream"`.
+- `mirror.list.json`: the node entry is replaced with the same tag and digest. The allowlist is unchanged
+  (`docker.io/library/node`).
+- `deployment/images/images.test.ts`: `runtime_base_is_alpine` is replaced by `runtime_base_is_debian_slim`; new
+  `runtime_stage_installs_no_os_packages`; kept `runtime_has_no_package_manager`, `dl3026_ignore_only_on_upstream_base`,
+  `base_digest_matches_lock`, `from_without_digest_refused` and `from_host_not_allowlisted_refused`.
+
+**Digest:** per "Bumping a pinned base digest" above: the newest multi-arch index digest of `26-trixie-slim` at least
+7 days old, a younger one only for a named HIGH or CRITICAL fix. The PR body shows Trivy (HIGH and CRITICAL,
+`--ignore-unfixed`) for the old Alpine pin and the new pin; the bundled npm findings in the mirror scan exist in both
+variants and are named as such, not as new.
+
+**Trivy on Debian slim:** more reported-but-unfixed OS CVEs are expected and `--ignore-unfixed` covers them; fixable
+findings stay red; any `.trivyignore.yaml` entry still needs a reason and an expiry of 90 days or less. Node's own
+binary is not a dpkg package, so the reviewed base-digest bumps cover Node's CVEs.
+
+**Order:** independent of P1.28x and P1.28. If both are open together, whichever merges second merges main first,
+since both touch `mirror.list.json`. If pr-shape reports a class other than feature, the PR stops and asks the step
+book; it does not split itself.
+
+**Size:** small, well under 400 lines.
+
+---
+
 ### P1.27r — Make `images` a required check (split from P1.27q; deferred until after launch)
 Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, Alex's typed words in the building thread allowing the guard-file
   edit            Plan: §7 (CI); rule SE-6
@@ -5589,6 +5643,9 @@ P0.08's settings stay (`minimumReleaseAge: "7 days"`, `automerge: false`, `secur
 
 **Class:** if pr-shape classes `renovate.json` as a check path, the step is check class and needs the coordinator's
 clearance as a tightening; otherwise it is product. The `v` suffix is free on P1.27 (q, r and s are used).
+
+**Slice:** slice 2, confirmed at 01:19Z (book edit 2026-10-07-base-digest-bump-procedure). Slice 1 needs no Renovate
+takeover, because hand bumps under the procedure cover it.
 
 **After it merges:** bumps are Renovate's and Alex merges them (see "Bumping a pinned base digest" in P1.27).
 
@@ -5873,9 +5930,10 @@ on the PDS (P1.30 C12).
 One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
 from `dev:up`, not from CI), so this stays one step.
 
-**musl DNS (architecture 00:13Z, book edit 2026-10-06-p127-base-by-digest-book-text):** P1.29 gains
-`net_guard_resolve_pin_in_image`: the net-guard resolve-and-pin tests run once inside the built Alpine image, as part
-of the local-stack smoke, before the first deploy (musl's resolver differs from glibc's). If P1.29 cannot run it, it
+**Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
+2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29 gains
+`net_guard_resolve_pin_in_image`. The deployed image must hold the SSRF guarantee: run the net-guard resolve-and-pin
+tests once inside the built runtime image before the first deploy, and once per base bump. If P1.29 cannot run it, it
 moves to P1.30's preflight.
 
 **Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.12x, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
