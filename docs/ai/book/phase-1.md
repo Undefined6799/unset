@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b,
-  P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b, P1.28h,
+  P1.29k, P1.29, P1.29a, P1.29s, P1.29t, P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -123,6 +123,7 @@ flowchart TD
   P115g --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P115 --> P115s["P1.15s audit chain tests"]
+  P115s --> P115b["P1.15b verify through SET ROLE"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P103 --> P117e["P1.17e lock log events"]
   P111 --> P117["P1.17 advisory lock"]
@@ -179,11 +180,18 @@ flowchart LR
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
-  P1_29["P1.29 compose.dev.yaml"]
+  P1_28h["P1.28h Caddyfile reader"]
+  P1_29k["P1.29k migrate image, postgres locked"]
+  P1_29["P1.29 compose.dev.yaml, no PDS"]
+  P1_29a["P1.29a PDS and Mailpit ALEX"]
+  P1_29s["P1.29s dev seed and precheck"]
+  P1_29t["P1.29t running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
   P1_30p["P1.30p compose parser and SecretMap"]
   P1_30["P1.30 deploy preflight core"]
-  P1_30s["P1.30s preflight C13–C24"]
+  P1_30s["P1.30s preflight C13–C24 but C17, C18"]
+  P1_30t["P1.30t preflight C17 networks"]
+  P1_30u["P1.30u preflight C18 edge zones"]
   P1_31["P1.31 lexicons package"]
   P1_32["P1.32 permanent choices STOP"]
   P1_33["P1.33 server baseline ALEX"]
@@ -195,6 +203,7 @@ flowchart LR
   P1_37a["P1.37a Arachnid application ALEX"]
   P1_38["P1.38 Phase 1 exit"]
   P1_15s["P1.15s audit chain tests"]
+  P1_15b["P1.15b verify through SET ROLE"]
 
   P1_04 --> P1_20
   P1_10 --> P1_20
@@ -231,9 +240,16 @@ flowchart LR
   P1_28x --> P1_28
   P1_27 --> P1_28
   P1_11 --> P1_29
-  P1_27 --> P1_29
+  P1_27 --> P1_29k
+  P1_29k --> P1_29
   P1_28 -.-> P1_29
+  P1_30t --> P1_29
+  P1_29 --> P1_29a
+  P1_29a --> P1_29s
+  P1_29a --> P1_29t
+  P1_29s --> P1_29t
   P1_28 --> P1_28b
+  P1_28b --> P1_28h
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -246,12 +262,17 @@ flowchart LR
   P1_30 --> P1_34
   P1_30 --> P1_30s
   P1_30s --> P1_34
+  P1_30 --> P1_30t
+  P1_30t --> P1_34
+  P1_30 --> P1_30u
+  P1_28h --> P1_30u
+  P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_34
   P0_12 --> P1_34
   P0_11 -.-> P1_34
-  P1_29 -.-> P1_34
+  P1_29t -.-> P1_34
   P1_31 --> P1_35
   P1_34 --> P1_35
   P1_18 -.-> P1_35
@@ -259,6 +280,7 @@ flowchart LR
   P0_07 --> P1_36
   P1_26 --> P1_38
   P1_15s -.-> P1_38
+  P1_15s --> P1_15b
   P1_19 --> P1_22b["P1.22b locale (i18n slice)"]
   P1_22 --> P1_22b
   P1_26 --> P1_22b
@@ -2949,8 +2971,31 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      PR's class, so P1.15s stays feature. Red evidence: each tamper test fails with `verify` stubbed to report ok.
      Widening `trusted-base.ts` to let a trusted PR carry the reference line would be a loosening of a check gate and
      is not booked; if the split recurs, the step book can propose it as its own check-class step for Alex.
+     **As built** (#434, merged by Alex at 2026-10-07T12:14:07Z as `57631d6`; book edit
+     2026-10-07-p115s-as-built-and-p115b): the body showed the missing-module failure instead of the booked red run
+     (P1.15b shows it); it called two carried records "not yet carried" (once carried, a body cites the
+     `docs/ai/book/` path); its "AI notes: none needed" was wrong, though the hub note is in. `chain.test.ts:193`
+     creates a test-only login role `IN ROLE audit_owner`, which with default `INHERIT` holds the owner's rights
+     without `SET ROLE`, so the test does not prove the documented path; and `chain.test.ts:89-91` calls the
+     superuser-only `session_replication_role = replica` edit an owner's attack (an owner would use `ALTER TABLE ...
+     DISABLE TRIGGER`). Nothing in production changed; P1.15b fixes both.
+  4. **P1.15b** (feature, slice 1 beside P1.15s; depends on P1.15s, merged #434; book edits
+     2026-10-07-p115s-as-built-and-p115b and architecture's 2026-10-07-p115b-keep-set-role): verify the audit chain
+     through `SET ROLE`, in `tests/integration/audit/chain.test.ts` (and the hub note if needed); no trusted or check
+     path. Letter `b`: leftovers of P1.15 and P1.15s. Changes: (1) `verifyAsOwner` connects as a test-only login role
+     that is a `NOINHERIT` member of `audit_owner` (`WITH SET TRUE, INHERIT FALSE`, the shape migrator holds at
+     0003:65) and runs `SET ROLE audit_owner` before `verify`, as `audit.test.ts` does; `audit_owner` stays NOLOGIN
+     and no production login role is created; (2) the `tamper` comment says what it is, a superuser edit behind the
+     triggers; (3) new `tamper_as_owner_disable_trigger_detected`: as the owner, `ALTER TABLE ... DISABLE TRIGGER`,
+     edit a row, re-enable, and `verify full` reports it; (4) the body shows the booked red run (`verify` stubbed to
+     ok, every tamper test fails). Tests: `verifier_login_role_needs_set_role`, `verifier_without_set_role_is_denied`
+     (the same login role without `SET ROLE` is refused on the chain read, proving the NOINHERIT shape), the new
+     tamper test, and the existing tamper tests under the new role. Architecture refused the `IN ROLE` (inheriting)
+     form: under inheritance `current_user` stays the login role, so a green test there says nothing certain about
+     the `SET ROLE` path production uses, and a NOINHERIT member holds nothing until a visible `SET ROLE`. No word
+     from Alex: tests only, a tightening.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-  None depends on P1.15s except P1.38, so the tamper tests exist before Phase 1 closes.
+  None depends on P1.15s except P1.38 and P1.15b, so the tamper tests exist before Phase 1 closes.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
   `infrastructure/audit/{index.ts,actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) +
   `rowHash.test.ts`; `tests/integration/audit/chain.test.ts`, the `tests/tsconfig.json` reference and
@@ -6447,10 +6492,95 @@ runtime.
 
 ---
 
+### P1.28h — Caddyfile reader for edge checks
+
+Booked from architecture's 2026-10-07-p130s-networks-and-caddyfile-reader (point 2) by book edit
+2026-10-07-p130s-split-and-p128h. `edge.test.ts` reads the Caddyfile by regular expressions over text
+(`zoneCoverageProblems`, line 42; `zones`, line 27), and P1.30u's C18 must read the same file at the deploy gate. Two
+hand readers of one security config drift, and then CI and the gate disagree about which routes carry the zones, so
+one reader lands first, in the trusted base, and C18 imports it. Letter `h`: helper; P1.28's taken letters are b, d,
+q, u, v, w and x. Phase 1 owns it, after P1.15b and before P1.28u; it touches no file either of those touches, and
+Phase 2 needs it merged before P1.30u.
+
+**Tags:** [SEC], trusted (only `deployment/edge/` files and their tests) · **Depends on:** P1.28b · **Plan:** as P1.28
+
+**Where:** `deployment/edge/caddyfile.ts`; `deployment/edge/edge.test.ts`; tests.
+
+**Goal:** a small reader that tokenises the Caddyfile the way Caddy does (words, quotes, `{ }` blocks, newlines, `#`
+comments, `import` of snippets defined in the same file) into sites, blocks and directives. Any token it does not
+understand fails, never skips: environment placeholders, heredocs, and imports of files or globs included.
+`edge.test.ts` switches `zoneCoverageProblems` and `zones` to it, with today's expectations unchanged.
+
+**Done when (tests):** `caddyfile_reader_unknown_token_fails`, `caddyfile_reader_resolves_snippet_imports`,
+`caddyfile_reader_refuses_file_imports`, `caddyfile_reader_matches_caddy_adapt` (CI only, built edge image: for the
+repo's Caddyfile, the reader's sites, route order, imports and `rate_limit` zones agree with `caddy adapt --adapter
+caddyfile` JSON), and the existing `edge.test.ts` zone tests unchanged and green.
+
+**Not in this step:** C18 (P1.30u); any change to the Caddyfile itself.
+
+---
+
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
-One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
-from `dev:up`, not from CI), so this stays one step.
+**Split into five parts** (book edit 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h, with
+architecture's 2026-10-07-p129-migrate-image-and-run-only-images behind it, which wins where they differ; every part
+is slice 1). Why: nothing calls `syncRolePasswords` yet (`migrate-cli.ts` runs `migrate()` only, and the P1.12p and
+P1.12x binding says P1.29 wires it in after migrations); the PDS and Mailpit are vendor images, each a loosening Alex
+decides on its own card; the two running-stack tests need the whole stack in CI; and the single step plus the migrate
+image and the lock work is well over the ~550-line split line. The text below this note is the whole stack's spec;
+each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend on **P1.29t**, the
+last part, which implies all five.
+1. **P1.29k "Add the migrate image and lock postgres"** (product, security-review: `/deployment/` and
+   `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged):
+   - `deployment/images/migrate.Dockerfile`, a separate Dockerfile. A second APP would need a second final stage
+     chosen by `--target`, which escapes the "last stage ships" tests; `node-app.Dockerfile` keeps refusing any APP
+     but web. It uses the same locked node base by digest (no new lock entry), stages `deps` (`npm ci
+     --ignore-scripts --omit=dev`) and `runtime`, and no build stage. The runtime copies only `package.json`, prod
+     `node_modules`, `shared/` and `infrastructure/postgres/`, never `apps/`, `interfaces/`, `domains/`, `scripts/`,
+     `tests/` or `deployment/`. Uid 65532; npm, yarn, corepack and pnpm stripped; no OS packages; `ENTRYPOINT
+     ["node", "infrastructure/postgres/migrate-cli.ts"]`; no EXPOSE or HEALTHCHECK (one-shot); read-only root in
+     compose; the migrator credentials only.
+   - The `syncRolePasswords` wiring in `migrate-cli.ts`, after migrations, as the P1.12x binding requires.
+   - `images.test.ts`: the web image's runtime tests become per-Dockerfile (`runtime_has_no_package_manager`,
+     `runtime_stage_installs_no_os_packages`, the USER check, and the base and digest tests over every `dockerfiles`
+     entry).
+   - Postgres (`docker.io/library/postgres`, official, under Alex's official-images rule) joins `LIBRARY_IMAGES`, the
+     lock (a new key by name at `images.test.ts:143`, exact, never a pattern) and the mirror list with `stage:
+     "runtime"`, under the full age rule, with push times and Trivy in the body. `tests/support/postgres.ts` reads
+     `POSTGRES_IMAGE` from the lock instead of its own constant.
+   - Tests: `migrate_image_copies_only_its_paths`, `migrate_image_boots_to_config_check` (CI only: the image run with
+     no environment exits 78), `postgres_test_image_matches_lock`, a test that the CLI calls `syncRolePasswords`
+     after `migrate()` and not when migrations fail, and the per-Dockerfile runtime tests. It must pass P1.28u's
+     rules if P1.28u merges first, and P1.28u must pass on `migrate.Dockerfile` if it merges second.
+2. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.11p, P1.28,
+   P1.30t): `deployment/compose.dev.yaml` with postgres (by `ref:tag@digest` exactly as in the lock), migrate, web and
+   edge (both built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for
+   P1.27s); `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json` for
+   postgres, migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside
+   `deployment/edge/`, following the edge test fixture's pattern. Tests: the static compose and env tests below that
+   do not name the PDS or Mailpit; `compose_images_match_lock` (every `image:` in `deployment/` compose files is a
+   lock entry or one of web, edge and migrate); `compose_dev_networks_match_table`, which imports P1.30t's exported
+   comparison; and `preflight_matches_compose_config` on `compose.dev.yaml` (CI only).
+3. **P1.29a "Add the PDS and Mailpit to the dev stack"** ([ALEX] [SEC]; depends on P1.29 and Alex's two card
+   answers, one image per card, asked by the coordinator and quoted in the body; architecture recommends yes for
+   both, Mailpit as dev only): the exact vendor allowlist entries (`ghcr.io/bluesky-social/pds`,
+   `docker.io/axllent/mailpit`, never a host or namespace); their lock and mirror entries with `stage: "runtime"`
+   (a run-only image runs as shipped, so it takes the fail-on-HIGH gate; Phase 1's default of leaving them
+   unscanned until P1.27s is refused) and the full age rule; Mailpit's `"devOnly": true`; the `pds` and `mailpit`
+   services, with the PDS env names checked against the pinned PDS release's own env source (cited in the body);
+   their rows in `networks.dev.json`, with `compose_dev_networks_match_table` passing. Tests:
+   `pds_rate_limits_disabled_explicitly` (moved here: it reads the `pds` service's env, which first exists in this
+   part; still a static read, in the PR that writes the env line), `dev_only_image_never_in_prod_compose_or_from`,
+   and the remaining static PDS and Mailpit compose tests. If Alex refuses the PDS image, this part stops and comes
+   back to the step book (the alternative is building a PDS image from `@atproto/pds` on our node base, a larger
+   step).
+4. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a): `scripts/dev-seed.ts` and
+   `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring and their tests
+   below. `dev-seed` creates accounts through the dev PDS, so it needs P1.29a; `dev-precheck` travels with it.
+5. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s): `pds_device_row_has_no_client_ip`
+   (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
+   that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
+   measures it, and it needs Alex's typed line.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29 gains
@@ -6458,7 +6588,7 @@ from `dev:up`, not from CI), so this stays one step.
 tests once inside the built runtime image before the first deploy, and once per base bump. If P1.29 cannot run it, it
 moves to P1.30's preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.12x, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/compose.dev.yaml`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
 `scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests.
@@ -6828,26 +6958,85 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 
 ---
 
-### P1.30s — Deploy preflight C13–C24
+### P1.30s — Deploy preflight C13–C24 except C17 and C18
 
 Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 as designed in P1.30's table,
 in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
 
+**Split three ways** (book edit 2026-10-07-p130s-split-and-p128h, with architecture's
+2026-10-07-p130s-networks-and-caddyfile-reader behind it, which wins where they differ): P1.30s builds the ten
+checks with no new input contract; **P1.30t** builds C17 and **P1.30u** builds C18, below. All three are [SEC],
+product class, slice 1, owned by Phase 2, in the order s, t, u. Steps that depended on P1.30s (P2.13a, P1.34, P2.26a,
+P5.03) depend on P1.30s, P1.30t and P1.30u.
+
+**C21's retirement report** (Phase 2's default, accepted as book text): `docs/human/retirement/retirement-check.json`
+holds `{ "retirement_part_a_complete": true }` and is read with the strict YAML parser. When the file is absent, C21
+fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The retirement step writes the file.
+
 **Tags:** [SEC] · **Depends on:** P1.30 · **Plan:** as P1.30
 
-**Where:** `deployment/preflight/checks/*.ts` (C13–C24); fixtures; tests.
+**Where:** `deployment/preflight/checks/*.ts` (C13–C24 except C17 and C18); fixtures; tests.
 
 **Done when (tests):**
-- One failing fixture per check C13–C24 → exit 1 with that id. Named ones: `c13_lexicon_authority_did_fails`,
-  `c15_handle_domain_0x40_me_fails`, `c16_confirmation_link_required`, `c17_extra_service_on_pds_network_fails`,
-  `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, `c19_moderation_mail_missing_fails`,
+- One failing fixture per check C13–C24 except C17 and C18 → exit 1 with that id. Named ones:
+  `c13_lexicon_authority_did_fails`, `c15_handle_domain_0x40_me_fails`, `c16_confirmation_link_required`,
+  `c19_moderation_mail_missing_fails`,
   `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
   `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
   `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
   `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
-- The all-good fixture, extended to cover all 24 checks → exit 0.
+- The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
 
-**Not in this step:** anything P1.30 builds.
+**Not in this step:** anything P1.30 builds; C17 (P1.30t); C18 (P1.30u).
+
+---
+
+### P1.30t — Deploy preflight C17: compose networks against the table
+
+Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from architecture's
+2026-10-07-p130s-networks-and-caddyfile-reader, point 1). The strict subset governs which YAML constructs are
+refused, not which fields are read, so reading `services.*.networks` and the top-level `networks` widens the fields,
+not the constructs.
+
+**Tags:** [SEC] · **Depends on:** P1.30 · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/` (the parser's network fields, C17, the exported comparison); fixtures; tests.
+
+**Goal:** the parser models what Compose does: a service with no `networks:` key joins `default`, and a top-level
+`networks.default` changes that network's settings; `services.*.networks` in list form and in map form (keys
+`aliases`, `ipv4_address`, `ipv6_address`, `priority`; unknown keys fail); top-level keys `internal`, `driver` (only
+`bridge` or absent) and `name`; `external: true`, any other driver and `driver_opts` refused; `network_mode` set to
+anything on a service fails C17. C17 compares against `deployment/networks.<env>.json`, shaped `{ "<network>": {
+"internal": bool, "members": ["<service>", …] } }`, read with the strict YAML parser (it refuses duplicate keys,
+which `JSON.parse` resolves to the last one), exactly in both directions: every compose network is in the table and
+every table network in compose, members set-equal, `internal` equal, the implicit default network counted. A missing
+table fails C17 with "input missing". `preflight_matches_compose_config` compares networks too (this replaces the
+"networks are not compared" line of 2026-10-07-p130p-as-built from this step on). The comparison is exported for
+P1.29's `compose_dev_networks_match_table` (product importing product, allowed).
+
+**Done when (tests):** `c17_extra_service_on_pds_network_fails`, `c17_default_network_counted`,
+`c17_list_and_map_forms`, `c17_external_network_refused`, `c17_network_mode_fails`,
+`c17_table_mismatch_each_direction`, `c17_table_duplicate_key_refused`, `c17_missing_table_input_missing`; the
+all-good fixture still exits 0.
+
+**Not in this step:** C18 (P1.30u); `networks.dev.json` (P1.29, P1.29a).
+
+---
+
+### P1.30u — Deploy preflight C18: edge rate-limit zones through the Caddyfile reader
+
+Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h). C18 imports `deployment/edge/caddyfile.ts` (P1.28h);
+there is no second reader in `deployment/preflight/` (architecture refused one: the same parser differential it
+ruled out for YAML).
+
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
+
+**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`; the all-good
+fixture, now covering all 24 checks, exits 0.
+
+**Not in this step:** any change to `deployment/edge/` (P1.28h owns the reader).
 
 ---
 
@@ -7697,7 +7886,7 @@ sequenceDiagram
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.33, P1.33a, P0.12, P0.11, P1.29 · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `0x40.space`** hosts the lexicon authority account until
