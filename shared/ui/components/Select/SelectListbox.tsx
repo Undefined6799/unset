@@ -4,6 +4,8 @@
 // hides it with the hidden attribute (out of view, the tab order and the accessibility tree, still posted), and draws
 // the sheet's list: a combobox that opens a listbox, with typeahead, Home and End, opening upward when there is no
 // room below. A pick writes the native element's value and fires its change event, so the form POST is unchanged.
+// P1.24c: a required <select> stays native; the combobox is named by the visible label through aria-labelledby, and a
+// click on that label focuses it.
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { classNames } from "../../src/class-names.ts";
 import styles from "./Select.module.css";
@@ -44,11 +46,23 @@ export function SelectListbox({ select }: SelectListboxProps) {
 
   useEffect(() => {
     const element = document.getElementById(select);
-    if (!(element instanceof HTMLSelectElement)) return;
+    // A required select stays native: hidden, the browser could not focus it to show its message, and the form would
+    // silently not submit (P1.24c record; how a required listbox shows its error is a sheet question).
+    if (!(element instanceof HTMLSelectElement) || element.required) return;
     const options = [...element.options].filter((option) => !option.disabled);
     setNative({ element, options });
     setChosen(options.indexOf(element.options[element.selectedIndex] as HTMLOptionElement));
     element.hidden = true;
+    // A click on the visible label would focus the hidden native control; it focuses the combobox instead.
+    const focusBox = (event: Event) => {
+      event.preventDefault();
+      box.current?.focus();
+    };
+    const labels = [...(element.labels ?? [])];
+    for (const label of labels) label.addEventListener("click", focusBox);
+    return () => {
+      for (const label of labels) label.removeEventListener("click", focusBox);
+    };
   }, [select]);
   useEffect(() => {
     if (open) document.getElementById(`${list}-${active}`)?.scrollIntoView?.({ block: "nearest" });
@@ -118,7 +132,7 @@ export function SelectListbox({ select }: SelectListboxProps) {
         ref={box}
         role="combobox"
         tabIndex={element.disabled ? -1 : 0}
-        aria-label={element.labels?.[0]?.textContent ?? undefined}
+        aria-labelledby={element.labels?.[0]?.id || undefined}
         aria-controls={list}
         aria-expanded={open}
         aria-haspopup="listbox"

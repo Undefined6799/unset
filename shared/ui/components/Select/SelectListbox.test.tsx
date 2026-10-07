@@ -26,7 +26,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mount(extra: { placeholder?: string } = {}) {
+async function mount(extra: { placeholder?: string; required?: boolean } = {}) {
   const html = renderToString(<Select id="lang" name="lang" label="Language" options={options} {...extra} />);
   const form = document.createElement("form");
   form.append(...new DOMParser().parseFromString(html, "text/html").body.childNodes);
@@ -56,7 +56,7 @@ test("select_island_takes_over_after_mount", async () => {
   expect(html).not.toMatch(/role="(combobox|listbox)"|\shidden[=\s>]/);
   const { form, native, box, list } = await mount();
   expect(native.hidden).toBe(true);
-  expect(box.getAttribute("aria-label")).toBe("Language");
+  expect(box.hasAttribute("aria-label")).toBe(false);
   expect(box.getAttribute("aria-expanded")).toBe("false");
   expect(box.getAttribute("aria-controls")).toBe(list.id);
   expect(box.tabIndex).toBe(0);
@@ -142,4 +142,26 @@ test("select_island_click_picks", async () => {
 test("select_island_props_schema", () => {
   expect(select.propsSchema({ select: "_R_1_" })).toBe(true);
   for (const bad of [null, {}, { select: 1 }]) expect(isSelectListboxProps(bad), JSON.stringify(bad)).toBe(false);
+});
+
+test("select_island_labelledby_label", async () => {
+  const { form, box } = await mount();
+  const label = form.querySelector("label") as HTMLLabelElement;
+  expect(label.id).toBe("lang-label");
+  expect(box.getAttribute("aria-labelledby")).toBe("lang-label");
+});
+
+test("select_label_click_focuses_combobox", async () => {
+  const { form, native, box } = await mount();
+  await act(async () => (form.querySelector("label") as HTMLLabelElement).click());
+  expect(document.activeElement).toBe(box);
+  expect(document.activeElement).not.toBe(native);
+});
+
+test("select_island_leaves_required_native", async () => {
+  const { form, native, box } = await mount({ placeholder: "pick one", required: true });
+  expect(native.hidden).toBe(false);
+  expect(box).toBeNull();
+  expect(form.querySelector('[role="listbox"]')).toBeNull();
+  expect(native.checkValidity()).toBe(false);
 });

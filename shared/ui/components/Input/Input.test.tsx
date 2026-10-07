@@ -12,7 +12,7 @@ describe("Input", () => {
     const html = renderToStaticMarkup(
       <Input id="handle" name="handle" label="Handle" hint="your domain" error="taken" />,
     );
-    expect(html).toContain(`<label class="${styles.label}" for="handle">Handle</label>`);
+    expect(html).toContain(`<label id="handle-label" class="${styles.label}" for="handle">Handle</label>`);
     expect(html).toMatch(
       /<input aria-describedby="handle-hint handle-error" aria-invalid="true" id="handle" [^>]*name="handle"/,
     );
@@ -23,7 +23,7 @@ describe("Input", () => {
   it("field_without_messages_has_no_aria", () => {
     const html = renderToStaticMarkup(<Input id="q" label="Search" type="search" />);
     expect(html).toBe(
-      `<div class="${styles.field}"><label class="${styles.label}" for="q">Search</label>` +
+      `<div class="${styles.field}"><label id="q-label" class="${styles.label}" for="q">Search</label>` +
         `<input id="q" type="search" class="${styles.control}"/></div>`,
     );
   });

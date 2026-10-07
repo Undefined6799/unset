@@ -24,7 +24,7 @@ afterEach(() => {
 async function mount() {
   const html = renderToString(<Toast closeHref={href}>profile saved</Toast>);
   document.body.append(...new DOMParser().parseFromString(html, "text/html").body.childNodes);
-  const box = document.querySelector("[id]") as HTMLElement;
+  const box = document.querySelector("[role=status] > [id]") as HTMLElement;
   const link = box.querySelector("a") as HTMLAnchorElement;
   const island = document.createElement("span");
   link.replaceWith(island);
@@ -56,6 +56,30 @@ test("toast_island_closes_in_place", async () => {
   expect(location.pathname + location.search).toBe("/settings");
   // The live region stays in the page for the next toast.
   expect(box.parentElement?.getAttribute("role")).toBe("status");
+});
+
+test("toast_close_moves_focus_to_main", async () => {
+  const main = document.createElement("main");
+  main.id = "main";
+  document.body.append(main);
+  const { link } = await mount();
+  link.focus();
+  await click(link);
+  expect(document.activeElement).toBe(main);
+  expect(main.getAttribute("tabindex")).toBe("-1");
+});
+
+test("toast_close_leaves_focus_held_elsewhere", async () => {
+  const main = document.createElement("main");
+  main.id = "main";
+  const other = document.createElement("button");
+  document.body.append(main, other);
+  const { box, link } = await mount();
+  other.focus();
+  await click(link);
+  expect(box.hidden).toBe(true);
+  expect(document.activeElement).toBe(other);
+  expect(main.hasAttribute("tabindex")).toBe(false);
 });
 
 test("toast_island_without_toast_follows_link", async () => {
