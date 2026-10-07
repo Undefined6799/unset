@@ -178,6 +178,7 @@ flowchart LR
   P1_25x["P1.25x ui-build plan default test"]
   P1_25d["P1.25d jsx-free detector"]
   P1_25r["P1.25r jsx-free test parses with oxc"]
+  P1_25s["P1.25s jsx-free second regression"]
   P1_25l["P1.25l islands keep lazy chunks"]
   P1_25o["P1.25o own shared/islands ALEX"]
   P1_25i["P1.25i island runtime to shared/islands"]
@@ -265,6 +266,7 @@ flowchart LR
   P1_25w --> P1_25x
   P1_25h --> P1_25d
   P1_25d --> P1_25r
+  P1_25r --> P1_25s
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
@@ -5662,7 +5664,12 @@ recorded as built. Defence in depth beside P1.25w's row, so their order does not
 
 ### P1.25r — Close the jsx-free test's regression
 Tags: —            Depends on: P1.25d (merged, #512)
-As built: merged by Alex at 2026-10-07T23:07:29Z as `5681a4f` (#520).
+As built: merged by Alex at 2026-10-07T23:07:29Z as `5681a4f` (#520; issue #518). It regressed below main again: `eval`
+and `Function` holding `import("@unset/shared-ui")` pass, where main's text count refused them, and the type exception
+also accepts `import type * as K` and `import type K`. Its subpath fixture uses `@unset/shared-ui/index.ts`, not the
+`/sub` named below; both are subpaths, and the book line stays. Not pinned: a file holding both an `import type` and a
+value import of the index is refused by the logic, but no fixture covers it. Dead code: the workspace-link branch at
+`jsx-free.test.ts:88-92`. P1.25s fixes all of these.
 Slice 1, product class (`shared/ui-build/jsx-free.test.ts`, plus the two nits below); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (P1.25r, text final 23:00Z), from architecture's N4 amendment in
 2026-10-07-p125h-follow-ups. Owner: the third thread, in its next slot, ahead of P1.25l. A tightening, cleared by the
@@ -5715,6 +5722,39 @@ only) of any `isEntry` chunk, boot included.
 Tests (`islands_are_lazy_chunks`): fail an island statically imported from boot (the #464 shape), an island with no
 manifest chunk, and an island chunk marked `isEntry`; pass today's shape, where boot reaches each island only through
 `dynamicImports`. Done when `npm run check` is green on main and the report still prints one line per island.
+
+---
+
+### P1.25s — Close the jsx-free test's second regression
+Tags: [SEC]            Depends on: P1.25r (merged, #520)
+Slice 1, issue #525, product (`shared/ui-build/jsx-free.test.ts`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups
+(amendment 3, 23:30Z), from the coordinator's check of #520 and architecture's second note under N4 in
+2026-10-07-p125h-follow-ups (23:25Z). A tightening; the coordinator clears it, no word from Alex. Owner: the third
+thread, after P1.25l (#523).
+
+1. **The floor:** any parsed string or template literal whose value contains `@unset/shared-ui` as a whole specifier
+   fails, wherever it sits. "Whole" means followed by the end, `/`, a quote, or a character that cannot appear in a
+   package name, so `@unset/shared-uix` still passes. This replaces "equals or starts with"; the only exception is the
+   exact specifier of an allowed type import (item 3).
+2. **LOADERS** gains `eval`, called directly and indirectly as `(0, eval)`; `Function`, both called and constructed; and
+   any import of `vm` or `node:vm`.
+3. **The type exception** applies only when every specifier is a named ImportSpecifier
+   (`import type { A, B } from "@unset/shared-ui"`). `import type * as K` and `import type K` fail, as on main.
+4. **Pin every check:** realpath, the node_modules segment, `import =`, createRequire, eval, Function and vm, and the
+   contains-floor each get at least one red fixture that only it catches, so removing the check turns a test red. The PR
+   body lists each check with its pinning fixture. The dead branch at :88-92 is removed, not pinned.
+5. **The node_modules test** works on `relative(HERE, target)`, not the absolute target: a checkout whose own path
+   contains `node_modules` must not refuse every import.
+
+Fixtures: red, `eval('import("@unset/shared-ui")')` and `(0, eval)(…)`;
+`Function('return import("@unset/shared-ui")')()` and `new Function(…)`; `import vm from "node:vm"` with
+`vm.runInThisContext(…)`; `setTimeout('…@unset/shared-ui…')` (floor only); `import type * as K from "@unset/shared-ui"`
+and `import type K from "@unset/shared-ui"`; one file holding `import type { X }` and a value import of the index.
+Green: a checkout path containing `node_modules` (relative-path test); `"@unset/shared-uix"`;
+`import type { A, B } from "@unset/shared-ui"`.
+
+Done when `npm run check` is green, every red fixture fails for its stated check, and the PR body shows the
+check-to-fixture table.
 
 ---
 
