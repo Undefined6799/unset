@@ -5,7 +5,10 @@
 // security. Anything outside the subset is refused, never interpreted, so the preflight cannot read a file one way
 // while Compose reads it another (preflight_matches_compose_config checks the rest against Compose in CI).
 // yaml 2.9.1 (node_modules/yaml, docs at eemeli.org/yaml): parseAllDocuments, visit, LineCounter.
-// Compose: compose-spec 05-services.md ("ports", "env_file", "Env_file format") and 12-interpolation.md.
+// Compose: compose-spec 05-services.md ("ports", "env_file", "Env_file format", "networks", "network_mode"),
+// 06-networks.md and 12-interpolation.md. Networks (P1.30t, architecture record
+// 2026-10-07-p130s-networks-and-caddyfile-reader) are read as Compose v5.3.1 `config` reports them: a service with no
+// `networks` key and no `network_mode` joins `default`, and a declared network is listed whether or not one joins it.
 import {
   type Document,
   isMap,
@@ -28,8 +31,13 @@ export type Service = {
   envFiles: string[];
   environment: [string, EnvValue][];
   ports: Port[];
+  /** The networks the service joins, by their key in the file. */
+  networks: string[];
+  networkMode: string | null;
 };
-export type Compose = { name: string | null; services: Service[]; secretFiles: string[] };
+/** A top-level network: only `internal`, a `bridge` driver and `name` are read; anything else is refused. */
+export type Network = { name: string; internal: boolean };
+export type Compose = { name: string | null; services: Service[]; networks: Network[]; secretFiles: string[] };
 
 export class ParseError extends Error {}
 
@@ -98,6 +106,7 @@ export function parseCompose(text: string, file: string): Compose {
   return {
     name: name === undefined ? null : r.text(name, "name"),
     services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value)),
+    networks: networks(r, root.get("networks", true)),
     secretFiles: secretFiles(r, root.get("secrets", true)),
   };
 }
@@ -153,7 +162,76 @@ function service(r: Reader, name: string, spec: unknown): Service {
     envFiles: r.list(spec.get("env_file", true), "env_file").map((n) => r.text(n, "env_file")),
     environment: environment(r, spec.get("environment", true), name),
     ports: r.list(spec.get("ports", true), "ports").map((n) => port(r, n)),
+    networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
+    networkMode: spec.has("network_mode") ? r.text(spec.get("network_mode", true), "network_mode") : null,
   };
+}
+
+const ATTACHMENT_KEYS = new Set(["aliases", "ipv4_address", "ipv6_address", "priority"]);
+const NETWORK_KEYS = new Set(["internal", "driver", "name"]);
+const isEmpty = (node: unknown): boolean => node === null || (isScalar(node) && node.value === null);
+
+/** `networks:` on a service, as a list of keys or a map of key to attachment; with neither it is on `default`. */
+function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: string): string[] {
+  if (node === undefined) return hasMode ? [] : ["default"];
+  if (hasMode) return r.fail(node, `${service} sets both networks and network_mode`);
+  r.noDollar(node, "networks");
+  let names: string[];
+  if (isSeq(node)) {
+    names = node.items.map((n) => r.text(n, "network"));
+  } else if (isMap(node)) {
+    names = node.items.map((pair) => {
+      if (!isEmpty(pair.value) && !isMap(pair.value)) r.fail(pair.value, "network attachment is not a mapping");
+      for (const key of isMap(pair.value) ? pair.value.items : []) {
+        const field = r.text(key.key, "attachment key");
+        if (!ATTACHMENT_KEYS.has(field)) r.fail(key.key, `network attachment key ${field}`);
+      }
+      return r.text(pair.key, "network");
+    });
+  } else {
+    return r.fail(node, `networks of ${service} is not a list or mapping`);
+  }
+  if (names.length === 0) r.fail(node, `networks of ${service} is empty`);
+  if (new Set(names).size !== names.length) r.fail(node, `networks of ${service} repeats a network`);
+  return names;
+}
+
+/** Top-level `networks:`. An external network's settings live outside the file, so it is refused, as is any driver
+ * but bridge. */
+function networks(r: Reader, node: unknown): Network[] {
+  if (node === undefined) return [];
+  if (!isMap(node)) return r.fail(node, "networks is not a mapping");
+  r.noDollar(node, "networks");
+  return node.items.map((pair) => {
+    const name = r.text(pair.key, "network name");
+    if (isEmpty(pair.value)) return { name, internal: false };
+    const spec = pair.value;
+    if (!isMap(spec)) return r.fail(spec, `network ${name} is not a mapping`);
+    for (const key of spec.items) {
+      const field = r.text(key.key, "network key");
+      if (!NETWORK_KEYS.has(field)) r.fail(key.key, `network ${name}: ${field} is refused`);
+    }
+    if (spec.has("driver") && r.text(spec.get("driver", true), "driver") !== "bridge") {
+      r.fail(spec.get("driver", true), `network ${name}: driver other than bridge`);
+    }
+    if (spec.has("name")) r.text(spec.get("name", true), "network name");
+    const internal = spec.get("internal", true);
+    if (internal === undefined) return { name, internal: false };
+    if (!isScalar(internal) || typeof internal.value !== "boolean") {
+      return r.fail(internal, `network ${name}: internal is not true or false`);
+    }
+    r.text(internal, "internal");
+    return { name, internal: internal.value };
+  });
+}
+
+/** Every network the stack has, as Compose creates them: the declared ones, plus `default` when a service is on it
+ * and no file declares it. */
+export function networksOf(compose: Pick<Compose, "services" | "networks">): Network[] {
+  const declared = compose.networks;
+  const onDefault = compose.services.some((service) => service.networks.includes("default"));
+  const implicit = onDefault && !declared.some((network) => network.name === "default");
+  return implicit ? [...declared, { name: "default", internal: false }] : declared;
 }
 
 function environment(r: Reader, node: unknown, service: string): [string, EnvValue][] {

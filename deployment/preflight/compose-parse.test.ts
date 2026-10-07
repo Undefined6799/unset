@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
-import { ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
+import { networksOf, ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
 
 describe("compose subset", () => {
   const refused = (yaml: string) => expect(() => parseCompose(yaml, "c.yaml")).toThrow();
@@ -70,12 +70,17 @@ describe("env file subset", () => {
 
 const digest = `sha256:${"a".repeat(64)}`;
 // Every field the parser reads, so the comparison covers its whole view: a whole-reference and a `$$` value, env
-// files and file secrets (the files exist, as Compose requires).
+// files and file secrets (the files exist, as Compose requires), and networks in both service forms beside a service
+// on the implicit default network (P1.30t).
 const STACK = `name: unset-prod
 services:
   edge:
     image: ghcr.io/undefined6799/edge@${digest}
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
+    networks:
+      front:
+        aliases: [edge]
+      inner:
   pds:
     image: ghcr.io/undefined6799/mirror/pds@${digest}
     env_file: [pds.env]
@@ -87,6 +92,14 @@ services:
       - target: 3000
         published: "3000"
         host_ip: 127.0.0.1
+    networks: [inner]
+  web:
+    image: ghcr.io/undefined6799/web@${digest}
+networks:
+  front: {}
+  inner:
+    internal: true
+    driver: bridge
 secrets:
   pds_admin:
     file: ./pds-admin.secret
@@ -119,8 +132,11 @@ type Theirs = {
       env_file?: { path: string }[];
       environment?: Record<string, string | null>;
       ports?: { target: number; published?: string; host_ip?: string }[];
+      networks?: Record<string, unknown>;
+      network_mode?: string;
     }
   >;
+  networks?: Record<string, { internal?: boolean }>;
   secrets?: Record<string, { file?: string }>;
 };
 
@@ -150,9 +166,12 @@ function oursAsCompose(file: string) {
             ]),
           ),
           ports: service.ports,
+          networks: [...service.networks].sort(),
+          networkMode: service.networkMode,
         },
       ]),
     ),
+    networks: Object.fromEntries(networksOf(ours).map((n) => [n.name, { internal: n.internal }])),
     secretFiles: ours.secretFiles.map((path) => resolve(dirname(file), path)).sort(),
   };
 }
@@ -172,8 +191,13 @@ function theirsAsOurs(theirs: Theirs) {
             published: p.published ?? null,
             target: `${p.target}`,
           })),
+          networks: Object.keys(service.networks ?? {}).sort(),
+          networkMode: service.network_mode ?? null,
         },
       ]),
+    ),
+    networks: Object.fromEntries(
+      Object.entries(theirs.networks ?? {}).map(([name, n]) => [name, { internal: n.internal ?? false }]),
     ),
     secretFiles: Object.values(theirs.secrets ?? {})
       .flatMap((secret) => (secret.file === undefined ? [] : [secret.file]))
@@ -186,8 +210,8 @@ describe("compose agreement", () => {
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
-  // env_file, environment, file secrets) against Compose's, for the fixture and every compose*.yaml in the repository.
-  // The parser reads no networks, so there is nothing of them to compare until a check needs them.
+  // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
+  // with its internal flag) against Compose's, for the fixture and every compose*.yaml in the repository.
   test.runIf(hasCompose || process.env.CI)("preflight_matches_compose_config", async ({ annotate }) => {
     const fixture = join(dir, "compose.yaml");
     writeFileSync(fixture, STACK);

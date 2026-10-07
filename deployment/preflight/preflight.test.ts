@@ -1,4 +1,4 @@
-// P1.30 and P1.30s: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
+// P1.30, P1.30s and P1.30t: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -65,6 +65,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C14",
   "C15",
   "C16",
+  "C17",
   "C19",
   "C20",
   "C21",
@@ -79,14 +80,18 @@ type Stack = {
   lock?: object | null;
   dotEnv?: string;
   report?: string;
+  /** The network table, written as both networks.dev.json and networks.prod.json: an object, raw text, or none. */
+  networks?: object | string | null;
 };
+/** The all-good stack's table: every service on Compose's implicit default network. */
+const TABLE = { default: { internal: false, members: ["edge", "pds", "web"] } };
 const dirs: string[] = [];
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 });
 
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
-function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report }: Stack = {}) {
+function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report, networks = TABLE }: Stack = {}) {
   const root = mkdtempSync(join(tmpdir(), "preflight-"));
   dirs.push(root);
   mkdirSync(join(root, "deployment/secrets"), { recursive: true });
@@ -101,6 +106,11 @@ function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report }: 
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
+  for (const env of ["dev", "prod"]) {
+    if (networks === null) continue;
+    const table = typeof networks === "string" ? networks : JSON.stringify(networks);
+    writeFileSync(join(root, `deployment/networks.${env}.json`), table);
+  }
   if (report !== undefined) {
     mkdirSync(join(root, "docs/human/retirement"), { recursive: true });
     writeFileSync(join(root, "docs/human/retirement/retirement-check.json"), report);
@@ -430,5 +440,112 @@ describe("preflight C13 to C24 (P1.30s)", () => {
       "PASS C24 n/a",
     );
     expect(local.calls.some(([file]) => file === "timedatectl")).toBe(false);
+  });
+});
+
+describe("preflight C17 (P1.30t)", () => {
+  // Two declared networks and the implicit default, in both service forms (compose-spec 05-services.md "networks").
+  const NETWORKED = COMPOSE.replace(
+    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
+    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: [edge]\n      inner:',
+  )
+    .replace("    env_file: pds.env", "    env_file: pds.env\n    networks: [inner]")
+    .replace("secrets:", "networks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
+  const NETWORKED_TABLE = {
+    default: { internal: false, members: ["web"] },
+    front: { internal: false, members: ["edge"] },
+    inner: { internal: true, members: ["edge", "pds"] },
+  };
+  const cannotRun = async (s: Stack, pattern: RegExp) => {
+    const result = await check(s);
+    expect(result.code).toBe(2);
+    expect(result.lines[0]).toMatch(pattern);
+  };
+
+  test("c17_extra_service_on_pds_network_fails", async () => {
+    // Only the services the table names may share a network with the PDS (P1.30's check table, C17).
+    const withPdsNetwork = (webNetworks: string) =>
+      COMPOSE.replace("    env_file: pds.env", "    env_file: pds.env\n    networks: [pds_net]")
+        .replace(
+          '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
+          '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks: [default, pds_net]',
+        )
+        .replace(`    image: ${WEB}`, `    image: ${WEB}\n    networks: ${webNetworks}`)
+        .replace("secrets:", "networks:\n  pds_net:\n    internal: true\nsecrets:");
+    const table = {
+      default: { internal: false, members: ["edge", "web"] },
+      pds_net: { internal: true, members: ["edge", "pds"] },
+    };
+    expect(failed((await check({ compose: withPdsNetwork("[default]"), networks: table })).lines)).toEqual([]);
+    expect(await expectOnly("C17", { compose: withPdsNetwork("[default, pds_net]"), networks: table })).toBe(
+      "FAIL C17 web is on pds_net, the table says not",
+    );
+  });
+
+  test("c17_default_network_counted", async () => {
+    // A service with no networks key joins `default`, so a table without it, or without one of its members, fails.
+    await expectOnly("C17", { networks: {} });
+    await expectOnly("C17", { networks: { default: { internal: false, members: ["edge", "pds"] } } });
+    // A top-level networks.default changes that network's settings.
+    const internal = COMPOSE.replace("secrets:", "networks:\n  default:\n    internal: true\nsecrets:");
+    await expectOnly("C17", { compose: internal });
+    const table = { default: { internal: true, members: ["edge", "pds", "web"] } };
+    expect(failed((await check({ compose: internal, networks: table })).lines)).toEqual([]);
+  });
+
+  test("c17_list_and_map_forms", async () => {
+    expect(failed((await check({ compose: NETWORKED, networks: NETWORKED_TABLE })).lines)).toEqual([]);
+    const outer = { ...NETWORKED_TABLE, inner: { internal: false, members: ["edge", "pds"] } };
+    expect(await expectOnly("C17", { compose: NETWORKED, networks: outer })).toContain("inner: internal differs");
+    // An attachment key outside the four the subset reads, an empty list, and a network no file defines are refused.
+    const mac = NETWORKED.replace("        aliases: [edge]", "        mac_address: 02:42:ac:11:00:02");
+    await cannotRun({ compose: mac, networks: NETWORKED_TABLE }, /mac_address/);
+    const empty = NETWORKED.replace("networks: [inner]", "networks: []");
+    await cannotRun({ compose: empty, networks: NETWORKED_TABLE }, /empty/);
+    const undefinedNetwork = NETWORKED.replace("networks: [inner]", "networks: [back]");
+    await cannotRun({ compose: undefinedNetwork, networks: NETWORKED_TABLE }, /network back is not defined/);
+  });
+
+  test("c17_external_network_refused", async () => {
+    const top = (spec: string) => NETWORKED.replace("  front: {}", `  front:\n    ${spec}`);
+    await cannotRun({ compose: top("external: true"), networks: NETWORKED_TABLE }, /external/);
+    await cannotRun({ compose: top("driver: overlay"), networks: NETWORKED_TABLE }, /driver/);
+    await cannotRun({ compose: top("driver_opts: {}"), networks: NETWORKED_TABLE }, /driver_opts/);
+    expect(failed((await check({ compose: top("driver: bridge"), networks: NETWORKED_TABLE })).lines)).toEqual([]);
+  });
+
+  test("c17_network_mode_fails", async () => {
+    for (const mode of ["host", '"service:edge"', '"container:x"', "bridge"]) {
+      const compose = COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    network_mode: ${mode}`);
+      const table = { default: { internal: false, members: ["edge", "web"] } };
+      expect(await expectOnly("C17", { compose, networks: table })).toBe("FAIL C17 network_mode is set in pds");
+    }
+  });
+
+  test("c17_table_mismatch_each_direction", async () => {
+    const spare = { ...NETWORKED_TABLE, spare: { internal: true, members: [] } };
+    expect(await expectOnly("C17", { compose: NETWORKED, networks: spare })).toContain("spare is not in compose");
+    const { front: _front, ...noFront } = NETWORKED_TABLE;
+    expect(await expectOnly("C17", { compose: NETWORKED, networks: noFront })).toContain("front is not in the table");
+    const extra = { ...NETWORKED_TABLE, front: { internal: false, members: ["edge", "web"] } };
+    expect(await expectOnly("C17", { compose: NETWORKED, networks: extra })).toContain("web is not on front");
+    const fewer = { ...NETWORKED_TABLE, inner: { internal: true, members: ["edge"] } };
+    expect(await expectOnly("C17", { compose: NETWORKED, networks: fewer })).toContain("pds is on inner");
+  });
+
+  test("c17_table_duplicate_key_refused", async () => {
+    const twice =
+      '{"default": {"internal": true, "members": []}, "default": {"internal": false, "members": ["edge", "pds", "web"]}}';
+    expect(await expectOnly("C17", { networks: twice })).toBe("FAIL C17 the network table is unreadable");
+    // The table's own shape is strict too: an unknown key, a repeated member or a string boolean is refused.
+    await expectOnly("C17", { networks: { default: { ...TABLE.default, aliases: [] } } });
+    await expectOnly("C17", { networks: { default: { internal: false, members: ["edge", "pds", "web", "web"] } } });
+    await expectOnly("C17", { networks: { default: { internal: "false", members: ["edge", "pds", "web"] } } });
+  });
+
+  test("c17_missing_table_input_missing", async () => {
+    expect(await expectOnly("C17", { networks: null })).toMatch(/^FAIL C17 input missing: .*networks\.prod\.json$/);
+    const dev = await check({ compose: DEV, pdsEnv: DEV_ENV, networks: null }, "dev");
+    expect(dev.lines.find((l) => l.startsWith("FAIL C17"))).toMatch(/networks\.dev\.json$/);
   });
 });
