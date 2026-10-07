@@ -1,9 +1,9 @@
 // The icon build entry, `node scripts/ui/icons.ts [--check]` (P1.24i): binds node:fs and sha256 to the pure icon run in
-// shared/ui, which imports no Node built-in. Writes only shared/ui/icons/icons.json; `--check`
-// writes nothing. Nothing imports this file; freshness is the shared/ui product test (icon_allowlist_matches_sheet).
+// shared/ui, which imports no Node built-in. Writes only shared/ui/icons/icons.json and
+// shared/ui/icons/drawings/; `--check` writes nothing. Nothing imports this file; freshness is the shared/ui product test (icon_allowlist_matches_sheet).
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { runIcons } from "../../shared/ui/index.ts";
 
 const UI = join(import.meta.dirname, "..", "..", "shared", "ui");
@@ -17,7 +17,10 @@ process.exitCode = runIcons(
         .update(readFileSync(join(UI, path)))
         .digest("hex"),
     list: (dir) => readdirSync(join(UI, dir)),
-    writeText: (path, text) => writeFileSync(join(UI, path), text),
+    writeText: (path, text) => {
+      mkdirSync(dirname(join(UI, path)), { recursive: true });
+      writeFileSync(join(UI, path), text);
+    },
   },
   console.log,
 );
