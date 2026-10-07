@@ -90,7 +90,7 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P1.12 | roles from `roles.json`: `web, api, indexer, media, review, review_egress, retention, auditor, backup, admin` and the others listed there (+ Tap's own database roles, P3.02); `infrastructure/postgres/grant-matrix.json` and its test; domain `types.did` |
 | P1.13 | `erasure-registry.json` with strategies `delete_row \| set_null \| retain \| audit_redact \| retain_legal_hold` (`retain` needs `class` and `reason`) and the `pg_catalog` coverage test |
 | P1.14 | `seal(plaintext, context) → string`; `unseal(sealed, context) → bytes`, with `context = sealContext(column, rowKey)` only and the value in a registered `types.sealed` column; P1.14a `sealTo("legal_hold", plaintext, context)` (encrypt only; used from Phase 4) |
-| P1.15 | `appendAudit(tx, {action, outcome, actorDid?, actorKey?, target?, reason?, case?, jti?, requestId?, receipt?, pii?}) → {lane, seq}` (lane derived from the action; `outcome` ∈ `attempted \| succeeded \| failed \| denied \| unknown`); SQL definer `audit.append(p_action, p_outcome, …)`; `verifyChain(db, lane, "links" \| "full")`; P1.15a `audit.erase_subject`, `audit.seal_segment`, `audit.mark_anchored` |
+| P1.15 | `appendAudit(tx, {action, outcome, actorDid?, actorKey?, target?, reason?, case?, jti?, requestId?, receipt?}) → {lane, seq}` (lane derived from the action; `outcome` ∈ `attempted \| succeeded \| failed \| denied \| unknown`); SQL definer `audit.append(p_action, p_outcome, …)`; `verifyChain(db, lane, "links" \| "full")`; P1.15a `audit.erase_subject`, `audit.seal_segment`, `audit.mark_anchored` |
 | P1.16 | `issue`/`consume(db, purpose, token, …) → "ok" \| "invalid"`; `claim(db, purpose, {issuer, externalId}, expiresAt) → boolean` (true only on first use per issuer; durable) |
 | P1.18 | `guardedRequest(policy, {url, method, headers?, body?, timeoutMs, maxBytes, accept?}) → {status, headers, body}` and `guardedFetch(policy, defaults)` (on `undici.request`); policies `fixed` and one `public` policy (`atproto`) whose internal-host exception is our own PDS (P1.18a); errors `NetGuardError.code` `egress.*`; P1.18b proxy mode and the `egress-public` proxy for Tap |
 | P1.22 | locale and theme resolution; on public pages: theme by `prefers-color-scheme`, locale by `Accept-Language` with a URL override (plan §5.4 "Caching") |
@@ -2298,8 +2298,8 @@ Outputs (contract):
     (`pending_action`, `credential_counter`, `known_device`, `case`, `db_hold`, `canary`). `admin` role: SELECT,
     INSERT, UPDATE, DELETE on `adm.session` only; everything else through definers; SELECT on `mod` views; no grant
     on `app.session`, `app.oauth_session` or any email column. Erasure: `adm.session.did` `delete_row`.
-  - Staff tailnet addresses are stored in `adm.session.login_ip`, the audit PII rows for admin security events
-    and the revoke file (AD §8.1); `adm.known_device` stores an HMAC of the IP. README invariant 3 needs this
+  - Staff tailnet addresses are stored in `adm.session.login_ip` and the revoke file (AD §8.1; the audit holds no PII,
+    P1a-A1 answered "No address", 2026-10-07); `adm.known_device` stores an HMAC of the IP. README invariant 3 needs this
     exception written in (plan issue PI-2); the P0.06 IP-write check allow-lists exactly these places.
   - Route manifest `[{method, path, minRole, touch, writes}]`; `writes` is true for any route that calls
     `pds-admin` or writes audit, and every `writes` route is a POST. The router is built from the manifest.
@@ -2635,7 +2635,7 @@ the PDS disagree (reconciliation).
 
 Inputs: P1.15 audit views; P3.15 `mod.report_list`, `mod.reveal_report`; P3.16d read verbs.
 Outputs (contract): screens only; no new tables. Moderators see their own trail and the trail by exact subject
-DID; owners see every trail; PII side rows are never displayed except the viewer's own tailnet IP on security events.
+DID; owners see every trail; the audit holds no PII side rows (P1a-A1 answered "No address", 2026-10-07).
 
 Algorithm (hypothesis): audit reads are bounded keyset queries; the reports queue lists `mod.report_list` by age
 (50 per page) with counts per subject and reveal through `commitLocal`; reconciliation compares our open
@@ -2919,7 +2919,8 @@ legal-hold key question is `P4a-A1`.
 7. **AD §6.2's signed fields lack per-verb `args`.** The book adds `args` inside the signed action, validated by a
    closed per-verb schema in both `admin` and `pds-admin`. (Part 2 PI-1.)
 8. **README invariant 3** ("no IPs anywhere, one exception") contradicts AD §8.1's staff tailnet addresses: amend
-   it to "… and staff tailnet addresses in `adm.*`, the audit PII side rows and the revoke file". (Part 2 PI-2.)
+   it to "… and staff tailnet addresses in `adm.*` and the revoke file". (Part 2 PI-2; the audit PII side rows were
+   dropped when P1a-A1 was answered "No address", 2026-10-07.)
 9. **Off-box audit copies in Phase 3** (plan line 622) need a provider chosen only in P5.01. Interim: chain heads in
    the daily digest, compared weekly by an owner (runbook 7). (Part 2 PI-3.)
 10. **`preserve.create` carries `subject_did`** so `pds-admin` can honour AD §8's "the reaper skips legal holds"

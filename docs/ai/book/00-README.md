@@ -166,9 +166,10 @@ These come from plan §2, §6 and §6.1. A step that would break one is wrong ev
    - the per-upload transmission buffer, sealed to the legal-hold public key and destroyed within minutes unless a
      fingerprint matches (plan §5.8, decision 21);
    - **staff** tailnet addresses (100.64.0.0/10, fd7a:115c:a1e0::/48) of people signing in to `admin`, in exactly the
-     places P3.17 lists: `adm.session.login_ip`, the audit PII side rows of admin security events, and `pds-admin`'s
-     revoke file (`adm.known_device` stores only an HMAC of the address). Never a member's address, never
-     user agents (phase-3 plan issue PI-2).
+     places P3.17 lists: `adm.session.login_ip` and `pds-admin`'s revoke file (`adm.known_device` stores only an
+     HMAC of the address). The audit holds no PII side rows (P1a-A1 answered "No address", 2026-10-07; book edit
+     2026-10-06-p115m-tailnet-deferral-steps, architecture 00:20Z). Never a member's address, never user agents
+     (phase-3 plan issue PI-2).
 4. No secret is optional, none is printed, none is in code, logs or responses.
 5. Every SQL statement is parameterised; every table with a DID column is reached by `eraseDid`.
 6. Nothing private reaches a repo. Only Publish writes to a repo, and only after review where the plan requires it.

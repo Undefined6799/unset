@@ -904,7 +904,8 @@ Edge cases and failures:
   - A non-UTF-8 file with a source extension → decode error → finding.
   - `ip-columns`: a column added later by `ALTER TABLE … ADD COLUMN client_ip text` → caught by (b); an address hidden
     inside a JSONB or sealed column → not detectable lexically; the sealed exception is covered by P4.03's tests, and
-    P1.15's `p_pii` check limits audit PII to tailnet addresses.
+    the audit holds no PII at all (`audit.append` has no `p_pii` and there is no `audit.event_pii`; P1a-A1 answered
+    "No address", book edit 2026-10-06-p115m-tailnet-deferral-steps).
   - A second file in `interfaces/pds-admin` importing `node:http` → finding (only `pds.mjs` is exempt).
 
 Threats: source code entering `main`, scanned on every run.
