@@ -870,6 +870,7 @@ word.
 
 ### P0.05d — Pin the root .npmrc and the check job's uses ref (book edit 2026-10-07-p005d-npmrc-and-uses-ref)
 Tags: [SEC]            Depends on: P0.05c (merged, #483)            Plan: rule SE-6; architecture's 2026-10-07-npmrc-pin-and-uses-ref
+As built: merged by Alex at 2026-10-07T22:23:51Z as `ad17bb5` (#506).
 Where: check paths, kind/build: `scripts/ci/npmrc.test.ts` (new), `scripts/ci/check-job.test.ts`, `.github/CODEOWNERS`
   (the parsed `# checks:` line at :108 gains `/.npmrc`; that line is the SE-6 check-path list), and
   `scripts/guards/change-shape.test.ts` (its pinned check-path list, :221-233, gains `"/.npmrc"`). No product file. A
