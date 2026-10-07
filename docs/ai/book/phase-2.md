@@ -667,6 +667,7 @@ identity index", so anyone deriving merged steps from commit prefixes counts tha
 
 ### P2.03q — Move the session store's trusted path
 Tags: [SEC]            Depends on: —            Plan: SE-6 (trusted base)
+Status: built (#403).
 Check class (SE-6 `q`; issue #401), `.github/CODEOWNERS` only (book edit 2026-10-07-p203-repath; architecture
 2026-10-07-p203-session-store-trusted). In the trusted section, under "CSRF gate, session and CSP builder", the line
 `/domains/identity/auth/session-store.ts` becomes `/infrastructure/postgres/session/ @Undefined6799`. A folder, so
@@ -692,6 +693,7 @@ If pr-shape reports trusted or mixed, the PR stops and asks the step book; it do
 
 ### P2.03e — Add the session store log events (prelude to P2.03)
 Tags: —            Depends on: —            Plan: §6.1; book edit 2026-10-07-p130q-p203e
+Status: built (#407).
 Where: `shared/log/` only (issue #405): EVENTS entries `session.touch_failed` and `session.sweep` plus their EVENTS
   test rows. Feature class.
 Done when (tests): `logger_session_events`.

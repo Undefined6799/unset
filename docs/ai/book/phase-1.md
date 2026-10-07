@@ -6212,7 +6212,8 @@ MATRIX has no row for `deployment/`, so every preflight import fails with "not-i
 row, `deployment-preflight`: from `^deployment/preflight/` to only itself, Node built-ins and the `yaml` package, with
 a fixture for it. It enforces architecture's location ruling (2026-10-07-p130-preflight-location-and-yaml).
 
-**Tags:** [SEC] · **Depends on:** — · **Plan:** SE-6; guideline §1 (dependency-cruiser enforces boundaries)
+**Tags:** [SEC] · **Depends on:** — · **Status:** built (#406) · **Plan:** SE-6; guideline §1 (dependency-cruiser
+enforces boundaries)
 
 **Done when (tests):** `deployment_preflight_is_a_leaf`: the preflight may not import `scripts/ci/verify-images.ts`,
 `shared/`, `deployment/images/` or `pg`, and nothing may import it.
