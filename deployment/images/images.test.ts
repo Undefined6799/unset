@@ -11,6 +11,10 @@ import { describe, expect, test } from "vitest";
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const DOCKERFILE = "images/node-app.Dockerfile";
+/** The migrate CLI's image (P1.29k; architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 1). */
+const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
+/** The images built on the locked Node base, each held to the Node runtime rules below. */
+const NODE_DOCKERFILES = [MIGRATE_DOCKERFILE, DOCKERFILE];
 
 /**
  * What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. `stage` says
@@ -52,9 +56,10 @@ function baseProblems(dockerfile: string, lock: Lock): string[] {
     if (pinned === null) return [`FROM ${image} is not pinned by digest`];
     const [, ref = "", , digest = ""] = pinned;
     if (!allowed(ref)) return [`FROM ${image} is not from an allowed host`];
-    const locked = Object.values(lock).find((base) => base.ref === ref);
-    if (locked === undefined) return [`FROM ${image} has no lock entry`];
-    return locked.digest === digest ? [] : [`FROM ${image} differs from the lock digest ${locked.digest}`];
+    const locked = Object.values(lock).filter((base) => base.ref === ref);
+    if (locked.length === 0) return [`FROM ${image} has no lock entry`];
+    if (locked.some((base) => base.digest === digest)) return [];
+    return [`FROM ${image} differs from the lock digest ${locked.map((base) => base.digest).join(" or ")}`];
   });
 }
 
@@ -249,6 +254,35 @@ function referenceProblems(text: string): string[] {
   return stage.started() ? problems : ["the Dockerfile has no FROM"];
 }
 
+/**
+ * Every hadolint DL3026 ignore that is not directly above a FROM of an upstream lock base, with the book edit and
+ * P1.27s named in the comment line above it, and every upstream FROM without one.
+ */
+function dl3026Problems(dockerfile: string, lock: Lock): string[] {
+  const lines = dockerfile.split("\n").map((line) => line.trim());
+  const ignores = lines.flatMap((line, at) => (/hadolint\b.*ignore/i.test(line) ? [at] : []));
+  const upstream = Object.values(lock).filter((base) => base.source === "upstream");
+  const upstreamFroms = fromImages(dockerfile).filter((image) =>
+    upstream.some((base) => PINNED.exec(image)?.[1] === base.ref),
+  );
+  const problems =
+    ignores.length === upstreamFroms.length
+      ? []
+      : [`${ignores.length} ignores for ${upstreamFroms.length} upstream FROMs`];
+  for (const at of ignores) {
+    // hadolint applies an inline ignore to the next line only (src/Hadolint/Pragma.hs, `line + 1`, v2.15.1), so the
+    // FROM follows the ignore directly and the reason sits in the comment line above it.
+    const from = lines[at + 1] ?? "";
+    const ref = PINNED.exec(FROM.exec(from)?.[1] ?? "")?.[1];
+    if (lines[at] !== "# hadolint ignore=DL3026") problems.push(`line ${at + 1} is not a DL3026 ignore`);
+    if (!/^# .*2026-10-06-p127-upstream-base-by-digest.*removed by P1\.27s/.test(lines[at - 1] ?? "")) {
+      problems.push(`line ${at + 1} has no reason above it`);
+    }
+    if (!upstream.some((base) => base.ref === ref)) problems.push(`line ${at + 1} is not above an upstream FROM`);
+  }
+  return problems;
+}
+
 /** Every Dockerfile under deployment/ (the web image's and, from P1.28, the edge's), so a new image is covered too. */
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
@@ -261,8 +295,10 @@ const pinnedNode = `docker.io/library/node:${NODE.tag}@${NODE.digest}`;
 
 describe("base images", () => {
   test("base_digest_matches_lock", () => {
-    expect(baseProblems(dockerfile, lock)).toEqual([]);
-    expect(fromImages(dockerfile).length).toBeGreaterThanOrEqual(2);
+    for (const file of dockerfiles) {
+      expect(baseProblems(read(file), lock), file).toEqual([]);
+      expect(fromImages(read(file)).length, file).toBeGreaterThanOrEqual(2);
+    }
     const other = `sha256:${"1".repeat(64)}`;
     expect(baseProblems(`FROM docker.io/library/node:${NODE.tag}@${other} AS build`, lock)).toEqual([
       `FROM docker.io/library/node:${NODE.tag}@${other} differs from the lock digest ${NODE.digest}`,
@@ -324,37 +360,23 @@ describe("base images", () => {
     // one locked base.
     expect(NODE.ref).toBe("docker.io/library/node");
     expect(NODE.tag).toMatch(/^26(?:\.\d+){0,2}-[a-z]+-slim$/);
-    for (const image of fromImages(dockerfile)) expect(image, image).toBe(pinnedNode);
+    for (const file of NODE_DOCKERFILES) {
+      for (const image of fromImages(read(file))) expect(image, file).toBe(pinnedNode);
+    }
   });
 
   test("runtime_stage_installs_no_os_packages", () => {
     // No stage installs OS packages, so no apt or apk line needs version pins (DL3008, DL3018) and the runtime holds
-    // only what the base ships.
-    for (const line of dockerfile.split("\n")) {
-      expect(line, line).not.toMatch(/^\s*RUN\b.*\b(?:apt-get|apt|apk|dpkg)\b/);
+    // only what the base ships. The edge is not a Node image: it removes setcap's packages (deployment/edge/Dockerfile).
+    for (const file of NODE_DOCKERFILES) {
+      for (const line of read(file).split("\n")) {
+        expect(line, `${file}: ${line}`).not.toMatch(/^\s*RUN\b.*\b(?:apt-get|apt|apk|dpkg)\b/);
+      }
     }
   });
 
   test("dl3026_ignore_only_on_upstream_base", () => {
-    const lines = dockerfile.split("\n").map((line) => line.trim());
-    const ignores = lines.flatMap((line, at) => (/hadolint\b.*ignore/i.test(line) ? [at] : []));
-    const upstream = Object.values(lock).filter((base) => base.source === "upstream");
-    const upstreamFroms = fromImages(dockerfile).filter((image) =>
-      upstream.some((base) => PINNED.exec(image)?.[1] === base.ref),
-    );
-    expect(ignores.length).toBe(upstreamFroms.length);
-    for (const at of ignores) {
-      // hadolint applies an inline ignore to the next line only (src/Hadolint/Pragma.hs, `line + 1`, v2.15.1), so the
-      // FROM follows the ignore directly and the reason sits in the comment line above it.
-      expect(lines[at]).toBe("# hadolint ignore=DL3026");
-      expect(lines[at - 1]).toMatch(/^# .*2026-10-06-p127-upstream-base-by-digest.*removed by P1\.27s/);
-      const from = lines[at + 1] ?? "";
-      const ref = PINNED.exec(FROM.exec(from)?.[1] ?? "")?.[1];
-      expect(
-        upstream.map((base) => base.ref),
-        from,
-      ).toContain(ref);
-    }
+    for (const file of dockerfiles) expect(dl3026Problems(read(file), lock), file).toEqual([]);
   });
 
   test("mirror_list_digest_only", () => {
@@ -523,7 +545,9 @@ describe("references outside FROM", () => {
 
   test("real_dockerfiles_name_images_only_in_from", () => {
     // A floor, not an exact list: a new Dockerfile under deployment/ is checked without editing this test.
-    expect(dockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile", "images/node-app.Dockerfile"]));
+    expect(dockerfiles).toEqual(
+      expect.arrayContaining(["edge/Dockerfile", "images/migrate.Dockerfile", "images/node-app.Dockerfile"]),
+    );
     for (const file of dockerfiles) expect(referenceProblems(read(file)), file).toEqual([]);
   });
 });
@@ -540,9 +564,18 @@ describe("runtime stage", () => {
   const runtime = runtimeStage(dockerfile);
 
   test("runtime_runs_as_65532", () => {
-    expect(runtime.filter((line) => line.startsWith("USER "))).toEqual(["USER 65532:65532"]);
-    // Nothing runs as root once the user is set: no RUN follows it.
-    expect(runtime.slice(runtime.indexOf("USER 65532:65532")).filter((line) => line.startsWith("RUN "))).toEqual([]);
+    for (const file of dockerfiles) {
+      const stage = runtimeStage(read(file));
+      expect(
+        stage.filter((line) => line.startsWith("USER ")),
+        file,
+      ).toEqual(["USER 65532:65532"]);
+      // Nothing runs as root once the user is set: no RUN follows it.
+      expect(
+        stage.slice(stage.indexOf("USER 65532:65532")).filter((line) => line.startsWith("RUN ")),
+        file,
+      ).toEqual([]);
+    }
   });
 
   test("prod_image_has_ssr_build_only", () => {
@@ -555,34 +588,63 @@ describe("runtime stage", () => {
   });
 
   test("image_has_no_dev_deps", () => {
-    expect(dockerfile).toMatch(/^RUN npm ci --ignore-scripts --omit=dev$/m);
-    expect(runtime.filter((line) => line.startsWith("COPY ") && line.includes("node_modules"))).toEqual([
-      "COPY --from=deps /app/node_modules node_modules",
-    ]);
+    for (const file of NODE_DOCKERFILES) {
+      expect(read(file), file).toMatch(/^RUN npm ci --ignore-scripts --omit=dev$/m);
+      const copies = runtimeStage(read(file)).filter(
+        (line) => line.startsWith("COPY ") && line.includes("node_modules"),
+      );
+      expect(copies, file).toEqual(["COPY --from=deps /app/node_modules node_modules"]);
+    }
   });
 
   test("runtime_has_no_package_manager", () => {
-    const removal = runtime.find((line) => line.startsWith("RUN rm -rf ")) ?? "";
-    for (const path of [
-      "/usr/local/lib/node_modules/npm",
-      "/usr/local/lib/node_modules/corepack",
-      "/opt/yarn-*",
-      ...["npm", "npx", "corepack", "yarn", "yarnpkg", "pnpm", "pnpx"].map((tool) => `/usr/local/bin/${tool}`),
-    ]) {
-      expect(removal.split(" "), path).toContain(path);
+    for (const file of NODE_DOCKERFILES) {
+      const text = read(file);
+      const stage = runtimeStage(text);
+      const removal = stage.find((line) => line.startsWith("RUN rm -rf ")) ?? "";
+      for (const path of [
+        "/usr/local/lib/node_modules/npm",
+        "/usr/local/lib/node_modules/corepack",
+        "/opt/yarn-*",
+        ...["npm", "npx", "corepack", "yarn", "yarnpkg", "pnpm", "pnpx"].map((tool) => `/usr/local/bin/${tool}`),
+      ]) {
+        expect(removal.split(" "), `${file}: ${path}`).toContain(path);
+      }
+      expect(stage.indexOf(removal), file).toBeLessThan(stage.indexOf("USER 65532:65532"));
+      // The earlier stages keep npm: they run npm ci.
+      expect(
+        text
+          .split(/^FROM .*$/m)
+          .slice(1, -1)
+          .join(""),
+        file,
+      ).not.toContain("rm -rf");
     }
-    expect(runtime.indexOf(removal)).toBeLessThan(runtime.indexOf("USER 65532:65532"));
-    // The build and deps stages keep npm: they run npm ci.
-    expect(
-      dockerfile
-        .split(/^FROM .*$/m)
-        .slice(1, -1)
-        .join(""),
-    ).not.toContain("rm -rf");
   });
 
   test("runtime_entry_is_the_web_server", () => {
     expect(runtime).toContain('ENTRYPOINT ["node", "interfaces/http/main.ts"]');
     expect(runtime.some((line) => line.startsWith("HEALTHCHECK ") && line.includes("/health"))).toBe(true);
+  });
+});
+
+// The migrate image (P1.29k): the one-shot `migrate` service, holding the migrator credentials only. Its runtime stage
+// copies what `node infrastructure/postgres/migrate-cli.ts` loads and nothing else: no app, entry point, domain, script,
+// test or deployment file. migrate.image.test.ts builds it and proves it boots.
+describe("migrate image", () => {
+  const migrate = runtimeStage(read(MIGRATE_DOCKERFILE));
+
+  test("migrate_image_copies_only_its_paths", () => {
+    expect(fromImages(read(MIGRATE_DOCKERFILE))).toEqual([pinnedNode, pinnedNode]);
+    expect(migrate.filter((line) => /^(?:COPY|ADD) /.test(line))).toEqual([
+      "COPY --from=deps /app/package.json package.json",
+      "COPY --from=deps /app/node_modules node_modules",
+      "COPY --from=deps /app/shared shared",
+      "COPY --from=deps /app/infrastructure/net-guard infrastructure/net-guard",
+      "COPY --from=deps /app/infrastructure/postgres infrastructure/postgres",
+    ]);
+    expect(migrate).toContain('ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]');
+    // One-shot: it listens on nothing and Compose waits for its exit, not its health.
+    expect(migrate.filter((line) => /^(?:EXPOSE|HEALTHCHECK|CMD) /.test(line))).toEqual([]);
   });
 });

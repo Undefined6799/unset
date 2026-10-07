@@ -20,6 +20,8 @@ checked: 2026-10-07
 - `migrations/`: numbered SQL files; `migrate.ts` applies them once, in order, as `migrator`, under an advisory lock,
   with checksums. The runner refuses gaps. `sqlLint.ts` refuses unsafe constructs.
 - `roles.json`: every process role with its limits and timeouts; `roles.ts` syncs passwords as SCRAM verifiers.
+  `unset-migrate` (`migrate-cli.ts`, the migrate image from P1.29k) runs `migrateThenSyncPasswords`: migrations first, then
+  each roster role's password from its file under the fixed `/run/secrets`; no password changes when a migration fails.
 - `grant-matrix.json`: every grant, checked against the live catalog by `tests/integration/postgres/grants.test.ts`.
 - `erasure-registry.json` and `didColumns.ts`: every DID-bearing column, found from the catalog.
 - `pool.ts`: the only place a pooled client is taken. `tx.ts`: the only place a transaction opens.
