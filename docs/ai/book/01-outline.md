@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 103 steps: 85 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 104 steps: 86 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -177,7 +177,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.14q, P1.02, P1.12 | `phase-1.md` |
 | P1.14d | Sealed type and column registry (split from P1.14; P1.14m first if pr-shape classes the migration trusted) | [SEC] | P1.14, P1.13 | `phase-1.md` |
 | P1.15x | Migration lint: allow TRUNCATE as a trigger event only (product; loosening) | [ALEX] | P1.11 | `phase-1.md` |
-| P1.15m | Audit SQL part 1: schema grants, default privilege, functions (trusted) | [SEC] | P1.15x, P1.12, P1.13 | `phase-1.md` |
+| P1.15q | pr-shape: SET ROLE/RESET ROLE neutral in trusted files (check, loosening) | [SEC] [ALEX] | — | `phase-1.md` |
+| P1.15m | Audit SQL part 1: schema grants, default privilege, functions (trusted) | [SEC] | P1.15x, P1.15q, P1.12, P1.13 | `phase-1.md` |
 | P1.15d | Audit SQL part 2: tables, seeds, index, triggers, auditor SELECT | [SEC] | P1.15m | `phase-1.md` |
 | P1.15g | Audit SQL part 3: EXECUTE grants on `audit.append`, audit tests (trusted) | [SEC] | P1.15d | `phase-1.md` |
 | P1.15 | Audit TS workspace: actions, append, rowHash, verify (trusted; SQL in P1.15m to P1.15g) | [SEC] | P1.15g, P1.14q | `phase-1.md` |
@@ -282,6 +283,7 @@ flowchart TD
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
   P1_14d["P1.14d Sealed type and registry"]
   P1_15x["P1.15x Lint: TRUNCATE trigger event"]
+  P1_15q["P1.15q SET ROLE in trusted files"]
   P1_15m["P1.15m Audit SQL part 1"]
   P1_15d["P1.15d Audit SQL part 2"]
   P1_15g["P1.15g Audit SQL part 3"]
@@ -371,6 +373,7 @@ flowchart TD
   P1_13 --> P1_15m
   P1_11 --> P1_15x
   P1_15x --> P1_15m
+  P1_15q --> P1_15m
   P1_15m --> P1_15d
   P1_15d --> P1_15g
   P1_15g --> P1_15

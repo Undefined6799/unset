@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -116,6 +116,7 @@ flowchart TD
   P111 --> P115x["P1.15x lint: TRUNCATE trigger event [ALEX]"]
   P113 --> P115m["P1.15m audit SQL [SEC]"]
   P115x --> P115m
+  P115q["P1.15q pr-shape: SET ROLE in trusted files [ALEX]"] --> P115m
   P115m --> P115d["P1.15d audit tables"]
   P115d --> P115g["P1.15g audit EXECUTE grants [SEC]"]
   P115g --> P115["P1.15 audit chain [SEC]"]
@@ -2672,7 +2673,8 @@ Outputs:
   - Contexts are not free strings. (P1.14d) `sealed-columns.json` in `infrastructure/postgres` lists every column of
     type `types.sealed` as `{ "<schema>.<table>.<column>": { "rowKey": "<column whose value identifies the row>" } }`.
     `SealedColumnId` is `keyof` that JSON, typed in `infrastructure/postgres` with no generator, and wraps seal's
-    generic `sealContext`. `sealContext(column: SealedColumnId, rowKey: string): SealContext` returns the
+    generic `sealContext`. `sealedContext(column: SealedColumnId, rowKey: string): SealContext` (named apart from
+    seal's own `sealContext`, book edit 2026-10-07-p114d-names) returns the
     branded string `"<schema>.<table>.<column>|<rowKey>"`; `rowKey` must be non-empty printable ASCII without `|`.
     Two call sites can therefore never share or drift on a context.
   - `seal(plaintext: Uint8Array, context: SealContext): string` and `unseal(sealed: string, context: SealContext):
@@ -2711,7 +2713,8 @@ Outputs:
   - (P1.14d) Domain `types.sealed AS text CHECK (VALUE ~ '^s1\.[a-z0-9]{1,16}\.')`; `sealed-columns.test.ts` compares the
     `pg_catalog` columns of type `types.sealed` with the entries without a `form` (the P1.13 method), and checks that
     every entry with a `form` names an existing `text` or `bytea` column that is not `types.sealed`.
-  - (P1.14d, in `infrastructure/postgres`) `rewrapAll(db, { batchSize = 500 })`: for each registered column: `SELECT … WHERE split_part(col,'.',2) <> $active
+  - (P1.14d, in `infrastructure/postgres`) `rewrapAll(pool, keyring, { batchSize = 500 })` (the keyring is passed in;
+    the CLI builds it from the secret store; book edit 2026-10-07-p114d-names): for each registered column: `SELECT … WHERE split_part(col,'.',2) <> $active
     LIMIT $batch FOR UPDATE SKIP LOCKED`, rewrap, `UPDATE`, commit per batch; returns counts per kid.
     `rewrapAll --check <kid>` exits 1 while any row still uses that kid. Run by the operator after adding a key; a key is
     removed from the keyring only after `--check` passes (runbook text in P5.06).
@@ -2761,10 +2764,10 @@ Done when (tests):
   - roundtrip: seal/unseal 0 bytes, 1 byte, 1 MiB → equal.
   - too_large: 1 MiB + 1 → `seal.too_large`.
   - fresh_dek_and_iv: sealing the same plaintext twice → different outputs.
-  - context_bound: seal with `sealContext(colA, "1")`, unseal with `sealContext(colA, "2")` or `sealContext(colB, "1")` →
+  - context_bound: seal with `sealedContext(colA, "1")`, unseal with `sealedContext(colA, "2")` or `sealedContext(colB, "1")` →
     `auth_failed`.
   - context_is_branded: `seal(bytes, "free string")` is a type error (`// @ts-expect-error`).
-  - context_rowkey_rules: `sealContext(colA, "")` and `sealContext(colA, "a|b")` → throw.
+  - context_rowkey_rules: `sealedContext(colA, "")` and `sealedContext(colA, "a|b")` → throw.
   - tamper_each_part: flip one bit in each of parts 2–5 → `auth_failed` or `format` (parametrised); never a plaintext.
   - unknown_kid: value with kid `zz` → `unknown_kid`.
   - rotation: keyring {k1 active} seal; then {k2 active, k1} → unseal works; `rewrap` → value now `s1.k2.…` and unseals;
@@ -2831,7 +2834,17 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      trigger, a `-- do this BEFORE` line then `TRUNCATE t;`, `CREATE TRIGGER x BEFORE UPDATE OF c OR TRUNCATE ON t`,
      and `CREATE TRIGGER x AFTER INSERT ON t EXECUTE FUNCTION f('TRUNCATE')`. A loosening: it opens only with
      Alex's typed word naming the change and the branch, quoted in the PR body.
-  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, never stacked on P1.15x; and on #126's 0005 and P1.16's
+  0b. **P1.15q** (check path, [ALEX]; depends on nothing; architecture 00:24Z, book edit 2026-10-06-p115m-tailnet-deferral-steps): pr-shape refuses
+     0007 and 0009 with `mixed_grant_change`, because `SET ROLE` and `RESET ROLE` are neutral findings and
+     `scripts/guards/trusted-base.ts`'s `kindOf` counts any neutral finding in a trusted file as mixed. In
+     `trusted-base.ts` and its tests only, `kindOf` leaves out exactly two findings when judging trusted versus mixed:
+     an exact `SET ROLE <ident>` and a bare `RESET ROLE`. Every other neutral finding still counts, and a file holding
+     only `SET ROLE` stays not trusted. Fixtures: `trusted_file_with_set_role_is_trusted`,
+     `set_role_with_feature_statement_still_mixed`, `set_role_only_file_not_trusted`,
+     `set_role_with_extra_tokens_unclassified`; the P0.09m fixture is unchanged. 0007 and 0009 each end with
+     `RESET ROLE`. A loosening: it opens only after Alex's word on the card naming P1.15q is verified. (The id reuses
+     the lapsed, never-issued allow-entry draft.)
+  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, P1.15q, never stacked on P1.15x; and on #126's 0005 and P1.16's
      0006 for migration order only):
      `infrastructure/postgres/migrations/0007_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
      with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `audit.row_hash`,
@@ -2845,7 +2858,7 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      **Three-way split** (book edit 2026-10-06-p115m-tailnet-deferral-steps, split section final 00:03Z; local pr-shape
      reports mixed_grant_change on one 0007, so the class comes from pr-shape, the P1.14m precedent). The SQL above
      ships in three PRs, merged in number order, each leaving main green:
-     - **P1.15m** (trusted; P1.15x, P1.12, P1.13), 0007: the `types` and `public` USAGE grants to `audit_owner`,
+     - **P1.15m** (trusted; P1.15x, P1.15q, P1.12, P1.13), 0007: the `types` and `public` USAGE grants to `audit_owner`,
        `audit_owner`'s routine default privilege, the four `audit.*` plpgsql functions, the matrix `schemas` and
        `defaults` lines and the `grants.test.ts` stand-in updates. The default privilege revoking EXECUTE from
        PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
@@ -2917,14 +2930,14 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
     `legal_hold_closed` (phase-3 editor; the list is P3.07's). Later
     steps add codes by migration; the TS `AuditReason` union mirrors the table (test `reason_union_matches_table`).
   - `audit.chain(lane text, seq bigint, ts timestamptz NOT NULL, action text NOT NULL REFERENCES audit.actions, writer name
-    NOT NULL, retention_class text NOT NULL, body_mac bytea NOT NULL, pii_mac bytea NOT NULL, prev_hash bytea NOT NULL,
+    NOT NULL, retention_class text NOT NULL, body_mac bytea NOT NULL, prev_hash bytea NOT NULL,
     row_hash bytea NOT NULL, PRIMARY KEY (lane, seq))`; index on `(writer, ts)`.
   - `audit.event_body(lane, seq, subject types.did, k_body bytea NOT NULL, body_text text NOT NULL, PRIMARY KEY (lane,
     seq))` — `subject` is the **target** DID (null when none); `body_text` is the exact UTF-8 text that was MACed (the
     viewer reads it as `body_text::jsonb`; the MAC never depends on Postgres re-printing jsonb the same way after an
     upgrade).
-  - No `audit.event_pii` (P1a-A1 answered "No address"; see the split above). The chain's `pii_mac` is the MAC of the
-    empty string under a random key that is discarded.
+  - No `audit.event_pii` (P1a-A1 answered "No address"; see the split above), and no `pii_mac` in the chain
+    (architecture 00:24Z).
   - `audit.append(p_action text, p_outcome text, p_actor_did types.did, p_actor_key text, p_target types.did, p_reason
     text, p_case uuid, p_jti text, p_request_id uuid, p_receipt bytea) RETURNS TABLE(lane text, seq bigint,
     row_hash bytea)` — `SECURITY DEFINER`, `SET search_path = pg_catalog, audit`, EXECUTE granted to `web`, `indexer`,
@@ -2950,7 +2963,9 @@ Outputs (SQL, created under `SET ROLE audit_owner`, so `audit_owner` owns everyt
 Row hash encoding (fixed, length-prefixed; `lp(x)` = 2-byte big-endian byte length of the UTF-8 string `x`, then its
 bytes):
   `row_hash = sha256( "unset.audit.v1" ‖ 0x00 ‖ lp(lane) ‖ u64be(seq) ‖ i64be(ts as microseconds since the Unix epoch) ‖
-  lp(action) ‖ lp(writer) ‖ lp(retention_class) ‖ prev_hash (32 bytes) ‖ body_mac (32) ‖ pii_mac (32) )`.
+  lp(action) ‖ lp(writer) ‖ lp(retention_class) ‖ prev_hash (32 bytes) ‖ body_mac (32) )`. (`pii_mac` left the
+  encoding with `event_pii`, architecture 00:24Z; the committed vector is regenerated, and P1.15g's and P1.15's
+  `row_hash_known_answer` use the new one.)
   So editing any chain column (an early-redaction trick through `retention_class`, a relabelled action, a moved time)
   breaks the hash even after the side rows are gone.
 
@@ -2970,7 +2985,7 @@ Algorithm (`audit.append`, inside the caller's transaction):
      p_action, 'outcome', p_outcome, 'target', p_target, 'reason', p_reason, 'case', p_case, 'jti', p_jti, 'request',
      p_request_id, 'receipt', encode(p_receipt, 'hex'))` with nulls stripped, then `::text` once; `k_body =
      gen_random_bytes(32)`; `body_mac = hmac(convert_to(body_text, 'UTF8'), k_body, 'sha256')`.
-  7. (Removed: no audit PII.) `pii_mac` is the MAC of an empty string under a discarded random key.
+  7. (Removed: no audit PII and no `pii_mac`.)
   8. `row_hash = audit.row_hash(…)` per the encoding. Insert the chain row and the body row (`subject = p_target`).
      Return `(lane, seq, row_hash)`.
   Any exception propagates → the caller's transaction rolls back; per admin design §7.2 the caller treats a failed
@@ -3037,7 +3052,7 @@ Diagram:
 ```mermaid
 flowchart LR
   subgraph lane["lane 'sec' (lane 'mod' identical, own lock)"]
-    C1["chain seq n-1<br/>row_hash"] --> C2["chain seq n<br/>prev_hash = row_hash(n-1)<br/>row_hash = sha256(v1 ‖ lane ‖ seq ‖ ts ‖ action ‖ writer ‖ class ‖ prev ‖ body_mac ‖ pii_mac)"]
+    C1["chain seq n-1<br/>row_hash"] --> C2["chain seq n<br/>prev_hash = row_hash(n-1)<br/>row_hash = sha256(v1 ‖ lane ‖ seq ‖ ts ‖ action ‖ writer ‖ class ‖ prev ‖ body_mac)"]
   end
   C2 -.-> B["event_body(n)<br/>subject = target DID<br/>k_body, body_text"]
   W["web / indexer / admin<br/>(asserted actor DID)"] -->|"EXECUTE audit.append"| C2
@@ -7350,7 +7365,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
   `last_seen_at` touch on its own connection, outside the handler's read-only transaction.
 - **P2.14, P3.11** call `claim(db, purpose, { issuer, externalId }, …)` (P1.16): a `jti` is unique per issuer. P3.11's
   `api`-side `jti` table (the `api` role cannot read `app`) keys on `iss` too.
-- **P2.16, P4.07** use `sealTo("legal_hold", bytes, sealContext(column, rowKey))` from P1.14a; phase-4-part1's
+- **P2.16, P4.07** use `sealTo("legal_hold", bytes, sealedContext(column, rowKey))` from P1.14a; phase-4-part1's
   `seal.encryptTo(pubKeyId, bytes)` and `seal.encrypt(keyId, bytes)` / `seal.decrypt(envelope)` names (no context) become
   `sealTo(…, context)` and P1.14's `seal(plaintext, context)` / `unseal(sealed, context)`. Held **media files** larger
   than 1 MiB are not covered by `sealTo`; P4.07 must say how held media bytes are stored (for example, a held copy in a
