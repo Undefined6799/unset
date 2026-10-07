@@ -10,7 +10,7 @@ const UI = import.meta.dirname;
 const STOP_ITEMS = join(UI, "..", "..", "docs", "human", "ui", "stop-items.md");
 type Entry = { sheet: string; sheetSha256: string; props: string; variants: string[]; status: string };
 const inventory = JSON.parse(readFileSync(join(UI, "inventory.json"), "utf8")) as Record<string, Entry>;
-const STATUSES = ["built", "p1.24", "p1.24s", "p1.24a", "p1.24k", "stop"];
+const STATUSES = ["built", "p1.24", "p1.24s", "p1.24a", "p1.24k", "p1.24f", "stop"];
 
 /** One "- **Name** · needed by <step> · … · approved by Alex <date>" line per piece; approval is optional in shape. */
 const ITEM = /^- \*\*(\w+)\*\* · needed by (P\d\.\d+[a-z]?) · sheet draft: (\S+) · (.*)$/;

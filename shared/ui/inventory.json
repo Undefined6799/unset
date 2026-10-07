@@ -53,7 +53,7 @@
     "sheetSha256": "ffa951b13f0d174a9afb72b8fd170ba4b971406043396586584cd2e8f380ab6f",
     "props": "CommandBlockProps",
     "variants": [],
-    "status": "p1.24k"
+    "status": "p1.24f"
   },
   "DescriptionList": {
     "sheet": "sheet/components/DescriptionList/README.md",
@@ -67,21 +67,21 @@
     "sheetSha256": "1cdd6724fada302ea35e50c902e5db28740f358f9ad8bca518c79fe06e0d8646",
     "props": "FeedMoreProps",
     "variants": ["state=idle", "state=loading", "state=end", "state=error"],
-    "status": "p1.24k"
+    "status": "p1.24f"
   },
   "Footer": {
     "sheet": "sheet/components/Footer/README.md",
     "sheetSha256": "488688b6f7018bf7fb2437673d216f48d7ecc27d4e05db7bbc38134b62256fe5",
     "props": "FooterProps",
     "variants": [],
-    "status": "p1.24k"
+    "status": "built"
   },
   "Header": {
     "sheet": "sheet/components/Header/README.md",
     "sheetSha256": "b0e61c678fbab72bc1331c456084fc0158b9fd90282625e475627cd81e933c3c",
     "props": "HeaderProps",
     "variants": [],
-    "status": "p1.24k"
+    "status": "built"
   },
   "Icon": {
     "sheet": "sheet/components/Icon/README.md",
@@ -130,14 +130,14 @@
     "sheetSha256": "6312b931d23af94708582d25cb04fa6991cfee570f7bffa602b8e872abcfc8d2",
     "props": "ModalProps",
     "variants": ["tone=default", "tone=danger"],
-    "status": "p1.24k"
+    "status": "built"
   },
   "NewPosts": {
     "sheet": "sheet/components/NewPosts/README.md",
     "sheetSha256": "5495a0162714dd03509584768e5d3329c24ae8c84ee00b68e8f28c3790d5c7c3",
     "props": "NewPostsProps",
     "variants": [],
-    "status": "p1.24k"
+    "status": "p1.24f"
   },
   "Pagination": {
     "sheet": "sheet/components/Pagination/README.md",
@@ -207,7 +207,7 @@
     "sheetSha256": "fa5c269ab980876cb1523bf9eff692c1135ab91f5814d5091ef13bf28846460c",
     "props": "TabsProps",
     "variants": [],
-    "status": "p1.24k"
+    "status": "built"
   },
   "Tag": {
     "sheet": "sheet/components/Tag/README.md",
@@ -228,6 +228,6 @@
     "sheetSha256": "cc5827000458a7892b58c48ebfbfcf22d99a049efb7f3530c503b265193b2f5c",
     "props": "ToastProps",
     "variants": ["tone=ok", "tone=err", "tone=info"],
-    "status": "p1.24k"
+    "status": "p1.24f"
   }
 }

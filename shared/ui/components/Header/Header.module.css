@@ -1,0 +1,106 @@
+/* Header (P1.24k; sheet components/Header/README.md, v45): space-4 top and bottom, space-6 either side and between
+   items. The folded menu is a level-3 surface (ground, `line-strong` border, `shadow-menu`). */
+@layer components {
+  .root {
+    position: relative;
+    container-type: inline-size;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+    padding: var(--space-4) var(--space-6);
+  }
+
+  .home {
+    display: inline-flex;
+    color: var(--color-ink);
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .item,
+  .toggle {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+
+  .item:hover,
+  .toggle:hover,
+  .current {
+    color: var(--color-ink);
+  }
+
+  .current {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+
+  .menu {
+    display: none;
+  }
+
+  .toggle {
+    display: inline-flex;
+    gap: var(--space-2);
+    min-height: 40px;
+    align-items: center;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .caret::before {
+    content: "▾";
+  }
+
+  .menu[open] .caret::before {
+    content: "▴";
+  }
+
+  .panel {
+    /* Left at its static top, just under the toggle, and stretched across the header. */
+    position: absolute;
+    right: 0;
+    left: 0;
+    margin-top: var(--space-4);
+    z-index: var(--z-menu);
+    padding: var(--space-4);
+    border: 1px solid var(--color-line-strong);
+    background-color: var(--color-ground);
+    box-shadow: var(--shadow-menu);
+  }
+
+  .panel .nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  @container (max-width: 440px) {
+    .wide {
+      display: none;
+    }
+
+    .menu {
+      display: block;
+    }
+  }
+}

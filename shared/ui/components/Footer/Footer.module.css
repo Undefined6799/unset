@@ -1,0 +1,71 @@
+/* Footer (P1.24k; sheet components/Footer/README.md, v45): links in the `label` style in `ink`, titles `ink-muted`. */
+@layer components {
+  .root {
+    padding: var(--space-8) var(--space-6);
+    border-top: 1px solid var(--color-line);
+  }
+
+  .top,
+  .bottom {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-6);
+  }
+
+  .brand {
+    color: var(--color-ink);
+  }
+
+  .code,
+  .bottom {
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+  }
+
+  .columns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .title,
+  .link {
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: uppercase;
+  }
+
+  .title {
+    color: var(--color-ink-muted);
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 24px;
+    color: var(--color-ink);
+    text-decoration: none;
+  }
+
+  .link:hover {
+    text-decoration: underline;
+  }
+
+  .slot,
+  .bottom {
+    margin-top: var(--space-6);
+  }
+}
