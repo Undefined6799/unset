@@ -2,9 +2,10 @@
 // shared/ui/src/tokens.css; `--check` instead fails when the committed file differs. tokens.css sits in src/ because
 // the Biome override that allows hex colours names that path (biome.json, P0.05).
 //
-// shared/ui imports no Node built-in (dependency-cruiser, shared-ui row), so file access and hashing arrive as `io`;
-// the binding to node:fs lives with the tooling that runs it (tokens.test.ts, and scripts/ui/tokens.ts).
-import { buildTokens, type FontMetrics, TokenError } from "./build-tokens.ts";
+// The run stays pure, so file access and hashing arrive as `io`; the binding to node:fs lives with the tooling that
+// runs it (tokens.test.ts, and scripts/ui/tokens.ts).
+import type { FontMetrics } from "@unset/shared-ui";
+import { buildTokens, TokenError } from "./build-tokens.ts";
 import { type ContrastPair, checkContrast } from "./contrast.ts";
 
 /** Paths are relative to shared/ui. */

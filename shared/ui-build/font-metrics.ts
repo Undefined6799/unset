@@ -5,7 +5,7 @@
 // size-adjust is the ratio of average character widths (latin subset), and each vertical metric is divided by the
 // web font's em square scaled by it. Pure: the font files are read, and the fallback metrics looked up, by
 // scripts/ui/font-metrics.ts.
-import type { FallbackFace, FontMetrics } from "./build-tokens.ts";
+import type { FallbackFace, FontMetrics } from "@unset/shared-ui";
 
 /** Font-wide metrics in font units, as @capsizecss/unpack and @capsizecss/metrics report them. */
 export type FaceMetrics = {

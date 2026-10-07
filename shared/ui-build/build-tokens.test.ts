@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { FontMetrics } from "@unset/shared-ui";
 import { describe, expect, test } from "vitest";
-import { buildTokens, type FontMetrics, TokenError } from "./build-tokens.ts";
+import { buildTokens, TokenError } from "./build-tokens.ts";
 
-const UI = join(import.meta.dirname, "..");
+const UI = join(import.meta.dirname, "..", "ui");
 const sheet = (): Record<string, unknown> => JSON.parse(readFileSync(join(UI, "sheet", "tokens.json"), "utf8"));
 
 const METRICS: FontMetrics = {

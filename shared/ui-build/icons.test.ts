@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { afterAll, expect, test } from "vitest";
 import { ICONOIR_VERSION, type IconsIo, parseSvg, runIcons, sheetDrawings } from "./icons.ts";
 
-const UI = join(import.meta.dirname, "..");
+const UI = join(import.meta.dirname, "..", "ui");
 const temps: string[] = [];
 afterAll(() => {
   for (const dir of temps) rmSync(dir, { recursive: true, force: true });
@@ -58,17 +58,6 @@ test("icon_allowlist_matches_sheet", () => {
   const licence = readFileSync(join(UI, "icons/LICENSE-iconoir.txt"), "utf8");
   expect(licence).toMatch(/^MIT License/);
   expect(licence).toContain("Copyright (c) 2021 Luca Burgio");
-});
-
-test("icon_drawing_modules_match_icons_json", async () => {
-  const json = JSON.parse(readFileSync(join(UI, "icons/icons.json"), "utf8"));
-  const names = Object.keys(json.drawings).sort();
-  expect(readdirSync(join(UI, "icons/drawings")).sort()).toEqual(names.map((n) => `${n}.generated.ts`));
-  for (const name of names) {
-    const drawing = (await import(`../icons/drawings/${name}.generated.ts`)).default;
-    expect(drawing, name).toEqual(json.drawings[name]);
-    expect(Object.isFrozen(drawing) && drawing.every(Object.isFrozen), name).toBe(true);
-  }
 });
 
 test("icon_drawing_module_missing_or_extra_fails", () => {

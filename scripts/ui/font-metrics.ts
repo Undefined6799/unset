@@ -1,6 +1,6 @@
 // The font-metrics entry, `node scripts/ui/font-metrics.ts [--check]` (P1.21m; architecture record
 // 2026-10-06-p121-token-pipeline-structure.md, points 5 and 6): reads the two web fonts and the fallback fonts'
-// metrics, and writes shared/ui/tokens/font-metrics.json through the pure buildFontMetrics in shared/ui. Run it again
+// metrics, and writes shared/ui/tokens/font-metrics.json through the pure buildFontMetrics in shared/ui-build. Run it again
 // only when the fonts change; font_metrics_current fails until then. `--check` (P1.24c) writes nothing and exits 1
 // when the committed file is stale; ui_build_entries_run_in_node runs it.
 //
@@ -15,7 +15,8 @@ import arial from "@capsizecss/metrics/arial";
 import courierNew from "@capsizecss/metrics/courierNew";
 import roboto from "@capsizecss/metrics/roboto";
 import { fromFile } from "@capsizecss/unpack/fs";
-import { buildFontMetrics, type FallbackSpec, type FontMetrics, type WebFont } from "../../shared/ui/index.ts";
+import type { FontMetrics } from "@unset/shared-ui";
+import { buildFontMetrics, type FallbackSpec, type WebFont } from "@unset/shared-ui-build";
 
 const UI = join(import.meta.dirname, "..", "..", "shared", "ui");
 export const OUTPUT = "tokens/font-metrics.json";

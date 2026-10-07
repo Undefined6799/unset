@@ -17,11 +17,6 @@ export {
 } from "./islands/slot.ts";
 // P1.24h: the one link validator; every component link takes its SafeHref.
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
-export type { FallbackFace, FontMetrics } from "./scripts/build-tokens.ts";
-// P1.21m: the fallback-face metrics, computed by scripts/ui/font-metrics.ts.
-export { buildFontMetrics, type FaceMetrics, type FallbackSpec, type WebFont } from "./scripts/font-metrics.ts";
-// P1.24i: the icon build, run by scripts/ui/icons.ts, which binds node:fs to it.
-export { type IconsIo, runIcons } from "./scripts/icons.ts";
-// P1.21: the token build, run by scripts/ui/tokens.ts, which binds node:fs to it.
-export { runTokens, type TokensIo } from "./scripts/tokens.ts";
 export { PropsMissing, readProps } from "./src/islands/readProps.ts";
+// P1.25h: the shape of tokens/font-metrics.json, which @unset/shared-ui-build produces.
+export type { FallbackFace, FontMetrics } from "./tokens/font-metrics.ts";

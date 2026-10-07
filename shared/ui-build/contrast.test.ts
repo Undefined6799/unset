@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import { TokenError } from "./build-tokens.ts";
 import { type ContrastPair, checkContrast, contrastRatio } from "./contrast.ts";
 
-const UI = join(import.meta.dirname, "..");
+const UI = join(import.meta.dirname, "..", "ui");
 const read = (path: string) => JSON.parse(readFileSync(join(UI, path), "utf8"));
 const PAIRS: ContrastPair[] = read("tokens/contrast-pairs.json").pairs;
 
