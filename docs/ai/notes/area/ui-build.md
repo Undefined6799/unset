@@ -30,9 +30,10 @@ injected `io`, and the Node entries in `scripts/ui/` bind `node:fs` and sha256 t
 file, no `react` or `react-dom` import, and shared/ui only through a whole-statement `import type { ... } from
 "@unset/shared-ui"` (`ui_build_is_jsx_free`; `@unset/shared-ui` is a devDependency). The check parses each file
 (oxc through vite's `parseSync`; TypeScript 7 has no in-process parser), so a comment cannot hide an import. No string
-may name the kit except that specifier; `require`, `createRequire` and `import()` of a non-literal are refused; and a
-relative import must resolve, through symlinks, inside this workspace (P1.25d, P1.25r). shared/ui owns the
-`FontMetrics` and `FallbackFace` shapes and takes no dependency on this workspace. `ui_build_entries_run_in_node` runs
-the entries.
+may contain the kit's name except that specifier, with named imports only; `require`, `createRequire`, `eval`,
+`Function`, `vm` and `import()` of a non-literal are refused; and a relative import must resolve, through symlinks,
+inside this workspace and outside its node_modules (P1.25d, P1.25r, P1.25s). Each check has a fixture only it catches
+(`ui_build_jsx_free_check_pins_each_check`). shared/ui owns the `FontMetrics` and `FallbackFace` shapes and takes no
+dependency on this workspace. `ui_build_entries_run_in_node` runs the entries.
 
 **Links.** Architecture record `2026-10-07-p125-ui-build-workspace.md`, [[ui]].
