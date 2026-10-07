@@ -37,5 +37,9 @@ make a test pass. Chain tests against real Postgres are in `tests/integration/au
 - **`SET ROLE audit_owner`.** Audit migrations create objects as `audit_owner` and end with `RESET ROLE`, so the owner
   is never a login role. The triggers refuse UPDATE, DELETE and TRUNCATE even for the owner, and `auditor` reads the
   chain only, never a body row.
+- **The owner can still switch the triggers off.** It owns the tables, so `ALTER TABLE ... DISABLE TRIGGER` around an
+  edit works; only the chain hash and the body MAC reveal it (`tamper_as_owner_disable_trigger_detected`). The weekly
+  verifier logs in as a `NOINHERIT` member (`WITH INHERIT FALSE, SET TRUE`) and must `SET ROLE audit_owner` first;
+  without it every audit read is denied (`verifier_without_set_role_is_denied`).
 
 **Links.** [[postgres]].
