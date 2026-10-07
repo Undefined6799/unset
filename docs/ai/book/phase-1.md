@@ -4966,11 +4966,11 @@ enhanced by an island.
   public pages, P1.22).
 - `Tabs`: two modes (book edit 2026-10-07-p124j-tabs-modes-and-styles-entry). Default: without JS, each tab is a link
   to `?tab=<id>` and the server renders only that panel (`aria-current="page"`). In the default mode the tabs island
-  adds keyboard handling only (the ARIA tabs pattern, with roving tabindex and arrow keys between the tab links).
-  Choosing a tab is still a plain navigation to ?tab=<id>, and the server renders that panel. There is no fetch and no
-  client-side panel swap. `eager`: the server renders every panel with the unchosen ones
-  `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the URL in
-  sync with `history.replaceState`. See "Tabs eager mode" below.
+  adds keyboard handling only: arrow, Home and End move focus between the tab links, which keep their natural tab
+  order and aria-current, with no tab roles. Choosing a tab is still a plain navigation to ?tab=<id>, and the server
+  renders that panel. There is no fetch and no client-side panel swap. `eager`: the server renders every panel with the
+  unchosen ones `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps
+  the URL in sync with `history.replaceState`. See "Tabs eager mode" below.
 - `Modal`: requires `fallbackHref` — without JS the trigger is a link to a full page with the same content; island
   `modal.island.tsx` opens a native `<dialog>` with `showModal()` (focus trap and Escape come from the
   platform), returns focus to the trigger on close.
@@ -5050,7 +5050,9 @@ CSS alone, so no-JS shows only the chosen panel and `?tab=` still picks it
 HTML, so every panel of an eager Tabs holds only what the viewer may see on that request, and a panel that needs a
 different permission or costly data uses the default mode. Eager mode departs from P1.24k's "server renders only the
 chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the tabs island
-adds keyboard handling only (the ARIA tabs pattern, with roving tabindex and arrow keys between the tab links).
+adds keyboard handling only: arrow, Home and End move focus between the tab links, which keep their natural tab
+order and aria-current, with no tab roles (as built in #419, `TabsBar.tsx` lines 72 to 105,
+`tabs_island_default_mode_keys_only`; the ARIA tabs pattern with roving tabindex is eager mode's only).
 Choosing a tab is still a plain navigation to ?tab=<id>, and the server renders that panel. There is no fetch and no
 client-side panel swap. In eager mode an unknown `?tab=` falls back to the first
 tab and is not echoed, and the island switches panels client-side with the ARIA tabs pattern. Mode of each booked
@@ -5247,7 +5249,9 @@ Request → route:
 **Tags:** — · **Depends on:** P1.25, P1.24j · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
 
 Pending, not skipped (book edit 2026-10-07-p124b-and-p124j-as-built): the toast and select island keyboard tests
-move to P1.24b and run when it lands; P1.26 still depends on P1.24j only.
+move to P1.24b and run when it lands; P1.26 still depends on P1.24j only. The tabs keyboard and axe tests check the
+default mode against its built form (links in natural tab order with aria-current, no tab roles) and eager mode
+against the ARIA tabs pattern.
 
 **Where:** `tests/e2e/{playwright.config.ts, pages.ts, a11y.spec.ts, nojs.spec.ts, csp.spec.ts, headers.spec.ts}`;
 `tests/e2e/fixtures/servers.ts`; `.pa11yci.json`; `lighthouserc.json`; `.github/workflows/e2e.yml`;
