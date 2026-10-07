@@ -1,9 +1,13 @@
-// The kit showcase (P1.24, P1.24s; book P1.24 "Where"): every built component in each variant and state, server-rendered
+// The kit showcase (P1.24, P1.24s, P1.24a; book P1.24 "Where"): every built component in each variant and state, server-rendered
 // with no JS. P1.26's test server serves it for the axe and target-size checks in both themes; no app links it.
 import type { ReactNode } from "react";
+import { AsciiBackground } from "../components/AsciiBackground/AsciiBackground.tsx";
 import { Avatar } from "../components/Avatar/Avatar.tsx";
 import { Button } from "../components/Button/Button.tsx";
+import { Callout } from "../components/Callout/Callout.tsx";
+import { Card } from "../components/Card/Card.tsx";
 import { Checkbox } from "../components/Checkbox/Checkbox.tsx";
+import { CodeBlock } from "../components/CodeBlock/CodeBlock.tsx";
 import { DescriptionList } from "../components/DescriptionList/DescriptionList.tsx";
 import { Icon } from "../components/Icon/Icon.tsx";
 import { Input } from "../components/Input/Input.tsx";
@@ -12,11 +16,14 @@ import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
 import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
+import { Progress } from "../components/Progress/Progress.tsx";
 import { RadioGroup } from "../components/RadioGroup/RadioGroup.tsx";
 import { SectionHeading } from "../components/SectionHeading/SectionHeading.tsx";
 import { Select } from "../components/Select/Select.tsx";
 import { SkipLink } from "../components/SkipLink/SkipLink.tsx";
+import { Spinner } from "../components/Spinner/Spinner.tsx";
 import { Switch } from "../components/Switch/Switch.tsx";
+import { Table } from "../components/Table/Table.tsx";
 import { Tag } from "../components/Tag/Tag.tsx";
 import { Textarea } from "../components/Textarea/Textarea.tsx";
 import { type SafeHref, safeHref } from "../safe-href.ts";
@@ -135,6 +142,48 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
       <Pagination page={5} pages={12} hrefFor={(n) => href(`/kit?page=${n}`)} />
       <Pagination label="Followers" newer={null} older={href("/kit?cursor=next")} />
     </>
+  ),
+  Callout: (
+    <>
+      <Callout title="Handle verified">Your domain points at your account.</Callout>
+      <Callout tone="note" title="Drafts stay private" />
+      <Callout tone="success" title="Saved" />
+      <Callout tone="danger" title="Delete account">
+        This cannot be undone.
+      </Callout>
+    </>
+  ),
+  Card: (
+    <Card eyebrow="01" title="Own your handle" action={{ label: "Read more", href: href("/docs") }}>
+      Use a domain you control as your name on the network.
+    </Card>
+  ),
+  Table: (
+    <Table
+      caption="Services"
+      columns={[
+        { key: "name", label: "Service", mono: false },
+        { key: "state", label: "State" },
+        { key: "ms", label: "Latency", align: "right", muted: true },
+      ]}
+      rows={[
+        { name: "PDS", state: <Tag status="ok">live</Tag>, ms: "42" },
+        { name: "Indexer", state: <Tag status="err">down</Tag>, ms: null },
+      ]}
+    />
+  ),
+  Progress: <Progress value={65} label="uploading video" />,
+  Spinner: <Spinner label="loading…" />,
+  CodeBlock: (
+    <CodeBlock
+      filename="~/.unset/config.toml"
+      code={'# unset config\n[profile]\nhandle = "alex.example"\npublic = true\nretries = 3\n'}
+    />
+  ),
+  AsciiBackground: (
+    <AsciiBackground seed={3} rows={12} fadeFrom="left">
+      <Card title="Over the field">Text on the field sits inside a card.</Card>
+    </AsciiBackground>
   ),
 };
 
