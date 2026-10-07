@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
-  P1.29, P1.30q, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -174,6 +174,7 @@ flowchart LR
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
   P1_30q["P1.30q preflight boundary row"]
+  P1_30p["P1.30p compose parser and SecretMap"]
   P1_30["P1.30 deploy preflight core"]
   P1_30s["P1.30s preflight C13–C24"]
   P1_31["P1.31 lexicons package"]
@@ -221,6 +222,8 @@ flowchart LR
   P1_28 -.-> P1_29
   P1_27 --> P1_30
   P1_30q --> P1_30
+  P1_30q --> P1_30p
+  P1_30p --> P1_30
   P1_29 -.-> P1_30
   P1_01 --> P1_31
   P1_32 -.-> P1_31
@@ -5760,6 +5763,8 @@ minimal `permissions`, nothing pushed or signed until P1.27s.
 
 ### P1.28d — Label every base entry with its stage
 
+Issue #396.
+
 **Tags:** [SEC] · **Depends on:** P1.27 (merged) · **Class:** feature (neutral: it neither tightens nor loosens a
 check, so it does not wait for Alex) · records 2026-10-07-p128-edge-bases-and-ratelimit-adr (section "Mirror scan of
 build-only images", architecture 02:10Z) and 2026-10-07-p128v-mirror-scan-stage (final 02:12Z)
@@ -5779,6 +5784,8 @@ non-final Dockerfile stage; the final stage's `FROM` is a `runtime` entry or `sc
 ---
 
 ### P1.28v — Scan build-only bases at fail-on-critical [ALEX]
+
+Issue #397.
 
 **Tags:** [SEC] [ALEX] · **Depends on:** P1.28d and Alex's tap · **Class:** check (a loosening); waiting on Alex's
 word on the card "Should the weekly mirror scan only warn, not fail, on HIGH findings in build-only images, while
@@ -6275,17 +6282,40 @@ If P1.30s ever needs another edge, that edge is a separate `q` step; the row is 
 
 ---
 
+### P1.30p — Add the strict Compose parser and SecretMap
+
+Feature class (issue #414), `deployment/preflight/` only (book edit 2026-10-07-p130p-parser-split; letter `p` after the P1.11p and
+P1.12p precedents). Builds `compose-parse.ts` and `secret-map.ts` (about 223 lines) as P1.30's Outputs describe them:
+the `yaml` 2.9.1 strict subset with its refusals, and the redacting `SecretMap`.
+
+**Tags:** [SEC] · **Depends on:** P1.30q · **Plan:** as P1.30
+
+**Done when (tests),** in `compose-parse.test.ts` and `secret-map.test.ts`:
+- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
+  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
+  `preflight_refuses_interpolation_in_security_fields`: each refuses, naming the feature and line (exit 2 once P1.30's
+  CLI runs it).
+- `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
+- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
+  `docker compose -f <file> config --format json --no-interpolate` agrees with the parser's normalised view on every
+  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+
+---
+
 ### P1.30 — Deploy preflight core, C1–C12
 
 The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
 signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
-Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, `SecretMap`,
-the compose parser, the check runner, checks C1–C12 and the debug-logging runbook (C12's failure points to it).
-P1.30s, below, builds C13–C24. This section keeps the full design of all 24 checks; each part's tests are listed
+Split (book edit 2026-10-07-p130-split; the book gave about 470 source lines): P1.30 builds the CLI, the check
+runner, the injected verifier, checks C1–C12 and the debug-logging runbook (C12's failure points to it). P1.30p,
+above, builds the strict compose parser and `SecretMap` (book edit 2026-10-07-p130p-parser-split: P1.30 core measured
+777 changed source lines, and the parser carries the parser-differential threat, so it gets its own review). P1.30s,
+below, builds C13–C24. P1.30's body says why it is over 400 lines (one runner and twelve checks with shared types,
+measured at 554). This section keeps the full design of all 24 checks; each part's tests are listed
 under its own heading. Location and parser follow architecture's ruling (2026-10-07-p130-preflight-location-and-yaml).
 
-**Tags:** [SEC] · **Depends on:** P1.27, P1.30q · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
+**Tags:** [SEC] · **Depends on:** P1.27, P1.30q, P1.30p · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
 **Where:** `deployment/preflight/{index.ts, checks/*.ts, secret-map.ts, compose-parse.ts}`, product class (the
 guideline's tree puts the preflight under `deployment/`; `scripts/` is repository tooling, SE-6);
@@ -6412,17 +6442,11 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
   `c7_pds_rate_limits_enabled_fails`, `c7_pds_rate_limits_unset_fails`, `c8_any_bypass_var_fails` (`_KEY`, the edge's
   IP, a service IP, a CIDR, an empty value), `c12_log_enabled_fails`.
 - `preflight_never_prints_secrets`: fixture secrets with a canary string → canary absent from all output.
-- `secret_map_redacts`: `JSON.stringify`, template string and `util.inspect` → `[redacted]`.
 - `preflight_no_skip_flag`: `--skip C3` → exit 2.
 - `preflight_check_throws_fails_closed`.
 - `preflight_does_not_call_docker_compose_config`: spawn is stubbed; any call → test fails.
 - `missing_input_fails_check_not_run`: C2 pointed at an absent lock file → `FAIL C2 input missing`, exit 1.
-- `preflight_refuses_anchor_alias_merge`, `preflight_refuses_tags`, `preflight_refuses_multi_document`,
-  `preflight_refuses_duplicate_keys`, `preflight_refuses_include_and_extends`,
-  `preflight_refuses_interpolation_in_security_fields`: each → exit 2 naming the feature and line.
-- `preflight_matches_compose_config` (CI only; thread containers have no Docker): for each compose file in the repo,
-  `docker compose -f <file> config --format json --no-interpolate` agrees with the preflight's normalised view on every
-  field the preflight checks. The test may call `docker compose config`; the preflight never does.
+- The parser and `SecretMap` tests are P1.30p's.
 - `pds_device_row_has_no_client_ip` moved to P1.29 (book edit 2026-10-07-p130-split).
 
 **Reuse** (all provisional — for reuse review):

@@ -676,7 +676,7 @@ and `/domains/identity/auth/` keeps its security-review line. It goes alone, bec
 PR with product paths; a docs line rides only if a test maps the trusted section to an SE-6 list. Phase 0 moves the
 matching P0.03 line in `phase-0.md` in its next carrier after this merges.
 
-### P2.03x — Session table, registry rows and timeouts
+### P2.03x — Add the session table, registry rows and timeouts
 Tags: [SEC]            Depends on: P1.12, P1.15g (migration order)            Plan: §5.3 "Sessions"
 Feature class (issue #402), judged by its grant findings like P1.16's 0006 (book edit 2026-10-07-p203-repath).
 Contents:
