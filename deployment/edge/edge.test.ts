@@ -1,10 +1,22 @@
 // P1.28: what the edge's files must say, read without starting Caddy (the running edge is tested in
 // tests/integration/deployment/edge/). Certificates come from Let's Encrypt only; the rate limiter keeps client
 // addresses in memory and nowhere else (ADR 0018, invariant 3); the image is built from pinned versions only.
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  cpSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
-import { type Directive, readCaddyfile } from "./caddyfile.ts";
+import { afterAll, describe, expect, test } from "vitest";
+import { type EdgeFiles, edgeSiteProblems, readEdgeConfig } from "./caddyfile.ts";
 
 const EDGE = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(EDGE, file), "utf8");
@@ -26,66 +38,71 @@ const froms = (text: string): string[] =>
 
 /** The environment the PDS site and the TLS snippet read (Caddy's `{$NAME}`); test values only. */
 const ENV = { PDS_HOST: "pds.unset.test", PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
-/** Every snippet file but the rate limits, in the order Caddy's `import snippets/*.caddy` reads them. */
-const otherSnippets = (): string =>
-  readdirSync(join(EDGE, "snippets"))
-    .filter((f) => f !== "ratelimit.caddy")
-    .sort()
-    .map((f) => read(`snippets/${f}`))
-    .join("\n");
 
-/** The rate_limit blocks of the pds-ratelimit snippet, read through the Caddyfile reader (P1.28h). */
-const rateLimits = (ratelimit: string): Directive[] =>
-  readCaddyfile(ratelimit, ENV)
+/** The reader's file-system reads, through node:fs (caddyfile.ts itself imports nothing). */
+const FILES: EdgeFiles = {
+  list: (dir) => readdirSync(dir),
+  kind: (path) => {
+    const stat = lstatSync(path);
+    return stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+  },
+  realpath: (path) => {
+    try {
+      return realpathSync(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  },
+  read: (path) => readFileSync(path, "utf8"),
+};
+
+const trees: string[] = [];
+afterAll(() => {
+  for (const dir of trees) rmSync(dir, { recursive: true, force: true });
+});
+/**
+ * A copy of the edge's config files with `edits` written over them (a null edit deletes the file), and a
+ * sites/enabled directory linking to sites/pds.caddy, as P1.29 and P5 mount it.
+ */
+function edgeTree(edits: Record<string, string | null> = {}): { edgeDir: string; sitesDir: string } {
+  const edgeDir = mkdtempSync(join(tmpdir(), "edge-"));
+  trees.push(edgeDir);
+  for (const part of ["Caddyfile", "snippets", "sites"])
+    cpSync(join(EDGE, part), join(edgeDir, part), { recursive: true });
+  const sitesDir = join(edgeDir, "sites", "enabled");
+  mkdirSync(sitesDir);
+  symlinkSync(join(edgeDir, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
+  for (const [file, text] of Object.entries(edits)) {
+    if (text === null) rmSync(join(edgeDir, file));
+    else writeFileSync(join(edgeDir, file), text);
+  }
+  return { edgeDir, sitesDir };
+}
+/** The shipped config, or an edited copy, read through the one edge reader (P1.28e). */
+const shippedConfig = (edits: Record<string, string | null> = {}) => {
+  const { edgeDir, sitesDir } = edgeTree(edits);
+  return readEdgeConfig(edgeDir, sitesDir, ENV, FILES);
+};
+const siteProblems = (edits: Record<string, string | null> = {}) => edgeSiteProblems(shippedConfig(edits));
+
+/** The zones of the pds-ratelimit snippet's first rate_limit block, in order. */
+function zones() {
+  const limit = shippedConfig()
     .snippet("pds-ratelimit")
-    .filter((directive) => directive.name === "rate_limit");
-
-/** The zones of the pds-ratelimit snippet's one rate_limit block, in order. */
-function zones(ratelimit: string) {
-  return (rateLimits(ratelimit)[0]?.block ?? [])
+    .find((directive) => directive.name === "rate_limit");
+  return (limit?.block ?? [])
     .filter((directive) => directive.name === "zone")
     .map((zone) => {
       const value = (name: string) => zone.block?.find((directive) => directive.name === name)?.args[0];
       return {
         name: zone.args[0] ?? "",
-        match: zone.block?.some((directive) => directive.name === "match") ?? false,
         key: value("key"),
         ipv6Prefix: value("ipv6_prefix"),
         events: Number(value("events")),
         window: value("window"),
       };
     });
-}
-
-/** Every directive in `directives` and their blocks, depth first. */
-const flatten = (directives: Directive[]): Directive[] =>
-  directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
-
-/**
- * Why some PDS request could pass the edge uncounted; empty when the snippet holds one rate_limit block whose global
- * zone counts every request (no matcher), and the PDS site has one route, with no matcher, that applies it first and
- * once, with no other rate_limit anywhere.
- */
-function zoneCoverageProblems(ratelimit: string, site: string): string[] {
-  const found = [];
-  const blocks = rateLimits(ratelimit).length;
-  if (blocks !== 1) found.push(`the zones snippet holds ${blocks} rate_limit blocks`);
-  const global = zones(ratelimit).find((zone) => zone.name === "global");
-  if (global === undefined) found.push("there is no global zone");
-  else if (global.match) found.push("the global zone has a matcher");
-  const { sites } = readCaddyfile(`${otherSnippets()}\n${ratelimit}\n${site}`, ENV);
-  const pds = sites.find((s) => s.addresses.includes(ENV.PDS_HOST));
-  const routes = pds?.directives.filter((directive) => directive.name === "route") ?? [];
-  if (routes.length !== 1 || routes[0]?.args.length !== 0) found.push("the PDS site has not exactly one plain route");
-  const first = routes[0]?.block?.[0];
-  if (first?.name !== "rate_limit" || first.via !== "pds-ratelimit") {
-    found.push("the PDS route does not apply the zones first");
-  }
-  const limits = sites.flatMap((s) => flatten(s.directives)).filter((directive) => directive.name === "rate_limit");
-  if (limits.length !== 1 || limits[0]?.via !== "pds-ratelimit") {
-    found.push(`the sites hold ${limits.length} rate_limit blocks`);
-  }
-  return found;
 }
 
 /** Why the shipped Caddy config could keep or share a rate-limit key beyond memory; empty when it cannot. */
@@ -137,7 +154,7 @@ describe("edge config", () => {
   test("edge_ratelimit_memory_only", () => {
     expect(memoryOnlyProblems(config())).toEqual([]);
     // Every zone is keyed by the client address, IPv6 by its /64.
-    for (const zone of zones(read("snippets/ratelimit.caddy"))) {
+    for (const zone of zones()) {
       expect(zone.key, zone.name).toBe("{remote_host}");
       expect(zone.ipv6Prefix, zone.name).toBe("64");
     }
@@ -159,14 +176,12 @@ describe("edge config", () => {
     // The zone values are architecture's (record 2026-10-07-p1b-a1-pds-no-forwarded-address, 01:52Z), kept once in
     // limits.json; the snippet must say the same.
     const limits = JSON.parse(read("limits.json")) as { rateLimitZones: Record<string, unknown> };
-    const shipped = Object.fromEntries(
-      zones(read("snippets/ratelimit.caddy")).map((z) => [z.name, { events: z.events, window: z.window }]),
-    );
+    const shipped = Object.fromEntries(zones().map((z) => [z.name, { events: z.events, window: z.window }]));
     expect(shipped).toEqual(limits.rateLimitZones);
   });
 
   test("every_pds_route_has_a_zone", () => {
-    expect(zoneCoverageProblems(read("snippets/ratelimit.caddy"), read("sites/pds.caddy"))).toEqual([]);
+    expect(siteProblems()).toEqual([]);
   });
 
   test("pds_route_without_zone_fails", () => {
@@ -174,49 +189,173 @@ describe("edge config", () => {
     // or a global zone narrowed by a matcher, each leaves some PDS request uncounted.
     const limits = read("snippets/ratelimit.caddy");
     const site = read("sites/pds.caddy");
-    expect(zoneCoverageProblems(limits, site.replace("\t\timport pds-ratelimit\n", ""))).toEqual([
-      "the PDS route does not apply the zones first",
-      "the sites hold 0 rate_limit blocks",
+    const pds = (text: string) => siteProblems({ "sites/pds.caddy": text });
+    expect(pds(site.replace("\t\timport pds-ratelimit\n", ""))).toEqual([
+      "pds.unset.test: the route does not apply the zones first",
+      "pds.unset.test: 0 rate_limit blocks",
     ]);
     const late = site.replace(
       "\t\timport pds-ratelimit\n\t\timport xrpc-guard\n",
       "\t\timport xrpc-guard\n\t\timport pds-ratelimit\n",
     );
     expect(late).not.toBe(site);
-    expect(zoneCoverageProblems(limits, late)).toEqual(["the PDS route does not apply the zones first"]);
-    expect(zoneCoverageProblems(limits, `${site}\nother {\n\troute {\n\t\timport pds-ratelimit\n\t}\n}\n`)).toEqual([
-      "the sites hold 2 rate_limit blocks",
-    ]);
+    expect(pds(late)).toEqual(["pds.unset.test: the route does not apply the zones first"]);
     // P1.28h (#463 verification, D2): a route behind a matcher, a second route, or a second rate_limit block.
     const matched = site.replace("\troute {\n", "\troute /never-matches {\n");
     expect(matched).not.toBe(site);
-    expect(zoneCoverageProblems(limits, matched)).toEqual(["the PDS site has not exactly one plain route"]);
+    expect(pds(matched)).toEqual([
+      "pds.unset.test: not exactly one plain route",
+      "pds.unset.test: the route does not apply the zones first",
+      "pds.unset.test: a reverse_proxy is outside the route",
+    ]);
     const second = site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n");
-    expect(zoneCoverageProblems(limits, second)).toEqual([
-      "the PDS site has not exactly one plain route",
-      "the PDS route does not apply the zones first",
+    expect(pds(second)).toEqual([
+      "pds.unset.test: not exactly one plain route",
+      "pds.unset.test: the route does not apply the zones first",
+      "pds.unset.test: a reverse_proxy is outside the route",
     ]);
     const forwarded = limits.replace(
       /\t\tdisable_metrics\n\t\}\n/,
       "\t\tdisable_metrics\n\t}\n\trate_limit {\n\t\tzone xff {\n\t\t\tkey {remote_host}\n\t\t\tevents 1\n\t\t\twindow 1m\n\t\t}\n\t}\n",
     );
     expect(forwarded).not.toBe(limits);
-    expect(zoneCoverageProblems(forwarded, site)).toEqual([
+    expect(siteProblems({ "snippets/ratelimit.caddy": forwarded })).toEqual([
       "the zones snippet holds 2 rate_limit blocks",
-      "the sites hold 2 rate_limit blocks",
+      "pds.unset.test: 2 rate_limit blocks",
     ]);
     const narrowed = limits.replace(/(\tzone global \{\n)/, "$1\t\t\tmatch {\n\t\t\t\tpath /xrpc/*\n\t\t\t}\n");
     expect(narrowed).not.toBe(limits);
-    expect(zoneCoverageProblems(narrowed, site)).toEqual(["the global zone has a matcher"]);
-    expect(zoneCoverageProblems(limits.replace(/\tzone global \{/, "\tzone overall {"), site)).toEqual([
-      "there is no global zone",
+    expect(siteProblems({ "snippets/ratelimit.caddy": narrowed })).toEqual(["the global zone has a matcher"]);
+    expect(
+      siteProblems({ "snippets/ratelimit.caddy": limits.replace(/\tzone global \{/, "\tzone overall {") }),
+    ).toEqual(["there is no global zone"]);
+  });
+
+  test("edge_site_rules_apply_to_every_upstream", () => {
+    // P1.28e (architecture amendment 7, point 3): the rule follows the upstream, not the PDS host's name.
+    const site = read("sites/pds.caddy");
+    const upstream = read("snippets/upstream.caddy");
+    const extra = (text: string) => ({ "sites/other.caddy": text });
+    const enable = (edits: Record<string, string>) => {
+      const { edgeDir, sitesDir } = edgeTree(edits);
+      for (const file of Object.keys(edits)) {
+        if (file.startsWith("sites/")) symlinkSync(join(edgeDir, file), join(sitesDir, file.slice("sites/".length)));
+      }
+      return edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, ENV, FILES));
+    };
+    // A second site whose route proxies without the zones; a proxy written straight in a site the reader refuses.
+    expect(enable(extra("other.unset.test {\n\troute {\n\t\timport upstream other:80\n\t}\n}\n"))).toEqual([
+      "other.unset.test: the route does not apply the zones first",
+      "other.unset.test: 0 rate_limit blocks",
     ]);
+    expect(() => enable(extra("other.unset.test {\n\timport upstream other:80\n}\n"))).toThrow(
+      "directive reverse_proxy is not allowed in site",
+    );
+    // A proxy outside the route.
+    const outside = site.replace("\troute {\n", "\troute /other {\n\t\timport upstream other:80\n\t}\n\troute {\n");
+    expect(outside).not.toBe(site);
+    expect(siteProblems({ "sites/pds.caddy": outside })).toEqual([
+      "pds.unset.test: not exactly one plain route",
+      "pds.unset.test: the route does not apply the zones first",
+      "pds.unset.test: a reverse_proxy is outside the route",
+    ]);
+    // A missing header_up, and one that sets a removed header again.
+    expect(siteProblems({ "snippets/upstream.caddy": upstream.replace("\t\theader_up -X-Real-IP\n", "") })).toEqual([
+      "pds.unset.test: a reverse_proxy passes X-Real-IP",
+    ]);
+    const reset = upstream.replace(
+      "\t\theader_up -Forwarded\n",
+      "\t\theader_up -Forwarded\n\t\theader_up forwarded x\n",
+    );
+    expect(siteProblems({ "snippets/upstream.caddy": reset })).toEqual([
+      "pds.unset.test: a reverse_proxy passes Forwarded",
+    ]);
+    // A public site with no upstream, and one bound to loopback but named for a public host.
+    expect(enable(extra("other.unset.test {\n\trespond 200\n}\n"))).toEqual([
+      "other.unset.test: public site without rate limit",
+    ]);
+    expect(enable(extra("other.unset.test {\n\tbind 127.0.0.1\n\trespond 200\n}\n"))).toEqual([
+      "other.unset.test: public site without rate limit",
+    ]);
+    expect(enable(extra("http://127.0.0.1:8082 {\n\trespond 200\n}\n"))).toEqual([
+      "http://127.0.0.1:8082: public site without rate limit",
+    ]);
+    expect(enable(extra("http://[::1]:8082 {\n\tbind ::1\n\trespond 200\n}\n"))).toEqual([]);
   });
 
   test("edge_admin_api_off_in_config", () => {
     expect(read("Caddyfile")).toMatch(/^\tadmin off$/m);
     expect(read("Caddyfile")).toMatch(/^\tpersist_config off$/m);
     expect(config()).not.toMatch(/trusted_proxies/);
+  });
+});
+
+describe("edge config reader (P1.28e)", () => {
+  // The two file imports resolved as Caddy v2.11.7 does (caddyconfig/caddyfile/parse.go doImport: filepath.Glob, whose
+  // glob() sorts names, go1.25 src/path/filepath/match.go), and everything Caddy would read differently refused.
+  const load = (tree: { edgeDir: string; sitesDir: string }) => () =>
+    readEdgeConfig(tree.edgeDir, tree.sitesDir, ENV, FILES);
+
+  test("edge_config_reads_shipped_sites", () => {
+    const config = shippedConfig();
+    expect(config.sites.map((site) => site.addresses)).toEqual([["http://127.0.0.1:8081"], [ENV.PDS_HOST]]);
+  });
+
+  test("edge_config_sites_dir_entries_refused", () => {
+    const outside = edgeTree();
+    writeFileSync(join(outside.edgeDir, "elsewhere.caddy"), "other.unset.test {\n\trespond 200\n}\n");
+    symlinkSync(join(outside.edgeDir, "elsewhere.caddy"), join(outside.sitesDir, "z.caddy"));
+    expect(load(outside)).toThrow("z.caddy: the link leaves sites/");
+    // A sibling whose name starts with "sites", and a chain whose last hop leaves sites/, both fail too.
+    const sibling = edgeTree();
+    mkdirSync(join(sibling.edgeDir, "sites-evil"));
+    writeFileSync(join(sibling.edgeDir, "sites-evil", "x.caddy"), "other.unset.test {\n\trespond 200\n}\n");
+    symlinkSync(join(sibling.edgeDir, "sites-evil", "x.caddy"), join(sibling.sitesDir, "x.caddy"));
+    expect(load(sibling)).toThrow("x.caddy: the link leaves sites/");
+    const chain = edgeTree();
+    writeFileSync(join(chain.edgeDir, "elsewhere.caddy"), "other.unset.test {\n\trespond 200\n}\n");
+    symlinkSync(join(chain.edgeDir, "elsewhere.caddy"), join(chain.edgeDir, "sites", "hop.caddy"));
+    symlinkSync(join(chain.edgeDir, "sites", "hop.caddy"), join(chain.sitesDir, "hop.caddy"));
+    expect(load(chain)).toThrow("hop.caddy: the link leaves sites/");
+    const subdir = edgeTree();
+    mkdirSync(join(subdir.sitesDir, "more"));
+    expect(load(subdir)).toThrow("more: not a .caddy file");
+    const other = edgeTree();
+    writeFileSync(join(other.sitesDir, "notes.txt"), "");
+    expect(load(other)).toThrow("notes.txt: not a .caddy file");
+    const hidden = edgeTree();
+    writeFileSync(join(hidden.sitesDir, ".old.caddy"), "");
+    expect(load(hidden)).toThrow(".old.caddy: not a .caddy file");
+    const dangling = edgeTree();
+    symlinkSync(join(dangling.edgeDir, "sites", "gone.caddy"), join(dangling.sitesDir, "gone.caddy"));
+    expect(load(dangling)).toThrow("gone.caddy: dangling link");
+    const linkedDir = edgeTree();
+    mkdirSync(join(linkedDir.edgeDir, "sites", "x.caddy"));
+    symlinkSync(join(linkedDir.edgeDir, "sites", "x.caddy"), join(linkedDir.sitesDir, "x.caddy"));
+    expect(load(linkedDir)).toThrow("x.caddy: the link target is not a regular file");
+    // A link in snippets/ is refused: only sites/enabled holds links.
+    const snippetLink = edgeTree();
+    symlinkSync(join(snippetLink.edgeDir, "sites", "pds.caddy"), join(snippetLink.edgeDir, "snippets", "z.caddy"));
+    expect(load(snippetLink)).toThrow("z.caddy: not a regular file");
+  });
+
+  test("edge_config_imports_refused", () => {
+    const caddyfile = read("Caddyfile");
+    const empty = edgeTree();
+    rmSync(join(empty.sitesDir, "pds.caddy"));
+    expect(load(empty)).toThrow("import sites/enabled/*.caddy matches nothing");
+    const extra = edgeTree({ Caddyfile: `${caddyfile}\nimport extra.caddy\n` });
+    writeFileSync(join(extra.edgeDir, "extra.caddy"), "");
+    expect(load(extra)).toThrow("file imports are refused");
+    const twice = edgeTree({ Caddyfile: `${caddyfile}\nimport snippets/*.caddy\n` });
+    expect(load(twice)).toThrow("the Caddyfile must import snippets/*.caddy exactly once");
+    const indented = edgeTree({
+      Caddyfile: caddyfile.replace("import sites/enabled/*.caddy", " import sites/enabled/*.caddy"),
+    });
+    expect(load(indented)).toThrow("the Caddyfile must import sites/enabled/*.caddy exactly once");
+    // An included file's own file import is not expanded again.
+    const nested = edgeTree({ "sites/pds.caddy": `${read("sites/pds.caddy")}\nimport snippets/*.caddy\n` });
+    expect(load(nested)).toThrow("file imports are refused");
   });
 });
 

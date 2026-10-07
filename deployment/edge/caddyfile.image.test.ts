@@ -2,10 +2,11 @@
 // image, so it lives in an *.image.test.ts file (step book P1.28i; architecture record
 // 2026-10-07-test-timing-fuzz-and-image-tests), apart from the reader's unit tests in caddyfile.test.ts.
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { readCaddyfile } from "./caddyfile.ts";
+import { type Caddyfile, type EdgeFiles, readEdgeConfig } from "./caddyfile.ts";
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
 // by the built edge image (`caddy adapt`, Caddy v2.11.7). It carries no skip of its own (P1.28j): without Docker it
@@ -69,7 +70,7 @@ describe("caddyfile reader against caddy adapt", () => {
     );
     expect(imageConfig(image)).toStrictEqual(repository);
     const theirs = adapt(image, env);
-    const ours = readCaddyfile(shippedConfig(), env);
+    const ours = shippedConfig(env);
     expect(ours.sites.flatMap((site) => site.addresses.map(hostOf)).sort()).toEqual(adaptedHosts(theirs).sort());
     const route = ours.sites
       .find((site) => site.addresses.includes(PDS_HOST))
@@ -120,19 +121,35 @@ const nanoseconds = (duration: string): number => {
   return Number(amount) * { s: 1, m: 60, h: 3600 }[unit as "s" | "m" | "h"] * 1e9;
 };
 
-/** The shipped Caddyfile with its two file imports resolved as Caddy would (sorted globs), the PDS site enabled. */
-function shippedConfig(): string {
-  const caddyfile = readFileSync(join(EDGE, "Caddyfile"), "utf8");
-  const snippets = readdirSync(join(EDGE, "snippets"))
-    .sort()
-    .map((file) => readFileSync(join(EDGE, "snippets", file), "utf8"))
-    .join("\n");
-  const imports = [...caddyfile.matchAll(/^import (\S+)$/gm)].map((match) => match[1]);
-  expect(imports).toEqual(["snippets/*.caddy", "sites/enabled/*.caddy"]);
-  return caddyfile
-    .replace("import snippets/*.caddy", snippets)
-    .replace("import sites/enabled/*.caddy", readFileSync(join(EDGE, "sites", "pds.caddy"), "utf8"));
+/** The shipped Caddyfile through the one edge reader (P1.28e), with sites/enabled linking to the PDS site as P1.29 and
+ * P5 mount it. */
+function shippedConfig(env: Record<string, string>): Caddyfile {
+  const sitesDir = mkdtempSync(join(tmpdir(), "edge-sites-"));
+  try {
+    symlinkSync(join(EDGE, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
+    return readEdgeConfig(EDGE, sitesDir, env, FILES);
+  } finally {
+    rmSync(sitesDir, { recursive: true, force: true });
+  }
 }
+
+/** The reader's file-system reads, through node:fs (caddyfile.ts itself imports nothing). */
+const FILES: EdgeFiles = {
+  list: (dir) => readdirSync(dir),
+  kind: (path) => {
+    const stat = lstatSync(path);
+    return stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+  },
+  realpath: (path) => {
+    try {
+      return realpathSync(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  },
+  read: (path) => readFileSync(path, "utf8"),
+};
 
 function adapt(image: string, env: Record<string, string>): Adapted {
   const result = docker([

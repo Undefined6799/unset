@@ -19,6 +19,8 @@
 //   first token at the top level fail.
 // - Directives come from an allowlist per block (DIRECTIVES): what our files use today, nothing more. Adding one is a
 //   trusted change in the same PR as the Caddyfile line that needs it.
+// - `readEdgeConfig` (P1.28e) resolves the shipped Caddyfile's two glob imports, and only those, before reading;
+//   `edgeSiteProblems` holds the site rules edge.test.ts and C18 share, so neither keeps a copy.
 
 /** One directive line with its arguments, its block if it opens one, and the snippet it was imported from. */
 export type Directive = {
@@ -328,4 +330,160 @@ function withArgs(token: Token, args: readonly string[]): Token {
     return value;
   });
   return { ...token, text };
+}
+
+/**
+ * The file-system reads `readEdgeConfig` needs. The caller passes them in (node:fs in tests and the preflight), so this
+ * file imports nothing and needs no dependency-cruiser row of its own.
+ */
+export type EdgeFiles = {
+  /** The entry names of a directory. */
+  list(dir: string): string[];
+  /** What the path itself is; a final symlink is not followed. */
+  kind(path: string): "file" | "link" | "dir" | "other";
+  /** The path with every symlink resolved, or null when nothing is there. */
+  realpath(path: string): string | null;
+  read(path: string): string;
+};
+
+/** The Caddyfile's two file imports, matched as whole lines, and the one directory each reads. */
+const FILE_IMPORTS = ["import snippets/*.caddy", "import sites/enabled/*.caddy"] as const;
+/** A name `*.caddy` matches that sorts the same in JavaScript and in Go (ASCII), with no leading dot: Caddy skips
+ * dotfiles a leading `*` matches (parse.go doImport, issue #5295), so one there would be read by us and not by it. */
+const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
+
+/**
+ * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
+ * 2026-10-07-p130s-networks-and-caddyfile-reader): `edgeDir`'s Caddyfile with `import snippets/*.caddy` replaced by
+ * `edgeDir/snippets` and `import sites/enabled/*.caddy` by `sitesDir`, each in byte order (doImport uses
+ * filepath.Glob, whose glob() sorts the names, go src/path/filepath/match.go). Each import line must appear exactly
+ * once; an included file is not scanned for imports again, so any other file import reaches readCaddyfile and fails.
+ * An entry is a regular `*.caddy` file; in `sitesDir` it may also be a symlink to one inside `edgeDir/sites`.
+ */
+export function readEdgeConfig(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
+  const lines = files.read(`${edgeDir}/Caddyfile`).split("\n");
+  for (const line of FILE_IMPORTS) {
+    if (lines.filter((l) => l === line).length !== 1) {
+      throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
+    }
+  }
+  const sitesRoot = files.realpath(`${edgeDir}/sites`);
+  if (sitesRoot === null) throw new CaddyfileError("there is no sites directory");
+  const expanded = lines.map((line) => {
+    if (line === FILE_IMPORTS[0]) return globbed(files, `${edgeDir}/snippets`, null, line);
+    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, sitesRoot, line);
+    return line;
+  });
+  return readCaddyfile(expanded.join("\n"), env);
+}
+
+/** The text of every entry of `dir` in byte order, each checked; a link is allowed only into `linkRoot`. */
+function globbed(files: EdgeFiles, dir: string, linkRoot: string | null, line: string): string {
+  const names = files.list(dir).sort();
+  if (names.length === 0) throw new CaddyfileError(`${line} matches nothing`);
+  return names
+    .map((name) => {
+      const path = `${dir}/${name}`;
+      if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
+      const kind = files.kind(path);
+      if (kind === "link" && linkRoot !== null) return files.read(linkTarget(files, path, name, linkRoot));
+      if (kind !== "file") throw new CaddyfileError(`${name}: not a regular file`);
+      return files.read(path);
+    })
+    .join("\n");
+}
+
+/** Where a sites/enabled link leads, which must be a regular `*.caddy` file inside the repository's sites/. */
+function linkTarget(files: EdgeFiles, path: string, name: string, linkRoot: string): string {
+  const target = files.realpath(path);
+  if (target === null) throw new CaddyfileError(`${name}: dangling link`);
+  if (!target.startsWith(`${linkRoot}/`)) throw new CaddyfileError(`${name}: the link leaves sites/`);
+  if (files.kind(target) !== "file" || !target.endsWith(".caddy")) {
+    throw new CaddyfileError(`${name}: the link target is not a regular file`);
+  }
+  return target;
+}
+
+/** The client address headers the edge removes before every upstream (ADR 0018). */
+const ADDRESS_HEADERS = ["X-Forwarded-For", "X-Real-IP", "Forwarded"];
+/** A site address that only loopback can reach by name: `127.0.0.1:<port>` or `[::1]:<port>`, optionally http://. */
+const LOOPBACK_ADDRESS = /^(?:http:\/\/)?(?:127\.0\.0\.1|\[::1\]):\d{1,5}$/;
+const LOOPBACK_BIND = ["127.0.0.1", "::1"];
+
+const flatten = (directives: Directive[]): Directive[] =>
+  directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
+const named = (directives: Directive[], name: string): Directive[] => directives.filter((d) => d.name === name);
+
+/**
+ * Why some request could reach an upstream uncounted or carrying a client address; empty when none can (P1.28e;
+ * architecture amendment 7, point 3). The pds-ratelimit snippet holds one rate_limit block whose global zone has no
+ * matcher. Every site with a reverse_proxy has exactly one plain route that applies that snippet first, holds every
+ * reverse_proxy of the site, and is the site's only rate_limit; each reverse_proxy removes the address headers and
+ * sets none again. A site with no reverse_proxy is exempt because it has none, not because of its name or address;
+ * it must still be bound to loopback and named for it, or it is a public site without rate limit.
+ */
+export function edgeSiteProblems(config: Caddyfile): string[] {
+  const found = zoneProblems(config);
+  for (const site of config.sites) found.push(...siteProblems(site));
+  return found;
+}
+
+function zoneProblems(config: Caddyfile): string[] {
+  let limits: Directive[];
+  try {
+    limits = named(config.snippet("pds-ratelimit"), "rate_limit");
+  } catch (error) {
+    if (error instanceof CaddyfileError) return [`the zones snippet is unreadable: ${error.message}`];
+    throw error;
+  }
+  const found = [];
+  if (limits.length !== 1) found.push(`the zones snippet holds ${limits.length} rate_limit blocks`);
+  const global = named(limits[0]?.block ?? [], "zone").find((zone) => zone.args[0] === "global");
+  if (global === undefined) found.push("there is no global zone");
+  else if (named(global.block ?? [], "match").length > 0) found.push("the global zone has a matcher");
+  return found;
+}
+
+function siteProblems(site: Site): string[] {
+  const name = site.addresses.join(" ");
+  const all = flatten(site.directives);
+  const proxies = named(all, "reverse_proxy");
+  if (proxies.length === 0) return loopbackOnly(site) ? [] : [`${name}: public site without rate limit`];
+  const found = [];
+  const routes = named(site.directives, "route");
+  const route = routes.length === 1 && routes[0]?.args.length === 0 ? routes[0] : undefined;
+  if (route === undefined) found.push(`${name}: not exactly one plain route`);
+  const first = route?.block?.[0];
+  if (first?.name !== "rate_limit" || first.via !== "pds-ratelimit") {
+    found.push(`${name}: the route does not apply the zones first`);
+  }
+  if (named(flatten(route?.block ?? []), "reverse_proxy").length !== proxies.length) {
+    found.push(`${name}: a reverse_proxy is outside the route`);
+  }
+  const limits = named(all, "rate_limit").length;
+  if (limits !== 1) found.push(`${name}: ${limits} rate_limit blocks`);
+  for (const header of ADDRESS_HEADERS) {
+    if (proxies.some((proxy) => passes(proxy, header))) found.push(`${name}: a reverse_proxy passes ${header}`);
+  }
+  return found;
+}
+
+/** Whether `proxy` lacks `header_up -<header>` or sets the header again in any letter case. */
+function passes(proxy: Directive, header: string): boolean {
+  const ups = named(proxy.block ?? [], "header_up");
+  const removed = ups.some((up) => up.args.length === 1 && up.args[0] === `-${header}`);
+  const setAgain = ups.some(
+    (up) => up.args[0] !== `-${header}` && up.args[0]?.replace(/^[+-]/, "").toLowerCase() === header.toLowerCase(),
+  );
+  return !removed || setAgain;
+}
+
+/** A site Caddy listens for on loopback only (`bind`) and that names only loopback addresses. */
+function loopbackOnly(site: Site): boolean {
+  const binds = named(site.directives, "bind");
+  return (
+    binds.length > 0 &&
+    binds.every((bind) => bind.args.length > 0 && bind.args.every((arg) => LOOPBACK_BIND.includes(arg))) &&
+    site.addresses.every((address) => LOOPBACK_ADDRESS.test(address))
+  );
 }
