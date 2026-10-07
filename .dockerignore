@@ -1,0 +1,17 @@
+# What the image build context leaves out (P1.27): history, local installs and builds (each stage installs and
+# builds its own), tests, docs and secrets. The runtime stage copies named folders only; this keeps the rest out of
+# the build stages too.
+.git
+**/node_modules
+**/dist
+**/coverage
+.worktrees
+**/*.test.ts
+**/*.test.tsx
+tests
+docs
+.env
+.env.*
+secrets
+**/*.pem
+**/*.key
