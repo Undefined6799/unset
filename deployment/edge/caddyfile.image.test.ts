@@ -8,8 +8,8 @@ import { afterAll, describe, expect, test } from "vitest";
 import { readCaddyfile } from "./caddyfile.ts";
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
-// by the built edge image (`caddy adapt`, Caddy v2.11.7). CI only, like the edge integration tests that build the same
-// image; `npm test` locally skips it unless CI is set, and in CI a missing Docker fails it. The test builds and runs
+// by the built edge image (`caddy adapt`, Caddy v2.11.7). It carries no skip of its own (P1.28j): without Docker it
+// fails, and whether the images project runs locally is run.ts's decision (P1.28r). The test builds and runs
 // the image itself with node built-ins (architecture amendment 3 to 2026-10-07-p130s-networks-and-caddyfile-reader):
 // a trusted test owns its inputs, and first proves the image holds the repository's config byte for byte.
 const EDGE = import.meta.dirname;
@@ -56,52 +56,46 @@ describe("caddyfile reader against caddy adapt", () => {
     for (const image of built) docker(["rmi", "-f", image]);
   });
 
-  test.runIf(process.env.CI)(
-    "caddyfile_reader_matches_caddy_adapt",
-    () => {
-      const image = buildEdgeImage();
-      const repository = Object.fromEntries(
-        [
-          "Caddyfile",
-          "sites/pds.caddy",
-          ...readdirSync(join(EDGE, "snippets"))
-            .sort()
-            .map((f) => `snippets/${f}`),
-        ].map((file) => [file, readFileSync(join(EDGE, file), "utf8")]),
-      );
-      expect(imageConfig(image)).toStrictEqual(repository);
-      const theirs = adapt(image, env);
-      const ours = readCaddyfile(shippedConfig(), env);
-      expect(ours.sites.flatMap((site) => site.addresses.map(hostOf)).sort()).toEqual(adaptedHosts(theirs).sort());
-      const route = ours.sites
-        .find((site) => site.addresses.includes(PDS_HOST))
-        ?.directives.find((directive) => directive.name === "route");
-      const handlers = (route?.block ?? [])
-        .filter((d) => !d.name.startsWith("@"))
-        .map((d) => HANDLER[d.name] ?? d.name);
-      const pdsRoute = adaptedPdsRoute(theirs);
-      expect(handlers).toEqual(pdsRoute.flatMap((r) => r.handle.map((h) => h.handler)));
-      expect(route?.block?.map((d) => d.via)).toEqual(["pds-ratelimit", ...Array(6).fill("xrpc-guard"), "upstream"]);
-      const zones = route?.block?.find((d) => d.name === "rate_limit")?.block?.filter((d) => d.name === "zone") ?? [];
-      const limits = pdsRoute.flatMap((r) => r.handle).find((h) => h.handler === "rate_limit")?.rate_limits ?? {};
-      expect(zones.map((zone) => zone.args[0]).sort()).toEqual(Object.keys(limits).sort());
-      for (const zone of zones) {
-        const value = (name: string) => zone.block?.find((d) => d.name === name)?.args[0] ?? "";
-        const name = zone.args[0] ?? "";
-        expect(
-          {
-            key: KEY[value("key")] ?? value("key"),
-            ipv6_prefix: Number(value("ipv6_prefix")),
-            max_events: Number(value("events")),
-            window: nanoseconds(value("window")),
-            matched: zone.block?.some((d) => d.name === "match") ?? false,
-          },
-          name,
-        ).toEqual({ ...pick(limits[name]), matched: limits[name]?.match !== undefined });
-      }
-    },
-    600_000,
-  );
+  test("caddyfile_reader_matches_caddy_adapt", () => {
+    const image = buildEdgeImage();
+    const repository = Object.fromEntries(
+      [
+        "Caddyfile",
+        "sites/pds.caddy",
+        ...readdirSync(join(EDGE, "snippets"))
+          .sort()
+          .map((f) => `snippets/${f}`),
+      ].map((file) => [file, readFileSync(join(EDGE, file), "utf8")]),
+    );
+    expect(imageConfig(image)).toStrictEqual(repository);
+    const theirs = adapt(image, env);
+    const ours = readCaddyfile(shippedConfig(), env);
+    expect(ours.sites.flatMap((site) => site.addresses.map(hostOf)).sort()).toEqual(adaptedHosts(theirs).sort());
+    const route = ours.sites
+      .find((site) => site.addresses.includes(PDS_HOST))
+      ?.directives.find((directive) => directive.name === "route");
+    const handlers = (route?.block ?? []).filter((d) => !d.name.startsWith("@")).map((d) => HANDLER[d.name] ?? d.name);
+    const pdsRoute = adaptedPdsRoute(theirs);
+    expect(handlers).toEqual(pdsRoute.flatMap((r) => r.handle.map((h) => h.handler)));
+    expect(route?.block?.map((d) => d.via)).toEqual(["pds-ratelimit", ...Array(6).fill("xrpc-guard"), "upstream"]);
+    const zones = route?.block?.find((d) => d.name === "rate_limit")?.block?.filter((d) => d.name === "zone") ?? [];
+    const limits = pdsRoute.flatMap((r) => r.handle).find((h) => h.handler === "rate_limit")?.rate_limits ?? {};
+    expect(zones.map((zone) => zone.args[0]).sort()).toEqual(Object.keys(limits).sort());
+    for (const zone of zones) {
+      const value = (name: string) => zone.block?.find((d) => d.name === name)?.args[0] ?? "";
+      const name = zone.args[0] ?? "";
+      expect(
+        {
+          key: KEY[value("key")] ?? value("key"),
+          ipv6_prefix: Number(value("ipv6_prefix")),
+          max_events: Number(value("events")),
+          window: nanoseconds(value("window")),
+          matched: zone.block?.some((d) => d.name === "match") ?? false,
+        },
+        name,
+      ).toEqual({ ...pick(limits[name]), matched: limits[name]?.match !== undefined });
+    }
+  }, 600_000);
 });
 
 type AdaptedHandler = { handler: string; routes?: AdaptedRoute[]; rate_limits?: Record<string, AdaptedZone> };
