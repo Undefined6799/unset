@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -203,6 +203,7 @@ flowchart LR
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
   P1_28o["P1.28o edge drops apk-tools"]
+  P1_28y["P1.28y edge kind forbids apk"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
@@ -286,6 +287,8 @@ flowchart LR
   P1_29w --> P1_29
   P1_29x --> P1_29v
   P1_29x --> P1_28o
+  P1_28o --> P1_28y
+  P1_29x --> P1_28y
   P1_28w --> P1_29v
   P1_29v --> P1_29d
   P1_29d --> P1_29
@@ -7811,10 +7814,8 @@ Done when the edge image builds, the existing edge image tests and the adapt byt
 passes in CI.
 
 **After it lands:** the edge kind gains `runtime_has_no_package_manager` (apk) in `deployment/images/images.test.ts`.
-That file is product class, so a trusted PR cannot carry it. It rides the next product PR that touches
-`images.test.ts` after P1.28o merges (P1.29d is the likely carrier); if none is open within a day of P1.28o merging, it
-becomes a small product step of its own, and the coordinator asks for it. Either way it is a tightening, with no line
-from Alex.
+That file is product class, so a trusted PR cannot carry it. It is its own product step, P1.28y (book edit
+2026-10-07-p128o-edge-apk-tools, superseded 22:40Z: it no longer rides another PR).
 
 If P1.28o chooses a scratch or distroless final stage rather than removing apk-tools, a small product step lands first
 in `images.test.ts` to add that kind: no shell and no package manager present, a numeric non-root USER, and the binary
@@ -7822,6 +7823,24 @@ copied from a named build stage only. P1.28o, as a trusted PR, cannot add the ki
 fails `every_dockerfile_has_a_known_kind` today (architecture's amendment 4, point 3, in
 2026-10-07-p129-migrate-image-and-run-only-images; book edit 2026-10-07-p129x-kinds-and-removal-verbs). If it removes
 apk-tools, the edge stays kind `edge` and no extra step is needed.
+
+---
+
+### P1.28y — Forbid a package manager in the edge runtime
+Tags: [SEC]            Depends on: P1.28o, P1.29x (merged, #507)
+Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p128o-edge-apk-tools (P1.28y, 22:40Z), from
+architecture's amendment in that record ("Afterwards", 22:45Z), relayed by the coordinator at 22:36Z. A tightening; the
+coordinator clears it, no word from Alex. Owner: Phase 1. It replaces the earlier plan to ride the next `images.test.ts`
+PR.
+
+**What:** the edge kind in `KIND_BY_FINAL_ENTRY`'s rule set gains `runtime_has_no_package_manager` for apk. The edge's
+final stage must not contain `apk` or `/sbin/apk`, and must not install apk-tools back. With that, the rule from
+amendment 2, point 4 (p129-migrate) covers every kind.
+
+Fixtures: fail, an edge-kind final stage with no `apk del ... apk-tools` (apk left present); pass, today's edge
+Dockerfile after P1.28o.
+
+Done when `npm run check` is green, and the rule runs over the edge Dockerfile, not only over the node kind.
 
 ---
 
