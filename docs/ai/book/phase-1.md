@@ -5289,6 +5289,24 @@ push, so until then P1.27 builds from the one official upstream base by digest. 
 - **Order:** P1.27; then P1.28, P1.29 and P1.30 on locally built images; then P1.27s (Alex: `packages: write` and the
   signing environment); P1.27r after launch.
 
+**Official images rule, until P1.27s** (book edit 2026-10-07-official-images-rule, final). Alex tapped "Yes, all
+official" at 2026-10-07 00:54Z on the card "Until our private mirror exists, may every container build use official
+Docker images, Alpine where offered, pinned by digest?". This generalises the Node-only interim base above:
+- **Which images:** every container build (node-app, edge, and the dev-stack services P1.28 to P1.30 build or run)
+  may use any `docker.io/library/*` official image.
+- **Variant:** the Alpine variant wherever the official image offers one; where it does not, the official default,
+  and the PR body says no Alpine variant exists.
+- **Pinning:** each image by its multi-arch index digest, recorded in `deployment/images/bases.lock.json`, in
+  `deployment/mirror.list.json` (so P1.27s mirrors it by digest), and in the `from_host_not_allowlisted_refused`
+  allowlist, which names `docker.io/library` plus each image, never a wildcard registry. The DL3026 reason line and
+  ignore order above apply to each upstream `FROM`.
+- **Vendor namespaces** (a PDS image, Tap, anything outside `library/`) are not covered: each needs an architecture
+  ruling per image.
+- **End:** P1.27s flips every image to the mirror by the same digest (`mirrored_digest_equals_lock`).
+- **Tests:** `base_digest_matches_lock` and `from_without_digest_refused` apply to every Dockerfile and compose
+  image; `runtime_base_is_alpine` applies to node-app, and other images assert Alpine only where the lock says the
+  official image offers it.
+
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
@@ -5579,7 +5597,9 @@ takes admin Basic auth).
 
 **Outputs:**
 - `deployment/edge/Dockerfile`: standard Caddy plus exactly one plugin, `github.com/mholt/caddy-ratelimit`, built with
-  `xcaddy` at pinned versions (Caddy and plugin by commit), runtime from the mirrored Caddy image by digest,
+  `xcaddy` at pinned versions (Caddy and plugin by commit), runtime from the mirrored Caddy image by digest
+  (until P1.27s, the official `caddy:<2.x.y>-builder-alpine` and `caddy:<2.x.y>-alpine` by index digest under the
+  official images rule in P1.27, listed in `bases.lock.json` with `"source": "upstream"` and in `mirror.list.json`),
   non-root with `cap_net_bind_service` only. It is a first-party image, so P1.27 scans, signs and locks it.
   (Standard Caddy has no rate limiter; this is the plugin Caddy's own docs point to. Licence Apache-2.0; the
   reuse reviewer confirms maintenance.)
