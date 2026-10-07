@@ -7073,6 +7073,16 @@ since it cannot fix a product file under SE-6, the fix goes in a small product P
 - **(b) Import resolution.** `image_builds_only_in_image_tests` resolves imports with dependency-cruiser's resolver, or
   with `ts.resolveModuleName` and the root tsconfig, covering extensionless imports, `.js` to `.ts`, `index` and
   `@unset/*` imports; an unresolvable relative or workspace import fails. Four fixtures, one per import form.
+- **(b2) The one allowed unresolved edge** (architecture's amendment 3, 21:55Z, in
+  2026-10-07-test-timing-fuzz-and-image-tests). `interfaces/http/web/render-entry.ts` importing
+  `"@unset/apps-web/server"`, the generated bundle the boundary config already allows as `RENDER_BUILD_IMPORT` (Alex,
+  2026-10-06 21:49Z), is the only exemption from "an unresolvable import fails". It matches only when the importer path
+  and the specifier both equal the boundary config's values exactly, reusing `RENDER_BUILD_IMPORT` rather than copying
+  it. If the config carries only the specifier, the importer is one pinned constant, checked by a test against the
+  boundary rule. No pattern, prefix or list. The guard reports it once as `unresolved, allowed: <importer> ->
+  <specifier>` and does not follow it. Tests: `unresolved_import_fails`,
+  `render_build_specifier_from_other_importer_fails`, `other_unresolved_specifier_from_render_entry_fails`,
+  `render_build_import_exemption_matches_boundary_config`. The PR body cites amendment 3.
 - **(c) Listed files in CI.** In CI mode, `toRun = listed` (run.ts:288 at db046bf), and a file that is listed but not
   discovered fails again. Test: `listed_but_undiscovered_file_fails_in_ci`.
 
