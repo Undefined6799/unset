@@ -223,9 +223,9 @@ describe("preflight", () => {
   test("c8_any_bypass_var_fails", async () => {
     for (const [name, value] of [
       ["PDS_RATE_LIMIT_BYPASS_KEY", "k"],
-      ["PDS_RATE_LIMIT_BYPASS_IPS", "172.30.10.2"],
-      ["PDS_RATE_LIMIT_BYPASS_IPS", "172.30.10.4"],
-      ["PDS_RATE_LIMIT_BYPASS_IPS", "172.30.10.0/24"],
+      ["PDS_RATE_LIMIT_BYPASS_IPS", "198.51.100.2"],
+      ["PDS_RATE_LIMIT_BYPASS_IPS", "198.51.100.4"],
+      ["PDS_RATE_LIMIT_BYPASS_IPS", "198.51.100.0/24"],
       ["PDS_RATE_LIMIT_BYPASS_IPS", ""],
     ] as const) {
       expect(await expectOnly("C8", { pdsEnv: { [name]: value } })).toBe(`FAIL C8 ${name} is set in pds`);
