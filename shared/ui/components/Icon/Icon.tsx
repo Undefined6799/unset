@@ -21,15 +21,15 @@ type PathAttributes = Pick<
   SVGProps<SVGPathElement>,
   "d" | "fill" | "stroke" | "strokeWidth" | "strokeLinecap" | "strokeLinejoin"
 >;
+// The icon build admits only these attributes, with Iconoir's own values (scripts/icons.ts, checked against the sheet).
 /** One icon's drawing: its <path> attributes, as icons/drawings/<name>.generated.ts exports them. */
 export type IconPaths = readonly Readonly<PathAttributes>[];
-// The icon build admits only these attributes, with Iconoir's own values (scripts/icons.ts, checked against the sheet).
-const drawings = data.drawings as Readonly<Record<IconName, IconPaths>>;
 
 export type IconDrawingProps = Omit<IconProps, "name"> & { paths: IconPaths };
 
 export function Icon({ name, ...rest }: IconProps) {
-  return <Drawing paths={drawings[name]} {...rest} />;
+  // Read inside the function, not at module level, so a bundle that uses only IconDrawing drops icons.json.
+  return <Drawing paths={(data.drawings as Readonly<Record<IconName, IconPaths>>)[name]} {...rest} />;
 }
 
 /** For islands: the same markup as `Icon`, from a drawing module the island imports by itself. */
