@@ -263,7 +263,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the Caddyfile reader | [SEC] | P1.30, P1.28h | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
-| P1.29x | Lock entries declare stripped paths, proven deleted in every final stage | [SEC] | P1.29k | `phase-1.md` |
+| P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
 | P1.28o | Edge runtime drops apk-tools; image test proves no package manager | [SEC], trusted | P1.29x | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
