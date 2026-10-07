@@ -4,7 +4,7 @@
 // allowlist: Docker's official library images, each named (interim, until P1.27s mirrors them and flips the host; book edit
 // 2026-10-07-p128-edge-bases-and-ratelimit-adr widened it from Node alone for the edge's Caddy bases) and our GHCR
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -12,8 +12,14 @@ const DEPLOYMENT = join(import.meta.dirname, "..");
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const DOCKERFILE = "images/node-app.Dockerfile";
 
-/** What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. */
-type Base = { ref: string; tag: string; digest: string; source: "upstream" | "mirror" };
+/**
+ * What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. `stage` says
+ * whether the base may become a shipped image (`runtime`) or only builds one (`build`); it is required (P1.28d, book
+ * edit 2026-10-07-p128v-mirror-scan-stage), so the mirror scan can tell them apart (P1.28v).
+ */
+type Base = { ref: string; tag: string; digest: string; source: "upstream" | "mirror"; stage: Stage };
+type Stage = "build" | "runtime";
+type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
 
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
@@ -51,6 +57,48 @@ function baseProblems(dockerfile: string, lock: Lock): string[] {
     return locked.digest === digest ? [] : [`FROM ${image} differs from the lock digest ${locked.digest}`];
   });
 }
+
+const STAGES: readonly unknown[] = ["build", "runtime"];
+
+/** Every lock or mirror-list entry without a known stage, and every mirror entry whose stage differs from its lock's. */
+function stageProblems(lock: Lock, list: MirrorEntry[]): string[] {
+  const locked = Object.entries(lock).flatMap(([name, base]) =>
+    STAGES.includes(base.stage) ? [] : [`lock entry ${name} has no stage`],
+  );
+  const listed = list.flatMap((entry) => {
+    if (!STAGES.includes(entry.stage)) return [`mirror entry ${entry.source} has no stage`];
+    const base = Object.values(lock).find((b) => entry.source === `${b.ref}:${b.tag}@${b.digest}`);
+    return base === undefined || base.stage === entry.stage ? [] : [`mirror entry ${entry.source} differs in stage`];
+  });
+  return [...locked, ...listed];
+}
+
+/**
+ * What the final stage is built FROM, following stage names back to their base: a `build` base may only feed earlier
+ * stages, so the shipped image is a `runtime` base or `scratch`.
+ */
+function finalStageProblems(dockerfile: string, lock: Lock): string[] {
+  const stageBase = new Map<string, string>();
+  let last: string | undefined;
+  for (const line of dockerfile.split("\n")) {
+    const match = FROM.exec(line.trim());
+    if (match === null) continue;
+    const [, image = "", stage] = match;
+    last = stageBase.get(image) ?? image;
+    if (stage !== undefined) stageBase.set(stage, last);
+  }
+  if (last === undefined) return ["the Dockerfile has no FROM"];
+  if (last === "scratch") return [];
+  const ref = PINNED.exec(last)?.[1];
+  const base = Object.values(lock).find((b) => b.ref === ref && last?.endsWith(`@${b.digest}`));
+  if (base === undefined) return [`final FROM ${last} has no lock entry`];
+  return base.stage === "runtime" ? [] : [`final FROM ${last} is a ${base.stage} base`];
+}
+
+/** Every Dockerfile under deployment/ (the web image's and, from P1.28, the edge's), so a new image is covered too. */
+const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
+  .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
+  .sort();
 
 const dockerfile = read(DOCKERFILE);
 const lock = JSON.parse(read("images/bases.lock.json")) as Lock;
@@ -99,17 +147,20 @@ describe("base images", () => {
       tag: expect.stringMatching(/^26(?:\.\d+){0,2}-[a-z]+-slim$/),
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
+      stage: "runtime",
     });
     // The edge's bases (P1.28): Caddy's builder and runtime images, both Alpine, both by index digest.
-    for (const [name, tag] of [
-      ["caddy-builder", /^2\.11\.7-builder-alpine$/],
-      ["caddy", /^2\.11\.7-alpine$/],
+    // The builder only builds the edge binary; the runtime image is what ships.
+    for (const [name, tag, stage] of [
+      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build"],
+      ["caddy", /^2\.11\.7-alpine$/, "runtime"],
     ] as const) {
       expect(lock[name], name).toStrictEqual({
         ref: "docker.io/library/caddy",
         tag: expect.stringMatching(tag),
         digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
         source: "upstream",
+        stage,
       });
     }
   });
@@ -153,7 +204,7 @@ describe("base images", () => {
   });
 
   test("mirror_list_digest_only", () => {
-    const list = JSON.parse(read("mirror.list.json")) as { source: string; mirror: string }[];
+    const list = JSON.parse(read("mirror.list.json")) as MirrorEntry[];
     // Every upstream base in the lock is scanned weekly by the mirror workflow, and nothing else is listed.
     const upstream = Object.values(lock)
       .filter((base) => base.source === "upstream")
@@ -164,6 +215,43 @@ describe("base images", () => {
       expect(entry.source, entry.source).toMatch(PINNED);
       expect(entry.mirror, entry.source).toMatch(/^ghcr\.io\/undefined6799\/mirror\/[a-z0-9._-]+$/);
     }
+  });
+
+  test("every_lock_entry_has_stage", () => {
+    const list = JSON.parse(read("mirror.list.json")) as MirrorEntry[];
+    expect(stageProblems(lock, list)).toEqual([]);
+    expect(list.map((entry) => entry.stage)).toEqual(Object.values(lock).map((base) => base.stage));
+    const { stage: _, ...unlabelled } = NODE;
+    const source = pinnedNode;
+    expect(stageProblems({ node: unlabelled as Base }, [])).toEqual(["lock entry node has no stage"]);
+    expect(stageProblems({ node: { ...NODE, stage: "test" as Stage } }, [])).toEqual(["lock entry node has no stage"]);
+    expect(stageProblems(lock, [{ source, mirror: "m" } as MirrorEntry])).toEqual([
+      `mirror entry ${source} has no stage`,
+    ]);
+    expect(stageProblems(lock, [{ source, mirror: "m", stage: "build" }])).toEqual([
+      `mirror entry ${source} differs in stage`,
+    ]);
+  });
+
+  test("build_stage_bases_never_in_final_stage", () => {
+    expect(dockerfiles).toContain(DOCKERFILE);
+    for (const file of dockerfiles) expect(finalStageProblems(read(file), lock), file).toEqual([]);
+    const builder = lock["caddy-builder"] as Base;
+    const runtime = lock.caddy as Base;
+    const build = `${builder.ref}:${builder.tag}@${builder.digest}`;
+    const ship = `${runtime.ref}:${runtime.tag}@${runtime.digest}`;
+    // The edge's shape: the builder feeds a stage the runtime image copies from.
+    expect(finalStageProblems(`FROM ${build} AS b\nFROM ${ship}\nCOPY --from=b /out /app`, lock)).toEqual([]);
+    expect(finalStageProblems(`FROM ${ship} AS b\nFROM ${build}`, lock)).toEqual([
+      `final FROM ${build} is a build base`,
+    ]);
+    expect(finalStageProblems(`FROM ${build} AS b\nFROM b AS c\nFROM c`, lock)).toEqual([
+      `final FROM ${build} is a build base`,
+    ]);
+    expect(finalStageProblems(`FROM ${build} AS b\nFROM scratch`, lock)).toEqual([]);
+    expect(finalStageProblems(`FROM ${ship.replace(runtime.digest, `sha256:${"1".repeat(64)}`)}`, lock)).toEqual([
+      `final FROM ${ship.replace(runtime.digest, `sha256:${"1".repeat(64)}`)} has no lock entry`,
+    ]);
   });
 });
 
