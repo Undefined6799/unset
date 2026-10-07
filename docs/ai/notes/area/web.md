@@ -33,6 +33,9 @@ failed island stays as its server markup and only logs to the console.
 **Rules worth knowing.**
 - Islands may import only `shared/ui` and `react/jsx-runtime` (P1.23q's island-import-boundary).
 - Island budgets: 15 KB each and 75 KB in total, gzipped (P1.23q).
+- Every `*.island.tsx` under `src/islands/` or `shared/ui/islands/` must keep its own lazy chunk: a dynamic entry
+  that no entry reaches through static `imports`. `scripts/budgets/island.ts` refuses otherwise before the size gate,
+  so an island inlined into boot can no longer drop out of the count unseen (P1.25l).
 - No inline script or style on any page (CSP).
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[http]].
