@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -202,6 +202,7 @@ flowchart LR
   P1_28n["P1.28n image test gate gaps closed"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
+  P1_29r["P1.29r final-stage rule regression closed"]
   P1_28o["P1.28o edge drops apk-tools"]
   P1_28y["P1.28y edge kind forbids apk"]
   P1_29w["P1.29w discover and scan every image ALEX"]
@@ -286,6 +287,8 @@ flowchart LR
   P1_29w --> P1_29v
   P1_29w --> P1_29
   P1_29x --> P1_29v
+  P1_29x --> P1_29r
+  P1_29r --> P1_29d
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
@@ -5616,6 +5619,7 @@ shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run c
 
 ### P1.25d — Tighten the jsx-free detector's matching
 Tags: —            Depends on: P1.25h (merged, #464)
+As built: merged by Alex at 2026-10-07T22:37:20Z as `cbc2f20` (#512).
 Slice 1, feature class (`shared/ui-build/jsx-free.test.ts` only; it cannot ride P1.25w); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (N4). Owner: the third thread. KIT matches any import that resolves into
 `shared/ui/` (the bare specifier, any subpath, any relative path), on the resolved path, not the text; REACT matches
@@ -7055,6 +7059,7 @@ CI the images run shows N files, 0 skipped.
 
 ### P1.28n — Close the image test gate's three gaps
 Tags: [SEC], check            Depends on: P1.28r (merged, #499)
+As built: merged by Alex at 2026-10-07T22:30:11Z as `ddf434f` (#508).
 Slice 1, check class (`scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing, amendment 2 (21:45Z), from
 architecture's amendment 2 in 2026-10-07-test-timing-fuzz-and-image-tests, asked by the coordinator after P1.28r. A
 tightening; the coordinator clears it, no line from Alex and no classifier path. Owner: Phase 2. It goes before P1.29d,
@@ -7563,8 +7568,8 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
    stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r and
-   P1.28n; Phase 1):
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n
+   and P1.29r; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -7791,6 +7796,42 @@ dev-seed:
 
 ---
 
+### P1.29r — Close the final-stage package rule's regression
+Tags: [SEC]            Depends on: P1.29x (merged, #507)
+Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p129r-final-stage-rule-regression (final
+22:55Z), from architecture's amendment 5 in 2026-10-07-p129-migrate-image-and-run-only-images (22:50Z). A tightening;
+the coordinator clears it, no word from Alex. Owner: Phase 1, the next Phase 1 slot. It goes before P1.29d, which gains
+it as a dependency. It is separate from P1.28y: if both are built together they may share a PR, but P1.29r does not wait
+for it.
+
+**Why:** after #507, four node-kind final-stage RUNs that main refused before now pass: `node -e` with `execSync`
+running `apt-get install`; `perl -e` running `system`; `node -e` with `execFileSync`; and `apt-get -c remove install -y
+curl`, where a value-taking option hides the verb. ksh, mksh, csh, tcsh and fish are also not counted as shells. The
+rule must only ever tighten.
+
+**What:** three layers, each applied to final stages and to the named stages a final stage builds on.
+1. **Floor.** Main's old word check returns, on joined instructions in shell and exec form: any final-stage RUN that
+   contains `apk`, `apt`, `apt-get`, `aptitude`, `dpkg`, `rpm`, `dnf`, `microdnf` or `yum` as a word anywhere fails. The
+   only exception is a match that is the first word of a parsed command which passes layer 3.
+2. **A command allowlist.** Every simple command's first word (its basename) must be in an exact set,
+   `FINAL_STAGE_COMMANDS`: exactly the commands today's final stages use (expected: roughly rm, mkdir, chown, chmod, ln,
+   setcap, plus the package managers under layer 3), each listed in the PR body with its file and line. Every shell,
+   interpreter (node, perl, python, ruby, php, lua, awk) and launcher fails. Adding a command later is a product PR that
+   states it under "What I am unsure about".
+3. **Removal options from an allowlist.** Only these value-less flags may come before the verb: apk `--no-network`,
+   `--purge`, `--no-cache`, `-q`; apt-get and apt `-y`, `-q`, `--purge`, `--auto-remove`, `--no-install-recommends`;
+   dpkg none. After the verb, arguments must be package names matching `^[a-z0-9][a-z0-9+._-]*$`, or the same allowed
+   flags.
+
+Fixtures: red, the four inputs above; `ksh -c 'apk add x'`; `node -e "require('child_process').execSync('ap'+'t-get
+install x')"`, which only layer 2 catches; `apt-get -o Foo=remove install x`; a package-manager name in an exec-form
+argument. Green: `apk del --no-network curl libcap apk-tools` (the edge after P1.28o) and `apt-get purge -y x`.
+
+Done when `npm run check` is green with every red fixture failing for the stated layer and the green ones passing, and
+the real Dockerfiles on main still pass.
+
+---
+
 ### P1.28o — Remove apk-tools from the edge image
 Tags: [SEC], trusted            Depends on: P1.29x
 Slice 1, trusted base (`deployment/edge/`); book edit 2026-10-07-p128o-edge-apk-tools (final 22:10Z), from
@@ -7807,11 +7848,19 @@ Caddy runtime carries a package manager.
 nothing may call `apk`. Fallback, only if removing apk-tools breaks the image: a scratch or distroless final stage with
 the static caddy binary. The PR body says which it chose, and why.
 
-Test: an image test in a `*.image.test.ts` file under `deployment/edge/` (P1.28r's rule), in the images project, shows
-`apk` is absent from the built edge image: `/sbin/apk` does not exist and `apk` is not on PATH.
+Test (amended 22:45Z, architecture's CA-bundle ruling in the same record): one `*.image.test.ts` under
+`deployment/edge/` (P1.28r's rule), run in the images project, with these checks:
+- `edge_image_has_no_apk`: `/sbin/apk` does not exist, and `apk` is not on PATH.
+- The CA bundle `/etc/ssl/certs/ca-certificates.crt` is identical to the same file in the runtime base, at the digest in
+  `bases.lock.json`.
+- The bundle is a regular file, not a symlink.
+- The bundle holds at least one PEM certificate, and every block parses with `node:crypto` `X509Certificate`.
 
 Done when the edge image builds, the existing edge image tests and the adapt byte check stay green, and the new test
-passes in CI.
+passes in CI. The PR body states three conditions, each with file and line:
+1. nothing in the edge image or its compose service calls `wget` or another TLS client over HTTPS;
+2. no `SSL_CERT_FILE` or `SSL_CERT_DIR` points at a removed path;
+3. Caddy's config sets no `trusted_roots` or `tls_trusted_ca_certs` pointing at a removed path.
 
 **After it lands:** the edge kind gains `runtime_has_no_package_manager` (apk) in `deployment/images/images.test.ts`.
 That file is product class, so a trusted PR cannot carry it. It is its own product step, P1.28y (book edit
