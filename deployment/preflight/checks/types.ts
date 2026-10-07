@@ -32,6 +32,8 @@ export type Inputs = {
   run: Run;
   /** The committed retirement-check report (P1.33a) that C21 reads. */
   retirementReportPath: string;
+  /** `deployment/networks.<env>.json`, the reviewed table of networks and members that C17 compares Compose with. */
+  networkTablePath: string;
   readText: (path: string) => string | null;
   stat: (path: string) => Stats | null;
   uid: number;

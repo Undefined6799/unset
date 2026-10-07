@@ -4,8 +4,8 @@
 //   node deployment/preflight/index.ts --env dev|prod --compose <file> [--compose <file>...]
 //
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
-// malformed compose or env file). There is no flag to skip a check. A check that throws fails; C3, C4 and C5 give up
-// after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a secret value: env files are
+// malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3 to C5,
+// and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a secret value: env files are
 // read into SecretMaps, and Compose is parsed here, never through `docker compose config`.
 import { execFile } from "node:child_process";
 import { readFileSync, type Stats, statSync } from "node:fs";
@@ -17,7 +17,15 @@ import type { Check, Env, Inputs, ManifestKind, Outcome, Run, Verifier } from ".
 
 export type { Run };
 
-import { type Compose, type EnvValue, ParseError, parseCompose, parseEnvFile, type Service } from "./compose-parse.ts";
+import {
+  type Compose,
+  type EnvValue,
+  type Network,
+  ParseError,
+  parseCompose,
+  parseEnvFile,
+  type Service,
+} from "./compose-parse.ts";
 import { SecretMap } from "./secret-map.ts";
 
 export type Deps = {
@@ -73,6 +81,7 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
 /** The compose files as one stack: one project name, and each service defined in exactly one file. */
 function loadCompose(files: string[], readText: (path: string) => string | null) {
   const services: { service: Service; dir: string }[] = [];
+  const networks: Network[] = [];
   const secretPaths: string[] = [];
   let name: string | null = null;
   for (const file of files) {
@@ -87,9 +96,20 @@ function loadCompose(files: string[], readText: (path: string) => string | null)
       }
       services.push({ service, dir: dirname(file) });
     }
+    for (const network of compose.networks) {
+      if (networks.some((n) => n.name === network.name))
+        throw new CannotRun(`network ${network.name} is defined twice`);
+      networks.push(network);
+    }
     secretPaths.push(...compose.secretFiles.map((path) => resolve(dirname(file), path)));
   }
-  const compose: Compose = { name, services: services.map((s) => s.service), secretFiles: secretPaths };
+  const compose: Compose = { name, services: services.map((s) => s.service), networks, secretFiles: secretPaths };
+  // `docker compose config` accepts a network no file defines; `up` would then fail, so it cannot run here either.
+  for (const network of compose.services.flatMap((s) => s.networks)) {
+    if (network !== "default" && !networks.some((n) => n.name === network)) {
+      throw new CannotRun(`network ${network} is not defined`);
+    }
+  }
   return { compose, services, secretPaths };
 }
 
@@ -130,6 +150,7 @@ function loadInputs(argv: string[], deps: Deps): Inputs {
     manifestKind: manifestKind(deps),
     run: deps.run,
     retirementReportPath: join(deps.root, RETIREMENT_REPORT),
+    networkTablePath: join(deps.root, `deployment/networks.${env}.json`),
     readText,
     stat: deps.stat ?? statOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,

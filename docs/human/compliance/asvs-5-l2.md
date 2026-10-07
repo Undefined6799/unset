@@ -296,7 +296,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 
 | id | requirement (short) | status | evidence | step |
 |---|---|---|---|---|
-| V13.1.1 | All communication needs for the application are documented | open |  | — |
+| V13.1.1 | All communication needs for the application are documented | partial | `test:deployment/preflight/preflight.test.ts#c17_table_mismatch_each_direction` | — |
 | V13.2.1 | Communications between backend application components that don't support the … | open |  | — |
 | V13.2.2 | Communications between backend application components, including local or operating … | covered | `test:tests/integration/postgres/grants.test.ts#matrix_matches`, `test:tests/integration/postgres/grants.test.ts#no_ddl_for_services`, `test:tests/integration/setup/pg.setup.test.ts#test_files_never_superuser` | — |
 | V13.2.3 | If a credential has to be used for service authentication, the credential being used by … | partial | `test:shared/config/schema.test.ts#secret_has_no_default`, `test:tests/integration/postgres/grants.test.ts#no_password_no_login` | — |
