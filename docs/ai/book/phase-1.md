@@ -6131,15 +6131,10 @@ line; docs never change its class. If pr-shape reports mixed, the PR stops and a
    the P1.28 pull request, #409, at 2026-10-07T03:31:33Z)". The ADR named that PR as the place for his word, and it
    was not yet accepted, so the status line is the only change. If Alex objects, the line goes back to Proposed and
    the open points go to a card.
-4. Make `edge_logs_no_client_address` deterministic (`tests/integration/deployment/edge/edge.test.ts:260`). Docs-only
-   carrier #417 failed it at vitest's default 5 s timeout while main 2bacd95 passed it in the same minute; "flake"
-   explains nothing, and this step already edits the file. Root cause first: measure where the time goes, above all
-   the two closed-port probes; give each probe an explicit connect timeout well under the test's own, so a refused
-   or blackholed port ends the probe quickly; wait on a condition (the log line or the probe's own end), never a fixed
-   sleep. Then set an explicit per-test timeout sized from the measured worst case over several local runs, with
-   headroom (the P1.01q precedent), and give the numbers in the body. Raising the timeout alone is not enough;
-   retries, `.skip` and quarantine are never allowed. The assertion is unchanged: no client address reaches any edge
-   log.
+4. P1.28b item 4: edge_logs_no_client_address timed out because the first probe() test pulled the probe's node image
+   inside its 5 s. The fix pulls that image by its locked digest in beforeAll (600 s hook timeout), gives every probe
+   connection a 1 s connect timeout, waits on the 429 and 502 log lines with a deadline, and sets a per-test timeout
+   sized from measured runs; the assertion is unchanged, and no retry, skip or quarantine is allowed.
 
 The long-window zones `session_day` and `firehose_hour` are checked statically: a runtime trip would need a day or an
 hour of requests, or a fake clock the pinned plugin does not offer. The short-window zones prove the mechanism at
