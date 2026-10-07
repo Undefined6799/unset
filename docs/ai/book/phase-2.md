@@ -665,22 +665,52 @@ identity index", so anyone deriving merged steps from commit prefixes counts tha
 
 ---
 
+### P2.03q — Move the session store's trusted path
+Tags: [SEC]            Depends on: —            Plan: SE-6 (trusted base)
+Check class (SE-6 `q`; issue #401), `.github/CODEOWNERS` only (book edit 2026-10-07-p203-repath; architecture
+2026-10-07-p203-session-store-trusted). In the trusted section, under "CSRF gate, session and CSP builder", the line
+`/domains/identity/auth/session-store.ts` becomes `/infrastructure/postgres/session/ @Undefined6799`. A folder, so
+anything later added beside the store is trusted by default. Removing the old line is neutral: domains hold no SQL,
+and `/domains/identity/auth/` keeps its security-review line. It goes alone, because a `# checks:` path cannot share a
+PR with product paths; a docs line rides only if a test maps the trusted section to an SE-6 list. Phase 0 moves the
+matching P0.03 line in `phase-0.md` in its next carrier after this merges.
+
+### P2.03x — Session table, registry rows and timeouts
+Tags: [SEC]            Depends on: P1.12, P1.15g (migration order)            Plan: §5.3 "Sessions"
+Feature class (issue #402), judged by its grant findings like P1.16's 0006 (book edit 2026-10-07-p203-repath).
+Contents:
+  - `infrastructure/postgres/migrations/0011_app_session.sql`: the `app.session` table and indexes in P2.03's Outputs.
+    `migrate.ts` refuses a gap and 0008–0010 are booked for P1.15m, P1.15d and P1.15g, so it waits for P1.15g; it may
+    be built locally on any free number and renumbered at open time.
+  - `infrastructure/postgres/grant-matrix.json`: `app.session` for `web`, SELECT, INSERT and UPDATE by column list,
+    DELETE as `rowPrivileges`.
+  - `infrastructure/postgres/erasure-registry.json`: `app.session.did`, `delete_row`.
+  - The three `SESSION_*` timeouts in `interfaces/http/config.ts` (typed config), with the defaults in P2.03's Inputs
+    and their config tests.
+Done when (tests): the P1.12 grant-matrix test and the P1.13 did-columns test pass with the new table.
+If pr-shape reports trusted or mixed, the PR stops and asks the step book; it does not split itself.
+
 ### P2.03 — Session store and lifecycle
-Tags: [SEC]            Depends on: P1.12            Plan: §2 rule 7; §5.3 "Sessions"
-Where: `domains/identity/auth/session-store.ts`, `interfaces/http/session-cookie.ts`,
-  migration `0201_app_session.sql`, `db/did-columns.coverage` (+1 line), `db/grants.matrix` (+1 table)
+Tags: [SEC]            Depends on: P2.03q, P2.03x            Plan: §2 rule 7; §5.3 "Sessions"
+Trusted class; never opens before P2.03q merges (book edit 2026-10-07-p203-repath; architecture
+2026-10-07-p203-session-store-trusted).
+Where: `infrastructure/postgres/session/store.ts` with its tests in that folder (following `singleUse/`);
+  `interfaces/http/session-cookie.ts` (unchanged path, already trusted) with its test beside it. No domain file:
+  domains hold no SQL, and P2.06 composes the store in `interfaces/http`; a type-only `Sessions` contract in
+  `domains/identity/contract.ts` is added by P2.06 only if it needs one. The migration, registry rows and timeouts
+  are P2.03x's.
 Size: ~170 source lines, ~260 test lines
 
 Goal: Durable browser sessions that map a random cookie to a DID, with server-checked idle and absolute timeouts,
 rotation at login and one call that ends every session of a DID inside the caller's transaction.
 
-Inputs: P1.12 roles (this step's migration grants `web` SELECT/INSERT/UPDATE on `app.session` by column list and DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges); config `SESSION_IDLE_S` (604800),
+Inputs: P1.12 roles (P2.03x's migration grants `web` SELECT/INSERT/UPDATE on `app.session` by column list and DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges); config `SESSION_IDLE_S` (604800),
   `SESSION_ABSOLUTE_S` (2592000), `SESSION_TOUCH_INTERVAL_S` (300).
 Outputs:
   - Table `app.session(id_hash bytea primary key /* sha256 of the 32-byte id */, did text not null,
     created_at timestamptz not null, last_seen_at timestamptz not null, absolute_expires_at timestamptz not null,
     email_confirmed boolean null /* cache, P2.11 */, email_checked_at timestamptz null)`; index `(did)`;
-    index `(absolute_expires_at)`. Coverage line: `app.session.did → delete`.
+    index `(absolute_expires_at)`. Registry row: `app.session.did`, `delete_row`. Table, grants and row are P2.03x's.
   - `sessions.create(tx, did, opts: {replacingCookie?: string}) -> {cookieValue: string, expiresAt}`.
   - `sessions.read(ctx) -> Session | null` where `Session = {did, idHash, createdAt, emailConfirmed: boolean | null}`;
     memoised in `ctx.memo` for the request.
@@ -696,7 +726,8 @@ Outputs:
     set, a caller that must revoke the grant at the authorization server calls `client.revoke` **before** it.
   - `sessions.setEmailConfirmed(tx, idHash | {did}, value: boolean) -> void`.
   - `sessionCookie.set(ctx, value, maxAgeS)`, `sessionCookie.clear(ctx)`: `__Host-sid`, HttpOnly, Secure, SameSite=Lax, Path=/.
-  - `sessions.sweep() -> number` (deletes rows past idle or absolute expiry), run hourly under `withAdvisoryLock('session-sweep')`.
+  - `sessions.sweep() -> number` (deletes rows past idle or absolute expiry), run hourly under `withAdvisoryLock('session-sweep')`
+    from `infrastructure/postgres/lock.ts` (P1.17); it lives in the store.
 
 Algorithm:
   1. `create(tx, did, {replacingCookie})`:
@@ -770,12 +801,16 @@ Done when (tests):
     `app.oauth_session` row.
   - `session.touch_outside_read_only_tx`: a GET handler running in a read-only transaction, session 6 min idle → the
     touch succeeds (own connection) and the handler's transaction stays read-only.
-  - `session.db_error_is_503`: DB throws on read → the route answers 503, cookie not cleared.
+  - `session.db_error_is_503`: DB throws on read → the route answers 503, cookie not cleared. The route is test-only,
+    in the store's test file, not a product route.
   - `session.cookie_attributes`: Set-Cookie has `__Host-sid`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`.
   - `session.sweep`: three expired and two live rows → 3 deleted.
   - `session.no_token_set_ends` (runs after P2.04's migration): a live session row whose DID has no `app.oauth_session`
     row → `read` returns null, the row is deleted, the cookie is cleared.
-  - P1.13 DID-column test passes with the new coverage line; P1.12 grant-matrix test passes.
+  - P1.13 DID-column test and P1.12 grant-matrix test: run in P2.03x.
+  - Built and run with P2.04, which creates `app.end_sessions_for_did` and `app.oauth_session` (book edit
+    2026-10-07-p203-repath): `session.destroyAllForDid_in_tx`, `session.end_sessions_single_sql`,
+    `session.end_sessions_why_closed`, `session.no_token_set_ends`. They are listed here as the store's contract.
 
 Reuse (provisional — for reuse review):
   - `app/src/lib/db.ts:94-121` (cookie session) → REJECT: stores the raw sid, absolute TTL only (14 d), no idle timeout,
