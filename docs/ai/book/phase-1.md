@@ -5489,6 +5489,7 @@ the assets path). This supersedes the unbooked per-page `script-src 'none'` cand
 
 ### P1.25b — Finish the error-page hook's leftovers
 Tags: [SEC], trusted            Depends on: P1.25k (merged, #445)
+As built: merged by Alex at 2026-10-07T21:51:37Z as `9cdca36` (#503).
 Slice 1, trusted base (`/shared/http/`); book edit 2026-10-07-pds-image-answer-and-p125k-riders, with architecture's
 13:20Z addendum in 2026-10-07-p125k-error-page-hook. Letter `b`: leftovers of P1.25k (P1.25's taken letters are h, j
 reserved, k and q). Owner: the third thread, after P1.28c; it must merge before any later kit step touches
@@ -7391,6 +7392,7 @@ the all-good fixture, now covering all 24 checks, exits 0.
 
 ### P1.30n — Refuse compose network names in the preflight
 Tags: [SEC]            Depends on: P1.30t (merged, #492)
+As built: merged by Alex at 2026-10-07T21:49:21Z as `ca71670` (#501).
 Slice 1, product (`deployment/preflight/`); book edit 2026-10-07-p130n-network-names (final 20:15Z), from
 architecture's amendment 6 in 2026-10-07-p130s-networks-and-caddyfile-reader, after the coordinator's verification of
 P1.30t (#492). A tightening; the coordinator clears it, no word from Alex. Owner: Phase 2. Board issue #495. It must
@@ -7453,6 +7455,9 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
      (CI only: the image run with no environment exits 78), `migrate_cli_reads_passwords_only_from_run_secrets`, a
      test that the CLI calls `syncRolePasswords` after `migrate()` and not when migrations fail, and the
      per-Dockerfile runtime tests. It and P1.28t are separate PRs; whichever lands second merges main.
+   - As built: merged by Alex at 2026-10-07T21:52:36Z as `322b498` (#504). Its hard-coded `NODE_DOCKERFILES` list
+     (`deployment/images/images.test.ts:17`) is replaced in P1.29x, under amendments 2 and 3 of
+     2026-10-07-p129-migrate-image-and-run-only-images.
 2. **P1.29x "Declare the paths our images strip"** (feature, security-review: `bases.lock.json`, `images.test.ts`;
    depends on P1.29k; Phase 1; no word from Alex: it declares and proves, and nothing reads the field yet; `x` is the
    product half of the check step, SE-6): an optional `stripped` array on each lock entry, read by the lock schema
