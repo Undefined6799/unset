@@ -7,6 +7,7 @@ import {
   compare,
   discoverByGlob,
   executedFiles,
+  filesToRun,
   imagesPlan,
   LIST_ARGS,
   type Mode,
@@ -228,6 +229,43 @@ describe("images project", { timeout: 60_000 }, () => {
     const noDocker = await runMain(root, "images", () => false);
     expect(noDocker.code).toBe(1);
     expect(noDocker.err).toContain("npm run test:images needs Docker");
+  });
+
+  // Amendment 2 (architecture, 2026-10-07 21:45Z): an earlier CI step can rewrite CI through $GITHUB_ENV, but not
+  // GITHUB_ACTIONS, so CI mode cannot be switched off from inside the job.
+  test("ci_mode_from_github_actions", () => {
+    expect(modeFor({ GITHUB_ACTIONS: "true", CI: "true" }, [])).toBe("ci");
+    expect(modeFor({ GITHUB_ACTIONS: "true", CI: "true" }, ["--images"])).toBe("images");
+  });
+
+  test("inconsistent_ci_env_fails", () => {
+    const inconsistent = "CI environment is inconsistent: GITHUB_ACTIONS is set and CI is not true";
+    expect(() => modeFor({ GITHUB_ACTIONS: "true" }, [])).toThrow(inconsistent);
+    expect(() => modeFor({ GITHUB_ACTIONS: "true", CI: "false" }, [])).toThrow(inconsistent);
+    expect(() => modeFor({ GITHUB_ACTIONS: "false", CI: "1" }, ["--images"])).toThrow(inconsistent);
+    // run.ts stops at start, before any discovery or Vitest run.
+    const env = { PATH: process.env.PATH ?? "", GITHUB_ACTIONS: "true", CI: "false" };
+    const run = spawnSync(process.execPath, [join(REPO, "scripts/test/run.ts")], {
+      cwd: fixture({}),
+      env,
+      encoding: "utf8",
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr.trim()).toBe(inconsistent);
+  });
+
+  test("listed_but_undiscovered_file_fails_in_ci", () => {
+    // A file Vitest lists that the glob did not discover (its exclude drifting from SKIP_DIRS) must still have run.
+    const glob = ["domains/x/a.test.ts"];
+    const listed = ["domains/x/a.test.ts", "vendor/x/b.test.ts"];
+    const toRun = filesToRun("ci", listed, glob);
+    expect(toRun).toEqual(listed);
+    expect(compare(glob, listed, new Set(glob), none, [], [], toRun).notExecuted).toEqual(["vendor/x/b.test.ts"]);
+    // Locally and in the opt-in, only the files the run starts are checked.
+    expect(filesToRun("local", listed, glob)).toEqual(glob);
+    expect(filesToRun("images", ["d/a.image.test.ts", ...listed], ["d/a.image.test.ts"])).toEqual([
+      "d/a.image.test.ts",
+    ]);
   });
 
   test("empty_images_project_fails_in_ci", async () => {
