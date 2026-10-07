@@ -5625,9 +5625,9 @@ shared-ui index, a relative `../ui/index.ts` value import). Done when `npm run c
 
 ### P1.25x — Pin the ui-build plan default with a test
 Tags: —            Depends on: P1.25w (merged, #516)
-Slice 1, check class (`scripts/budgets/`, `scripts/lint/`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups
-(amendment 2, 23:08Z), from the coordinator's check of #516. Owner: Phase 2. A tightening, cleared by the coordinator;
-not a classifier path, because it changes tests only.
+Slice 1, issue #521, check class (`scripts/budgets/`, `scripts/lint/`); book edit
+2026-10-07-p125w-p125d-ui-build-follow-ups (amendment 2, 23:08Z), from the coordinator's check of #516. Owner: Phase 2.
+A tightening, cleared by the coordinator; not a classifier path, because it changes tests only.
 
 **Why:** reverting the `shared/ui-build` key at `scripts/budgets/check.ts:24` leaves every test green. The comment at
 `check.test.ts:148-149` says the plan defaults carry the same number as budgets.json, but nothing asserts this.
