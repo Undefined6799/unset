@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.28o, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -199,6 +199,7 @@ flowchart LR
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
   P1_28r["P1.28r images project after unit tests"]
+  P1_28n["P1.28n image test gate gaps closed"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
   P1_28o["P1.28o edge drops apk-tools"]
@@ -307,6 +308,8 @@ flowchart LR
   P1_28j --> P1_28r
   P1_28r --> P1_29k
   P1_28r --> P1_29d
+  P1_28r --> P1_28n
+  P1_28n --> P1_29d
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -7047,6 +7050,28 @@ CI the images run shows N files, 0 skipped.
 
 ---
 
+### P1.28n — Close the image test gate's three gaps
+Tags: [SEC], check            Depends on: P1.28r (merged, #499)
+Slice 1, check class (`scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing, amendment 2 (21:45Z), from
+architecture's amendment 2 in 2026-10-07-test-timing-fuzz-and-image-tests, asked by the coordinator after P1.28r. A
+tightening; the coordinator clears it, no line from Alex and no classifier path. Owner: Phase 2. It goes before P1.29d,
+which gains it as a dependency. P1.29k is not held (coordinator, 21:39Z): the new rules check the whole repo once they
+land, so they cover P1.29k's files after the fact; if one breaks a rule, P1.28n's own PR goes red, and since it cannot
+fix a product file under SE-6, the fix goes in a small product PR first. That fails closed.
+
+- **(a) The CI mode.** `run.ts` `modeFor` uses CI mode when `CI === "true"` or `GITHUB_ACTIONS === "true"`; if
+  `GITHUB_ACTIONS` is set and `CI` is not `"true"`, it fails at start, so a `$GITHUB_ENV` rewrite becomes a red check,
+  not a silent skip of the image tests. Tests: `ci_mode_from_github_actions`, `inconsistent_ci_env_fails`.
+- **(b) Import resolution.** `image_builds_only_in_image_tests` resolves imports with dependency-cruiser's resolver, or
+  with `ts.resolveModuleName` and the root tsconfig, covering extensionless imports, `.js` to `.ts`, `index` and
+  `@unset/*` imports; an unresolvable relative or workspace import fails. Four fixtures, one per import form.
+- **(c) Listed files in CI.** In CI mode, `toRun = listed` (run.ts:288 at db046bf), and a file that is listed but not
+  discovered fails again. Test: `listed_but_undiscovered_file_fails_in_ci`.
+
+Done when `npm run check` is green and the CI log shows the images run in CI mode.
+
+---
+
 ### P1.30q — Allow the deploy preflight in the boundary matrix
 
 Check class (SE-6 `q`; issue #404), `scripts/lint` only (book edit 2026-10-07-p130q-p203e). The dependency-cruiser
@@ -7506,8 +7531,8 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
    stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v and P1.28r;
-   Phase 1):
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r and
+   P1.28n; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
