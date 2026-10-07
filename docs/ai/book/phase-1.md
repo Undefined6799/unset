@@ -7241,6 +7241,115 @@ tightening. The C8 test addresses ride on P1.30s.
 
 ---
 
+### P1.30s — Add the preflight's remaining ten checks
+
+Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 except C17 and C18 as designed
+in P1.30's table, in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
+
+**Split three ways** (book edit 2026-10-07-p130s-split-and-p128h, with architecture's
+2026-10-07-p130s-networks-and-caddyfile-reader behind it, which wins where they differ): P1.30s builds the ten
+checks with no new input contract; **P1.30t** builds C17 and **P1.30u** builds C18, below. All three are [SEC],
+product class, slice 1, owned by Phase 2, in the order s, t, u. No word from Alex: nothing is loosened. No
+part stacks on an unmerged PR. Steps that depended on P1.30s (P2.13a, P1.34, P2.26a,
+P5.03) depend on P1.30s, P1.30t and P1.30u.
+
+**C21's retirement report** (Phase 2's default, accepted as book text): `docs/human/retirement/retirement-check.json`
+holds `{ "retirement_part_a_complete": true }` and is read with the strict YAML parser. When the file is absent, C21
+fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The retirement step writes the file.
+
+**Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/checks/*.ts` (C13–C24 except C17 and C18); fixtures; tests.
+
+**Done when (tests):**
+- One failing fixture per check C13–C24 except C17 and C18 → exit 1 with that id. Named ones:
+  `c13_lexicon_authority_did_fails`, `c14_dev_mode_fails`, `c15_handle_domain_0x40_me_fails`,
+  `c16_confirmation_link_required`,
+  `c19_moderation_mail_missing_fails`,
+  `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
+  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
+  `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
+  `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
+- The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
+
+**As built** (#452, merged by Alex at 2026-10-07T12:55:18Z as `2d6f9f8`; book edit 2026-10-07-p130s-as-built): C24
+runs under the 30 s network timeout (`checks/host.ts:40`), a tightening; C15 in dev requires exactly one entry,
+`.0x40.space` (`settings.ts:143`), stricter than booked and accepted; the `Run` type lives in `checks/types.ts`; ASVS
+V13.4.2 is covered; the c14 test is `c14_dev_mode_fails`; the red evidence was a local run (11 failures), acceptable
+when CI cannot show it. Its stale comments (`checks/index.ts:10`, `index.ts:7-8`) are fixed in P1.30t.
+
+**Rider from P1.30 as built** (book edit 2026-10-07-p130-as-built): the C8 bypass-IP values in
+`preflight.test.ts:184-186` (`172.30.10.x`, copied from P1.29's planned network table) change to a documentation
+range, for example `198.51.100.2`, `198.51.100.4` and `198.51.100.0/24`. Any value fails C8, so the address is a
+stand-in, and the test's behaviour is unchanged.
+
+**Not in this step:** anything P1.30 builds; C17 (P1.30t); C18 (P1.30u).
+
+---
+
+### P1.30t — Check compose networks against a table
+
+Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from architecture's
+2026-10-07-p130s-networks-and-caddyfile-reader, point 1). The strict subset governs which YAML constructs are
+refused, not which fields are read, so reading `services.*.networks` and the top-level `networks` widens the fields,
+not the constructs.
+
+**Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/` (the parser's network fields, C17, the exported comparison); fixtures; tests.
+
+**Goal:** the parser models what Compose does: a service with no `networks:` key joins `default`, and a top-level
+`networks.default` changes that network's settings; `services.*.networks` in list form and in map form (keys
+`aliases`, `ipv4_address`, `ipv6_address`, `priority`; unknown keys fail); top-level keys `internal`, `driver` (only
+`bridge` or absent) and `name`; `external: true`, any other driver and `driver_opts` refused; `network_mode` set to
+anything on a service fails C17. C17 compares against `deployment/networks.<env>.json`, shaped `{ "<network>": {
+"internal": bool, "members": ["<service>", …] } }`, read with the strict YAML parser (it refuses duplicate keys,
+which `JSON.parse` resolves to the last one), exactly in both directions: every compose network is in the table and
+every table network in compose, members set-equal, `internal` equal, the implicit default network counted. A missing
+table fails C17 with "input missing". `preflight_matches_compose_config` compares networks too (this replaces the
+"networks are not compared" line of 2026-10-07-p130p-as-built from this step on). The comparison is exported for
+P1.29's `compose_dev_networks_match_table` (product importing product, allowed).
+
+**Done when (tests):** `c17_extra_service_on_pds_network_fails`, `c17_default_network_counted`,
+`c17_list_and_map_forms`, `c17_external_network_refused`, `c17_network_mode_fails`,
+`c17_table_mismatch_each_direction`, `c17_table_duplicate_key_refused`, `c17_missing_table_input_missing`; the
+all-good fixture still exits 0.
+
+**Not in this step:** C18 (P1.30u); `networks.dev.json` (P1.29, P1.29a).
+
+---
+
+### P1.30u — Check the edge's rate-limit zones
+
+Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h). C18 imports `deployment/edge/caddyfile.ts` (P1.28h);
+there is no second reader in `deployment/preflight/` (architecture refused one: the same parser differential it
+ruled out for YAML).
+
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h · **Plan:** as P1.30
+
+**Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
+
+**Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
+a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
+   `0X40.space` or `0x40.space.` reads as n/a). Test: `c21_hostname_case_and_trailing_dot`.
+b. Secret values never in output (`settings.ts:10` and `host.ts:15` take raw values out of the SecretMap; no reason
+   prints one today). Test: `failure_reasons_never_contain_secret_values`, every check run with one sentinel in every
+   SecretMap entry, on passing and failing fixtures, and no output line holds it. A type guard is optional.
+c. Untested branches: `c22_non_integer_video_max_fails`, `c23_no_service_sets_fingerprint_check`,
+   `c24_time_tool_exit_nonzero_fails` (`timedatectl` or `chronyc` exits non-zero), `c15_subdomain_entry_refused`
+   (for example `x.0x40.me`).
+d. C12's `LOG_LEVEL` allowlist, even with SMTP set (debug logs carry personal data beyond mail). Test:
+   `c12_log_level_outside_allowlist_fails`.
+If these take P1.30u past about 550 lines, they split out as **P1.30b** (leftovers, feature, depends on P1.30s) and
+P1.30u stays C18 alone.
+
+**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, and the riders' tests;
+the all-good fixture, now covering all 24 checks, exits 0.
+
+**Not in this step:** any change to `deployment/edge/` (P1.28h owns the reader).
+
+---
+
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
 **Split into ten parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
@@ -7552,115 +7661,6 @@ dev-seed:
 - `deploy/secrets/pds.env.example` → LESSON: its SMTP warning.
 
 **Not in this step:** production compose (P5.02/P5.03); Tap decisions (P3.01); real SMTP (P2.25 prerequisite).
-
----
-
-### P1.30s — Add the preflight's remaining ten checks
-
-Split from P1.30 (book edit 2026-10-07-p130-split; issue #400). Builds checks C13–C24 except C17 and C18 as designed
-in P1.30's table, in `deployment/preflight/checks/`, on P1.30's runner, parser and `SecretMap`; product class.
-
-**Split three ways** (book edit 2026-10-07-p130s-split-and-p128h, with architecture's
-2026-10-07-p130s-networks-and-caddyfile-reader behind it, which wins where they differ): P1.30s builds the ten
-checks with no new input contract; **P1.30t** builds C17 and **P1.30u** builds C18, below. All three are [SEC],
-product class, slice 1, owned by Phase 2, in the order s, t, u. No word from Alex: nothing is loosened. No
-part stacks on an unmerged PR. Steps that depended on P1.30s (P2.13a, P1.34, P2.26a,
-P5.03) depend on P1.30s, P1.30t and P1.30u.
-
-**C21's retirement report** (Phase 2's default, accepted as book text): `docs/human/retirement/retirement-check.json`
-holds `{ "retirement_part_a_complete": true }` and is read with the strict YAML parser. When the file is absent, C21
-fails on `PDS_HOSTNAME=0x40.space` and passes n/a on any other hostname. The retirement step writes the file.
-
-**Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
-
-**Where:** `deployment/preflight/checks/*.ts` (C13–C24 except C17 and C18); fixtures; tests.
-
-**Done when (tests):**
-- One failing fixture per check C13–C24 except C17 and C18 → exit 1 with that id. Named ones:
-  `c13_lexicon_authority_did_fails`, `c14_dev_mode_fails`, `c15_handle_domain_0x40_me_fails`,
-  `c16_confirmation_link_required`,
-  `c19_moderation_mail_missing_fails`,
-  `c20_mod_service_set_fails`, `c21_part_a_incomplete_fails` (this is P1.33a's
-  `part_a_complete_required_by_p134_preflight`), `c22_blob_limit_below_master_fails`,
-  `c23_prod_fake_fingerprint_fails`, `c24_clock_unsynchronised_fails` (stubbed `timedatectl` printing `no`; stubbed
-  `chronyc` reporting a 2.5 s offset; `timedatectl` missing → each FAIL).
-- The all-good fixture, extended to C13–C24 except C17 and C18 → exit 0.
-
-**As built** (#452, merged by Alex at 2026-10-07T12:55:18Z as `2d6f9f8`; book edit 2026-10-07-p130s-as-built): C24
-runs under the 30 s network timeout (`checks/host.ts:40`), a tightening; C15 in dev requires exactly one entry,
-`.0x40.space` (`settings.ts:143`), stricter than booked and accepted; the `Run` type lives in `checks/types.ts`; ASVS
-V13.4.2 is covered; the c14 test is `c14_dev_mode_fails`; the red evidence was a local run (11 failures), acceptable
-when CI cannot show it. Its stale comments (`checks/index.ts:10`, `index.ts:7-8`) are fixed in P1.30t.
-
-**Rider from P1.30 as built** (book edit 2026-10-07-p130-as-built): the C8 bypass-IP values in
-`preflight.test.ts:184-186` (`172.30.10.x`, copied from P1.29's planned network table) change to a documentation
-range, for example `198.51.100.2`, `198.51.100.4` and `198.51.100.0/24`. Any value fails C8, so the address is a
-stand-in, and the test's behaviour is unchanged.
-
-**Not in this step:** anything P1.30 builds; C17 (P1.30t); C18 (P1.30u).
-
----
-
-### P1.30t — Check compose networks against a table
-
-Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; rules from architecture's
-2026-10-07-p130s-networks-and-caddyfile-reader, point 1). The strict subset governs which YAML constructs are
-refused, not which fields are read, so reading `services.*.networks` and the top-level `networks` widens the fields,
-not the constructs.
-
-**Tags:** [SEC] · **Depends on:** P1.30 (merged, #435) · **Plan:** as P1.30
-
-**Where:** `deployment/preflight/` (the parser's network fields, C17, the exported comparison); fixtures; tests.
-
-**Goal:** the parser models what Compose does: a service with no `networks:` key joins `default`, and a top-level
-`networks.default` changes that network's settings; `services.*.networks` in list form and in map form (keys
-`aliases`, `ipv4_address`, `ipv6_address`, `priority`; unknown keys fail); top-level keys `internal`, `driver` (only
-`bridge` or absent) and `name`; `external: true`, any other driver and `driver_opts` refused; `network_mode` set to
-anything on a service fails C17. C17 compares against `deployment/networks.<env>.json`, shaped `{ "<network>": {
-"internal": bool, "members": ["<service>", …] } }`, read with the strict YAML parser (it refuses duplicate keys,
-which `JSON.parse` resolves to the last one), exactly in both directions: every compose network is in the table and
-every table network in compose, members set-equal, `internal` equal, the implicit default network counted. A missing
-table fails C17 with "input missing". `preflight_matches_compose_config` compares networks too (this replaces the
-"networks are not compared" line of 2026-10-07-p130p-as-built from this step on). The comparison is exported for
-P1.29's `compose_dev_networks_match_table` (product importing product, allowed).
-
-**Done when (tests):** `c17_extra_service_on_pds_network_fails`, `c17_default_network_counted`,
-`c17_list_and_map_forms`, `c17_external_network_refused`, `c17_network_mode_fails`,
-`c17_table_mismatch_each_direction`, `c17_table_duplicate_key_refused`, `c17_missing_table_input_missing`; the
-all-good fixture still exits 0.
-
-**Not in this step:** C18 (P1.30u); `networks.dev.json` (P1.29, P1.29a).
-
----
-
-### P1.30u — Check the edge's rate-limit zones
-
-Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h). C18 imports `deployment/edge/caddyfile.ts` (P1.28h);
-there is no second reader in `deployment/preflight/` (architecture refused one: the same parser differential it
-ruled out for YAML).
-
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h · **Plan:** as P1.30
-
-**Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
-
-**Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
-a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
-   `0X40.space` or `0x40.space.` reads as n/a). Test: `c21_hostname_case_and_trailing_dot`.
-b. Secret values never in output (`settings.ts:10` and `host.ts:15` take raw values out of the SecretMap; no reason
-   prints one today). Test: `failure_reasons_never_contain_secret_values`, every check run with one sentinel in every
-   SecretMap entry, on passing and failing fixtures, and no output line holds it. A type guard is optional.
-c. Untested branches: `c22_non_integer_video_max_fails`, `c23_no_service_sets_fingerprint_check`,
-   `c24_time_tool_exit_nonzero_fails` (`timedatectl` or `chronyc` exits non-zero), `c15_subdomain_entry_refused`
-   (for example `x.0x40.me`).
-d. C12's `LOG_LEVEL` allowlist, even with SMTP set (debug logs carry personal data beyond mail). Test:
-   `c12_log_level_outside_allowlist_fails`.
-If these take P1.30u past about 550 lines, they split out as **P1.30b** (leftovers, feature, depends on P1.30s) and
-P1.30u stays C18 alone.
-
-**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, and the riders' tests;
-the all-good fixture, now covering all 24 checks, exits 0.
-
-**Not in this step:** any change to `deployment/edge/` (P1.28h owns the reader).
 
 ---
 
