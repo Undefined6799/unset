@@ -62,12 +62,10 @@ function baseProblems(dockerfile: string, lock: Lock): string[] {
   return images.flatMap((image) => {
     const pinned = PINNED.exec(image);
     if (pinned === null) return [`FROM ${image} is not pinned by digest`];
-    const [, ref = "", , digest = ""] = pinned;
+    const [, ref = ""] = pinned;
     if (!allowed(ref)) return [`FROM ${image} is not from an allowed host`];
-    const locked = Object.values(lock).filter((base) => base.ref === ref);
-    if (locked.length === 0) return [`FROM ${image} has no lock entry`];
-    if (locked.some((base) => base.digest === digest)) return [];
-    return [`FROM ${image} differs from the lock digest ${locked.map((base) => base.digest).join(" or ")}`];
+    if (!Object.values(lock).some((base) => base.ref === ref)) return [`FROM ${image} has no lock entry`];
+    return lockEntriesOf(image, lock).length > 0 ? [] : [`FROM ${image} matches no lock entry by tag and digest`];
   });
 }
 
@@ -100,10 +98,13 @@ function finalFrom(dockerfile: string): string | undefined {
   return last;
 }
 
-/** Every lock entry, by name, that a pinned image reference names exactly; one image may be listed more than once. */
+/**
+ * Every lock entry, by name, that a pinned image reference names exactly: ref, tag and digest (amendment 4), so the
+ * runtime digest under a build entry's tag names no entry. One image may be listed more than once.
+ */
 function lockEntriesOf(image: string, lock: Lock): [string, Base][] {
-  const ref = PINNED.exec(image)?.[1];
-  return Object.entries(lock).filter(([, b]) => b.ref === ref && image.endsWith(`@${b.digest}`));
+  const [, ref, tag, digest] = PINNED.exec(image) ?? [];
+  return Object.entries(lock).filter(([, b]) => b.ref === ref && b.tag === tag && b.digest === digest);
 }
 
 /** The runtime lock entry the final stage builds on, by name; undefined for scratch, a build base or no entry. */
@@ -533,8 +534,17 @@ describe("base images", () => {
     }
     const other = `sha256:${"1".repeat(64)}`;
     expect(baseProblems(`FROM docker.io/library/node:${NODE.tag}@${other} AS build`, lock)).toEqual([
-      `FROM docker.io/library/node:${NODE.tag}@${other} differs from the lock digest ${NODE.digest}`,
+      `FROM docker.io/library/node:${NODE.tag}@${other} matches no lock entry by tag and digest`,
     ]);
+    // Amendment 4: a FROM matches its entry on ref, tag and digest, so the runtime digest under the builder's tag (or
+    // no tag) is no entry at all.
+    const runtime = lock.caddy as Base;
+    const builder = lock["caddy-builder"] as Base;
+    for (const image of [`${runtime.ref}:${builder.tag}@${runtime.digest}`, `${runtime.ref}@${runtime.digest}`]) {
+      expect(baseProblems(`FROM ${image}`, lock), image).toEqual([
+        `FROM ${image} matches no lock entry by tag and digest`,
+      ]);
+    }
     // A later stage may build on an earlier one by name; only real images are checked.
     expect(baseProblems(`FROM ${pinnedNode} AS build\nFROM build AS test`, lock)).toEqual([]);
   });
@@ -779,6 +789,11 @@ describe("base images", () => {
       `final FROM ${build} is a build base`,
     ]);
     expect(finalStageProblems(`FROM ${build}`, { b: builder, r: { ...builder, stage: "runtime" } })).toEqual([]);
+    // Amendment 4: the builder's tag on the runtime digest resolves to no entry, so it cannot pass as the runtime base.
+    const crossed = `${runtime.ref}:${builder.tag}@${runtime.digest}`;
+    expect(finalStageProblems(`FROM ${build} AS b\nFROM ${crossed}`, lock)).toEqual([
+      `final FROM ${crossed} has no lock entry`,
+    ]);
     expect(finalStageProblems(`FROM ${build} AS b\nFROM b AS c\nFROM c`, lock)).toEqual([
       `final FROM ${build} is a build base`,
     ]);
