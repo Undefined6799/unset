@@ -42,6 +42,10 @@ const EVENTS = [
   // with the namespace as kind, never the key, which is usually a DID).
   "lock.hold_exceeded",
   "lock.lost",
+  // P2.03, the browser session store: a session's last-seen touch failed (the error class as kind; the session stays
+  // valid for that request), and the expiry sweep finished (the count of sessions deleted, never a DID).
+  "session.touch_failed",
+  "session.sweep",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
