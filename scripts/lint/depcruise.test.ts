@@ -89,6 +89,11 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   ],
   shared: [edge("shared/config/a.ts", "../errors/index.ts"), edge("shared/http/a.ts", "node:http")],
   "shared-ui-lexicons": [edge("shared/lexicons/a.ts", "@atproto/lex"), edge("shared/ui/a.ts", "./b.ts")],
+  "shared-ui-build": [
+    edge("shared/ui-build/a.ts", "./b.ts"),
+    edge("shared/ui-build/a.ts", "../ui/index.ts", "type"),
+    edge("shared/ui-build/a.ts", "left-pad"),
+  ],
   "shared-admin-envelope": [
     edge("shared/admin-envelope/a.ts", "node:crypto"),
     edge("shared/admin-envelope/a.ts", "./b.ts"),
@@ -377,6 +382,25 @@ describe("allowlist matrix", () => {
       edge("infrastructure/storage/a.ts", "../audit/index.ts"),
       edge("shared/ui/a.ts", "../config/index.ts"),
     );
+  });
+
+  test("shared_ui_build_is_pure", async () => {
+    // P1.25w (architecture ruling 2026-10-07-p125h-follow-ups, N2): the build runners take their IO injected, so no
+    // Node built-in, and they see shared/ui only as types through its index.
+    await expectFail(
+      "not-in-allowed",
+      edge("shared/ui-build/a.ts", "node:fs"),
+      edge("shared/ui-build/a.ts", "../ui/index.ts"),
+      edge("shared/ui-build/a.ts", "../ui/b.ts", "type"),
+    );
+    // A relative value import of the index fails too, whichever rule names it.
+    await expectFail(null, edge("shared/ui-build/a.ts", "../ui/index.ts"));
+    // shared/ui's own row stops at its trailing slash, so it never covers shared/ui-build.
+    const uiFrom = config.MATRIX.find((row) => row.name === "shared-ui-lexicons")?.from as
+      | { path?: string }
+      | undefined;
+    expect(new RegExp(uiFrom?.path ?? "$^").test("shared/ui-build/a.ts")).toBe(false);
+    expect(new RegExp(uiFrom?.path ?? "$^").test("shared/ui/a.ts")).toBe(true);
   });
 
   test("deployment_preflight_is_a_leaf", async () => {

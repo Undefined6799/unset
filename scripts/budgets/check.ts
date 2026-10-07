@@ -20,6 +20,8 @@ const PLAN_DEFAULTS: Readonly<Record<string, number>> = {
   "apps/admin + interfaces/admin + interfaces/pds-admin + infrastructure/audit": 3000,
   "infrastructure/net-guard": 400,
   "shared/ui": 2500,
+  // The UI build runners, moved out of shared/ui by P1.25h; measured on their own (P1.25w).
+  "shared/ui-build": 800,
 };
 
 const COUNTED = /\.(ts|tsx)$/;
