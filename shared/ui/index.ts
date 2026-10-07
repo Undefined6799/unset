@@ -8,6 +8,13 @@ export {
   type PropsSchema,
 } from "./islands/define.ts";
 export { type JsonValue, renderPropsTag, SerializeError, serializeProps } from "./islands/props.ts";
+// P1.24j: where a kit component places an island; apps/web provides the renderer.
+export {
+  type IslandRenderer,
+  IslandRendererContext,
+  IslandSlot,
+  type IslandSlotProps,
+} from "./islands/slot.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";
 export type { FallbackFace, FontMetrics } from "./scripts/build-tokens.ts";

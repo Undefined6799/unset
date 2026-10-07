@@ -1,5 +1,5 @@
 // Server render of pages and islands (P1.23's Done-when list), through the render entry interfaces/http calls.
-import { defineIsland, type IslandDefinition, type JsonValue } from "@unset/shared-ui";
+import { defineIsland, type IslandDefinition, IslandSlot, type JsonValue } from "@unset/shared-ui";
 import { describe, expect, test } from "vitest";
 import {
   type Assets,
@@ -16,8 +16,9 @@ const has =
   <K extends string>(key: K) =>
   (v: unknown): v is Record<K, JsonValue> =>
     typeof v === "object" && v !== null && key in v;
+const demo = defineIsland(({ n }: { n: number }) => <button type="button">{n}</button>, { propsSchema: hasN });
 const ISLANDS = new Map<string, IslandDefinition>([
-  ["demo", defineIsland(({ n }: { n: number }) => <button type="button">{n}</button>, { propsSchema: hasN })],
+  ["demo", demo],
   ["echo", defineIsland(({ text }: { text: JsonValue }) => <p>{String(text)}</p>, { propsSchema: has("text") })],
   [
     "labels",
@@ -114,6 +115,18 @@ describe("islands on the server", () => {
     expect([...html.matchAll(/data-island-id="([^"]+)"/g)].map((m) => m[1])).toEqual(["i1", "i2", "i3"]);
     expect(html.match(/rel="modulepreload"/g)).toHaveLength(3); // demo-2, echo-3, shared-4: each once
     expect(render(page).html).toBe(html); // the counter restarts per page
+  });
+
+  test("island_slot_with_provider_wraps_island", () => {
+    // A kit component's IslandSlot (P1.24j) hydrates on a page: the document provides the renderer.
+    const { html } = render(<IslandSlot name="demo" island={demo} props={{ n: 1 }} />);
+    expect(html).toContain('<div data-island="demo" data-island-id="i1"><button type="button">1</button></div>');
+    expect(html).toContain('<script type="application/json" id="i1">{"n":1}</script>');
+    expect(scripts(html)).toContain('<script type="module" src="https://unset.test/assets/boot-1.js">');
+    // The name must be the registry's name for that very definition.
+    const lookalike = defineIsland(({ n }: { n: number }) => <i>{n}</i>, { propsSchema: hasN });
+    expect(() => render(<IslandSlot name="demo" island={lookalike} props={{ n: 1 }} />)).toThrow(IslandUnknown);
+    expect(() => render(<IslandSlot name="echo" island={demo} props={{ n: 1 }} />)).toThrow(IslandUnknown);
   });
 
   test("island_unknown_throws", () => {
