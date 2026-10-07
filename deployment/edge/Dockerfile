@@ -22,10 +22,11 @@ LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset" \
       org.opencontainers.image.licenses="AGPL-3.0-only AND Apache-2.0"
 COPY --from=build /out/caddy /usr/bin/caddy
 # The built binary gets cap_net_bind_service only, so it binds 80 and 443 as a non-root user; then setcap's package,
-# curl and the base's sample site go.
+# curl and the base's sample site go, and apk-tools last, so the image ships no package manager (P1.28o).
 RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \
     && apk del --no-network curl libcap \
-    && rm -rf /usr/share/caddy /etc/caddy
+    && rm -rf /usr/share/caddy /etc/caddy \
+    && apk del --no-network apk-tools
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY snippets/ /etc/caddy/snippets/
 COPY sites/pds.caddy /etc/caddy/sites/pds.caddy
