@@ -5709,9 +5709,9 @@ every red fixture fails, every green one passes, and the real `shared/ui-build` 
 Tags: check            Depends on: P1.25h (merged, #464)
 As built: merged by Alex at 2026-10-07T23:21:28Z as `1bd6c0d` (#523).
 Slice 1, check class (`scripts/budgets/island.ts` and its test); book edit 2026-10-07-p125l-islands-lazy-chunks, from
-architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: Phase 2. A tightening that restores the adopted island
-model (plan §5.1), cleared by the coordinator. #464's first build inlined islands into boot and the budget silently
-counted fewer, so the manifest is checked against the source list.
+architecture's 2026-10-07-p125h-boot-chunk (part 3). Owner: the third thread (moved from Phase 2 by the coordinator at
+22:38Z). A tightening that restores the adopted island model (plan §5.1), cleared by the coordinator. #464's first build
+inlined islands into boot and the budget silently counted fewer, so the manifest is checked against the source list.
 
 `islandsAreLazyChunks` reads the Vite manifest (the `ManifestChunk` type, `island.ts:16-23`), never the build log, and
 runs in `main` before the size gate; a refusal exits 1 and names the island (and, for rule 3, the entry that reaches
@@ -5795,11 +5795,11 @@ subpath (DC-2).
 
 ### P1.25u — Drop the island runtime's old owner paths
 Tags: check            Depends on: P1.25i
-Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: Phase 2. Removes
-`/shared/ui/islands/`, `/shared/ui/src/islands/`, `/shared/ui/islands/props.ts` and
-`/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping `/shared/ui/safe-href.ts`, then confirms
-with `git ls-files` that none of the removed paths exists and that the trusted-base tests pass. A tightening: it
-removes ownership only from paths that no longer exist.
+Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: the third thread
+(moved from Phase 2 by the coordinator at 22:38Z). Removes `/shared/ui/islands/`, `/shared/ui/src/islands/`,
+`/shared/ui/islands/props.ts` and `/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping
+`/shared/ui/safe-href.ts`, then confirms with `git ls-files` that none of the removed paths exists and that the
+trusted-base tests pass. A tightening: it removes ownership only from paths that no longer exist.
 
 ---
 
