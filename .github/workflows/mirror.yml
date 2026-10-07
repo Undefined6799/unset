@@ -32,6 +32,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Scan every upstream source by digest
+        # `shell: bash` runs the step as `bash --noprofile --norc -eo pipefail {0}`; with no shell key Actions runs
+        # `bash -e {0}`, and the HIGH run's status would be tee's (P1.28w; docs.github.com workflow syntax, "shell").
+        shell: bash
         run: |
           if [ ! -e "$MIRROR_LIST" ]; then
             echo "::notice title=mirror::skipped, no mirror list yet (lands in P1.27)"
@@ -39,6 +42,9 @@ jobs:
           fi
           jq -r '.[] | [.source, (.stage // "none")] | @tsv' "$MIRROR_LIST" > "$RUNNER_TEMP/entries"
           test -s "$RUNNER_TEMP/entries"
+          # One Trivy cache for every run in this job, so the vulnerability database downloads once (P1.28w).
+          cache="$RUNNER_TEMP/trivy-cache"
+          mkdir -p "$cache"
           # Per stage (P1.28v, Alex's "Warn on build-only" 2026-10-07T03:56:37Z): a runtime base fails on HIGH or
           # CRITICAL; a build-only base fails on CRITICAL and only reports HIGH, as a warning and in the job summary,
           # because what ships is gated by the image jobs' own scans. Trivy v0.74.0 exits with --exit-code when it
@@ -51,7 +57,8 @@ jobs:
                 severity=CRITICAL
                 status=0
                 { echo "### HIGH findings in build-only base $source"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-                docker run --rm -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" image --exit-code 2 --severity HIGH \
+                docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
+                  image --exit-code 2 --severity HIGH \
                   --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source" \
                   | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
                 echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -63,6 +70,7 @@ jobs:
                 ;;
               *) echo "no known stage for $source: $stage"; exit 1 ;;
             esac
-            docker run --rm -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" image --exit-code 1 --severity "$severity" \
+            docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
+              image --exit-code 1 --severity "$severity" \
               --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source"
           done < "$RUNNER_TEMP/entries"
