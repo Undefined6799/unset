@@ -1,7 +1,8 @@
 // P1.27: the image's bases are pinned and the Dockerfile ships only what production runs (step book P1.27; architecture
 // ruling 2026-10-06 23:15Z, book edit 2026-10-06-p127-upstream-base-by-digest). Every FROM, the build stages included,
 // names its base by the multi-arch index digest recorded in deployment/images/bases.lock.json, from a host on a fixed
-// allowlist: the one official upstream image (interim, until P1.27s mirrors it and flips the host) and our GHCR
+// allowlist: Docker's official library images, each named (interim, until P1.27s mirrors them and flips the host; book edit
+// 2026-10-07-p128-edge-bases-and-ratelimit-adr widened it from Node alone for the edge's Caddy bases) and our GHCR
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,8 +16,10 @@ const DOCKERFILE = "images/node-app.Dockerfile";
 type Base = { ref: string; tag: string; digest: string; source: "upstream" | "mirror" };
 type Lock = Record<string, Base>;
 
-/** Where a base may come from: the official Node image upstream (interim) and our own GHCR namespace. */
-const ALLOWED = [/^docker\.io\/library\/node$/, /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/];
+/** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
+const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy"]);
+const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
+const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
 const PINNED = /^([a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+)(?::([\w][\w.-]{0,127}))?@(sha256:[0-9a-f]{64})$/;
 
@@ -42,7 +45,7 @@ function baseProblems(dockerfile: string, lock: Lock): string[] {
     const pinned = PINNED.exec(image);
     if (pinned === null) return [`FROM ${image} is not pinned by digest`];
     const [, ref = "", , digest = ""] = pinned;
-    if (!ALLOWED.some((host) => host.test(ref))) return [`FROM ${image} is not from an allowed host`];
+    if (!allowed(ref)) return [`FROM ${image} is not from an allowed host`];
     const locked = Object.values(lock).find((base) => base.ref === ref);
     if (locked === undefined) return [`FROM ${image} has no lock entry`];
     return locked.digest === digest ? [] : [`FROM ${image} differs from the lock digest ${locked.digest}`];
@@ -74,7 +77,13 @@ describe("base images", () => {
   });
 
   test("from_host_not_allowlisted_refused", () => {
-    for (const ref of ["quay.io/library/node", "docker.io/library/nodejs", "ghcr.io/someone-else/node"]) {
+    for (const ref of [
+      "quay.io/library/node",
+      "docker.io/someone/node",
+      "docker.io/library/a/node",
+      "docker.io/library/nginx",
+      "ghcr.io/someone-else/node",
+    ]) {
       const image = `${ref}:${NODE.tag}@${NODE.digest}`;
       expect(baseProblems(`FROM --platform=linux/amd64 ${image}`, lock)).toEqual([
         `FROM ${image} is not from an allowed host`,
@@ -83,7 +92,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -91,6 +100,18 @@ describe("base images", () => {
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
     });
+    // The edge's bases (P1.28): Caddy's builder and runtime images, both Alpine, both by index digest.
+    for (const [name, tag] of [
+      ["caddy-builder", /^2\.11\.7-builder-alpine$/],
+      ["caddy", /^2\.11\.7-alpine$/],
+    ] as const) {
+      expect(lock[name], name).toStrictEqual({
+        ref: "docker.io/library/caddy",
+        tag: expect.stringMatching(tag),
+        digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        source: "upstream",
+      });
+    }
   });
 
   test("runtime_base_is_alpine", () => {
@@ -123,7 +144,12 @@ describe("base images", () => {
 
   test("mirror_list_digest_only", () => {
     const list = JSON.parse(read("mirror.list.json")) as { source: string; mirror: string }[];
-    expect(list.map((entry) => entry.source)).toContain(pinnedNode);
+    // Every upstream base in the lock is scanned weekly by the mirror workflow, and nothing else is listed.
+    const upstream = Object.values(lock)
+      .filter((base) => base.source === "upstream")
+      .map((base) => `${base.ref}:${base.tag}@${base.digest}`);
+    expect(list.map((entry) => entry.source)).toEqual(upstream);
+    expect(upstream).toContain(pinnedNode);
     for (const entry of list) {
       expect(entry.source, entry.source).toMatch(PINNED);
       expect(entry.mirror, entry.source).toMatch(/^ghcr\.io\/undefined6799\/mirror\/[a-z0-9._-]+$/);
