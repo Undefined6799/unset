@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 116 steps: 95 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 117 steps: 96 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -220,6 +220,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
+| P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted | [SEC] | P1.28 | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30q | Allow the deploy preflight in the boundary matrix (check part of P1.30; SE-6 q) | [SEC] | — | `phase-1.md` |
 | P1.30p | Strict Compose parser and SecretMap (split from P1.30) | [SEC] | P1.30q | `phase-1.md` |
@@ -335,6 +336,7 @@ flowchart TD
   P1_28v["P1.28v mirror scan per stage"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
+  P1_28b["P1.28b Edge leftovers"]
   P1_29["P1.29 Development stack"]
   P1_30q["P1.30q preflight boundary row"]
   P1_30p["P1.30p compose parser and SecretMap"]
@@ -460,6 +462,7 @@ flowchart TD
   P1_27 --> P1_28
   P1_11p --> P1_29
   P1_28 --> P1_29
+  P1_28 --> P1_28b
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p

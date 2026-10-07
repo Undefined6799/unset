@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28, P1.28b,
   P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -172,6 +172,7 @@ flowchart LR
   P1_28v["P1.28v mirror scan per stage [ALEX]"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
+  P1_28b["P1.28b edge leftovers"]
   P1_29["P1.29 compose.dev.yaml"]
   P1_30q["P1.30q preflight boundary row"]
   P1_30p["P1.30p compose parser and SecretMap"]
@@ -220,6 +221,7 @@ flowchart LR
   P1_11 --> P1_29
   P1_27 --> P1_29
   P1_28 -.-> P1_29
+  P1_28 --> P1_28b
   P1_27 --> P1_30
   P1_30q --> P1_30
   P1_30q --> P1_30p
@@ -4956,8 +4958,10 @@ enhanced by an island.
 - `Footer` (links, and one slot that P1.25 fills by route group: `PrefsForms` on app pages, `LanguageLinks` on
   public pages, P1.22).
 - `Tabs`: two modes (book edit 2026-10-07-p124j-tabs-modes-and-styles-entry). Default: without JS, each tab is a link
-  to `?tab=<id>` and the server renders only that panel (`aria-current="page"`); island `tabs.island.tsx` intercepts
-  the links and navigates, fetching nothing new. `eager`: the server renders every panel with the unchosen ones
+  to `?tab=<id>` and the server renders only that panel (`aria-current="page"`). In the default mode the tabs island
+  adds keyboard handling only (the ARIA tabs pattern, with roving tabindex and arrow keys between the tab links).
+  Choosing a tab is still a plain navigation to ?tab=<id>, and the server renders that panel. There is no fetch and no
+  client-side panel swap. `eager`: the server renders every panel with the unchosen ones
   `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the URL in
   sync with `history.replaceState`. See "Tabs eager mode" below.
 - `Modal`: requires `fallbackHref` — without JS the trigger is a link to a full page with the same content; island
@@ -5038,8 +5042,10 @@ CSS alone, so no-JS shows only the chosen panel and `?tab=` still picks it
 (`tabs_eager_hides_unchosen_with_hidden_attribute`). Hiding is not a security boundary: hidden panels ship in the
 HTML, so every panel of an eager Tabs holds only what the viewer may see on that request, and a panel that needs a
 different permission or costly data uses the default mode. Eager mode departs from P1.24k's "server renders only the
-chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the island
-intercepts the links and fetches nothing new: it navigates. In eager mode an unknown `?tab=` falls back to the first
+chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the tabs island
+adds keyboard handling only (the ARIA tabs pattern, with roving tabindex and arrow keys between the tab links).
+Choosing a tab is still a plain navigation to ?tab=<id>, and the server renders that panel. There is no fetch and no
+client-side panel swap. In eager mode an unknown `?tab=` falls back to the first
 tab and is not echoed, and the island switches panels client-side with the ARIA tabs pattern. Mode of each booked
 use (checked on main 16d10ee): P4.21 and P4.22, the `/home` feed tab bar, use the default (per-viewer feeds loaded
 through the PDS proxy, and P4.21 already routes `?tab=<id>` to the server); the P1.24j and P1.26 showcase shows both
@@ -5763,7 +5769,7 @@ minimal `permissions`, nothing pushed or signed until P1.27s.
 
 ### P1.28d — Label every base entry with its stage
 
-Issue #396.
+Issue #396. Status: built (#412).
 
 **Tags:** [SEC] · **Depends on:** P1.27 (merged) · **Class:** feature (neutral: it neither tightens nor loosens a
 check, so it does not wait for Alex) · records 2026-10-07-p128-edge-bases-and-ratelimit-adr (section "Mirror scan of
@@ -6101,6 +6107,34 @@ takes admin Basic auth).
 
 **Not in this step:** the app host's site config (Phase 2); the PDS's own settings (P1.29, P1.30); `LOG_ENABLED`
 on the PDS (P1.30 C12).
+
+**As built:** merged by Alex as #409 at 2026-10-07T03:31:33Z; three leftovers go to P1.28b.
+
+---
+
+### P1.28b — Edge leftovers
+
+Issue #415. Trusted base (book edit 2026-10-07-p128b-edge-leftovers): `/deployment/edge/` is in CODEOWNERS' trusted section, so
+the PR carries only `deployment/edge/**`, edge-path tests (`tests/integration/deployment/edge/`) and the ADR status
+line; docs never change its class. If pr-shape reports mixed, the PR stops and asks the step book.
+
+**Tags:** [SEC] · **Depends on:** P1.28 (merged; in Phase 2's lane it follows P1.28d and P1.30p, lane order only) ·
+**Size:** small
+
+**Contents:**
+1. `pds_route_without_zone_fails`, the negative twin of `every_pds_route_has_a_zone`: a fixture PDS route with no
+   `rate_limit` zone fails the check.
+2. Documentation addresses: in `tests/integration/deployment/edge/edge.test.ts` (lines 137 and 152 to 154),
+   `1.2.3.4` and `5.6.7.8` become addresses from `192.0.2.0/24` (RFC 5737), for example `192.0.2.10` and
+   `192.0.2.20`; a test that needs two different /64s also uses `2001:db8::/32` (RFC 3849).
+3. ADR 0018's status line (`docs/human/decisions/0018-edge-rate-limit-plugin.md:3`) becomes "Accepted (Alex merged
+   the P1.28 pull request, #409, at 2026-10-07T03:31:33Z)". The ADR named that PR as the place for his word, and it
+   was not yet accepted, so the status line is the only change. If Alex objects, the line goes back to Proposed and
+   the open points go to a card.
+
+The long-window zones `session_day` and `firehose_hour` are checked statically: a runtime trip would need a day or an
+hour of requests, or a fake clock the pinned plugin does not offer. The short-window zones prove the mechanism at
+runtime.
 
 ---
 
