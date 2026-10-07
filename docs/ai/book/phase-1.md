@@ -2802,12 +2802,12 @@ Diagram: none.
 
 ### P1.14d — Sealed type and column registry (split from P1.14)
 Tags: [SEC]            Depends on: P1.14, P1.13 (or P1.14m, if split)            Plan: §5.3
-Where: `infrastructure/postgres/migrations/<next>_sealed_type.sql` (`types.sealed`; the next free number when it opens:
-  0004 is P1.13's and 0005 P1.16g's),
+Where: `infrastructure/postgres/migrations/0007_sealed_type.sql` (`types.sealed`; built as 0007 in #376, merged
+  2026-10-07 00:43Z),
   `infrastructure/postgres/sealed-columns.json`, `SealedColumnId` (`keyof` that JSON, no generator) and the mapping
   from a column id and row key to seal's context string, `rewrapAll` with `--check`, `sealed-columns.test.ts`.
   The `d` letter: unused on P1.14, and r1's suggested `b` was never booked.
-Class check before opening: if local pr-shape classes `0005_sealed_type.sql` as trusted base, split once more into
+Class check before opening: if local pr-shape classes `0007_sealed_type.sql` as trusted base, split once more into
   **P1.14m** (trusted: the migration plus `tests/integration/postgres/` tests only) and P1.14d (product: JSON, types,
   `rewrapAll` and its tests), which then depends on P1.14m.
 Size: ~80 source lines.
@@ -2838,18 +2838,18 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      and `CREATE TRIGGER x AFTER INSERT ON t EXECUTE FUNCTION f('TRUNCATE')`. A loosening: it opens only with
      Alex's typed word naming the change and the branch, quoted in the PR body.
   0b. **P1.15q** (check path, [ALEX]; depends on nothing; architecture 00:24Z, book edit 2026-10-06-p115m-tailnet-deferral-steps): pr-shape refuses
-     0007 and 0009 with `mixed_grant_change`, because `SET ROLE` and `RESET ROLE` are neutral findings and
+     0008 and 0010 with `mixed_grant_change`, because `SET ROLE` and `RESET ROLE` are neutral findings and
      `scripts/guards/trusted-base.ts`'s `kindOf` counts any neutral finding in a trusted file as mixed. In
      `trusted-base.ts` and its tests only, `kindOf` leaves out exactly two findings when judging trusted versus mixed:
      an exact `SET ROLE <ident>` and a bare `RESET ROLE`. Every other neutral finding still counts, and a file holding
      only `SET ROLE` stays not trusted. Fixtures: `trusted_file_with_set_role_is_trusted`,
      `set_role_with_feature_statement_still_mixed`, `set_role_only_file_not_trusted`,
-     `set_role_with_extra_tokens_unclassified`; the P0.09m fixture is unchanged. 0007 and 0009 each end with
+     `set_role_with_extra_tokens_unclassified`; the P0.09m fixture is unchanged. 0008 and 0010 each end with
      `RESET ROLE`. A loosening: it opens only after Alex's word on the card naming P1.15q is verified. (The id reuses
      the lapsed, never-issued allow-entry draft.)
-  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, P1.15q, never stacked on P1.15x; and on #126's 0005 and P1.16's
-     0006 for migration order only):
-     `infrastructure/postgres/migrations/0007_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
+  1. **P1.15m** (trusted; depends on P1.12, P1.13, P1.15x, P1.15q, never stacked on P1.15x; and on #126's 0005, P1.16's
+     0006 and P1.14d's 0007 (#376) for migration order only):
+     `infrastructure/postgres/migrations/0008_audit.sql` (the number free at open time) under `SET ROLE audit_owner`,
      with `retention_classes`, `actions`, `reasons`, `chain`, `event_body`, `audit.row_hash`,
      `audit.append`, the triggers, auditor SELECT and the default-privileges line; the `grant-matrix.json` and
      `erasure-registry.json` rows. Tests in `tests/integration/postgres/audit.test.ts`: `append_as_admin`,
@@ -2859,27 +2859,28 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      only the owner holds it, and the grants test proves no role does (a default-privileges path that grants it goes
      back to architecture). The append-only trigger is statement-level (see Triggers below).
      **Three-way split** (book edit 2026-10-06-p115m-tailnet-deferral-steps, split section final 00:03Z; local pr-shape
-     reports mixed_grant_change on one 0007, so the class comes from pr-shape, the P1.14m precedent). The SQL above
+     reports mixed_grant_change on one 0008, so the class comes from pr-shape, the P1.14m precedent). The SQL above
      ships in three PRs, merged in number order, each leaving main green:
-     - **P1.15m** (trusted; P1.15x, P1.15q, P1.12, P1.13), 0007: the `types` and `public` USAGE grants to `audit_owner`,
+     - **P1.15m** (trusted; P1.15x, P1.15q, P1.12, P1.13), 0008: the `types` and `public` USAGE grants to `audit_owner`,
        `audit_owner`'s routine default privilege, the four `audit.*` plpgsql functions, the matrix `schemas` and
        `defaults` lines and the `grants.test.ts` stand-in updates. The default privilege revoking EXECUTE from
        PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
-       0007. No 0007 function depends on an audit table (no audit table type in a signature, no `%ROWTYPE`, no
+       0008. No 0008 function depends on an audit table (no audit table type in a signature, no `%ROWTYPE`, no
        `LANGUAGE sql` body).
-     - **P1.15d** (feature; P1.15m), 0008 under `SET ROLE audit_owner`: the tables (five under the "No
+     - **P1.15d** (feature; P1.15m), 0009 under `SET ROLE audit_owner`: the tables (five under the "No
        address" answer below), the seeds, the `(writer, ts)` index with its PF-1 evidence, the triggers (the
        statement-level one included; none on `event_pii`), auditor's SELECT on the chain, the matrix `audit.chain`
        row and the registry rows (no `event_pii` row).
-     - **P1.15g** (trusted, grant migration; P1.15d), 0009: `GRANT EXECUTE ON audit.append` to `web`, `indexer` and
-       `admin` (only they hold it after 0009), the matrix `audit.append` row, and
+     - **P1.15g** (trusted, grant migration; P1.15d), 0010: `GRANT EXECUTE ON audit.append` to `web`, `indexer` and
+       `admin` (only they hold it after 0010), the matrix `audit.append` row, and
        `tests/integration/postgres/audit.test.ts`.
      **No audit PII** (P1a-A1 answered "No address", 2026-10-07; book edit 2026-10-06-p115m-tailnet-deferral-steps, architecture 00:20Z):
-     `audit.event_pii` goes entirely. In 0007 `audit.append` has no `p_pii` and no step 7, `redact` works on the body
-     only, and `erase_subject` has no `event_pii` clause; 0008 creates five tables (`retention_classes`, `actions`,
+     `audit.event_pii` goes entirely. In 0008 `audit.append` has no `p_pii` and no step 7, `redact` works on the body
+     only, and `erase_subject` has no `event_pii` clause; 0009 creates five tables (`retention_classes`, `actions`,
      `reasons`, `chain`, `event_body`) with no `event_pii` trigger or registry row; the verifier's `full` mode checks
-     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_parameter`. P1.15q and P1.15t are
-     retired and `ip-columns.allow.json` stays `[]`. Any future audit PII is Alex's decision and an expand migration
+     body MACs only (P1.15). `pii_only_admin` is replaced by `append_has_no_pii_parameter`. P1.15t is retired (the
+     P1.15q id is reused above for the check step) and `ip-columns.allow.json` stays `[]`. Any future audit PII is
+     Alex's decision and an expand migration
      with a new signature. `adm.session.login_ip` and `pds-admin`'s staff addresses (P3.17) are unchanged. The text
      below is amended to match.
   2. **P1.15** (trusted; depends on P1.15g, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
@@ -2889,7 +2890,7 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      `tamper_chain_metadata`, `tamper_body`. P1.14 and P1.15 each add one trusted workspace alone: two PRs after
      P1.14q, in either order.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
-Where: `infrastructure/postgres/migrations/0007` to `0009` (P1.15m, P1.15d, P1.15g), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
+Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
   (P1.15) + tests; `erasure-registry.json` and `grant-matrix.json` rows (P1.15m to P1.15g)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
 
