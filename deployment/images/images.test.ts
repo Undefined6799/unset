@@ -98,9 +98,12 @@ function finalStageProblems(dockerfile: string, lock: Lock): string[] {
 /**
  * Images and URLs named outside FROM (P1.28u; architecture record 2026-10-07-p128-copy-from-image-ref): `COPY --from=`
  * and a `RUN --mount` `from=` may name only an earlier stage, by alias (case-insensitive, as BuildKit matches it) or
- * index, and `ADD` takes local sources only. An image that is really needed gets its own `FROM … AS name` stage, so
- * every rule above applies to it; there is no allowlist. Read against the Dockerfile reference (docs.docker.com/
- * reference/dockerfile, "COPY --from", "RUN --mount", "ADD"). Anything this reader cannot parse is a problem, never a skip.
+ * index. An image that is really needed gets its own `FROM … AS name` stage, so every rule above applies to it; there
+ * is no allowlist. Read against the Dockerfile reference (docs.docker.com/reference/dockerfile, "COPY --from",
+ * "RUN --mount", "ADD", "Parser directives"). Anything this reader cannot parse is a problem, never a skip.
+ * P1.28t (architecture record 2026-10-07-p128u-reader-gaps): where BuildKit's exact behaviour is unconfirmed, the reader
+ * refuses more, never less. ADD is refused outright (hadolint DL3020); flags and mount keys are read in any letter case;
+ * the `syntax` and `escape` parser directives are refused (an unpinned frontend image; a different line join).
  */
 const INSTRUCTIONS = new Set(
   "ADD ARG CMD COPY ENTRYPOINT ENV EXPOSE FROM HEALTHCHECK LABEL MAINTAINER ONBUILD RUN SHELL STOPSIGNAL USER VOLUME WORKDIR".split(
@@ -126,7 +129,9 @@ function instructions(text: string): { line: number; text: string }[] {
   let open: { line: number; text: string } | undefined;
   for (const [at, raw] of text.split("\n").entries()) {
     const line = raw.trim();
-    if (/^#\s*escape\s*=/i.test(line)) throw new Unparsed("parser directive escape not supported", at + 1);
+    const directive = /^#\s*(syntax|escape)\s*=/i.exec(line)?.[1];
+    if (directive !== undefined)
+      throw new Unparsed(`parser directive ${directive.toLowerCase()} not supported`, at + 1);
     if (line === "" || line.startsWith("#")) continue;
     const body = line.endsWith("\\") ? line.slice(0, -1).trimEnd() : line;
     open = open === undefined ? { line: at + 1, text: body } : { line: open.line, text: `${open.text} ${body}` };
@@ -139,12 +144,12 @@ function instructions(text: string): { line: number; text: string }[] {
   return out;
 }
 
-/** The leading `--flag` words of an instruction's arguments, and the rest. */
+/** The leading `--flag` words of an instruction's arguments, and the rest; flag names are lower-cased (`--FROM=x`). */
 function splitFlags(args: string): { flags: string[]; rest: string } {
   const flags: string[] = [];
   let rest = args;
   for (let match = /^(--\S*)\s*/.exec(rest); match !== null; match = /^(--\S*)\s*/.exec(rest)) {
-    flags.push(match[1] as string);
+    flags.push((match[1] as string).replace(/^--[A-Za-z-]+/, (name) => name.toLowerCase()));
     rest = rest.slice(match[0].length);
   }
   return { flags, rest };
@@ -171,27 +176,13 @@ function mountProblems(flags: string[], earlier: Earlier): string[] {
       const mount = /^--mount=([^"']*)$/.exec(flag)?.[1];
       if (mount === undefined) throw new Unparsed("cannot parse RUN --mount");
       return mount.split(",").flatMap((part) => {
-        const [key, ...value] = part.split("=");
+        const [key = "", ...value] = part.split("=");
         const from = value.join("=");
-        return key === "from" && !earlier(from) ? [`RUN --mount from=${from} is not an earlier stage`] : [];
+        return key.toLowerCase() === "from" && !earlier(from)
+          ? [`RUN --mount from=${from} is not an earlier stage`]
+          : [];
       });
     });
-}
-
-/** ADD's sources (every argument but the destination, shell or JSON form) that are a URL or a git repository. */
-function addSourceProblems(rest: string): string[] {
-  let args: unknown;
-  try {
-    args = rest.startsWith("[") ? JSON.parse(rest) : rest.split(/\s+/);
-  } catch {
-    throw new Unparsed("cannot parse ADD sources");
-  }
-  if (!Array.isArray(args) || args.length < 2 || !args.every((a) => typeof a === "string" && a !== "")) {
-    throw new Unparsed("cannot parse ADD sources");
-  }
-  return (args.slice(0, -1) as string[])
-    .filter((source) => source.includes("://") || /^git@/.test(source) || /\.git(?:#|$)/.test(source))
-    .map((source) => `ADD ${source} is not a local source`);
 }
 
 /** What one instruction after the first FROM names outside FROM; ONBUILD's instruction is held to the same rule. */
@@ -201,11 +192,12 @@ function instructionProblems(keyword: string, args: string, earlier: Earlier): s
     if (inner === undefined) throw new Unparsed("cannot parse ONBUILD");
     return instructionProblems(inner.toUpperCase(), rest, earlier);
   }
-  if (!["RUN", "COPY", "ADD"].includes(keyword)) return [];
+  if (keyword === "ADD") return ["ADD is not allowed; use COPY"];
+  if (!["RUN", "COPY"].includes(keyword)) return [];
   if (HEREDOC.test(args)) throw new Unparsed("heredoc not supported");
-  const { flags, rest } = splitFlags(args);
+  const { flags } = splitFlags(args);
   if (keyword === "RUN") return mountProblems(flags, earlier);
-  return [...fromFlagProblems(keyword, flags, earlier), ...(keyword === "ADD" ? addSourceProblems(rest) : [])];
+  return fromFlagProblems(keyword, flags, earlier);
 }
 
 /** The stages declared so far: each FROM enters one, and `earlier` answers for the stage being read. */
@@ -453,21 +445,52 @@ describe("references outside FROM", () => {
     ).toEqual([]);
   });
 
-  test("add_remote_source_refused", () => {
-    for (const source of [
-      "https://example.com/tool.tar.gz",
-      "git@example.com:owner/repo.git",
-      "https://example.com/owner/repo.git#main",
-      "example.com/owner/repo.git#v1",
+  test("add_refused", () => {
+    // ADD's extra powers (URLs, git refs, tar extraction) bring in unpinned content, and a variable hides its source.
+    for (const args of [
+      "local.tar /opt/",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile build argument, not a JS template.
+      "${SRC} /opt/",
+      "deploy@example.com:o/r /opt/",
+      "https://example.com/tool.tar.gz /opt/",
+      '["local.tar", "/opt/"]',
+      "--chown=1:1 local.tar /opt/",
     ]) {
-      expect(referenceProblems(`FROM ${node}\nADD ${source} /opt/`), source).toEqual([
-        `line 2: ADD ${source} is not a local source`,
+      expect(referenceProblems(`FROM ${node}\nADD ${args}`), args).toEqual(["line 2: ADD is not allowed; use COPY"]);
+    }
+    expect(referenceProblems(`FROM ${node}\nadd local.tar /opt/\nONBUILD ADD local.tar /opt/`)).toEqual([
+      "line 2: ADD is not allowed; use COPY",
+      "line 3: ADD is not allowed; use COPY",
+    ]);
+  });
+
+  test("mount_from_key_any_case_refused", () => {
+    // BuildKit's flag and mount-key letter case is unconfirmed, so every case is read as the lower-case one.
+    for (const key of ["FROM", "From", "fRoM"]) {
+      expect(referenceProblems(`${twoStages}RUN --mount=type=bind,${key}=img,target=/x true`), key).toEqual([
+        "line 3: RUN --mount from=img is not an earlier stage",
       ]);
     }
-    expect(referenceProblems(`FROM ${node}\nADD ["local.tar", "https://example.com/x", "/opt/"]`)).toEqual([
-      "line 2: ADD https://example.com/x is not a local source",
+    expect(referenceProblems(`${twoStages}RUN --MOUNT=from=img,target=/x true\nCOPY --FROM=img /a /b`)).toEqual([
+      "line 3: RUN --mount from=img is not an earlier stage",
+      "line 4: COPY --from=img is not an earlier stage",
     ]);
-    expect(referenceProblems(`FROM ${node}\nADD --chown=1:1 local.tar other/ /opt/`)).toEqual([]);
+  });
+
+  test("syntax_directive_refused", () => {
+    for (const directive of ["# syntax=docker/dockerfile:1", "#syntax = docker/dockerfile:1", "# SYNTAX=x"]) {
+      expect(referenceProblems(`${directive}\nFROM ${node}`), directive).toEqual([
+        "line 1: parser directive syntax not supported",
+      ]);
+    }
+  });
+
+  test("escape_directive_refused", () => {
+    for (const directive of ["# escape=`", "#Escape = \\"]) {
+      expect(referenceProblems(`${directive}\nFROM ${node}`), directive).toEqual([
+        "line 1: parser directive escape not supported",
+      ]);
+    }
   });
 
   test("copy_from_stage_alias_or_index_allowed", () => {
@@ -486,9 +509,7 @@ describe("references outside FROM", () => {
       [`FROM ${node}\nFETCH https://example.com/x /y`, "line 2: unknown instruction FETCH"],
       [`FROM ${node}\nCOPY --from build /a /b`, "line 2: cannot parse COPY flag --from"],
       [`FROM ${node}\nRUN --mount=type=bind,"from=x",target=/y true`, "line 2: cannot parse RUN --mount"],
-      [`FROM ${node}\nADD ["unclosed /opt/`, "line 2: cannot parse ADD sources"],
       [`FROM ${node}\nCOPY <<EOF /x\nhello\nEOF`, "line 2: heredoc not supported"],
-      [`# escape=\`\nFROM ${node}`, "line 1: parser directive escape not supported"],
       [`FROM ${node} AS a b`, "line 1: cannot parse FROM"],
       ["", "the Dockerfile has no FROM"],
     ] as const) {
@@ -501,7 +522,8 @@ describe("references outside FROM", () => {
   });
 
   test("real_dockerfiles_name_images_only_in_from", () => {
-    expect(dockerfiles).toEqual(["edge/Dockerfile", "images/node-app.Dockerfile"]);
+    // A floor, not an exact list: a new Dockerfile under deployment/ is checked without editing this test.
+    expect(dockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile", "images/node-app.Dockerfile"]));
     for (const file of dockerfiles) expect(referenceProblems(read(file)), file).toEqual([]);
   });
 });
