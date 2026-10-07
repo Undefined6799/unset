@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 99 steps: 81 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 103 steps: 85 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -177,8 +177,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.14 | Seal: AES-256-GCM envelope encryption with key ids, bound contexts and rotation | [SEC] | P1.14q, P1.02, P1.12 | `phase-1.md` |
 | P1.14d | Sealed type and column registry (split from P1.14; P1.14m first if pr-shape classes the migration trusted) | [SEC] | P1.14, P1.13 | `phase-1.md` |
 | P1.15x | Migration lint: allow TRUNCATE as a trigger event only (product; loosening) | [ALEX] | P1.11 | `phase-1.md` |
-| P1.15m | Audit SQL: tables, `append()`, `row_hash`, triggers, grants (split from P1.15; trusted) | [SEC] | P1.12, P1.13, P1.15x | `phase-1.md` |
-| P1.15 | Audit TS workspace: actions, append, rowHash, verify (trusted; SQL in P1.15m) | [SEC] | P1.15m, P1.14q | `phase-1.md` |
+| P1.15m | Audit SQL part 1: schema grants, default privilege, functions (trusted) | [SEC] | P1.15x, P1.12, P1.13 | `phase-1.md` |
+| P1.15d | Audit SQL part 2: tables, seeds, index, triggers, auditor SELECT | [SEC] | P1.15m | `phase-1.md` |
+| P1.15g | Audit SQL part 3: EXECUTE grants on `audit.append`, audit tests (trusted) | [SEC] | P1.15d | `phase-1.md` |
+| P1.15 | Audit TS workspace: actions, append, rowHash, verify (trusted; SQL in P1.15m to P1.15g) | [SEC] | P1.15g, P1.14q | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
@@ -203,9 +205,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
 | P1.24 | UI kit, part 1a: Button, Link, Tag, Mark, SectionHeading, Kbd and the form components | — (every sheet piece approved, sheet v45, 2026-10-04) | P1.24i, P1.24h, P1.23c | `phase-1.md` |
 | P1.24s | UI kit, part 1b: Avatar, Switch, SkipLink, MediaFrame, DescriptionList, Pagination | — | P1.24i, P1.24h, P1.23c | `phase-1.md` |
-| P1.24a | UI kit, part 2: blocks, chrome and interactive components (added step) | — | P1.24, P1.24s, P1.24q, P1.23, P1.23r | `phase-1.md` |
-| P1.25 | App shell and error pages | — | P1.24, P1.24a, P1.08 | `phase-1.md` |
-| P1.26 | Accessibility and browser test harness | — | P1.25 | `phase-1.md` |
+| P1.24a | UI kit 2a: zero-JS blocks (added step; split 2026-10-07) | — | P1.24, P1.24s, P1.24q, P1.23, P1.23r | `phase-1.md` |
+| P1.24k | UI kit 2b: chrome and feed, no-JS | — | P1.24a | `phase-1.md` |
+| P1.24j | Islands, budget-measured | — | P1.24k | `phase-1.md` |
+| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
+| P1.26 | Accessibility and browser test harness | — | P1.25, P1.24j | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.28 | Edge (Caddy) | [SEC] | P1.27 | `phase-1.md` |
@@ -278,7 +282,9 @@ flowchart TD
   P1_14["P1.14 Seal: AES-256-GCM envelope"]
   P1_14d["P1.14d Sealed type and registry"]
   P1_15x["P1.15x Lint: TRUNCATE trigger event"]
-  P1_15m["P1.15m Audit SQL"]
+  P1_15m["P1.15m Audit SQL part 1"]
+  P1_15d["P1.15d Audit SQL part 2"]
+  P1_15g["P1.15g Audit SQL part 3"]
   P1_15["P1.15 Audit TS workspace"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
@@ -302,7 +308,9 @@ flowchart TD
   P1_24q["P1.24q UI inventory guard"]
   P1_24["P1.24 UI kit"]
   P1_24s["P1.24s UI kit part 1b"]
-  P1_24a["P1.24a UI kit"]
+  P1_24a["P1.24a UI kit: zero-JS blocks"]
+  P1_24k["P1.24k UI kit: chrome and feed"]
+  P1_24j["P1.24j Islands"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -363,7 +371,9 @@ flowchart TD
   P1_13 --> P1_15m
   P1_11 --> P1_15x
   P1_15x --> P1_15m
-  P1_15m --> P1_15
+  P1_15m --> P1_15d
+  P1_15d --> P1_15g
+  P1_15g --> P1_15
   P1_14q --> P1_15
   P1_13 --> P1_16
   P1_16g --> P1_16
@@ -406,7 +416,10 @@ flowchart TD
   P1_23 --> P1_23r
   P1_23r --> P1_24i
   P1_23r --> P1_24a
-  P1_24a --> P1_25
+  P1_24a --> P1_24k
+  P1_24k --> P1_24j
+  P1_24k --> P1_25
+  P1_24j --> P1_26
   P1_25 --> P1_26
   P1_04 --> P1_27
   P1_27 --> P1_28
@@ -523,7 +536,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
-| P1.24b | Remaining islands, after the budget ruling (added step) | — | P1.24a, plus an architecture ruling (runtime share or budget raise) | `phase-1.md` |
+| P1.24b | Remaining islands, after the budget ruling (added step) | — | P1.24j, plus an architecture ruling (runtime share or budget raise) | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
 
