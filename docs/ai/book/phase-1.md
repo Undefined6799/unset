@@ -4952,9 +4952,11 @@ enhanced by an island.
   Escape-to-close and focus return.
 - `Footer` (links, and one slot that P1.25 fills by route group: `PrefsForms` on app pages, `LanguageLinks` on
   public pages, P1.22).
-- `Tabs`: without JS, each tab is a link to `?tab=<id>` and the server renders that panel (`aria-current="page"`);
-  island `tabs.island.tsx` turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the
-  URL in sync with `history.replaceState`.
+- `Tabs`: two modes (book edit 2026-10-07-p124j-tabs-modes-and-styles-entry). Default: without JS, each tab is a link
+  to `?tab=<id>` and the server renders only that panel (`aria-current="page"`); island `tabs.island.tsx` intercepts
+  the links and navigates, fetching nothing new. `eager`: the server renders every panel with the unchosen ones
+  `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the URL in
+  sync with `history.replaceState`. See "Tabs eager mode" below.
 - `Modal`: requires `fallbackHref` — without JS the trigger is a link to a full page with the same content; island
   `modal.island.tsx` opens a native `<dialog>` with `showModal()` (focus trap and Escape come from the
   platform), returns focus to the trigger on close.
@@ -5033,14 +5035,23 @@ CSS alone, so no-JS shows only the chosen panel and `?tab=` still picks it
 (`tabs_eager_hides_unchosen_with_hidden_attribute`). Hiding is not a security boundary: hidden panels ship in the
 HTML, so every panel of an eager Tabs holds only what the viewer may see on that request, and a panel that needs a
 different permission or costly data uses the default mode. Eager mode departs from P1.24k's "server renders only the
-chosen panel"; the step book's departure record names which mode each booked use takes, before the P1.24j PR opens.
+chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the island
+intercepts the links and fetches nothing new: it navigates. In eager mode an unknown `?tab=` falls back to the first
+tab and is not echoed, and the island switches panels client-side with the ARIA tabs pattern. Mode of each booked
+use (checked on main 16d10ee): P4.21 and P4.22, the `/home` feed tab bar, use the default (per-viewer feeds loaded
+through the PDS proxy, and P4.21 already routes `?tab=<id>` to the server); the P1.24j and P1.26 showcase shows both
+modes, each with its own fixture, and P1.26 runs the keyboard and axe tests on both; P2.13 `SettingsShell` is links to
+separate routes, not a Tabs use. A new use names its mode in its step text; if it does not, it uses the default.
+If the IslandSlot and eager additions push P1.24j past about 400 source lines the body says why; past 800 it splits
+at an island boundary and comes back to the step book.
 
 **The styles entry in the island total** (same record): `apps/web/src/styles.ts` is a build device whose output that
 matters is CSS; its JS (3,735 gzip bytes of class-name maps) is never requested by a page, so it does not belong in
 the island total. First fix, product side, inside P1.24j: the entry imports the CSS Modules for side effect only
 instead of exporting the eager glob's maps, on vite 8.3.1 and rolldown, with the build's CSS output unchanged
 (`styles_entry_emits_css_only`: the entry's JS is under 300 gzip bytes and the CSS asset list is unchanged). Only if
-that fails: **P1.24q**, a check-class PR in `scripts/budgets/` alone, which is a loosening and needs Alex's word
+that fails: **P1.24v** (architecture wrote P1.24q, an id the merged UI inventory guard #368 holds; booked only if
+needed, step book 2026-10-07-p124j-tabs-modes-and-styles-entry), a check-class PR in `scripts/budgets/` alone, which is a loosening and needs Alex's word
 naming the change ("the styles entry's JS leaves the island total") and the branch. Its exclusion matches the
 manifest key `src/styles.ts` exactly, fails if that chunk imports or dynamically imports any JS chunk or if any island
 or bootstrap chunk imports it, and prints the excluded bytes on every run (`styles_entry_excluded_only_by_exact_key`,
