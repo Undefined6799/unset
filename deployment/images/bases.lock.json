@@ -4,5 +4,17 @@
     "tag": "26-alpine",
     "digest": "sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80",
     "source": "upstream"
+  },
+  "caddy-builder": {
+    "ref": "docker.io/library/caddy",
+    "tag": "2.11.7-builder-alpine",
+    "digest": "sha256:80331d37e7d4d230f186f2707079e279f32552924f101ee659e8cae9f9877c26",
+    "source": "upstream"
+  },
+  "caddy": {
+    "ref": "docker.io/library/caddy",
+    "tag": "2.11.7-alpine",
+    "digest": "sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
+    "source": "upstream"
   }
 }
