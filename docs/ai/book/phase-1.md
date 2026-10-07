@@ -4952,9 +4952,11 @@ enhanced by an island.
   Escape-to-close and focus return.
 - `Footer` (links, and one slot that P1.25 fills by route group: `PrefsForms` on app pages, `LanguageLinks` on
   public pages, P1.22).
-- `Tabs`: without JS, each tab is a link to `?tab=<id>` and the server renders that panel (`aria-current="page"`);
-  island `tabs.island.tsx` turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the
-  URL in sync with `history.replaceState`.
+- `Tabs`: two modes (book edit 2026-10-07-p124j-tabs-modes-and-styles-entry). Default: without JS, each tab is a link
+  to `?tab=<id>` and the server renders only that panel (`aria-current="page"`); island `tabs.island.tsx` intercepts
+  the links and navigates, fetching nothing new. `eager`: the server renders every panel with the unchosen ones
+  `hidden`; the island turns it into the ARIA tabs pattern with roving tabindex and arrow keys, and keeps the URL in
+  sync with `history.replaceState`. See "Tabs eager mode" below.
 - `Modal`: requires `fallbackHref` — without JS the trigger is a link to a full page with the same content; island
   `modal.island.tsx` opens a native `<dialog>` with `showModal()` (focus trap and Escape come from the
   platform), returns focus to the trigger on close.
@@ -5011,6 +5013,52 @@ lists the total after each island it adds, measured by `scripts/budgets/island.t
 in order of need; if the next one would cross the total, this step stops at the last one that fits and reports it. It
 never raises the budget or ships an island over it. The rest wait in **P1.24b**.
 
+**How kit components place islands: `IslandSlot`** (architecture 2026-10-07 03:45Z, record
+2026-10-07-p124j-island-slots-and-styles-budget; option A). `shared/ui` declares the slot and `apps/web` supplies the
+renderer by context, so the dependency still points from apps to shared, and a component renders correctly with no
+provider (showcase, tests, zero-JS pages get the server markup). Conditions:
+1. The slot takes the island's `IslandDefinition` from its `*.island.tsx`, its registry name and the props. With no
+   provider it runs the same `propsSchema` and P1.10 serialiser checks before rendering, so invalid props fail in both
+   paths (`island_slot_static_checks_props`).
+2. Sibling ids come from the per-render counter or React's `useId`, never from data; an island reaches sibling server
+   markup only by an id in its props, as `apps/web/src/islands/runtime/island.tsx` does (`island_slot_ids_not_from_data`).
+3. An island owns only its serialisable part (the copy button, the tablist, the menu toggle, the modal trigger).
+   ReactNode children never cross into props; the slot's types refuse them, so the mistake fails at compile time.
+4. No provider means static (`island_slot_without_provider_renders_static`); with the provider the island is wrapped
+   (`island_slot_with_provider_wraps_island`, in apps/web).
+No ADR: no dependency or boundary changes. Architecture adds the guideline line "shared/ui places an island only
+through IslandSlot; apps/web provides the renderer" in its own document.
+
+**Tabs eager mode** (same record): `Tabs` keeps both modes. The default stays as above (tabs as `?tab=` links, only
+the chosen panel rendered). `eager` renders every panel and hides the unchosen ones with the `hidden` attribute, not
+CSS alone, so no-JS shows only the chosen panel and `?tab=` still picks it
+(`tabs_eager_hides_unchosen_with_hidden_attribute`). Hiding is not a security boundary: hidden panels ship in the
+HTML, so every panel of an eager Tabs holds only what the viewer may see on that request, and a panel that needs a
+different permission or costly data uses the default mode. Eager mode departs from P1.24k's "server renders only the
+chosen panel" (departure record 2026-10-07-p124j-tabs-modes-and-styles-entry). In the default mode the island
+intercepts the links and fetches nothing new: it navigates. In eager mode an unknown `?tab=` falls back to the first
+tab and is not echoed, and the island switches panels client-side with the ARIA tabs pattern. Mode of each booked
+use (checked on main 16d10ee): P4.21 and P4.22, the `/home` feed tab bar, use the default (per-viewer feeds loaded
+through the PDS proxy, and P4.21 already routes `?tab=<id>` to the server); the P1.24j and P1.26 showcase shows both
+modes, each with its own fixture, and P1.26 runs the keyboard and axe tests on both; P2.13 `SettingsShell` is links to
+separate routes, not a Tabs use. A new use names its mode in its step text; if it does not, it uses the default.
+If the IslandSlot and eager additions push P1.24j past about 400 source lines the body says why; past 800 it splits
+at an island boundary and comes back to the step book.
+
+**The styles entry in the island total** (same record): `apps/web/src/styles.ts` is a build device whose output that
+matters is CSS; its JS (3,735 gzip bytes of class-name maps) is never requested by a page, so it does not belong in
+the island total. First fix, product side, inside P1.24j: the entry imports the CSS Modules for side effect only
+instead of exporting the eager glob's maps, on vite 8.3.1 and rolldown, with the build's CSS output unchanged
+(`styles_entry_emits_css_only`: the entry's JS is under 300 gzip bytes and the CSS asset list is unchanged). Only if
+that fails: **P1.24v** (architecture wrote P1.24q, an id the merged UI inventory guard #368 holds; booked only if
+needed, step book 2026-10-07-p124j-tabs-modes-and-styles-entry), a check-class PR in `scripts/budgets/` alone, which is a loosening and needs Alex's word
+naming the change ("the styles entry's JS leaves the island total") and the branch. Its exclusion matches the
+manifest key `src/styles.ts` exactly, fails if that chunk imports or dynamically imports any JS chunk or if any island
+or bootstrap chunk imports it, and prints the excluded bytes on every run (`styles_entry_excluded_only_by_exact_key`,
+`styles_entry_with_imports_fails`, and in apps/web `pages_never_load_styles_entry`). The per-island 15 KB gate, the
+75 KB total and the CSS budget still hold. Until then the step builds islands in book order and stops at the last
+one that fits the current measure.
+
 **Done when (tests):**
 - Island total reported per island in the PR body; stop at the budget.
 - `inventory_all_built`: 23 entries `built` (plus stop items untouched).
@@ -5033,6 +5081,10 @@ never raises the budget or ships an island over it. The rest wait in **P1.24b**.
 - `ascii_background_deterministic`: same seed → identical HTML on two renders; `aria-hidden`.
 - `no_inner_html_lint`: fixture island using `dangerouslySetInnerHTML` → P0.06's `inner-html` guard fails.
 - `kit_islands_budget`: each kit island ≤15 KB gzipped.
+- `island_slot_static_checks_props`, `island_slot_ids_not_from_data`, `island_slot_without_provider_renders_static`,
+  `island_slot_with_provider_wraps_island` (apps/web).
+- `tabs_eager_hides_unchosen_with_hidden_attribute`; the P1.24k Tabs tests stay for the default mode.
+- `styles_entry_emits_css_only`.
 - `kit_axe_both_themes_js_and_nojs` via P1.26.
 - `card_no_solid_variant`: `Card` has no `solid` prop (type error) and renders on the opaque `surface-card`.
 - `toast_nojs_server_printed`, `toast_live_region_from_load`, `toast_never_auto_hides`.
