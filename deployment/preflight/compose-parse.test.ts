@@ -51,6 +51,19 @@ describe("compose subset", () => {
     refused(`${base}    environment:\n      A: pre\${B}\n`);
     refused(`${base}    environment:\n      A:\n`);
   });
+  // P1.30n: a network's `name` is the real Docker network name, so two keys could share one network, or one key could
+  // take another's `<project>_<key>`, merging networks the C17 table keeps apart. The project `name:` stays allowed.
+  test("network_name_is_refused", () => {
+    const stack = (networks: string) => `${base}    networks: [a, b]\nnetworks:\n${networks}`;
+    // The project-level `name:` alone, with no network `name`, is accepted.
+    expect(parseCompose(stack("  a: {}\n  b: {}\n"), "c.yaml").name).toBe("unset-prod");
+    expect(() => parseCompose(stack("  a:\n    name: shared\n  b:\n    name: shared\n"), "c.yaml")).toThrow(
+      /network a: name is refused/,
+    );
+    expect(() => parseCompose(stack("  a:\n    name: unset-prod_b\n  b: {}\n"), "c.yaml")).toThrow(
+      /network a: name is refused/,
+    );
+  });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
 });
 

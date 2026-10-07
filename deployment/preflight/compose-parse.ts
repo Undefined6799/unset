@@ -168,7 +168,9 @@ function service(r: Reader, name: string, spec: unknown): Service {
 }
 
 const ATTACHMENT_KEYS = new Set(["aliases", "ipv4_address", "ipv6_address", "priority"]);
-const NETWORK_KEYS = new Set(["internal", "driver", "name"]);
+// No `name`: it is the real Docker network name, so two keys could share one network, or one key could take another's
+// `<project>_<key>`, merging networks the C17 table keeps apart (P1.30n). The project's own `name:` is unaffected.
+const NETWORK_KEYS = new Set(["internal", "driver"]);
 const isEmpty = (node: unknown): boolean => node === null || (isScalar(node) && node.value === null);
 
 /** `networks:` on a service, as a list of keys or a map of key to attachment; with neither it is on `default`. */
@@ -214,7 +216,6 @@ function networks(r: Reader, node: unknown): Network[] {
     if (spec.has("driver") && r.text(spec.get("driver", true), "driver") !== "bridge") {
       r.fail(spec.get("driver", true), `network ${name}: driver other than bridge`);
     }
-    if (spec.has("name")) r.text(spec.get("name", true), "network name");
     const internal = spec.get("internal", true);
     if (internal === undefined) return { name, internal: false };
     if (!isScalar(internal) || typeof internal.value !== "boolean") {
