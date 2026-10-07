@@ -1,0 +1,57 @@
+/* Callout (P1.24a; sheet components/Callout/README.md, v45): colour on the glyph and its box only. The sheet's 13px
+   glyph and 1.5px dashes become the 12px label size and a 1px line, since this CSS takes only tokens and 1-3px lines. */
+@layer components {
+  .root {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background-color: var(--color-surface-raised);
+    box-shadow: var(--shadow-1);
+    border-radius: var(--radius-xs);
+  }
+
+  .glyph {
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px dashed currentcolor;
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    font-weight: var(--type-heading-1-weight);
+    line-height: var(--type-label-line);
+  }
+
+  .body {
+    min-width: 0;
+  }
+
+  .title {
+    color: var(--color-ink);
+    font-weight: var(--type-heading-3-weight);
+  }
+
+  .text {
+    color: var(--color-ink-muted);
+  }
+
+  .info {
+    color: var(--color-link);
+  }
+
+  .danger {
+    color: var(--color-danger);
+  }
+
+  .success {
+    color: var(--color-success);
+  }
+
+  .note {
+    color: var(--color-ink-muted);
+  }
+}

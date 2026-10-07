@@ -1,0 +1,24 @@
+/* Progress (P1.24a; sheet components/Progress/README.md, v45): mono 14px; brackets and `-` in `line-strong`. */
+@layer components {
+  .root {
+    position: relative;
+    display: inline-block;
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    white-space: pre;
+  }
+
+  .rule {
+    color: var(--color-line-strong);
+  }
+
+  .done {
+    color: var(--color-success);
+  }
+
+  .label {
+    color: var(--color-ink-muted);
+  }
+}

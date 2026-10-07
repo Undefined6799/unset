@@ -1,0 +1,45 @@
+/* CodeBlock (P1.24a; sheet components/CodeBlock/README.md, v45): level 1, bar and code padded space-3 × space-4. */
+@layer components {
+  .root {
+    background-color: var(--color-surface-raised);
+    box-shadow: var(--shadow-1);
+    border-radius: var(--radius-xs);
+  }
+
+  .bar {
+    min-height: var(--type-code-line);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+  }
+
+  .pre {
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    overflow-x: auto;
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+    white-space: pre;
+  }
+
+  .comment {
+    color: var(--color-ink-muted);
+  }
+
+  .section {
+    color: var(--color-plum);
+  }
+
+  .string {
+    color: var(--color-cyan);
+  }
+
+  .number {
+    color: var(--color-emerald);
+  }
+}
