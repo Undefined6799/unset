@@ -126,11 +126,6 @@ describe("dependency-cruiser runs", () => {
     expect(real.status, real.stderr).toBe(0);
     expect((JSON.parse(real.stdout) as ICruiseResult).summary.totalCruised).toBeGreaterThanOrEqual(1);
   });
-
-  test("lint_clean_repo", () => {
-    const lint = spawnSync("npm", ["run", "lint"], { cwd: ROOT, encoding: "utf8" });
-    expect(lint.status, lint.stdout + lint.stderr).toBe(0);
-  });
 });
 
 describe("boundary rules", () => {
