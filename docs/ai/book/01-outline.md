@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 108 steps: 90 from `phase-1.md`, 18 from `phase-2.md` (including the
+Depth: **build-ready**. 110 steps: 92 from `phase-1.md`, 18 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -216,7 +216,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.27d | Switch the web image base to Debian slim (`node:26-trixie-slim`, Alex 2026-10-07 01:29Z) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28q | images.yml: build, lint, scan, health-check the edge image | check | P1.27q, P1.27 | `phase-1.md` |
-| P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature) | [SEC] | P1.27 | `phase-1.md` |
+| P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
+| P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
+| P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature) | [SEC] | P1.27, P1.28v | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) | [SEC] | P1.12p, P1.12x, P1.11p, P1.27, P1.28 | `phase-1.md` |
 | P1.30 | Deploy preflight | [SEC] | P1.27 | `phase-1.md` |
@@ -323,6 +325,8 @@ flowchart TD
   P1_27["P1.27 Container images"]
   P1_27d["P1.27d Web image on Debian slim"]
   P1_28q["P1.28q edge image scan"]
+  P1_28d["P1.28d base entries by stage"]
+  P1_28v["P1.28v mirror scan per stage"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_29["P1.29 Development stack"]
@@ -437,6 +441,9 @@ flowchart TD
   P1_27 --> P1_27d
   P1_27 --> P1_28q
   P1_28q --> P1_28
+  P1_27 --> P1_28d
+  P1_28d --> P1_28v
+  P1_28v --> P1_28x
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28

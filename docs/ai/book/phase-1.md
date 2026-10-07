@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28x, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -168,6 +168,8 @@ flowchart LR
   P1_27["P1.27 container images"]
   P1_27d["P1.27d web image on Debian slim"]
   P1_28q["P1.28q images.yml: edge image"]
+  P1_28d["P1.28d base entries labelled by stage"]
+  P1_28v["P1.28v mirror scan per stage [ALEX]"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
@@ -207,6 +209,9 @@ flowchart LR
   P1_27 --> P1_27d
   P1_27 --> P1_28q
   P1_28q --> P1_28
+  P1_27 --> P1_28d
+  P1_28d --> P1_28v
+  P1_28v --> P1_28x
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -5697,9 +5702,57 @@ minimal `permissions`, nothing pushed or signed until P1.27s.
 
 ---
 
+### P1.28d — Label every base entry with its stage
+
+**Tags:** [SEC] · **Depends on:** P1.27 (merged) · **Class:** feature (neutral: it neither tightens nor loosens a
+check, so it does not wait for Alex) · records 2026-10-07-p128-edge-bases-and-ratelimit-adr (section "Mirror scan of
+build-only images", architecture 02:10Z) and 2026-10-07-p128v-mirror-scan-stage (final 02:12Z)
+
+**Why:** the labels land before P1.28v, because a mirror.yml that requires `stage` must not reach main before every
+entry has one. `bases.lock.json` and `mirror.list.json` are product files, so a check-class PR cannot carry them.
+
+**Where:** every entry in `deployment/images/bases.lock.json` and `deployment/mirror.list.json` gains
+`"stage": "build"` or `"stage": "runtime"` (required, no default); `deployment/images/images.test.ts` gains the tests.
+
+**Tests:** `every_lock_entry_has_stage`; `build_stage_bases_never_in_final_stage` (a `build` entry appears only in a
+non-final Dockerfile stage; the final stage's `FROM` is a `runtime` entry or `scratch`).
+
+**Collision:** P1.27d edits the same two files. Whichever merges second merges main first, and the node entry carries
+`"stage": "runtime"`.
+
+---
+
+### P1.28v — Scan build-only bases at fail-on-critical [ALEX]
+
+**Tags:** [SEC] [ALEX] · **Depends on:** P1.28d and Alex's tap · **Class:** check (a loosening); waiting on Alex's
+word on the card "Should the weekly mirror scan only warn, not fail, on HIGH findings in build-only images, while
+failing on CRITICAL and keeping every shipped image at fail-on-HIGH?" (architecture recommends yes)
+
+**Why:** `caddy:2.11.7-builder-alpine` carries eight fixable HIGH Go standard library findings (Go 1.26.5) in
+`/usr/bin/xcaddy`, fixed in 1.26.6, while `caddy:2.11.7-alpine` and the shipped edge image scan clean (Trivy 0.74.0,
+HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). xcaddy is a build-time CLI fed only our pinned versions and
+checksum-verified modules, in an unprivileged job; the edge image's own Trivy scan reads the built binary's Go build
+info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE ignore entries (the alternative) recur on
+every Go point release and waive a CVE id globally unless scoped by path.
+
+**Where:** `.github/workflows/mirror.yml` reads each entry's `stage` and fails if it is missing. `build` entries scan
+at HIGH and CRITICAL, fail on CRITICAL, and report HIGH in the job summary and annotations; `runtime` entries are
+unchanged (fail on HIGH and CRITICAL); `--ignore-unfixed` throughout. Its tests sit next to the existing workflow
+tests on the check paths, with fixture lock files under the test directory, not the real ones.
+
+**Tests:** `mirror_scan_fails_on_critical_for_build_entries`; `shipped_image_scan_fails_on_high` (the images.yml web
+and edge jobs, unchanged and only asserted).
+
+**Opening:** only after Alex's tap; the body quotes the tap and its time and names `.github/workflows/mirror.yml` as
+the one workflow touched. Alex's answer joins `alex-answers.md` as a `mirror-build-stage` row. If he says no, P1.28v
+is withdrawn, P1.28d stays, the builder findings go to per-CVE trivyignore cards, and P1.28x waits on them.
+
+---
+
 ### P1.28x — Edge pins (non-trusted part of P1.28)
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Class:** feature (product, non-trusted) · record
+**Tags:** [SEC] · **Depends on:** P1.27, P1.28v (it lists the builder image in `mirror.list.json`) · **Class:**
+feature (product, non-trusted) · record
 2026-10-07-p128-split-and-p1b-a1.md (final 01:10Z)
 
 **Why:** CODEOWNERS makes `deployment/edge/` trusted base, so the P1.28 PR may carry only `deployment/edge/**`, tests
@@ -5707,7 +5760,8 @@ with an `edge` path segment, and docs. The pins it needs elsewhere land first, h
 
 **Contents:** the `caddy` and `caddy-builder` entries in `deployment/images/bases.lock.json`;
 `deployment/mirror.list.json`; and `deployment/images/images.test.ts`, whose allowlist widens to
-`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27).
+`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27). Its entries
+carry `stage` (P1.28d): `caddy` is `runtime`, `caddy-builder` is `build`.
 
 **Digest age** (step book 2026-10-07 02:03Z, book edit 2026-10-07-p128-split-and-p1b-a1): a first pin follows the
 7-day rule of "Bumping a pinned base digest" in P1.27. The indexes current at booking, `caddy:2.11.7-alpine`
