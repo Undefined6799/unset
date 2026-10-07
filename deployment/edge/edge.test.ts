@@ -34,12 +34,15 @@ const otherSnippets = (): string =>
     .map((f) => read(`snippets/${f}`))
     .join("\n");
 
-/** The zones of the pds-ratelimit snippet, in order, read through the Caddyfile reader (P1.28h). */
-function zones(ratelimit: string) {
-  const limit = readCaddyfile(ratelimit, ENV)
+/** The rate_limit blocks of the pds-ratelimit snippet, read through the Caddyfile reader (P1.28h). */
+const rateLimits = (ratelimit: string): Directive[] =>
+  readCaddyfile(ratelimit, ENV)
     .snippet("pds-ratelimit")
-    .find((directive) => directive.name === "rate_limit");
-  return (limit?.block ?? [])
+    .filter((directive) => directive.name === "rate_limit");
+
+/** The zones of the pds-ratelimit snippet's one rate_limit block, in order. */
+function zones(ratelimit: string) {
+  return (rateLimits(ratelimit)[0]?.block ?? [])
     .filter((directive) => directive.name === "zone")
     .map((zone) => {
       const value = (name: string) => zone.block?.find((directive) => directive.name === name)?.args[0];
@@ -59,24 +62,29 @@ const flatten = (directives: Directive[]): Directive[] =>
   directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
 
 /**
- * Why some PDS request could pass the edge uncounted; empty when the global zone counts every request (no matcher) and
- * the PDS site applies the zones, once, before any other handler in its route.
+ * Why some PDS request could pass the edge uncounted; empty when the snippet holds one rate_limit block whose global
+ * zone counts every request (no matcher), and the PDS site has one route, with no matcher, that applies it first and
+ * once, with no other rate_limit anywhere.
  */
 function zoneCoverageProblems(ratelimit: string, site: string): string[] {
   const found = [];
+  const blocks = rateLimits(ratelimit).length;
+  if (blocks !== 1) found.push(`the zones snippet holds ${blocks} rate_limit blocks`);
   const global = zones(ratelimit).find((zone) => zone.name === "global");
   if (global === undefined) found.push("there is no global zone");
   else if (global.match) found.push("the global zone has a matcher");
   const { sites } = readCaddyfile(`${otherSnippets()}\n${ratelimit}\n${site}`, ENV);
   const pds = sites.find((s) => s.addresses.includes(ENV.PDS_HOST));
-  const first = pds?.directives.find((directive) => directive.name === "route")?.block?.[0];
+  const routes = pds?.directives.filter((directive) => directive.name === "route") ?? [];
+  if (routes.length !== 1 || routes[0]?.args.length !== 0) found.push("the PDS site has not exactly one plain route");
+  const first = routes[0]?.block?.[0];
   if (first?.name !== "rate_limit" || first.via !== "pds-ratelimit") {
     found.push("the PDS route does not apply the zones first");
   }
-  const imports = sites
-    .flatMap((s) => flatten(s.directives))
-    .filter((directive) => directive.name === "rate_limit" && directive.via === "pds-ratelimit").length;
-  if (imports !== 1) found.push(`the PDS site imports the zones ${imports} times`);
+  const limits = sites.flatMap((s) => flatten(s.directives)).filter((directive) => directive.name === "rate_limit");
+  if (limits.length !== 1 || limits[0]?.via !== "pds-ratelimit") {
+    found.push(`the sites hold ${limits.length} rate_limit blocks`);
+  }
   return found;
 }
 
@@ -168,7 +176,7 @@ describe("edge config", () => {
     const site = read("sites/pds.caddy");
     expect(zoneCoverageProblems(limits, site.replace("\t\timport pds-ratelimit\n", ""))).toEqual([
       "the PDS route does not apply the zones first",
-      "the PDS site imports the zones 0 times",
+      "the sites hold 0 rate_limit blocks",
     ]);
     const late = site.replace(
       "\t\timport pds-ratelimit\n\t\timport xrpc-guard\n",
@@ -176,8 +184,26 @@ describe("edge config", () => {
     );
     expect(late).not.toBe(site);
     expect(zoneCoverageProblems(limits, late)).toEqual(["the PDS route does not apply the zones first"]);
-    expect(zoneCoverageProblems(limits, `${site}\nother {\n\timport pds-ratelimit\n}\n`)).toEqual([
-      "the PDS site imports the zones 2 times",
+    expect(zoneCoverageProblems(limits, `${site}\nother {\n\troute {\n\t\timport pds-ratelimit\n\t}\n}\n`)).toEqual([
+      "the sites hold 2 rate_limit blocks",
+    ]);
+    // P1.28h (#463 verification, D2): a route behind a matcher, a second route, or a second rate_limit block.
+    const matched = site.replace("\troute {\n", "\troute /never-matches {\n");
+    expect(matched).not.toBe(site);
+    expect(zoneCoverageProblems(limits, matched)).toEqual(["the PDS site has not exactly one plain route"]);
+    const second = site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n");
+    expect(zoneCoverageProblems(limits, second)).toEqual([
+      "the PDS site has not exactly one plain route",
+      "the PDS route does not apply the zones first",
+    ]);
+    const forwarded = limits.replace(
+      /\t\tdisable_metrics\n\t\}\n/,
+      "\t\tdisable_metrics\n\t}\n\trate_limit {\n\t\tzone xff {\n\t\t\tkey {remote_host}\n\t\t\tevents 1\n\t\t\twindow 1m\n\t\t}\n\t}\n",
+    );
+    expect(forwarded).not.toBe(limits);
+    expect(zoneCoverageProblems(forwarded, site)).toEqual([
+      "the zones snippet holds 2 rate_limit blocks",
+      "the sites hold 2 rate_limit blocks",
     ]);
     const narrowed = limits.replace(/(\tzone global \{\n)/, "$1\t\t\tmatch {\n\t\t\t\tpath /xrpc/*\n\t\t\t}\n");
     expect(narrowed).not.toBe(limits);
