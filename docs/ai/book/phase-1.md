@@ -5758,6 +5758,9 @@ thread, after P1.25l (#523).
    body lists each check with its pinning fixture. The dead branch at :88-92 is removed, not pinned.
 5. **The node_modules test** works on `relative(HERE, target)`, not the absolute target: a checkout whose own path
    contains `node_modules` must not refuse every import.
+6. **Concatenation is out of scope:** a specifier split across string concatenation is out of reach for any text test.
+   Catching it is the P1.25w depcruise row's job, and this test stays defence in depth (architecture's second N4 note,
+   p125h:97; amendment 3, added 23:55Z).
 
 Fixtures: red, `eval('import("@unset/shared-ui")')` and `(0, eval)(…)`;
 `Function('return import("@unset/shared-ui")')()` and `new Function(…)`; `import vm from "node:vm"` with
@@ -7527,30 +7530,40 @@ all-good fixture still exits 0.
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
 Slice 1, issue #524, trusted (`deployment/edge/caddyfile.ts`, with the matching tests `edge.test.ts`,
 `caddyfile.test.ts` and `caddyfile.image.test.ts`); book edit 2026-10-07-p128e-edge-config-reader (final 23:25Z), from
-architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader. Neutral to tightening; the
-coordinator clears it, no word from Alex. Owner: Phase 2, which raised it and owns P1.30u, its only consumer, so the two
-run back to back. It goes before P1.30u, which gains it as a dependency; P1.30u's riders a to d do not wait for it.
-Phase 1's queue (P1.29r, P1.28y, P1.29d) stays as it is; P1.28y also touches the edge, and whichever lands second merges
-main in, neither waiting on the other.
+architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, with its amendment 1 (23:55Z)
+from architecture's 23:50Z note under amendment 7. Neutral to tightening; the coordinator clears it, no word from Alex.
+Owner: Phase 2, which raised it and owns P1.30u, its only consumer, so the two run back to back. It goes before P1.30u,
+which gains it as a dependency; P1.30u's riders a to d do not wait for it. Phase 1's queue (P1.29r, P1.28y, P1.29d)
+stays as it is; P1.28y also touches the edge, and whichever lands second merges main in, neither waiting on the other.
 
 **What:**
-1. **`readEdgeConfig(edgeDir, sitesDir, env)`** in `deployment/edge/caddyfile.ts` resolves exactly the shipped
-   Caddyfile's two import lines, `snippets/*.caddy` and `sites/enabled/*.caddy`, matched by their literal text, and
-   expands each glob in byte order, as Caddy does. Every other file import is refused, and so is a glob that matches
-   nothing. `{$PDS_HOST}`, `{$PDS_UPSTREAM}` and `{$ACME_EMAIL}` come from `env`, with the reader's existing shape
-   checks. Entries of `sitesDir` must be `*.caddy` regular files or symlinks; each symlink, realpathed, must land inside
-   `deployment/edge/sites/` and be a regular `*.caddy` file. A subdirectory, another extension, a dangling link and a
-   link that leaves `deployment/edge/sites/` all fail.
-2. **`edgeSiteProblems(config, env)`** replaces edge.test.ts's private `zoneCoverageProblems` (:69) and adds the
-   header_up check (amendment 7 point 3). **Trigger:** the rule applies to every site whose parsed tree has any
-   `reverse_proxy`. **Route:** such a site has exactly one plain route, whose first handler is the `pds-ratelimit`
-   snippet's `rate_limit`, and every `reverse_proxy` of the site is inside it. **Rate limits:** no other `rate_limit`
-   anywhere in the site. **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and
-   `-Forwarded` (ADR 0018). **A site with no upstream** is exempt by that fact, not by its name; it must bind loopback
-   only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
-3. **Switch the tests:** `edge.test.ts` and `caddyfile.image.test.ts` (shippedConfig) switch to both functions, and both
+1. **`readEdgeConfig(edgeDir, sitesDir, env, files: EdgeFiles)`** in `deployment/edge/caddyfile.ts` takes an injected
+   `EdgeFiles`: four bare primitives with no policy, `list`, `kind`, `realpath` and `read`, so `caddyfile.ts` imports
+   nothing. It resolves exactly the shipped Caddyfile's two import lines, `snippets/*.caddy` and
+   `sites/enabled/*.caddy`, matched by their literal text, and expands each glob in byte order, as Caddy does. Every
+   other file import is refused, and so is a glob that matches nothing. `{$PDS_HOST}`, `{$PDS_UPSTREAM}` and
+   `{$ACME_EMAIL}` come from `env`, with the reader's existing shape checks. Entries of `sitesDir` must be `*.caddy`
+   regular files or symlinks. **Containment stays inside readEdgeConfig:** it calls `realpath` on the sites root and on
+   each entry; each resolved entry must equal `root + sep + …`, a prefix check on a path boundary, so `sites-evil/`
+   fails; and the resolved target's `kind` must be a regular `*.caddy` file. A subdirectory, another extension, a
+   dangling link and a link that leaves `deployment/edge/sites/` all fail.
+2. **Thin adapters:** each side keeps one `node:fs` adapter for `EdgeFiles`, every member one direct `node:fs` call with
+   no filtering and no path logic. The edge tests keep their own adapter (trusted), and C18 keeps its own (preflight). A
+   trusted test importing a product adapter is refused.
+3. **`edgeSiteProblems(config)`** replaces edge.test.ts's private `zoneCoverageProblems` (:69) and adds the header_up
+   check (amendment 7 point 3). It takes no env, because none of its rules reads env; a later rule that needs env adds
+   the parameter in its own PR. **Trigger:** the rule applies to every site whose parsed tree has any `reverse_proxy`.
+   **Route:** such a site has exactly one plain route, whose first handler is the `pds-ratelimit` snippet's
+   `rate_limit`, and every `reverse_proxy` of the site is inside it. **Rate limits:** no other `rate_limit` anywhere in
+   the site. **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (ADR
+   0018). **A site with no upstream** is exempt because it has no `reverse_proxy`, not because of its name or address;
+   it must bind loopback only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
+4. **Switch the tests:** `edge.test.ts` and `caddyfile.image.test.ts` (shippedConfig) switch to both functions, and both
    hand expansions are deleted. The image test still proves byte for byte that the image carries the repo's Caddyfile
    and snippets.
+5. **Real-filesystem tests:** at least one edge test drives `readEdgeConfig` through its real `node:fs` adapter over a
+   temporary tree. A symlink escaping `sites/`, a symlink to a `sites-evil/` sibling, a symlink chain that ends outside,
+   and a dangling link fail; a legitimate link passes. Fake-only coverage is not enough.
 
 Fixtures: red, a second site with a proxy and no route; a proxy outside the route; a missing header_up; a public site
 with no upstream; a symlink out of `sites/`; a subdirectory in `sitesDir`; a non-`.caddy` entry; a dangling link; an
@@ -7568,8 +7581,10 @@ outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` w
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
-23:25Z). C18 calls `readEdgeConfig` and `edgeSiteProblems` from `deployment/edge/caddyfile.ts` (P1.28e). A second reader
-in `deployment/preflight/` stays refused, because two parsers of one syntax drift (amendment 7).
+23:25Z, and its amendment 1, 23:55Z). C18 calls `readEdgeConfig(…, files)` with its own thin `node:fs` EdgeFiles adapter
+in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(config)` with no env, both from
+`deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
+of one syntax drift (amendment 7).
 
 **Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e · **Plan:** as P1.30
 
@@ -7585,7 +7600,8 @@ The edge service mounts nothing else at or under `/etc/caddy`: a file, a directo
 `deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
 a loosening and needs Alex's typed line (for example "yes P1.30u preflight imports edge reader"); the coordinator asks
 him before C18 is built. If he declines, C18 runs the reader as a CLI by fixed path, the same as verify-images, and no
-lint row is added. The PR body says which path it took and quotes his line.
+lint row is added. The PR body says which path it took and quotes his line. The EdgeFiles injection removes the reader's
+own need for `node:fs`, not the preflight's import.
 
 **Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
 a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
@@ -7603,9 +7619,11 @@ P1.30u stays C18 alone.
 
 **Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`,
 `c18_mount_over_caddyfile_fails`, `c18_mount_over_etc_caddy_parent_fails`, `c18_sites_symlink_out_of_repo_fails`,
-`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, and the riders' tests; fixtures carry a compose
-file; the all-good fixture, now covering all 24 checks, exits 0. C18 fails with "input missing" on every real run until
-P1.29 adds compose.dev.yaml. That is expected, because the preflight is not a gate yet.
+`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, `c18_real_tree_symlink_containment` (C18 through
+its real adapter over a temporary tree: an escaping link, a `sites-evil/` sibling, an outward chain and a dangling link
+fail; a legitimate link passes), and the riders' tests; fixtures carry a compose file; the all-good fixture, now
+covering all 24 checks, exits 0. C18 fails with "input missing" on every real run until P1.29 adds compose.dev.yaml.
+That is expected, because the preflight is not a gate yet.
 
 **Not in this step:** any change to `deployment/edge/` (P1.28e owns the reader and the site rules).
 
