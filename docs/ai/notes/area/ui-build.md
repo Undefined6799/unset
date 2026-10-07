@@ -28,8 +28,11 @@ injected `io`, and the Node entries in `scripts/ui/` bind `node:fs` and sha256 t
 
 **Rules worth knowing.** Everything `index.ts` reaches loads under plain Node 26, which refuses `.tsx`: no `.tsx`
 file, no `react` or `react-dom` import, and shared/ui only through a whole-statement `import type { ... } from
-"@unset/shared-ui"` (`ui_build_is_jsx_free`; `@unset/shared-ui` is a devDependency). The check matches imports on where
-they resolve, so a subpath or a relative path into shared/ui counts as reaching it (P1.25d). shared/ui owns the `FontMetrics` and
-`FallbackFace` shapes and takes no dependency on this workspace. `ui_build_entries_run_in_node` runs the entries.
+"@unset/shared-ui"` (`ui_build_is_jsx_free`; `@unset/shared-ui` is a devDependency). The check parses each file
+(oxc through vite's `parseSync`; TypeScript 7 has no in-process parser), so a comment cannot hide an import. No string
+may name the kit except that specifier; `require`, `createRequire` and `import()` of a non-literal are refused; and a
+relative import must resolve, through symlinks, inside this workspace (P1.25d, P1.25r). shared/ui owns the
+`FontMetrics` and `FallbackFace` shapes and takes no dependency on this workspace. `ui_build_entries_run_in_node` runs
+the entries.
 
 **Links.** Architecture record `2026-10-07-p125-ui-build-workspace.md`, [[ui]].
