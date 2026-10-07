@@ -873,7 +873,8 @@ Tags: [SEC]            Depends on: P0.05c (merged, #483)            Plan: rule S
 Where: check paths, kind/build: `scripts/ci/npmrc.test.ts` (new), `scripts/ci/check-job.test.ts`, `.github/CODEOWNERS`
   (the parsed `# checks:` line at :108 gains `/.npmrc`; that line is the SE-6 check-path list), and
   `scripts/guards/change-shape.test.ts` (its pinned check-path list, :221-233, gains `"/.npmrc"`). No product file. A
-  tightening, cleared by the coordinator. Slice 1. Owner: Phase 2, slotted after P1.28r (an order, not a dependency; board issue #487).
+  tightening, cleared by the coordinator. Slice 1. Part: Phase 0, like P0.05b and P0.05c (board issue #487). Owner:
+  Phase 2, slotted after P1.28r (an order, not a dependency).
   If the harness refuses Phase 2 on those paths even for a tightening, the line to ask Alex for is "yes .npmrc check
   path scripts/guards", quoted in the PR body if used.
 

@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28r,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r,
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -197,6 +197,7 @@ flowchart LR
   P1_28h["P1.28h Caddyfile reader"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
+  P1_28j["P1.28j edge image tests drop runIf"]
   P1_28r["P1.28r images project after unit tests"]
   P1_29k["P1.29k migrate image, syncRolePasswords"]
   P1_29x["P1.29x stripped paths declared"]
@@ -214,6 +215,7 @@ flowchart LR
   P1_30s["P1.30s preflight C13–C24 but C17, C18"]
   P1_30t["P1.30t preflight C17 networks"]
   P1_30u["P1.30u preflight C18 edge zones"]
+  P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
   P1_32["P1.32 permanent choices STOP"]
   P1_33["P1.33 server baseline ALEX"]
@@ -286,6 +288,8 @@ flowchart LR
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
+  P1_30t --> P1_30n
+  P1_30n --> P1_29
   P1_29 --> P1_29a
   P1_29a --> P1_29h
   P1_29h --> P1_29s
@@ -296,7 +300,8 @@ flowchart LR
   P1_28b --> P1_28h
   P1_28h --> P1_28s
   P1_28h --> P1_28i
-  P1_28i --> P1_28r
+  P1_28i --> P1_28j
+  P1_28j --> P1_28r
   P1_28r --> P1_29k
   P1_28r --> P1_29d
   P1_27 --> P1_30
@@ -6983,18 +6988,42 @@ Not booked: a future non-test helper under `deployment/` that needs Node built-i
 
 ---
 
+### P1.28j — Drop the CI-only gate from the edge image tests
+Tags: [SEC], trusted            Depends on: P1.28i (merged, #488)
+As built: merged by Alex at 2026-10-07T21:05:45Z as `9611f79` (#496).
+Slice 1, trusted base; book edit 2026-10-07-p123d-p128i-p128r-test-timing, amendment 1 (20:10Z), from architecture's
+amendment 1 in 2026-10-07-test-timing-fuzz-and-image-tests. Neutral; no word from Alex. Owner: Phase 1. Board issue
+#494. Why its own step: `deployment/edge/caddyfile.image.test.ts` is a trusted-base matching test, and P1.28r is check
+class, which touches no `deployment/` path (CODEOWNERS:100-103), so P1.28r cannot remove that `runIf` itself.
+
+**What:** remove `runIf(process.env.CI)` from `deployment/edge/caddyfile.image.test.ts`;
+`tests/integration/deployment/edge/edge.image.test.ts` already has no conditional skip. CI is unchanged, because
+CI=true; locally the image tests then fail without Docker rather than counting as skipped, no worse than the local red
+since #488, and P1.28r fixes it. P1.28r's `image_tests_have_no_conditional_skip` is then green on arrival. Order:
+P1.28j, then P1.28r, back to back (architecture, 20:06Z).
+
+---
+
 ### P1.28r — Run image tests after the unit tests
-Tags: [SEC], check            Depends on: P1.28i
-Slice 1, check class (root `vitest.config.ts`, `scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing.
-Neutral; the coordinator clears it; not workflow-gated. Owner: Phase 2 or the third thread, whichever has a slot
-first. It goes before P1.29k and P1.29d, which depend on it and name their image tests `*.image.test.ts` from the
-start; P1.29w does not wait, because its scan is in `images.yml`. Landing the include pattern first, matching nothing,
-is not taken.
+Tags: [SEC], check            Depends on: P1.28i (merged, #488), P1.28j (merged, #496)
+Slice 1, check class (root `vitest.config.ts`, `scripts/test/`); book edit 2026-10-07-p123d-p128i-p128r-test-timing,
+with its amendment 1 (20:10Z), from architecture's amendment 1 in 2026-10-07-test-timing-fuzz-and-image-tests.
+Neutral, leaning to a tightening; the coordinator clears it, no line from Alex; not workflow-gated. Owner: Phase 2
+(settled 21:05Z). It goes before P1.29k and P1.29d, which depend on it and name their image tests `*.image.test.ts`
+from the start; P1.29w does not wait, because its scan is in `images.yml`. Landing the include pattern first, matching
+nothing, is not taken.
 - Root `vitest.config.ts` gains an `images` project including `**/*.image.test.{ts,tsx,mts,cts}`; every existing
   project, `tests/integration` included, excludes that pattern; the images project has no Postgres global setup.
-- `scripts/test/run.ts` runs the unit projects first, then `--project images`, and fails if either fails. The
-  every-file-ran and no-skips rules apply to both runs; the CI-only condition and run.ts's local skip exception are
-  unchanged and not widened.
+- `scripts/test/run.ts` runs the unit projects first, then `--project images`, and fails if either fails; the
+  every-file-ran and no-skips rules apply to both runs. **run.ts decides once** whether the images run, keyed only on
+  the `*.image.test.ts` pattern: no file list, and no new or wider skip exception (an exception-list entry is refused).
+  Image tests carry no `runIf`, `skipIf`, `.skip` or `todo`.
+  - With `CI=true`, the images project always runs after the unit projects; no skips, and zero collected files fails.
+  - Locally, by default, it is not started; run.ts prints "images project: not run locally (N files; CI runs them;
+    npm run test:images to run)", and the files are reported as not run, never as skipped.
+  - `npm run test:images` (a root `package.json` script) runs the project locally under the CI rules, and fails
+    loudly if Docker is absent.
+  - The existing local skip exception is removed if it is no longer needed.
 - **The guard `image_builds_only_in_image_tests`** (scripts/test): a test file, or a helper it imports, that runs an
   image build (`docker build`, `docker buildx build`, or the known wrapper `buildEdgeImage`) must be named
   `*.image.test.ts`. It matches builds, not every `docker` call: `docker run`, `inspect`, `logs` and `rm` in
@@ -7003,9 +7032,12 @@ is not taken.
   projects. Moving container runs is a separate question, not booked. Fixtures: a unit test with a `docker build`
   spawn fails; a unit test importing a build wrapper fails; an image test with a build passes; a unit test with
   `docker run` passes.
+- Tests: `ci_runs_image_project`, `local_reports_images_not_run`, `image_tests_have_no_conditional_skip`,
+  `empty_images_project_fails_in_ci`.
 
 Done when `npm test` prints the unit run, then the images run, and the `props.fuzz` margin no longer shares the runner
-with an xcaddy compile.
+with an xcaddy compile; a local `npm run check` on main without Docker is green and prints the images not-run line; in
+CI the images run shows N files, 0 skipped.
 
 ---
 
@@ -7350,6 +7382,31 @@ the all-good fixture, now covering all 24 checks, exits 0.
 
 ---
 
+### P1.30n — Refuse compose network names in the preflight
+Tags: [SEC]            Depends on: P1.30t (merged, #492)
+Slice 1, product (`deployment/preflight/`); book edit 2026-10-07-p130n-network-names (final 20:15Z), from
+architecture's amendment 6 in 2026-10-07-p130s-networks-and-caddyfile-reader, after the coordinator's verification of
+P1.30t (#492). A tightening; the coordinator clears it, no word from Alex. Owner: Phase 2. Board issue #495. It must
+land before P1.29, which gains it as a dependency and whose test relies on `networkTableProblems`; it has no relation
+to P1.29v.
+
+**What:**
+- **(a)** `compose-parse.ts` (:217 on #492's head) refuses a `name` key on any top-level network, with a clear problem
+  string. `name` is the real Docker network name, so two keys with one `name`, or a `name` equal to another key's
+  `<project>_<key>`, would merge networks the C17 table keeps apart. Compose's own `<project>_<key>` naming is what the
+  table assumes; re-implementing its name resolution is refused, because every gap in that copy is a hole. The
+  project-level compose `name:` is not touched: it renames every network alike and cannot merge two. No compose file
+  is tracked on main (20:15Z); if one lands first and sets a network `name`, this step removes it.
+- **(b)** The undefined-network refusal moves from `index.ts` `loadCompose` into the exported `networkTableProblems`,
+  the contract other tests and the CLI call. `loadCompose` keeps calling it, so behaviour is unchanged.
+
+Tests: `network_name_is_refused`, with fixtures for a duplicate name across two keys and a name equal to another key's
+prefixed name, plus one pass case, a project-level `name:` alone; `undeclared_service_network_is_a_problem`, calling
+`networkTableProblems` directly. Fixtures follow the documentation-address rule
+(2026-10-07-fixture-documentation-addresses).
+
+---
+
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
 **Split into ten parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
@@ -7456,10 +7513,10 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
    after.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
-   P1.11p, P1.28, P1.30t, so no image is composed before every image is scanned): `deployment/compose.dev.yaml` with
-   postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0 or root, tmpfs at
-   `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and edge (built
-   locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
+   P1.11p, P1.28, P1.30t, P1.30n, so no image is composed before every image is scanned):
+   `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
+   or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and
+   edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
    `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json` for postgres,
    migrate, web and edge; the local edge TLS override (`tls internal`) mounted from outside `deployment/edge/`,
    following the edge test fixture's pattern. Tests: the static compose and env tests below that do not name the PDS;
@@ -7510,7 +7567,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
