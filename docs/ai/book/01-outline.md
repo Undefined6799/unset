@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 119 steps: 98 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 120 steps: 99 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -182,6 +182,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.15d | Audit SQL part 2: tables, seeds, index, triggers, auditor SELECT | [SEC] | P1.15m | `phase-1.md` |
 | P1.15g | Audit SQL part 3: EXECUTE grants on `audit.append`, audit tests (trusted) | [SEC] | P1.15d | `phase-1.md` |
 | P1.15 | Audit TS workspace: actions, append, rowHash, verify, error, AuditDb | trusted | P1.15m, P1.15d, P1.15g, P1.14q | `phase-1.md` |
+| P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
 | P1.16g | Retention's USAGE on schema `app` (trusted, split from P1.16) | [SEC] | P1.12 | `phase-1.md` |
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
@@ -303,6 +304,7 @@ flowchart TD
   P1_15d["P1.15d Audit SQL part 2"]
   P1_15g["P1.15g Audit SQL part 3"]
   P1_15["P1.15 Audit TS workspace"]
+  P1_15s["P1.15s Audit chain tests"]
   P1_16g["P1.16g Retention schema USAGE"]
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17e["P1.17e Lock log events"]
@@ -505,6 +507,7 @@ flowchart TD
   P2_11 --> P2_12
   P2_15 --> P2_12
   P1_15 --> P2_12
+  P1_15 --> P1_15s
   P2_06 --> P2_13
   P1_25 --> P2_13
   P2_13 --> P2_13a
@@ -572,7 +575,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -581,7 +584,6 @@ Arachnid application, and the Phase 1 exit.
 | P2.13b | graphify code graphs in CI (added, editor pass 2026-10-04 evening; PI-2) | — | P2.13a, P0.07 | `phase-2.md` |
 | P1.14a | `sealTo`: encrypt-only sealing to an offline-held public key (age X25519) | [SEC] | P1.02, P1.14 | `phase-1.md` |
 | P1.15a | Audit retention: segments, retention-checked redaction, erasure by lane | [SEC] | P1.15 | `phase-1.md` |
-| P1.15s | Audit chain integration tests and the tests/tsconfig.json reference | feature | P1.15 | `phase-1.md` |
 | P1.18b | `net-guard` forward-proxy mode and the egress proxy for processes that are not ours | [SEC] | P1.18a | `phase-1.md` |
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
@@ -598,7 +600,6 @@ Arachnid application, and the Phase 1 exit.
 flowchart TD
   P1_14a["P1.14a sealTo"]
   P1_15a["P1.15a Audit retention"]
-  P1_15s["P1.15s Audit chain tests"]
   P1_18b["P1.18b net-guard forward-proxy mode and"]
   P1_33["P1.33 Server baseline"]
   P1_33a["P1.33a Retire the 0x40 prototype before"]
@@ -613,7 +614,6 @@ flowchart TD
   P1_34 --> P1_35
   P1_35 --> P1_38
   P1_37a --> P1_38
-  P1_15s --> P1_38
 ```
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)

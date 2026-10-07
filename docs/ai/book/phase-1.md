@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28, P1.28b,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28x, P1.28, P1.28b,
   P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -2923,16 +2923,16 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      workspace (`row_hash_known_answer`, TS), reproducing `audit-row-hash.vector.json` byte for byte with the fixture
      DIDs of 02-shared-blocks (the two constants of `audit.test.ts:77-78`, or a shared `tests/fixtures/dids.ts` if one
      exists by then). P1.14 and P1.15 each add one trusted workspace alone: two PRs after P1.14q, in either order.
-  3. **P1.15s** (feature; depends on P1.15, opened only after it merges, never stacked): the audit chain integration
-     tests. A trusted PR may carry only trusted files and tests with a matching path segment, and these tests need
-     the `tests/tsconfig.json` reference to the new workspace, which is outside `infrastructure/audit/`; splitting
-     keeps P1.15 pure with no change to the gate. Contents: `tests/integration/audit/chain.test.ts` with
-     `reason_union_matches_table`, `typed_append_rejects_free_text`, `chain_links`, `tamper_chain_metadata` and
-     `tamper_body` as worded below, its own `AuditDb` over a real `pg` client and real roles (the adapter lives in
-     the test file, not the workspace), and the `tests/tsconfig.json` reference. Red evidence: each tamper test fails
-     with `verify` stubbed to report ok. Widening `trusted-base.ts` to let a trusted PR carry the reference line
-     would be a loosening of a check gate and is not booked; if the split recurs, the step book can propose it as its
-     own check-class step for Alex.
+  3. **P1.15s** (feature, slice 1 beside P1.15; depends on P1.15, opened only after it merges, never stacked): the
+     audit chain integration tests. A trusted PR may carry only trusted files and tests with a matching path segment,
+     and these tests need the `tests/tsconfig.json` reference to the new workspace, which is outside
+     `infrastructure/audit/`; splitting keeps P1.15 pure with no change to the gate. Contents:
+     `tests/integration/audit/chain.test.ts` with `reason_union_matches_table`, `typed_append_rejects_free_text`,
+     `chain_links`, `tamper_chain_metadata` and `tamper_body` as worded below, its own `AuditDb` over a real `pg`
+     client and real roles (the adapter lives in the test file, not the workspace), and the `tests/tsconfig.json`
+     reference. Red evidence: each tamper test fails with `verify` stubbed to report ok. Widening `trusted-base.ts` to
+     let a trusted PR carry the reference line would be a loosening of a check gate and is not booked; if the split
+     recurs, the step book can propose it as its own check-class step for Alex.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
   None depends on P1.15s except P1.38, so the tamper tests exist before Phase 1 closes.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
