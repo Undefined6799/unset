@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.28o, P1.28y, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -197,6 +197,7 @@ flowchart LR
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
+  P1_28e["P1.28e one edge config reader"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -336,6 +337,8 @@ flowchart LR
   P1_30t --> P1_34
   P1_30 --> P1_30u
   P1_28h --> P1_30u
+  P1_28h --> P1_28e
+  P1_28e --> P1_30u
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7467,15 +7470,69 @@ all-good fixture still exits 0.
 
 ---
 
+### P1.28e — Share one edge config reader and the site rules
+Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+Slice 1, issue #524, trusted (`deployment/edge/caddyfile.ts`, with the matching tests `edge.test.ts`,
+`caddyfile.test.ts` and `caddyfile.image.test.ts`); book edit 2026-10-07-p128e-edge-config-reader (final 23:25Z), from
+architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader. Neutral to tightening; the
+coordinator clears it, no word from Alex. Owner: Phase 2, which raised it and owns P1.30u, its only consumer, so the two
+run back to back. It goes before P1.30u, which gains it as a dependency; P1.30u's riders a to d do not wait for it.
+Phase 1's queue (P1.29r, P1.28y, P1.29d) stays as it is; P1.28y also touches the edge, and whichever lands second merges
+main in, neither waiting on the other.
+
+**What:**
+1. **`readEdgeConfig(edgeDir, sitesDir, env)`** in `deployment/edge/caddyfile.ts` resolves exactly the shipped
+   Caddyfile's two import lines, `snippets/*.caddy` and `sites/enabled/*.caddy`, matched by their literal text, and
+   expands each glob in byte order, as Caddy does. Every other file import is refused, and so is a glob that matches
+   nothing. `{$PDS_HOST}`, `{$PDS_UPSTREAM}` and `{$ACME_EMAIL}` come from `env`, with the reader's existing shape
+   checks. Entries of `sitesDir` must be `*.caddy` regular files or symlinks; each symlink, realpathed, must land inside
+   `deployment/edge/sites/` and be a regular `*.caddy` file. A subdirectory, another extension, a dangling link and a
+   link that leaves `deployment/edge/sites/` all fail.
+2. **`edgeSiteProblems(config, env)`** replaces edge.test.ts's private `zoneCoverageProblems` (:69) and adds the
+   header_up check (amendment 7 point 3). **Trigger:** the rule applies to every site whose parsed tree has any
+   `reverse_proxy`. **Route:** such a site has exactly one plain route, whose first handler is the `pds-ratelimit`
+   snippet's `rate_limit`, and every `reverse_proxy` of the site is inside it. **Rate limits:** no other `rate_limit`
+   anywhere in the site. **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and
+   `-Forwarded` (ADR 0018). **A site with no upstream** is exempt by that fact, not by its name; it must bind loopback
+   only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
+3. **Switch the tests:** `edge.test.ts` and `caddyfile.image.test.ts` (shippedConfig) switch to both functions, and both
+   hand expansions are deleted. The image test still proves byte for byte that the image carries the repo's Caddyfile
+   and snippets.
+
+Fixtures: red, a second site with a proxy and no route; a proxy outside the route; a missing header_up; a public site
+with no upstream; a symlink out of `sites/`; a subdirectory in `sitesDir`; a non-`.caddy` entry; a dangling link; an
+extra file import; a glob that matches nothing. Green: the shipped edge with `sites/enabled` linking to
+`sites/pds.caddy`, plus the health site on loopback. (Amendment 7's sixth red fixture, a mount over
+`/etc/caddy/Caddyfile`, is a compose fact only C18 reads, so it sits in P1.30u.)
+
+Done when `npm run check` is green, every red fixture fails with its stated reason, and no Caddyfile expansion remains
+outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` with its output in the PR body.
+
+**Not in this step:** the preflight (`deployment/preflight/`) and the compose mount rules (P1.30u).
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
-Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h). C18 imports `deployment/edge/caddyfile.ts` (P1.28h);
-there is no second reader in `deployment/preflight/` (architecture refused one: the same parser differential it
-ruled out for YAML).
+Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
+23:25Z). C18 calls `readEdgeConfig` and `edgeSiteProblems` from `deployment/edge/caddyfile.ts` (P1.28e). A second reader
+in `deployment/preflight/` stays refused, because two parsers of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
+
+**What C18 reads:** the Caddyfile and `snippets/*.caddy` from the repo's `deployment/edge/`; the `sites/enabled`
+directory that is the source of the compose edge service's bind mount at `/etc/caddy/sites/enabled`, which must be a
+directory inside `deployment/edge/` whose entries follow P1.28e's symlink rules; and the env from `serviceEnv("edge")`.
+The edge service mounts nothing else at or under `/etc/caddy`: a file, a directory, or a parent such as `/etc/caddy` or
+`/etc` each fails. No edge service, no such mount, or an empty directory gives `input missing: <path>`.
+
+**The import fork:** the depcruise matrix needs a row that lets `deployment/preflight` import
+`deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
+a loosening and needs Alex's typed line (for example "yes P1.30u preflight imports edge reader"); the coordinator asks
+him before C18 is built. If he declines, C18 runs the reader as a CLI by fixed path, the same as verify-images, and no
+lint row is added. The PR body says which path it took and quotes his line.
 
 **Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
 a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
@@ -7491,10 +7548,13 @@ d. C12's `LOG_LEVEL` allowlist, even with SMTP set (debug logs carry personal da
 If these take P1.30u past about 550 lines, they split out as **P1.30b** (leftovers, feature, depends on P1.30s) and
 P1.30u stays C18 alone.
 
-**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`, and the riders' tests;
-the all-good fixture, now covering all 24 checks, exits 0.
+**Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`,
+`c18_mount_over_caddyfile_fails`, `c18_mount_over_etc_caddy_parent_fails`, `c18_sites_symlink_out_of_repo_fails`,
+`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, and the riders' tests; fixtures carry a compose
+file; the all-good fixture, now covering all 24 checks, exits 0. C18 fails with "input missing" on every real run until
+P1.29 adds compose.dev.yaml. That is expected, because the preflight is not a gate yet.
 
-**Not in this step:** any change to `deployment/edge/` (P1.28h owns the reader).
+**Not in this step:** any change to `deployment/edge/` (P1.28e owns the reader and the site rules).
 
 ---
 
