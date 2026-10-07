@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { defineIsland } from "./define.ts";
 import { SerializeError } from "./props.ts";
-import { IslandRendererContext, IslandSlot } from "./slot.tsx";
+import { IslandRendererContext, IslandSlot } from "./slot.ts";
 
 type Count = { n: number };
 const isCount = (v: unknown): v is Count => typeof (v as Partial<Count> | null)?.n === "number";

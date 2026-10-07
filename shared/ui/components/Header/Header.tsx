@@ -4,7 +4,7 @@
 // one of the two is ever displayed, so assistive tech meets the links once. The menu is the header-menu island
 // (P1.24j, HeaderMenu.tsx), which adds Escape-to-close and focus return.
 import headerMenu from "../../islands/header-menu.island.tsx";
-import { IslandSlot } from "../../islands/slot.tsx";
+import { IslandSlot } from "../../islands/slot.ts";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Mark } from "../Mark/Mark.tsx";
