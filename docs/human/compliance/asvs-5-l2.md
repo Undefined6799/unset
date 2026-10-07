@@ -314,7 +314,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 
 | id | requirement (short) | status | evidence | step |
 |---|---|---|---|---|
-| V14.1.1 | All sensitive data created and processed by the application has been identified and … | partial | `test:tests/integration/postgres/grants.test.ts#personal_data_by_column_list`, `test:tests/integration/postgres/did-columns.test.ts#registry_complete`, `step:P1.14d` | P1.14d |
+| V14.1.1 | All sensitive data created and processed by the application has been identified and … | partial | `test:tests/integration/postgres/grants.test.ts#personal_data_by_column_list`, `test:tests/integration/postgres/did-columns.test.ts#registry_complete`, `test:tests/integration/postgres/sealed-columns.test.ts#sealed_columns_registry` | P1.14d |
 | V14.1.2 | All sensitive data protection levels have a documented set of protection requirements | open |  | — |
 | V14.2.1 | Sensitive data is only sent to the server in the HTTP message body or header fields, and … | open |  | — |
 | V14.2.2 | The application prevents sensitive data from being cached in server components, such as … | open |  | — |

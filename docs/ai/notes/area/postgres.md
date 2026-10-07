@@ -3,14 +3,14 @@ id: postgres
 type: area
 status: current
 areas: ["[[postgres]]"]
-summary: "Hub for infrastructure/postgres: migrations, roles, grants, pool, transactions, single-use store, advisory lock."
+summary: "Hub for infrastructure/postgres: migrations, roles, grants, pool, transactions, single-use, locks, sealed columns."
 code: [infrastructure/postgres/index.ts]
 sources: []
 importance: normal
 related: ["[[tests]]", "[[deployment]]", "[[postgres-tests-need-docker]]"]
 replaced_by: null
 tags: [area, postgres]
-checked: 2026-10-06
+checked: 2026-10-07
 ---
 # postgres
 
@@ -29,6 +29,9 @@ checked: 2026-10-06
   two-int4 key space (`LockNamespace`, `hashtext(key)`), apart from the migration runner's bigint lock. The wait raises
   the role's 2 s `statement_timeout` for itself, or Postgres cancels it first with 57014. Never log the key: it is
   usually a DID. A new use adds a `LockNamespace` line with a new number.
+- `sealed-columns.json` and `sealedColumns.ts`: every `types.sealed` column (migration 0007) with the row key its
+  seal context binds; `sealedContext` is the only way to get a context for a stored value. `rewrapAll.ts` and
+  `unset-rewrap` move stored values to a new seal key; `--check <kid>` says when the old key may go (P1.14d).
 
 **Rules worth knowing.**
 - Each process connects as its own role (web, api, indexer, retention and others), never as a superuser.
