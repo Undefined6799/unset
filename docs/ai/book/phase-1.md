@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28q, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -164,6 +164,7 @@ flowchart LR
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
+  P1_28q["P1.28q images.yml: edge image"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
   P1_30["P1.30 deploy preflight"]
@@ -198,6 +199,8 @@ flowchart LR
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
+  P1_27 --> P1_28q
+  P1_28q --> P1_28
   P1_27 --> P1_28
   P1_11 --> P1_29
   P1_27 --> P1_29
@@ -5526,9 +5529,28 @@ depend on it: the preflight is tested against an injected verifier and fails clo
 
 ---
 
+### P1.28q — Edge image in images.yml (check step before P1.28)
+
+**Tags:** [SEC] · **Depends on:** P1.27q, P1.27 · **Class:** check paths (SE-6), kind/build · record
+2026-10-07-p128q-edge-image-scan.md (final 00:42Z)
+
+**Why:** this book says P1.27 scans the edge image as a first-party image, but `images.yml` (P1.27q) builds, scans
+and health-checks only `deployment/images/node-app.Dockerfile` with `APP=web`. Editing
+`.github/workflows/images.yml` is check class, so the change cannot ride in P1.28.
+
+**Contents:** `.github/workflows/images.yml` only. It adds `deployment/edge/Dockerfile` to the build, hadolint,
+Trivy (HIGH and CRITICAL, no ignore) and the health check, under the same rules as node-app: actions pinned by SHA,
+minimal `permissions`, nothing pushed or signed until P1.27s.
+
+**Class:** a tightening (one more image is scanned); cleared by the coordinator at 00:40Z, so no Alex word is needed.
+
+**Note:** the edge base follows record 2026-10-07-p128-edge-bases-and-ratelimit-adr.md.
+
+---
+
 ### P1.28 — Edge (Caddy)
 
-**Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §5.2 (edge; PDS admin XRPC never public), §5.7 (Synapse/MAS precedent: no client IP upstream, per-IP limits at the edge), §6 (logs: no IP, no user agent), §5.3 (PDS); review 04-infra; fable 06
+**Tags:** [SEC] · **Depends on:** P1.27, P1.28q · **Plan:** §5.2 (edge; PDS admin XRPC never public), §5.7 (Synapse/MAS precedent: no client IP upstream, per-IP limits at the edge), §6 (logs: no IP, no user agent), §5.3 (PDS); review 04-infra; fable 06
 
 **Where:** `deployment/edge/Caddyfile`; `deployment/edge/sites/{app.caddy, pds.caddy}`; `deployment/edge/snippets/{log.caddy,
 security-headers.caddy, xrpc-guard.caddy, ratelimit.caddy, tls.caddy, upstream.caddy}`; `deployment/edge/limits.json`; `deployment/edge/Dockerfile` (Caddy built
@@ -5561,6 +5583,39 @@ takes admin Basic auth).
   non-root with `cap_net_bind_service` only. It is a first-party image, so P1.27 scans, signs and locks it.
   (Standard Caddy has no rate limiter; this is the plugin Caddy's own docs point to. Licence Apache-2.0; the
   reuse reviewer confirms maintenance.)
+  The xcaddy build also fetches Go modules, a second upstream fetch, pinned as follows (record
+  2026-10-07-p128-edge-bases-and-ratelimit-adr.md):
+  - `xcaddy build v2.x.y --with github.com/mholt/caddy-ratelimit@<pseudo-version of the pinned commit>`;
+  - `GOFLAGS=-mod=readonly`;
+  - the checksum database stays on (default `GOSUMDB`);
+  - `GOPROXY` is the default proxy.golang.org;
+  - `GONOSUMDB`, `GONOSUMCHECK`, `GOINSECURE` and `-insecure` are never set.
+- **ADR 0018 (caddy-ratelimit)** lands in this step's PR. It is written from the plugin repository at the pinned
+  commit, with URLs and the date it was read (DO-3), and shows:
+  1. Identity and pin: the module path, the full commit SHA and its Go pseudo-version, the module's `go.sum`
+     lines, the Caddy version built against, and the plugin's declared minimum Caddy version.
+  2. Licence: the SPDX id read from LICENSE at that commit (Apache-2.0 expected; verified, not assumed), one line
+     on compatibility with our AGPL-3.0 image, and the licences of any Go modules it adds beyond Caddy's own.
+  3. Maintenance, as dated facts: maintainer or org, last commit date, whether tagged releases exist (if none,
+     say so: we pin a pseudo-version), open issue count and any open security issue, and the README's own status
+     quoted if it calls itself experimental. Then a one-line judgement and the trigger to revisit it (for example
+     "no commit in 12 months" or "a Caddy major version").
+  4. What it does and replaces: edge rate limiting per zone, before requests reach the app. It replaces nothing;
+     the app's own limits stay as the inner layer, so no later step drops them as "covered at the edge".
+  5. Invariant 3: zones keyed on `{remote_host}` hold client addresses in memory only. Distributed mode (shared
+     storage) is not configured, nothing logs the key, and the access log has no client address field (cite
+     `log.caddy` above).
+  6. Failure modes: plugin absent → a Caddyfile using `rate_limit` fails to adapt and Caddy refuses to start
+     (fail closed); limit hit → 429 with `Retry-After`; memory → how zones evict, with a bound or sizing note
+     (`window`, `events`, key cardinality under a flood); restart → counters reset, accepted.
+  7. Supply chain: the built binary is in the image SBOM (syft reads Go build info) and scanned by Trivy's
+     gobinary analyser; no outbound calls at runtime.
+  8. Exit plan: if the plugin is abandoned or a CVE goes unfixed, drop the directive, rely on the app limits, and
+     pick a replacement through the reuse checklist; it names the step that would do it.
+  9. Alternatives, one line each: Caddy core alone (no rate limiter), app-only limits, a separate proxy such as
+     HAProxy's stick tables.
+
+  The PR body carries the reuse check as a short tick list for points 1, 2, 3 and 5, each with its evidence link.
 - `Caddyfile` global: `admin off`; no `trusted_proxies` (nothing sits in front of the edge; if a VPS edge with a
   tunnel is ever added, P1.34's CGNAT branch revisits this); default logger configured (below);
   `import sites/enabled/*`.
@@ -5682,6 +5737,12 @@ takes admin Basic auth).
 - `edge_admin_api_off`; `edge_security_headers`: HSTS, nosniff, no `Server`.
 - `edge_image_plugins_exact`: `caddy list-modules` in the image shows standard modules plus `http.handlers.rate_limit`
   and nothing else non-standard.
+- `edge_caddyfile_validates`: `caddy validate` in the built image passes on the shipped Caddyfile.
+- `edge_dockerfile_pins_caddy_and_plugin`: the Dockerfile pins the Caddy version and the plugin's pseudo-version,
+  sets `GOFLAGS=-mod=readonly`, and sets none of `GONOSUMDB`, `GONOSUMCHECK`, `GOINSECURE` or `-insecure`; a
+  fixture missing either pin, or setting any of them, fails.
+- `edge_ratelimit_memory_only`: the Caddyfile and its snippets have no `distributed` block and no storage for
+  `rate_limit`; a fixture with either fails.
 - `edge_timeout_above_every_deadline` (plan §6.1 Deadlines): the adapted Caddy JSON has `response_header_timeout`
   equal to `limits.json`'s `EDGE_UPSTREAM_TIMEOUT_S` on every `reverse_proxy`, and the server `write` timeout is
   larger; every `deadlineMs` in every `interfaces/*/routes.manifest.json` (P1.04) and the maximum of
@@ -5691,7 +5752,7 @@ takes admin Basic auth).
 **Reuse** (all provisional — for reuse review):
 - `deploy/traefik/dynamic.yml:1-60` → REJECT: routes admin XRPC publicly (lines 31-40).
 - `github.com/mholt/caddy-ratelimit` → USE candidate (pinned commit; reuse reviewer confirms licence and
-  maintenance).
+  maintenance against ADR 0018's points 1 to 3 and 5).
 
 **Not in this step:** the app host's site config (Phase 2); the PDS's own settings (P1.29, P1.30); `LOG_ENABLED`
 on the PDS (P1.30 C12).
