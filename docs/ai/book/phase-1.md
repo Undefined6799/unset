@@ -5659,6 +5659,7 @@ recorded as built. Defence in depth beside P1.25w's row, so their order does not
 
 ### P1.25r — Close the jsx-free test's regression
 Tags: —            Depends on: P1.25d (merged, #512)
+As built: merged by Alex at 2026-10-07T23:07:29Z as `5681a4f` (#520).
 Slice 1, product class (`shared/ui-build/jsx-free.test.ts`, plus the two nits below); book edit
 2026-10-07-p125w-p125d-ui-build-follow-ups (P1.25r, text final 23:00Z), from architecture's N4 amendment in
 2026-10-07-p125h-follow-ups. Owner: the third thread, in its next slot, ahead of P1.25l. A tightening, cleared by the
