@@ -78,11 +78,8 @@ function stageProblems(lock: Lock, list: MirrorEntry[]): string[] {
   return [...locked, ...listed];
 }
 
-/**
- * What the final stage is built FROM, following stage names back to their base: a `build` base may only feed earlier
- * stages, so the shipped image is a `runtime` base or `scratch`.
- */
-function finalStageProblems(dockerfile: string, lock: Lock): string[] {
+/** The image the final stage is built FROM, following stage names back to their base; undefined with no FROM. */
+function finalFrom(dockerfile: string): string | undefined {
   const stageBase = new Map<string, string>();
   let last: string | undefined;
   for (const line of dockerfile.split("\n")) {
@@ -92,10 +89,21 @@ function finalStageProblems(dockerfile: string, lock: Lock): string[] {
     last = stageBase.get(image) ?? image;
     if (stage !== undefined) stageBase.set(stage, last);
   }
+  return last;
+}
+
+/** The lock entry, by name, that a pinned image reference names exactly; undefined for anything else. */
+function lockEntryOf(image: string, lock: Lock): [string, Base] | undefined {
+  const ref = PINNED.exec(image)?.[1];
+  return Object.entries(lock).find(([, b]) => b.ref === ref && image.endsWith(`@${b.digest}`));
+}
+
+/** A `build` base may only feed earlier stages, so the shipped image is a `runtime` base or `scratch`. */
+function finalStageProblems(dockerfile: string, lock: Lock): string[] {
+  const last = finalFrom(dockerfile);
   if (last === undefined) return ["the Dockerfile has no FROM"];
   if (last === "scratch") return [];
-  const ref = PINNED.exec(last)?.[1];
-  const base = Object.values(lock).find((b) => b.ref === ref && last?.endsWith(`@${b.digest}`));
+  const base = lockEntryOf(last, lock)?.[1];
   if (base === undefined) return [`final FROM ${last} has no lock entry`];
   return base.stage === "runtime" ? [] : [`final FROM ${last} is a ${base.stage} base`];
 }
