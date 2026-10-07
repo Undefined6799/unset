@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 120 steps: 99 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 121 steps: 100 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -213,7 +213,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24j | Islands, budget-measured | — | P1.24f | `phase-1.md` |
 | P1.24b | Toast and select islands within the JS budget (per-icon drawing modules first) | feature | P1.24j | `phase-1.md` |
 | P1.24c | Toast focus after close, required select stays native, select labels, font-metrics entry check | feature | P1.24b | `phase-1.md` |
-| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
+| P1.25k | Error-page hook in the server kit | [SEC], trusted | P1.04, P1.08 | `phase-1.md` |
+| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -333,6 +334,7 @@ flowchart TD
   P1_24j["P1.24j Islands"]
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
+  P1_25k["P1.25k Error-page hook in the kit"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -457,6 +459,7 @@ flowchart TD
   P1_24j --> P1_24b
   P1_24b --> P1_24c
   P1_24k --> P1_25
+  P1_25k --> P1_25
   P1_24c --> P1_26
   P1_25 --> P1_26
   P1_04 --> P1_27

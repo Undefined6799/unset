@@ -166,6 +166,7 @@ flowchart LR
   P1_24j["P1.24j islands, budget-measured"]
   P1_24b["P1.24b toast and select islands"]
   P1_24c["P1.24c toast focus, required select, labels"]
+  P1_25k["P1.25k error-page hook in the kit"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -213,6 +214,7 @@ flowchart LR
   P1_24k -.-> P1_25
   P1_24c -.-> P1_26
   P1_08 --> P1_25
+  P1_25k --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
   P0_07 --> P1_27
@@ -5245,13 +5247,65 @@ Tests: `toast_close_moves_focus_to_main` (jsdom; P1.26's toast keyboard test ass
 
 ---
 
+### P1.25k — Add the error-page hook to the server kit
+Tags: [SEC], trusted            Depends on: P1.04, P1.08 (both merged; P1.08 is #66)
+Slice 1, trusted base (`/shared/http/` is in CODEOWNERS' trusted section, "CSRF gate, session and CSP builder"); book
+edits 2026-10-07-p125-split and architecture's 2026-10-07-p125k-error-page-hook (which wins where they differ).
+Letter `k` is the server-kit part, the letter architecture named. No word from Alex is needed: the 404 change is the
+book's adopted behaviour, narrowed, and the hook is an extension point inside the trusted base under trusted review.
+
+**Where:** `shared/http/` only (`server.ts`, `errors.ts` as needed); tests in `shared/http/server.test.ts`.
+
+**What** (read on main fa74f1a: `errorResponse` maps non-public codes to `internal.error` and sets `no-store`;
+`fail()` at `server.ts:148`; `secured()`'s catch at `:222`; `reqId = randomUUID()` at `:292`):
+1. **The hook:** `errorPage?: (code: ErrorCode, ctx: { group: "app" | "profile" | "admin"; reqId?: string }) =>
+   string`.
+   - Synchronous: a Promise return is a type error, so the hook cannot await I/O or hang a response past the kit.
+   - Inputs are only what the kit chooses: `code` after the public mapping (never an internal code); a page group
+     (the api, media and static groups never call it); `reqId` only for `internal.error`. No path, query, header,
+     cookie, locale or session reaches it, so an error body cannot echo the caller and the hook cannot look up who
+     is signed in.
+   - It returns only the body. The kit keeps the status, `content-type`, `cache-control`, every extra header
+     (`allow`, `retry-after`, `connection`) and the group's security headers through `secured()`.
+   - A throw, a non-string or a body over 256 KiB falls back to today's fixed page for that code, logged once through
+     the existing `log.logError` (stack path-only); the hook is never called twice and the error's text never
+     reaches the body.
+   - `secured()`'s catch never calls the hook: the last-resort 500 stays the fixed static page.
+2. **404 gets `no-cache`**, for `http.not_found` in the app, profile and admin groups only. Every other error (405
+   included) and every api, media and static response stays `no-store`. Safe because the 404 body depends only on
+   the group.
+3. **The request id in the 500 body only:** the kit's `reqId` (never taken from a request header) goes in the body of
+   `internal.error` responses, not 4xx and not `http.deadline`. No `x-request-id` header until a booked step asks.
+
+**Done when (tests),** in `shared/http/server.test.ts`:
+- `error_page_hook_renders_page_groups`: app, profile and admin use the hook's body; api, media and static never call
+  it.
+- `error_page_hook_receives_no_request_data`: a spy records only the code, the group and, for 500, the reqId.
+- `error_page_hook_throw_falls_back`: today's fixed page, same status and headers, one logError line, no error text.
+- `error_page_hook_non_string_or_oversize_falls_back`.
+- `error_page_hook_keeps_kit_headers`: status, content-type, cache-control, allow and retry-after unchanged; security
+  headers present.
+- `internal_error_body_has_kit_request_id`: the 500 body holds the same reqId as `http.request`, UUID shape; no 4xx
+  body holds it.
+- `not_found_body_identical_across_requests`: two 404s in one group with different paths, queries, cookies and
+  Accept-Language give byte-identical bodies with `cache-control: no-cache`.
+- `secured_fallback_never_calls_hook`.
+
+**Unbooked candidate:** a per-page `script-src 'none'` CSP on zero-JS pages, a tightening in the trusted CSP builder.
+Recorded, not booked; the step book books it when someone asks.
+
+---
+
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08 · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
-`apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx, static-500.html}`;
-`interfaces/http/routes/test-routes.ts`; favicon files copied from the sheet's `assets/Logos/`; tests.
+`apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
+`interfaces/http/routes/test-routes.ts`; favicon files copied from the sheet's `assets/Logos/`; tests. P1.25 wires the
+kit's `errorPage` hook (P1.25k) in `apps/web`: feature class, no trusted path. `static-500.html` is dropped (book edits
+2026-10-07-p125-split and 2026-10-07-p125k-error-page-hook): the kit's fixed page and `secured()`'s static 500 already
+cover it.
 
 **Size:** ~300 source lines, ~300 test lines.
 
@@ -5273,16 +5327,25 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
   `feed?: true`: a feed page renders **no footer**, and the footer's links and slot move into the `Header` menu (sheet
   v44; used by P3.12 and P4.21/P4.22).
 - Route groups in Phase 1: `/`, `/terms`, `/privacy` and every error page are **public** (no cookie read, no
-  `Vary: Cookie`). The only `app` page in Phase 1 is the test page `/__test/app` (test server only), which P1.22's
-  and P1.26's cookie tests use until Phase 2 adds real signed-in pages.
+  `Vary: Cookie`). Error pages render through the kit's hook, so they are anonymous by construction: the hook
+  receives only the code, the kit's group and, for 500, the kit's `reqId`. The hook's `group` is the kit's header
+  group, not P1.22's app/public page group. The only `app` page in Phase 1 is the test page `/__test/app` (test
+  server only), which P1.22's and P1.26's cookie tests use until Phase 2 adds real signed-in pages.
+- Zero-JS pages: `renderPage` takes `islands: "off"` as a fixed argument for `/`, `/terms`, `/privacy`, 404 and 500,
+  never from the request. "off" emits no bootstrap script, no props `<script type="application/json">`, no
+  `modulepreload` and no island markers; Document provides no IslandSlot renderer, so the header menu renders static
+  as `<details>`/`<summary>` (P1.24j condition 4). App pages keep the island; error pages render with no island run at
+  all. A component that renders correctly only with its island is a bug on an "off" page.
 - Routes: `GET /` (placeholder landing text from the catalog), `GET /terms` and `GET /privacy` (placeholder pages
   saying the documents are in preparation, `noindex`; real texts come with the legal work).
 - Error pages:
-  - 404: catalog text, link home; `Cache-Control: no-cache`; the requested path is not echoed.
-  - 500: catalog text plus `requestId` (shown so a user can quote it; it is an opaque random id); `Cache-Control:
-    no-store`. If rendering the 500 page itself throws, the handler sends `static-500.html` (built at build
-    time, no data).
-  - 503: `Retry-After: 30`, `Cache-Control: no-store`; used by the maintenance flag P1.02 exposes, if any.
+  - 404: catalog text, link home; `Cache-Control: no-cache`, set by the kit in page groups (P1.25k); the requested
+    path is never echoed.
+  - 500: catalog text plus the kit's `reqId` (shown so a user can quote it; the same id `http.request` logs);
+    `Cache-Control: no-store`. If the hook throws, returns a non-string or runs over 256 KiB, the kit's fixed page
+    is the fallback.
+  - 503: no maintenance flag is booked. The `/__test/unavailable` route, defined in the test file only and never in
+    production routing, returns its own page with `Retry-After: 30` and `Cache-Control: no-store`.
   - `?error=<code>` on any shell page: the code is looked up in the catalog; known → a `Callout` (danger) with the
     catalog text; unknown → ignored; the raw value is never rendered.
 - `TEST_ROUTES=1` (test server only) mounts `/__test/throw`, `/__test/showcase`, `/__test/unavailable`, `/__test/app`; in
@@ -5293,10 +5356,8 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
 Request → route:
 1. Matched route renders inside AppShell.
 2. No route → 404 page (status 404).
-3. Handler throws → log { code: "http.unhandled", requestId, route pattern } (no message text, no stack in
-   production logs if it can contain user data; the stack goes to logs only with paths, per P1.03 rule) →
-   try render 500 page; that throws → send static-500.html. Both with status 500.
-4. Maintenance flag on → 503 page for every route except /health.
+3. Handler throws → the kit's existing logError event (no new event; stack path-only, per P1.03 rule) → the
+   kit renders the 500 page through the hook; a hook failure → the kit's fixed page. Both with status 500.
 ```
 
 **Edge cases and failures:**
@@ -5308,11 +5369,14 @@ Request → route:
 
 **Done when (tests):**
 - `shell_head_contents`: preload links for both fonts, stylesheet from manifest, favicons, color-scheme meta.
-- `shell_zero_js`: `/`, `/terms`, `/privacy`, 404, 500 → no `<script`.
-- `notfound_no_echo`: `GET /%3Cscript%3Ex` → 404, body lacks `script>x`, `Cache-Control: no-cache`.
-- `server_error_request_id`: `/__test/throw` → 500, body contains the response's request id, no stack text.
-- `server_error_fallback_static`: 500 renderer forced to throw → static page, status 500.
-- `unavailable_retry_after`: 503 with `Retry-After: 30`.
+- `shell_zero_js`: `/`, `/terms`, `/privacy`, 404, 500 → no `<script` of any type and no `modulepreload` link.
+- `header_menu_static_on_zero_js_pages`: the menu is a `<details>` with a `<summary>`, its links present with no JS.
+- `notfound_no_echo`: `GET /%3Cscript%3Ex` → 404, body lacks `script>x`, `Cache-Control: no-cache` (now from the
+  kit).
+- `server_error_request_id`: `/__test/throw` → 500, body holds the kit's `reqId` (UUID shape), the same as on
+  `http.request`, no stack text.
+- `server_error_fallback_static`: the hook forced to throw → the kit's fixed page, status 500.
+- `unavailable_retry_after`: 503 with `Retry-After: 30`, on the test-only route.
 - `error_param_known_code` → Callout with catalog text; `error_param_unknown_ignored`.
 - `test_routes_refused_in_prod`: config with both set → startup exits 1 with the code.
 - `legal_placeholders_noindex`: meta and header present.
