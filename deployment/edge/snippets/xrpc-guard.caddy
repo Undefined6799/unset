@@ -1,0 +1,26 @@
+# The PDS admin surface is never reachable from outside (plan §5.2; P1.28). Matched on the raw request target
+# ({http.request.orig_uri}, as the client sent it, before any decoding), so no encoding reaches the PDS as an admin
+# call. Caddy v2.11.7 request matchers (caddyserver/website src/docs/markdown/caddyfile/matchers.md, "vars_regexp",
+# "path_regexp", "header_regexp"); RE2 syntax.
+(xrpc-guard) {
+	# 1. Anything that decodes to an XRPC path must be exactly /xrpc/<NSID> (plus a query) as sent: no encoded
+	#    character, no extra segment, no trailing slash, no case games with "xrpc". Otherwise 400.
+	@xrpc_malformed {
+		path_regexp (?i)xrpc
+		not vars_regexp {http.request.orig_uri} ^/xrpc/(?:_health|[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)+)(?:\?[^#]*)?$
+	}
+	respond @xrpc_malformed 400 {
+		close
+	}
+
+	# 2. Admin namespaces, in any letter case: 404, so the route is not revealed.
+	@xrpc_admin vars_regexp {http.request.orig_uri} (?i)^/xrpc/(?:com\.atproto\.admin\.|com\.atproto\.temp\.|tools\.ozone\.|com\.atproto\.server\.createinvitecodes?(?:\?|$))
+	respond @xrpc_admin 404
+
+	# 3. Basic auth is admin auth; users never send it. 401 without WWW-Authenticate.
+	@xrpc_basic {
+		path_regexp (?i)xrpc
+		header_regexp Authorization (?i)^\s*basic\b
+	}
+	respond @xrpc_basic 401
+}

@@ -1,0 +1,5 @@
+# Test-only replacement for deployment/edge/snippets/tls.caddy (book P1.28, algorithm step 1): Caddy's internal CA
+# instead of Let's Encrypt, mounted over the image's file. edge_tls_issuer_letsencrypt checks the production one.
+(tls) {
+	tls internal
+}

@@ -1,0 +1,12 @@
+# Certificates (P1.28): Let's Encrypt only. The CAA records allow only letsencrypt.org (P0.11, P1.34), and Caddy's
+# default issuers would fall back to ZeroSSL, which the CAA refuses. The contact address comes from the environment
+# (an alias Alex controls), so none is committed. TLS-ALPN-01 on 443 works when port 80 is blocked. Caddy v2.11.7 tls
+# directive (caddyserver/website src/docs/markdown/caddyfile/directives/tls.md, "issuer acme").
+(tls) {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			email {$ACME_EMAIL}
+		}
+	}
+}

@@ -1,0 +1,57 @@
+{
+  "EDGE_UPSTREAM_TIMEOUT_S": 130,
+  "rateLimitZones": {
+    "session": {
+      "events": 30,
+      "window": "5m"
+    },
+    "session_day": {
+      "events": 300,
+      "window": "24h"
+    },
+    "oauth_signin": {
+      "events": 30,
+      "window": "5m"
+    },
+    "oauth_token": {
+      "events": 120,
+      "window": "5m"
+    },
+    "signup": {
+      "events": 10,
+      "window": "1h"
+    },
+    "reset": {
+      "events": 5,
+      "window": "1h"
+    },
+    "sync": {
+      "events": 1500,
+      "window": "5m"
+    },
+    "blob_read": {
+      "events": 600,
+      "window": "5m"
+    },
+    "blob_upload": {
+      "events": 60,
+      "window": "5m"
+    },
+    "firehose": {
+      "events": 6,
+      "window": "1m"
+    },
+    "firehose_hour": {
+      "events": 60,
+      "window": "1h"
+    },
+    "identity": {
+      "events": 300,
+      "window": "5m"
+    },
+    "global": {
+      "events": 3000,
+      "window": "5m"
+    }
+  }
+}

@@ -1,0 +1,134 @@
+# Per-client limits at the edge (P1.28; ADR 0018). github.com/mholt/caddy-ratelimit, sliding window, in memory only:
+# no `distributed` block and no `storage`, so no client address is written to disk or shared; `disable_metrics`, so no
+# address becomes a metrics label; no `log_key`. Zones are keyed by the socket address ({remote_host}); there are no
+# trusted proxies. An IPv6 client is keyed by its /64, so rotating addresses inside one subnet neither escapes a limit
+# nor allocates a ring per address (each key holds `events` timestamps, ringbuffer.go:46). The numbers are
+# architecture's starting values (record 2026-10-07-p1b-a1-pds-no-forwarded-address, "Zone values for P1.28", 01:52Z),
+# the same as limits.json rateLimitZones (edge_ratelimit_matches_limits). They take over the PDS's own per-address
+# limits, which are off because the PDS sees only the edge's address (P1b-A1, "Do not forward"). A request counts in
+# every zone it matches; paired limits (session, firehose) are two zones on one matcher; global has no matcher, so
+# every PDS route has a zone. OAuth paths are @atproto/oauth-provider's (create-oauth-middleware.ts,
+# create-api-middleware.ts and oauth-provider-api constants.ts at atproto 2902aa2). Over a limit: 429 with
+# Retry-After. The app's own limits stay the inner layer; these replace nothing.
+(pds-ratelimit) {
+	rate_limit {
+		zone session {
+			match {
+				path /xrpc/com.atproto.server.createSession
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 30
+			window 5m
+		}
+		zone session_day {
+			match {
+				path /xrpc/com.atproto.server.createSession
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 300
+			window 24h
+		}
+		zone oauth_signin {
+			match {
+				method POST
+				path /@atproto/oauth-provider/~api/sign-in
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 30
+			window 5m
+		}
+		zone oauth_token {
+			match {
+				path /oauth/token /xrpc/com.atproto.server.refreshSession
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 120
+			window 5m
+		}
+		zone signup {
+			match {
+				path /xrpc/com.atproto.server.createAccount /@atproto/oauth-provider/~api/sign-up
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 10
+			window 1h
+		}
+		zone reset {
+			match {
+				path /xrpc/com.atproto.server.requestPasswordReset /xrpc/com.atproto.server.resetPassword /xrpc/com.atproto.server.requestEmailConfirmation /xrpc/com.atproto.server.requestEmailUpdate /@atproto/oauth-provider/~api/reset-password-request /@atproto/oauth-provider/~api/reset-password-confirm /@atproto/oauth-provider/~api/update-email-request /@atproto/oauth-provider/~api/verify-email-request
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 5
+			window 1h
+		}
+		zone sync {
+			match {
+				path /xrpc/com.atproto.sync.*
+				not path /xrpc/com.atproto.sync.getBlob
+				not path /xrpc/com.atproto.sync.subscribeRepos
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 1500
+			window 5m
+		}
+		zone blob_read {
+			match {
+				path /xrpc/com.atproto.sync.getBlob
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 600
+			window 5m
+		}
+		zone blob_upload {
+			match {
+				path /xrpc/com.atproto.repo.uploadBlob
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 60
+			window 5m
+		}
+		zone firehose {
+			match {
+				path /xrpc/com.atproto.sync.subscribeRepos
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 6
+			window 1m
+		}
+		zone firehose_hour {
+			match {
+				path /xrpc/com.atproto.sync.subscribeRepos
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 60
+			window 1h
+		}
+		zone identity {
+			match {
+				path /xrpc/com.atproto.identity.* /xrpc/com.atproto.server.describeServer /.well-known/atproto-did /xrpc/_health
+			}
+			key {remote_host}
+			ipv6_prefix 64
+			events 300
+			window 5m
+		}
+		zone global {
+			key {remote_host}
+			ipv6_prefix 64
+			events 3000
+			window 5m
+		}
+		disable_metrics
+	}
+}

@@ -1,0 +1,25 @@
+# Logs (P1.28; rule SE-7; bibliography review R3-16). Caddy v2.11.7 log directive and global log option
+# (caddyserver/website src/docs/markdown/caddyfile/directives/log.md, "filter"; options.md, "log").
+
+# Access log, one line per request on stdout: time, host, method, route class, status, duration, size. Never the
+# address, the raw path, the query, headers or TLS details; a path is personal data (`/@alice`), so it is kept only as
+# its route class (route-class).
+(access-log) {
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+				request>proto delete
+				request>uri delete
+				request>headers delete
+				request>tls delete
+				resp_headers delete
+				user_id delete
+			}
+		}
+	}
+}

@@ -25,3 +25,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0015](0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Accepted (pending merge) |
 | [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |
 | [0017](0017-main-ruleset-applied.md) | Main ruleset applied; supersedes 0009 | Accepted 2026-10-06 |
+| [0018](0018-edge-rate-limit-plugin.md) | Edge rate limiting with caddy-ratelimit, in memory only (P1.28) | Proposed (awaiting Alex) |
