@@ -19,9 +19,18 @@ const NODE_DOCKERFILES = [MIGRATE_DOCKERFILE, DOCKERFILE];
 /**
  * What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. `stage` says
  * whether the base may become a shipped image (`runtime`) or only builds one (`build`); it is required (P1.28d, book
- * edit 2026-10-07-p128v-mirror-scan-stage), so the mirror scan can tell them apart (P1.28v).
+ * edit 2026-10-07-p128v-mirror-scan-stage), so the mirror scan can tell them apart (P1.28v). `stripped` lists the
+ * absolute paths every image built on the base deletes in its final stage (P1.29x; architecture record
+ * 2026-10-07-p129-postgres-image-and-stripped-paths), so the mirror scan may skip exactly those (P1.29v).
  */
-type Base = { ref: string; tag: string; digest: string; source: "upstream" | "mirror"; stage: Stage };
+type Base = {
+  ref: string;
+  tag: string;
+  digest: string;
+  source: "upstream" | "mirror";
+  stage: Stage;
+  stripped?: string[];
+};
 type Stage = "build" | "runtime";
 type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
@@ -291,6 +300,56 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
   return problems;
 }
 
+/** The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&` or `;`. */
+function finalStageRemovals(dockerfile: string): Set<string> {
+  const all = instructions(dockerfile);
+  const finalFromAt = all.findLastIndex((step) => /^FROM\s/i.test(step.text));
+  const removed = new Set<string>();
+  for (const { text } of all.slice(finalFromAt + 1)) {
+    if (!/^RUN\s/i.test(text)) continue;
+    for (const command of text.replace(/^RUN\s+/i, "").split(/&&|;/)) {
+      const [rm, flags, ...paths] = command.trim().split(/\s+/);
+      if (rm === "rm" && flags === "-rf") for (const path of paths) removed.add(path);
+    }
+  }
+  return removed;
+}
+
+const STRIPPED_PATH = /^\/[\w.@+-]+(?:\/[\w.@+-]+)*$/;
+
+/** Every way a lock entry's `stripped` list is malformed: empty, a path twice, or a path not absolute and literal. */
+function strippedListProblems(name: string, declared: string[]): string[] {
+  const problems = declared.length === 0 ? [`lock entry ${name} has an empty stripped list`] : [];
+  if (new Set(declared).size !== declared.length) problems.push(`lock entry ${name} lists a stripped path twice`);
+  for (const path of declared) {
+    if (!STRIPPED_PATH.test(path) || path.split("/").includes("..")) {
+      problems.push(`lock entry ${name}: stripped path ${path} is not an absolute path without wildcards`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Every stripped path a lock entry declares that is malformed, or that an image built on that base keeps: each
+ * Dockerfile whose final stage builds on the entry must delete each declared path with `rm -rf` in that stage, and a
+ * path is declared only when at least one final stage builds on the entry (P1.29x).
+ */
+function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
+  const problems: string[] = [];
+  for (const [name, { stripped }] of Object.entries(lock)) {
+    if (stripped === undefined) continue;
+    problems.push(...strippedListProblems(name, stripped));
+    const users = Object.entries(files).filter(([, text]) => lockEntryOf(finalFrom(text) ?? "", lock)?.[0] === name);
+    if (users.length === 0) problems.push(`lock entry ${name} declares stripped paths but no final stage builds on it`);
+    for (const [file, text] of users) {
+      const removed = finalStageRemovals(text);
+      const kept = stripped.filter((path) => !removed.has(path));
+      problems.push(...kept.map((path) => `${file} keeps ${path}, which lock entry ${name} declares stripped`));
+    }
+  }
+  return problems.sort();
+}
+
 /** Every Dockerfile under deployment/ (the web image's and, from P1.28, the edge's), so a new image is covered too. */
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
@@ -346,6 +405,7 @@ describe("base images", () => {
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
+      stripped: ["/usr/local/lib/node_modules/npm", "/usr/local/lib/node_modules/corepack"],
     });
     // The edge's bases (P1.28): Caddy's builder and runtime images, both Alpine, both by index digest.
     // The builder only builds the edge binary; the runtime image is what ships.
@@ -361,6 +421,53 @@ describe("base images", () => {
         stage,
       });
     }
+  });
+
+  test("stripped_paths_removed_in_every_final_stage", () => {
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    expect(strippedProblems(files, lock)).toEqual([]);
+    const npm = "/usr/local/lib/node_modules/npm";
+    const corepack = "/usr/local/lib/node_modules/corepack";
+    const declared: Lock = { node: { ...NODE, stripped: [npm, corepack] } };
+    const both = `RUN rm -rf ${npm} \\\n  ${corepack}\n`;
+    expect(strippedProblems({ ok: `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n${both}` }, declared)).toEqual([]);
+    expect(
+      strippedProblems(
+        {
+          "one.Dockerfile": `FROM ${pinnedNode}\nRUN rm -rf ${npm}\n`,
+          "early.Dockerfile": `FROM ${pinnedNode} AS deps\n${both}FROM ${pinnedNode}\n`,
+          "chained.Dockerfile": `FROM ${pinnedNode} AS base\nFROM base\nRUN true && rm -rf ${npm} && rm -f ${corepack}\n`,
+        },
+        declared,
+      ),
+    ).toEqual([
+      `chained.Dockerfile keeps ${corepack}, which lock entry node declares stripped`,
+      `early.Dockerfile keeps ${corepack}, which lock entry node declares stripped`,
+      `early.Dockerfile keeps ${npm}, which lock entry node declares stripped`,
+      `one.Dockerfile keeps ${corepack}, which lock entry node declares stripped`,
+    ]);
+    expect(strippedProblems({}, declared)).toEqual([
+      "lock entry node declares stripped paths but no final stage builds on it",
+    ]);
+    expect(
+      strippedProblems(
+        { ok: `FROM ${pinnedNode}\n` },
+        { node: { ...NODE, stripped: ["/opt/yarn-*", "usr/x", "/a/../b"] } },
+      ),
+    ).toEqual([
+      "lock entry node: stripped path /a/../b is not an absolute path without wildcards",
+      "lock entry node: stripped path /opt/yarn-* is not an absolute path without wildcards",
+      "lock entry node: stripped path usr/x is not an absolute path without wildcards",
+      "ok keeps /a/../b, which lock entry node declares stripped",
+      "ok keeps /opt/yarn-*, which lock entry node declares stripped",
+      "ok keeps usr/x, which lock entry node declares stripped",
+    ]);
+    expect(strippedProblems({ ok: `FROM ${pinnedNode}\n` }, { node: { ...NODE, stripped: [] } })).toEqual([
+      "lock entry node has an empty stripped list",
+    ]);
+    expect(
+      strippedProblems({ ok: `FROM ${pinnedNode}\n${both}` }, { node: { ...NODE, stripped: [npm, npm] } }),
+    ).toEqual(["lock entry node lists a stripped path twice"]);
   });
 
   test("runtime_base_is_debian_slim", () => {
