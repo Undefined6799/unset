@@ -1,0 +1,47 @@
+/* AsciiBackground (P1.24a; sheet components/AsciiBackground/README.md, v45): mono 12/14px behind the content. */
+@layer components {
+  /* Field and content share one grid cell, so the block is as tall as the taller of the two. */
+  .root {
+    display: grid;
+    overflow: hidden;
+  }
+
+  .field,
+  .content {
+    grid-area: 1 / 1;
+  }
+
+  .field {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: calc(var(--space-3) + var(--space-1) / 2);
+    white-space: pre;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .content {
+    position: relative;
+  }
+
+  .sparse {
+    color: var(--color-line);
+  }
+
+  .mid {
+    color: var(--color-line-strong);
+  }
+
+  .plum {
+    color: var(--color-plum);
+  }
+
+  .cyan {
+    color: var(--color-cyan);
+  }
+
+  .emerald {
+    color: var(--color-emerald);
+  }
+}

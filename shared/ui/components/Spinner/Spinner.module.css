@@ -1,0 +1,49 @@
+/* Spinner (P1.24a; sheet components/Spinner/README.md, v45): `ink` glyph, `ink-muted` label, 4 frames × 140ms.
+   `content` animates discretely (CSS Animations 1, "animation type: discrete"); step-end holds each frame. */
+@layer components {
+  .root {
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+  }
+
+  .glyph {
+    display: inline-block;
+    width: 1ch;
+    color: var(--color-ink);
+  }
+
+  .glyph::before {
+    content: "|";
+    animation: spin 560ms step-end infinite;
+  }
+
+  /* base.css's reduced-motion rule sits in an earlier layer, so this layer stops its own animation: a still `|`. */
+  @media (prefers-reduced-motion: reduce) {
+    .glyph::before {
+      animation: none;
+    }
+  }
+
+  .label {
+    color: var(--color-ink-muted);
+  }
+
+  @keyframes spin {
+    0% {
+      content: "|";
+    }
+
+    25% {
+      content: "/";
+    }
+
+    50% {
+      content: "-";
+    }
+
+    75% {
+      content: "\\";
+    }
+  }
+}

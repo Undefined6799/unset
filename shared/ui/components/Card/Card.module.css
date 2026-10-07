@@ -1,0 +1,30 @@
+/* Card (P1.24a; sheet components/Card/README.md, v45): solid `surface-card`, `shadow-2`, no border, padding 20px. */
+@layer components {
+  .root {
+    padding: calc(var(--space-4) + var(--space-1));
+    background-color: var(--color-surface-card);
+    box-shadow: var(--shadow-2);
+    border-radius: var(--radius-xs);
+  }
+
+  .eyebrow {
+    margin-bottom: var(--space-4);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+  }
+
+  .title {
+    margin: 0;
+  }
+
+  .body {
+    margin-top: var(--space-2);
+    color: var(--color-ink-muted);
+  }
+
+  .action {
+    margin-top: var(--space-4);
+  }
+}

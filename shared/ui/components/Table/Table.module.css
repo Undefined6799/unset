@@ -1,0 +1,51 @@
+/* Table (P1.24a; sheet components/Table/README.md, v45): no fills, no zebra stripes; scrolls sideways on phones. */
+@layer components {
+  .wrap {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .caption {
+    padding-bottom: var(--space-2);
+    color: var(--color-ink-muted);
+    text-align: left;
+  }
+
+  .table th {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-line-strong);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    font-weight: var(--type-label-weight);
+    letter-spacing: var(--type-label-tracking);
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-line);
+    color: var(--color-ink);
+  }
+
+  .table .mono {
+    font-family: var(--font-mono);
+    font-size: var(--type-code-size);
+    line-height: var(--type-code-line);
+  }
+
+  .table .muted {
+    color: var(--color-ink-muted);
+  }
+
+  .table .right {
+    text-align: right;
+  }
+}
