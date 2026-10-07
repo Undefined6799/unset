@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigError, defineConfig, loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
-import { connectionOf, poolFields, postgresFields } from "./config.ts";
+import { connectionOf, lockPoolFields, poolFields, postgresFields } from "./config.ts";
 import { migrateConfig } from "./migrate-cli.ts";
 
 const passwordFile = join(mkdtempSync(join(tmpdir(), "unset-migrate-cli-")), "pg_migrator_password");
@@ -67,6 +67,16 @@ describe("pool config", () => {
     expect(() => loadPool({ PG_POOL_MAX: "51" })).toThrow(ConfigError);
     expect(() => loadPool({ PG_MAX_REPLICAS: "5" })).toThrow(ConfigError);
     expect(() => loadConfig(poolConfig, env(), { onUnknownKeys: () => undefined })).toThrow(ConfigError);
+  });
+
+  test("lock_pool_max_default_and_range", () => {
+    const lockConfig = defineConfig({ ...postgresFields, ...lockPoolFields });
+    const loadLock = (overrides: Record<string, string> = {}) =>
+      loadConfig(lockConfig, env(overrides), { onUnknownKeys: () => undefined });
+    expect(loadLock().LOCK_POOL_MAX).toBe(8);
+    expect(loadLock({ LOCK_POOL_MAX: "2" }).LOCK_POOL_MAX).toBe(2);
+    expect(() => loadLock({ LOCK_POOL_MAX: "0" })).toThrow(ConfigError);
+    expect(() => loadLock({ LOCK_POOL_MAX: "21" })).toThrow(ConfigError);
   });
 
   test("sslmode_disable_refused_for_dotted_or_ip_host", () => {

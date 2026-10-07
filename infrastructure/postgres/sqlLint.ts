@@ -23,6 +23,19 @@ const EXPAND_FORBIDDEN: readonly { rule: string; pattern: RegExp }[] = [
   { rule: "truncate", pattern: /\bTRUNCATE\b/gi },
 ];
 
+const EVENT = "(?:INSERT|UPDATE|DELETE|TRUNCATE)";
+/**
+ * A `CREATE TRIGGER` clause from `CREATE` through `ON`, events joined by `OR` with no `UPDATE OF` column list
+ * (PostgreSQL 18 CREATE TRIGGER, https://www.postgresql.org/docs/18/sql-createtrigger.html). TRUNCATE here names a
+ * trigger event, which guards a table rather than emptying it, so the expand rule skips it there and nowhere else
+ * (architecture ruling 2026-10-06 23:10Z, P1.15x). A clause that does not match keeps its TRUNCATE reported.
+ */
+export const TRIGGER_EVENTS = new RegExp(
+  `\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?(?:CONSTRAINT\\s+)?TRIGGER\\s+(?:\\w+|"[^"]+")\\s+` +
+    `(?:BEFORE|AFTER|INSTEAD\\s+OF)\\s+${EVENT}(?:\\s+OR\\s+${EVENT})*\\s+ON\\b`,
+  "gi",
+);
+
 const CREATE_INDEX = /\bCREATE\s+(?:UNIQUE\s+)?INDEX\b(?:\s+CONCURRENTLY)?(?:\s+IF\s+NOT\s+EXISTS)?\s+("?)(\w+)\1/gi;
 const DROP_INDEX = /\bDROP\s+INDEX\b(\s+CONCURRENTLY\s+IF\s+EXISTS\s+("?)(\w+)\2)?/gi;
 const QUERY_LINE = /^\s*--\s*query:\s*(\S+)\s*$/;
@@ -44,10 +57,15 @@ export function lintMigration(sql: string, phase: Phase, root: string): LintProb
   return problems.sort((a, b) => a.line - b.line);
 }
 
+/** The code with each TRUNCATE inside a trigger's event list blanked in place, so offsets and lines stay the same. */
+const withoutTriggerEvents = (code: string): string =>
+  code.replace(TRIGGER_EVENTS, (clause) => clause.replace(/\bTRUNCATE\b/gi, (word) => " ".repeat(word.length)));
+
 function expandProblems(code: string): LintProblem[] {
   const created = new Set([...code.matchAll(CREATE_INDEX)].map((m) => (m[2] ?? "").toLowerCase()));
+  const checked = withoutTriggerEvents(code);
   const problems = EXPAND_FORBIDDEN.flatMap(({ rule, pattern }) =>
-    [...code.matchAll(pattern)].map((m) => ({ line: lineAt(code, m.index), rule })),
+    [...checked.matchAll(pattern)].map((m) => ({ line: lineAt(checked, m.index), rule })),
   );
   for (const m of code.matchAll(DROP_INDEX)) {
     // Dropping an index this same file created (a failed `CONCURRENTLY` build being retried) is the one exception.

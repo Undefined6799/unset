@@ -1,0 +1,3 @@
+// fixture: apps/web/src/Share.test.tsx findings=0
+// A test may assert on rendered markup, which holds an inline <svg>.
+export const expected = '<svg aria-hidden="true" focusable="false">';
