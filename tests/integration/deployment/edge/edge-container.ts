@@ -62,6 +62,16 @@ function nodeImage(): string {
   return `${lock.node.ref}:${lock.node.tag}@${lock.node.digest}`;
 }
 
+/**
+ * Pulls the probe's pinned node image unless it is already present, so no test pays for the pull: on a fresh CI
+ * runner the first probe used to pull it inside edge_logs_no_client_address and pass vitest's 5 s (P1.28b).
+ */
+export function pullProbeImage(): void {
+  if (docker(["image", "inspect", nodeImage()]).code === 0) return;
+  const pulled = docker(["pull", "-q", nodeImage()]);
+  if (pulled.code !== 0) throw new Error(`probe image pull failed: ${pulled.err.slice(-2000)}`);
+}
+
 /** Runs docker without blocking the event loop, which answers for the stub upstream. */
 function dockerAsync(args: readonly string[]): Promise<{ code: number; out: string; err: string }> {
   return new Promise((resolve) => {
@@ -263,4 +273,18 @@ function edgeHandle(
     },
     stop,
   };
+}
+
+/** The edge's logs once `ready` holds for them, or as they are after 3 s, so the caller's assertions say what is missing. */
+export async function logsWhen(
+  edge: Edge,
+  ready: (logs: { stdout: string; stderr: string }) => boolean,
+): Promise<{ stdout: string; stderr: string }> {
+  const deadline = Date.now() + 3000;
+  let logs = edge.logs();
+  while (!ready(logs) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    logs = edge.logs();
+  }
+  return logs;
 }

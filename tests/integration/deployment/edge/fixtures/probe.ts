@@ -4,13 +4,29 @@
 // edge's internal CA root in $CA. Node built-ins only; it prints one JSON result per step.
 import { request as httpRequest } from "node:http"; // guard-allow: egress local edge test only
 import { Agent, request as httpsRequest } from "node:https"; // guard-allow: egress local edge test only
-import { connect } from "node:net"; // guard-allow: egress local edge test only
+import { connect, type Socket } from "node:net"; // guard-allow: egress local edge test only
 
 type Step =
   | { kind: "https"; path: string; method?: string; count?: number; headers?: Record<string, string> }
   | { kind: "http"; port: number; path: string }
   | { kind: "garbage" };
 type Result = { statuses: number[]; retryAfter?: string };
+type Connecting = { on(event: "socket", listener: (socket: Socket) => void): unknown; destroy(error?: Error): void };
+
+/**
+ * A new connection that has not connected within this ends its step as -1, so a refused or silently dropped port
+ * costs at most this long (P1.28b). A keep-alive socket the agent reuses is already connected and is not timed.
+ */
+const CONNECT_MS = 1000;
+
+function connectDeadline(req: Connecting): void {
+  req.on("socket", (socket) => {
+    if (!socket.connecting) return;
+    const timer = setTimeout(() => req.destroy(new Error("connect timeout")), CONNECT_MS);
+    socket.once("connect", () => clearTimeout(timer));
+    socket.once("close", () => clearTimeout(timer));
+  });
+}
 
 const [source, stepsJson] = process.argv.slice(2);
 const steps = JSON.parse(stepsJson ?? "[]") as Step[];
@@ -28,6 +44,7 @@ function https(
       const retryAfter = res.headers["retry-after"];
       res.on("end", () => resolve({ status: res.statusCode ?? 0, ...(retryAfter ? { retryAfter } : {}) }));
     });
+    connectDeadline(req);
     req.on("error", () => resolve({ status: -1 }));
     req.end();
   });
@@ -39,6 +56,7 @@ function http(port: number, path: string): Promise<number> {
       res.resume();
       res.on("end", () => resolve(res.statusCode ?? 0));
     });
+    connectDeadline(req);
     req.on("timeout", () => req.destroy());
     req.on("error", () => resolve(-1));
     req.end();
@@ -50,7 +68,11 @@ function garbage(): Promise<void> {
     const socket = connect({ host: source, port: 443, localAddress: source }, () =>
       socket.end("\u0016\u0003\u0001 not a tls hello\r\n\r\n"),
     );
-    socket.on("close", () => resolve());
+    const timer = setTimeout(() => socket.connecting && socket.destroy(), CONNECT_MS);
+    socket.on("close", () => {
+      clearTimeout(timer);
+      resolve();
+    });
     socket.on("error", () => resolve());
     socket.resume();
   });
