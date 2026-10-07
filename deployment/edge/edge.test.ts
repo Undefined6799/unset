@@ -4,6 +4,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { type Directive, readCaddyfile } from "./caddyfile.ts";
 
 const EDGE = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(EDGE, file), "utf8");
@@ -23,17 +24,39 @@ const lock = JSON.parse(readFileSync(join(EDGE, "..", "images", "bases.lock.json
 const froms = (text: string): string[] =>
   [...text.matchAll(/^FROM\s+(\S+)(?:\s+AS\s+\S+)?\s*$/gim)].map((m) => m[1] ?? "");
 
-/** The zones of a rate_limit block, in order. */
-function zones(block: string) {
-  return [...block.matchAll(/\tzone (\w+) \{\n([\s\S]*?)\n\t\t\}/g)].map(([, name = "", body = ""]) => ({
-    name,
-    match: /\bmatch \{/.test(body),
-    key: /\bkey (\S+)/.exec(body)?.[1],
-    ipv6Prefix: /\bipv6_prefix (\d+)/.exec(body)?.[1],
-    events: Number(/\bevents (\d+)/.exec(body)?.[1]),
-    window: /\bwindow (\S+)/.exec(body)?.[1],
-  }));
+/** The environment the PDS site and the TLS snippet read (Caddy's `{$NAME}`); test values only. */
+const ENV = { PDS_HOST: "pds.unset.test", PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
+/** Every snippet file but the rate limits, in the order Caddy's `import snippets/*.caddy` reads them. */
+const otherSnippets = (): string =>
+  readdirSync(join(EDGE, "snippets"))
+    .filter((f) => f !== "ratelimit.caddy")
+    .sort()
+    .map((f) => read(`snippets/${f}`))
+    .join("\n");
+
+/** The zones of the pds-ratelimit snippet, in order, read through the Caddyfile reader (P1.28h). */
+function zones(ratelimit: string) {
+  const limit = readCaddyfile(ratelimit, ENV)
+    .snippet("pds-ratelimit")
+    .find((directive) => directive.name === "rate_limit");
+  return (limit?.block ?? [])
+    .filter((directive) => directive.name === "zone")
+    .map((zone) => {
+      const value = (name: string) => zone.block?.find((directive) => directive.name === name)?.args[0];
+      return {
+        name: zone.args[0] ?? "",
+        match: zone.block?.some((directive) => directive.name === "match") ?? false,
+        key: value("key"),
+        ipv6Prefix: value("ipv6_prefix"),
+        events: Number(value("events")),
+        window: value("window"),
+      };
+    });
 }
+
+/** Every directive in `directives` and their blocks, depth first. */
+const flatten = (directives: Directive[]): Directive[] =>
+  directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
 
 /**
  * Why some PDS request could pass the edge uncounted; empty when the global zone counts every request (no matcher) and
@@ -41,13 +64,18 @@ function zones(block: string) {
  */
 function zoneCoverageProblems(ratelimit: string, site: string): string[] {
   const found = [];
-  const block = /rate_limit \{([\s\S]*?)\n\t\}\n\}/.exec(ratelimit)?.[1] ?? "";
-  const global = zones(block).find((zone) => zone.name === "global");
+  const global = zones(ratelimit).find((zone) => zone.name === "global");
   if (global === undefined) found.push("there is no global zone");
   else if (global.match) found.push("the global zone has a matcher");
-  const routes = site.replaceAll(/^\s*#.*$/gm, "");
-  if (!/route \{\s*import pds-ratelimit\n/.test(routes)) found.push("the PDS route does not apply the zones first");
-  const imports = [...routes.matchAll(/import pds-ratelimit/g)].length;
+  const { sites } = readCaddyfile(`${otherSnippets()}\n${ratelimit}\n${site}`, ENV);
+  const pds = sites.find((s) => s.addresses.includes(ENV.PDS_HOST));
+  const first = pds?.directives.find((directive) => directive.name === "route")?.block?.[0];
+  if (first?.name !== "rate_limit" || first.via !== "pds-ratelimit") {
+    found.push("the PDS route does not apply the zones first");
+  }
+  const imports = sites
+    .flatMap((s) => flatten(s.directives))
+    .filter((directive) => directive.name === "rate_limit" && directive.via === "pds-ratelimit").length;
   if (imports !== 1) found.push(`the PDS site imports the zones ${imports} times`);
   return found;
 }
@@ -100,9 +128,8 @@ describe("edge config", () => {
 
   test("edge_ratelimit_memory_only", () => {
     expect(memoryOnlyProblems(config())).toEqual([]);
-    const block = /rate_limit \{([\s\S]*?)\n\t\}\n\}/.exec(read("snippets/ratelimit.caddy"))?.[1] ?? "";
     // Every zone is keyed by the client address, IPv6 by its /64.
-    for (const zone of zones(block)) {
+    for (const zone of zones(read("snippets/ratelimit.caddy"))) {
       expect(zone.key, zone.name).toBe("{remote_host}");
       expect(zone.ipv6Prefix, zone.name).toBe("64");
     }
@@ -123,9 +150,10 @@ describe("edge config", () => {
   test("edge_ratelimit_matches_limits", () => {
     // The zone values are architecture's (record 2026-10-07-p1b-a1-pds-no-forwarded-address, 01:52Z), kept once in
     // limits.json; the snippet must say the same.
-    const block = /rate_limit \{([\s\S]*?)\n\t\}\n\}/.exec(read("snippets/ratelimit.caddy"))?.[1] ?? "";
     const limits = JSON.parse(read("limits.json")) as { rateLimitZones: Record<string, unknown> };
-    const shipped = Object.fromEntries(zones(block).map((z) => [z.name, { events: z.events, window: z.window }]));
+    const shipped = Object.fromEntries(
+      zones(read("snippets/ratelimit.caddy")).map((z) => [z.name, { events: z.events, window: z.window }]),
+    );
     expect(shipped).toEqual(limits.rateLimitZones);
   });
 
