@@ -795,6 +795,52 @@ describe("error page hook", () => {
     expect((await request("/boom")).headers.get("cache-control")).toBe("no-store");
   });
 
+  test("error_page_hook_cap_counts_bytes", async () => {
+    const fixed = await (await kit({ routes }).request("/nothing")).text();
+    const wide = "é".repeat(128 * 1024 + 1); // under 256 Ki characters, over 256 KiB in UTF-8
+    expect(wide.length).toBeLessThan(256 * 1024);
+    const { request, records } = kit({ routes, errorPage: spy(() => wide).errorPage });
+    expect(await (await request("/nothing")).text()).toBe(fixed);
+    expect(records().filter((r) => r.event === "error")).toHaveLength(1);
+  });
+
+  test("not_found_no_cache_in_every_page_group", async () => {
+    for (const errorPage of [undefined, spy().errorPage]) {
+      const hook = errorPage ? { errorPage } : {};
+      const { request } = kit({ routes, ...hook });
+      const admin = kit({ routes, ...hook, errorGroup: "admin" });
+      const sent = [
+        await request("/nothing"),
+        await request("/@a"),
+        await request("/terms"),
+        await admin.request("/x"),
+      ];
+      for (const response of sent) {
+        expect(response.status).toBe(404);
+        expect(response.headers.get("cache-control")).toBe("no-cache");
+      }
+    }
+  });
+
+  test("payload_too_large_closes_connection", async () => {
+    const form = { "content-type": "application/x-www-form-urlencoded", "content-length": "70000" };
+    for (const errorPage of [undefined, spy().errorPage]) {
+      const { request } = kit({
+        routes: [page({ method: "POST", path: "/form" })],
+        ...(errorPage ? { errorPage } : {}),
+      });
+      const response = await request("/form", { method: "POST", headers: form });
+      expect(response.status).toBe(413);
+      expect(response.headers.get("connection")).toBe("close");
+    }
+  });
+
+  test("error_page_hook_promise_is_type_error", () => {
+    // @ts-expect-error: the hook is synchronous; a Promise-returning render is refused by type.
+    const asyncPage: ErrorPage = async (code: ErrorCode) => `<p>${code}</p>`;
+    expect(typeof asyncPage).toBe("function");
+  });
+
   test("secured_fallback_never_calls_hook", async () => {
     const { seen, errorPage } = spy();
     const { request } = kit({ routes, errorPage });
