@@ -287,3 +287,12 @@ their own, but no step may rebuild them.
   with no allowlist change. If gitleaks flags such a file, the PR stops and comes back: an allowlist entry is a
   loosening and needs Alex's word. First use: `tests/integration/postgres/audit-row-hash.vector.json` (P1.15m,
   encoding in 0008's comment; book edit 2026-10-07-p115m-as-built).
+- Fixture DIDs are `did:plc:` plus 24 of one letter from `[a-z2-7]`, or `did:web:` on an RFC 2606 host; never a real
+  or random-looking DID (book edit 2026-10-07-p115m-as-built, item 6). One letter per role, for example
+  `did:plc:aaaaaaaaaaaaaaaaaaaaaaaa` (actor) and `did:plc:bbbbbbbbbbbbbbbbbbbbbbbb` (target), or
+  `did:web:alice.example.com`; no handles of real people; no DID in a log assertion's expected output (SE-7: log
+  tests assert absence). Gitleaks passes with no allowlist change, or the PR stops.
+- Addresses in fixtures and tests come from the documentation ranges (RFC 5737 192.0.2.0/24, 198.51.100.0/24 and
+  203.0.113.0/24; RFC 3849 2001:db8::/32) or loopback, except in tests whose subject is address classification (book
+  edit 2026-10-07-fixture-documentation-addresses). Loopback (`127.0.0.0/8`, `::1`) is for tests that really bind or
+  connect. This is book text; no guard or lint enforces it.
