@@ -37,10 +37,32 @@ jobs:
             echo "::notice title=mirror::skipped, no mirror list yet (lands in P1.27)"
             exit 0
           fi
-          jq -r '.[].source' "$MIRROR_LIST" > "$RUNNER_TEMP/sources"
-          test -s "$RUNNER_TEMP/sources"
-          while read -r source; do
+          jq -r '.[] | [.source, (.stage // "none")] | @tsv' "$MIRROR_LIST" > "$RUNNER_TEMP/entries"
+          test -s "$RUNNER_TEMP/entries"
+          # Per stage (P1.28v, Alex's "Warn on build-only" 2026-10-07T03:56:37Z): a runtime base fails on HIGH or
+          # CRITICAL; a build-only base fails on CRITICAL and only reports HIGH, as a warning and in the job summary,
+          # because what ships is gated by the image jobs' own scans. Trivy v0.74.0 exits with --exit-code when it
+          # finds anything at --severity, so exit 2 below means HIGH findings and any other non-zero is a failure.
+          while IFS=$'\t' read -r source stage; do
             case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
-            docker run --rm -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" image --exit-code 1 --severity HIGH,CRITICAL \
+            case "$stage" in
+              runtime) severity=HIGH,CRITICAL ;;
+              build)
+                severity=CRITICAL
+                status=0
+                { echo "### HIGH findings in build-only base $source"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+                docker run --rm -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" image --exit-code 2 --severity HIGH \
+                  --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source" \
+                  | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+                echo '```' >> "$GITHUB_STEP_SUMMARY"
+                case "$status" in
+                  0) ;;
+                  2) echo "::warning title=mirror::HIGH findings in build-only base $source (reported, not failing)" ;;
+                  *) exit "$status" ;;
+                esac
+                ;;
+              *) echo "no known stage for $source: $stage"; exit 1 ;;
+            esac
+            docker run --rm -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" image --exit-code 1 --severity "$severity" \
               --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source"
-          done < "$RUNNER_TEMP/sources"
+          done < "$RUNNER_TEMP/entries"
