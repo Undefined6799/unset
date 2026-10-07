@@ -2,5 +2,10 @@
   "app.single_use.bind_did": {
     "strategy": "delete_row",
     "reason": "a single-use token bound to the person; it has no use once they are erased"
+  },
+  "audit.event_body.subject": {
+    "strategy": "audit_redact",
+    "class": "mod",
+    "reason": "the target of a moderation or security event; the side row is redacted, the hash chain stays (P1.15a)"
   }
 }

@@ -114,6 +114,9 @@
     }
   },
   "tables": {
+    "audit.chain": {
+      "auditor": { "privileges": ["SELECT"], "wholeTable": true }
+    },
     "app.single_use": {
       "retention": {
         "columns": {
