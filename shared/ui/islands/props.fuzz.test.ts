@@ -4,7 +4,15 @@ import { parse } from "parse5";
 import { expect, test } from "vitest";
 import { SerializeError, serializeProps } from "./props.ts";
 
-const BREAKERS = new Set([0x3c, 0x3e, 0x26, 0x2028, 0x2029]);
+/** Characters that end or confuse a script element; the serialised JSON must hold none of them. */
+const BREAKER = new RegExp(`[<>&${String.fromCharCode(0x2028, 0x2029)}]`);
+/** The first breaker in the output, named with its index and context, or null when there is none. */
+const breakerAt = (json: string): string | null => {
+  const found = BREAKER.exec(json);
+  if (found === null) return null;
+  const context = json.slice(Math.max(0, found.index - 16), found.index + 16);
+  return `breaker ${JSON.stringify(found[0])} at index ${found.index}: ${JSON.stringify(context)}`;
+};
 /** Strings built from the pieces that end or confuse a script element, so escaping is tested where it matters. */
 const BREAKER_PIECES = ["</script", "</SCRIPT ", "<script", "<!--", "-->", "<", ">", "&", "/", '"', "\\"].concat([
   String.fromCharCode(0x2028),
@@ -13,8 +21,24 @@ const BREAKER_PIECES = ["</script", "</SCRIPT ", "<script", "<!--", "-->", "<", 
 const breakerString = fc
   .array(fc.oneof(fc.constantFrom(...BREAKER_PIECES), fc.string({ maxLength: 3 })), { maxLength: 8 })
   .map((parts) => parts.join(""));
+/**
+ * Any JSON value, with every size bounded explicitly (P1.23d): the breakers are short, so longer values add time,
+ * not coverage. The leaves are fc.jsonValue's own: null, booleans, finite doubles and binary strings.
+ */
+const jsonString = fc.string({ unit: "binary", maxLength: 256 });
+const { json } = fc.letrec((tie) => ({
+  json: fc.oneof(
+    { maxDepth: 4, depthIdentifier: "json" },
+    fc.constant(null),
+    fc.boolean(),
+    fc.double({ noDefaultInfinity: true, noNaN: true }),
+    jsonString,
+    fc.array(tie("json"), { maxLength: 16, depthIdentifier: "json" }),
+    fc.dictionary(jsonString, tie("json"), { maxKeys: 16, depthIdentifier: "json" }),
+  ),
+}));
 const value = fc.oneof(
-  fc.jsonValue({ stringUnit: "binary", maxDepth: 6 }),
+  json,
   fc.dictionary(breakerString, breakerString, { maxKeys: 4 }),
   fc.array(breakerString, { maxLength: 4 }),
 );
@@ -48,9 +72,7 @@ test("fuzz_roundtrip", () => {
 test("fuzz_no_breakers", () => {
   fc.assert(
     fc.property(value, (v) => {
-      for (const ch of serialiseOrRefused(v) ?? "") {
-        expect(BREAKERS.has(ch.codePointAt(0) ?? 0)).toBe(false);
-      }
+      expect(breakerAt(serialiseOrRefused(v) ?? "")).toBeNull();
     }),
     { numRuns: 10_000 },
   );
@@ -61,6 +83,16 @@ const scripts = (node: Node): Node[] => [
   ...(node.nodeName === "script" ? [node] : []),
   ...(node.childNodes ?? []).flatMap(scripts),
 ];
+
+test("props_breaker_examples_fail", () => {
+  const ls = String.fromCharCode(0x2028);
+  const ps = String.fromCharCode(0x2029);
+  for (const breaker of ["</script", "</ScRiPt>", "<!--", "-->", "<", ">", "&", ls, ps]) {
+    const at = '{"a":"'.length + breaker.search(BREAKER);
+    expect(breakerAt(`{"a":"${breaker}"}`) ?? "no breaker found", breaker).toMatch(`at index ${at}: `);
+    expect(breakerAt(serializeProps({ a: breaker })), breaker).toBeNull();
+  }
+});
 
 test("html_parse_check", () => {
   fc.assert(
