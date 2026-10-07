@@ -5358,6 +5358,15 @@ managers for the lock files. The repeatable procedure:
   says npm is bundled in the base, that npm is absent from the runtime image (citing the test or the Dockerfile
   line), and "re-check on expiry, bump per 2026-10-07-base-digest-bump-procedure.md". Where the scanner allows it,
   the entry is scoped to the base and mirror scan, not the runtime image scan.
+- **First use of the fallback** (step book 02:05Z): Alex tapped "Ignore 14 days" at 2026-10-07 02:02:20Z for the
+  three fixed HIGH npm CVEs in the upstream Node base that keep main's mirror scan red, with no fixed upstream digest.
+  Id-less maintenance, subject `deps: ignore bundled npm CVEs in node:26 base until 2026-10-21`, label `security`
+  (P1.27b with the same text if pr-shape or the subject check refuses `deps:` on a check-path file). The PR holds only
+  three entries in `.github/trivyignore.yaml`: CVE-2026-102276 and CVE-2026-102278 (brace-expansion 5.0.9) and
+  CVE-2026-19534 (undici 6.28.0), each with the reason text above and `expired_at` 2026-10-21, scoped to the bundled
+  npm paths if Trivy's format allows. If `mirror.yml` does not already read that file, the PR stops and comes back
+  (wiring an ignore file into a workflow is a further check change the card did not name). The body quotes the tap
+  and says the entries cover both variants, since the same npm ships in `26-trixie-slim`.
 
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
