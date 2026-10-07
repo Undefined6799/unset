@@ -1,11 +1,12 @@
 // P1.30: the strict Compose subset the preflight reads (architecture record 2026-10-07-p130-preflight-location-and-yaml):
 // anything Compose could read differently from us is refused rather than guessed.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { parseCompose, parseEnvFile } from "./compose-parse.ts";
+import { parseAllDocuments } from "yaml";
+import { ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
 
 describe("compose subset", () => {
   const refused = (yaml: string) => expect(() => parseCompose(yaml, "c.yaml")).toThrow();
@@ -23,6 +24,16 @@ describe("compose subset", () => {
   test("preflight_refuses_anchor_alias_merge", () => {
     refused(`${base}    environment: &e\n      A: "1"\n  pds:\n    environment: *e\n`);
     refused(`${base}  pds:\n    <<: {image: y}\n`);
+  });
+  // The second layer behind the walk (docs/ai/book/phase-1.md, P1.30; book edit 2026-10-07-p130p-as-built).
+  test("parser_sets_max_alias_count_zero", () => {
+    refused(`${base}    environment: &e\n      A: "1"\n  pds:\n    image: y\n    environment: *e\n`);
+    // With the walk skipped, the option alone still refuses the alias, naming the file.
+    const [aliased] = parseAllDocuments(`a: &x 1\nb: *x\n`);
+    expect(() => aliased && refuseAliasesByOption(aliased, "c.yaml")).toThrow(ParseError);
+    expect(() => aliased && refuseAliasesByOption(aliased, "c.yaml")).toThrow(/^c\.yaml: alias/);
+    const [plain] = parseAllDocuments(base);
+    expect(() => plain && refuseAliasesByOption(plain, "c.yaml")).not.toThrow();
   });
   test("preflight_refuses_tags", () => refused(`${base}    user: !!str "1000"\n`));
   test("preflight_refuses_multi_document", () => refused(`${base}---\n${base}`));
@@ -58,6 +69,8 @@ describe("env file subset", () => {
 });
 
 const digest = `sha256:${"a".repeat(64)}`;
+// Every field the parser reads, so the comparison covers its whole view: a whole-reference and a `$$` value, env
+// files and file secrets (the files exist, as Compose requires).
 const STACK = `name: unset-prod
 services:
   edge:
@@ -65,12 +78,18 @@ services:
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
   pds:
     image: ghcr.io/undefined6799/mirror/pds@${digest}
+    env_file: [pds.env]
     environment:
       PDS_HOSTNAME: pds.example.test
+      PDS_PRICE: one$$
+      PDS_ADMIN_PASSWORD: \${PDS_ADMIN_PASSWORD}
     ports:
       - target: 3000
         published: "3000"
         host_ip: 127.0.0.1
+secrets:
+  pds_admin:
+    file: ./pds-admin.secret
 `;
 
 /** Whether `docker compose` runs here; CI must have it (the architecture record's anti-drift test runs there). */
@@ -83,34 +102,104 @@ const hasCompose = (() => {
   }
 })();
 
+const ROOT = join(import.meta.dirname, "..", "..");
+/** Every compose file in the repository (P1.29 adds compose.dev.yaml, P5.03 the production one). */
+const repositoryFiles = (): string[] =>
+  execFileSync("git", ["ls-files", "-z", "--", ":(glob)**/compose*.yaml"], { cwd: ROOT, encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean)
+    .map((file) => join(ROOT, file));
+
+type Theirs = {
+  name: string;
+  services: Record<
+    string,
+    {
+      image: string;
+      env_file?: { path: string }[];
+      environment?: Record<string, string | null>;
+      ports?: { target: number; published?: string; host_ip?: string }[];
+    }
+  >;
+  secrets?: Record<string, { file?: string }>;
+};
+
+/** Compose's reading of `file` (never the preflight's: only this test runs Compose), with nothing interpolated. */
+function composeConfig(file: string): Theirs {
+  const json = execFileSync("docker", ["compose", "-f", file, "config", "--format", "json", "--no-interpolate"], {
+    encoding: "utf8",
+  });
+  return JSON.parse(json) as Theirs;
+}
+
+/** The parser's whole view of `file`, in Compose's terms: paths resolved beside the file, values as written. */
+function oursAsCompose(file: string) {
+  const ours = parseCompose(readFileSync(file, "utf8"), file);
+  return {
+    name: ours.name,
+    services: Object.fromEntries(
+      ours.services.map((service) => [
+        service.name,
+        {
+          image: service.image,
+          envFiles: service.envFiles.map((path) => resolve(dirname(file), path)),
+          environment: Object.fromEntries(
+            service.environment.map(([key, value]) => [
+              key,
+              "ref" in value ? `\${${value.ref}}` : value.literal.replaceAll("$", () => "$$"),
+            ]),
+          ),
+          ports: service.ports,
+        },
+      ]),
+    ),
+    secretFiles: ours.secretFiles.map((path) => resolve(dirname(file), path)).sort(),
+  };
+}
+
+function theirsAsOurs(theirs: Theirs) {
+  return {
+    name: theirs.name,
+    services: Object.fromEntries(
+      Object.entries(theirs.services).map(([name, service]) => [
+        name,
+        {
+          image: service.image,
+          envFiles: (service.env_file ?? []).map((entry) => entry.path),
+          environment: service.environment ?? {},
+          ports: (service.ports ?? []).map((p) => ({
+            hostIp: p.host_ip ?? null,
+            published: p.published ?? null,
+            target: `${p.target}`,
+          })),
+        },
+      ]),
+    ),
+    secretFiles: Object.values(theirs.secrets ?? {})
+      .flatMap((secret) => (secret.file === undefined ? [] : [secret.file]))
+      .sort(),
+  };
+}
+
 describe("compose agreement", () => {
   const dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  test.runIf(hasCompose || process.env.CI)("preflight_matches_compose_config", () => {
-    const file = join(dir, "compose.yaml");
-    writeFileSync(file, STACK);
-    // The test (never the preflight) asks Compose for its reading of the same file.
-    const json = execFileSync("docker", ["compose", "-f", file, "config", "--format", "json", "--no-interpolate"], {
-      encoding: "utf8",
-    });
-    const theirs = JSON.parse(json) as {
-      name: string;
-      services: Record<string, { image: string; ports?: { target: number; published?: string; host_ip?: string }[] }>;
-    };
-    const ours = parseCompose(STACK, file);
-    expect(theirs.name).toBe(ours.name);
-    expect(Object.keys(theirs.services).sort()).toEqual(ours.services.map((s) => s.name).sort());
-    for (const service of ours.services) {
-      const their = theirs.services[service.name];
-      expect(their?.image).toBe(service.image);
-      expect(
-        (their?.ports ?? []).map((p) => ({
-          hostIp: p.host_ip ?? null,
-          published: p.published ?? null,
-          target: `${p.target}`,
-        })),
-      ).toEqual(service.ports);
+  // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
+  // env_file, environment, file secrets) against Compose's, for the fixture and every compose*.yaml in the repository.
+  // The parser reads no networks, so there is nothing of them to compare until a check needs them.
+  test.runIf(hasCompose || process.env.CI)("preflight_matches_compose_config", async ({ annotate }) => {
+    const fixture = join(dir, "compose.yaml");
+    writeFileSync(fixture, STACK);
+    writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
+    writeFileSync(join(dir, "pds-admin.secret"), "");
+    const real = repositoryFiles();
+    if (real.length === 0)
+      await annotate(
+        "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
+      );
+    for (const file of [fixture, ...real]) {
+      expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
     }
   });
 });
