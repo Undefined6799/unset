@@ -114,6 +114,11 @@
     }
   },
   "tables": {
+    "audit.append": {
+      "admin": ["EXECUTE"],
+      "indexer": ["EXECUTE"],
+      "web": ["EXECUTE"]
+    },
     "audit.chain": {
       "auditor": { "privileges": ["SELECT"], "wholeTable": true }
     },
