@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -116,7 +116,9 @@ flowchart TD
   P111 --> P115x["P1.15x lint: TRUNCATE trigger event [ALEX]"]
   P113 --> P115m["P1.15m audit SQL [SEC]"]
   P115x --> P115m
-  P115m --> P115["P1.15 audit chain [SEC]"]
+  P115m --> P115d["P1.15d audit tables"]
+  P115d --> P115g["P1.15g audit EXECUTE grants [SEC]"]
+  P115g --> P115["P1.15 audit chain [SEC]"]
   P115 --> P115a["P1.15a audit retention + erasure [SEC]"]
   P113 --> P116["P1.16 single-use store [SEC]"]
   P103 --> P117e["P1.17e lock log events"]
@@ -155,7 +157,9 @@ flowchart LR
   P1_22["P1.22 base styles, theme, locale"]
   P1_23["P1.23 island runtime"]
   P1_24["P1.24 UI kit: gate + primitives"]
-  P1_24a["P1.24a UI kit: blocks, chrome, islands"]
+  P1_24a["P1.24a UI kit: zero-JS blocks"]
+  P1_24k["P1.24k UI kit: chrome and feed, no-JS"]
+  P1_24j["P1.24j islands, budget-measured"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -185,7 +189,10 @@ flowchart LR
   P1_24 --> P1_24a
   P1_23 -.-> P1_24a
   P1_24 --> P1_25
-  P1_24a -.-> P1_25
+  P1_24a --> P1_24k
+  P1_24k --> P1_24j
+  P1_24k -.-> P1_25
+  P1_24j -.-> P1_26
   P1_08 --> P1_25
   P1_25 --> P1_26
   P1_04 --> P1_27
@@ -2807,7 +2814,7 @@ Diagram: none.
 ---
 
 ### P1.15 — Audit: append-only `audit.append()`, two hash-chained lanes, side tables, chain verifier
-Tags: [SEC]            Depends on: P1.15m, P1.14q            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
+Tags: [SEC]            Depends on: P1.15g, P1.14q            Plan: §5.7 (audit), §6 (no user sign-in records; retention), invariant 3; admin design §7.1–7.4, §8, §8.1
 Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` is a new trusted workspace, so its root
   `tsconfig.json` reference and lockfile entries wait for P1.14q, while the SQL needs neither (the P1.14 / P1.14m
   precedent: `m` is the migration part). Three steps, in order; this section's text specifies the last two:
@@ -2835,7 +2842,23 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      vector file committed under `tests/integration/postgres/`, which P1.15 reuses unchanged. No `REVOKE TRUNCATE`:
      only the owner holds it, and the grants test proves no role does (a default-privileges path that grants it goes
      back to architecture). The append-only trigger is statement-level (see Triggers below).
-  2. **P1.15** (trusted; depends on P1.15m, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
+     **Three-way split** (book edit 2026-10-06-p115m-tailnet-deferral-steps, split section final 00:03Z; local pr-shape
+     reports mixed_grant_change on one 0007, so the class comes from pr-shape, the P1.14m precedent). The SQL above
+     ships in three PRs, merged in number order, each leaving main green:
+     - **P1.15m** (trusted; P1.15x, P1.12, P1.13), 0007: the `types` and `public` USAGE grants to `audit_owner`,
+       `audit_owner`'s routine default privilege, the four `audit.*` plpgsql functions, the matrix `schemas` and
+       `defaults` lines and the `grants.test.ts` stand-in updates. The default privilege revoking EXECUTE from
+       PUBLIC comes before the CREATE FUNCTIONs, and `grants.test` asserts no role holds EXECUTE on `audit.*` after
+       0007. No 0007 function depends on an audit table (no audit table type in a signature, no `%ROWTYPE`, no
+       `LANGUAGE sql` body).
+     - **P1.15d** (feature; P1.15m), 0008 under `SET ROLE audit_owner`: the six tables, the seeds, the
+       `(writer, ts)` index with its PF-1 evidence, the three triggers (the statement-level one included),
+       auditor's SELECT on the chain, the matrix `audit.chain` row and both registry rows.
+     - **P1.15g** (trusted, grant migration; P1.15d), 0009: `GRANT EXECUTE ON audit.append` to `web`, `indexer` and
+       `admin` (only they hold it after 0009), the matrix `audit.append` row, and
+       `tests/integration/postgres/audit.test.ts`.
+     How `p_pii` behaves in this SQL waits on the tailnet deferral record, still a draft pending Alex (P1a-A1).
+  2. **P1.15** (trusted; depends on P1.15g, P1.14q): the `infrastructure/audit` workspace alone, `actions.ts`,
      `append.ts` (with the TS validation), `rowHash.ts`, `verify.ts`, plus the root `tsconfig.json` reference and the
      package's own lockfile entries as P1.14q permits. Tests: `reason_union_matches_table`,
      `typed_append_rejects_free_text`, `row_hash_known_answer` (TS, same vector), `chain_links`,
@@ -2843,8 +2866,8 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      P1.14q, in either order.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
   The tailnet-address exception (P1a-A1) is built as booked and flagged provisional in the PR body.
-Where: `infrastructure/postgres/migrations/0007_audit.sql` (P1.15m), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
-  (P1.15) + tests; `erasure-registry.json` and `grant-matrix.json` rows (P1.15m)
+Where: `infrastructure/postgres/migrations/0007` to `0009` (P1.15m, P1.15d, P1.15g), `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts}`
+  (P1.15) + tests; `erasure-registry.json` and `grant-matrix.json` rows (P1.15m to P1.15g)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
 
 Goal: moderation and security events are written only through one database function that stamps the writing role itself
@@ -4641,7 +4664,8 @@ and the inventory check decides CI, so it is a guard. Steps, in order (`b` stays
    Input, Textarea, Checkbox, RadioGroup, Select.
 5. **P1.24s, UI kit part 1b** (depends on P1.24i and P1.23c, plus P1.24h if any of its components links): Avatar, Switch,
    SkipLink, MediaFrame, DescriptionList, Pagination.
-6. P1.24a, then P1.24b if the budget ruling requires it.
+6. P1.24a (zero-JS blocks), P1.24k (chrome and feed, no-JS), P1.24j (islands), then P1.24b if the budget ruling
+   requires it (book edit 2026-10-07-p124a-split).
 These PRs add only the server-rendered showcase markup; `components_axe_clean` and `components_target_size` run in
 P1.26's harness. `card_surface_opaque` moves to P1.24a with Card.
 
@@ -4843,6 +4867,23 @@ need the island runtime (P1.23), which P1.24 does not depend on.
 **Size:** ~500 source lines, ~450 test lines (upper end of a PR; if it runs over, the islands split off into a
 review-only second PR within the same step).
 
+**Split (book edit 2026-10-07-p124a-split, final 00:09Z):** measured on main 1462b4b the kit components average about
+75 source lines each, so this step's 15 components and up to 6 islands come to about 1,200 to 1,500 lines, over the
+800-line limit even with the islands in a second PR. Three product steps of about 400 lines each (a reason in the PR
+body above that); this section's text specifies all three:
+  1. **P1.24a** (deps unchanged; keeps the issue and `card_surface_opaque`): Callout, Card, Table, Progress, Spinner,
+     CodeBlock, AsciiBackground.
+  2. **P1.24k** (depends on P1.24a): no-JS versions only: Header (details and summary, container query), Footer, Tabs
+     (link fallback), Modal (`fallbackHref` link), Toast (printed by the server, close link), CommandBlock (no button
+     without JavaScript), NewPosts and the FeedMore markup; then `inventory_all_built`.
+  3. **P1.24j** (depends on P1.24k): the islands in order of need (copy, header-menu, tabs, modal, toast, select),
+     measuring the island budget after each and stopping at the last that fits the 76,800-byte total
+     (2026-10-06-p123-shape measure-first rule); the rest go to P1.24b.
+  SSR unit tests cover every component's no-JS behaviour here. The Playwright tests (commandblock copy and denied,
+  select and tabs keyboard, `header_folds_by_container`, axe in both themes) run in P1.26's harness on the showcase,
+  since P1.26 depends on P1.25, which depends on this work. P1.25 depends on P1.24k instead of P1.24a (the shell needs
+  the no-JS Header and Footer, not the islands); P1.26 adds P1.24j.
+
 **Goal:** The rest of the sheet's components exist; every interactive one works without JavaScript and is only
 enhanced by an island.
 
@@ -4975,8 +5016,8 @@ never raises the budget or ships an island over it. The rest wait in **P1.24b**.
 ---
 
 ### P1.24b — Remaining islands, after the budget ruling (added step)
-Tags: —            Depends on: P1.24a, plus one of the rulings below
-Holds the islands P1.24a could not fit under the 76,800-byte island total. They move here only after one of:
+Tags: —            Depends on: P1.24j, plus one of the rulings below
+Holds the islands P1.24j could not fit under the 76,800-byte island total. They move here only after one of:
 architecture rules on reducing the runtime's share (code-splitting the React runtime out of the bootstrap, a lighter
 runtime within ADR 0015, or dropping islands that could be zero-JS); or a budget raise, which is a check-path loosening
 needing an architecture ruling and Alex's typed word. A Renovate bump that pushes the total past the limit is caught by
@@ -4986,7 +5027,7 @@ the island budget check on its own PR and is Alex's to decide.
 
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24a, P1.08 · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08 · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx, static-500.html}`;
@@ -5070,7 +5111,7 @@ Request → route:
 
 ### P1.26 — Accessibility and browser test harness
 
-**Tags:** — · **Depends on:** P1.25 · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
+**Tags:** — · **Depends on:** P1.25, P1.24j · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
 
 **Where:** `tests/e2e/{playwright.config.ts, pages.ts, a11y.spec.ts, nojs.spec.ts, csp.spec.ts, headers.spec.ts}`;
 `tests/e2e/fixtures/servers.ts`; `.pa11yci.json`; `lighthouserc.json`; `.github/workflows/e2e.yml`;
