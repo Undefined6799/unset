@@ -391,33 +391,66 @@ const REMOVAL_VERBS = new Map<string, readonly string[]>([
   ["dpkg", ["-r", "-P", "--remove", "--purge"]],
   ...["aptitude", "rpm", "dnf", "microdnf", "yum"].map((tool): [string, readonly string[]] => [tool, []]),
 ]);
-/** Commands that run a command they are given or build, which this reader cannot see: every shell, not only `-c`. */
-const INDIRECT = new Set(["sh", "bash", "ash", "dash", "zsh", "eval", "xargs", "env", "busybox", "source", "."]);
+/**
+ * Amendment 5, layer 3: the value-less options a removal may carry, so no option (`-c`, `-o`, `--config-file`) can
+ * hide the verb. After the verb only these options and package names may follow.
+ */
+const APT_FLAGS = ["-y", "-q", "--purge", "--auto-remove", "--no-install-recommends"];
+const REMOVAL_FLAGS = new Map<string, readonly string[]>([
+  ["apk", ["--no-network", "--purge", "--no-cache", "-q"]],
+  ["apt", APT_FLAGS],
+  ["apt-get", APT_FLAGS],
+]);
+const PACKAGE_NAME = /^[a-z0-9][a-z0-9+._-]*$/;
+/**
+ * Amendment 5, layer 2: every command a shipped stage runs, other than a package manager's removal, is one of these,
+ * exactly what today's final stages use (rm in images/node-app.Dockerfile and images/migrate.Dockerfile; setcap and
+ * rm in edge/Dockerfile). Every shell, interpreter and launcher fails without being named; a new command is added here
+ * in a product PR that says so.
+ */
+const FINAL_STAGE_COMMANDS = new Set(["rm", "setcap"]);
+/**
+ * Amendment 5, layer 1, main's old check on joined instructions: a package-manager name as a word (a hyphen joins a
+ * word, so `apk-tools` is a package, not apk). It may appear only as the first word of a removal that passes layer 3.
+ */
+const PACKAGE_MANAGER_WORD = /(?<![\w-])(?:apt-get|aptitude|apt|apk|dpkg|rpm|dnf|microdnf|yum)(?![\w-])/g;
+const FLOOR = "a package manager is named outside a removal command";
 const basename = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
 
-/** Why one simple command may not run in a shipped image; undefined when it may. */
+/** Why a package manager's command is not a plain removal (layer 3); undefined when it is one. */
+function removalProblem(name: string, args: string[]): string | undefined {
+  const verbs = REMOVAL_VERBS.get(name) ?? [];
+  if (verbs.length === 0) return `${name} may not run in a shipped image`;
+  const flags = REMOVAL_FLAGS.get(name) ?? [];
+  const at = args.findIndex((word) => !flags.includes(word));
+  const verb = args[at];
+  if (verb === undefined || !verbs.includes(verb)) {
+    return verb?.startsWith("-") ? `${name} option ${verb} is not allowed` : `${name} may only remove packages`;
+  }
+  const other = args.slice(at + 1).find((word) => !flags.includes(word) && !PACKAGE_NAME.test(word));
+  return other === undefined ? undefined : `${name} argument ${other} is not a package name`;
+}
+
+/** Why one simple command may not run in a shipped image (layers 2 and 3); undefined when it may. */
 function commandProblem(words: string[]): string | undefined {
   const [command = "", ...args] = words;
   const name = basename(command);
   const shown = words.join(" ");
   if (words.some((word) => /[$`]/.test(word))) return `${shown}: a variable or command substitution hides what runs`;
-  if (INDIRECT.has(name)) return `${shown}: ${name} runs a command this test cannot read`;
-  const verbs = REMOVAL_VERBS.get(name);
-  if (verbs === undefined) {
-    // A package manager handed to another command (nohup, timeout, find -exec) is refused; rm only deletes it.
-    return name !== "rm" && args.some((word) => REMOVAL_VERBS.has(basename(word)))
-      ? `${shown}: runs a package manager through ${name}`
-      : undefined;
+  if (REMOVAL_VERBS.has(name)) {
+    const problem = removalProblem(name, args);
+    return problem === undefined ? undefined : `${shown}: ${problem}`;
   }
-  const verb = name === "dpkg" ? args[0] : args.find((word) => !word.startsWith("-"));
-  if (verbs.length === 0) return `${shown}: ${name} may not run in a shipped image`;
-  return verb !== undefined && verbs.includes(verb) ? undefined : `${shown}: ${name} may only remove packages`;
+  return FINAL_STAGE_COMMANDS.has(name) ? undefined : `${shown}: ${name} is not an allowed final-stage command`;
 }
 
-/** A shell-form RUN as simple commands: split on `&&`, `||`, `;`, `|`, `&`, newlines and parentheses, quotes dropped. */
+/**
+ * A shell-form RUN as simple commands: split on `&&`, `||`, `;`, `|`, `&` and newlines, quotes dropped. A subshell or
+ * group keeps its `(` or `{` on the first word, so it is no allowed command.
+ */
 function shellCommands(script: string): string[][] {
   return script
-    .split(/&&|\|\||[;|&\n(){}!]/)
+    .split(/&&|\|\||[;|&\n]/)
     .map((command) =>
       command
         .trim()
@@ -456,12 +489,18 @@ function shippedInstructionProblems(instruction: string): string[] {
   const { rest } = splitFlags(args);
   if (HEREDOC.test(rest)) return ["heredoc not supported"];
   if (!rest.startsWith("[") && /[$`]/.test(rest)) return ["a variable or command substitution hides what runs"];
-  const commands = rest.startsWith("[") ? [execCommand(rest)] : shellCommands(rest);
-  return commands.flatMap((command) => {
-    if (command === undefined) return ["cannot parse exec-form RUN"];
+  const exec = rest.startsWith("[") ? execCommand(rest) : undefined;
+  if (rest.startsWith("[") && exec === undefined) return ["cannot parse exec-form RUN"];
+  const commands = exec === undefined ? shellCommands(rest) : [exec];
+  const problems = commands.flatMap((command) => {
     const problem = commandProblem(command);
     return problem === undefined ? [] : [problem];
   });
+  const removals = commands.filter(
+    (command) => REMOVAL_VERBS.has(basename(command[0] ?? "")) && commandProblem(command) === undefined,
+  ).length;
+  const named = (exec === undefined ? rest : exec.join(" ")).match(PACKAGE_MANAGER_WORD)?.length ?? 0;
+  return named > removals ? [...problems, FLOOR] : problems;
 }
 
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
@@ -703,38 +742,73 @@ describe("base images", () => {
   });
 
   test("runtime_stage_installs_no_os_packages", () => {
-    // Amendment 3: in the stages an image ships, a package manager may only remove, read on joined instructions.
+    // Amendments 3 and 5: in the stages an image ships, read on joined instructions, a package manager may only remove
+    // (layer 3), every command is on an allowlist (layer 2), and a package-manager name anywhere else fails (layer 1).
     for (const file of dockerfiles) expect(osPackageProblems(read(file)), file).toEqual([]);
     const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
     const substitution = "a variable or command substitution hides what runs";
-    for (const [run, problem] of [
-      ["RUN true \\\n  && apk add curl", "apk add curl: apk may only remove packages"],
-      ["RUN apk --no-cache add curl", "apk --no-cache add curl: apk may only remove packages"],
-      ["RUN /sbin/apk add curl", "/sbin/apk add curl: apk may only remove packages"],
-      ["RUN apt-get -y install curl", "apt-get -y install curl: apt-get may only remove packages"],
-      ["RUN apk fix", "apk fix: apk may only remove packages"],
-      ["RUN dpkg --unpack x.deb", "dpkg --unpack x.deb: dpkg may only remove packages"],
-      ['RUN sh -c "apk add x"', "sh -c apk add x: sh runs a command this test cannot read"],
+    const floor = "a package manager is named outside a removal command";
+    const notAllowed = (shown: string, name: string): string =>
+      `${shown}: ${name} is not an allowed final-stage command`;
+    const execSync = "require('child_process').execSync('apt-get install -y curl')";
+    const execFileSync = "require('child_process').execFileSync('apt-get', ['install', 'curl'])";
+    const perl = "system('apt-get install -y curl')";
+    for (const [run, problems] of [
+      // Amendment 5's red fixtures: the verifier's four, ksh, a name the floor cannot see, -o, an exec-form argument.
+      [`RUN ["node","-e","${execSync}"]`, [notAllowed(`node -e ${execSync}`, "node"), floor]],
+      [`RUN ["perl","-e","${perl}"]`, [notAllowed(`perl -e ${perl}`, "perl"), floor]],
+      [
+        `RUN ["node","-e","${execFileSync.replaceAll("'", "\\u0027")}"]`,
+        [notAllowed(`node -e ${execFileSync}`, "node"), floor],
+      ],
+      [
+        "RUN apt-get -c remove install -y curl",
+        ["apt-get -c remove install -y curl: apt-get option -c is not allowed", floor],
+      ],
+      ["RUN ksh -c 'apk add x'", [notAllowed("ksh -c apk add x", "ksh"), floor]],
+      [
+        `RUN node -e "require('child_process').execSync('ap'+'t-get install x')"`,
+        [notAllowed("node -e require(child_process).execSync(ap+t-get install x)", "node")],
+      ],
+      [
+        "RUN apt-get -o Foo=remove install x",
+        ["apt-get -o Foo=remove install x: apt-get option -o is not allowed", floor],
+      ],
+      ['RUN ["rm","-f","/usr/bin/apt-get"]', [floor]],
+      ["RUN dpkg -r x && rm -rf /usr/bin/dpkg", [floor]],
+      // Amendment 3's fixtures.
+      ["RUN rm -f /x \\\n  && apk add curl", ["apk add curl: apk may only remove packages", floor]],
+      ["RUN apk --no-cache add curl", ["apk --no-cache add curl: apk may only remove packages", floor]],
+      ["RUN /sbin/apk add curl", ["/sbin/apk add curl: apk may only remove packages", floor]],
+      ["RUN apt-get -y install curl", ["apt-get -y install curl: apt-get may only remove packages", floor]],
+      ["RUN apk fix", ["apk fix: apk may only remove packages", floor]],
+      ["RUN dpkg --unpack x.deb", ["dpkg --unpack x.deb: dpkg option --unpack is not allowed", floor]],
+      ['RUN sh -c "apk add x"', [notAllowed("sh -c apk add x", "sh"), floor]],
       // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a JS template.
-      ["RUN ${PM} add x", substitution],
-      ["RUN $PM add x", substitution],
-      ['RUN ["apk","add","x"]', "apk add x: apk may only remove packages"],
-      ["RUN nohup apk add x", "nohup apk add x: runs a package manager through nohup"],
-      ["RUN FOO=1 apk add x", "apk add x: apk may only remove packages"],
-      ["RUN apk", "apk: apk may only remove packages"],
-      ["RUN yum remove x", "yum remove x: yum may not run in a shipped image"],
-      ["ONBUILD RUN apk add x", "apk add x: apk may only remove packages"],
-      ['SHELL ["/sbin/apk", "add"]', "SHELL changes what RUN runs"],
-    ]) {
-      expect(osPackageProblems(`${node}${run}`), run).toEqual([`line 3: ${problem}`]);
+      ["RUN ${PM} add x", [substitution]],
+      ["RUN $PM add x", [substitution]],
+      ['RUN ["apk","add","x"]', ["apk add x: apk may only remove packages", floor]],
+      ["RUN nohup apk add x", [notAllowed("nohup apk add x", "nohup"), floor]],
+      ["RUN FOO=1 apk add x", ["apk add x: apk may only remove packages", floor]],
+      ["RUN apk", ["apk: apk may only remove packages", floor]],
+      ["RUN apk del --no-network x/y", ["apk del --no-network x/y: apk argument x/y is not a package name", floor]],
+      ["RUN yum remove x", ["yum remove x: yum may not run in a shipped image", floor]],
+      ["ONBUILD RUN apk add x", ["apk add x: apk may only remove packages", floor]],
+      ['SHELL ["/sbin/apk", "add"]', ["SHELL changes what RUN runs"]],
+    ] as const) {
+      expect(osPackageProblems(`${node}${run}`), run).toEqual(problems.map((problem) => `line 3: ${problem}`));
     }
     // Stages the final one builds on by name ship too; a stage it only copies from does not.
-    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN apk add x\nFROM base`)).toHaveLength(1);
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN apk add x\nFROM base`)).toEqual([
+      "line 2: apk add x: apk may only remove packages",
+      `line 2: ${floor}`,
+    ]);
     expect(osPackageProblems(`FROM ${pinnedNode} AS deps\nRUN apk add x\nFROM ${pinnedNode}`)).toEqual([]);
     for (const run of [
       "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\\n    && apk del --no-network curl libcap",
+      "RUN apk del --no-network curl libcap apk-tools",
       "RUN apt-get purge -y x",
-      "RUN dpkg -r x && rm -rf /usr/bin/dpkg",
+      "RUN dpkg -r x",
     ]) {
       expect(osPackageProblems(`${node}${run}`), run).toEqual([]);
     }
