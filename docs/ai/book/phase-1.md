@@ -2923,6 +2923,10 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      workspace (`row_hash_known_answer`, TS), reproducing `audit-row-hash.vector.json` byte for byte with the fixture
      DIDs of 02-shared-blocks (the two constants of `audit.test.ts:77-78`, or a shared `tests/fixtures/dids.ts` if one
      exists by then). P1.14 and P1.15 each add one trusted workspace alone: two PRs after P1.14q, in either order.
+     **As built** (#426, merged by Alex at 2026-10-07T11:58:59Z; book edit 2026-10-07-p115-as-built): the workspace
+     also has `index.ts`, its package entry (`package.json` exports it, rule DC-2), and an extra test
+     `to_micros_keeps_the_sixth_digit` guards the timestamp precision the row hash depends on. Its `notes-hub`
+     warning (`scripts/guards/notes.ts:206`) is answered by P1.15s.
   3. **P1.15s** (feature, slice 1 beside P1.15; depends on P1.15, opened only after it merges, never stacked): the
      audit chain integration tests. A trusted PR may carry only trusted files and tests with a matching path segment,
      and these tests need the `tests/tsconfig.json` reference to the new workspace, which is outside
@@ -2930,15 +2934,18 @@ Split (book edit 2026-10-06-p115-split, final 23:01Z): `infrastructure/audit/` i
      `tests/integration/audit/chain.test.ts` with `reason_union_matches_table`, `typed_append_rejects_free_text`,
      `chain_links`, `tamper_chain_metadata` and `tamper_body` as worded below, its own `AuditDb` over a real `pg`
      client and real roles (the adapter lives in the test file, not the workspace), and the `tests/tsconfig.json`
-     reference. Red evidence: each tamper test fails with `verify` stubbed to report ok. Widening `trusted-base.ts` to
-     let a trusted PR carry the reference line would be a loosening of a check gate and is not booked; if the split
-     recurs, the step book can propose it as its own check-class step for Alex.
+     reference, plus the audit hub note `docs/ai/notes/area/audit.md` (book edit 2026-10-07-p115-as-built): what the
+     workspace owns and that it reaches the database only through `AuditDb`; links to `rowHash.ts`, `verify.ts` and the
+     vector; the pitfalls (microsecond timestamps, SQL `RETURN` bodies, `SET ROLE audit_owner`). Docs never change a
+     PR's class, so P1.15s stays feature. Red evidence: each tamper test fails with `verify` stubbed to report ok.
+     Widening `trusted-base.ts` to let a trusted PR carry the reference line would be a loosening of a check gate and
+     is not booked; if the split recurs, the step book can propose it as its own check-class step for Alex.
   Downstream steps keep depending on P1.15 (P1.15a included); none calls `audit.append` from SQL alone as booked.
   None depends on P1.15s except P1.38, so the tamper tests exist before Phase 1 closes.
 Where: `infrastructure/postgres/migrations/0008` to `0010` (P1.15m, P1.15d, P1.15g),
-  `infrastructure/audit/{actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) + `rowHash.test.ts`;
-  `tests/integration/audit/chain.test.ts` and the `tests/tsconfig.json` reference (P1.15s); `erasure-registry.json`
-  and `grant-matrix.json` rows (P1.15m to P1.15g)
+  `infrastructure/audit/{index.ts,actions.ts,append.ts,rowHash.ts,verify.ts,error.ts,db.ts}` (P1.15) +
+  `rowHash.test.ts`; `tests/integration/audit/chain.test.ts`, the `tests/tsconfig.json` reference and
+  `docs/ai/notes/area/audit.md` (P1.15s); `erasure-registry.json` and `grant-matrix.json` rows (P1.15m to P1.15g)
 Size: ~180 lines SQL, ~200 source lines, ~300 test lines
 
 Goal: moderation and security events are written only through one database function that stamps the writing role itself
