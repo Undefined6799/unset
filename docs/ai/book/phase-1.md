@@ -5246,6 +5246,32 @@ reduced default below and the push, sign and attest work is **P1.27s**:
 - If Alex approves the guard change before P1.27q opens, P1.27s's shape (below) lands in P1.27q instead and P1.27s
   lapses.
 
+**Interim base: upstream Node on Alpine by digest until P1.27s** (book edit 2026-10-06-p127-base-by-digest-book-text,
+final; architecture 2026-10-06-p127-upstream-base-by-digest). Alex answered "Yes, digest" at 2026-10-07 00:17Z, and
+in his own words at 00:09Z: "Base image for container will be alpine linux". The mirror exists only once P1.27s can
+push, so until then P1.27 builds from the one official upstream base by digest. This amends the text below:
+- **Goal (amended):** every image a deploy can pull comes from our registry by digest, was scanned, carries an SBOM
+  and SLSA provenance, and is signed with our key; until P1.27s, builds in CI and on dev machines pull the upstream
+  base by digest. Nothing is pushed or signed until P1.27s; Trivy scans the built image.
+- **Base:** `node:26-alpine` for every stage (`deps`, `build`, `runtime`, so build output matches musl), pinned by its
+  multi-arch index digest. `USER 65532:65532`, read-only-friendly, the node HEALTHCHECK and `npm ci --ignore-scripts`
+  are unchanged. `pg` without `pg-native` (ADR 0014) is unaffected; any later native dependency ships a musl build or
+  builds from source in `build`, and its step says so.
+- **Pins:** `deployment/images/bases.lock.json`, shaped `{ "node": { ref, tag: "26-alpine", digest (index), source:
+  "upstream" | "mirror" } }`. `images.lock.json` and the signing ADR move to P1.27s, so the Where line drops
+  `deployment/images.lock.json` and the ADR and gains `bases.lock.json`. `verify-images.ts` is unchanged; it checks
+  every `FROM` digest equals its lock entry, no `FROM` lacks a digest, and every host is on the allowlist (the one
+  official upstream image plus our GHCR namespace).
+- **Hadolint:** each upstream `FROM` is preceded by a reason comment (citing the record, "removed by P1.27s"), then
+  `# hadolint ignore=DL3026` on the line directly above it (v2.15.1 applies an inline ignore to the next line only).
+  Allowed nowhere else; P1.27s removes it.
+- **Tests (added):** `base_digest_matches_lock`, `dl3026_ignore_only_on_upstream_base` (asserts that order),
+  `from_without_digest_refused`, `from_host_not_allowlisted_refused`, `runtime_base_is_alpine` (the tag starts with
+  `26-alpine` in the lock and the Dockerfile). The root `vitest.config.ts` `deployment` project already selects
+  `deployment/images/images.test.ts`; no new project and no q step.
+- **Order:** P1.27; then P1.28, P1.29 and P1.30 on locally built images; then P1.27s (Alex: `packages: write` and the
+  signing environment); P1.27r after launch.
+
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
@@ -5444,6 +5470,12 @@ Tags: [SEC] [ALEX]            Depends on: P1.27q, P1.27, Alex's typed approval o
 Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy job in
   `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests, and
   `scripts/ci/image-workflows.test.ts`. No product file rides with it.
+Interim base (2026-10-06-p127-base-by-digest-book-text, final): P1.27s flips every `FROM` host and the
+  `bases.lock.json` `source` back to the mirror and removes the DL3026 ignores; it brings `images.lock.json` with the
+  first publish and the ADR "image signing: key or keyless", re-decided from current documentation now the repository
+  is public (if keyless wins, Alex's signing-key tick item lapses; the environment, the reviewer and GATE_IF stay).
+  The mirror copy must keep the digests (`mirrored_digest_equals_lock`); if it cannot, that goes back to
+  architecture.
 Size: about 250 lines.
 
 Lapses if Alex approves the guard change before P1.27q opens; the same shape then lands in P1.27q.
@@ -5657,6 +5689,11 @@ on the PDS (P1.30 C12).
 One step (SE-6 recount, 2026-10-05 01:43Z): `dev-seed` and `dev-precheck` are developer tools (`dev-precheck` runs
 from `dev:up`, not from CI), so this stays one step.
 
+**musl DNS (architecture 00:13Z, book edit 2026-10-06-p127-base-by-digest-book-text):** P1.29 gains
+`net_guard_resolve_pin_in_image`: the net-guard resolve-and-pin tests run once inside the built Alpine image, as part
+of the local-stack smoke, before the first deploy (musl's resolver differs from glibc's). If P1.29 cannot run it, it
+moves to P1.30's preflight.
+
 **Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** P1.11p, P1.12p, P1.12x, P1.27, P1.28 · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/compose.dev.yaml`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
@@ -5800,6 +5837,9 @@ dev-seed:
 ---
 
 ### P1.30 — Deploy preflight
+
+The preflight accepts only a signed GHCR image by digest, so every real deploy fails closed until P1.27s and the
+signing key exist (book edit 2026-10-06-p127-base-by-digest-book-text).
 
 **Tags:** [SEC] · **Depends on:** P1.27 · **Plan:** §2 rule 23 and §6.1 SLSA row (refuse unsigned images), §5.2 (edge rate limiting, no client address to the PDS, PDS logging off: "the deploy preflight checks the three settings"), §5.3 (recovery key, confirmation link), §5.8 (moderation mail), §6
 
