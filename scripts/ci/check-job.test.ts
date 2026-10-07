@@ -62,14 +62,17 @@ const checkJob = (text: string): Job => readWorkflow(text).workflow.jobs?.check 
 
 /**
  * A step with its `uses` split on the last `@`: a 40-hex ref becomes `@<sha>`, so Renovate's SHA bumps compare equal.
- * Anything else (no `@`, an empty ref, a tag, a short SHA) stays as written and so never matches the pinned step.
+ * Anything else (no `@`, an empty ref, a tag, a short SHA, the literal `@<sha>`) is marked unpinned, so it never
+ * matches the pinned step.
  */
 function normalised(step: Step): Step {
   if (typeof step.uses !== "string") return step;
   const at = step.uses.lastIndexOf("@");
   const path = step.uses.slice(0, at);
   const ref = step.uses.slice(at + 1);
-  return at > 0 && /^[0-9a-f]{40}$/.test(ref) ? { ...step, uses: `${path}@<sha>` } : step;
+  return at > 0 && /^[0-9a-f]{40}$/.test(ref)
+    ? { ...step, uses: `${path}@<sha>` }
+    : { ...step, uses: `unpinned:${step.uses}` };
 }
 
 const ifProblems = (text: string): string[] =>
@@ -193,6 +196,7 @@ describe("check job", () => {
       edited(CHECKOUT, "actions/checkout"),
       edited(CHECKOUT, "actions/checkout@"),
       edited(CHECKOUT, "actions/checkout@3d3c42e"),
+      edited(CHECKOUT, "actions/checkout@<sha>"),
       edited(CHECKOUT, `actions/checkout@${"f".repeat(40)}@v7`),
       edited(CHECKOUT, `someone/checkout@${"f".repeat(40)}`),
       edited(LINT, "      - run: npm run lint\n        if: false\n"),
