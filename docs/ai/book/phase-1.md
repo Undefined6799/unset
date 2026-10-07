@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28q, P1.28,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.28q, P1.28x, P1.28,
   P1.29, P1.30, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -70,7 +70,8 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   stays where it is below so ids and links hold; P1.22b sits after P1.37. No French page ships before this slice lands.
   It may run before, beside or after slice 2's steps; P1.38 waits for it, because the Phase 1 exit needs both languages.
 - **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode), P1.33
-  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.37a, then the Phase 1 exit P1.38.
+  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.37a, P1.27v (Renovate managers for
+  the image locks), then the Phase 1 exit P1.38.
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
 
 Why some pieces the plan lists for later stay in slice 1 (each is a security or dependency reason; none adds scope):
@@ -165,6 +166,7 @@ flowchart LR
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
   P1_28q["P1.28q images.yml: edge image"]
+  P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_29["P1.29 compose.dev.yaml"]
   P1_30["P1.30 deploy preflight"]
@@ -201,6 +203,8 @@ flowchart LR
   P0_07 --> P1_27
   P1_27 --> P1_28q
   P1_28q --> P1_28
+  P1_27 --> P1_28x
+  P1_28x --> P1_28
   P1_27 --> P1_28
   P1_11 --> P1_29
   P1_27 --> P1_29
@@ -5308,6 +5312,30 @@ Docker images, Alpine where offered, pinned by digest?". This generalises the No
   image; `runtime_base_is_alpine` applies to node-app, and other images assert Alpine only where the lock says the
   official image offers it.
 
+**Bumping a pinned base digest** (book edit 2026-10-07-base-digest-bump-procedure, final 01:05Z). P0.08's Renovate
+dockerfile manager bumps only the `FROM` line, so `base_digest_matches_lock` would fail its PR until P1.27v adds
+managers for the lock files. The repeatable procedure:
+1. Take the newest upstream multi-arch index digest of the same tag that is at least 7 days old (P0.08's
+   `minimumReleaseAge`); `docker buildx imagetools inspect` shows an OCI index. A younger digest is allowed only when
+   it fixes a HIGH or CRITICAL finding with a fixed version, and the PR body names the CVEs.
+2. Change the one digest in four places in one PR: the `FROM` lines, `bases.lock.json`, `mirror.list.json`, and any
+   test fixture that pins it.
+3. The PR body shows Trivy on the new digest: zero HIGH or CRITICAL findings with a fixed version, against the old
+   digest's list.
+4. Run `base_digest_matches_lock`, `runtime_base_is_alpine` and the images test locally.
+- **Who bumps:** until P1.27v merges, an agent may hand-bump under this procedure; once it merges, bumps are
+  Renovate's and Alex merges them, and agents hand-bump only for a security finding Renovate has not yet opened.
+- **Id:** a hand bump is maintenance, not a book step, so it takes no step id. Subject `deps: bump <image>:<tag> index
+  digest` (Renovate's `deps` convention), with the `security` label when it fixes CVEs. Phase 2 first confirms that
+  pr-shape and the commit-subject check accept a `deps:` subject, as they must for Renovate PRs; if they reject it,
+  the first bump rides as **P1.27b** ("bump node:26-alpine digest for CVE fixes") and an id-less maintenance class
+  goes to the step book.
+- **No fixed upstream digest:** a time-boxed `.trivyignore.yaml` entry per CVE (`id`, `reason`, `expires`), a
+  loosening that needs Alex's card, expiring in 14 days (well under the 90-day cap), then re-checked. The reason
+  says npm is bundled in the base, that npm is absent from the runtime image (citing the test or the Dockerfile
+  line), and "re-check on expiry, bump per 2026-10-07-base-digest-bump-procedure.md". Where the scanner allows it,
+  the entry is scoped to the base and mirror scan, not the runtime image scan.
+
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
@@ -5548,6 +5576,24 @@ depend on it: the preflight is tested against an injected verifier and fails clo
 
 ---
 
+### P1.27v — Renovate managers for the image locks
+
+**Tags:** [SEC] · **Depends on:** P1.27 · record 2026-10-07-base-digest-bump-procedure.md (final 01:05Z)
+
+**Goal:** Renovate bumps a base image digest in all four places at once (`FROM` lines, `bases.lock.json`,
+`mirror.list.json`, pinned test fixtures), so its PRs pass `base_digest_matches_lock`.
+
+**Contents:** in `renovate.json`, a regex `customManager` each for `deployment/images/bases.lock.json` and
+`deployment/mirror.list.json`, and a packageRule grouping the dockerfile and regex updates for one image into one PR.
+P0.08's settings stay (`minimumReleaseAge: "7 days"`, `automerge: false`, `security` label on vulnerability alerts).
+
+**Class:** if pr-shape classes `renovate.json` as a check path, the step is check class and needs the coordinator's
+clearance as a tightening; otherwise it is product. The `v` suffix is free on P1.27 (q, r and s are used).
+
+**After it merges:** bumps are Renovate's and Alex merges them (see "Bumping a pinned base digest" in P1.27).
+
+---
+
 ### P1.28q — Edge image in images.yml (check step before P1.28)
 
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.27 · **Class:** check paths (SE-6), kind/build · record
@@ -5567,13 +5613,30 @@ minimal `permissions`, nothing pushed or signed until P1.27s.
 
 ---
 
+### P1.28x — Edge pins (non-trusted part of P1.28)
+
+**Tags:** [SEC] · **Depends on:** P1.27 · **Class:** feature (product, non-trusted) · record
+2026-10-07-p128-split-and-p1b-a1.md (final 01:10Z)
+
+**Why:** CODEOWNERS makes `deployment/edge/` trusted base, so the P1.28 PR may carry only `deployment/edge/**`, tests
+with an `edge` path segment, and docs. The pins it needs elsewhere land first, here.
+
+**Contents:** the `caddy` and `caddy-builder` entries in `deployment/images/bases.lock.json`;
+`deployment/mirror.list.json`; and `deployment/images/images.test.ts`, whose allowlist widens to
+`docker.io/library/*` images under Alex's "Yes, all official" (00:54Z; each image named, see P1.27).
+
+---
+
 ### P1.28 — Edge (Caddy)
 
-**Tags:** [SEC] · **Depends on:** P1.27, P1.28q · **Plan:** §5.2 (edge; PDS admin XRPC never public), §5.7 (Synapse/MAS precedent: no client IP upstream, per-IP limits at the edge), §6 (logs: no IP, no user agent), §5.3 (PDS); review 04-infra; fable 06
+**Tags:** [SEC] · **Depends on:** P1.27, P1.28q, P1.28x · **Class:** trusted base (`deployment/edge/**`, tests with an
+`edge` path segment, docs) · **Plan:** §5.2 (edge; PDS admin XRPC never public), §5.7 (Synapse/MAS precedent: no client IP upstream, per-IP limits at the edge), §6 (logs: no IP, no user agent), §5.3 (PDS); review 04-infra; fable 06
 
-**Where:** `deployment/edge/Caddyfile`; `deployment/edge/sites/{app.caddy, pds.caddy}`; `deployment/edge/snippets/{log.caddy,
+**Where:** `deployment/edge/Caddyfile`; `deployment/edge/sites/pds.caddy` (`sites/app.caddy` arrives with the Phase 2
+step that serves the app host); `deployment/edge/snippets/{log.caddy,
 security-headers.caddy, xrpc-guard.caddy, ratelimit.caddy, tls.caddy, upstream.caddy}`; `deployment/edge/limits.json`; `deployment/edge/Dockerfile` (Caddy built
-with one plugin, see below); `tests/integration/deployment/edge/` (stub upstream and test runner).
+with one plugin, see below; its `FROM` lines tied to the lock by `edge_from_matches_lock`);
+`tests/integration/deployment/edge/` (stub upstream and test runner).
 
 **Size:** ~220 lines of Caddy config and Dockerfile, ~350 test lines.
 
@@ -5581,7 +5644,20 @@ with one plugin, see below); `tests/integration/deployment/edge/` (stub upstream
 admin surface from outside in every encoding, rate-limits clients by address in memory only, and never passes the
 client address upstream.
 
-**Client-address rule (provisional — Alex question P1b-A1; recommendation (a)):** the upstream PDS logs all request
+**Client-address rule (settled, P1b-A1):** Alex tapped "Do not forward" at 2026-10-07 00:57:16Z on "Should the edge
+forward the client's network address to the PDS (P1b-A1)?", and remarked at 00:57:31Z "But with the pds, I would
+refer you to the atproto docs" and at 00:57:59Z "Seems like the pds is public to query if I am not mistaken"
+(architecture record 2026-10-07-p1b-a1-pds-no-forwarded-address; book edit 2026-10-07-p128-split-and-p1b-a1):
+- On the PDS route the edge strips `X-Forwarded-For`, `X-Real-IP` and `Forwarded`, both inbound and as Caddy sets
+  them by default, because the PDS trusts private-network peers (`pds_route_strips_forwarded_headers`).
+- `PDS_RATE_LIMITS_ENABLED=false` is set explicitly, with no bypass (`pds_rate_limits_disabled_explicitly`).
+- caddy-ratelimit takes over with per-address zones by traffic class (sync, firehose connections, identity, account
+  and auth strict, global), one test each.
+- Recorded gaps: per-account write limits keyed by DID (revisit before open sign-up) and concurrent firehose
+  connections.
+- The PDS still stores user agents; noted for the RoPA row (P1.36).
+
+The reasoning behind it, from round 1: the upstream PDS logs all request
 headers when logging is on and stores the client address and user agent per signed-in browser in its `device`
 table (verified in round 1: `pds/src/logger.ts:40-58`, `pds/src/account-manager/db/schema/device.ts:9-10`), and it
 trusts every private address as a proxy (`pds/src/index.ts:197-204`). So the edge **does not forward the client
@@ -5652,11 +5728,14 @@ takes admin Basic auth).
     `^/health$` → `health`; anything else → `other`. The app host's site config (Phase 2) adds its rows the same way
     (`/@*` → `profile`, `/o/*` → `o`, `/join` → `join`, …), never a capture of a user segment. If the pinned Caddy
     cannot delete the URI fields or append the class, the log-content test fails and the step stops;
-  - **default (non-access) log** as well: level `ERROR`, with the same `filter` encoder deleting `remote_ip`,
-    `remote_addr`, `client_ip` and any `remote`/`address` fields, and an output that drops the Go stdlib
-    "TLS handshake error from <ip>:<port>" lines (they arrive as a message string, so the filter replaces the
-    message's `<ip>:<port>` with `[redacted]` by regexp). If the pinned Caddy version cannot filter a field that
-    carries an address, the test below fails and the step stops (no "probably fine").
+  - **default (non-access) log** (departure, architecture 01:09Z, book edit 2026-10-07-p128-split-and-p1b-a1; it
+    replaces the earlier regexp rewrite of "TLS handshake error from <ip>:<port>" lines): level `ERROR` with the
+    `http.stdlib` logger excluded, the `remote_ip` filter, no global metrics and `disable_metrics` per zone. The
+    `http.log.error` logger gets the same request filter: `remote_ip`, `client_ip`, `remote_port`, and the headers
+    `X-Forwarded-For`, `X-Real-Ip`, `Forwarded`, `Authorization`, `Cookie` and `Dpop`; the filter also applies to any
+    access log that is ever enabled. Accepted costs: handshake errors and panics go unlogged in slice 1, and the
+    admin API is on localhost or off. If the pinned Caddy version cannot filter a field that carries an address, the
+    test below fails and the step stops (no "probably fine").
 - `security-headers.caddy`: `Strict-Transport-Security max-age=63072000; includeSubDomains` (no preload until
   Alex decides), `X-Content-Type-Options nosniff`, `Referrer-Policy no-referrer` default, `-Server`, `-Via`. CSP is
   set by the app (P1.08); the edge sets a strict CSP only on hosts with no app CSP.
@@ -5684,6 +5763,8 @@ takes admin Basic auth).
   | `auth` | `/oauth/*`, `/account*`, `/xrpc/com.atproto.server.createSession`, `…server.refreshSession`, `…server.requestPasswordReset`, `…server.resetPassword` | 30 per 5 min |
   | `signup` | `/xrpc/com.atproto.server.createAccount` | 10 per hour |
   | `global` | everything on the PDS host | 3000 per 5 min |
+  Under P1b-A1 the zones also cover sync, firehose connections and identity, one test each; their numbers are set
+  in review alongside the provisional ones above.
   Over the limit → 429 with `Retry-After`; nothing logged except the access-log line (no address).
 - Upstream (`reverse_proxy` on every site): `header_up -X-Forwarded-For`, `header_up -X-Real-IP`,
   `header_up -Forwarded`, `header_up X-Forwarded-Proto https`, `header_up X-Forwarded-Host {host}`; upstream
@@ -5748,6 +5829,13 @@ takes admin Basic auth).
 - `edge_strips_client_address_headers`: client sends `X-Forwarded-For: 1.2.3.4`, `X-Real-IP`, `Forwarded` →
   upstream sees none of them.
 - `edge_rate_limit_auth_zone`: 31st request → 429 with `Retry-After`; other address unaffected.
+- One zone test each for sync, firehose connections and identity (P1b-A1).
+- `pds_route_strips_forwarded_headers` and `pds_rate_limits_disabled_explicitly` (P1b-A1).
+- `edge_from_matches_lock`: the edge Dockerfile's `FROM` lines equal the `caddy` and `caddy-builder` lock entries
+  (P1.28x).
+- `edge_logs_no_client_address`: the built Caddy with the shipped Caddyfile; from 127.0.0.2 with a spoofed
+  `X-Forwarded-For: 203.0.113.9`, a rate-limit hit, an upstream 502 and a failed TLS handshake; neither address
+  appears in stdout, stderr or at `/metrics`.
 - `edge_all_logs_have_no_ip_path_or_query` (renamed from `edge_all_logs_have_no_ip_or_query`, R3-16): step 5 over all
   output; the requests include `/join?code=<canary>` (the invite link of P2.10, phase-2 E23),
   `/@<canary-handle>.test` and `/o/draft-preview/drafts/did:plc:<canary>/x`, and no canary appears anywhere.
