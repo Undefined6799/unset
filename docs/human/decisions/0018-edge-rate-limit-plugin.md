@@ -1,7 +1,7 @@
 # 0018 — Edge rate limiting with caddy-ratelimit
 
-Status: Proposed (awaiting Alex in the P1.28 pull request; architecture's reuse ruling
-2026-10-07 00:45Z, record p128-edge-bases-and-ratelimit-adr)
+Status: Accepted (Alex merged the P1.28 pull request, #409, at 2026-10-07T03:31:33Z;
+architecture's reuse ruling 2026-10-07 00:45Z, record p128-edge-bases-and-ratelimit-adr)
 
 ## Context
 P1.28 puts one edge, Caddy, in front of every public host. The edge must limit clients by address

@@ -35,6 +35,23 @@ function zones(block: string) {
   }));
 }
 
+/**
+ * Why some PDS request could pass the edge uncounted; empty when the global zone counts every request (no matcher) and
+ * the PDS site applies the zones, once, before any other handler in its route.
+ */
+function zoneCoverageProblems(ratelimit: string, site: string): string[] {
+  const found = [];
+  const block = /rate_limit \{([\s\S]*?)\n\t\}\n\}/.exec(ratelimit)?.[1] ?? "";
+  const global = zones(block).find((zone) => zone.name === "global");
+  if (global === undefined) found.push("there is no global zone");
+  else if (global.match) found.push("the global zone has a matcher");
+  const routes = site.replaceAll(/^\s*#.*$/gm, "");
+  if (!/route \{\s*import pds-ratelimit\n/.test(routes)) found.push("the PDS route does not apply the zones first");
+  const imports = [...routes.matchAll(/import pds-ratelimit/g)].length;
+  if (imports !== 1) found.push(`the PDS site imports the zones ${imports} times`);
+  return found;
+}
+
 /** Why the shipped Caddy config could keep or share a rate-limit key beyond memory; empty when it cannot. */
 function memoryOnlyProblems(text: string): string[] {
   const found = [];
@@ -113,13 +130,33 @@ describe("edge config", () => {
   });
 
   test("every_pds_route_has_a_zone", () => {
-    // The global zone has no matcher, so it counts every request; the PDS site applies the zones before anything else.
-    const block = /rate_limit \{([\s\S]*?)\n\t\}\n\}/.exec(read("snippets/ratelimit.caddy"))?.[1] ?? "";
-    const global = zones(block).find((zone) => zone.name === "global");
-    expect(global?.match).toBe(false);
-    const site = read("sites/pds.caddy").replaceAll(/^\s*#.*$/gm, "");
-    expect(/route \{\s*import pds-ratelimit\n/.test(site)).toBe(true);
-    expect([...site.matchAll(/import pds-ratelimit/g)].length).toBe(1);
+    expect(zoneCoverageProblems(read("snippets/ratelimit.caddy"), read("sites/pds.caddy"))).toEqual([]);
+  });
+
+  test("pds_route_without_zone_fails", () => {
+    // P1.28b: the negative twin. A PDS site whose route skips the zones, imports them after another handler or twice,
+    // or a global zone narrowed by a matcher, each leaves some PDS request uncounted.
+    const limits = read("snippets/ratelimit.caddy");
+    const site = read("sites/pds.caddy");
+    expect(zoneCoverageProblems(limits, site.replace("\t\timport pds-ratelimit\n", ""))).toEqual([
+      "the PDS route does not apply the zones first",
+      "the PDS site imports the zones 0 times",
+    ]);
+    const late = site.replace(
+      "\t\timport pds-ratelimit\n\t\timport xrpc-guard\n",
+      "\t\timport xrpc-guard\n\t\timport pds-ratelimit\n",
+    );
+    expect(late).not.toBe(site);
+    expect(zoneCoverageProblems(limits, late)).toEqual(["the PDS route does not apply the zones first"]);
+    expect(zoneCoverageProblems(limits, `${site}\nother {\n\timport pds-ratelimit\n}\n`)).toEqual([
+      "the PDS site imports the zones 2 times",
+    ]);
+    const narrowed = limits.replace(/(\tzone global \{\n)/, "$1\t\t\tmatch {\n\t\t\t\tpath /xrpc/*\n\t\t\t}\n");
+    expect(narrowed).not.toBe(limits);
+    expect(zoneCoverageProblems(narrowed, site)).toEqual(["the global zone has a matcher"]);
+    expect(zoneCoverageProblems(limits.replace(/\tzone global \{/, "\tzone overall {"), site)).toEqual([
+      "there is no global zone",
+    ]);
   });
 
   test("edge_admin_api_off_in_config", () => {

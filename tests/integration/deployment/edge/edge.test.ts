@@ -134,7 +134,7 @@ describe("edge", () => {
   test("edge_strips_client_address_headers", async () => {
     const from = edge.seen.length;
     const path = "/xrpc/com.atproto.server.describeServer?strip";
-    await send(path, { "x-forwarded-for": "1.2.3.4", "x-real-ip": "1.2.3.4", forwarded: "for=1.2.3.4" });
+    await send(path, { "x-forwarded-for": "192.0.2.10", "x-real-ip": "192.0.2.10", forwarded: "for=192.0.2.10" });
     const seen = edge.seen.slice(from).find((s) => s.rawPath === path);
     expect(seen).toBeDefined();
     for (const header of ["x-forwarded-for", "x-real-ip", "forwarded"]) {
@@ -149,9 +149,9 @@ describe("edge", () => {
     const from = edge.seen.length;
     await send("/xrpc/com.atproto.server.describeServer?default");
     await send("/xrpc/com.atproto.server.describeServer?cased", {
-      "X-Forwarded-For": "1.2.3.4, 5.6.7.8",
-      "X-REAL-IP": "1.2.3.4",
-      FORWARDED: "for=1.2.3.4;proto=http",
+      "X-Forwarded-For": "192.0.2.10, 192.0.2.20",
+      "X-REAL-IP": "192.0.2.10",
+      FORWARDED: "for=192.0.2.10;proto=http",
     });
     const seen = edge.seen.slice(from);
     expect(seen.length).toBe(2);
