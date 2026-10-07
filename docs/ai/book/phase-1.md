@@ -163,6 +163,7 @@ flowchart LR
   P1_24k["P1.24k UI kit: chrome, no-JS"]
   P1_24f["P1.24f UI kit: feed and feedback, no-JS"]
   P1_24j["P1.24j islands, budget-measured"]
+  P1_24b["P1.24b toast and select islands"]
   P1_25["P1.25 app shell, error pages"]
   P1_26["P1.26 test harness"]
   P1_27["P1.27 container images"]
@@ -204,6 +205,7 @@ flowchart LR
   P1_24a --> P1_24k
   P1_24k --> P1_24f
   P1_24f --> P1_24j
+  P1_24j --> P1_24b
   P1_24k -.-> P1_25
   P1_24j -.-> P1_26
   P1_08 --> P1_25
@@ -4709,7 +4711,8 @@ and the inventory check decides CI, so it is a guard. Steps, in order (`b` stays
 5. **P1.24s, UI kit part 1b** (depends on P1.24i and P1.23c, plus P1.24h if any of its components links): Avatar, Switch,
    SkipLink, MediaFrame, DescriptionList, Pagination.
 6. P1.24a (zero-JS blocks), P1.24k (chrome, no-JS), P1.24f (feed and feedback, no-JS), P1.24j (islands), then P1.24b
-   if the budget ruling requires it (book edits 2026-10-07-p124a-split and 2026-10-07-p124k-split).
+   (toast and select, per-icon drawing modules first; book edits 2026-10-07-p124b-island-icons,
+   2026-10-07-p124a-split and 2026-10-07-p124k-split).
 These PRs add only the server-rendered showcase markup; `components_axe_clean` and `components_target_size` run in
 P1.26's harness. `card_surface_opaque` moves to P1.24a with Card.
 
@@ -4928,7 +4931,7 @@ four:
      this part.
   3. **P1.24j** (depends on P1.24f): the islands in order of need (copy, header-menu, tabs, modal, toast, select),
      measuring the island budget after each and stopping at the last that fits the 76,800-byte total
-     (2026-10-06-p123-shape measure-first rule); the rest go to P1.24b.
+     (2026-10-06-p123-shape measure-first rule); the rest go to P1.24b. As built (#419) toast and select went to P1.24b.
   SSR unit tests cover every component's no-JS behaviour here. The Playwright tests (commandblock copy and denied,
   select and tabs keyboard, `header_folds_by_container`, axe in both themes) run in P1.26's harness on the showcase,
   since P1.26 depends on P1.25, which depends on this work. P1.25 depends on P1.24k instead of P1.24a (the shell needs
@@ -5060,9 +5063,12 @@ at an island boundary and comes back to the step book.
 
 **The styles entry in the island total** (same record): `apps/web/src/styles.ts` is a build device whose output that
 matters is CSS; its JS (3,735 gzip bytes of class-name maps) is never requested by a page, so it does not belong in
-the island total. First fix, product side, inside P1.24j: the entry imports the CSS Modules for side effect only
-instead of exporting the eager glob's maps, on vite 8.3.1 and rolldown, with the build's CSS output unchanged
-(`styles_entry_emits_css_only`: the entry's JS is under 300 gzip bytes and the CSS asset list is unchanged). Only if
+the island total. First fix, product side, inside P1.24j: the entry emits CSS only instead of exporting the eager glob's
+maps, on vite 8.3.1 and rolldown, with the build's CSS output unchanged; as built (#419) via a vite config plugin and
+a `?styles-entry` import query (a plain side-effect import is tree-shaken), leaving 39 bytes of entry JS and
+byte-identical CSS (`styles_entry_emits_css_only`: the entry's JS is under 300 gzip bytes, the CSS asset list is
+unchanged, and an island that imports a CSS Module does not pull that module's CSS out of the linked stylesheet).
+Only if
 that fails: **P1.24v** (architecture wrote P1.24q, an id the merged UI inventory guard #368 holds; booked only if
 needed, step book 2026-10-07-p124j-tabs-modes-and-styles-entry), a check-class PR in `scripts/budgets/` alone, which is a loosening and needs Alex's word
 naming the change ("the styles entry's JS leaves the island total") and the branch. Its exclusion matches the
@@ -5070,7 +5076,7 @@ manifest key `src/styles.ts` exactly, fails if that chunk imports or dynamically
 or bootstrap chunk imports it, and prints the excluded bytes on every run (`styles_entry_excluded_only_by_exact_key`,
 `styles_entry_with_imports_fails`, and in apps/web `pages_never_load_styles_entry`). The per-island 15 KB gate, the
 75 KB total and the CSS budget still hold. Until then the step builds islands in book order and stops at the last
-one that fits the current measure.
+one that fits the current measure. As built the fix held, so P1.24v is not needed and not booked.
 
 **Done when (tests):**
 - Island total reported per island in the PR body; stop at the budget.
@@ -5121,13 +5127,34 @@ one that fits the current measure.
 
 ---
 
-### P1.24b — Remaining islands, after the budget ruling (added step)
-Tags: —            Depends on: P1.24j, plus one of the rulings below
-Holds the islands P1.24j could not fit under the 76,800-byte island total. They move here only after one of:
-architecture rules on reducing the runtime's share (code-splitting the React runtime out of the bootstrap, a lighter
-runtime within ADR 0015, or dropping islands that could be zero-JS); or a budget raise, which is a check-path loosening
-needing an architecture ruling and Alex's typed word. A Renovate bump that pushes the total past the limit is caught by
-the island budget check on its own PR and is Alex's to decide.
+### P1.24b — Add the toast and select islands within the JS budget
+Tags: —            Depends on: P1.24j
+Slice 1, feature class (`shared/ui` islands and icon drawings, `scripts/ui/icons.ts`); book edits
+2026-10-07-p124b-and-p124j-as-built and 2026-10-07-p124b-island-icons (architecture's ruling). P1.24j (#419) built
+the copy, header-menu, tabs and modal islands at 72,799 of 76,800 gzip bytes; toast measured 78,206 because
+`Icon.tsx` imports the whole `icons.json` (5,082 gzip bytes), so one close icon shipped all 36 drawings.
+- **Drawing modules first.** The icon build (`scripts/ui/icons.ts`, product class) also writes one generated module per
+  icon, `shared/ui/icons/drawings/<name>.ts`, exporting that icon's frozen path list, from the same `icons.json`, never
+  edited by hand.
+- **Icon.tsx keeps the only inline svg** (the kit rule stays word for word). It gains one internal drawing component;
+  `Icon` (by name, server-side) and an exported `IconDrawing` (by path list) both render through it, sharing size,
+  `aria-hidden`, `focusable` and the `label` rule. Islands use `IconDrawing` with a static import of the one drawing
+  they need; pages keep `<Icon name>`.
+- **Then toast, then select,** each measured against the island budget as it stands; the close icon's measured cost
+  goes in the body. If toast or select still does not fit, the PR stops at the last island that fits and comes back
+  to the step book; a budget change stays a separate loosening needing Alex.
+- **Split if large:** the drawing modules, `IconDrawing` and the three tests go first as **P1.24d** (feature class;
+  P1.24h is taken by safeHref), and P1.24b then depends on it.
+- **Refused by the ruling:** icon markup reached by id, a smaller icon subset, a shared icon chunk, a budget change.
+- No-JS behaviour is unaffected: P1.24f already ships the server-printed toast with its close link and the native
+  select; only the enhancement waits. P1.26's toast and select island keyboard tests move here and run when it lands;
+  until then P1.26 lists them as pending, never skipped.
+
+Tests: `island_bundle_has_no_icon_map` (apps/web build: no island chunk holds the `iconoirVersion` or `sheetVersion`
+keys or the path data of a fixed sentinel icon no island imports), `icon_drawing_modules_match_icons_json` (in the
+freshness test beside `icon_allowlist_matches_sheet`: every module equals its entry and every entry has a module),
+`icon_drawing_matches_icon_markup` (`IconDrawing` with `close` renders the same markup as `<Icon name="close">` at all
+three sizes, with and without `label`), and the island budget gate unchanged.
 
 ---
 
@@ -5218,6 +5245,9 @@ Request → route:
 ### P1.26 — Accessibility and browser test harness
 
 **Tags:** — · **Depends on:** P1.25, P1.24j · **Plan:** §6.1 (WCAG 2.2 AA, Playwright + axe, Lighthouse budgets), §7
+
+Pending, not skipped (book edit 2026-10-07-p124b-and-p124j-as-built): the toast and select island keyboard tests
+move to P1.24b and run when it lands; P1.26 still depends on P1.24j only.
 
 **Where:** `tests/e2e/{playwright.config.ts, pages.ts, a11y.spec.ts, nojs.spec.ts, csp.spec.ts, headers.spec.ts}`;
 `tests/e2e/fixtures/servers.ts`; `.pa11yci.json`; `lighthouserc.json`; `.github/workflows/e2e.yml`;

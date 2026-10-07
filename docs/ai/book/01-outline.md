@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 117 steps: 96 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 118 steps: 97 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -210,6 +210,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.24k | UI kit 2b: chrome, no-JS | — | P1.24a | `phase-1.md` |
 | P1.24f | UI kit 2c: feed and feedback, no-JS | — | P1.24k | `phase-1.md` |
 | P1.24j | Islands, budget-measured | — | P1.24f | `phase-1.md` |
+| P1.24b | Toast and select islands within the JS budget (per-icon drawing modules first) | feature | P1.24j | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08 | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24j | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
@@ -327,6 +328,7 @@ flowchart TD
   P1_24k["P1.24k UI kit: chrome"]
   P1_24f["P1.24f UI kit: feed and feedback"]
   P1_24j["P1.24j Islands"]
+  P1_24b["P1.24b toast and select islands"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
   P1_27["P1.27 Container images"]
@@ -448,6 +450,7 @@ flowchart TD
   P1_24a --> P1_24k
   P1_24k --> P1_24f
   P1_24f --> P1_24j
+  P1_24j --> P1_24b
   P1_24k --> P1_25
   P1_24j --> P1_26
   P1_25 --> P1_26
@@ -566,7 +569,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -584,7 +587,6 @@ Arachnid application, and the Phase 1 exit.
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
-| P1.24b | Remaining islands, after the budget ruling (added step) | — | P1.24j, plus an architecture ruling (runtime share or budget raise) | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a | `phase-1.md` |
 
