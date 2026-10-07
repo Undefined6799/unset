@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28x, P1.28, P1.28b,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28x, P1.28, P1.28b,
   P1.29, P1.30q, P1.30p, P1.30, P1.30s, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -175,6 +175,7 @@ flowchart LR
   P1_28d["P1.28d base entries labelled by stage"]
   P1_28v["P1.28v mirror scan per stage [ALEX]"]
   P1_28w["P1.28w mirror scan pipefail shell"]
+  P1_28u["P1.28u image refs outside FROM"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 edge (Caddy)"]
   P1_28b["P1.28b edge leftovers"]
@@ -225,6 +226,7 @@ flowchart LR
   P1_27 --> P1_28d
   P1_28d --> P1_28v
   P1_28v --> P1_28w
+  P1_28v --> P1_28u
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
@@ -5247,6 +5249,10 @@ Tests: `toast_close_moves_focus_to_main` (jsdom; P1.26's toast keyboard test ass
 `select_island_leaves_required_native`, `select_island_labelledby_label`, `select_label_click_focuses_combobox`,
 `ui_build_entries_run_in_node` with `font-metrics.ts --check` added, and the island budget gate unchanged.
 
+**As built** (#433, merged 2026-10-07T12:12:22Z as `30022a8`; book edit 2026-10-07-p125-split, P1.24c section added
+12:28Z): no deviation from the record; an extra test, `toast_close_leaves_focus_held_elsewhere`, joins the list. Its
+follow-ups ride P1.25 (product class; P1.26 is check class and cannot carry product code).
+
 ---
 
 ### P1.25k — Add the error-page hook to the server kit
@@ -5384,6 +5390,17 @@ Request → route:
 - `legal_placeholders_noindex`: meta and header present.
 - `shell_feed_no_footer`: `AppShell` with `feed` → no `<footer>`; the footer links and `PrefsForms` are in the header
   menu, reachable by keyboard with JS off.
+
+**Riders from P1.24c** (book edit 2026-10-07-p125-split, added 12:28Z; product class, like P1.25; the body lists them
+under a "Riders from P1.24c" heading):
+1. Disabled Select label click: `SelectListbox.tsx:57-62` focuses the combobox on a label click even when the native
+   control is disabled, unlike native behaviour. The handler returns without focusing when `element.disabled`. Test:
+   `select_label_click_disabled_no_focus`.
+2. Untested branches get tests: `toast_close_without_main_leaves_focus` (the no-`#main` branch, `ToastClose.tsx:43`)
+   and `font_metrics_check_fails_when_stale` (the stale branch of `font-metrics.ts --check`).
+- Stays a note, no change: `aria-labelledby` has no fallback when a label lacks an id (`SelectListbox.tsx:135`).
+  Every Select goes through `Field`, which always prints the label id; a later step that renders a Select outside
+  `Field` adds the fallback.
 
 **Reuse** (all provisional — for reuse review):
 - `app/src/components/app-shell.tsx:28-186` (StateWindow 158-186) → LESSON: one state component for empty,
@@ -6055,11 +6072,48 @@ second `docker run`, not piped) fails the job as approved, so nothing ships weak
 harness classifier on `.github/workflows` still needs his typed line, for example "yes P1.28w mirror.yml"; the
 coordinator asks for it once.
 
-**For architecture (candidate, not booked):** `deployment/images/images.test.ts` matches `FROM` lines only. A
-`COPY --from=<external image>` or a `RUN --mount=from=<external image>` into the final stage could bring a build-only
-base's files into a shipped image without a `FROM`. Whether the test must also refuse those (or require their image
-to be a pinned, scanned runtime base) is a structure and security question for architecture; the step book books it
-after the ruling.
+**Image references outside FROM:** the candidate this record raised for architecture is ruled and booked as P1.28u
+below (every stage, no allowlist, `ADD` local only).
+
+---
+
+### P1.28u — Refuse image references outside FROM
+
+**Tags:** [SEC] · **Depends on:** P1.28v (merged, #430); independent of P1.28w · **Class:** product (feature),
+`deployment/images/images.test.ts` only, under the `/deployment/` security-review line (not trusted base, not a check
+path, no `.github/` file) · **Slice:** 1, after P1.28v · **Owner:** Phase 1 (it touches no file P1.29 touches)
+
+Book edits 2026-10-07-p128u-image-refs-outside-from and architecture's 2026-10-07-p128-copy-from-image-ref (which
+wins where they differ). Letter `u` is architecture's suggestion (P1.28's taken letters are b, d, q, v, w and x). No
+word from Alex: a tightening outside `.github/`.
+
+**The gap** (read on main ae87efc): `finalStageProblems` (`images.test.ts` about lines 79 to 96) and the digest, lock
+and allowlist tests (`base_digest_matches_lock`, `from_without_digest_refused`, `from_host_not_allowlisted_refused`)
+read `FROM` lines only. `COPY --from=<image ref>` and `RUN --mount=…,from=<image ref>` pull a whole image that never
+passes through `FROM`, so it bypasses the digest pin, the lock entry, the allowlisted host, the mirror scan and the
+stage label; `ADD <url>` and `ADD <git ref>` fetch external content the same way.
+
+**Rule:**
+- In every stage, a `COPY --from=` value and the `from=` key of every `RUN --mount` (bind or cache) name only an
+  earlier stage's alias (case-insensitive, as BuildKit matches) or an earlier stage's numeric index. Anything else
+  is refused: an image reference, a later or unknown stage, an empty value.
+- `ADD` takes only local sources; a source with `://`, or the git form, is refused.
+- No allowlist: an image that is really needed gets its own `FROM … AS name` stage, which makes it pinned, locked,
+  allowlisted, mirrored, scanned and stage-labelled by the rules that already exist.
+- Parsing fails closed: instructions match case-insensitively, continuation lines are joined (as `runtimeStage`
+  does), `--from` and `from=` are read wherever they sit among the flags, and an instruction the test cannot parse is
+  a failure, not a skip.
+- Build artifacts copied from a build stage into the final stage (the edge's caddy binary) stay allowed; the
+  shipped-image Trivy scan in `images.yml` (fail on HIGH) judges what they contain.
+
+**Done when (tests),** in `deployment/images/images.test.ts`:
+- `copy_from_image_ref_refused`: a full digest-pinned reference, a bare `alpine` and a later stage's name.
+- `run_mount_from_image_ref_refused`: bind and cache mounts, `from=` in any position.
+- `add_remote_source_refused`: an `https://` source and a git source.
+- `copy_from_stage_alias_or_index_allowed`: an alias in any letter case and an earlier numeric index.
+- `instruction_parse_failure_fails`.
+- Every real Dockerfile under `deployment/` (the existing `dockerfiles` list) passes unchanged. A real Dockerfile
+  that fails is a finding to report, never a test to relax.
 
 ---
 

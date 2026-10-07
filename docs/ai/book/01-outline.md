@@ -125,7 +125,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 122 steps: 101 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 123 steps: 102 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29). The reasons each
@@ -223,6 +223,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28v | Mirror scan per stage (check, loosening; waits on Alex's card) | [SEC] [ALEX] | P1.28d | `phase-1.md` |
 | P1.28w | Mirror scan: pipefail shell so build-stage HIGH warnings fire; one Trivy cache | [SEC] | P1.28v | `phase-1.md` |
+| P1.28u | Refuse image references outside FROM: COPY --from, RUN --mount from=, ADD remote | [SEC] | P1.28v | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
@@ -344,6 +345,7 @@ flowchart TD
   P1_28d["P1.28d base entries by stage"]
   P1_28v["P1.28v mirror scan per stage"]
   P1_28w["P1.28w mirror scan pipefail shell"]
+  P1_28u["P1.28u image refs outside FROM"]
   P1_28x["P1.28x edge pins"]
   P1_28["P1.28 Edge Caddy"]
   P1_28b["P1.28b Edge leftovers"]
@@ -471,6 +473,7 @@ flowchart TD
   P1_27 --> P1_28d
   P1_28d --> P1_28v
   P1_28v --> P1_28w
+  P1_28v --> P1_28u
   P1_27 --> P1_28x
   P1_28x --> P1_28
   P1_27 --> P1_28
