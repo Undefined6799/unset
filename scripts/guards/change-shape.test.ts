@@ -231,6 +231,7 @@ describe("trusted base (SE-6)", () => {
       "/.semgrepignore",
       "/vitest.config.ts",
       "/biome.json",
+      "/.npmrc",
     ]);
     expect(broken(`${CODEOWNERS}# trusted base (SE-6)\n/x/ @Undefined6799\n`)).toBe(false);
   });
