@@ -7,6 +7,10 @@
 # one built here. Any later cost saving is change detection inside the job, never a `paths:` filter, because a
 # required check that never starts blocks the PR.
 #
+# The `edge` job (P1.28q) does the same for the edge image, deployment/edge/Dockerfile (Caddy plus one plugin, P1.28):
+# hadolint, build, Trivy and the image's own health check. It skips only while that file is absent, so P1.28's own PR
+# is the first one built there. Its Trivy scan reads no ignore file: an edge finding is fixed, never accepted.
+#
 # Tool images are pinned by index digest (scripts/guards/workflows.ts). The image under test is referenced by the
 # content id `docker build --iidfile` wrote, so it too is pinned by digest.
 
@@ -96,6 +100,67 @@ jobs:
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           id="$(docker run -d --read-only --tmpfs /tmp --env-file "deployment/images/$APP.test.env" "$APP_IMAGE")"
+          for _ in $(seq 20); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$id")"
+            if [ "$status" = "healthy" ]; then docker rm -f "$id" > /dev/null; exit 0; fi
+            sleep 1
+          done
+          docker logs "$id"
+          docker rm -f "$id" > /dev/null
+          echo "not healthy within 20 s (last status: $status)"
+          exit 1
+
+  edge:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      DOCKERFILE: deployment/edge/Dockerfile
+      HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+      TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Skip until the edge Dockerfile exists
+        id: dockerfile
+        run: |
+          if [ -e "$DOCKERFILE" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=edge::skipped, no edge Dockerfile yet (lands in P1.28)"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Lint the Dockerfile
+        if: steps.dockerfile.outputs.present == 'true'
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo "$HADOLINT_IMAGE" /bin/hadolint --config .github/hadolint.yaml "$DOCKERFILE"
+      - name: Build
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
+            --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" deployment/edge
+      # Trivy v0.74.0: HIGH or CRITICAL with a fixed version fails, and no accepted finding applies (--ignorefile
+      # /dev/null, so neither .trivyignore nor .github/trivyignore.yaml is read); the gobinary analyser covers the
+      # built Caddy binary.
+      - name: Scan
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          EDGE_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /dev/null \
+            --timeout 10m "$EDGE_IMAGE"
+      # The image's own HEALTHCHECK must report healthy within 20 s, on a read-only root with Caddy's data and config
+      # directories on tmpfs, started with the edge's test env.
+      - name: Becomes healthy
+        if: steps.dockerfile.outputs.present == 'true'
+        run: |
+          EDGE_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          ENV_FILE=deployment/edge/edge.test.env
+          id="$(docker run -d --read-only --tmpfs /tmp --tmpfs /data --tmpfs /config --env-file "$ENV_FILE" "$EDGE_IMAGE")"
           for _ in $(seq 20); do
             status="$(docker inspect --format '{{.State.Health.Status}}' "$id")"
             if [ "$status" = "healthy" ]; then docker rm -f "$id" > /dev/null; exit 0; fi
