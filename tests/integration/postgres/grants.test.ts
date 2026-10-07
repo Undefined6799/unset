@@ -310,7 +310,7 @@ describe("grants", () => {
   test("types_domains_typacl_null", async () => {
     const domains = "SELECT t.typname FROM pg_type t WHERE t.typnamespace = 'types'::regnamespace AND t.typtype = 'd'";
     const explicit = `${domains} AND t.typacl IS NOT NULL ORDER BY 1`;
-    expect(postgres.sql("unset", `${domains} ORDER BY 1`).split("\n")).toEqual(["at_uri", "did"]);
+    expect(postgres.sql("unset", `${domains} ORDER BY 1`).split("\n")).toEqual(["at_uri", "did", "sealed"]);
     expect(postgres.sql("unset", explicit)).toBe("");
     const { name, pool } = await freshDatabase();
     await run(pool, "REVOKE USAGE ON DOMAIN types.did FROM PUBLIC");

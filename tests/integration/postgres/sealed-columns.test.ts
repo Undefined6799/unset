@@ -124,7 +124,8 @@ const keyring = (active: string, kids: readonly string[]): Keyring =>
   parseKeyring(
     JSON.stringify({
       active,
-      keys: Object.fromEntries(kids.map((kid, i) => [kid, Buffer.alloc(32, i + 1).toString("base64")])),
+      // Each kid has the same key in every keyring, as a real rotation keeps the old keys.
+      keys: Object.fromEntries(kids.map((kid) => [kid, Buffer.alloc(32, kid).toString("base64")])),
     }),
   ) as Keyring;
 
@@ -167,8 +168,8 @@ describe("sealed columns", () => {
     expect(await registryProblems(pool, { "app.t.secret": { rowKey: "owner" } })).toEqual([
       "app.t.secret: row key owner is not unique on its own",
     ]);
+    // A types.sealed column registered with a form is refused: a form row names a text or bytea column only.
     expect(await registryProblems(pool, { "app.t.secret": { rowKey: "id", form: "sealTo" } })).toEqual([
-      "add a sealed-columns row for app.t.secret",
       "app.t.secret (sealTo) is not a text or bytea column",
     ]);
   });
