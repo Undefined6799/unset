@@ -1,9 +1,18 @@
+import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { afterAll, expect, test } from "vitest";
-import { checkIslands, type IslandBudget, type Manifest, main } from "./island.ts";
+import {
+  checkIslands,
+  ISLAND_ROOTS,
+  type IslandBudget,
+  islandSources,
+  islandsAreLazyChunks,
+  type Manifest,
+  main,
+} from "./island.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const KIB = 1024;
@@ -53,9 +62,12 @@ function manifestOf(islands: string[]): Manifest {
   return manifest;
 }
 
-function run(dir: string): { code: number; lines: string[] } {
+/** The source list `manifestOf(islands)` was built from, in the manifest's own terms. */
+const sourcesOf = (islands: string[]): string[] => islands.map((name) => `src/islands/${name}.island.tsx`);
+
+function run(dir: string, islands: string[] = []): { code: number; lines: string[] } {
   const lines: string[] = [];
-  const code = main([dir], ROOT, (line) => lines.push(line));
+  const code = main([dir], ROOT, (line) => lines.push(line), islands);
   return { code, lines };
 }
 
@@ -70,7 +82,7 @@ test("island_budget_passes_within_limits", () => {
     "assets/demo-c3.js": 10,
     "assets/menu-c3.js": 12,
   });
-  const { code, lines } = run(dir);
+  const { code, lines } = run(dir, sourcesOf(["demo", "menu"]));
   expect(code).toBe(0);
   expect(lines.filter((line) => line.startsWith("island "))).toHaveLength(2);
   expect(lines.at(-1)).toMatch(/^all island JS: \d+ gzip bytes in 4 files \(max 76800\)$/);
@@ -83,7 +95,7 @@ test("island_budget_check", () => {
     "assets/demo-c3.js": 5,
     "assets/big-c3.js": 16,
   });
-  const { code, lines } = run(dir);
+  const { code, lines } = run(dir, sourcesOf(["demo", "big"]));
   expect(code).toBe(1);
   const errors = lines.filter((line) => line.startsWith("::error"));
   expect(errors).toHaveLength(1);
@@ -94,7 +106,7 @@ test("island_budget_fails_total_over", () => {
   const islands = ["a", "b", "c", "d", "e", "f"];
   const sizes: Record<string, number> = { "assets/boot-a1.js": 4, "assets/runtime-b2.js": 10 };
   for (const name of islands) sizes[`assets/${name}-c3.js`] = 11;
-  const { code, lines } = run(build(manifestOf(islands), sizes));
+  const { code, lines } = run(build(manifestOf(islands), sizes), sourcesOf(islands));
   expect(code).toBe(1);
   expect(lines.filter((line) => line.startsWith("::error"))).toEqual([
     expect.stringMatching(/^::error title=island-budget::all island JS: \d+ gzip bytes in 8 files/),
@@ -111,10 +123,60 @@ test("island_budget_fails_closed", () => {
   expect(run(build({}, {})).code).toBe(1); // no entry chunk
   const dangling = manifestOf(["x"]);
   dangling["src/boot.ts"]?.imports?.push("_missing.js");
-  expect(run(build(dangling, { "assets/boot-a1.js": 1, "assets/runtime-b2.js": 1, "assets/x-c3.js": 1 })).code).toBe(1);
-  expect(run(build(manifestOf(["x"]), { "assets/boot-a1.js": 1 })).code).toBe(1); // a listed file is missing
+  const x = sourcesOf(["x"]);
+  expect(run(build(dangling, { "assets/boot-a1.js": 1, "assets/runtime-b2.js": 1, "assets/x-c3.js": 1 }), x).code).toBe(
+    1,
+  );
+  expect(run(build(manifestOf(["x"]), { "assets/boot-a1.js": 1 }), x).code).toBe(1); // a listed file is missing
   const noManifest = mkdtempSync(join(tmpdir(), "island-budget-"));
   temps.push(noManifest);
   expect(run(noManifest).code).toBe(1);
   expect(main([], ROOT, () => undefined)).toBe(1);
+});
+
+// P1.25l (book edit 2026-10-07-p125l-islands-lazy-chunks): #464's first build inlined islands into boot and the size
+// budget silently counted fewer, so every island in the source list must keep its own lazy chunk.
+test("islands_are_lazy_chunks", () => {
+  const islands = sourcesOf(["demo", "menu"]);
+  expect(islandsAreLazyChunks(manifestOf(["demo", "menu"]), islands)).toEqual([]);
+
+  const inlined = manifestOf(["demo", "menu"]);
+  inlined["src/boot.ts"]?.imports?.push("src/islands/menu.island.tsx"); // the #464 shape
+  expect(islandsAreLazyChunks(inlined, islands)).toEqual([
+    "island src/islands/menu.island.tsx is statically imported by entry src/boot.ts",
+  ]);
+
+  const missing = manifestOf(["demo"]);
+  expect(islandsAreLazyChunks(missing, islands)).toEqual([
+    "island src/islands/menu.island.tsx has no chunk of its own",
+  ]);
+
+  const entry = manifestOf(["demo", "menu"]);
+  const menu = entry["src/islands/menu.island.tsx"];
+  if (menu !== undefined) menu.isEntry = true;
+  expect(islandsAreLazyChunks(entry, islands)).toEqual([
+    "island src/islands/menu.island.tsx is not a dynamic entry only (isDynamicEntry true, isEntry false)",
+  ]);
+});
+
+test("islands_are_lazy_chunks_refuse_in_main", () => {
+  const sizes = { "assets/boot-a1.js": 1, "assets/runtime-b2.js": 1, "assets/demo-c3.js": 1 };
+  const { code, lines } = run(build(manifestOf(["demo"]), sizes), sourcesOf(["demo", "menu"]));
+  expect(code).toBe(1);
+  expect(lines).toEqual(["::error title=island-budget::island src/islands/menu.island.tsx has no chunk of its own"]);
+});
+
+test("island_sources_lists_every_island", () => {
+  const tracked = execFileSync("git", ["ls-files", "*.island.tsx"], { cwd: ROOT, encoding: "utf8" })
+    .split("\n")
+    .filter((file) => file !== "");
+  expect(tracked.length).toBeGreaterThan(0);
+  for (const file of tracked)
+    expect(
+      ISLAND_ROOTS.some((root) => file.startsWith(`${root}/`)),
+      file,
+    ).toBe(true);
+  const viteRoot = join(ROOT, "apps", "web");
+  const expected = tracked.map((file) => relative(viteRoot, join(ROOT, file))).sort();
+  expect(islandSources(ROOT)).toEqual(expected);
 });
