@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 168 steps: 147 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 169 steps: 148 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -276,11 +276,12 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28y | Edge kind gains runtime_has_no_package_manager (apk) | [SEC] | P1.28o, P1.29x | `phase-1.md` |
 | P1.29n | Node runtime ships no package manager (built-image test) | [SEC] | P1.29e | `phase-1.md` |
 | P1.29p | Built-image file capabilities and setuid match an exact per-kind list | [SEC] | P1.29e | `phase-1.md` |
-| P1.29f | Final stages: no here-docs, absolute destinations, && only, per-kind allowlists for destinations, ENV keys, no ARG | [SEC] | P1.29e, P1.29n | `phase-1.md` |
+| P1.29m | Kind-wide package manager test: kinds.json, full basename match, inert database allowlist, RM_BY_KIND | [SEC] | P1.29n | `phase-1.md` |
+| P1.29f | Final stages: no here-docs, absolute destinations, && only, per-kind allowlists for destinations, ENV keys, no ARG | [SEC] | P1.29e, P1.29n, P1.29m | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
-| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f | `phase-1.md` |
+| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
@@ -436,6 +437,7 @@ flowchart TD
   P1_28y["P1.28y Edge kind forbids apk"]
   P1_29n["P1.29n Node runtime without package manager"]
   P1_29p["P1.29p Capabilities and setuid pinned"]
+  P1_29m["P1.29m Kind-wide package manager test"]
   P1_29f["P1.29f Final-stage allowlists"]
   P1_29w["P1.29w Discover and scan every image"]
   P1_29v["P1.29v Mirror scan skips stripped"]
@@ -671,6 +673,10 @@ flowchart TD
   P1_29n --> P1_29f
   P1_29f --> P1_29d
   P1_29f --> P1_29
+  P1_29n --> P1_29m
+  P1_29m --> P1_29f
+  P1_29m --> P1_29d
+  P1_29m --> P1_29
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
