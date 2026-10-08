@@ -5741,6 +5741,7 @@ manifest chunk, and an island chunk marked `isEntry`; pass today's shape, where 
 
 ### P1.25s — Close the jsx-free test's second regression
 Tags: [SEC]            Depends on: P1.25r (merged, #520)
+As built: merged by Alex at 2026-10-08T00:02:01Z as `1240700` (#531).
 Slice 1, issue #525, product (`shared/ui-build/jsx-free.test.ts`); book edit 2026-10-07-p125w-p125d-ui-build-follow-ups
 (amendment 3, 23:30Z), from the coordinator's check of #520 and architecture's second note under N4 in
 2026-10-07-p125h-follow-ups (23:25Z). A tightening; the coordinator clears it, no word from Alex. Owner: the third
