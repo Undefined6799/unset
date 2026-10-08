@@ -7716,10 +7716,12 @@ Done when `npm run check` is green, and the red fixture fails on the new rule.
 ### P1.28k — Refuse root-absolute and unresolved imports
 Tags: [SEC]            Depends on: P1.28g (merged, #540)
 Slice 1, issue #544, check (`scripts/lint/.dependency-cruiser.cjs`, its fixtures and its tests); book edit
-2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z), from architecture's second note under amendment 8
+2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z; amendment 1, final 02:05Z, from architecture's
+p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z), from architecture's second note under amendment 8
 (01:10Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and
 relayed at 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its
-only dependency, and nothing waits for it; P1.30u does not.
+only dependency, and nothing waits for it; P1.30u does not. Amendment 1 rides PR #549; the narrow couldNotResolve fix is
+declined.
 
 **Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
 with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
@@ -7727,6 +7729,7 @@ root.
 
 **What:** one `forbidden` rule, severity error, applying to every file.
 - **Root-absolute specifiers fail even when they resolve.** Their meaning depends on which tool does the resolving.
+  Amendment 1's item 1 enforces it.
 - **Unresolved specifiers fail** when they are relative, root-absolute or `@unset/*`.
 - **One exception:** the `RENDER_BUILD_IMPORT` edge (`.dependency-cruiser.cjs:38`). It is read from that same config
   value, as `scripts/test/image-rules.test.ts:41` already does, with no second copy.
@@ -7735,8 +7738,26 @@ root.
   one in a product or trusted file, the step stops and says so: a check PR cannot rewrite those files under SE-6, so
   that rewrite would become its own step.
 
+**Raw-specifier allowlist and the package.json route** (amendment 1). The verifier found three gaps: a root package.json
+`exports` entry plus an `unset.sh/p` import reaches preflight with 0 depcruise errors; `FILE:///` passes, because the
+match is case-sensitive; and `/proc/self/cwd/...` resolves, so the import is not refused.
+
+1. **The raw-specifier allowlist.** A scripts/lint check reads each dependency's raw `module` from the cruise JSON. It
+   allows only `./` and `../`; `@unset/<workspace>` and its subpaths; `node:` built-ins; and bare names declared in
+   `dependencies` or `devDependencies` of the importing file's own workspace package.json (the root package.json for
+   root-level files). If main has violations, the PR lists them and fixes each by declaring the dependency where it is
+   used; only if that is impractical does it fall back to "declared by some workspace", with the list under "What I am
+   unsure about". Refused: the root package's own name; `#` imports; any URL scheme, case-insensitively; a leading `/`
+   or `\`, or any backslash; tsconfig `paths` aliases. RENDER_BUILD_IMPORT stays the single exemption, from its one
+   config value.
+2. **The package.json route, pinned under the check-job pinning test (scripts/ci).** The root package.json has no
+   `exports`, `imports`, `main`, `module` or `browser` field. Every workspace's `exports` and `imports` targets realpath
+   inside that workspace's directory. A current target outside the directory goes under unsure.
+
 Fixtures: red, a root-absolute import from an edge test into preflight; red, an unresolved relative import; red, an
-unresolved `@unset/x`; green, the render-build edge.
+unresolved `@unset/x`; green, the render-build edge. Amendment 1 adds: red, one per refused form, including `FILE:///`
+and `/proc/self/cwd/...`; red, a root `exports` field; red, a workspace export target outside its directory; green, one
+per allowed form.
 
 Done when `npm run check` is green, and each red fixture fails on the new rule.
 
