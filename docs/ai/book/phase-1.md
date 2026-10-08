@@ -5489,6 +5489,7 @@ follow-ups ride P1.25 (product class; P1.26 is check class and cannot carry prod
 
 ### P1.25k — Add the error-page hook to the server kit
 Tags: [SEC], trusted            Depends on: P1.04, P1.08 (both merged; P1.08 is #66)
+As built: merged by Alex at 2026-10-07T12:38:20Z as `78e9033` (#445).
 Slice 1, trusted base (`/shared/http/` is in CODEOWNERS' trusted section, "CSRF gate, session and CSP builder"); book
 edits 2026-10-07-p125-split and architecture's 2026-10-07-p125k-error-page-hook (which wins where they differ).
 Letter `k` is the server-kit part, the letter architecture named. No word from Alex is needed: the 404 change is the
@@ -6655,6 +6656,8 @@ below (every stage, no allowlist, `ADD` local only).
 `deployment/images/images.test.ts` only, under the `/deployment/` security-review line (not trusted base, not a check
 path, no `.github/` file) · **Slice:** 1, after P1.28v · **Owner:** Phase 1 (it touches no file P1.29 touches)
 
+As built: merged by Alex at 2026-10-07T12:38:32Z as `5fcbb38` (#449).
+
 Book edits 2026-10-07-p128u-image-refs-outside-from and architecture's 2026-10-07-p128-copy-from-image-ref (which
 wins where they differ). Letter `u` is architecture's suggestion (P1.28's taken letters are b, d, q, v, w and x). No
 word from Alex: a tightening outside `.github/`.
@@ -7799,7 +7802,7 @@ As built: merged by Alex at 2026-10-08T03:12:28Z as `e1edc1e` (#555).
 Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
 2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
 amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
-Nothing depends on it.
+P1.28p depends on it.
 
 **Why:** #549 lets a bare import be declared in the importing file's own workspace or in the root package.json. While
 that fallback applies to every file, a production file could import a root devDependency, such as `dependency-cruiser`
@@ -7832,7 +7835,7 @@ As built: merged by Alex at 2026-10-08T11:36:42Z as `ee892fa` (#558).
 Slice 1, issue #556, check (scripts/lint, kind/build); book edit 2026-10-08-p128p-product-never-imports-tooling (final
 03:20Z; amendment 1, 03:25Z), from architecture's p130s amendments 11 (03:20Z) and 11a (03:25Z), asked by the
 coordinator at 03:12Z after the #555 (P1.28m) verification and relayed at 03:14Z. A tightening; the coordinator clears
-it, no word from Alex. Owner: the third thread, which built P1.28m. Nothing depends on it.
+it, no word from Alex. Owner: the third thread, which built P1.28m. P1.28z depends on it.
 
 **Why:** `shared/http/via.ts` can import `./helper.test.ts`, which imports `dependency-cruiser`. The specifier check
 passes the import because its importer is a test file, and depcruise passes the edge because the `shared` MATRIX row
@@ -8418,6 +8421,7 @@ still passes. The PR body lists the per-kind lists with file and line.
 
 ### P1.28o — Remove apk-tools from the edge image
 Tags: [SEC], trusted            Depends on: P1.29x (merged, #507)
+As built: merged by Alex at 2026-10-07T22:53:28Z as `8b7bad2` (#513).
 Slice 1, trusted base (`deployment/edge/`); book edit 2026-10-07-p128o-edge-apk-tools (final 22:10Z), from
 architecture's amendment 3, point 4, in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; no word from
 Alex. Owner: Phase 1. It follows P1.29x, which carries amendments 2 and 3 (the Dockerfile kind map and the inverted
@@ -8460,7 +8464,7 @@ apk-tools, the edge stays kind `edge` and no extra step is needed.
 ---
 
 ### P1.28y — Forbid a package manager in the edge runtime
-Tags: [SEC]            Depends on: P1.28o, P1.29x (merged, #507)
+Tags: [SEC]            Depends on: P1.28o (merged, #513), P1.29x (merged, #507)
 As built: merged by Alex at 2026-10-08T00:15:49Z as `c14bc1b` (#535).
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p128o-edge-apk-tools (P1.28y, 22:40Z), from
 architecture's amendment in that record ("Afterwards", 22:45Z), relayed by the coordinator at 22:36Z. A tightening; the
