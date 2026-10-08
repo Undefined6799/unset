@@ -193,28 +193,28 @@ describe("edge config", () => {
     const site = read("sites/pds.caddy");
     const pds = (text: string) => siteProblems({ "sites/pds.caddy": text });
     expect(pds(site.replace("\t\timport pds-ratelimit\n", ""))).toEqual([
-      "pds.unset.test: the route does not apply the zones first",
-      "pds.unset.test: 0 rate_limit blocks",
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: 0 rate_limit blocks",
     ]);
     const late = site.replace(
       "\t\timport pds-ratelimit\n\t\timport xrpc-guard\n",
       "\t\timport xrpc-guard\n\t\timport pds-ratelimit\n",
     );
     expect(late).not.toBe(site);
-    expect(pds(late)).toEqual(["pds.unset.test: the route does not apply the zones first"]);
+    expect(pds(late)).toEqual(["{$PDS_HOST}: the route does not apply the zones first"]);
     // P1.28h (#463 verification, D2): a route behind a matcher, a second route, or a second rate_limit block.
     const matched = site.replace("\troute {\n", "\troute /never-matches {\n");
     expect(matched).not.toBe(site);
     expect(pds(matched)).toEqual([
-      "pds.unset.test: not exactly one plain route",
-      "pds.unset.test: the route does not apply the zones first",
-      "pds.unset.test: a reverse_proxy is outside the route",
+      "{$PDS_HOST}: not exactly one plain route",
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: a reverse_proxy is outside the route",
     ]);
     const second = site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n");
     expect(pds(second)).toEqual([
-      "pds.unset.test: not exactly one plain route",
-      "pds.unset.test: the route does not apply the zones first",
-      "pds.unset.test: a reverse_proxy is outside the route",
+      "{$PDS_HOST}: not exactly one plain route",
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: a reverse_proxy is outside the route",
     ]);
     const forwarded = limits.replace(
       /\t\tdisable_metrics\n\t\}\n/,
@@ -223,7 +223,7 @@ describe("edge config", () => {
     expect(forwarded).not.toBe(limits);
     expect(siteProblems({ "snippets/ratelimit.caddy": forwarded })).toEqual([
       "the zones snippet holds 2 rate_limit blocks",
-      "pds.unset.test: 2 rate_limit blocks",
+      "{$PDS_HOST}: 2 rate_limit blocks",
     ]);
     const narrowed = limits.replace(/(\tzone global \{\n)/, "$1\t\t\tmatch {\n\t\t\t\tpath /xrpc/*\n\t\t\t}\n");
     expect(narrowed).not.toBe(limits);
@@ -247,7 +247,10 @@ describe("edge config", () => {
     };
     // A second site whose route proxies without the zones; a proxy written straight in a site the reader refuses.
     expect(enable(extra("other.unset.test {\n\troute {\n\t\timport upstream other:80\n\t}\n}\n"))).toEqual([
+      "other.unset.test: a literal site address is not loopback",
+      "other.unset.test: a site other than {$PDS_HOST} has an upstream",
       "other.unset.test: the route does not apply the zones first",
+      "other.unset.test: a reverse_proxy does not name one placeholder upstream",
       "other.unset.test: 0 rate_limit blocks",
     ]);
     expect(() => enable(extra("other.unset.test {\n\timport upstream other:80\n}\n"))).toThrow(
@@ -257,26 +260,29 @@ describe("edge config", () => {
     const outside = site.replace("\troute {\n", "\troute /other {\n\t\timport upstream other:80\n\t}\n\troute {\n");
     expect(outside).not.toBe(site);
     expect(siteProblems({ "sites/pds.caddy": outside })).toEqual([
-      "pds.unset.test: not exactly one plain route",
-      "pds.unset.test: the route does not apply the zones first",
-      "pds.unset.test: a reverse_proxy is outside the route",
+      "{$PDS_HOST}: not exactly one plain route",
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: a reverse_proxy is outside the route",
+      "{$PDS_HOST}: a reverse_proxy does not name one placeholder upstream",
     ]);
     // A missing header_up, and one that sets a removed header again.
     expect(siteProblems({ "snippets/upstream.caddy": upstream.replace("\t\theader_up -X-Real-IP\n", "") })).toEqual([
-      "pds.unset.test: a reverse_proxy passes X-Real-IP",
+      "{$PDS_HOST}: a reverse_proxy passes X-Real-IP",
     ]);
     const reset = upstream.replace(
       "\t\theader_up -Forwarded\n",
       "\t\theader_up -Forwarded\n\t\theader_up forwarded x\n",
     );
     expect(siteProblems({ "snippets/upstream.caddy": reset })).toEqual([
-      "pds.unset.test: a reverse_proxy passes Forwarded",
+      "{$PDS_HOST}: a reverse_proxy passes Forwarded",
     ]);
     // A public site with no upstream, and one bound to loopback but named for a public host.
     expect(enable(extra("other.unset.test {\n\trespond 200\n}\n"))).toEqual([
+      "other.unset.test: a literal site address is not loopback",
       "other.unset.test: public site without rate limit",
     ]);
     expect(enable(extra("other.unset.test {\n\tbind 127.0.0.1\n\trespond 200\n}\n"))).toEqual([
+      "other.unset.test: a literal site address is not loopback",
       "other.unset.test: public site without rate limit",
     ]);
     expect(enable(extra("http://127.0.0.1:8082 {\n\trespond 200\n}\n"))).toEqual([
@@ -508,58 +514,135 @@ describe("edge site rules (P1.28f)", () => {
     const inline = site.replace("\t\timport pds-ratelimit\n", body.replaceAll(/^/gm, "\t").replace(/\t$/, ""));
     expect(inline).not.toBe(site);
     expect(siteProblems({ "sites/pds.caddy": inline })).toEqual([
-      "pds.unset.test: the route does not apply the zones first",
+      "{$PDS_HOST}: the route does not apply the zones first",
     ]);
   });
 
   test("edge_upstream_proxied_by_two_sites_fails", () => {
-    const second =
-      "other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n}\n";
-    expect(withSites({ "sites/other.caddy": second })).toEqual([
-      "pds.unset.test: upstream proxied by more than one site",
+    // Amendment 9, point 2: the one-site rule compares placeholder names, so a second site proxying {$PDS_UPSTREAM}
+    // fails however it is addressed.
+    const route = "\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n";
+    const shared = "{$PDS_HOST}: upstream proxied by more than one site";
+    expect(withSites({ "sites/other.caddy": `{$PDS_HOST} {\n${route}}\n` })).toEqual([shared]);
+    expect(withSites({ "sites/other.caddy": `other.unset.test {\n${route}}\n` })).toEqual([
+      "other.unset.test: a literal site address is not loopback",
+      "other.unset.test: a site other than {$PDS_HOST} has an upstream",
+      "other.unset.test: {$PDS_UPSTREAM} is outside its position in reverse_proxy",
+      shared,
     ]);
-    // A different upstream is fine.
-    expect(withSites({ "sites/other.caddy": second.replace("{$PDS_UPSTREAM}", "other:80") })).toEqual([]);
+    expect(withSites({ "sites/other.caddy": `http://127.0.0.1:8082 {\n\tbind 127.0.0.1\n${route}}\n` })).toEqual([
+      "http://127.0.0.1:8082: a site other than {$PDS_HOST} has an upstream",
+      "http://127.0.0.1:8082: {$PDS_UPSTREAM} is outside its position in reverse_proxy",
+      shared,
+    ]);
   });
 
-  test("edge_upstream_in_one_canonical_form", () => {
-    // Fail closed (amendment 8, point 4; coordinator verification of #541, F2): after an optional matcher, a
-    // reverse_proxy names exactly one upstream, in one canonical form, so a second spelling cannot pass as another.
+  test("edge_upstream_is_one_placeholder", () => {
+    // Amendment 9, point 2 (replacing #541's canonical form): after an optional matcher, a reverse_proxy names exactly
+    // one upstream, and it is a placeholder, so no literal can alias the value behind {$PDS_UPSTREAM}.
     const proxy = (args: string) =>
-      `other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n\t\t}\n\t}\n}\n`;
-    const other = (args: string) => withSites({ "sites/other.caddy": proxy(args) });
-    const noncanonical = "other.unset.test: a reverse_proxy does not name one upstream in canonical form";
-    const shared = "pds.unset.test: upstream proxied by more than one site";
-    expect(other("other:80")).toEqual([]);
-    expect(other("{$PDS_UPSTREAM}")).toEqual([shared]);
-    // Several upstreams fail, whichever comes first.
-    expect(other("{$PDS_UPSTREAM} other:80")).toEqual([noncanonical]);
-    expect(other("other:80 {$PDS_UPSTREAM}")).toEqual([noncanonical]);
-    // A matcher before the upstream is allowed, and the upstream is still compared.
-    expect(other("* {$PDS_UPSTREAM}")).toEqual([shared]);
-    expect(other("/xrpc/* {$PDS_UPSTREAM}")).toEqual([shared]);
-    expect(other("* other:80 {$PDS_UPSTREAM}")).toEqual([noncanonical]);
-    // Every other spelling of the shared upstream fails.
-    for (const variant of [
-      "http://upstream:3000",
-      "upstream:3000/",
-      "UPSTREAM:3000",
-      "Upstream:3000",
-      "upstream.:3000",
-      "upstream:03000",
-      "upstream",
-      "upstream:",
+      site.replace(
+        "\t\timport upstream {$PDS_UPSTREAM}\n",
+        `\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n\t\t}\n`,
+      );
+    const pds = (args: string) => siteProblems({ "sites/pds.caddy": proxy(args) });
+    const literal = "{$PDS_HOST}: a reverse_proxy does not name one placeholder upstream";
+    expect(pds("{$PDS_UPSTREAM}")).toEqual([]);
+    // A matcher before the upstream is allowed.
+    expect(pds("* {$PDS_UPSTREAM}")).toEqual([]);
+    expect(pds("/xrpc/* {$PDS_UPSTREAM}")).toEqual([]);
+    // Several upstreams fail, whichever comes first, and so does a literal one in any spelling.
+    for (const args of [
+      "{$PDS_UPSTREAM} other:80",
+      "other:80 {$PDS_UPSTREAM}",
+      "* other:80 {$PDS_UPSTREAM}",
+      "localhost:3000",
+      "127.0.0.1:3000",
       "[::1]:3000",
-      "[0:0::1]:3000",
-      "a..b:3000",
-      "upstream:99999",
+      "pds:3000",
+      "upstream:3000",
+      "http://upstream:3000",
+      "* pds:3000",
     ]) {
-      expect(other(variant), variant).toEqual([noncanonical]);
+      expect(pds(args), args).toContain(literal);
     }
+    // The site address is not an upstream.
+    expect(pds("{$PDS_HOST}")).toEqual(["{$PDS_HOST}: {$PDS_HOST} is outside its position in reverse_proxy"]);
+  });
+
+  test("edge_placeholders_only_in_their_position", () => {
+    // Amendment 9, point 1: each placeholder has one position; anywhere else fails and names the token.
+    const extra = (text: string) => withSites({ "sites/other.caddy": text });
+    expect(extra("{$ACME_EMAIL} {\n\trespond 200\n}\n")).toEqual([
+      "{$ACME_EMAIL}: {$ACME_EMAIL} is not a site address",
+      "{$ACME_EMAIL}: public site without rate limit",
+    ]);
+    expect(extra("{$PDS_UPSTREAM} {\n\trespond 200\n}\n")).toEqual([
+      "{$PDS_UPSTREAM}: {$PDS_UPSTREAM} is not a site address",
+      "{$PDS_UPSTREAM}: public site without rate limit",
+    ]);
+    expect(extra("{$PDS_HOST} http://127.0.0.1:8082 {\n\trespond 200\n}\n")).toContain(
+      "{$PDS_HOST} http://127.0.0.1:8082: {$PDS_HOST} shares its site with another address",
+    );
+    const pds = (from: string, to: string) => {
+      const text = site.replace(from, to);
+      expect(text).not.toBe(site);
+      return siteProblems({ "sites/pds.caddy": text });
+    };
+    const at = "\timport tls\n";
+    // In a header value, a matcher, a response body and a route's matcher.
+    expect(pds(at, `${at}\theader X-Test {$PDS_HOST}\n`)).toEqual([
+      "{$PDS_HOST}: {$PDS_HOST} is outside its position in header",
+    ]);
+    expect(
+      pds("\t\timport pds-ratelimit\n", "\t\timport pds-ratelimit\n\t\t@host header_regexp Host {$PDS_HOST}\n"),
+    ).toEqual(["{$PDS_HOST}: {$PDS_HOST} is outside its position in @host"]);
+    expect(pds(at, `${at}\trespond {$PDS_UPSTREAM}\n`)).toEqual([
+      "{$PDS_HOST}: {$PDS_UPSTREAM} is outside its position in respond",
+    ]);
+    expect(pds("\troute {\n", "\troute {$ACME_EMAIL} {\n")).toEqual([
+      "{$PDS_HOST}: not exactly one plain route",
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: a reverse_proxy is outside the route",
+      "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in route",
+    ]);
+    // {$ACME_EMAIL} only as the email of an `issuer acme` inside tls: not tls's own email shorthand, not another
+    // issuer, and not the global options.
+    expect(pds(at, `${at}\ttls {$ACME_EMAIL}\n`)).toEqual([
+      "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in tls",
+    ]);
+    expect(pds(at, `\ttls {\n\t\tissuer zerossl {\n\t\t\temail {$ACME_EMAIL}\n\t\t}\n\t}\n`)).toEqual([
+      "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in email",
+    ]);
+    for (const email of ["email {$ACME_EMAIL} x", "email x {$ACME_EMAIL}"]) {
+      const tls = read("snippets/tls.caddy").replace("email {$ACME_EMAIL}", email);
+      expect(withSites({}, ENV, { "snippets/tls.caddy": tls }), email).toEqual([
+        "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in email",
+      ]);
+    }
+    // The zones snippet is checked on its own too, so a site that does not import it cannot hide a placeholder there.
+    const limitsWith = limits.replace("events 3000", "events {$PDS_HOST}");
+    expect(limitsWith).not.toBe(limits);
+    expect(
+      withSites({}, ENV, {
+        "sites/pds.caddy": site.replace("\t\timport pds-ratelimit\n", ""),
+        "snippets/ratelimit.caddy": limitsWith,
+      }),
+    ).toEqual([
+      "the zones snippet: {$PDS_HOST} is outside its position in events",
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: 0 rate_limit blocks",
+    ]);
+    expect(
+      withSites({}, ENV, {
+        Caddyfile: read("Caddyfile").replace("\tadmin off\n", "\tadmin off\n\tlog {$ACME_EMAIL}\n"),
+      }),
+    ).toEqual(["the global options: {$ACME_EMAIL} is outside its position in log"]);
   });
 
   test("edge_messages_never_carry_env_values", () => {
-    // Amendment 8, point 5: a message names a site address and nothing else from env.
+    // Amendment 8, point 5 and amendment 9, point 3: every rule's failure path runs under sentinel values, and a
+    // message names a site by its address token, never by a value from env.
     const env = { ...ENV, ACME_EMAIL: "acme-sentinel@unset.test", PDS_UPSTREAM: "upstream-sentinel:3000" };
     const messages: string[] = [];
     const caught = (run: () => unknown) => {
@@ -569,49 +652,93 @@ describe("edge site rules (P1.28f)", () => {
         messages.push((error as Error).message);
       }
     };
-    const pds = (text: string) => withSites({}, env, { "sites/pds.caddy": text });
+    const pds = (text: string) => {
+      expect(text).not.toBe(site);
+      caught(() => withSites({}, env, { "sites/pds.caddy": text }));
+    };
+    const edit = (edits: Record<string, string>) => caught(() => withSites({}, env, edits));
+    const extra = (text: string) => caught(() => withSites({ "sites/other.caddy": text }, env));
     const upstream = read("snippets/upstream.caddy");
-    for (const text of [
-      site.replace("\t\timport pds-ratelimit\n", ""),
-      site.replace("\troute {\n", "\troute /x {\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n\troute {\n"),
-      site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n"),
-      site.replace("\timport tls\n", "\t{$ACME_EMAIL} on\n"),
-      site.replace("\timport tls\n", "\t{$PDS_UPSTREAM} on\n"),
-      site.replace("\timport tls\n", "\tbind {$PDS_UPSTREAM}\n"),
-      site.replace("\timport tls\n", "\timport {$ACME_EMAIL}\n"),
-      site.replace("\timport tls\n", "\tlog_append x {$ACME_EMAIL}{args[0]}\n"),
-    ]) {
-      caught(() => pds(text));
-    }
-    caught(() => withSites({}, env, { "snippets/ratelimit.caddy": limits.replace("zone global {", "zone overall {") }));
-    caught(() => withSites({}, env, { "snippets/upstream.caddy": upstream.replace("\t\theader_up -X-Real-IP\n", "") }));
-    caught(() =>
-      withSites({ "sites/other.caddy": "other.unset.test {\n\ttls {$ACME_EMAIL}\n\trespond 200\n}\n" }, env),
-    );
-    caught(() =>
-      withSites(
-        {
-          "sites/other.caddy":
-            "other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n}\n",
-        },
-        env,
+    const at = "\timport tls\n";
+    const route = "\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n";
+    // The site rules.
+    pds(site.replace("\t\timport pds-ratelimit\n", ""));
+    pds(site.replace("\troute {\n", "\troute /x {\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n\troute {\n"));
+    pds(site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n"));
+    pds(site.replace("import upstream {$PDS_UPSTREAM}", "import upstream {$PDS_UPSTREAM} other:80"));
+    pds(site.replace("import upstream {$PDS_UPSTREAM}", "reverse_proxy other:80 {$PDS_UPSTREAM}"));
+    edit({ "snippets/upstream.caddy": upstream.replace("\t\theader_up -X-Real-IP\n", "") });
+    // The zones: the count, the global zone and its matcher.
+    edit({ "snippets/ratelimit.caddy": limits.replace("zone global {", "zone overall {") });
+    edit({ "snippets/ratelimit.caddy": limits.replace("\trate_limit {\n", "\trate_limit {\n\t}\n\trate_limit {\n") });
+    edit({
+      "snippets/ratelimit.caddy": limits.replace(
+        "zone global {\n",
+        "zone global {\n\t\t\tmatch {\n\t\t\t\tpath /x\n\t\t\t}\n",
       ),
-    );
+    });
+    // The placeholder positions: as a directive, a snippet, part of a word, a site address and in a value.
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      pds(site.replace(at, `\t{$${name}} on\n`));
+      pds(site.replace(at, `\timport {$${name}}\n`));
+      pds(site.replace(at, `\tlog_append x {$${name}}{args[0]}\n`));
+      pds(site.replace(at, `${at}\theader X-Test {$${name}}\n`));
+      pds(site.replace(at, `${at}\tbind {$${name}}\n`));
+      pds(
+        site.replace(
+          "\t\timport pds-ratelimit\n",
+          `\t\timport pds-ratelimit\n\t\t@host header_regexp Host {$${name}}\n`,
+        ),
+      );
+      extra(`{$${name}} {\n\trespond 200\n}\n`);
+      extra(`{$${name}} {\n${route}}\n`);
+      edit({ Caddyfile: read("Caddyfile").replace("\tadmin off\n", `\tadmin off\n\tlog {$${name}}\n`) });
+    }
+    pds(site.replace(at, `${at}\ttls {$ACME_EMAIL}\n`));
+    extra("other.unset.test {\n\trespond 200\n}\n");
+    extra(`other.unset.test {\n${route}}\n`);
     // A snippet no site imports is read later, by snippet(); its errors are redacted too (verification of #541, F1).
     const unimported = site.replace("\t\timport pds-ratelimit\n", "");
     for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
       const limitsWith = limits.replace("\trate_limit {\n", `\t{$${name}} on\n\trate_limit {\n`);
-      caught(() => withSites({}, env, { "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith }));
+      edit({ "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith });
     }
-    // Each UNECHOED name is pinned: its value comes back as its placeholder, in a read and in snippet().
+    // Each rule's message came back, with placeholders named and no value.
+    for (const expected of [
+      "{$PDS_HOST}: the route does not apply the zones first",
+      "{$PDS_HOST}: a reverse_proxy is outside the route",
+      "{$PDS_HOST}: not exactly one plain route",
+      "{$PDS_HOST}: a reverse_proxy does not name one placeholder upstream",
+      "{$PDS_HOST}: a reverse_proxy passes X-Real-IP",
+      "there is no global zone",
+      "the zones snippet holds 2 rate_limit blocks",
+      "the global zone has a matcher",
+      "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in tls",
+      "other.unset.test: a literal site address is not loopback",
+      "other.unset.test: {$PDS_UPSTREAM} is outside its position in reverse_proxy",
+      "{$PDS_HOST}: upstream proxied by more than one site",
+    ]) {
+      expect(messages).toContain(expected);
+    }
     for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
-      expect(messages).toContainEqual(expect.stringContaining(`directive {$${name}} is not allowed in site`));
+      for (const expected of [
+        `{$${name}} cannot name a directive`,
+        `{$${name}} cannot name a snippet`,
+        `{$PDS_HOST}: {$${name}} is outside its position in header`,
+        `{$PDS_HOST}: {$${name}} is outside its position in bind`,
+        `{$PDS_HOST}: {$${name}} is outside its position in @host`,
+        `{$${name}}: {$${name}} is not a site address`,
+        `{$${name}}: a site other than {$PDS_HOST} has an upstream`,
+        `the global options: {$${name}} is outside its position in log`,
+      ]) {
+        expect(messages).toContainEqual(expect.stringContaining(expected));
+      }
       const snippet = new RegExp(
-        `^the zones snippet is unreadable: line \\d+: directive \\{\\$${name}\\} is not allowed`,
+        `^the zones snippet is unreadable: line \\d+: \\{\\$${name}\\} cannot name a directive`,
       );
       expect(messages).toContainEqual(expect.stringMatching(snippet));
     }
-    expect(messages.length).toBeGreaterThan(10);
+    expect(messages).toContainEqual(expect.stringContaining("an environment placeholder must be a whole word"));
     for (const message of messages) {
       expect(message).not.toContain(env.ACME_EMAIL);
       expect(message).not.toContain(env.PDS_UPSTREAM);

@@ -26,12 +26,15 @@
 export type Directive = {
   name: string;
   args: string[];
+  /** For each argument, the `{$NAME}` placeholder it was written as, or null for a literal (P1.28l). */
+  placeholders: (EnvName | null)[];
   block: Directive[] | null;
   /** The snippet whose import produced this directive at this level, or null when written in place. */
   via: string | null;
   line: number;
 };
-export type Site = { addresses: string[]; directives: Directive[] };
+/** A site block; `placeholders[i]` is the `{$NAME}` that `addresses[i]` was written as, or null for a literal. */
+export type Site = { addresses: string[]; placeholders: (EnvName | null)[]; directives: Directive[] };
 export type Caddyfile = {
   global: Directive[] | null;
   sites: Site[];
@@ -84,7 +87,8 @@ const DIRECTIVES: Readonly<Record<string, readonly string[] | "data">> = {
   match: MATCHERS,
 };
 
-type Token = { text: string; quoted: boolean; line: number };
+/** A word; `env` names the `{$NAME}` placeholder it was written as, which is always the whole word (P1.28l). */
+type Token = { text: string; quoted: boolean; line: number; env: EnvName | null };
 type Line = { tokens: Token[]; via: string | null };
 type Env = Readonly<Partial<Record<EnvName, string>>>;
 
@@ -148,16 +152,18 @@ function parse(text: string, env: Env): Caddyfile {
     }
     const last = line.tokens.at(-1) as Token;
     if (line.tokens.length < 2 || !isOpen(last)) fail(first.line, "a top-level line must open a site block");
-    const addresses = line.tokens.slice(0, -1).map((token) => address(token));
+    const tokens = line.tokens.slice(0, -1);
+    const addresses = tokens.map((token) => address(token));
     let directives: Directive[];
     [directives, at] = readBlock(lines, at + 1, expander, "site");
-    sites.push({ addresses, directives });
+    sites.push({ addresses, placeholders: tokens.map((token) => token.env), directives });
   }
   const snippet = (name: string, args: readonly string[] = []): Directive[] => {
     const body = snippets.get(name);
     if (body === undefined) throw new CaddyfileError(`no snippet ${name}`);
-    const copy = body.map((line) => ({ via: line.via, tokens: line.tokens.map((t) => withArgs(t, args)) }));
-    copy.push({ via: null, tokens: [{ text: "}", quoted: false, line: 0 }] });
+    const values = args.map((text) => ({ text, quoted: false, line: 0, env: null }));
+    const copy = body.map((line) => ({ via: line.via, tokens: line.tokens.map((t) => withArgs(t, values)) }));
+    copy.push({ via: null, tokens: [{ text: "}", quoted: false, line: 0, env: null }] });
     return readBlock(copy, 0, expander, "snippet")[0];
   };
   return { global, sites, snippet };
@@ -178,7 +184,11 @@ function withEnv(token: Token, env: Env): Token {
     return value;
   });
   if (text.includes("{$")) fail(token.line, `unsupported placeholder in ${token.text}`);
-  return { ...token, text };
+  if (text === token.text) return token;
+  // A placeholder is a whole word, so where it sits is a fact the edge rules can check (P1.28l).
+  const name = /^\{\$([A-Z_]+)\}$/.exec(token.text)?.[1];
+  if (name === undefined) fail(token.line, "an environment placeholder must be a whole word");
+  return { ...token, text, env: name as EnvName };
 }
 
 /** Lines of tokens; blank and comment-only lines dropped. */
@@ -201,11 +211,11 @@ function lex(text: string): Line[] {
       at = text.indexOf("\n", at) === -1 ? text.length : text.indexOf("\n", at);
     } else if (ch === '"' || ch === "`") {
       const end = quotedEnd(text, at, line);
-      tokens.push({ text: text.slice(at + 1, end), quoted: true, line });
+      tokens.push({ text: text.slice(at + 1, end), quoted: true, line, env: null });
       at = end + 1;
     } else {
       const end = wordEnd(text, at, line);
-      tokens.push({ text: text.slice(at, end), quoted: false, line });
+      tokens.push({ text: text.slice(at, end), quoted: false, line, env: null });
       at = end;
     }
   }
@@ -293,9 +303,19 @@ function readBlock(lines: Line[], start: number, expander: Expander, level: stri
       continue;
     }
     const [name, ...rest] = line.tokens as [Token, ...Token[]];
+    if (name.env !== null) fail(name.line, `{$${name.env}} cannot name a directive`);
     const opens = isOpen(rest.at(-1) ?? name);
-    const args = (opens ? rest.slice(0, -1) : rest).map((token) => word(token));
-    const directive = { name: word(name), args, block: null as Directive[] | null, via: line.via, line: name.line };
+    const tokens = opens ? rest.slice(0, -1) : rest;
+    const args = tokens.map((token) => word(token));
+    const placeholders = tokens.map((token) => token.env);
+    const directive = {
+      name: word(name),
+      args,
+      placeholders,
+      block: null as Directive[] | null,
+      via: line.via,
+      line: name.line,
+    };
     checkDirective(name, args, level);
     if (opens) {
       const inner = name.text.startsWith("@") ? "@" : level === "site" && name.text === "route" ? "route" : name.text;
@@ -310,7 +330,8 @@ function readBlock(lines: Line[], start: number, expander: Expander, level: stri
 /** Refuses a directive the allowlist does not name at this level, and a placeholder outside where our files use it. */
 function checkDirective(name: Token, args: readonly string[], level: string): void {
   if (name.quoted) fail(name.line, `quoted directive name "${name.text}" is not supported`);
-  const allowed = DIRECTIVES[level];
+  // Own keys only: a block named `constructor` or `__proto__` must not reach Object.prototype (P1.28l).
+  const allowed = Object.hasOwn(DIRECTIVES, level) ? DIRECTIVES[level] : undefined;
   if (allowed === undefined) fail(name.line, `${level} does not take a block`);
   const data = allowed === "data";
   const key = name.text.startsWith("@") ? "@" : name.text;
@@ -334,28 +355,33 @@ type Expander = { snippets: Map<string, Line[]>; imports: number };
 function expand(line: Line, expander: Expander): Line[] {
   const [keyword, target, ...args] = line.tokens as [Token, Token | undefined, ...Token[]];
   if (target === undefined) return fail(keyword.line, "import without a target");
+  if (target.env !== null) return fail(target.line, `{$${target.env}} cannot name a snippet`);
   const body = expander.snippets.get(target.text);
   if (target.quoted || body === undefined) {
     return fail(target.line, `import ${target.text} is not a snippet defined above (file imports are refused)`);
   }
   expander.imports += 1;
   if (expander.imports > MAX_IMPORTS) fail(target.line, "too many imports (a snippet imports itself?)");
-  const values = args.map((token) => word(token));
+  for (const token of args) word(token);
   return body.map((bodyLine) => ({
     via: line.via ?? target.text,
-    tokens: bodyLine.tokens.map((token) => withArgs(token, values)),
+    tokens: bodyLine.tokens.map((token) => withArgs(token, args)),
   }));
 }
 
 /** `{args[N]}` replaced by the import's Nth argument; any other `{args…}` form, or a missing argument, fails. */
-function withArgs(token: Token, args: readonly string[]): Token {
-  const text = token.text.replaceAll(/\{args([^}]*)\}/g, (_, index: string) => {
+function withArgs(token: Token, args: readonly Token[]): Token {
+  let env: EnvName | null = token.env;
+  const text = token.text.replaceAll(/\{args([^}]*)\}/g, (whole, index: string) => {
     const n = /^\[(\d+)\]$/.exec(index)?.[1];
     const value = n === undefined ? undefined : args[Number(n)];
     if (value === undefined) fail(token.line, `{args${index}} has no value`);
-    return value;
+    // A placeholder argument stays a whole word, so its position is still known (P1.28l).
+    if (value.env !== null && whole !== token.text) fail(token.line, "an environment placeholder must be a whole word");
+    env = value.env ?? env;
+    return value.text;
   });
-  return { ...token, text };
+  return { ...token, text, env };
 }
 
 /**
@@ -491,31 +517,47 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * it must still be bound to loopback and named for it, or it is a public site without rate limit. At most one site may
  * proxy a given upstream (P1.28f; amendment 8, point 4): until shared zone state across sites is proven, two sites on
  * one upstream would each count their clients separately.
+ *
+ * Each env placeholder sits only in its position in PLACEHOLDER_POSITIONS, every upstream is a placeholder, and a
+ * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
  */
 export function edgeSiteProblems(config: Caddyfile): string[] {
-  const found = zoneProblems(config);
+  const found = [...zoneProblems(config), ...positionProblems(config.global ?? [], "the global options", false)];
   const proxied = new Set<string>();
   for (const site of config.sites) {
-    found.push(...siteProblems(site));
+    found.push(...addressProblems(site), ...siteProblems(site));
+    const pds = site.placeholders.includes("PDS_HOST");
+    found.push(...positionProblems(site.directives, siteName(site), pds));
     const proxies = named(flatten(site.directives), "reverse_proxy");
     const upstreams = new Set(proxies.map(upstreamOf).filter((upstream) => upstream !== null));
     if ([...upstreams].some((upstream) => proxied.has(upstream))) {
-      found.push(`${site.addresses.join(" ")}: upstream proxied by more than one site`);
+      found.push(`${siteName(site)}: upstream proxied by more than one site`);
     }
     for (const upstream of upstreams) proxied.add(upstream);
   }
   return found;
 }
 
+/** A site as messages name it: its addresses as written, `{$NAME}` for a placeholder, never the value (P1.28l). */
+function siteName(site: Site): string {
+  return site.addresses
+    .map((address, at) => {
+      const env = site.placeholders[at];
+      return env === null || env === undefined ? address : `{$${env}}`;
+    })
+    .join(" ");
+}
+
 function zoneProblems(config: Caddyfile): string[] {
-  let limits: Directive[];
+  let directives: Directive[];
   try {
-    limits = named(config.snippet("pds-ratelimit"), "rate_limit");
+    directives = config.snippet("pds-ratelimit");
   } catch (error) {
     if (error instanceof CaddyfileError) return [`the zones snippet is unreadable: ${error.message}`];
     throw error;
   }
-  const found = [];
+  const limits = named(directives, "rate_limit");
+  const found = positionProblems(directives, "the zones snippet", false);
   if (limits.length !== 1) found.push(`the zones snippet holds ${limits.length} rate_limit blocks`);
   const global = named(limits[0]?.block ?? [], "zone").find((zone) => zone.args[0] === "global");
   if (global === undefined) found.push("there is no global zone");
@@ -523,8 +565,63 @@ function zoneProblems(config: Caddyfile): string[] {
   return found;
 }
 
+/** Only `{$PDS_HOST}` may be a site address, alone; a literal address is loopback, on a site with no upstream. */
+function addressProblems(site: Site): string[] {
+  const name = siteName(site);
+  const found: string[] = [];
+  const pds = site.placeholders.includes("PDS_HOST");
+  if (pds && site.addresses.length !== 1) found.push(`${name}: {$PDS_HOST} shares its site with another address`);
+  site.addresses.forEach((address, at) => {
+    const env = site.placeholders[at] ?? null;
+    if (env !== null && env !== "PDS_HOST") found.push(`${name}: {$${env}} is not a site address`);
+    if (env === null && !LOOPBACK_ADDRESS.test(address)) found.push(`${name}: a literal site address is not loopback`);
+  });
+  if (!pds && named(flatten(site.directives), "reverse_proxy").length > 0) {
+    found.push(`${name}: a site other than {$PDS_HOST} has an upstream`);
+  }
+  return found;
+}
+
+/**
+ * Where each env placeholder may be written (P1.28l; architecture amendment 9 to
+ * 2026-10-07-p130s-networks-and-caddyfile-reader, and the P1.28l record, final 02:00Z): `{$PDS_UPSTREAM}` as the
+ * upstream of a reverse_proxy on the `{$PDS_HOST}` site, `{$ACME_EMAIL}` as the `email` of an `issuer acme` inside a
+ * `tls` block (snippets/tls.caddy). `{$PDS_HOST}` is a site address only (addressProblems). Adding a position is a
+ * trusted change; widening one loosens.
+ */
+const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>> = {
+  PDS_HOST: () => false,
+  PDS_UPSTREAM: ({ directive, arg, pds }) =>
+    pds && directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null,
+  ACME_EMAIL: ({ directive, arg, parents }) => {
+    const [tls, issuer] = parents.slice(-2);
+    return (
+      directive.name === "email" &&
+      arg === 0 &&
+      directive.args.length === 1 &&
+      issuer?.name === "issuer" &&
+      issuer.args.length === 1 &&
+      issuer.args[0] === "acme" &&
+      tls?.name === "tls"
+    );
+  },
+};
+type Position = { directive: Directive; arg: number; parents: Directive[]; pds: boolean };
+
+/** Every placeholder in `directives` (at any depth) that is outside its position, named for `owner`. */
+function positionProblems(directives: Directive[], owner: string, pds: boolean, parents: Directive[] = []): string[] {
+  return directives.flatMap((directive) => [
+    ...directive.placeholders.flatMap((env, arg) =>
+      env === null || PLACEHOLDER_POSITIONS[env]({ directive, arg, parents, pds })
+        ? []
+        : [`${owner}: {$${env}} is outside its position in ${directive.name}`],
+    ),
+    ...positionProblems(directive.block ?? [], owner, pds, [...parents, directive]),
+  ]);
+}
+
 function siteProblems(site: Site): string[] {
-  const name = site.addresses.join(" ");
+  const name = siteName(site);
   const all = flatten(site.directives);
   const proxies = named(all, "reverse_proxy");
   if (proxies.length === 0) return loopbackOnly(site) ? [] : [`${name}: public site without rate limit`];
@@ -540,7 +637,7 @@ function siteProblems(site: Site): string[] {
     found.push(`${name}: a reverse_proxy is outside the route`);
   }
   if (proxies.some((proxy) => upstreamOf(proxy) === null)) {
-    found.push(`${name}: a reverse_proxy does not name one upstream in canonical form`);
+    found.push(`${name}: a reverse_proxy does not name one placeholder upstream`);
   }
   const limits = named(all, "rate_limit").length;
   if (limits !== 1) found.push(`${name}: ${limits} rate_limit blocks`);
@@ -550,19 +647,16 @@ function siteProblems(site: Site): string[] {
   return found;
 }
 
-/** An upstream in its one canonical form: a lower-case host name, no scheme or trailing dot, and a port with no leading
- * zero. Two sites naming one upstream then compare equal, whatever they would otherwise write. */
-const CANONICAL_UPSTREAM = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*:([1-9]\d{0,4})$/;
-
 /**
- * The one upstream `proxy` names, after an optional matcher token (`@name`, a path or `*`), or null when it names none,
- * several, or one in any other form (P1.28f; amendment 8, point 4: the comparison fails closed).
+ * The placeholder `proxy` names as its one upstream, after an optional matcher token (`@name`, a path or `*`), or null
+ * when it names none, several, or a literal (P1.28l; amendment 9, point 2: a literal host, an IP literal, `localhost`
+ * or a service name written out could alias the placeholder's value, so none is accepted).
  */
-function upstreamOf(proxy: Directive): string | null {
+function upstreamOf(proxy: Directive): EnvName | null {
   const first = proxy.args[0] ?? "";
-  const args = first.startsWith("@") || first.startsWith("/") || first === "*" ? proxy.args.slice(1) : proxy.args;
-  const port = args.length === 1 ? CANONICAL_UPSTREAM.exec(args[0] as string)?.[1] : undefined;
-  return port !== undefined && Number(port) <= 65535 ? (args[0] as string) : null;
+  const from =
+    (first.startsWith("@") || first.startsWith("/") || first === "*") && proxy.placeholders[0] === null ? 1 : 0;
+  return proxy.args.length === from + 1 ? (proxy.placeholders[from] ?? null) : null;
 }
 
 /** Whether `proxy` lacks `header_up -<header>` or sets the header again in any letter case. */
