@@ -157,6 +157,13 @@ const KIND_BY_FINAL_ENTRY = new Map<string, Kind>([
 const kindOf = (dockerfile: string, lock: Lock): Kind | undefined =>
   KIND_BY_FINAL_ENTRY.get(finalEntry(dockerfile, lock) ?? "");
 
+/** The kinds no image test file proves free of a package manager by a test of the agreed name. */
+function missingPackageManagerTests(kinds: readonly string[], sources: readonly string[]): string[] {
+  return kinds.filter(
+    (kind) => !sources.some((source) => source.includes(`test("${kind}_image_has_no_package_manager"`)),
+  );
+}
+
 function kindProblems(files: Record<string, string>, lock: Lock): string[] {
   return Object.entries(files).flatMap(([file, text]) =>
     kindOf(text, lock) === undefined ? [`${file} builds on no known kind of image`] : [],
@@ -400,7 +407,10 @@ const APT_FLAGS = ["-y", "-q", "--purge", "--auto-remove", "--no-install-recomme
 const REMOVAL_FLAGS = new Map<string, readonly string[]>([
   ["apk", ["--no-network", "--purge", "--no-cache", "-q"]],
   ["apt", APT_FLAGS],
-  ["apt-get", APT_FLAGS],
+  // P1.29n: the node runtime purges apt, then debconf and dpkg, both essential (node-app.Dockerfile:45-46 and
+  // migrate.Dockerfile:32-33); each kind's image test proves the result.
+  ["apt-get", [...APT_FLAGS, "--allow-remove-essential"]],
+  ["dpkg", ["--force-remove-essential", "--force-depends"]],
 ]);
 const PACKAGE_NAME = /^[a-z0-9][a-z0-9+._-]*$/;
 /**
@@ -811,6 +821,18 @@ describe("base images", () => {
     ).toEqual(["lock entry node lists a stripped path twice"]);
   });
 
+  test("every_kind_has_a_package_manager_image_test", () => {
+    // P1.29n (architecture, 23:45Z): every kind's built image has no package manager, proven by a test named
+    // `<kind>_image_has_no_package_manager` in an image test file. A new kind brings its test in the PR that adds it.
+    const imageTests = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
+      .filter((file) => file.endsWith(".image.test.ts"))
+      .map(read);
+    expect(missingPackageManagerTests([...new Set(KIND_BY_FINAL_ENTRY.values())], imageTests)).toEqual([]);
+    expect(
+      missingPackageManagerTests(["node", "edge", "postgres"], ['test("node_image_has_no_package_manager"']),
+    ).toEqual(["edge", "postgres"]);
+  });
+
   test("every_dockerfile_has_a_known_kind", () => {
     const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
     expect(kindProblems(files, lock)).toEqual([]);
@@ -929,6 +951,12 @@ describe("base images", () => {
       ["RUN --mount=type=bind,source=/usr/bin/apt-get,target=/usr/local/bin/rm rm install -y curl", [mount, floor]],
       ["RUN --mount=type=cache,target=/var/cache/x rm -f /x", [mount]],
       ["RUN --mount=type=cache,target=/x apk del x", [mount]],
+      // P1.29n adds exactly two dpkg flags and one apt-get flag; others still fail.
+      ["RUN dpkg --force-all -r x", ["dpkg --force-all -r x: dpkg option --force-all is not allowed", floor]],
+      [
+        "RUN apt purge --allow-remove-essential x",
+        ["apt purge --allow-remove-essential x: apt argument --allow-remove-essential is not a package name", floor],
+      ],
       ["RUN apt-get purge x=1.0", ["apt-get purge x=1.0: apt-get argument x=1.0 asks apt to install", floor]],
       ["RUN FOO=1 rm -f /x", [assignment("FOO=1 rm -f /x")]],
       ["RUN <<EOF\nrm -f /x\nEOF", ["heredoc not supported"]],
@@ -989,7 +1017,13 @@ describe("base images", () => {
     expect(osPackageProblems(`${edge}RUN setcap cap_net_admin=+ep /usr/bin/caddy`)).toEqual([
       `line 2: ${setcapNotListed("setcap cap_net_admin=+ep /usr/bin/caddy", "edge")}`,
     ]);
-    for (const run of ["RUN apk del --no-network curl libcap apk-tools", "RUN apt-get purge -y x", "RUN dpkg -r x"]) {
+    for (const run of [
+      "RUN apk del --no-network curl libcap apk-tools",
+      "RUN apt-get purge -y x",
+      "RUN dpkg -r x",
+      // P1.29n's removal of the OS package managers.
+      "RUN apt-get purge --allow-remove-essential -y apt \\\n  && dpkg --purge --force-remove-essential --force-depends debconf dpkg",
+    ]) {
       expect(osPackageProblems(`${node}${run}`), run).toEqual([]);
     }
   });
