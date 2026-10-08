@@ -7751,9 +7751,9 @@ match is case-sensitive; and `/proc/self/cwd/...` resolves, so the import is not
    allows only `./` and `../`; `@unset/<workspace>` and its subpaths; `node:` built-ins (as amendment 2, item 1 defines
    them); and bare names declared in `dependencies` or `devDependencies` of the importing file's own workspace
    package.json (the root package.json for root-level files). If main has violations, the PR lists them and fixes each
-   by declaring the dependency where it is used; otherwise amendment 2, item 2 applies. Refused: the root package's own
-   name; `#` imports; any URL scheme, case-insensitively; a leading `/` or `\`, or any backslash; tsconfig `paths`
-   aliases. RENDER_BUILD_IMPORT stays the single exemption, from its one config value.
+   by declaring the dependency where it is used; where that is impractical, amendment 2, item 2's fallback applies.
+   Refused: the root package's own name; `#` imports; any URL scheme, case-insensitively; a leading `/` or `\`, or any
+   backslash; tsconfig `paths` aliases. RENDER_BUILD_IMPORT stays the single exemption, from its one config value.
 2. **The package.json route, pinned under the check-job pinning test (scripts/ci).** The root package.json has no
    `exports`, `imports`, `main`, `module` or `browser` field. Every workspace's `exports` and `imports` targets realpath
    inside that workspace's directory. A current target outside the directory goes under unsure.
@@ -7787,7 +7787,7 @@ it, together with amendment 8 item 2's general rule.
 
 ---
 
-### P1.28m — Allow root-only dependencies in tests only
+### P1.28m — Root dependency fallback for test files only
 Tags: [SEC]            Depends on: P1.28k (merged, #549)
 As built: merged by Alex at 2026-10-08T03:12:28Z as `e1edc1e` (#555).
 Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
@@ -8617,7 +8617,7 @@ Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g (merged, #554)
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
-Phase 1, after P1.29g (P1.29e and P1.29n merged; p129f-corpus-gaps record, amendment 1, 02:10Z).
+Phase 1, after P1.29g (P1.29e and P1.29n merged).
 
 **What:** the image test `image_privileges_match_list`, for every kind in `deployment/images/kinds.json` (p129g record,
 amendment 1). It walks each built image's filesystem; every file with a `security.capability` xattr, and every setuid or
