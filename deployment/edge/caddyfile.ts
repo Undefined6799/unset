@@ -584,17 +584,19 @@ function addressProblems(site: Site): string[] {
 
 /**
  * Where each env placeholder may be written (P1.28l; architecture amendment 9 to
- * 2026-10-07-p130s-networks-and-caddyfile-reader, and the P1.28l record, final 02:00Z): `{$PDS_UPSTREAM}` as the
- * upstream of a reverse_proxy on the `{$PDS_HOST}` site, `{$ACME_EMAIL}` as the `email` of an `issuer acme` inside a
- * `tls` block (snippets/tls.caddy). `{$PDS_HOST}` is a site address only (addressProblems). Adding a position is a
- * trusted change; widening one loosens.
+ * 2026-10-07-p130s-networks-and-caddyfile-reader, and the P1.28l record, final 01:55Z, corrected 02:00Z):
+ * `{$PDS_UPSTREAM}` as the upstream of a reverse_proxy on the `{$PDS_HOST}` site, `{$ACME_EMAIL}` as the `email` of
+ * an `issuer acme` in a `tls` block at the block root (snippets/tls.caddy). `{$PDS_HOST}` is a site address only
+ * (addressProblems). Adding a position is a trusted change; widening one loosens.
  */
 const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>> = {
   PDS_HOST: () => false,
   PDS_UPSTREAM: ({ directive, arg, pds }) =>
     pds && directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null,
   ACME_EMAIL: ({ directive, arg, parents }) => {
-    const [tls, issuer] = parents.slice(-2);
+    // The chain from the block root, so a data block (header, map, fields) that opens a level named tls or issuer
+    // cannot hold it (coordinator verification of #552).
+    const [tls, issuer] = parents;
     return (
       directive.name === "email" &&
       arg === 0 &&

@@ -620,6 +620,46 @@ describe("edge site rules (P1.28f)", () => {
         "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in email",
       ]);
     }
+    // The exact issuer acme: not another issuer argument, not another directive under it.
+    const tls = read("snippets/tls.caddy");
+    for (const [from, to, where] of [
+      ["issuer acme {", "issuer acme x {", "email"],
+      ["\t\t\temail {$ACME_EMAIL}\n", "\t\t\tdir {$ACME_EMAIL}\n", "dir"],
+    ] as const) {
+      const edited = tls.replace(from, to);
+      expect(edited).not.toBe(tls);
+      expect(withSites({}, ENV, { "snippets/tls.caddy": edited }), to).toContain(
+        `{$PDS_HOST}: {$ACME_EMAIL} is outside its position in ${where}`,
+      );
+    }
+    // Why the issuer name check cannot be reached on its own: a tls block at the root takes only issuer.
+    expect(() => withSites({}, ENV, { "snippets/tls.caddy": tls.replace("issuer acme {", "other acme {") })).toThrow(
+      "directive other is not allowed in tls",
+    );
+    // An issuer opened as a header field is not inside tls.
+    expect(pds(at, `${at}\theader {\n\t\tissuer acme {\n\t\t\temail {$ACME_EMAIL}\n\t\t}\n\t}\n`)).toEqual([
+      "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in email",
+    ]);
+    // The whole chain from the block root: a data block (header, fields) may open a level named tls, and a tls block
+    // there is not the site's tls (coordinator verification of #552, item 1).
+    const nested = "tls {\n\tissuer acme {\n\t\temail {$ACME_EMAIL}\n\t}\n}\n";
+    const indent = (text: string, tabs: string) => text.replaceAll(/^(?=.)/gm, tabs);
+    expect(pds(at, `${at}\theader {\n${indent(nested, "\t\t")}\t}\n`)).toEqual([
+      "{$PDS_HOST}: {$ACME_EMAIL} is outside its position in email",
+    ]);
+    const health = "http://127.0.0.1:8082 {\n\tbind 127.0.0.1\n\trespond 200\n";
+    expect(withSites({ "sites/other.caddy": `${health}\theader {\n${indent(nested, "\t\t")}\t}\n}\n` })).toEqual([
+      "http://127.0.0.1:8082: {$ACME_EMAIL} is outside its position in email",
+    ]);
+    const caddyfile = read("Caddyfile");
+    const fields = caddyfile.replace(
+      "\t\t\t\tremote_ip delete\n",
+      `\t\t\t\tremote_ip delete\n${indent(nested, "\t\t\t\t")}`,
+    );
+    expect(fields).not.toBe(caddyfile);
+    expect(withSites({}, ENV, { Caddyfile: fields })).toEqual([
+      "the global options: {$ACME_EMAIL} is outside its position in email",
+    ]);
     // The zones snippet is checked on its own too, so a site that does not import it cannot hide a placeholder there.
     const limitsWith = limits.replace("events 3000", "events {$PDS_HOST}");
     expect(limitsWith).not.toBe(limits);
@@ -695,13 +735,20 @@ describe("edge site rules (P1.28f)", () => {
       edit({ Caddyfile: read("Caddyfile").replace("\tadmin off\n", `\tadmin off\n\tlog {$${name}}\n`) });
     }
     pds(site.replace(at, `${at}\ttls {$ACME_EMAIL}\n`));
+    // Errors raised while parsing, before any rule runs (main's pin, restored after verification of #552, item 2).
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      caught(() => withSites({ "sites/other.caddy": `"{$${name}}" {\n\trespond 200\n}\n` }, env));
+      pds(site.replace("\t\timport pds-ratelimit\n", `\t\timport pds-ratelimit\n\t\t@m {$${name}}\n`));
+    }
     extra("other.unset.test {\n\trespond 200\n}\n");
     extra(`other.unset.test {\n${route}}\n`);
     // A snippet no site imports is read later, by snippet(); its errors are redacted too (verification of #541, F1).
     const unimported = site.replace("\t\timport pds-ratelimit\n", "");
     for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
-      const limitsWith = limits.replace("\trate_limit {\n", `\t{$${name}} on\n\trate_limit {\n`);
-      edit({ "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith });
+      for (const line of [`{$${name}} on`, `@m {$${name}}`]) {
+        const limitsWith = limits.replace("\trate_limit {\n", `\t${line}\n\trate_limit {\n`);
+        edit({ "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith });
+      }
     }
     // Each rule's message came back, with placeholders named and no value.
     for (const expected of [
@@ -733,12 +780,16 @@ describe("edge site rules (P1.28f)", () => {
       ]) {
         expect(messages).toContainEqual(expect.stringContaining(expected));
       }
-      const snippet = new RegExp(
-        `^the zones snippet is unreadable: line \\d+: \\{\\$${name}\\} cannot name a directive`,
-      );
-      expect(messages).toContainEqual(expect.stringMatching(snippet));
+      for (const why of ["\\{\\$NAME\\} cannot name a directive", "matcher \\{\\$NAME\\} is not allowed"]) {
+        const snippet = new RegExp(`^the zones snippet is unreadable: line \\d+: ${why.replace("NAME", name)}`);
+        expect(messages).toContainEqual(expect.stringMatching(snippet));
+      }
     }
     expect(messages).toContainEqual(expect.stringContaining("an environment placeholder must be a whole word"));
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      expect(messages).toContainEqual(expect.stringContaining(`quoted top-level token "{$${name}}" is not supported`));
+      expect(messages).toContainEqual(expect.stringContaining(`matcher {$${name}} is not allowed`));
+    }
     for (const message of messages) {
       expect(message).not.toContain(env.ACME_EMAIL);
       expect(message).not.toContain(env.PDS_UPSTREAM);
