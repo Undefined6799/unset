@@ -61,6 +61,7 @@ review covers the rule. *Review-only* means a person or the PR template checks i
 | ADG §1 | A vendor SDK is imported in one adapter folder per runtime | checked: `vendor-sdk-one-adapter` |
 | plan §5.4 | net-guard imports only Node built-ins, undici and its own files; its *.test.ts may also import fast-check and vitest | checked: `net-guard-leaf` |
 | ADG §2, P1.28g | No `deployment/edge/` file, tests included, imports `deployment/preflight/`: the edge is trusted base and the preflight is product (architecture amendment 8 item 2, 2026-10-08) | checked: `edge-not-preflight`, `edge_never_imports_preflight`, `edge_not_preflight_is_one_way` |
+| ADG §1, P1.28k | Every relative or `@unset/*` import resolves, and no file uses a root-absolute or `file:` specifier; the one unresolved import is the render build edge above (architecture amendment 8, second note, 2026-10-08) | checked: `specifier-must-resolve`, `root_absolute_and_unresolved_imports_fail`, `render_build_import_is_the_only_unresolved_exception` |
 | TE-1 | Fakes are used only in tests and in non-production composition roots | checked: `fake-only-in-composition-root`, `fake_boot_refused_in_prod` |
 | DC-1 | No dependency cycles | checked: `no-circular` |
 | DC-1 | No orphan modules | checked: `no-orphans` |
