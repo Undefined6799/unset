@@ -34,3 +34,17 @@ const escapeRegex = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g
 
 /** A file Vitest runs as a test: the part of the tooling set P1.28m lets fall back to the root package.json. */
 export const TEST_FILE = TEST_GLOBS.map(globSource).join("|");
+
+/** Every pattern of the tooling set (step book P1.28p "What"), each matched against a repo-relative path. */
+export const TOOLING_SET: string[] = [
+  TEST_FILE,
+  "^tests/",
+  // The SE-6 check paths (amendment 11a): scripts/ui is product and stays outside.
+  "^scripts/(guards|lint|ci|budgets|licence|docs|test|workspace|githooks)/",
+  "^vitest\\.config\\.ts$",
+  "(^|/)(fixtures|__fixtures__)/",
+  "\\.fixture\\.[^/]*$",
+  "\\.vector\\.json$",
+];
+
+export const TOOLING_PATTERN = TOOLING_SET.map((source) => `(?:${source})`).join("|");

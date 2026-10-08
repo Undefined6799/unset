@@ -1,7 +1,7 @@
 // The tooling set in scripts/lint/tooling.ts: its glob reading against node:path matchesGlob, and its members (P1.28p).
 import { matchesGlob } from "node:path";
 import { expect, test } from "vitest";
-import { globSource, TEST_FILE, TEST_GLOBS } from "./tooling.ts";
+import { globSource, TEST_FILE, TEST_GLOBS, TOOLING_PATTERN } from "./tooling.ts";
 
 const PATHS = [
   "shared/http/main.test.ts",
@@ -47,4 +47,35 @@ test("glob_source_reads_globs_as_matchesGlob_does", () => {
 test("glob_source_refuses_forms_it_does_not_read", () => {
   for (const glob of ["a/?.ts", "a/[ab].ts", "!a.ts", "a/{b.ts", "a/@(b).ts", "a/**", "a/**.ts"])
     expect(() => globSource(glob)).toThrow();
+});
+
+test("tooling_set_members", () => {
+  const tooling = new RegExp(TOOLING_PATTERN);
+  for (const path of [
+    "shared/http/main.test.ts",
+    "a.image.test.ts",
+    "tests/support/x.ts",
+    "scripts/guards/files.ts",
+    "scripts/lint/specifiers.ts",
+    "scripts/githooks/pre-commit.ts",
+    "vitest.config.ts",
+    "shared/http/fixtures/a.ts",
+    "shared/http/__fixtures__/a.ts",
+    "fixtures/a.ts",
+    "shared/http/a.fixture.ts",
+    "shared/http/a.vector.json",
+  ]) {
+    expect(tooling.test(path), path).toBe(true);
+  }
+  for (const path of [
+    "shared/http/main.ts",
+    "shared/http/.h/leak.test.ts",
+    "scripts/ui/css-scope.ts",
+    "apps/web/vite.config.ts",
+    "shared/http/myfixtures/a.ts",
+    "shared/http/vector.json",
+    "x/vitest.config.ts",
+  ]) {
+    expect(tooling.test(path), path).toBe(false);
+  }
 });
