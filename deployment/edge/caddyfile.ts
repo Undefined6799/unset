@@ -334,13 +334,14 @@ function withArgs(token: Token, args: readonly string[]): Token {
 
 /**
  * The file-system reads `readEdgeConfig` needs. The caller passes them in (node:fs in tests and the preflight), so this
- * file imports nothing and needs no dependency-cruiser row of its own.
+ * file imports nothing and needs no dependency-cruiser row of its own. Each is one direct call with no policy: the
+ * reader checks every answer itself (P1.28f).
  */
 export type EdgeFiles = {
   /** The entry names of a directory. */
   list(dir: string): string[];
-  /** What the path itself is; a final symlink is not followed. */
-  kind(path: string): "file" | "link" | "dir" | "other";
+  /** What the path itself is (a final symlink is not followed), and its hard-link count. */
+  kind(path: string): { type: "file" | "link" | "dir" | "other"; links: number };
   /** The path with every symlink resolved, or null when nothing is there. */
   realpath(path: string): string | null;
   read(path: string): string;
@@ -351,6 +352,8 @@ const FILE_IMPORTS = ["import snippets/*.caddy", "import sites/enabled/*.caddy"]
 /** A name `*.caddy` matches that sorts the same in JavaScript and in Go (ASCII), with no leading dot: Caddy skips
  * dotfiles a leading `*` matches (parse.go doImport, issue #5295), so one there would be read by us and not by it. */
 const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
+/** The env values a message may never carry: only the site address (PDS_HOST) may appear (amendment 8, point 5). */
+const UNECHOED: readonly EnvName[] = ["ACME_EMAIL", "PDS_UPSTREAM"];
 
 /**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
@@ -358,49 +361,97 @@ const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
  * `edgeDir/snippets` and `import sites/enabled/*.caddy` by `sitesDir`, each in byte order (doImport uses
  * filepath.Glob, whose glob() sorts the names, go src/path/filepath/match.go). Each import line must appear exactly
  * once; an included file is not scanned for imports again, so any other file import reaches readCaddyfile and fails.
- * An entry is a regular `*.caddy` file; in `sitesDir` it may also be a symlink to one inside `edgeDir/sites`.
+ *
+ * Containment (P1.28f; amendment 8, point 1): every path is resolved, and each resolved path must stay where it
+ * belongs. `sitesDir` lies inside `edgeDir/sites/`; a snippet is a regular file inside `edgeDir/snippets/`; a site is
+ * a regular file, or a symlink to one, inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
+ * beyond that count, and a file swapped between `kind` and `read`, since this is a build-time reader over a checkout.
  */
 export function readEdgeConfig(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
-  const lines = files.read(`${edgeDir}/Caddyfile`).split("\n");
+  const root = resolved(files, edgeDir, "the edge directory");
+  const sitesRoot = `${root}/sites`;
+  if (resolved(files, sitesRoot, "the sites directory") !== sitesRoot) {
+    throw new CaddyfileError("sites/ leaves the edge directory");
+  }
+  if (!resolved(files, sitesDir, "the enabled sites directory").startsWith(`${sitesRoot}/`)) {
+    throw new CaddyfileError("the enabled sites directory is not inside sites/");
+  }
+  const lines = files.read(entry(files, root, "Caddyfile", root, false)).split("\n");
   for (const line of FILE_IMPORTS) {
     if (lines.filter((l) => l === line).length !== 1) {
       throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
     }
   }
-  const sitesRoot = files.realpath(`${edgeDir}/sites`);
-  if (sitesRoot === null) throw new CaddyfileError("there is no sites directory");
   const expanded = lines.map((line) => {
-    if (line === FILE_IMPORTS[0]) return globbed(files, `${edgeDir}/snippets`, null, line);
-    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, sitesRoot, line);
+    if (line === FILE_IMPORTS[0]) return globbed(files, `${root}/snippets`, `${root}/snippets`, false, line);
+    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, sitesRoot, true, line);
     return line;
   });
-  return readCaddyfile(expanded.join("\n"), env);
+  try {
+    return readCaddyfile(expanded.join("\n"), env);
+  } catch (error) {
+    if (!(error instanceof CaddyfileError)) throw error;
+    throw new CaddyfileError(unechoed(error.message, env));
+  }
 }
 
-/** The text of every entry of `dir` in byte order, each checked; a link is allowed only into `linkRoot`. */
-function globbed(files: EdgeFiles, dir: string, linkRoot: string | null, line: string): string {
+/** `message` with each value the reader put in from UNECHOED replaced by its placeholder. */
+function unechoed(message: string, env: Env): string {
+  return UNECHOED.reduce((text, name) => {
+    const value = env[name];
+    return value === undefined || value === "" ? text : text.replaceAll(value, `{$${name}}`);
+  }, message);
+}
+
+/** An absolute path whose every segment is a name: no empty, `.` or `..` segment and no trailing slash. */
+const NORMAL_PATH = /^(?:\/(?!\.{1,2}(?:\/|$))[^/]+)+$/;
+
+/**
+ * The adapter's real path for `path`, which must exist and be absolute and normal: no empty, `.` or `..` segment and
+ * no trailing slash, so it equals `path.normalize` of itself (amendment 8, point 1).
+ */
+function resolved(files: EdgeFiles, path: string, what: string): string {
+  const real = files.realpath(path);
+  if (real === null) throw new CaddyfileError(`${what}: nothing is there`);
+  if (real !== "/" && !NORMAL_PATH.test(real)) {
+    throw new CaddyfileError(`${what} resolves to a path that is not absolute and normal`);
+  }
+  return real;
+}
+
+/** The text of every entry of `dir` in byte order, each checked to resolve inside `bound`. */
+function globbed(files: EdgeFiles, dir: string, bound: string, links: boolean, line: string): string {
   const names = files.list(dir).sort();
   if (names.length === 0) throw new CaddyfileError(`${line} matches nothing`);
   return names
     .map((name) => {
-      const path = `${dir}/${name}`;
       if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
-      const kind = files.kind(path);
-      if (kind === "link" && linkRoot !== null) return files.read(linkTarget(files, path, name, linkRoot));
-      if (kind !== "file") throw new CaddyfileError(`${name}: not a regular file`);
-      return files.read(path);
+      return files.read(entry(files, dir, name, bound, links));
     })
     .join("\n");
 }
 
-/** Where a sites/enabled link leads, which must be a regular `*.caddy` file inside the repository's sites/. */
-function linkTarget(files: EdgeFiles, path: string, name: string, linkRoot: string): string {
-  const target = files.realpath(path);
-  if (target === null) throw new CaddyfileError(`${name}: dangling link`);
-  if (!target.startsWith(`${linkRoot}/`)) throw new CaddyfileError(`${name}: the link leaves sites/`);
-  if (files.kind(target) !== "file" || !target.endsWith(".caddy")) {
+/**
+ * Where `dir/name` really is: a regular file with one hard link whose resolved path lies inside `bound`. When `links`
+ * is true it may also be a symlink to such a file; the link's own place does not matter, only where it leads.
+ */
+function entry(files: EdgeFiles, dir: string, name: string, bound: string, links: boolean): string {
+  const path = `${dir}/${name}`;
+  const own = files.kind(path).type;
+  if (own !== "file" && !(own === "link" && links)) throw new CaddyfileError(`${name}: not a regular file`);
+  if (own === "link" && files.realpath(path) === null) throw new CaddyfileError(`${name}: dangling link`);
+  const target = resolved(files, path, name);
+  if (!target.startsWith(`${bound}/`)) {
+    const area = bound.slice(bound.lastIndexOf("/") + 1);
+    throw new CaddyfileError(
+      own === "link" ? `${name}: the link leaves ${area}/` : `${name}: the file is not inside ${area}/`,
+    );
+  }
+  const real = files.kind(target);
+  if (real.type !== "file" || (own === "link" && !target.endsWith(".caddy"))) {
     throw new CaddyfileError(`${name}: the link target is not a regular file`);
   }
+  if (real.links !== 1) throw new CaddyfileError(`${name}: the file has ${real.links} hard links`);
   return target;
 }
 
@@ -419,12 +470,23 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * architecture amendment 7, point 3). The pds-ratelimit snippet holds one rate_limit block whose global zone has no
  * matcher. Every site with a reverse_proxy has exactly one plain route that applies that snippet first, holds every
  * reverse_proxy of the site, and is the site's only rate_limit; each reverse_proxy removes the address headers and
- * sets none again. A site with no reverse_proxy is exempt because it has none, not because of its name or address;
- * it must still be bound to loopback and named for it, or it is a public site without rate limit.
+ * sets none again. A site with no reverse_proxy is
+ * exempt because it has no `reverse_proxy`, not because of its name or address;
+ * it must still be bound to loopback and named for it, or it is a public site without rate limit. At most one site may
+ * proxy a given upstream (P1.28f; amendment 8, point 4): until shared zone state across sites is proven, two sites on
+ * one upstream would each count their clients separately.
  */
 export function edgeSiteProblems(config: Caddyfile): string[] {
   const found = zoneProblems(config);
-  for (const site of config.sites) found.push(...siteProblems(site));
+  const proxied = new Set<string>();
+  for (const site of config.sites) {
+    found.push(...siteProblems(site));
+    const upstreams = new Set(named(flatten(site.directives), "reverse_proxy").map((proxy) => proxy.args.join(" ")));
+    if ([...upstreams].some((upstream) => proxied.has(upstream))) {
+      found.push(`${site.addresses.join(" ")}: upstream proxied by more than one site`);
+    }
+    for (const upstream of upstreams) proxied.add(upstream);
+  }
   return found;
 }
 

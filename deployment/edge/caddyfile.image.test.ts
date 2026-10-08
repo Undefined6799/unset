@@ -138,7 +138,8 @@ const FILES: EdgeFiles = {
   list: (dir) => readdirSync(dir),
   kind: (path) => {
     const stat = lstatSync(path);
-    return stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+    const type = stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+    return { type, links: stat.nlink };
   },
   realpath: (path) => {
     try {
