@@ -3,16 +3,11 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { cruise, type ICruiseResult } from "dependency-cruiser";
 import { afterAll, expect, test } from "vitest";
-import VITEST from "../../vitest.config.ts";
 import { config, ROOT, removeFixtures, tempDir, write } from "./depcruise-fixture.ts";
-import { type Packages, readPackages, refusal, specifierViolations, testFileByGlobs } from "./specifiers.ts";
+import { isTestFile, type Packages, readPackages, refusal, specifierViolations } from "./specifiers.ts";
+import { TEST_GLOBS } from "./tooling.ts";
 
 afterAll(removeFixtures);
-
-/** The Vitest include globs, read from the root vitest.config.ts rather than copied (P1.28m). */
-const TEST_GLOBS = (VITEST.test?.projects ?? []).flatMap((project) =>
-  typeof project === "object" && "test" in project ? (project.test?.include ?? []) : [],
-);
 
 const PACKAGES: Packages = {
   rootName: "unset.sh",
@@ -21,7 +16,7 @@ const PACKAGES: Packages = {
     ["shared/http", { name: "@unset/shared-http", declared: new Set(["hono"]) }],
     ["infrastructure/net-guard", { name: "@unset/infrastructure-net-guard", declared: new Set(["undici"]) }],
   ]),
-  testFile: testFileByGlobs(TEST_GLOBS),
+  testFile: isTestFile,
 };
 const FROM = "shared/http/a.ts";
 
@@ -82,6 +77,11 @@ test("root_only_packages_only_in_test_files", () => {
     "shared/http/test.ts",
     "shared/http/a.tests.ts",
     "shared/http/a.test.js",
+    // The rest of the tooling set does not widen the fallback (#558 verification): fixtures and vectors still declare.
+    "shared/http/fixtures/x.ts",
+    "shared/http/a.fixture.ts",
+    "shared/http/a.image.test.js",
+    "shared/http/vectors.vector.json",
   ]) {
     expect(refusal(packages, file, "dependency-cruiser"), file).toBe("a root-only package outside a test file");
   }
@@ -126,7 +126,10 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
     readdirSync(join(ROOT, dir), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => `${dir}/${entry.name}`);
-  const packages = readPackages(ROOT, list, TEST_GLOBS);
+  const packages = readPackages(ROOT, list);
+  // The real tree is clean, so the cruise below cannot show that readPackages wires in the test-file definition.
+  expect(packages.testFile("shared/http/via.ts")).toBe(false);
+  expect(packages.testFile("shared/http/main.test.ts")).toBe(true);
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
 });

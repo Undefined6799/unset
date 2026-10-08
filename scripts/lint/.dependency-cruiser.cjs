@@ -46,6 +46,10 @@ const CORE = { dependencyTypes: ["core"] };
 const APP_BUILD_CONFIG = "^apps/[^/]+/vite\\.config\\.ts$";
 // Root files count as tooling only when they are config files (vitest.config.ts); so does an app's build config.
 const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|tsx|mts|cts)$|${APP_BUILD_CONFIG}`;
+// The files that never ship (P1.28p): defined once in tooling.ts, which specifiers.ts reads too. Node 26 loads a
+// TypeScript ES module through require() (doc/api/modules.md "Loading ECMAScript modules using require()";
+// doc/api/typescript.md "Type stripping").
+const { TOOLING_PATTERN } = require("./tooling.ts");
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
 const LEAF_SHARED = "^shared/(ui|ui-build|lexicons|admin-envelope)/";
@@ -211,6 +215,12 @@ module.exports = {
       "scripts/ and tests/ are tooling; product code never imports them (invariant 13).",
       { pathNot: TOOLING },
       { path: "^(scripts|tests)/" },
+    ),
+    forbidden(
+      "no-product-imports-tooling-set",
+      "Tests, check scripts, fixtures and vectors never ship; no file outside that set imports one inside it (P1.28p).",
+      { pathNot: TOOLING_PATTERN },
+      { path: TOOLING_PATTERN },
     ),
     forbidden(
       "infrastructure-not-entry",
