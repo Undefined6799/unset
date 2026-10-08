@@ -7734,8 +7734,8 @@ p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z; amendment 2, fin
 third thread's recon on b2188a9, relayed at 01:50Z), from architecture's second note under amendment 8 (01:10Z) in
 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and relayed at
 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its only
-dependency, and nothing waits for it; P1.30u does not. Amendments 1 and 2 ride PR #549; the narrow couldNotResolve fix
-is declined.
+dependency. P1.28m (#553) depends on it; P1.30u does not. Amendments 1 and 2 ride PR #549; the narrow couldNotResolve
+fix is declined.
 
 **Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
 with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
@@ -7802,7 +7802,7 @@ As built: merged by Alex at 2026-10-08T03:12:28Z as `e1edc1e` (#555).
 Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
 2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
 amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
-P1.28p depends on it.
+P1.28p (#556) depends on it.
 
 **Why:** #549 lets a bare import be declared in the importing file's own workspace or in the root package.json. While
 that fallback applies to every file, a production file could import a root devDependency, such as `dependency-cruiser`
@@ -7835,7 +7835,7 @@ As built: merged by Alex at 2026-10-08T11:36:42Z as `ee892fa` (#558).
 Slice 1, issue #556, check (scripts/lint, kind/build); book edit 2026-10-08-p128p-product-never-imports-tooling (final
 03:20Z; amendment 1, 03:25Z), from architecture's p130s amendments 11 (03:20Z) and 11a (03:25Z), asked by the
 coordinator at 03:12Z after the #555 (P1.28m) verification and relayed at 03:14Z. A tightening; the coordinator clears
-it, no word from Alex. Owner: the third thread, which built P1.28m. P1.28z depends on it.
+it, no word from Alex. Owner: the third thread, which built P1.28m. P1.28z (#561) depends on it.
 
 **Why:** `shared/http/via.ts` can import `./helper.test.ts`, which imports `dependency-cruiser`. The specifier check
 passes the import because its importer is a test file, and depcruise passes the edge because the `shared` MATRIX row
