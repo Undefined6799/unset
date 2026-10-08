@@ -5,20 +5,53 @@
 // a package manager's fails, wherever it sits. images.test.ts holds every kind in KIND_BY_FINAL_ENTRY to a test named
 // `<kind>_image_has_no_package_manager` here. It builds images, so it lives in an *.image.test.ts file (P1.28r).
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
+const REPO = join(DEPLOYMENT, "..");
+const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8"));
+const lock = json("bases.lock.json") as Record<string, { ref: string; tag: string; digest: string }>;
+/** The same lock-entry-to-kind map images.test.ts reads, so every kind it knows is built and checked here. */
+const KIND_BY_FINAL_ENTRY = new Map(Object.entries(json("kinds.json") as Record<string, string>));
+const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
+  .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
+  .sort();
 const built: string[] = [];
+
+/** The image the final stage builds on, following stage aliases back to a base; undefined with no FROM. */
+function finalBase(dockerfile: string): string | undefined {
+  const stages = [...dockerfile.matchAll(/^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?/gim)].map(
+    ([, base = "", alias]) => ({ base, alias: alias?.toLowerCase() }),
+  );
+  let at = stages.length - 1;
+  for (;;) {
+    const stage = stages[at];
+    if (stage === undefined) return undefined;
+    const parent = stages.findLastIndex((earlier, index) => index < at && earlier.alias === stage.base.toLowerCase());
+    if (parent < 0) return stage.base;
+    at = parent;
+  }
+}
+
+/** A Dockerfile's kind, by the lock entry its final stage builds on; undefined when it is on no known kind. */
+function kindOf(dockerfile: string): string | undefined {
+  const base = finalBase(dockerfile);
+  const entry = Object.entries(lock).find(([, b]) => `${b.ref}:${b.tag}@${b.digest}` === base)?.[0];
+  return KIND_BY_FINAL_ENTRY.get(entry ?? "");
+}
+
+/** The images/ Dockerfiles build from the repository root; any other builds from its own folder. */
+const contextOf = (file: string): string => (file.startsWith("images/") ? REPO : join(DEPLOYMENT, dirname(file)));
 
 function docker(args: readonly string[]): { code: number; out: string; err: string } {
   const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
 }
 
-/** Builds a Dockerfile with its context; the image id. */
+/** Builds a Dockerfile with its context; the image id. A failed build fails the test, so no kind passes unbuilt. */
 function build(dockerfile: string, context: string): string {
   const result = docker(["build", "-q", "-f", dockerfile, context]);
   if (result.code !== 0) throw new Error(`${dockerfile} build failed: ${result.err.slice(-2000)}`);
@@ -26,39 +59,114 @@ function build(dockerfile: string, context: string): string {
   return result.out.trim();
 }
 
-/** The `tar -tv` listing of an image's whole filesystem, exported from a container that never starts. */
-function listing(image: string): string[] {
+/** An image's whole filesystem: its `tar -tv` listing, and a file's text by absolute path ("" when absent). */
+type Filesystem = { lines: string[]; text: (path: string) => string };
+
+/** Exports an image's filesystem from a container that never starts, and hands it to `use`. */
+function inspect<T>(image: string, use: (filesystem: Filesystem) => T): T {
   const created = docker(["create", image]);
   if (created.code !== 0) throw new Error(`docker create failed: ${created.err.slice(-2000)}`);
   const container = created.out.trim();
   const dir = mkdtempSync(join(tmpdir(), "image-fs-"));
+  const tar = join(dir, "fs.tar");
   try {
-    const exported = docker(["export", "-o", join(dir, "fs.tar"), container]);
+    const exported = docker(["export", "-o", tar, container]);
     if (exported.code !== 0) throw new Error(`docker export failed: ${exported.err.slice(-2000)}`);
-    const listed = spawnSync("tar", ["-tvf", join(dir, "fs.tar")], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+    const listed = spawnSync("tar", ["-tvf", tar], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
     if (listed.status !== 0) throw new Error(`tar failed: ${listed.stderr.slice(-2000)}`);
-    return listed.stdout.split("\n").filter((line) => line !== "");
+    const text = (path: string): string =>
+      spawnSync("tar", ["-xOf", tar, path.slice(1)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
+    return use({ lines: listed.stdout.split("\n").filter((line) => line !== ""), text });
   } finally {
     docker(["rm", "-f", container]);
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
+/** A listing line's mode and absolute path. */
+const entry = (line: string): { mode: string; path: string } => ({
+  mode: line.slice(0, 10),
+  path: (/ (\S+?)(?: -> \S+)?$/.exec(line)?.[1] ?? "").replace(/^\.?\/?/, "/").replace(/\/$/, ""),
+});
+
 /**
- * Every executable file or link in a listing whose name is a package manager's. A `tar -tv` line starts with the mode
- * (`-rwxr-xr-x`, `lrwxrwxrwx`) and ends with the path, then ` -> target` for a link.
+ * Every file or link in a listing whose name is a package manager's or its library's, wherever it sits; directories
+ * are left out (architecture note under amendment 7: an empty directory runs nothing).
  */
-function packageManagers(lines: readonly string[], name: RegExp): string[] {
-  return lines.flatMap((line) => {
-    const mode = line.slice(0, 10);
-    const path = (/ (\S+?)(?: -> \S+)?$/.exec(line)?.[1] ?? "").replace(/^\.?\/?/, "/");
-    const executable = mode.startsWith("l") || (mode.startsWith("-") && mode.includes("x"));
-    return executable && name.test(path.slice(path.lastIndexOf("/") + 1)) ? [path] : [];
+function packageManagers(lines: readonly string[]): string[] {
+  return lines
+    .map(entry)
+    .filter(({ mode, path }) => !mode.startsWith("d") && PACKAGE_MANAGER.test(path.slice(path.lastIndexOf("/") + 1)))
+    .map(({ path }) => path);
+}
+
+/**
+ * The names a package manager or its library ships under, for every kind (architecture note under amendment 7, after
+ * #535): Alpine's apk and libapk, Debian's apt, libapt and dpkg, and the RPM family.
+ */
+const PACKAGE_MANAGER =
+  /^(?:apk|apk\.static|apk-.+|libapk.*|apt|apt-get|apt-.+|libapt.*|dpkg|dpkg-.+|rpm|yum|dnf|microdnf)$/;
+
+/**
+ * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
+ * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
+ * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
+ */
+const DATABASE_BY_KIND = new Map([
+  [
+    "node",
+    {
+      root: "/var/lib/dpkg",
+      data: /^(?:status|status-old|arch-native|available|cmethopt|diversions|diversions-old|lock|lock-frontend|info\/format|info\/[^/]+\.(?:list|md5sums|conffiles|shlibs|symbols|templates|triggers)|alternatives\/[^/]+|triggers\/[^/]+)$/,
+      index: "status",
+      names: /^Package: /m,
+    },
+  ],
+  [
+    "edge",
+    { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
+  ],
+]);
+
+/** Every way a kind's package database holds more than inert data, or no longer names a package. */
+function databaseProblems(kind: string, filesystem: Filesystem): string[] {
+  const database = DATABASE_BY_KIND.get(kind);
+  if (database === undefined) return [`the ${kind} kind has no package-database list`];
+  const problems = filesystem.lines
+    .map(entry)
+    .filter(({ mode, path }) => !mode.startsWith("d") && path.startsWith(`${database.root}/`))
+    .flatMap(({ mode, path }) => {
+      const relative = path.slice(database.root.length + 1);
+      if (!mode.startsWith("-") || !database.data.test(relative)) return [`${path} is not on the ${kind} list`];
+      return mode.includes("x") ? [`${path} is executable`] : [];
+    });
+  const index = `${database.root}/${database.index}`;
+  return database.names.test(filesystem.text(index)) ? problems : [...problems, `${index} names no package`];
+}
+
+/**
+ * Every problem with one kind: it has no Dockerfile, or a Dockerfile fails `check`, a build failure included. Each
+ * problem is a finding, so no kind passes by being skipped (second architecture note under amendment 7).
+ */
+function kindProblems(kind: string, files: readonly string[], check: (file: string) => string[]): string[] {
+  if (files.length === 0) return [`the ${kind} kind has no Dockerfile`];
+  return files.flatMap((file) => {
+    try {
+      return check(file).map((problem) => `${file}: ${problem}`);
+    } catch (error) {
+      return [`${file}: ${error instanceof Error ? error.message : String(error)}`];
+    }
   });
 }
 
-const DEBIAN = /^(?:apt|apt-get|dpkg|dpkg-.+)$/;
-const ALPINE = /^(?:apk|apk-.+)$/;
+/** Builds one Dockerfile and lists its package managers and package-database problems. */
+function imageProblems(kind: string, file: string): string[] {
+  const image = build(join(DEPLOYMENT, file), contextOf(file));
+  return inspect(image, (filesystem) => [
+    ...packageManagers(filesystem.lines).map((path) => `${path} is a package manager`),
+    ...databaseProblems(kind, filesystem),
+  ]);
+}
 
 describe("image package managers", () => {
   afterAll(() => {
@@ -73,20 +181,88 @@ describe("image package managers", () => {
       "drwxr-xr-x 0/0           0 2026-10-07 00:00 etc/apt/",
       "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 ./opt/x/dpkg",
       "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/bin/node",
+      "-rw-r--r-- 0/0        1000 2026-10-07 00:00 usr/lib/x86_64-linux-gnu/libapt-pkg.so.7.0.0",
+      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 opt/tools/apk.static",
+      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/lib/libapk.so.2.14.0",
+      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/bin/microdnf",
+      "drwxr-xr-x 0/0           0 2026-10-07 00:00 etc/apk/",
     ];
-    expect(packageManagers(lines, DEBIAN)).toEqual(["/usr/bin/apt-get", "/usr/sbin/dpkg-reconfigure", "/opt/x/dpkg"]);
+    expect(packageManagers(lines)).toEqual([
+      "/usr/bin/apt-get",
+      "/usr/share/doc/dpkg-dev",
+      "/usr/sbin/dpkg-reconfigure",
+      "/opt/x/dpkg",
+      "/usr/lib/x86_64-linux-gnu/libapt-pkg.so.7.0.0",
+      "/opt/tools/apk.static",
+      "/usr/lib/libapk.so.2.14.0",
+      "/usr/bin/microdnf",
+    ]);
   });
 
-  test("node_image_has_no_package_manager", () => {
-    // The web and migrate images both build on the node kind's runtime entry.
-    for (const dockerfile of ["images/node-app.Dockerfile", "images/migrate.Dockerfile"]) {
-      const image = build(join(DEPLOYMENT, dockerfile), join(DEPLOYMENT, ".."));
-      expect(packageManagers(listing(image), DEBIAN), dockerfile).toEqual([]);
-    }
-  }, 1_200_000);
+  test("package_database_reader", () => {
+    const line = (mode: string, path: string): string => `${mode} 0/0 10 2026-10-07 00:00 ${path}`;
+    const dpkg = [
+      line("drwxr-xr-x", "var/lib/dpkg/"),
+      line("-rw-r--r--", "var/lib/dpkg/status"),
+      line("-rw-r--r--", "var/lib/dpkg/info/tar.list"),
+      line("-rwxr-xr-x", "var/lib/dpkg/info/tar.postinst"),
+      line("-rwxr-xr-x", "var/lib/dpkg/info/tar.md5sums"),
+      line("lrwxrwxrwx", "var/lib/dpkg/alternatives/x -> /tmp/x"),
+      line("-rw-r--r--", "var/lib/dpkg/info/tzdata.config"),
+    ];
+    const status = (text: string): Filesystem => ({ lines: dpkg, text: () => text });
+    expect(databaseProblems("node", status("Package: tar\n"))).toEqual([
+      "/var/lib/dpkg/info/tar.postinst is not on the node list",
+      "/var/lib/dpkg/info/tar.md5sums is executable",
+      "/var/lib/dpkg/alternatives/x is not on the node list",
+      "/var/lib/dpkg/info/tzdata.config is not on the node list",
+    ]);
+    expect(databaseProblems("node", { lines: dpkg.slice(0, 3), text: () => "" })).toEqual([
+      "/var/lib/dpkg/status names no package",
+    ]);
+    const apk = [line("-rw-r--r--", "lib/apk/db/installed"), line("-rw-r--r--", "lib/apk/db/scripts.tar.gz")];
+    expect(databaseProblems("edge", { lines: apk, text: () => "C:x\nP:musl\n" })).toEqual([]);
+    expect(databaseProblems("edge", { lines: [...apk, line("-rw-r--r--", "lib/apk/db/x")], text: () => "" })).toEqual([
+      "/lib/apk/db/x is not on the edge list",
+      "/lib/apk/db/installed names no package",
+    ]);
+    const executable = [...apk, line("-rwxr-xr-x", "lib/apk/db/triggers")];
+    expect(databaseProblems("edge", { lines: executable, text: () => "P:musl\n" })).toEqual([
+      "/lib/apk/db/triggers is executable",
+    ]);
+    expect(databaseProblems("postgres", { lines: [], text: () => "" })).toEqual([
+      "the postgres kind has no package-database list",
+    ]);
+  });
 
-  test("edge_image_has_no_package_manager", () => {
-    const image = build(join(DEPLOYMENT, "edge/Dockerfile"), join(DEPLOYMENT, "edge"));
-    expect(packageManagers(listing(image), ALPINE)).toEqual([]);
-  }, 600_000);
+  test("kind_problems_reader", () => {
+    expect(kindProblems("postgres", [], () => [])).toEqual(["the postgres kind has no Dockerfile"]);
+    expect(
+      kindProblems("node", ["a", "b"], (file) => (file === "b" ? ["/usr/bin/apt is a package manager"] : [])),
+    ).toEqual(["b: /usr/bin/apt is a package manager"]);
+    // A Dockerfile that fails to build is a finding, not a skip.
+    const dir = mkdtempSync(join(tmpdir(), "image-broken-"));
+    try {
+      writeFileSync(join(dir, "Dockerfile"), "FROM scratch\nRUN false\n");
+      const problems = kindProblems("node", [join(dir, "Dockerfile")], (file) => [build(file, dir)]);
+      expect(problems).toEqual([expect.stringContaining("build failed")]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("every_dockerfile_builds_a_known_kind", () => {
+    expect(dockerfiles.filter((file) => kindOf(readFileSync(join(DEPLOYMENT, file), "utf8")) === undefined)).toEqual(
+      [],
+    );
+  });
+
+  // Architecture notes under amendment 7: the kind map itself is iterated, a kind with no Dockerfile fails, and a
+  // failed build fails, so no kind passes by being skipped.
+  for (const kind of new Set(KIND_BY_FINAL_ENTRY.values())) {
+    test(`${kind}_image_has_no_package_manager`, () => {
+      const files = dockerfiles.filter((file) => kindOf(readFileSync(join(DEPLOYMENT, file), "utf8")) === kind);
+      expect(kindProblems(kind, files, (file) => imageProblems(kind, file))).toEqual([]);
+    }, 1_200_000);
+  }
 });
