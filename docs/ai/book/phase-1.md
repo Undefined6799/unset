@@ -7530,6 +7530,7 @@ all-good fixture still exits 0.
 
 ### P1.28e — Share one edge config reader and the site rules
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
+As built: merged by Alex at 2026-10-08T00:05:28Z as `59bee6a` (#533).
 Slice 1, issue #524, trusted (`deployment/edge/caddyfile.ts`, with the matching tests `edge.test.ts`,
 `caddyfile.test.ts` and `caddyfile.image.test.ts`); book edit 2026-10-07-p128e-edge-config-reader (final 23:25Z), from
 architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, with its amendment 1 (23:55Z)
