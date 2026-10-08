@@ -16,15 +16,16 @@ async function expectRefused(...edges: Edge[]): Promise<void> {
   }
 }
 
-test("root_absolute_and_unresolved_imports_fail", async () => {
-  // Architecture amendment 8, second note (2026-10-08 01:10Z): depcruise leaves "/deployment/preflight/…" unresolved
-  // with its slash, so no path rule matches it, while Vitest resolves it from the repo root.
+test("unresolved_imports_fail", async () => {
+  // Architecture amendment 8, second note (2026-10-08 01:10Z): an import depcruise cannot resolve escapes every path
+  // rule, so our relative and @unset/* specifiers must resolve, from tests and from deployment/ too. Spelling (a
+  // root-absolute path, a scheme) is the raw-specifier check's (specifiers.test.ts).
   await expectRefused(
-    unresolved("deployment/edge/caddyfile.test.ts", "/deployment/preflight/compose-parse.ts"),
-    unresolved("deployment/edge/caddyfile.test.ts", "file:///deployment/preflight/compose-parse.ts"),
+    unresolved("deployment/edge/caddyfile.test.ts", "../preflight/missing.ts"),
     unresolved("apps/web/src/a.ts", "./missing.ts"),
     unresolved("domains/identity/a.ts", "../content/missing.ts"),
     unresolved("interfaces/http/a.ts", "@unset/x"),
+    unresolved("interfaces/http/a.test.ts", "@unset/x/y"),
   );
 });
 
