@@ -88,6 +88,8 @@ test("tooling_set_members", () => {
     "apps/web/vite.config.ts",
     "shared/http/myfixtures/a.ts",
     "shared/http/vector.json",
+    // Text after the image-test name: the member's end anchor keeps it out (P1.28z).
+    "deployment/images/x.image.test.d/b.ts",
     "x/vitest.config.ts",
   ]) {
     expect(tooling.test(path), path).toBe(false);
