@@ -7657,6 +7657,7 @@ is under "What I am unsure about".
 
 ### P1.28l — Close the edge reader's echo and alias gaps
 Tags: [SEC], trusted            Depends on: P1.28f (merged, #541)
+As built: merged by Alex at 2026-10-08T03:12:07Z as `11b6801` (#552).
 Slice 1, issue #551, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
 2026-10-08-p128l-edge-reader-echo-and-aliases (final 01:55Z; the `{$ACME_EMAIL}` position corrected at 02:00Z), from the
 coordinator's check of #541, relayed at 01:42Z, and architecture's amendment 9 (01:50Z) in
@@ -7786,8 +7787,9 @@ it, together with amendment 8 item 2's general rule.
 
 ---
 
-### P1.28m — Allow root-only dependencies in test files only
+### P1.28m — Allow root-only dependencies in tests only
 Tags: [SEC]            Depends on: P1.28k (merged, #549)
+As built: merged by Alex at 2026-10-08T03:12:28Z as `e1edc1e` (#555).
 Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
 2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
 amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
@@ -8559,6 +8561,7 @@ passes, and the body lists every allowlist entry with its citation.
 
 ### P1.29g — Harden the package manager image reader
 Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f (merged, #548)
+As built: merged by Alex at 2026-10-08T03:12:19Z as `718fb69` (#554), with items 5 and 6.
 Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final 01:45Z),
 from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the verification
 finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green and nothing is
@@ -8610,7 +8613,7 @@ P1.29g and before P1.29p; the PR says so under "What I am unsure about".
 ---
 
 ### P1.29p — Pin file capabilities and setuid in every image
-Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g (merged, #554)
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
