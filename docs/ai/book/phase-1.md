@@ -7607,6 +7607,7 @@ outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` w
 
 ### P1.28f — Close the edge reader's containment gaps
 Tags: [SEC], trusted            Depends on: P1.28e (merged, #533)
+As built: merged by Alex at 2026-10-08T01:22:05Z as `b2188a9` (#541).
 Slice 1, issue #536, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
 2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
 2026-10-07-p130s-networks-and-caddyfile-reader, relayed by the coordinator at 00:22Z. A tightening; the coordinator
