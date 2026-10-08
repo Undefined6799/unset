@@ -3,6 +3,10 @@
     "strategy": "delete_row",
     "reason": "a single-use token bound to the person; it has no use once they are erased"
   },
+  "app.session.did": {
+    "strategy": "delete_row",
+    "reason": "a signed-in browser session of the person; it ends when they are erased"
+  },
   "audit.event_body.subject": {
     "strategy": "audit_redact",
     "class": "mod",
