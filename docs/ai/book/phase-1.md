@@ -7862,19 +7862,34 @@ PR carries no product or trusted path; the step book then books the move as its 
 
 ---
 
-### P1.28z — Pin the tooling set's image-test anchor
+### P1.28z — Pin tooling anchor, bound the depcruise test
 Tags: [SEC]            Depends on: P1.28p (merged, #558)
-Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor
-(final 05:00Z), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator
-clears it, no word from Alex. Owner: the third thread, after P1.28p (#556, PR #558) merges. Nothing depends on it. It
-cannot ride P1.29j (#560), which is product class and owned by Phase 1. If another third-thread step that touches
-scripts/lint opens first, it may carry this instead; that PR says so, and this step closes as carried.
+Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor (final
+05:00Z; amendment 1, 11:50Z, from the coordinator's relay at 11:46Z of the "does the app work" thread's run on main
+95a3fab), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator clears
+it, no word from Alex. Owner: the third thread, after P1.28p (#556, PR #558) merges. Nothing depends on it. It cannot
+ride P1.29j (#560), which is product class and owned by Phase 1. If another third-thread step that touches scripts/lint
+opens first, it may carry this instead; that PR says so, and this step closes as carried.
 
 **What:** nothing pins the `$` on the tooling set's image member `\.image\.test\.[^/]*$` (`tooling.ts:48-49` on #558's
 head), so dropping it would make a path like `x.image.test.d/b.ts` count as tooling. Add one non-member assertion for a
 path with text after the image-test name, such as `deployment/images/x.image.test.d/b.ts`, so that the mutant fails.
 
-Done when `npm run check` is green and the anchor-removal mutant fails a test.
+**Bound `depcruise_cruised_nonzero`** (amendment 1). It (`scripts/lint/depcruise.test.ts:114-133`) timed out at 5205 ms
+against the 5000 ms default while a docker build competed for CPU; run alone it takes about 3.0 s (3030, 2938 and 3011
+ms), because its second half (:127-132) spawns depcruise synchronously over the whole repo. The P1.28p verifier saw it
+go red under parallel load too. A timeout bump, retry or skip is not a fix.
+- The fixture half (:115-125) stays as it is.
+- The whole-repo half is replaced by the real config cruising a fixed list of real files, one per top-level area (apps/,
+  shared/, infrastructure/, interfaces/, deployment/, scripts/), and the test asserts that every listed file appears in
+  `modules`. That is stronger than today's `totalCruised >= 1`, because it fails if an `exclude` or path rule silently
+  drops any area, and it does not grow with the repo.
+- The list lives in the test, and a listed file that no longer exists fails the test by name.
+- The full-tree cruise still runs in `npm run lint` on every check. If the builder finds a property only the whole-repo
+  run in this test proved, the PR stops and lists it under "What I am unsure about", and architecture rules.
+
+Done when `npm run check` is green, the anchor-removal mutant fails a test, and `depcruise_cruised_nonzero` passes well
+inside the default timeout; the PR body gives three isolated timings, each at most about 1 s.
 
 ---
 
