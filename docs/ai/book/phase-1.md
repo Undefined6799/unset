@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29f, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -214,6 +214,7 @@ flowchart LR
   P1_28y["P1.28y edge kind forbids apk"]
   P1_29n["P1.29n node runtime without package manager"]
   P1_29p["P1.29p capabilities and setuid pinned"]
+  P1_29f["P1.29f final-stage allowlists"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
@@ -310,6 +311,10 @@ flowchart LR
   P1_29p --> P1_29d
   P1_29n --> P1_29
   P1_29p --> P1_29
+  P1_29e --> P1_29f
+  P1_29n --> P1_29f
+  P1_29f --> P1_29d
+  P1_29f --> P1_29
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
@@ -7852,7 +7857,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n,
-   P1.29r, P1.29e, P1.29n and P1.29p; Phase 1):
+   P1.29r, P1.29e, P1.29n, P1.29p and P1.29f; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -7877,9 +7882,11 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    setuid binaries (for example su, passwd, mount), and since the image runs as 999:999 with gosu gone, P1.29d removes
    their setuid bits or the files in its final RUN. If `chmod u-s` is needed, it is added to FINAL_STAGE_COMMANDS,
    citing the line; anything it keeps goes under "What I am unsure about", with the reason. Test:
-   `image_privileges_match_list` covers postgres.
+   `image_privileges_match_list` covers postgres. From book edit 2026-10-08-p129f-final-stage-allowlists (00:55Z): it
+   adds the postgres entries to P1.29f's destination-prefix and ENV-key allowlists, each cited.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
-   P1.11p, P1.28, P1.30t, P1.30n, P1.29n and P1.29p, so no image is composed before every image is scanned):
+   P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p and P1.29f, so no image is composed before every image is
+   scanned):
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and
    edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
@@ -7933,7 +7940,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
@@ -8272,6 +8279,38 @@ files are removed in the final RUN, or the body lists each one that must stay, w
 fails the test, so a new image cannot arrive unlisted.
 
 Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
+
+---
+
+### P1.29f — Turn final-stage rules into per-kind allowlists
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n
+Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z),
+from architecture's amendment 7 (00:45Z) in 2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e
+(#532), relayed by the coordinator at 00:27Z. A tightening; the coordinator clears it, no word from Alex. Owner:
+Phase 1, the next slot after P1.29n. It is not tied to P1.29p: privileges are a separate concern, so either can land first. It
+goes before P1.29d and P1.29, which both gain it as a dependency; P1.29d adds the postgres entries to every list below.
+
+**What:**
+1. **Here-docs.** Any `<<` in any instruction of any stage, outside comments, fails, whatever follows it. That covers
+   `<<WORD`, `<<\WORD`, `<<1`, `<<"1x"` and `<<-`. Fixture: the verifier's fake-final-stage Dockerfile.
+2. **Destination shape.** In a final stage and in the stages it builds on, COPY and ADD destinations, in shell or JSON
+   form, must be absolute and match `^/[A-Za-z0-9._/-]+$` after JSON decoding; WORKDIR must match the same pattern;
+   relative destinations fail. Fixtures: each of the verifier's five forms, plus `WORKDIR /usr/bin` followed by
+   `COPY x .`.
+3. **Exact per-kind allowlists in final stages.** Every entry is cited in the PR body with its file and line.
+   - **COPY and ADD destination prefixes.** Anything not listed fails. node: `/app/` and what main ships; edge:
+     `/usr/bin/caddy`, `/etc/caddy/` and what main ships; postgres: set by P1.29d. This replaces amendment 6's
+     PATH-directory and package-manager-config denylists, which stay in the record as the reason those paths are absent.
+     Red fixture: `COPY x /var/lib/dpkg/info/x.prerm`.
+   - **ENV keys.** Each kind has an exact list of keys, for example `NODE_ENV`. `PATH` is allowed only at its exact
+     per-kind value, the value main ships. `LD_*`, `NODE_OPTIONS`, `BASH_ENV` and `ENV` fail unless listed with a
+     reason.
+   - **No ARG in a final stage.**
+4. **The pin for P1.29e (c).** `RUN apk del ap\k-tools && rm -f /apk\x` is red under the count-based mutant and green
+   otherwise. The PR body lists it next to the mutation.
+
+Done when `npm run check` is green, every red fixture fails for its stated rule, every real Dockerfile on main still
+passes, and the body lists every allowlist entry with its citation.
 
 ---
 
