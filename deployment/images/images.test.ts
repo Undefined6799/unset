@@ -456,9 +456,10 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
 ]);
 
 /**
- * The only rm each kind's shipped stages run that names a package manager, word for word as written (fourth
+ * The only rm each kind's final stage runs that names a package manager, word for word as written (fourth
  * architecture note under amendment 7): the node kind drops dpkg's maintainer scripts once dpkg is gone
- * (node-app.Dockerfile:48-49, migrate.Dockerfile:34-35). Any other rm naming one still meets the floor.
+ * (node-app.Dockerfile:48-49, migrate.Dockerfile:34-35). Any other rm naming one, and this one in a stage the final
+ * stage is built FROM (P1.29g), still meets the floor.
  */
 const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", []],
@@ -476,7 +477,8 @@ const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
     ],
   ],
 ]);
-const listedRm = (command: Token[], kind: Kind | undefined): boolean =>
+const listedRm = (command: Token[], kind: Kind | undefined, final: boolean): boolean =>
+  final &&
   command[0]?.raw === "rm" &&
   (RM_BY_KIND.get(kind as Kind) ?? []).some((allowed) =>
     isDeepStrictEqual(
@@ -512,8 +514,8 @@ const managerNames = (text: string): number => text.match(PACKAGE_MANAGER_WORD)?
  * word and its package names when the command is a removal that passes, and none in a kind's listed rm. A word counts
  * as written and without quotes.
  */
-function unexemptManagerNames(command: Token[], kind: Kind | undefined): number {
-  if (listedRm(command, kind)) return 0;
+function unexemptManagerNames(command: Token[], kind: Kind | undefined, final: boolean): number {
+  if (listedRm(command, kind, final)) return 0;
   const [name = "", ...args] = command.map((token) => token.word);
   const flags = REMOVAL_FLAGS.get(name) ?? [];
   const removal = REMOVAL_VERBS.has(name) && commandProblem(command, kind) === undefined;
@@ -566,7 +568,7 @@ function unreadableRun(rest: string): string | undefined {
 }
 
 /** Why one shipped instruction may install OS packages; SHELL is refused because it changes what every RUN runs. */
-function shippedInstructionProblems(instruction: string, kind: Kind | undefined): string[] {
+function shippedInstructionProblems(instruction: string, kind: Kind | undefined, final: boolean): string[] {
   const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
   const keyword = word.toUpperCase();
   if (keyword === "ONBUILD") return ["ONBUILD is not allowed"];
@@ -585,7 +587,8 @@ function shippedInstructionProblems(instruction: string, kind: Kind | undefined)
     if (problem !== undefined) problems.push(problem);
   }
   // Layer 1 reads the flags too (amendment 6, step A b); nothing in them is exempt.
-  const named = managerNames(flags.join(" ")) + commands.reduce((sum, c) => sum + unexemptManagerNames(c, kind), 0);
+  const named =
+    managerNames(flags.join(" ")) + commands.reduce((sum, c) => sum + unexemptManagerNames(c, kind, final), 0);
   return named > 0 ? [...problems, FLOOR] : problems;
 }
 
@@ -707,8 +710,10 @@ function apkKeptProblems(dockerfile: string): string[] {
 function osPackageProblems(dockerfile: string): string[] {
   try {
     const kind = kindOf(dockerfile, lock);
-    return shippedInstructions(instructions(dockerfile)).flatMap(({ line, text }) =>
-      shippedInstructionProblems(text, kind).map((problem) => `line ${line}: ${problem}`),
+    const all = instructions(dockerfile);
+    const finalFrom = all.findLast(({ text }) => FROM.test(text))?.line ?? 0;
+    return shippedInstructions(all).flatMap(({ line, text }) =>
+      shippedInstructionProblems(text, kind, line > finalFrom).map((problem) => `line ${line}: ${problem}`),
     );
   } catch (error) {
     if (!(error instanceof Unparsed)) throw error;
@@ -1108,6 +1113,10 @@ describe("base images", () => {
     ] as const) {
       expect(osPackageProblems(`${base}${run}`), run).toEqual([`line ${base.split("\n").length}: ${floor}`]);
     }
+    // P1.29g: the listed rm passes in the final stage only, not in a stage the final stage is built FROM.
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN rm -f ${scripts}\nFROM base`)).toEqual([
+      `line 2: ${floor}`,
+    ]);
   });
 
   test("no_dockerfile_uses_onbuild", () => {
