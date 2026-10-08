@@ -442,6 +442,35 @@ describe("edge reader containment (P1.28f)", () => {
     expect(load(tree, lying(tree.edgeDir, `${realpathSync(tree.edgeDir)}/./x`))).toThrow("not absolute and normal");
   });
 
+  test("edge_reader_bounds_caddyfile_sites_dir_and_link_targets", () => {
+    // Mutation pins (verification of #541): the Caddyfile's own bound, the sitesDir path boundary, and a link target
+    // that must be a .caddy file.
+    const tree = edgeTree();
+    const outside = outsideDir();
+    cpSync(join(EDGE, "Caddyfile"), join(outside, "Caddyfile"));
+    const files: EdgeFiles = {
+      ...FILES,
+      realpath: (path) =>
+        path === `${realpathSync(tree.edgeDir)}/Caddyfile`
+          ? realpathSync(join(outside, "Caddyfile"))
+          : FILES.realpath(path),
+    };
+    expect(load(tree, files)).toThrow("Caddyfile: the file is not inside the edge directory");
+    const sibling = join(tree.edgeDir, "sites-evil");
+    mkdirSync(sibling);
+    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(sibling, "pds.caddy"));
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: sibling })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: join(tree.edgeDir, "sites") })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+    const notes = edgeTree();
+    writeFileSync(join(notes.edgeDir, "sites", "notes.txt"), "other.unset.test {\n\trespond 200\n}\n");
+    symlinkSync(join(notes.edgeDir, "sites", "notes.txt"), join(notes.sitesDir, "x.caddy"));
+    expect(load(notes)).toThrow("x.caddy: the link target is not a regular file");
+  });
+
   test("edge_reader_legitimate_link_reads", () => {
     expect(load(edgeTree())().sites.map((site) => site.addresses)).toEqual([["http://127.0.0.1:8081"], [ENV.PDS_HOST]]);
   });
@@ -493,6 +522,42 @@ describe("edge site rules (P1.28f)", () => {
     expect(withSites({ "sites/other.caddy": second.replace("{$PDS_UPSTREAM}", "other:80") })).toEqual([]);
   });
 
+  test("edge_upstream_in_one_canonical_form", () => {
+    // Fail closed (amendment 8, point 4; coordinator verification of #541, F2): after an optional matcher, a
+    // reverse_proxy names exactly one upstream, in one canonical form, so a second spelling cannot pass as another.
+    const proxy = (args: string) =>
+      `other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n\t\t}\n\t}\n}\n`;
+    const other = (args: string) => withSites({ "sites/other.caddy": proxy(args) });
+    const noncanonical = "other.unset.test: a reverse_proxy does not name one upstream in canonical form";
+    const shared = "pds.unset.test: upstream proxied by more than one site";
+    expect(other("other:80")).toEqual([]);
+    expect(other("{$PDS_UPSTREAM}")).toEqual([shared]);
+    // Several upstreams fail, whichever comes first.
+    expect(other("{$PDS_UPSTREAM} other:80")).toEqual([noncanonical]);
+    expect(other("other:80 {$PDS_UPSTREAM}")).toEqual([noncanonical]);
+    // A matcher before the upstream is allowed, and the upstream is still compared.
+    expect(other("* {$PDS_UPSTREAM}")).toEqual([shared]);
+    expect(other("/xrpc/* {$PDS_UPSTREAM}")).toEqual([shared]);
+    expect(other("* other:80 {$PDS_UPSTREAM}")).toEqual([noncanonical]);
+    // Every other spelling of the shared upstream fails.
+    for (const variant of [
+      "http://upstream:3000",
+      "upstream:3000/",
+      "UPSTREAM:3000",
+      "Upstream:3000",
+      "upstream.:3000",
+      "upstream:03000",
+      "upstream",
+      "upstream:",
+      "[::1]:3000",
+      "[0:0::1]:3000",
+      "a..b:3000",
+      "upstream:99999",
+    ]) {
+      expect(other(variant), variant).toEqual([noncanonical]);
+    }
+  });
+
   test("edge_messages_never_carry_env_values", () => {
     // Amendment 8, point 5: a message names a site address and nothing else from env.
     const env = { ...ENV, ACME_EMAIL: "acme-sentinel@unset.test", PDS_UPSTREAM: "upstream-sentinel:3000" };
@@ -511,6 +576,7 @@ describe("edge site rules (P1.28f)", () => {
       site.replace("\troute {\n", "\troute /x {\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n\troute {\n"),
       site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n"),
       site.replace("\timport tls\n", "\t{$ACME_EMAIL} on\n"),
+      site.replace("\timport tls\n", "\t{$PDS_UPSTREAM} on\n"),
       site.replace("\timport tls\n", "\tbind {$PDS_UPSTREAM}\n"),
       site.replace("\timport tls\n", "\timport {$ACME_EMAIL}\n"),
       site.replace("\timport tls\n", "\tlog_append x {$ACME_EMAIL}{args[0]}\n"),
@@ -531,6 +597,20 @@ describe("edge site rules (P1.28f)", () => {
         env,
       ),
     );
+    // A snippet no site imports is read later, by snippet(); its errors are redacted too (verification of #541, F1).
+    const unimported = site.replace("\t\timport pds-ratelimit\n", "");
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      const limitsWith = limits.replace("\trate_limit {\n", `\t{$${name}} on\n\trate_limit {\n`);
+      caught(() => withSites({}, env, { "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith }));
+    }
+    // Each UNECHOED name is pinned: its value comes back as its placeholder, in a read and in snippet().
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      expect(messages).toContainEqual(expect.stringContaining(`directive {$${name}} is not allowed in site`));
+      const snippet = new RegExp(
+        `^the zones snippet is unreadable: line \\d+: directive \\{\\$${name}\\} is not allowed`,
+      );
+      expect(messages).toContainEqual(expect.stringMatching(snippet));
+    }
     expect(messages.length).toBeGreaterThan(10);
     for (const message of messages) {
       expect(message).not.toContain(env.ACME_EMAIL);
