@@ -7717,11 +7717,12 @@ Done when `npm run check` is green, and the red fixture fails on the new rule.
 Tags: [SEC]            Depends on: P1.28g (merged, #540)
 Slice 1, issue #544, check (`scripts/lint/.dependency-cruiser.cjs`, its fixtures and its tests); book edit
 2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z; amendment 1, final 02:05Z, from architecture's
-p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z), from architecture's second note under amendment 8
-(01:10Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and
-relayed at 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its
-only dependency, and nothing waits for it; P1.30u does not. Amendment 1 rides PR #549; the narrow couldNotResolve fix is
-declined.
+p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z; amendment 2, final 02:15Z, three tightenings from the
+third thread's recon on b2188a9, relayed at 01:50Z), from architecture's second note under amendment 8 (01:10Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and relayed at
+00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its only
+dependency, and nothing waits for it; P1.30u does not. Amendments 1 and 2 ride PR #549; the narrow couldNotResolve fix
+is declined.
 
 **Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
 with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
@@ -7743,21 +7744,35 @@ root.
 match is case-sensitive; and `/proc/self/cwd/...` resolves, so the import is not refused.
 
 1. **The raw-specifier allowlist.** A scripts/lint check reads each dependency's raw `module` from the cruise JSON. It
-   allows only `./` and `../`; `@unset/<workspace>` and its subpaths; `node:` built-ins; and bare names declared in
-   `dependencies` or `devDependencies` of the importing file's own workspace package.json (the root package.json for
-   root-level files). If main has violations, the PR lists them and fixes each by declaring the dependency where it is
-   used; only if that is impractical does it fall back to "declared by some workspace", with the list under "What I am
-   unsure about". Refused: the root package's own name; `#` imports; any URL scheme, case-insensitively; a leading `/`
-   or `\`, or any backslash; tsconfig `paths` aliases. RENDER_BUILD_IMPORT stays the single exemption, from its one
-   config value.
+   allows only `./` and `../`; `@unset/<workspace>` and its subpaths; `node:` built-ins (as amendment 2, item 1 defines
+   them); and bare names declared in `dependencies` or `devDependencies` of the importing file's own workspace
+   package.json (the root package.json for root-level files). If main has violations, the PR lists them and fixes each
+   by declaring the dependency where it is used; otherwise amendment 2, item 2 applies. Refused: the root package's own
+   name; `#` imports; any URL scheme, case-insensitively; a leading `/` or `\`, or any backslash; tsconfig `paths`
+   aliases. RENDER_BUILD_IMPORT stays the single exemption, from its one config value.
 2. **The package.json route, pinned under the check-job pinning test (scripts/ci).** The root package.json has no
    `exports`, `imports`, `main`, `module` or `browser` field. Every workspace's `exports` and `imports` targets realpath
    inside that workspace's directory. A current target outside the directory goes under unsure.
 
+**Amendment 2** (02:15Z), three tightenings:
+
+1. **Built-ins.** Depcruise 18.5.0 moves the `node:` prefix out of `module` into a separate `protocol` field
+   (`src/extract/helpers.mjs:76-100`), so the allowance is `protocol` equal to `node:` with `coreModule` true. A bare
+   built-in such as `fs` is refused. Main has none: all 464 core imports use `node:`.
+2. **Bare-name fallback.** A bare name must be declared in the importing file's own workspace package.json or the root
+   package.json. Main's six exceptions are test files importing root devDependencies, and fixing them would need
+   workspace package.json edits a check PR cannot make, so the PR lists them under "What I am unsure about":
+   `fast-check` from infrastructure/net-guard, shared/http and shared/ui; `vite` from interfaces/http and
+   shared/ui-build; `dependency-cruiser` from interfaces/http/main.test.ts.
+3. **Excluded folders.** Depcruise's `exclude` also drops any dependency that resolves into `dist/`, `coverage/`,
+   `.worktrees/` or `graphify-out/`, so a tracked deployment/preflight/dist/b.ts imported from an edge test shows no
+   dependency at all. The pinning test (scripts/ci) also requires that no tracked file sits under a folder with one of
+   those names, anywhere in the repo. Main has none; the two fixture folders stay the only tracked excluded paths.
+
 Fixtures: red, a root-absolute import from an edge test into preflight; red, an unresolved relative import; red, an
 unresolved `@unset/x`; green, the render-build edge. Amendment 1 adds: red, one per refused form, including `FILE:///`
 and `/proc/self/cwd/...`; red, a root `exports` field; red, a workspace export target outside its directory; green, one
-per allowed form.
+per allowed form. Amendment 2 adds: red, a tracked file under an excluded folder.
 
 Done when `npm run check` is green, and each red fixture fails on the new rule.
 
