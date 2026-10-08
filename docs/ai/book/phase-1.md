@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29m, P1.29f, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -199,6 +199,9 @@ flowchart LR
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
   P1_28e["P1.28e one edge config reader"]
+  P1_28f["P1.28f edge reader containment"]
+  P1_28g["P1.28g edge never imports preflight"]
+  P1_28k["P1.28k no root-absolute or unresolved imports"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -212,6 +215,8 @@ flowchart LR
   P1_28y["P1.28y edge kind forbids apk"]
   P1_29n["P1.29n node runtime without package manager"]
   P1_29p["P1.29p capabilities and setuid pinned"]
+  P1_29m["P1.29m kind-wide package manager test"]
+  P1_29f["P1.29f final-stage allowlists"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
@@ -308,6 +313,14 @@ flowchart LR
   P1_29p --> P1_29d
   P1_29n --> P1_29
   P1_29p --> P1_29
+  P1_29e --> P1_29f
+  P1_29n --> P1_29f
+  P1_29f --> P1_29d
+  P1_29f --> P1_29
+  P1_29n --> P1_29m
+  P1_29m --> P1_29f
+  P1_29m --> P1_29d
+  P1_29m --> P1_29
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
@@ -353,6 +366,11 @@ flowchart LR
   P1_28h --> P1_30u
   P1_28h --> P1_28e
   P1_28e --> P1_30u
+  P1_28e --> P1_28f
+  P1_28e --> P1_28g
+  P1_28f --> P1_30u
+  P1_28g --> P1_30u
+  P1_28g --> P1_28k
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7530,7 +7548,8 @@ all-good fixture still exits 0.
 
 ### P1.28e — Share one edge config reader and the site rules
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
-As built: merged by Alex at 2026-10-08T00:05:28Z as `59bee6a` (#533).
+As built: merged by Alex at 2026-10-08T00:05:28Z as `59bee6a` (#533). Containment, mutation pins and one-site-per-upstream
+follow in P1.28f (book edit 2026-10-08-p128f-p128g-edge-reader-follow-ups, 00:40Z).
 Slice 1, issue #524, trusted (`deployment/edge/caddyfile.ts`, with the matching tests `edge.test.ts`,
 `caddyfile.test.ts` and `caddyfile.image.test.ts`); book edit 2026-10-07-p128e-edge-config-reader (final 23:25Z), from
 architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, with its amendment 1 (23:55Z)
@@ -7548,8 +7567,8 @@ stays as it is; P1.28y also touches the edge, and whichever lands second merges 
    `{$ACME_EMAIL}` come from `env`, with the reader's existing shape checks. Entries of `sitesDir` must be `*.caddy`
    regular files or symlinks. **Containment stays inside readEdgeConfig:** it calls `realpath` on the sites root and on
    each entry; each resolved entry must equal `root + sep + …`, a prefix check on a path boundary, so `sites-evil/`
-   fails; and the resolved target's `kind` must be a regular `*.caddy` file. A subdirectory, another extension, a
-   dangling link and a link that leaves `deployment/edge/sites/` all fail.
+   fails; and the resolved target's `kind` must be a regular file. A subdirectory, another extension, a dangling link
+   and a link that leaves `deployment/edge/sites/` all fail.
 2. **Thin adapters:** each side keeps one `node:fs` adapter for `EdgeFiles`, every member one direct `node:fs` call with
    no filtering and no path logic. The edge tests keep their own adapter (trusted), and C18 keeps its own (preflight). A
    trusted test importing a product adapter is refused.
@@ -7558,9 +7577,10 @@ stays as it is; P1.28y also touches the edge, and whichever lands second merges 
    the parameter in its own PR. **Trigger:** the rule applies to every site whose parsed tree has any `reverse_proxy`.
    **Route:** such a site has exactly one plain route, whose first handler is the `pds-ratelimit` snippet's
    `rate_limit`, and every `reverse_proxy` of the site is inside it. **Rate limits:** no other `rate_limit` anywhere in
-   the site. **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (ADR
-   0018). **A site with no upstream** is exempt because it has no `reverse_proxy`, not because of its name or address;
-   it must bind loopback only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
+   the site. **Upstreams:** at most one site may `reverse_proxy` to a given upstream (amendment 8 point 4; P1.28f).
+   **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (ADR 0018).
+   **A site with no upstream** is exempt because it has no `reverse_proxy`, not because of its name or address; it must
+   bind loopback only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
 4. **Switch the tests:** `edge.test.ts` and `caddyfile.image.test.ts` (shippedConfig) switch to both functions, and both
    hand expansions are deleted. The image test still proves byte for byte that the image carries the repo's Caddyfile
    and snippets.
@@ -7581,6 +7601,103 @@ outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` w
 
 ---
 
+### P1.28f — Close the edge reader's containment gaps
+Tags: [SEC], trusted            Depends on: P1.28e (merged, #533)
+Slice 1, issue #536, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
+2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader, relayed by the coordinator at 00:22Z. A tightening; the coordinator
+clears it, no word from Alex. Owner: Phase 2. It lands before P1.30u (#448), which gains it as a dependency, and does
+not wait on P1.28g. C18 builds on its reader.
+
+**What:**
+1. **Containment** (amendment 8 point 1). Realpath every path: `edgeDir`, `sites/`, `sitesDir`, and every entry, regular
+   files included. Each entry's real path must start with `realpath(edgeDir)/sites/` on a path boundary. `sitesDir`'s
+   real path must lie inside `realpath(edgeDir)/sites/`, and the reader enforces this itself. The reader checks the
+   adapter's answers: every `realpath` result must be absolute, equal to `path.normalize` of itself, and free of `..`
+   segments, or the read fails. A regular entry with nlink > 1 fails, using the link count that `kind` reports. **Out of
+   scope, stated in the body:** hard links beyond the nlink guard, and a swap between `kind` and `read`; it is a
+   build-time reader over the checkout.
+2. **Mutation pins** (point 3). Each pin is red under exactly its own mutation, and the PR body lists each mutation
+   beside its pin: an inline `rate_limit`-first fixture that does not come via the pds-ratelimit snippet fails (the via
+   check); a byte-order fixture, `B.caddy` before `a.caddy`, with a rule that depends on the order (the sort); and the
+   containment fixtures below (the sites-root realpath).
+3. **One proxied site per upstream** (point 4). At most one site may `reverse_proxy` to a given upstream; a second fails
+   as "upstream proxied by more than one site". This narrows amendment 7 point 3 and fails closed until shared zone
+   state is proven. Relaxing it later to "same zone name" needs an image test proving shared state, and Alex's word,
+   because it is a loosening.
+4. **No env values in messages** (point 5). A message may name the site address, and nothing else from env;
+   `{$ACME_EMAIL}` is never echoed. Test: every rule's failure path runs with a recognizable ACME_EMAIL fixture, and the
+   test asserts it appears in no message.
+5. **No split** (architecture's note under amendment 8, 00:40Z). `caddyfile.ts` stays one file. The PR body discloses
+   the `noExcessiveLinesPerFile` warning at :26 with its line count under "What I am unsure about". If a real need to
+   split appears later, the depcruise row for the second `deployment/edge` file goes to Alex as its own named line.
+6. **Restore the exact phrase** at :422: "exempt because it has no `reverse_proxy`, not because of its name or address".
+
+Fixtures (real `node:fs` adapter over a temporary tree): red, `sites/enabled` as a symlinked directory pointing outside;
+`sites/` symlinked outside; a `sitesDir` outside the tree; a regular file reached through a symlinked parent; an nlink-2
+file; a fake adapter returning `root/../x` from `realpath`; a second site proxying the same upstream; plus the two
+mutation pins above. Green: the shipped edge, and a legitimate link into `sites/`.
+
+Done when `npm run check` is green, with the existing line warning disclosed and no other new warning; each red fixture
+fails for its stated reason; the mutation-to-pin table is in the body; and any new warning or paraphrased record phrase
+is under "What I am unsure about".
+
+---
+
+### P1.28g — Refuse preflight imports from the edge
+Tags: [SEC]            Depends on: P1.28e (merged, #533)
+As built: merged by Alex at 2026-10-08T00:40:42Z as `485cd61` (#540).
+Slice 1, issue #537, check (`scripts/lint/.dependency-cruiser.cjs` and its lint fixtures and tests); book edit
+2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader. A tightening, so the coordinator clears it; not a classifier path.
+Owner: the third thread (the coordinator, 00:22Z). It lands before P1.30u (#448), which gains it as a dependency, and
+does not wait on P1.28f.
+
+**What:** a depcruise `forbidden` rule at severity error. Nothing under `^deployment/edge/`, sources and tests alike,
+may import from `^deployment/preflight/`. It is pinned by the scripts/lint fixtures the other forbidden rules use: a red
+fixture for an edge test importing a preflight file, and a green fixture for preflight importing edge.
+
+**Noted, not booked:** the general form is "trusted-base paths and their tests may import only trusted-base paths, node
+built-ins and npm packages". The next step that touches the trusted section of the matrix books it.
+
+Done when `npm run check` is green, and the red fixture fails on the new rule.
+
+---
+
+### P1.28k — Refuse root-absolute and unresolved imports
+Tags: [SEC]            Depends on: P1.28g (merged, #540)
+Slice 1, issue #544, check (`scripts/lint/.dependency-cruiser.cjs`, its fixtures and its tests); book edit
+2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z), from architecture's second note under amendment 8
+(01:10Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and
+relayed at 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its
+only dependency, and nothing waits for it; P1.30u does not.
+
+**Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
+with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
+root.
+
+**What:** one `forbidden` rule, severity error, applying to every file.
+- **Root-absolute specifiers fail even when they resolve.** Their meaning depends on which tool does the resolving.
+- **Unresolved specifiers fail** when they are relative, root-absolute or `@unset/*`.
+- **One exception:** the `RENDER_BUILD_IMPORT` edge (`.dependency-cruiser.cjs:38`). It is read from that same config
+  value, as `scripts/test/image-rules.test.ts:41` already does, with no second copy.
+- **Existing imports:** any root-absolute import on main is listed in the PR body and rewritten as relative. On 485cd61
+  a grep for `from "/`, `import("/` and `require("/` in source files finds none, so none is expected. If the build finds
+  one in a product or trusted file, the step stops and says so: a check PR cannot rewrite those files under SE-6, so
+  that rewrite would become its own step.
+
+Fixtures: red, a root-absolute import from an edge test into preflight; red, an unresolved relative import; red, an
+unresolved `@unset/x`; green, the render-build edge.
+
+Done when `npm run check` is green, and each red fixture fails on the new rule.
+
+**Noted, not booked:** depcruise's blind spots (`createRequire`, computed specifiers, `vi.importActual`,
+`import.meta.glob`, `import("x").T`, triple-slash references, JSDoc import types). The general fix is a parse-based
+check that trusted code imports only trusted code. The next step that touches the trusted section of the matrix books
+it, together with amendment 8 item 2's general rule.
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
@@ -7589,7 +7706,7 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -7597,7 +7714,11 @@ of one syntax drift (amendment 7).
 directory that is the source of the compose edge service's bind mount at `/etc/caddy/sites/enabled`, which must be a
 directory inside `deployment/edge/` whose entries follow P1.28e's symlink rules; and the env from `serviceEnv("edge")`.
 The edge service mounts nothing else at or under `/etc/caddy`: a file, a directory, or a parent such as `/etc/caddy` or
-`/etc` each fails. No edge service, no such mount, or an empty directory gives `input missing: <path>`.
+`/etc` each fails. No edge service, no such mount, or an empty directory gives `input missing: <path>`. C18 imports
+`readEdgeConfig` and `edgeSiteProblems` from `deployment/edge/caddyfile.ts` as it stands, through its own thin adapter.
+It passes its compose mount source as `sitesDir`, and the reader itself refuses one outside `deployment/edge/sites/`.
+Its rules include at most one site per upstream (P1.28f). (Book edit 2026-10-08-p128f-p128g-edge-reader-follow-ups,
+00:40Z.)
 
 **The import fork:** the depcruise matrix needs a row that lets `deployment/preflight` import
 `deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
@@ -7622,13 +7743,13 @@ P1.30u stays C18 alone.
 
 **Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`,
 `c18_mount_over_caddyfile_fails`, `c18_mount_over_etc_caddy_parent_fails`, `c18_sites_symlink_out_of_repo_fails`,
-`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, `c18_real_tree_symlink_containment` (C18 through
-its real adapter over a temporary tree: an escaping link, a `sites-evil/` sibling, an outward chain and a dangling link
-fail; a legitimate link passes), and the riders' tests; fixtures carry a compose file; the all-good fixture, now
-covering all 24 checks, exits 0. C18 fails with "input missing" on every real run until P1.29 adds compose.dev.yaml.
-That is expected, because the preflight is not a gate yet.
+`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, `c18_upstream_proxied_by_two_sites_fails`,
+`c18_real_tree_symlink_containment` (C18 through its real adapter over a temporary tree: an escaping link, a
+`sites-evil/` sibling, an outward chain and a dangling link fail; a legitimate link passes), and the riders' tests;
+fixtures carry a compose file; the all-good fixture, now covering all 24 checks, exits 0. C18 fails with "input missing"
+on every real run until P1.29 adds compose.dev.yaml. That is expected, because the preflight is not a gate yet.
 
-**Not in this step:** any change to `deployment/edge/` (P1.28e owns the reader and the site rules).
+**Not in this step:** any change to `deployment/edge/` (P1.28e and P1.28f own the reader and the site rules).
 
 ---
 
@@ -7778,7 +7899,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n,
-   P1.29r, P1.29e, P1.29n and P1.29p; Phase 1):
+   P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -7795,17 +7916,22 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    file (65532 for our Node images, 999 for postgres, never "any non-zero"), `postgres_test_image_matches_lock`, and
    `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
    after.
-   It adds `postgres` to `KIND_BY_FINAL_ENTRY` (P1.29x), with the generic rules applying to it. From book edit
+   It adds `postgres` to `deployment/images/kinds.json` (P1.29m), with the generic rules applying to it. From book edit
    2026-10-07-p129e-p129n-p129p-image-outcome-checks (23:48Z): its final stage (`RUN rm -f /usr/local/bin/gosu`,
-   `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in P1.29e (h) and (i) are empty. It
-   carries `postgres_image_has_no_package_manager`, using P1.29n's verbs and flags. Because P1.29p fails a kind with no
-   list, it adds the postgres privilege list, and that list is empty: the official Debian trixie Postgres image ships
-   setuid binaries (for example su, passwd, mount), and since the image runs as 999:999 with gosu gone, P1.29d removes
-   their setuid bits or the files in its final RUN. If `chmod u-s` is needed, it is added to FINAL_STAGE_COMMANDS,
-   citing the line; anything it keeps goes under "What I am unsure about", with the reason. Test:
-   `image_privileges_match_list` covers postgres.
+   `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in P1.29e (h) and (i) are empty. Its
+   final RUN uses P1.29n's verbs and flags, and postgres is covered by P1.29m's kind-wide test as soon as it joins the
+   kind map; a separate `postgres_image_has_no_package_manager` is optional (amendment 1). If the postgres image's
+   maintainer scripts need removing, P1.29d adds the postgres entry to P1.29m's `RM_BY_KIND`, token-exact, with the same
+   three red fixtures. Because P1.29p fails a kind with no list, it adds the postgres privilege list, and that list is
+   empty: the official Debian trixie Postgres image ships setuid binaries (for example su, passwd, mount), and since the
+   image runs as 999:999 with gosu gone, P1.29d removes their setuid bits or the files in its final RUN. If `chmod u-s`
+   is needed, it is added to FINAL_STAGE_COMMANDS, citing the line; anything it keeps goes under "What I am unsure
+   about", with the reason. Test: `image_privileges_match_list` covers postgres. From book edit
+   2026-10-08-p129f-final-stage-allowlists (00:55Z): it adds the postgres entries to P1.29f's destination-prefix and
+   ENV-key allowlists, each cited.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
-   P1.11p, P1.28, P1.30t, P1.30n, P1.29n and P1.29p, so no image is composed before every image is scanned):
+   P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f and P1.29m, so no image is composed before every image is
+   scanned):
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and
    edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
@@ -7859,7 +7985,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
@@ -8061,6 +8187,7 @@ the real Dockerfiles on main still pass.
 
 ### P1.29e — Close the final-stage recipe holes
 Tags: [SEC]            Depends on: P1.29r (merged, #519)
+As built: merged by Alex at 2026-10-08T00:04:13Z as `68bbe75` (#532).
 Slice 1, issue #528, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
@@ -8139,6 +8266,7 @@ apk-tools, the edge stays kind `edge` and no extra step is needed.
 
 ### P1.28y — Forbid a package manager in the edge runtime
 Tags: [SEC]            Depends on: P1.28o, P1.29x (merged, #507)
+As built: merged by Alex at 2026-10-08T00:15:49Z as `c14bc1b` (#535).
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p128o-edge-apk-tools (P1.28y, 22:40Z), from
 architecture's amendment in that record ("Afterwards", 22:45Z), relayed by the coordinator at 22:36Z. A tightening; the
 coordinator clears it, no word from Alex. Owner: Phase 1. It replaces the earlier plan to ride the next `images.test.ts`
@@ -8156,11 +8284,13 @@ Done when `npm run check` is green, and the rule runs over the edge Dockerfile, 
 ---
 
 ### P1.29n — Ship the node runtime without a package manager
-Tags: [SEC]            Depends on: P1.29e
+Tags: [SEC]            Depends on: P1.29e (merged, #532)
+As built: merged by Alex at 2026-10-08T00:34:04Z as `41810fa` (#538).
 Slice 1, issue #529, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex unless it
-needs a base change. Owner: Phase 1, after P1.29e, in either order or in parallel with P1.29p.
+needs a base change. Owner: Phase 1, after P1.29e, in either order or in parallel with P1.29p. As built and moved by
+book edit 2026-10-08-p129m-kind-wide-package-manager-test (final 01:30Z).
 
 **What:** the node-kind image test `node_image_has_no_package_manager`, the twin of P1.28o's `edge_image_has_no_apk`:
 the built web and migrate images contain no `apt`, `apt-get`, `dpkg` or `dpkg-*` executable anywhere on disk. The
@@ -8169,10 +8299,13 @@ removal uses the package managers' own verbs in the final RUN, for example
 The step adds exactly the flags it needs to the layer-3 flag allowlist, and the body lists each flag and the line that
 uses it.
 
-**General rule** (architecture, 23:45Z): every image kind's built image has no package manager; edge (P1.28o), node
-(this step) and postgres (P1.29d) cover the existing kinds. This step adds a kind-map test: every kind in
-`KIND_BY_FINAL_ENTRY` must have its `<kind>_image_has_no_package_manager` test, or the test fails. A new kind brings its
-test in the PR that adds it. Until P1.29d lands, postgres is not in the map, so the test passes with edge and node.
+**As built** (#538, first commit only; book edit 2026-10-08-p129m-kind-wide-package-manager-test):
+`deployment/images/package-manager.image.test.ts` hard-codes three images, node-app, migrate and edge. Node images are
+matched against Debian names (`apt`, `apt-get`, `dpkg`, `dpkg-*`) and edge against Alpine names (`apk`, `apk-*`). Only
+executable files count, plus symlinks to them; the test is `package_manager_listing_reader`. The node and migrate
+Dockerfiles purge apt and dpkg with their own verbs, and `images.test.ts` gains the flags.
+
+The rest moves to P1.29m.
 
 **Stop condition:** if this cannot work on Debian slim, the step stops and says so. Changing the runtime base would undo
 Alex's "Debian slim" card (03:56:37Z), and that needs his word on a new card.
@@ -8182,8 +8315,74 @@ body gives Trivy counts before and after.
 
 ---
 
+### P1.29m — Finish the kind-wide package manager test
+Tags: [SEC]            Depends on: P1.29n (merged, #538)
+Slice 1, issue #543, product (`deployment/images/`); book edit 2026-10-08-p129m-kind-wide-package-manager-test (final
+01:30Z), from the coordinator's relay at 00:51Z: #538 merged at 00:34:04Z as `41810fa` with only its first commit, so
+none of P1.29n's amendments 1 and 2 (in 2026-10-07-p129e-p129n-p129p-image-outcome-checks) is on main, checked on
+485cd61. A tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot, ahead of P1.29f. It
+goes before P1.29f, P1.29d and P1.29, which all gain it as a dependency.
+
+**What:** the text of amendments 1 and 2, carried over unchanged from P1.29n's section. The kind map moves to
+`deployment/images/kinds.json`, and the hard-coded list in `package-manager.image.test.ts` is deleted. The new test
+supersedes the hard-coded per-image tests from #538; `edge_image_has_no_apk` from P1.28o stays.
+
+**Every kind** (amendment 1): the whole-disk test runs over the kind map, not node only: edge and node now, and postgres
+once P1.29d lands. On each built image it fails if any non-directory entry's basename matches `apk`, `apk.static`,
+`apk-*`, `libapk*`, `apt`, `apt-get`, `apt-*`, `libapt*`, `dpkg`, `dpkg-*`, `rpm`, `yum`, `dnf` or `microdnf`.
+Directories stay out of the match. libapt-pkg is purged. `edge_image_has_no_apk` (P1.28o) stays as it is, redundant and
+harmless. This step stays product class and may build the edge image; no trusted step is needed.
+
+**General rule** (architecture, 23:45Z; amendment 7 notes; amendment 2, 01:20Z): every image kind's built image has no
+package manager. The kind map lives in `deployment/images/kinds.json`. The kind-wide test iterates that file and fails
+if any kind has no Dockerfile that was built and checked, or if any image fails to build. A new kind is covered as soon
+as it is added there, and needs no test of its own.
+
+**The package databases stay, as inert data** (architecture's third note under amendment 7, 01:00Z). Deleting them would
+blind Trivy and break "shipped images scanned in full", so the test requires:
+- `/var/lib/dpkg` holds only `status` and `status-old`; `info/*.list`, `info/*.md5sums`, and `info/format` if present;
+  and the node data files accepted by architecture's fourth note: `info/*.conffiles`, `*.shlibs`, `*.symbols`,
+  `*.templates` and `*.triggers`; `arch-native`, `available`, `cmethopt`, `diversions`, `diversions-old`, `lock` and
+  `lock-frontend`; `alternatives/*` and `triggers/*`. Each pattern is listed in the PR body. Maintainer scripts
+  (`*.preinst`, `*.postinst`, `*.prerm`, `*.postrm`, `*.config`) are absent.
+- `/lib/apk/db` holds only `installed`, `lock`, `triggers` and `scripts.tar.gz`, each only if present (fourth note,
+  01:05Z: `scripts.tar.gz`, not `scripts.tar`).
+- No file under either tree has an execute bit.
+- The scanner still sees packages: dpkg `status` has at least one `Package:` stanza, and apk `installed` has at least
+  one `P:` line.
+- Empty directories may stay: etc/apt, etc/dpkg, var/log/apt, etc/apk, lib/apk, usr/share/apk. Any file inside them,
+  apart from the two database trees, is subject to the basename and executable rules.
+
+Red fixtures: a dpkg `.postinst` left in `info/`; an executable file under `/lib/apk/db`; an emptied `status` with no
+`Package:` stanza.
+
+**RM_BY_KIND** (architecture's fourth note under amendment 7, 01:05Z): an exact per-kind rm allowlist, shaped like
+SETCAP_BY_KIND.
+- Node has exactly one entry:
+  `rm -f /var/lib/dpkg/info/*.preinst /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.prerm /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config`.
+  It deletes 61 maintainer scripts. Removing them beats disabling them, so chmod is not used.
+- The exemption matches only when the parsed command equals the entry token for token: the same flags, the same five
+  arguments, the same order, nothing added. It applies only in a final stage of a node-kind Dockerfile. Any other rm
+  naming dpkg still fails the floor.
+- Edge has no entry. Postgres adds its own entry in P1.29d if it needs one.
+- This is one exact constant entry in a per-kind allowlist, not a loosening in substance; the coordinator clears it, and
+  no line from Alex is needed.
+- Fixtures: red, the entry plus one extra argument; red, the entry with `-rf`; red, `rm -f /var/lib/dpkg/status`; green,
+  the exact entry.
+- Outcome: the built image has no maintainer script under `/var/lib/dpkg/info`, and no execute bit anywhere in either
+  database tree.
+
+Red fixtures for the general rule (architecture's second note under amendment 7): a kind in the map with no matching
+Dockerfile, and a Dockerfile that fails to build.
+
+Done when the kind-wide test is green on every kind in `kinds.json`, and on every built image of each; every red fixture
+fails; `npm run check` is green; and the PR body gives Trivy counts before and after, and lists the dpkg data files it
+allows.
+
+---
+
 ### P1.29p — Pin file capabilities and setuid in every image
-Tags: [SEC]            Depends on: P1.29e
+Tags: [SEC]            Depends on: P1.29e (merged, #532)
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
@@ -8196,6 +8395,44 @@ files are removed in the final RUN, or the body lists each one that must stay, w
 fails the test, so a new image cannot arrive unlisted.
 
 Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
+
+---
+
+### P1.29f — Turn final-stage rules into per-kind allowlists
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538), P1.29m
+Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
+items 5 and 6 at 01:00Z), from architecture's amendment 7 (00:45Z) and its 00:50Z note in
+2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e (#532), relayed by the coordinator at 00:27Z. A
+tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after P1.29n. It is not tied to
+P1.29p: privileges are a separate concern, so either can land first. It goes before P1.29d and P1.29, which both gain it
+as a dependency; P1.29d adds the postgres entries to every list below.
+
+**What:**
+1. **Here-docs.** Any `<<` in any instruction of any stage, outside comments, fails, whatever follows it. That covers
+   `<<WORD`, `<<\WORD`, `<<1`, `<<"1x"` and `<<-`. Fixture: the verifier's fake-final-stage Dockerfile.
+2. **Destination shape.** In a final stage and in the stages it builds on, COPY and ADD destinations, in shell or JSON
+   form, must be absolute and match `^/[A-Za-z0-9._/-]+$` after JSON decoding; WORKDIR must match the same pattern;
+   relative destinations fail. Fixtures: each of the verifier's five forms, plus `WORKDIR /usr/bin` followed by
+   `COPY x .`.
+3. **Exact per-kind allowlists in final stages.** Every entry is cited in the PR body with its file and line.
+   - **COPY and ADD destination prefixes.** Anything not listed fails. node: `/app/` and what main ships; edge:
+     `/usr/bin/caddy`, `/etc/caddy/` and what main ships; postgres: set by P1.29d. This replaces amendment 6's
+     PATH-directory and package-manager-config denylists, which stay in the record as the reason those paths are absent.
+     Red fixture: `COPY x /var/lib/dpkg/info/x.prerm`.
+   - **ENV keys.** Each kind has an exact list of keys, for example `NODE_ENV`. `PATH` is allowed only at its exact
+     per-kind value, the value main ships. `LD_*`, `NODE_OPTIONS`, `BASH_ENV` and `ENV` fail unless listed with a
+     reason.
+   - **No ARG in a final stage.**
+4. **The pin for P1.29e (c).** `RUN apk del ap\k-tools && rm -f /apk\x` is red under the count-based mutant and green
+   otherwise. The PR body lists it next to the mutation.
+5. **Separator allowlist** (architecture's 00:50Z note under amendment 7, F2). In final stages and the stages they build
+   on, a shell-form RUN may join commands only with `&&`. These fail: `;`, `||`, `&`, `|`, a newline without `&&`, and
+   any `#` inside a RUN. Any shipped final-stage RUN that uses another separator today is listed under "What I am unsure
+   about" and rewritten with `&&`. Fixtures: the three shipped forms the coordinator found.
+6. **The removalProblem pin.** `RUN apk del --no-network apk-tools && apk add apk-tools` fails.
+
+Done when `npm run check` is green, every red fixture fails for its stated rule, every real Dockerfile on main still
+passes, and the body lists every allowlist entry with its citation.
 
 ---
 

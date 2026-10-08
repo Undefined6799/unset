@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 165 steps: 144 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 170 steps: 149 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -264,7 +264,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30s | Deploy preflight C13–C24 except C17 and C18 | [SEC] | P1.30 | `phase-1.md` |
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
 | P1.28e | One edge config reader and site rules in deployment/edge (trusted) | [SEC] | P1.28h | `phase-1.md` |
-| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e | `phase-1.md` |
+| P1.28f | Edge reader containment, mutation pins, one site per upstream (trusted) | [SEC] | P1.28e | `phase-1.md` |
+| P1.28g | depcruise: deployment/edge never imports deployment/preflight | [SEC] | P1.28e | `phase-1.md` |
+| P1.28k | depcruise: refuse root-absolute and unresolved relative or @unset/* imports | [SEC] | P1.28g | `phase-1.md` |
+| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -274,10 +277,12 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28y | Edge kind gains runtime_has_no_package_manager (apk) | [SEC] | P1.28o, P1.29x | `phase-1.md` |
 | P1.29n | Node runtime ships no package manager (built-image test) | [SEC] | P1.29e | `phase-1.md` |
 | P1.29p | Built-image file capabilities and setuid match an exact per-kind list | [SEC] | P1.29e | `phase-1.md` |
+| P1.29m | Kind-wide package manager test: kinds.json, full basename match, inert database allowlist, RM_BY_KIND | [SEC] | P1.29n | `phase-1.md` |
+| P1.29f | Final stages: no here-docs, absolute destinations, && only, per-kind allowlists for destinations, ENV keys, no ARG | [SEC] | P1.29e, P1.29n, P1.29m | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
-| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p | `phase-1.md` |
+| P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
@@ -418,6 +423,9 @@ flowchart TD
   P1_28b["P1.28b Edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
   P1_28e["P1.28e One edge config reader"]
+  P1_28f["P1.28f Edge reader containment"]
+  P1_28g["P1.28g Edge never imports preflight"]
+  P1_28k["P1.28k No root-absolute or unresolved imports"]
   P1_28s["P1.28s Quoted top-level tokens refused"]
   P1_28i["P1.28i Edge image builds in image tests"]
   P1_28j["P1.28j Edge image tests drop runIf"]
@@ -431,6 +439,8 @@ flowchart TD
   P1_28y["P1.28y Edge kind forbids apk"]
   P1_29n["P1.29n Node runtime without package manager"]
   P1_29p["P1.29p Capabilities and setuid pinned"]
+  P1_29m["P1.29m Kind-wide package manager test"]
+  P1_29f["P1.29f Final-stage allowlists"]
   P1_29w["P1.29w Discover and scan every image"]
   P1_29v["P1.29v Mirror scan skips stripped"]
   P1_29d["P1.29d Gosu-free Postgres image"]
@@ -661,6 +671,14 @@ flowchart TD
   P1_29p --> P1_29d
   P1_29n --> P1_29
   P1_29p --> P1_29
+  P1_29e --> P1_29f
+  P1_29n --> P1_29f
+  P1_29f --> P1_29d
+  P1_29f --> P1_29
+  P1_29n --> P1_29m
+  P1_29m --> P1_29f
+  P1_29m --> P1_29d
+  P1_29m --> P1_29
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
@@ -687,6 +705,11 @@ flowchart TD
   P1_28h --> P1_30u
   P1_28h --> P1_28e
   P1_28e --> P1_30u
+  P1_28e --> P1_28f
+  P1_28e --> P1_28g
+  P1_28f --> P1_30u
+  P1_28g --> P1_30u
+  P1_28g --> P1_28k
   P1_30u --> P2_13a
   P1_03 --> P1_04k
   P1_03 --> P1_03w
