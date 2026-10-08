@@ -150,10 +150,10 @@ function sharedRefProblems(lock: Lock): string[] {
  * edge image whose last apk command does not remove it.
  */
 type Kind = "node" | "edge";
-const KIND_BY_FINAL_ENTRY = new Map<string, Kind>([
-  ["node", "node"],
-  ["caddy", "edge"],
-]);
+/** Lock entry to kind, in kinds.json so the built-image tests iterate the same map (package-manager.image.test.ts). */
+const KIND_BY_FINAL_ENTRY = new Map(
+  Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, "kinds.json"), "utf8")) as Record<string, Kind>),
+);
 const kindOf = (dockerfile: string, lock: Lock): Kind | undefined =>
   KIND_BY_FINAL_ENTRY.get(finalEntry(dockerfile, lock) ?? "");
 
