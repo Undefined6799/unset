@@ -7548,8 +7548,8 @@ stays as it is; P1.28y also touches the edge, and whichever lands second merges 
    `{$ACME_EMAIL}` come from `env`, with the reader's existing shape checks. Entries of `sitesDir` must be `*.caddy`
    regular files or symlinks. **Containment stays inside readEdgeConfig:** it calls `realpath` on the sites root and on
    each entry; each resolved entry must equal `root + sep + …`, a prefix check on a path boundary, so `sites-evil/`
-   fails; and the resolved target's `kind` must be a regular `*.caddy` file. A subdirectory, another extension, a
-   dangling link and a link that leaves `deployment/edge/sites/` all fail.
+   fails; and the resolved target's `kind` must be a regular file. A subdirectory, another extension, a dangling link
+   and a link that leaves `deployment/edge/sites/` all fail.
 2. **Thin adapters:** each side keeps one `node:fs` adapter for `EdgeFiles`, every member one direct `node:fs` call with
    no filtering and no path logic. The edge tests keep their own adapter (trusted), and C18 keeps its own (preflight). A
    trusted test importing a product adapter is refused.
@@ -8158,7 +8158,7 @@ Done when `npm run check` is green, and the rule runs over the edge Dockerfile, 
 ---
 
 ### P1.29n — Ship the node runtime without a package manager
-Tags: [SEC]            Depends on: P1.29e
+Tags: [SEC]            Depends on: P1.29e (merged, #532)
 Slice 1, issue #529, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex unless it
@@ -8185,7 +8185,7 @@ body gives Trivy counts before and after.
 ---
 
 ### P1.29p — Pin file capabilities and setuid in every image
-Tags: [SEC]            Depends on: P1.29e
+Tags: [SEC]            Depends on: P1.29e (merged, #532)
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
