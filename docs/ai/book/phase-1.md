@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29m, P1.29f, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -217,6 +217,7 @@ flowchart LR
   P1_29p["P1.29p capabilities and setuid pinned"]
   P1_29m["P1.29m kind-wide package manager test"]
   P1_29f["P1.29f final-stage allowlists"]
+  P1_29g["P1.29g image reader hardening"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
@@ -321,6 +322,9 @@ flowchart LR
   P1_29m --> P1_29f
   P1_29m --> P1_29d
   P1_29m --> P1_29
+  P1_29m --> P1_29g
+  P1_29f --> P1_29g
+  P1_29g --> P1_29p
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
@@ -8321,6 +8325,8 @@ body gives Trivy counts before and after.
 
 ### P1.29m — Finish the kind-wide package manager test
 Tags: [SEC]            Depends on: P1.29n (merged, #538)
+As built: merged by Alex at 2026-10-08T01:21:37Z as `901e1c5` (#545). Gaps the verification found follow in P1.29g
+(book edit 2026-10-08-p129m-kind-wide-package-manager-test, amendment 1, 01:45Z).
 Slice 1, issue #543, product (`deployment/images/`); book edit 2026-10-08-p129m-kind-wide-package-manager-test (final
 01:30Z; the coordinator's nits on #542 folded in at 01:40Z), from the coordinator's relay at 00:51Z: #538 merged at
 00:34:04Z as `41810fa` with only its first commit, so none of P1.29n's amendments 1 and 2 (in
@@ -8394,23 +8400,6 @@ allows.
 
 ---
 
-### P1.29p — Pin file capabilities and setuid in every image
-Tags: [SEC]            Depends on: P1.29e (merged, #532)
-Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
-23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
-2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
-Phase 1, after P1.29e, in parallel with P1.29n.
-
-**What:** the image test `image_privileges_match_list`, for every kind in `KIND_BY_FINAL_ENTRY`. It walks each built
-image's filesystem; every file with a `security.capability` xattr, and every setuid or setgid file, must be in an exact
-per-kind list. Today's lists: edge, caddy with `cap_net_bind_service`, if main has it; node, none (the base's setuid
-files are removed in the final RUN, or the body lists each one that must stay, with the reason). A kind that has no list
-fails the test, so a new image cannot arrive unlisted.
-
-Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
-
----
-
 ### P1.29f — Turn final-stage rules into per-kind allowlists
 Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538), P1.29m
 Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
@@ -8446,6 +8435,53 @@ as a dependency; P1.29d adds the postgres entries to every list below.
 
 Done when `npm run check` is green, every red fixture fails for its stated rule, every real Dockerfile on main still
 passes, and the body lists every allowlist entry with its citation.
+
+---
+
+### P1.29g — Harden the package manager image reader
+Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f
+Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final
+01:45Z), from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the
+verification finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green
+and nothing is weaker than main, but the verifier found gaps that would have held the PR. A tightening; the coordinator
+clears it, with no architecture ruling and no word from Alex. Owner: Phase 1, after P1.29f (a dependency for order) and
+before P1.29p, which gains it as a dependency: P1.29p walks the same exported filesystem and reuses this reader.
+
+**What** (line numbers are on main b2188a9):
+1. **Names come from a real name list, not the last token of each line.** `package-manager.image.test.ts:87-90`
+   (`entry`) takes the last token of each `tar -tv` line. For a hard link (`h… NAME link to TARGET`) that token is the
+   target, and names with spaces are split, so a hard link at `/usr/bin/dpkg`, or a hard-linked executable maintainer
+   script, escapes the "every non-directory entry" ruling. The fix: read the names from `tar -tf`, or from a header
+   parser, and pair them with the modes by index; fail closed when the two counts differ, or when a name contains a
+   newline. Fixtures: a hard link named `dpkg` (red); a hard-linked `x.postinst` under `/var/lib/dpkg/info` (red); a
+   file whose name contains a space (read correctly); a count mismatch (red).
+2. **The inert database files have no special mode bits.** The database check at :141 looks only for `x`. The fix: fail
+   on any of `x`, `s`, `S`, `t` or `T` in the mode. Fixtures: one for each letter.
+3. **The RM_BY_KIND exemption applies only in the final stage.** The token-exact rm (`images.test.ts:455-463`) also
+   passes in an ancestor stage that the final stage is built FROM. The fix: restrict it to the final stage. Fixture: the
+   exact rm in an ancestor stage fails.
+4. **Header comment.** `package-manager.image.test.ts:5-6` still describes the dropped source scan of
+   `KIND_BY_FINAL_ENTRY`. It should describe the kind-wide test over `kinds.json`.
+
+Done when `npm run check` and the image tests are green, every red fixture fails for its stated reason, and the
+space-name fixture is read correctly.
+
+---
+
+### P1.29p — Pin file capabilities and setuid in every image
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g
+Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
+23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
+2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
+Phase 1, after P1.29e, in parallel with P1.29n.
+
+**What:** the image test `image_privileges_match_list`, for every kind in `KIND_BY_FINAL_ENTRY`. It walks each built
+image's filesystem; every file with a `security.capability` xattr, and every setuid or setgid file, must be in an exact
+per-kind list. Today's lists: edge, caddy with `cap_net_bind_service`, if main has it; node, none (the base's setuid
+files are removed in the final RUN, or the body lists each one that must stay, with the reason). A kind that has no list
+fails the test, so a new image cannot arrive unlisted.
+
+Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
 
 ---
 
