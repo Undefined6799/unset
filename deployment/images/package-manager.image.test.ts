@@ -222,6 +222,26 @@ function xattrValues(tar: string): Map<string, Map<string, string>> {
 }
 
 /**
+ * A listing's entries with each attribute's value from the PAX headers, as `<name>=<hex>`. Two readers, one archive:
+ * GNU tar names each attribute and the PAX headers hold its value, and they must agree member by member.
+ */
+function withValues(entries: readonly Entry[], values: ReadonlyMap<string, ReadonlyMap<string, string>>): Entry[] {
+  const valued = entries.map((entry) => {
+    const own = values.get(entry.path);
+    const xattrs = entry.xattrs.map((name) => {
+      const value = own?.get(name);
+      if (value === undefined) throw new Error(`tar lists ${name} on ${entry.path} but no PAX header holds it`);
+      return `${name}=${value}`;
+    });
+    if (xattrs.length !== (own?.size ?? 0)) throw new Error(`tar and the PAX headers disagree on ${entry.path}`);
+    return { ...entry, xattrs };
+  });
+  const unlisted = [...values.keys()].find((path) => !entries.some((entry) => entry.path === path));
+  if (unlisted !== undefined) throw new Error(`a PAX header gives ${unlisted} attributes but tar lists no such member`);
+  return valued;
+}
+
+/**
  * An exported image's tar file as a filesystem; tar is GNU tar, whose listings quote names by `--quoting-style` and
  * print every extended attribute with `-tvv --xattrs --xattrs-include=*` (GNU tar 1.35 manual, "Extended File
  * Attributes"), so no attribute is filtered out before the privilege check reads it.
@@ -238,21 +258,7 @@ function readTar(tar: string): Filesystem {
   const text = (path: string): string =>
     spawnSync("tar", ["-xOf", tar, path.slice(1)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
   const entries = listing(list(["-tvv", "--xattrs", "--xattrs-include=*"]), list(["-t"]));
-  // Two readers, one archive: GNU tar names each attribute and the PAX headers hold its value, and they must agree.
-  const values = xattrValues(tar);
-  const valued = entries.map((entry) => {
-    const own = values.get(entry.path);
-    const xattrs = entry.xattrs.map((name) => {
-      const value = own?.get(name);
-      if (value === undefined) throw new Error(`tar lists ${name} on ${entry.path} but no PAX header holds it`);
-      return `${name}=${value}`;
-    });
-    if (xattrs.length !== (own?.size ?? 0)) throw new Error(`tar and the PAX headers disagree on ${entry.path}`);
-    return { ...entry, xattrs };
-  });
-  const unlisted = [...values.keys()].find((path) => !entries.some((entry) => entry.path === path));
-  if (unlisted !== undefined) throw new Error(`a PAX header gives ${unlisted} attributes but tar lists no such member`);
-  return { entries: valued, text };
+  return { entries: withValues(entries, xattrValues(tar)), text };
 }
 
 /** Exports an image's filesystem from a container that never starts, and hands it to `use`. */
