@@ -189,9 +189,12 @@ class Unparsed extends Error {
 }
 
 const INSTRUCTION = /^([A-Za-z]+)(?:\s+(.*))?$/;
-const HEREDOC = /<<-?\s*["']?[A-Za-z_]/;
 
-/** Logical instructions with the line each starts on: comment lines dropped, `\` continuations joined. */
+/**
+ * Logical instructions with the line each starts on: comment lines dropped, `\` continuations joined. A here-doc's
+ * body would read as instructions, so a fake `FROM` in it could hide the real final stage from every rule here: any
+ * `<<` outside a comment fails, in every stage, whatever follows it (P1.29f, amendment 7 point 1; the repo uses none).
+ */
 function instructions(text: string): { line: number; text: string }[] {
   const out: { line: number; text: string }[] = [];
   let open: { line: number; text: string } | undefined;
@@ -201,6 +204,7 @@ function instructions(text: string): { line: number; text: string }[] {
     if (directive !== undefined)
       throw new Unparsed(`parser directive ${directive.toLowerCase()} not supported`, at + 1);
     if (line === "" || line.startsWith("#")) continue;
+    if (line.includes("<<")) throw new Unparsed("heredoc not supported", at + 1);
     const body = line.endsWith("\\") ? line.slice(0, -1).trimEnd() : line;
     open = open === undefined ? { line: at + 1, text: body } : { line: open.line, text: `${open.text} ${body}` };
     if (!line.endsWith("\\")) {
@@ -262,7 +266,6 @@ function instructionProblems(keyword: string, args: string, earlier: Earlier): s
   }
   if (keyword === "ADD") return ["ADD is not allowed; use COPY"];
   if (!["RUN", "COPY"].includes(keyword)) return [];
-  if (HEREDOC.test(args)) throw new Unparsed("heredoc not supported");
   const { flags } = splitFlags(args);
   if (keyword === "RUN") return mountProblems(flags, earlier);
   return fromFlagProblems(keyword, flags, earlier);
@@ -548,10 +551,16 @@ function execCommand(json: string): string[] | undefined {
   }
 }
 
-/** Why a RUN's text cannot be read as commands: a heredoc, a substitution, or exec form that is not a string array. */
+/**
+ * P1.29f (architecture note under amendment 7, after #535): a shipped shell RUN joins its commands with `&&` only, so a
+ * failed removal fails the build. `;`, `||`, `|`, a lone `&` and `#` all let a removal fail or vanish unseen.
+ */
+const SEPARATOR = /[;|&#]/;
+
+/** Why a RUN's text cannot be read as commands: a substitution, or exec form that is not a string array. */
 function unreadableRun(rest: string): string | undefined {
-  if (HEREDOC.test(rest)) return "heredoc not supported";
   if (rest.startsWith("[")) return execCommand(rest) === undefined ? "cannot parse exec-form RUN" : undefined;
+  if (SEPARATOR.test(rest.replaceAll("&&", ""))) return "a shell RUN joins commands with && only";
   if (/[$`]/.test(rest)) return "a variable or command substitution hides what runs";
   return /[<>]\(/.test(rest) ? "a process substitution hides what runs" : undefined;
 }
@@ -580,56 +589,87 @@ function shippedInstructionProblems(instruction: string, kind: Kind | undefined)
   return named > 0 ? [...problems, FLOOR] : problems;
 }
 
-const PATH_DIRECTORIES = ["/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin"];
-const PACKAGE_STATE = ["/etc/apt", "/etc/dpkg", "/etc/apk", "/lib/apk", "/etc/ld.so.preload", "/etc/ld.so.conf.d"];
-/** The exact files each kind's shipped stages copy into a PATH directory: the edge's Caddy (edge/Dockerfile:23). */
-const PATH_COPIES_BY_KIND = new Map<Kind, readonly string[]>([
-  ["edge", ["/usr/bin/caddy"]],
-  ["node", []],
+/**
+ * P1.29f (amendment 7 point 2): a COPY or ADD destination and a WORKDIR are absolute paths of plain characters, so no
+ * quote, escape, variable or relative step can move where a file lands. JSON-form destinations are read decoded.
+ */
+const PLAIN_PATH = /^\/[A-Za-z0-9._/-]+$/;
+/**
+ * P1.29f (amendment 7 point 3): where each kind's shipped stages may copy, exactly; a prefix ending in `/` covers its
+ * tree. Anything else fails, which keeps amendment 6's PATH directories, package-manager state, loader configuration
+ * and maintainer scripts (`/var/lib/dpkg/info`) out without listing them.
+ */
+const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
+  ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
+  ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
 ]);
-const within = (path: string, directory: string): boolean =>
-  directory === "/" || path === directory || path.startsWith(`${directory}/`);
 
-/** Why one shipped COPY or ADD destination, resolved against WORKDIR, may not be written; undefined when it may. */
-function destinationProblem(target: string, kind: Kind | undefined): string | undefined {
-  if (PACKAGE_STATE.some((directory) => within(target, directory))) {
-    return `copies into ${target}, package-manager or loader state`;
-  }
-  if (PATH_DIRECTORIES.some((directory) => within(target, directory))) {
-    const listed = (PATH_COPIES_BY_KIND.get(kind as Kind) ?? []).includes(target);
-    return listed ? undefined : `copies into ${target}, a PATH directory not on the list`;
-  }
-  const holds = [...PATH_DIRECTORIES, ...PACKAGE_STATE].some((directory) => within(directory, target));
-  return holds ? `copies into ${target}, which holds a guarded directory` : undefined;
+/** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
+function destinationProblem(destination: string, kind: Kind | undefined): string | undefined {
+  if (!PLAIN_PATH.test(destination)) return `destination ${destination} is not an absolute plain path`;
+  const target = posix.normalize(destination);
+  const listed = (DESTINATIONS_BY_KIND.get(kind as Kind) ?? []).some((prefix) =>
+    prefix.endsWith("/") ? target.startsWith(prefix) : target === prefix,
+  );
+  return listed ? undefined : `copies into ${target}, not on the ${kind ?? "unknown"} list`;
 }
 
-/** Why one COPY or ADD may not run in a shipped stage, its destination resolved against `workdir`. */
-function copyProblem(keyword: string, args: string, workdir: string, kind: Kind | undefined): string | undefined {
+/** Why one COPY or ADD may not run in a shipped stage; its destination is the last word, decoded in JSON form. */
+function copyProblem(keyword: string, args: string, kind: Kind | undefined): string | undefined {
   const { rest } = splitFlags(args);
   const words = rest.startsWith("[") ? execCommand(rest) : rest.split(/\s+/);
   const destination = words?.at(-1);
   if (destination === undefined || words === undefined || words.length < 2) return `cannot parse ${keyword}`;
-  if (/[$`]/.test(destination) || /[$`]/.test(workdir)) return `a variable hides where ${keyword} lands`;
-  return destinationProblem(posix.resolve(workdir, destination), kind);
+  return destinationProblem(destination, kind);
 }
 
-/**
- * Where each shipped COPY or ADD lands that it may not (amendment 6, step A e). A destination is resolved against the
- * WORKDIR in force, and one above a guarded directory fails too, because a copied tree could reach into it.
- */
+/** Every shipped COPY, ADD or WORKDIR that may land somewhere its kind does not list (P1.29f points 2 and 3). */
 function copyDestinationProblems(dockerfile: string): string[] {
   const kind = kindOf(dockerfile, lock);
-  let workdir = "/";
   const problems: string[] = [];
   for (const { line, text } of shippedInstructions(instructions(dockerfile))) {
     const [, word = "", args = ""] = INSTRUCTION.exec(text) ?? [];
     const keyword = word.toUpperCase();
-    if (keyword === "WORKDIR") workdir = posix.resolve(workdir, args.trim().replaceAll(/["']/g, ""));
-    if (keyword !== "COPY" && keyword !== "ADD") continue;
-    const problem = copyProblem(keyword, args, workdir, kind);
+    const problem =
+      keyword === "WORKDIR"
+        ? PLAIN_PATH.test(args.trim())
+          ? undefined
+          : `WORKDIR ${args.trim()} is not an absolute plain path`
+        : keyword === "COPY" || keyword === "ADD"
+          ? copyProblem(keyword, args, kind)
+          : undefined;
     if (problem !== undefined) problems.push(`line ${line}: ${problem}`);
   }
   return problems;
+}
+
+/**
+ * P1.29f (amendment 7 point 3): the ENV keys each kind's shipped stages set, exactly. No kind sets PATH, so PATH is on
+ * no list; a kind that needs it lists its exact value. `LD_*`, `NODE_OPTIONS`, `BASH_ENV` and `ENV` change what every
+ * process loads or runs and are on no list either.
+ */
+const ENV_KEYS_BY_KIND = new Map<Kind, readonly string[]>([
+  ["edge", []],
+  ["node", ["NODE_ENV"]], // node-app.Dockerfile:30, migrate.Dockerfile:19
+]);
+const ENV_PAIR = /^([A-Za-z_][A-Za-z0-9_]*)=\S*$/;
+
+/** Every shipped ENV key the kind does not list, every ENV in another form, and every shipped ARG. */
+function environmentProblems(dockerfile: string): string[] {
+  const kind = kindOf(dockerfile, lock);
+  const listed = ENV_KEYS_BY_KIND.get(kind as Kind) ?? [];
+  return shippedInstructions(instructions(dockerfile)).flatMap(({ line, text }) => {
+    const [, word = "", args = ""] = INSTRUCTION.exec(text) ?? [];
+    const keyword = word.toUpperCase();
+    if (keyword === "ARG") return [`line ${line}: ARG is not allowed in a shipped stage`];
+    if (keyword !== "ENV") return [];
+    const pairs = args.trim().split(/\s+/);
+    if (!pairs.every((pair) => ENV_PAIR.test(pair))) return [`line ${line}: cannot parse ENV ${args.trim()}`];
+    return pairs
+      .map((pair) => pair.slice(0, pair.indexOf("=")))
+      .filter((key) => !listed.includes(key))
+      .map((key) => `line ${line}: ENV ${key} is not on the ${kind ?? "unknown"} list`);
+  });
 }
 
 /** Every ONBUILD in a Dockerfile, in any stage. */
@@ -1033,6 +1073,21 @@ describe("base images", () => {
     const scripts = ["preinst", "postinst", "prerm", "postrm", "config"]
       .map((suffix) => `/var/lib/dpkg/info/*.${suffix}`)
       .join(" ");
+    // P1.29f (amendment 7 point 4): the pin for amendment 6 step A c. A count of exempt names rather than their
+    // positions passes `rm -f /apk\\x` on the strength of the escaped package name; by position it is the one floor hit.
+    expect(osPackageProblems(`${edge}RUN apk del ap\\k-tools && rm -f /apk\\x`)).toEqual([`line 2: ${floor}`]);
+    // P1.29f (architecture note under amendment 7, after #535): `&&` is the only separator; #535's three spellings first.
+    const separator = "a shell RUN joins commands with && only";
+    for (const run of [
+      "RUN rm -rf /usr/share/caddy || apk del --no-network apk-tools",
+      "RUN rm -rf /usr/share/caddy # && apk del --no-network apk-tools",
+      "RUN apk del --no-network apk-tools &",
+      "RUN rm -f /x; apk del --no-network apk-tools",
+      "RUN rm -f /x | apk del --no-network apk-tools",
+      'RUN rm -f "/x;y"',
+    ]) {
+      expect(osPackageProblems(`${edge}${run}`), run).toEqual([`line 2: ${separator}`]);
+    }
     for (const run of [
       "RUN apk del --no-network curl libcap apk-tools",
       "RUN apt-get purge -y x",
@@ -1065,49 +1120,130 @@ describe("base images", () => {
     expect(onbuildProblems(`FROM ${pinnedNode}\nonbuild RUN rm -f /x`)).toEqual(["line 2: ONBUILD is not allowed"]);
   });
 
-  test("shipped_copies_stay_out_of_path_and_package_state", () => {
-    // Amendment 6, step A e: a shipped stage's COPY or ADD lands in no PATH directory, except each kind's exact list,
-    // and never in package-manager state or the dynamic loader's preload and search configuration.
+  test("shipped_copies_land_on_the_kind_list", () => {
+    // P1.29f (amendment 7 points 2 and 3): a shipped COPY or ADD lands only under its kind's exact prefixes, at an
+    // absolute plain path, and every shipped WORKDIR is one. This replaces amendment 6's PATH and package-state lists.
     for (const file of dockerfiles) expect(copyDestinationProblems(read(file)), file).toEqual([]);
     const caddy = lock.caddy as Base;
     const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
     const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
-    const path = (target: string): string => `copies into ${target}, a PATH directory not on the list`;
-    const state = (target: string): string => `copies into ${target}, package-manager or loader state`;
-    const above = (target: string): string => `copies into ${target}, which holds a guarded directory`;
+    const listed = (target: string, kind = "node"): string => `copies into ${target}, not on the ${kind} list`;
+    const plain = (destination: string): string => `destination ${destination} is not an absolute plain path`;
+    const workdir = (path: string): string => `WORKDIR ${path} is not an absolute plain path`;
     for (const [base, copy, problems] of [
-      [node, "COPY x /usr/bin/x", [path("/usr/bin/x")]],
-      [node, "COPY --from=deps /app/x /usr/local/bin/", [path("/usr/local/bin")]],
-      [node, "ADD x /sbin/x", [path("/sbin/x")]],
-      [node, "COPY x /usr/local/bin/", [path("/usr/local/bin")]],
-      [node, "ADD x /etc/ld.so.preload", [state("/etc/ld.so.preload")]],
-      [node, "WORKDIR /usr/bin\nCOPY x x", [path("/usr/bin/x")]],
-      [node, "WORKDIR /usr\nWORKDIR bin\nCOPY x .", [path("/usr/bin")]],
-      [node, 'COPY ["x", "/bin/x"]', [path("/bin/x")]],
-      [node, "COPY x /usr/bin/../sbin/x", [path("/usr/sbin/x")]],
-      [edge, "COPY x /usr/bin/caddy2", [path("/usr/bin/caddy2")]],
-      [node, "COPY x /usr/bin/caddy", [path("/usr/bin/caddy")]],
-      [node, "COPY x /etc/apt/apt.conf.d/99x", [state("/etc/apt/apt.conf.d/99x")]],
-      [node, "COPY x /etc/dpkg/dpkg.cfg.d/x", [state("/etc/dpkg/dpkg.cfg.d/x")]],
-      [edge, "COPY x /etc/apk/repositories", [state("/etc/apk/repositories")]],
-      [edge, "COPY x /lib/apk/db/installed", [state("/lib/apk/db/installed")]],
-      [node, "COPY x /etc/ld.so.preload", [state("/etc/ld.so.preload")]],
-      [node, "COPY x /etc/ld.so.conf.d/x.conf", [state("/etc/ld.so.conf.d/x.conf")]],
-      [node, "COPY rootfs/ /", [above("/")]],
-      [node, "COPY etc/ /etc", [above("/etc")]],
-      [node, "COPY usr/ /usr/", [above("/usr")]],
+      [node, "COPY x /usr/bin/x", [`line 3: ${listed("/usr/bin/x")}`]],
+      [node, "COPY --from=deps /app/x /usr/local/bin/", [`line 3: ${listed("/usr/local/bin/")}`]],
+      [node, "ADD x /sbin/x", [`line 3: ${listed("/sbin/x")}`]],
+      [node, "ADD x /etc/ld.so.preload", [`line 3: ${listed("/etc/ld.so.preload")}`]],
+      [node, 'COPY ["x", "/bin/x"]', [`line 3: ${listed("/bin/x")}`]],
+      [node, "COPY x /app/../usr/bin/x", [`line 3: ${listed("/usr/bin/x")}`]],
+      [edge, "COPY x /usr/bin/caddy2", [`line 2: ${listed("/usr/bin/caddy2", "edge")}`]],
+      [edge, "COPY x /etc/caddy/../apk/x", [`line 2: ${listed("/etc/apk/x", "edge")}`]],
+      [node, "COPY x /usr/bin/caddy", [`line 3: ${listed("/usr/bin/caddy")}`]],
+      [node, "COPY x /etc/apt/apt.conf.d/99x", [`line 3: ${listed("/etc/apt/apt.conf.d/99x")}`]],
+      [node, "COPY x /etc/dpkg/dpkg.cfg.d/x", [`line 3: ${listed("/etc/dpkg/dpkg.cfg.d/x")}`]],
+      [edge, "COPY x /etc/apk/repositories", [`line 2: ${listed("/etc/apk/repositories", "edge")}`]],
+      [edge, "COPY x /lib/apk/db/installed", [`line 2: ${listed("/lib/apk/db/installed", "edge")}`]],
+      [node, "COPY x /etc/ld.so.conf.d/x.conf", [`line 3: ${listed("/etc/ld.so.conf.d/x.conf")}`]],
+      // A maintainer script an allowed purge would run as root.
+      [node, "COPY x /var/lib/dpkg/info/x.prerm", [`line 3: ${listed("/var/lib/dpkg/info/x.prerm")}`]],
+      // The verifier's x_var_lib_dpkg: the script an allowed purge would then run.
+      [
+        node,
+        "COPY x /var/lib/dpkg/info/apt.prerm\nRUN apt-get purge -y apt",
+        [`line 3: ${listed("/var/lib/dpkg/info/apt.prerm")}`],
+      ],
+      [node, "COPY rootfs/ /", [`line 3: ${plain("/")}`]],
+      [node, "COPY etc/ /etc", [`line 3: ${listed("/etc")}`]],
+      [node, "COPY usr/ /usr/", [`line 3: ${listed("/usr/")}`]],
+      // The verifier's five forms (#532 evidence, cases.md), then relative destinations and other spellings.
+      [node, 'COPY x "/usr/bin/x"', [`line 3: ${plain('"/usr/bin/x"')}`]],
+      [node, "COPY x '/etc/apt/apt.conf.d/99x'", [`line 3: ${plain("'/etc/apt/apt.conf.d/99x'")}`]],
+      [node, `COPY ["x", "'/usr/bin/x'"]`, [`line 3: ${plain("'/usr/bin/x'")}`]],
+      [node, "COPY x /usr/b\\in/x", [`line 3: ${plain("/usr/b\\in/x")}`]],
+      [node, "WORKDIR /usr/b\\in\nCOPY x x", [`line 3: ${workdir("/usr/b\\in")}`, `line 4: ${plain("x")}`]],
+      [node, "WORKDIR /usr/bin\nCOPY x .", [`line 4: ${plain(".")}`]],
+      [node, "WORKDIR /usr/bin\nCOPY x x", [`line 4: ${plain("x")}`]],
+      [node, "WORKDIR /usr\nWORKDIR bin", [`line 4: ${workdir("bin")}`]],
+      [node, 'WORKDIR "/usr/bin"', [`line 3: ${workdir('"/usr/bin"')}`]],
+      [node, 'COPY ["x", "/app/\\u0024x"]', [`line 3: ${plain("/app/$x")}`]],
       // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a JS template.
-      [node, "COPY x ${DEST}", ["a variable hides where COPY lands"]],
+      [node, "COPY x ${DEST}", [`line 3: ${plain("${DEST}")}`]],
     ] as const) {
-      const lines = copy.split("\n").length;
-      const at = base.split("\n").length - 1 + lines;
-      expect(copyDestinationProblems(`${base}${copy}`), copy).toEqual(
-        problems.map((problem) => `line ${at}: ${problem}`),
-      );
+      expect(copyDestinationProblems(`${base}${copy}`), copy).toEqual(problems);
     }
-    // The edge's own binary is on its list; stages the final one only copies from are not shipped.
+    // Each kind's own entries pass; stages the final one only copies from are not shipped.
     expect(copyDestinationProblems(`${edge}COPY --from=build /out/caddy /usr/bin/caddy`)).toEqual([]);
+    expect(copyDestinationProblems(`${edge}COPY snippets/ /etc/caddy/snippets/`)).toEqual([]);
+    expect(copyDestinationProblems(`${node}COPY --from=deps /app/shared /app/shared`)).toEqual([]);
     expect(copyDestinationProblems(`FROM ${pinnedNode} AS deps\nCOPY x /usr/bin/x\nFROM ${pinnedNode}`)).toEqual([]);
+  });
+
+  test("shipped_environment_keys_on_the_kind_list", () => {
+    // P1.29f (amendment 7 point 3): a shipped ENV sets only its kind's listed keys, and a shipped stage has no ARG.
+    for (const file of dockerfiles) expect(environmentProblems(read(file)), file).toEqual([]);
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    const listed = (key: string, kind = "node"): string =>
+      `line ${kind === "node" ? 3 : 2}: ENV ${key} is not on the ${kind} list`;
+    for (const [base, env, problems] of [
+      [node, "ENV PATH=/tmp:/usr/local/bin:/usr/bin:/bin", [listed("PATH")]],
+      [node, "ENV LD_PRELOAD=/x.so", [listed("LD_PRELOAD")]],
+      [node, "ENV LD_LIBRARY_PATH=/x", [listed("LD_LIBRARY_PATH")]],
+      [node, "ENV NODE_OPTIONS=--require=/x.js", [listed("NODE_OPTIONS")]],
+      [node, "ENV BASH_ENV=/x", [listed("BASH_ENV")]],
+      [node, "ENV ENV=/x", [listed("ENV")]],
+      [node, "ENV NODE_ENV=production LD_PRELOAD=/x.so", [listed("LD_PRELOAD")]],
+      [edge, "ENV NODE_ENV=production", [listed("NODE_ENV", "edge")]],
+      [node, "ENV LD_PRELOAD /x.so", ["line 3: cannot parse ENV LD_PRELOAD /x.so"]],
+      // The verifier's cases (#532 evidence, cases.md): x_env_ldpreload, x_env_path and x_arg_ldpreload.
+      [node, "ENV LD_PRELOAD=/app/x.so\nCOPY --from=deps /app/x.so /app/x.so\nRUN rm -f /x", [listed("LD_PRELOAD")]],
+      [node, "ENV PATH=/app/bin:/usr/local/bin:/usr/bin:/bin\nRUN rm -f /x", [listed("PATH")]],
+      [node, "ARG X", ["line 3: ARG is not allowed in a shipped stage"]],
+      [node, "ARG LD_PRELOAD=/x.so", ["line 3: ARG is not allowed in a shipped stage"]],
+    ] as const) {
+      expect(environmentProblems(`${base}${env}`), env).toEqual(problems);
+    }
+    // A stage the final one builds on is shipped; one it only copies from is not.
+    expect(environmentProblems(`FROM ${pinnedNode} AS base\nARG X\nFROM base`)).toEqual([
+      "line 2: ARG is not allowed in a shipped stage",
+    ]);
+    expect(environmentProblems(`FROM ${pinnedNode} AS deps\nARG X\nENV LD_PRELOAD=/x\nFROM ${pinnedNode}`)).toEqual([]);
+    expect(environmentProblems(`${node}ENV NODE_ENV=production`)).toEqual([]);
+  });
+
+  test("heredoc_refused_in_every_stage", () => {
+    // P1.29f (amendment 7 point 1): a here-doc body read as instructions could hold a fake final stage, so any `<<`
+    // outside a comment fails, in every stage, whatever follows it.
+    // The verifier's fake-final-stage Dockerfile (#532 evidence, unset-plan/evidence/p129e-gaps), comments dropped: the
+    // here-doc body carries a fake final stage, so the real one's curl install and /usr/local/bin copy went unread.
+    const fake = [
+      `FROM ${pinnedNode} AS deps`,
+      "WORKDIR /app",
+      "COPY . .",
+      "RUN npm ci --ignore-scripts --omit=dev",
+      `FROM ${pinnedNode} AS runtime`,
+      "WORKDIR /app",
+      "COPY --from=deps /app/package.json package.json",
+      "RUN apt-get update && apt-get install -y --no-install-recommends curl",
+      "COPY --from=deps /app/package.json /usr/local/bin/evil",
+      "RUN rm -f /tmp/x <<\\LABEL",
+      `FROM ${pinnedNode} AS runtime2`,
+      "LABEL",
+      "COPY --from=deps /app/node_modules node_modules",
+      "USER 65532:65532",
+      'ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]',
+    ].join("\n");
+    expect(referenceProblems(fake)).toEqual(["line 10: heredoc not supported"]);
+    expect(osPackageProblems(fake)).toEqual(["line 10: heredoc not supported"]);
+    for (const spelling of ["<<EOF", "<<\\EOF", "<<1", '<<"1x"', "<<-EOF", "<< EOF", "<<'EOF'"]) {
+      for (const instruction of [`RUN cat ${spelling}`, `COPY ${spelling} /app/x`]) {
+        const build = `FROM ${pinnedNode} AS deps\n${instruction}\nEOF\nFROM ${pinnedNode}`;
+        expect(referenceProblems(build), instruction).toEqual(["line 2: heredoc not supported"]);
+      }
+    }
+    expect(referenceProblems(`FROM ${pinnedNode}\n# cat <<EOF\nRUN rm -f /x`)).toEqual([]);
   });
 
   test("dl3026_ignore_only_on_upstream_base", () => {
@@ -1325,8 +1461,8 @@ describe("runtime stage", () => {
     expect(dockerfile).toMatch(/^RUN npm run build -w @unset\/apps-web$/m);
     const web = runtime.filter((line) => line.includes("apps/web"));
     expect(web).toEqual([
-      "COPY --from=build /app/apps/web/package.json apps/web/package.json",
-      "COPY --from=build /app/apps/web/dist apps/web/dist",
+      "COPY --from=build /app/apps/web/package.json /app/apps/web/package.json",
+      "COPY --from=build /app/apps/web/dist /app/apps/web/dist",
     ]);
   });
 
@@ -1336,7 +1472,7 @@ describe("runtime stage", () => {
       const copies = runtimeStage(read(file)).filter(
         (line) => line.startsWith("COPY ") && line.includes("node_modules"),
       );
-      expect(copies, file).toEqual(["COPY --from=deps /app/node_modules node_modules"]);
+      expect(copies, file).toEqual(["COPY --from=deps /app/node_modules /app/node_modules"]);
     }
   });
 
@@ -1376,6 +1512,8 @@ describe("runtime stage", () => {
       "RUN apk del --no-network curl libcap",
       "RUN rm -rf /etc/caddy",
       "RUN apk del --no-network apk-tools \\\n  && apk del --no-network curl",
+      // P1.29f (fourth architecture note under amendment 7): the last apk command must itself be a removal.
+      "RUN apk del --no-network apk-tools && apk add apk-tools",
     ]) {
       expect(apkKeptProblems(`${edge}${run}`), run).toEqual([kept]);
     }
@@ -1403,11 +1541,11 @@ describe("migrate image", () => {
   test("migrate_image_copies_only_its_paths", () => {
     expect(fromImages(read(MIGRATE_DOCKERFILE))).toEqual([pinnedNode, pinnedNode]);
     expect(migrate.filter((line) => /^(?:COPY|ADD) /.test(line))).toEqual([
-      "COPY --from=deps /app/package.json package.json",
-      "COPY --from=deps /app/node_modules node_modules",
-      "COPY --from=deps /app/shared shared",
-      "COPY --from=deps /app/infrastructure/net-guard infrastructure/net-guard",
-      "COPY --from=deps /app/infrastructure/postgres infrastructure/postgres",
+      "COPY --from=deps /app/package.json /app/package.json",
+      "COPY --from=deps /app/node_modules /app/node_modules",
+      "COPY --from=deps /app/shared /app/shared",
+      "COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard",
+      "COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres",
     ]);
     expect(migrate).toContain('ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]');
     // One-shot: it listens on nothing and Compose waits for its exit, not its health.

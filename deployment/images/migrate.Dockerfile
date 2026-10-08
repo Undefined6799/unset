@@ -18,12 +18,12 @@ LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=deps /app/package.json package.json
-COPY --from=deps /app/node_modules node_modules
-COPY --from=deps /app/shared shared
+COPY --from=deps /app/package.json /app/package.json
+COPY --from=deps /app/node_modules /app/node_modules
+COPY --from=deps /app/shared /app/shared
 # config.ts checks PG_HOST through net-guard's address classes (its `classifyAddress`), so net-guard ships too.
-COPY --from=deps /app/infrastructure/net-guard infrastructure/net-guard
-COPY --from=deps /app/infrastructure/postgres infrastructure/postgres
+COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard
+COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres
 # The CLI needs node only, so every package manager the base may ship leaves the runtime, apt and dpkg included, and
 # dpkg's maintainer scripts with them, as in node-app.Dockerfile.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \

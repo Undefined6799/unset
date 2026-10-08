@@ -29,12 +29,12 @@ LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=deps /app/package.json package.json
-COPY --from=deps /app/node_modules node_modules
-COPY --from=deps /app/shared shared
-COPY --from=deps /app/interfaces/http interfaces/http
-COPY --from=build /app/apps/web/package.json apps/web/package.json
-COPY --from=build /app/apps/web/dist apps/web/dist
+COPY --from=deps /app/package.json /app/package.json
+COPY --from=deps /app/node_modules /app/node_modules
+COPY --from=deps /app/shared /app/shared
+COPY --from=deps /app/interfaces/http /app/interfaces/http
+COPY --from=build /app/apps/web/package.json /app/apps/web/package.json
+COPY --from=build /app/apps/web/dist /app/apps/web/dist
 # The server needs node only, so every package manager the base may ship leaves the runtime: the bundled npm (whose
 # own dependencies Trivy flags) and any yarn, corepack or pnpm, then the OS's own apt, debconf, dpkg and libapt, each
 # through its own removal verb and dpkg last, then dpkg's maintainer scripts. dpkg's database stays, without a script,
