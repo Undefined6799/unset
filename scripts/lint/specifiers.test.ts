@@ -127,6 +127,9 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
       .filter((entry) => entry.isDirectory())
       .map((entry) => `${dir}/${entry.name}`);
   const packages = readPackages(ROOT, list, TEST_GLOBS);
+  // The real tree is clean, so the cruise below cannot show that readPackages builds the test-file rule it is given.
+  expect(packages.testFile("shared/http/main.ts")).toBe(false);
+  expect(packages.testFile("shared/http/main.test.ts")).toBe(true);
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
 });
