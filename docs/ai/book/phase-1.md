@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -218,6 +218,7 @@ flowchart LR
   P1_28y["P1.28y edge kind forbids apk"]
   P1_29n["P1.29n node runtime without package manager"]
   P1_29p["P1.29p capabilities and setuid pinned"]
+  P1_29j["P1.29j image test mutant fixtures"]
   P1_29m["P1.29m kind-wide package manager test"]
   P1_29f["P1.29f final-stage allowlists"]
   P1_29g["P1.29g image reader hardening"]
@@ -328,6 +329,7 @@ flowchart LR
   P1_29m --> P1_29g
   P1_29f --> P1_29g
   P1_29g --> P1_29p
+  P1_29p --> P1_29j
   P1_29x --> P1_28o
   P1_28o --> P1_28y
   P1_29x --> P1_28y
@@ -8680,6 +8682,32 @@ is removed the PR says so.
 Done when the test is green on every built image, and a fixture image with one extra setuid file fails. That fixture
 image is built from `COPY --chmod=4755 x /app/x`, which shows the built-image test catches it even if the text rule is
 bypassed. The glob-list substring mutant fails a test.
+
+---
+
+### P1.29j — Pin image test guards with mutant fixtures
+Tags: [SEC]            Depends on: P1.29p (#530, PR #559)
+Slice 1, issue #ISSUE_TBD, product (`deployment/images/`, test files only); book edit
+2026-10-08-p129j-image-test-mutant-fixtures (final 03:55Z), from the coordinator's verification of #559 (P1.29p),
+relayed at 03:52Z. A tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after
+P1.29p (#559) merges. Nothing depends on it; P1.29d does not wait for it. The coordinator asked for these fixtures in
+the next Phase 1 step that touches deployment/images, which is P1.29d, but P1.29d waits behind P1.29v and Alex's typed
+line, and merged security checks should not stay unpinned that long.
+
+**What** (line numbers are on #559's head and are matched by code):
+1. **The `--chmod` octal bound.** Add a five-digit octal `--chmod` fixture, such as `--chmod=10755`, so that removing
+   the `octal > 0o7777` bound (`images.test.ts:670`) fails a test.
+2. **readTar's three agreement throws** in `package-manager.image.test.ts`: a unit fixture for each of
+   `value === undefined`, `xattrs.length !== own.size` and `unlisted`, so that removing any one throw on its own fails a
+   test.
+3. **GLOBS_BY_KIND reverse containment** (the cheap optional case). A fixture whose RUN word is a strict substring of a
+   listed glob, such as `/opt/yarn-`, so the `entry.includes(raw)` mutant fails.
+
+Done when `npm run check` and the image tests are green, and each of the five mutants named above fails at least one
+test. The PR body lists each mutant and the test that kills it.
+
+**Not in scope:** setgid and sticky directories in the privilege count. The coordinator has asked architecture
+separately; any ruling arrives as an amendment to this record or to P1.29p's.
 
 ---
 
