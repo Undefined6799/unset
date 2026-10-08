@@ -8242,10 +8242,10 @@ Done when `npm run check` is green, and the rule runs over the edge Dockerfile, 
 ### P1.29n — Ship the node runtime without a package manager
 Tags: [SEC]            Depends on: P1.29e (merged, #532)
 Slice 1, issue #529, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
-23:40Z, amended 23:48Z; amendment 1, 01:00Z, from architecture's 00:50Z note F1 under amendment 7), from architecture's
-amendment 6 (23:35Z) and its 23:45Z note in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the
-coordinator clears it, no word from Alex unless it needs a base change. Owner: Phase 1, after P1.29e, in either order or
-in parallel with P1.29p.
+23:40Z, amended 23:48Z; amendment 1, final 01:12Z, from architecture's notes under amendment 7 there, 00:50Z F1 and
+after), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
+2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex unless it
+needs a base change. Owner: Phase 1, after P1.29e, in either order or in parallel with P1.29p.
 
 **What:** the node-kind image test `node_image_has_no_package_manager`, the twin of P1.28o's `edge_image_has_no_apk`:
 the built web and migrate images contain no `apt`, `apt-get`, `dpkg` or `dpkg-*` executable anywhere on disk. The
@@ -8254,19 +8254,42 @@ removal uses the package managers' own verbs in the final RUN, for example
 The step adds exactly the flags it needs to the layer-3 flag allowlist, and the body lists each flag and the line that
 uses it.
 
-**Every kind** (amendment 1, 01:00Z): the whole-disk test runs over the kind map, not node only: edge and node now, and
-postgres once P1.29d lands. On each built image it fails if any file's basename matches `apk`, `apk.static`, `apk-*`,
-`libapk*`, `apt`, `apt-get`, `apt-*`, `libapt*`, `dpkg`, `dpkg-*`, `rpm`, `yum`, `dnf` or `microdnf`, or if
-`/lib/apk/db` or `/var/lib/dpkg` exists. The general rule from 23:45Z (every image kind's built image has no package
-manager) holds by construction, because the test iterates the kind map; that replaces the per-kind completeness check.
-`edge_image_has_no_apk` (P1.28o) stays as it is, redundant and harmless. This step stays product class and may build the
-edge image; no trusted step is needed. The heading stays, because the node removal is still its main change.
+**Every kind** (amendment 1): the whole-disk test runs over the kind map, not node only: edge and node now, and postgres
+once P1.29d lands. On each built image it fails if any non-directory entry's basename matches `apk`, `apk.static`,
+`apk-*`, `libapk*`, `apt`, `apt-get`, `apt-*`, `libapt*`, `dpkg`, `dpkg-*`, `rpm`, `yum`, `dnf` or `microdnf`.
+Directories stay out of the match. libapt-pkg is purged. The general rule from 23:45Z (every image kind's built image
+has no package manager) holds by construction, because the test iterates the kind map; that replaces the per-kind
+completeness check. `edge_image_has_no_apk` (P1.28o) stays as it is, redundant and harmless. This step stays product
+class and may build the edge image; no trusted step is needed. The heading stays, because the node removal is still its
+main change.
+
+**The package databases stay, as inert data** (architecture's third note under amendment 7, 01:00Z). Deleting them would
+blind Trivy and break "shipped images scanned in full", so the test requires:
+- `/var/lib/dpkg` holds only `status` and `status-old`; `info/*.list`, `info/*.md5sums`, and `info/format` if present;
+  and any other non-executable data file that main's image actually has (for example `diversions`, `statoverride`,
+  `alternatives/*`, `triggers/*`), each listed exactly in the PR body. Maintainer scripts (`*.preinst`, `*.postinst`,
+  `*.prerm`, `*.postrm`, `*.config`) are absent.
+- `/lib/apk/db` holds only `installed`, `lock`, `triggers` and `scripts.tar`, each only if present.
+- No file under either tree has an execute bit.
+- The scanner still sees packages: dpkg `status` has at least one `Package:` stanza, and apk `installed` has at least
+  one `P:` line.
+- Empty directories may stay: etc/apt, etc/dpkg, var/log/apt, etc/apk, lib/apk, usr/share/apk. Any file inside them,
+  apart from the two database trees, is subject to the basename and executable rules.
+
+Red fixtures: a dpkg `.postinst` left in `info/`; an executable file under `/lib/apk/db`; an emptied `status` with no
+`Package:` stanza.
+
+**No kind passes by being skipped** (architecture's second note under amendment 7). The kind-wide test iterates
+`KIND_BY_FINAL_ENTRY` itself. It fails if any kind has zero Dockerfiles that are built and checked, or if any image
+fails to build. Red fixtures: a kind in the map with no matching Dockerfile, and a Dockerfile that fails to build.
 
 **Stop condition:** if this cannot work on Debian slim, the step stops and says so. Changing the runtime base would undo
 Alex's "Debian slim" card (03:56:37Z), and that needs his word on a new card.
 
-Done when the image test is green on both built images, the kind-map test is green, and `npm run check` is green. The
-body gives Trivy counts before and after.
+Done when the kind-wide test is green on every kind in `KIND_BY_FINAL_ENTRY` (edge and node today), and on every built
+image of each kind; its red fixtures fail, including a kind with no Dockerfile, an image that fails to build, and the
+database fixtures above; `npm run check` is green; and the body gives Trivy counts before and after, and lists the dpkg
+data files it allows.
 
 ---
 
