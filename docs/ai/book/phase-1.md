@@ -8301,9 +8301,13 @@ uses it.
 
 **As built** (#538, first commit only; book edit 2026-10-08-p129m-kind-wide-package-manager-test):
 `deployment/images/package-manager.image.test.ts` hard-codes three images, node-app, migrate and edge. Node images are
-matched against Debian names (`apt`, `apt-get`, `dpkg`, `dpkg-*`) and edge against Alpine names (`apk`, `apk-*`). Only
-executable files count, plus symlinks to them; the test is `package_manager_listing_reader`. The node and migrate
-Dockerfiles purge apt and dpkg with their own verbs, and `images.test.ts` gains the flags.
+matched against Debian names (`apt`, `apt-get`, `dpkg`, `dpkg-*`) and edge against Alpine names (`apk`, `apk-*`). What
+counts: regular files with an execute bit, and every symlink whose name matches, whatever it points to
+(`package-manager.image.test.ts:55`). The image tests are `node_image_has_no_package_manager` and
+`edge_image_has_no_package_manager`; `package_manager_listing_reader` is the unit test of the listing reader.
+`images.test.ts:824-834` gains `every_kind_has_a_package_manager_image_test`, which requires a
+`<kind>_image_has_no_package_manager` test for every kind. The node and migrate Dockerfiles purge apt and dpkg with
+their own verbs, and `images.test.ts` gains the flags.
 
 The rest moves to P1.29m.
 
@@ -8318,14 +8322,23 @@ body gives Trivy counts before and after.
 ### P1.29m — Finish the kind-wide package manager test
 Tags: [SEC]            Depends on: P1.29n (merged, #538)
 Slice 1, issue #543, product (`deployment/images/`); book edit 2026-10-08-p129m-kind-wide-package-manager-test (final
-01:30Z), from the coordinator's relay at 00:51Z: #538 merged at 00:34:04Z as `41810fa` with only its first commit, so
-none of P1.29n's amendments 1 and 2 (in 2026-10-07-p129e-p129n-p129p-image-outcome-checks) is on main, checked on
-485cd61. A tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot, ahead of P1.29f. It
-goes before P1.29f, P1.29d and P1.29, which all gain it as a dependency.
+01:30Z; the coordinator's nits on #542 folded in at 01:40Z), from the coordinator's relay at 00:51Z: #538 merged at
+00:34:04Z as `41810fa` with only its first commit, so none of P1.29n's amendments 1 and 2 (in
+2026-10-07-p129e-p129n-p129p-image-outcome-checks) is on main, checked on 485cd61. A tightening; the coordinator clears
+it, no word from Alex. Owner: Phase 1, the next slot, ahead of P1.29f. It goes before P1.29f, P1.29d and P1.29, which
+all gain it as a dependency.
 
 **What:** the text of amendments 1 and 2, carried over unchanged from P1.29n's section. The kind map moves to
-`deployment/images/kinds.json`, and the hard-coded list in `package-manager.image.test.ts` is deleted. The new test
-supersedes the hard-coded per-image tests from #538; `edge_image_has_no_apk` from P1.28o stays.
+`deployment/images/kinds.json`, and the hard-coded list in `package-manager.image.test.ts` is deleted.
+
+**Retire, explicitly:**
+- the hard-coded `node_image_has_no_package_manager` and `edge_image_has_no_package_manager` tests (#538), which the
+  kind-wide test supersedes;
+- `every_kind_has_a_package_manager_image_test` (`images.test.ts:824-834`) and its helper `missingPackageManagerTests`.
+  The kind-wide test makes them redundant (amendment 2), and P1.29d's postgres test is optional only because they are
+  gone.
+- `package_manager_listing_reader` stays if the reader stays.
+- `edge_image_has_no_apk` from P1.28o stays.
 
 **Every kind** (amendment 1): the whole-disk test runs over the kind map, not node only: edge and node now, and postgres
 once P1.29d lands. On each built image it fails if any non-directory entry's basename matches `apk`, `apk.static`,
