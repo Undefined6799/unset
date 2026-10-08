@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 173 steps: 152 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 174 steps: 153 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -269,6 +269,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28g | depcruise: deployment/edge never imports deployment/preflight | [SEC] | P1.28e | `phase-1.md` |
 | P1.28k | depcruise and raw-specifier allowlist: refuse root-absolute, unresolved and non-allowlisted imports | [SEC] | P1.28g | `phase-1.md` |
 | P1.28m | Raw-specifier check: root-only dependencies allowed in test files only | [SEC] | P1.28k | `phase-1.md` |
+| P1.28p | depcruise: product code never imports the tooling set (tests, check scripts, fixtures, vectors) | [SEC] | P1.28m | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
@@ -431,6 +432,7 @@ flowchart TD
   P1_28g["P1.28g Edge never imports preflight"]
   P1_28k["P1.28k No root-absolute or unresolved imports"]
   P1_28m["P1.28m Root-only dependencies in tests only"]
+  P1_28p["P1.28p Product never imports tooling"]
   P1_28s["P1.28s Quoted top-level tokens refused"]
   P1_28i["P1.28i Edge image builds in image tests"]
   P1_28j["P1.28j Edge image tests drop runIf"]
@@ -722,6 +724,7 @@ flowchart TD
   P1_28g --> P1_30u
   P1_28g --> P1_28k
   P1_28k --> P1_28m
+  P1_28m --> P1_28p
   P1_30u --> P2_13a
   P1_03 --> P1_04k
   P1_03 --> P1_03w

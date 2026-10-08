@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -204,6 +204,7 @@ flowchart LR
   P1_28g["P1.28g edge never imports preflight"]
   P1_28k["P1.28k no root-absolute or unresolved imports"]
   P1_28m["P1.28m root-only dependencies in tests only"]
+  P1_28p["P1.28p product never imports tooling"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -380,6 +381,7 @@ flowchart LR
   P1_28g --> P1_30u
   P1_28g --> P1_28k
   P1_28k --> P1_28m
+  P1_28m --> P1_28p
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7820,6 +7822,41 @@ statically, the PR lists the pattern it uses instead and says why, under "What I
 
 ---
 
+### P1.28p — Product code never imports test tooling
+Tags: [SEC]            Depends on: P1.28m (merged, #555)
+Slice 1, issue #556, check (scripts/lint, kind/build); book edit 2026-10-08-p128p-product-never-imports-tooling (final
+03:20Z; amendment 1, 03:25Z), from architecture's p130s amendments 11 (03:20Z) and 11a (03:25Z), asked by the
+coordinator at 03:12Z after the #555 (P1.28m) verification and relayed at 03:14Z. A tightening; the coordinator clears
+it, no word from Alex. Owner: the third thread, which built P1.28m. Nothing depends on it.
+
+**Why:** `shared/http/via.ts` can import `./helper.test.ts`, which imports `dependency-cruiser`. The specifier check
+passes the import because its importer is a test file, and depcruise passes the edge because the `shared` MATRIX row
+allows `^shared/`.
+
+**What:** one depcruise `forbidden` rule, severity error: **no file outside the tooling set may import a file inside
+it.**
+- **The tooling set** is defined once and shared with P1.28m's test-file definition; P1.28m's code is refactored to read
+  the same definition, not a copy. It holds the nine Vitest project include globs, read from vitest.config.ts, and
+  `**/*.image.test.*`; `^tests/`; the SE-6 check paths
+  `^scripts/(guards|lint|ci|budgets|licence|docs|test|workspace|githooks)/` (amendment 11a), so scripts/ui stays
+  product; any `fixtures/` or `__fixtures__/` directory; `*.fixture.*`; and `*.vector.json`.
+- **No exemptions.** Any such edge on main is listed in the PR body, and its shared code moves into a product file that
+  both sides import.
+- **F1 from #555's verification** (amendment 1). The mutant `testFile: () => true` at `specifiers.ts:55` survives,
+  because only the real-tree run calls readPackages. A direct unit assertion fixes it: `testFile` is false for a product
+  path (for example shared/http/via.ts) and true for a `*.test.ts` under a workspace. It covers the shared tooling-set
+  definition.
+
+Fixtures: red, a product file importing a sibling `*.test.ts`; red, a product file importing `tests/support/x.ts`; red,
+a product file importing a `fixtures/` file; red, a product file importing a `*.vector.json`; red, a scripts/ui file
+importing a test helper; green, a test importing product code.
+
+Done when `npm run check` is green, each red fixture fails on this rule, and the F1 mutant fails a test. If moving
+shared code off an existing edge would touch a trusted or product file, the PR stops and lists the edge, because a check
+PR carries no product or trusted path; the step book then books the move as its own step, ahead of this one.
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
@@ -8561,7 +8598,8 @@ passes, and the body lists every allowlist entry with its citation.
 
 ### P1.29g — Harden the package manager image reader
 Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f (merged, #548)
-As built: merged by Alex at 2026-10-08T03:12:19Z as `718fb69` (#554), with items 5 and 6.
+As built: merged by Alex at 2026-10-08T03:12:19Z as `718fb69` (#554), with items 5 and 6. Across the 177 corpus cases,
+nothing main refused is now accepted (p129f-corpus-gaps record, amendment 2, 03:20Z).
 Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final 01:45Z),
 from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the verification
 finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green and nothing is
@@ -8632,9 +8670,16 @@ digit before the last three, or a symbolic mode containing `s` or `t`. A `--chmo
 symbolic also fails. Fixtures: red, `COPY --chmod=4755`, `--chmod=2755`, `--chmod=1777` and `--chmod=u+s` (case
 x_chmod_setuid); green, `--chmod=0755` and `--chmod=644`.
 
+**Glob-list mutant** (p129f-corpus-gaps record, amendment 2, test only). If the GLOBS_BY_KIND exact-token check at
+`images.test.ts:510` is loosened to a substring match (`listed.some(e => raw.includes(e))`), all 36 tests stay green.
+Add red fixtures whose RUN word contains a listed glob without being identical to it, such as `rm -rf /opt/yarn-*x` and
+`rm -rf /x/opt/yarn-*`, so the substring mutant fails. Optional, the builder's call: node's GLOBS_BY_KIND entry also
+holds `-f` (`images.test.ts:503`), because `slice(1)` takes the rm flag along with the globs; it is harmless, and if it
+is removed the PR says so.
+
 Done when the test is green on every built image, and a fixture image with one extra setuid file fails. That fixture
 image is built from `COPY --chmod=4755 x /app/x`, which shows the built-image test catches it even if the text rule is
-bypassed.
+bypassed. The glob-list substring mutant fails a test.
 
 ---
 
