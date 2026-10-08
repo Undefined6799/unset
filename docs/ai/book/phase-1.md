@@ -8663,7 +8663,9 @@ Phase 1, after P1.29g (P1.29e and P1.29n merged).
 amendment 1). It walks each built image's filesystem; every file with a `security.capability` xattr, and every setuid or
 setgid file, must be in an exact per-kind list. Today's lists: edge, caddy with `cap_net_bind_service`, if main has it;
 node, none (the base's setuid files are removed in the final RUN, or the body lists each one that must stay, with the
-reason). A kind that has no list fails the test, so a new image cannot arrive unlisted.
+reason). Setuid and setgid here mean regular files; setgid and sticky directories grant no privilege when run and are
+not listed (architecture, 03:58Z, after #559). A kind that has no list fails the test, so a new image cannot arrive
+unlisted.
 
 **Static `--chmod` check** (book edit 2026-10-08-p129f-corpus-gaps, final 02:05Z). `COPY --chmod=4755 x /app/x` passes
 today: `copyProblem` (`images.test.ts:607`) drops every flag via splitFlags, and nothing in deployment/ checks
@@ -8687,7 +8689,7 @@ bypassed. The glob-list substring mutant fails a test.
 
 ### P1.29j — Pin image test guards with mutant fixtures
 Tags: [SEC]            Depends on: P1.29p (#530, PR #559)
-Slice 1, issue #ISSUE_TBD, product (`deployment/images/`, test files only); book edit
+Slice 1, issue #560, product (`deployment/images/`, test files only); book edit
 2026-10-08-p129j-image-test-mutant-fixtures (final 03:55Z), from the coordinator's verification of #559 (P1.29p),
 relayed at 03:52Z. A tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after
 P1.29p (#559) merges. Nothing depends on it; P1.29d does not wait for it. The coordinator asked for these fixtures in
@@ -8706,8 +8708,8 @@ line, and merged security checks should not stay unpinned that long.
 Done when `npm run check` and the image tests are green, and each of the five mutants named above fails at least one
 test. The PR body lists each mutant and the test that kills it.
 
-**Not in scope:** setgid and sticky directories in the privilege count. The coordinator has asked architecture
-separately; any ruling arrives as an amendment to this record or to P1.29p's.
+**Not in scope:** setgid and sticky directories. Architecture confirmed at 03:58Z that P1.29p's list covers regular
+files only (note at the end of the p129e-p129n-p129p record), so no follow-up is needed.
 
 ---
 
