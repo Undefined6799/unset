@@ -7717,6 +7717,7 @@ Done when `npm run check` is green, and the red fixture fails on the new rule.
 
 ### P1.28k — Refuse root-absolute and unresolved imports
 Tags: [SEC]            Depends on: P1.28g (merged, #540)
+As built: merged by Alex at 2026-10-08T02:52:17Z as `0864d39` (#549).
 Slice 1, issue #544, check (`scripts/lint/.dependency-cruiser.cjs`, its fixtures and its tests); book edit
 2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z; amendment 1, final 02:05Z, from architecture's
 p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z; amendment 2, final 02:15Z, three tightenings from the
@@ -7786,7 +7787,7 @@ it, together with amendment 8 item 2's general rule.
 ---
 
 ### P1.28m — Allow root-only dependencies in test files only
-Tags: [SEC]            Depends on: P1.28k (#544, PR #549)
+Tags: [SEC]            Depends on: P1.28k (merged, #549)
 Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
 2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
 amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
@@ -8519,6 +8520,7 @@ allows.
 
 ### P1.29f — Turn final-stage rules into per-kind allowlists
 Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538), P1.29m (merged, #545)
+As built: merged by Alex at 2026-10-08T02:52:04Z as `ed761f3` (#548).
 Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
 items 5 and 6 at 01:00Z), from architecture's amendment 7 (00:45Z) and its 00:50Z note in
 2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e (#532), relayed by the coordinator at 00:27Z. A
@@ -8556,7 +8558,7 @@ passes, and the body lists every allowlist entry with its citation.
 ---
 
 ### P1.29g — Harden the package manager image reader
-Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f
+Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f (merged, #548)
 Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final 01:45Z),
 from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the verification
 finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green and nothing is
