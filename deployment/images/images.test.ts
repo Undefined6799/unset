@@ -145,8 +145,9 @@ function sharedRefProblems(lock: Lock): string[] {
 /**
  * What each image is, by its final stage's runtime lock entry, so the rules for a kind reach every image of that kind
  * (amendment 2): a Dockerfile on any other entry, scratch included, fails `every_dockerfile_has_a_known_kind` rather
- * than falling out of every kind's rules. P1.29d adds `postgres`. The edge kind has no package-manager rule yet: its
- * Caddy Alpine runtime keeps apk (amendment 3, point 4), which a separate trusted step removes.
+ * than falling out of every kind's rules. P1.29d adds `postgres`. The edge kind's package-manager rule is
+ * `edge_runtime_has_no_package_manager`: P1.28o removed apk-tools from its Caddy Alpine runtime, and P1.28y fails any
+ * edge image whose last apk command does not remove it.
  */
 type Kind = "node" | "edge";
 const KIND_BY_FINAL_ENTRY = new Map<string, Kind>([
@@ -603,6 +604,30 @@ function onbuildProblems(dockerfile: string): string[] {
     .map(({ line }) => `line ${line}: ONBUILD is not allowed`);
 }
 
+/** The simple commands every shipped RUN runs, in order, in shell or exec form. */
+function shippedCommands(dockerfile: string): string[][] {
+  return shippedInstructions(instructions(dockerfile)).flatMap(({ text }) => {
+    const [, word = "", args = ""] = INSTRUCTION.exec(text) ?? [];
+    if (word.toUpperCase() !== "RUN") return [];
+    const { rest } = splitFlags(args);
+    const exec = rest.startsWith("[") ? execCommand(rest) : undefined;
+    return exec === undefined ? shellCommands(rest).map((command) => command.map((token) => token.word)) : [exec];
+  });
+}
+
+/**
+ * The edge kind's package-manager rule (P1.28y; P1.28o record, architecture amendment 22:45Z, "Afterwards"): its
+ * Caddy Alpine base ships apk, so the last apk command the image runs must be a removal of apk-tools itself.
+ */
+function apkKeptProblems(dockerfile: string): string[] {
+  const last = shippedCommands(dockerfile)
+    .filter((words) => (words[0] ?? "").split("/").at(-1) === "apk")
+    .at(-1);
+  const removesApk =
+    last !== undefined && removalProblem("apk", last.slice(1)) === undefined && last.includes("apk-tools");
+  return removesApk ? [] : ["the final stage keeps apk: its last apk command does not remove apk-tools"];
+}
+
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
 function osPackageProblems(dockerfile: string): string[] {
   try {
@@ -664,6 +689,7 @@ const NODE = lock.node as Base;
  * Node image is held to the Node runtime rules below without editing this test.
  */
 const nodeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "node");
+const edgeDockerfiles = dockerfiles.filter((file) => kindOf(read(file), lock) === "edge");
 const pinnedNode = `docker.io/library/node:${NODE.tag}@${NODE.digest}`;
 
 describe("base images", () => {
@@ -1275,6 +1301,29 @@ describe("runtime stage", () => {
           .join(""),
         file,
       ).not.toContain("rm -rf");
+    }
+  });
+
+  test("edge_runtime_has_no_package_manager", () => {
+    // The rule runs over every edge-kind image, edge/Dockerfile among them.
+    expect(edgeDockerfiles).toEqual(expect.arrayContaining(["edge/Dockerfile"]));
+    for (const file of edgeDockerfiles) expect(apkKeptProblems(read(file)), file).toEqual([]);
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    const kept = "the final stage keeps apk: its last apk command does not remove apk-tools";
+    for (const run of [
+      "RUN apk del --no-network curl libcap",
+      "RUN rm -rf /etc/caddy",
+      "RUN apk del --no-network apk-tools \\\n  && apk del --no-network curl",
+    ]) {
+      expect(apkKeptProblems(`${edge}${run}`), run).toEqual([kept]);
+    }
+    for (const run of [
+      "RUN apk del --no-network curl libcap \\\n  && apk del --no-network apk-tools",
+      "RUN apk del --no-network curl libcap apk-tools",
+      'RUN ["apk", "del", "--no-network", "apk-tools"]',
+    ]) {
+      expect(apkKeptProblems(`${edge}${run}`), run).toEqual([]);
     }
   });
 
