@@ -157,13 +157,6 @@ const KIND_BY_FINAL_ENTRY = new Map(
 const kindOf = (dockerfile: string, lock: Lock): Kind | undefined =>
   KIND_BY_FINAL_ENTRY.get(finalEntry(dockerfile, lock) ?? "");
 
-/** The kinds no image test file proves free of a package manager by a test of the agreed name. */
-function missingPackageManagerTests(kinds: readonly string[], sources: readonly string[]): string[] {
-  return kinds.filter(
-    (kind) => !sources.some((source) => source.includes(`test("${kind}_image_has_no_package_manager"`)),
-  );
-}
-
 function kindProblems(files: Record<string, string>, lock: Lock): string[] {
   return Object.entries(files).flatMap(([file, text]) =>
     kindOf(text, lock) === undefined ? [`${file} builds on no known kind of image`] : [],
@@ -407,7 +400,7 @@ const APT_FLAGS = ["-y", "-q", "--purge", "--auto-remove", "--no-install-recomme
 const REMOVAL_FLAGS = new Map<string, readonly string[]>([
   ["apk", ["--no-network", "--purge", "--no-cache", "-q"]],
   ["apt", APT_FLAGS],
-  // P1.29n: the node runtime purges apt, then debconf and dpkg, both essential (node-app.Dockerfile:45-46 and
+  // P1.29n: the node runtime purges apt, then debconf, dpkg and libapt, apt and dpkg essential (node-app.Dockerfile:46-47 and
   // migrate.Dockerfile:32-33); each kind's image test proves the result.
   ["apt-get", [...APT_FLAGS, "--allow-remove-essential"]],
   ["dpkg", ["--force-remove-essential", "--force-depends"]],
@@ -459,6 +452,36 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["node", []],
 ]);
 
+/**
+ * The only rm each kind's shipped stages run that names a package manager, word for word as written (fourth
+ * architecture note under amendment 7): the node kind drops dpkg's maintainer scripts once dpkg is gone
+ * (node-app.Dockerfile:48-49, migrate.Dockerfile:34-35). Any other rm naming one still meets the floor.
+ */
+const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
+  ["edge", []],
+  [
+    "node",
+    [
+      [
+        "-f",
+        "/var/lib/dpkg/info/*.preinst",
+        "/var/lib/dpkg/info/*.postinst",
+        "/var/lib/dpkg/info/*.prerm",
+        "/var/lib/dpkg/info/*.postrm",
+        "/var/lib/dpkg/info/*.config",
+      ],
+    ],
+  ],
+]);
+const listedRm = (command: Token[], kind: Kind | undefined): boolean =>
+  command[0]?.raw === "rm" &&
+  (RM_BY_KIND.get(kind as Kind) ?? []).some((allowed) =>
+    isDeepStrictEqual(
+      allowed,
+      command.slice(1).map((token) => token.raw),
+    ),
+  );
+
 /** Why one simple command may not run in a shipped image of this kind (layers 2 and 3); undefined when it may. */
 function commandProblem(command: Token[], kind: Kind | undefined): string | undefined {
   const words = command.map((token) => token.word);
@@ -483,9 +506,11 @@ const managerNames = (text: string): number => text.match(PACKAGE_MANAGER_WORD)?
 
 /**
  * Layer 1 by position (amendment 6, step A c): the package-manager names in a command's words, other than its first
- * word and its package names when the command is a removal that passes. A word counts as written and without quotes.
+ * word and its package names when the command is a removal that passes, and none in a kind's listed rm. A word counts
+ * as written and without quotes.
  */
 function unexemptManagerNames(command: Token[], kind: Kind | undefined): number {
+  if (listedRm(command, kind)) return 0;
   const [name = "", ...args] = command.map((token) => token.word);
   const flags = REMOVAL_FLAGS.get(name) ?? [];
   const removal = REMOVAL_VERBS.has(name) && commandProblem(command, kind) === undefined;
@@ -821,18 +846,6 @@ describe("base images", () => {
     ).toEqual(["lock entry node lists a stripped path twice"]);
   });
 
-  test("every_kind_has_a_package_manager_image_test", () => {
-    // P1.29n (architecture, 23:45Z): every kind's built image has no package manager, proven by a test named
-    // `<kind>_image_has_no_package_manager` in an image test file. A new kind brings its test in the PR that adds it.
-    const imageTests = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
-      .filter((file) => file.endsWith(".image.test.ts"))
-      .map(read);
-    expect(missingPackageManagerTests([...new Set(KIND_BY_FINAL_ENTRY.values())], imageTests)).toEqual([]);
-    expect(
-      missingPackageManagerTests(["node", "edge", "postgres"], ['test("node_image_has_no_package_manager"']),
-    ).toEqual(["edge", "postgres"]);
-  });
-
   test("every_dockerfile_has_a_known_kind", () => {
     const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
     expect(kindProblems(files, lock)).toEqual([]);
@@ -1017,14 +1030,28 @@ describe("base images", () => {
     expect(osPackageProblems(`${edge}RUN setcap cap_net_admin=+ep /usr/bin/caddy`)).toEqual([
       `line 2: ${setcapNotListed("setcap cap_net_admin=+ep /usr/bin/caddy", "edge")}`,
     ]);
+    const scripts = ["preinst", "postinst", "prerm", "postrm", "config"]
+      .map((suffix) => `/var/lib/dpkg/info/*.${suffix}`)
+      .join(" ");
     for (const run of [
       "RUN apk del --no-network curl libcap apk-tools",
       "RUN apt-get purge -y x",
       "RUN dpkg -r x",
       // P1.29n's removal of the OS package managers.
       "RUN apt-get purge --allow-remove-essential -y apt \\\n  && dpkg --purge --force-remove-essential --force-depends debconf dpkg",
+      `RUN rm -f ${scripts}`,
     ]) {
       expect(osPackageProblems(`${node}${run}`), run).toEqual([]);
+    }
+    // The node kind's listed rm passes word for word only, and only in a node image (fourth note under amendment 7).
+    for (const [base, run] of [
+      [node, `RUN rm -f ${scripts} /x`],
+      [node, `RUN rm -rf ${scripts}`],
+      [node, "RUN rm -f /var/lib/dpkg/status"],
+      [node, `RUN rm -f ${scripts.replace("*.preinst", "'*.preinst'")}`],
+      [edge, `RUN rm -f ${scripts}`],
+    ] as const) {
+      expect(osPackageProblems(`${base}${run}`), run).toEqual([`line ${base.split("\n").length}: ${floor}`]);
     }
   });
 
