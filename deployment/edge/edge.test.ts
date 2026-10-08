@@ -3,6 +3,7 @@
 // addresses in memory and nowhere else (ADR 0018, invariant 3); the image is built from pinned versions only.
 import {
   cpSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -14,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type EdgeFiles, edgeSiteProblems, readEdgeConfig } from "./caddyfile.ts";
 
@@ -44,7 +45,8 @@ const FILES: EdgeFiles = {
   list: (dir) => readdirSync(dir),
   kind: (path) => {
     const stat = lstatSync(path);
-    return stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+    const type = stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+    return { type, links: stat.nlink };
   },
   realpath: (path) => {
     try {
@@ -356,6 +358,264 @@ describe("edge config reader (P1.28e)", () => {
     // An included file's own file import is not expanded again.
     const nested = edgeTree({ "sites/pds.caddy": `${read("sites/pds.caddy")}\nimport snippets/*.caddy\n` });
     expect(load(nested)).toThrow("file imports are refused");
+  });
+});
+
+describe("edge reader containment (P1.28f)", () => {
+  // Architecture amendment 8 to 2026-10-07-p130s-networks-and-caddyfile-reader, point 1; step book
+  // 2026-10-08-p128f-p128g-edge-reader-follow-ups. Every fixture goes through the real node:fs adapter.
+  const load =
+    (tree: { edgeDir: string; sitesDir: string }, files: EdgeFiles = FILES) =>
+    () =>
+      readEdgeConfig(tree.edgeDir, tree.sitesDir, ENV, files);
+  const outsideDir = () => {
+    const dir = mkdtempSync(join(tmpdir(), "outside-"));
+    trees.push(dir);
+    return dir;
+  };
+
+  test("edge_reader_symlinked_sites_enabled_fails", () => {
+    const tree = edgeTree();
+    const outside = outsideDir();
+    cpSync(join(EDGE, "sites", "pds.caddy"), join(outside, "pds.caddy"));
+    rmSync(tree.sitesDir, { recursive: true });
+    symlinkSync(outside, tree.sitesDir);
+    expect(load(tree)).toThrow("the enabled sites directory is not inside sites/");
+  });
+
+  test("edge_reader_symlinked_sites_fails", () => {
+    const tree = edgeTree();
+    const outside = join(outsideDir(), "sites");
+    cpSync(join(tree.edgeDir, "sites"), outside, { recursive: true, verbatimSymlinks: true });
+    rmSync(join(tree.edgeDir, "sites"), { recursive: true });
+    symlinkSync(outside, join(tree.edgeDir, "sites"));
+    expect(load(tree)).toThrow("sites/ leaves the edge directory");
+  });
+
+  test("edge_reader_sites_dir_outside_tree_fails", () => {
+    const tree = edgeTree();
+    const outside = outsideDir();
+    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(outside, "pds.caddy"));
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: outside })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+    // Its real path counts, not how it is written.
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: `${tree.edgeDir}/sites/../../${basename(outside)}` })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+  });
+
+  test("edge_reader_file_through_symlinked_parent_fails", () => {
+    const tree = edgeTree();
+    const outside = join(outsideDir(), "snippets");
+    cpSync(join(tree.edgeDir, "snippets"), outside, { recursive: true });
+    rmSync(join(tree.edgeDir, "snippets"), { recursive: true });
+    symlinkSync(outside, join(tree.edgeDir, "snippets"));
+    expect(load(tree)).toThrow("log.caddy: the file is not inside snippets/");
+  });
+
+  test("edge_reader_hard_linked_file_fails", () => {
+    const tree = edgeTree();
+    linkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(outsideDir(), "pds.caddy"));
+    expect(load(tree)).toThrow("pds.caddy: the file has 2 hard links");
+    const snippet = edgeTree();
+    linkSync(join(snippet.edgeDir, "snippets", "tls.caddy"), join(outsideDir(), "tls.caddy"));
+    expect(load(snippet)).toThrow("tls.caddy: the file has 2 hard links");
+  });
+
+  test("edge_reader_checks_adapter_answers", () => {
+    // An adapter answering `root/sites/../../x` would pass a bare prefix check.
+    const tree = edgeTree();
+    const outside = outsideDir();
+    writeFileSync(join(outside, "x.caddy"), "other.unset.test {\n\trespond 200\n}\n");
+    const lying = (from: string, to: string): EdgeFiles => ({
+      ...FILES,
+      realpath: (path) => (path === from ? to : FILES.realpath(path)),
+    });
+    const entry = join(tree.sitesDir, "pds.caddy");
+    const outward = `${realpathSync(tree.edgeDir)}/sites/../../${outside.slice(1)}/x.caddy`;
+    expect(load(tree, lying(entry, outward))).toThrow("pds.caddy resolves to a path that is not absolute and normal");
+    expect(load(tree, lying(tree.edgeDir, "relative/edge"))).toThrow(
+      "the edge directory resolves to a path that is not absolute and normal",
+    );
+    expect(load(tree, lying(tree.edgeDir, `${realpathSync(tree.edgeDir)}/`))).toThrow("not absolute and normal");
+    expect(load(tree, lying(tree.edgeDir, `${realpathSync(tree.edgeDir)}/./x`))).toThrow("not absolute and normal");
+  });
+
+  test("edge_reader_bounds_caddyfile_sites_dir_and_link_targets", () => {
+    // Mutation pins (verification of #541): the Caddyfile's own bound, the sitesDir path boundary, and a link target
+    // that must be a .caddy file.
+    const tree = edgeTree();
+    const outside = outsideDir();
+    cpSync(join(EDGE, "Caddyfile"), join(outside, "Caddyfile"));
+    const files: EdgeFiles = {
+      ...FILES,
+      realpath: (path) =>
+        path === `${realpathSync(tree.edgeDir)}/Caddyfile`
+          ? realpathSync(join(outside, "Caddyfile"))
+          : FILES.realpath(path),
+    };
+    expect(load(tree, files)).toThrow("Caddyfile: the file is not inside the edge directory");
+    const sibling = join(tree.edgeDir, "sites-evil");
+    mkdirSync(sibling);
+    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(sibling, "pds.caddy"));
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: sibling })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: join(tree.edgeDir, "sites") })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+    const notes = edgeTree();
+    writeFileSync(join(notes.edgeDir, "sites", "notes.txt"), "other.unset.test {\n\trespond 200\n}\n");
+    symlinkSync(join(notes.edgeDir, "sites", "notes.txt"), join(notes.sitesDir, "x.caddy"));
+    expect(load(notes)).toThrow("x.caddy: the link target is not a regular file");
+  });
+
+  test("edge_reader_legitimate_link_reads", () => {
+    expect(load(edgeTree())().sites.map((site) => site.addresses)).toEqual([["http://127.0.0.1:8081"], [ENV.PDS_HOST]]);
+  });
+
+  test("edge_reader_snippets_in_byte_order", () => {
+    // Mutation pin for the sort: Caddy reads B.caddy before a.caddy (byte order), so the snippet B defines exists
+    // when a imports it; in any other order a's import comes first and fails.
+    const tree = edgeTree();
+    writeFileSync(join(tree.edgeDir, "snippets", "B.caddy"), "(late) {\n\thttp://[::1]:8083 {\n\t\tbind ::1\n\t}\n}\n");
+    writeFileSync(join(tree.edgeDir, "snippets", "a.caddy"), "import late\n");
+    expect(load(tree)().sites.map((site) => site.addresses[0])).toEqual([
+      "http://[::1]:8083",
+      "http://127.0.0.1:8081",
+      ENV.PDS_HOST,
+    ]);
+  });
+});
+
+describe("edge site rules (P1.28f)", () => {
+  const limits = read("snippets/ratelimit.caddy");
+  const site = read("sites/pds.caddy");
+  /** The site rules over the shipped tree plus each `sites/<name>` in `extra`, linked into sites/enabled. */
+  const withSites = (extra: Record<string, string>, env: typeof ENV = ENV, edits: Record<string, string> = {}) => {
+    const { edgeDir, sitesDir } = edgeTree({ ...edits, ...extra });
+    for (const file of Object.keys(extra)) {
+      symlinkSync(join(edgeDir, file), join(sitesDir, file.slice("sites/".length)));
+    }
+    return edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, env, FILES));
+  };
+
+  test("edge_zones_written_in_place_fail", () => {
+    // Mutation pin for the via check: the same rate_limit block written straight into the route, not imported from
+    // pds-ratelimit, is not the zones (amendment 8, point 3).
+    const body = limits.slice(limits.indexOf("\trate_limit {"), limits.lastIndexOf("}"));
+    const inline = site.replace("\t\timport pds-ratelimit\n", body.replaceAll(/^/gm, "\t").replace(/\t$/, ""));
+    expect(inline).not.toBe(site);
+    expect(siteProblems({ "sites/pds.caddy": inline })).toEqual([
+      "pds.unset.test: the route does not apply the zones first",
+    ]);
+  });
+
+  test("edge_upstream_proxied_by_two_sites_fails", () => {
+    const second =
+      "other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n}\n";
+    expect(withSites({ "sites/other.caddy": second })).toEqual([
+      "pds.unset.test: upstream proxied by more than one site",
+    ]);
+    // A different upstream is fine.
+    expect(withSites({ "sites/other.caddy": second.replace("{$PDS_UPSTREAM}", "other:80") })).toEqual([]);
+  });
+
+  test("edge_upstream_in_one_canonical_form", () => {
+    // Fail closed (amendment 8, point 4; coordinator verification of #541, F2): after an optional matcher, a
+    // reverse_proxy names exactly one upstream, in one canonical form, so a second spelling cannot pass as another.
+    const proxy = (args: string) =>
+      `other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\treverse_proxy ${args} {\n\t\t\theader_up -X-Forwarded-For\n\t\t\theader_up -X-Real-IP\n\t\t\theader_up -Forwarded\n\t\t}\n\t}\n}\n`;
+    const other = (args: string) => withSites({ "sites/other.caddy": proxy(args) });
+    const noncanonical = "other.unset.test: a reverse_proxy does not name one upstream in canonical form";
+    const shared = "pds.unset.test: upstream proxied by more than one site";
+    expect(other("other:80")).toEqual([]);
+    expect(other("{$PDS_UPSTREAM}")).toEqual([shared]);
+    // Several upstreams fail, whichever comes first.
+    expect(other("{$PDS_UPSTREAM} other:80")).toEqual([noncanonical]);
+    expect(other("other:80 {$PDS_UPSTREAM}")).toEqual([noncanonical]);
+    // A matcher before the upstream is allowed, and the upstream is still compared.
+    expect(other("* {$PDS_UPSTREAM}")).toEqual([shared]);
+    expect(other("/xrpc/* {$PDS_UPSTREAM}")).toEqual([shared]);
+    expect(other("* other:80 {$PDS_UPSTREAM}")).toEqual([noncanonical]);
+    // Every other spelling of the shared upstream fails.
+    for (const variant of [
+      "http://upstream:3000",
+      "upstream:3000/",
+      "UPSTREAM:3000",
+      "Upstream:3000",
+      "upstream.:3000",
+      "upstream:03000",
+      "upstream",
+      "upstream:",
+      "[::1]:3000",
+      "[0:0::1]:3000",
+      "a..b:3000",
+      "upstream:99999",
+    ]) {
+      expect(other(variant), variant).toEqual([noncanonical]);
+    }
+  });
+
+  test("edge_messages_never_carry_env_values", () => {
+    // Amendment 8, point 5: a message names a site address and nothing else from env.
+    const env = { ...ENV, ACME_EMAIL: "acme-sentinel@unset.test", PDS_UPSTREAM: "upstream-sentinel:3000" };
+    const messages: string[] = [];
+    const caught = (run: () => unknown) => {
+      try {
+        messages.push(...((run() as string[] | undefined) ?? []));
+      } catch (error) {
+        messages.push((error as Error).message);
+      }
+    };
+    const pds = (text: string) => withSites({}, env, { "sites/pds.caddy": text });
+    const upstream = read("snippets/upstream.caddy");
+    for (const text of [
+      site.replace("\t\timport pds-ratelimit\n", ""),
+      site.replace("\troute {\n", "\troute /x {\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n\troute {\n"),
+      site.replace("\troute {\n", "\troute {\n\t\trespond 200\n\t}\n\troute {\n"),
+      site.replace("\timport tls\n", "\t{$ACME_EMAIL} on\n"),
+      site.replace("\timport tls\n", "\t{$PDS_UPSTREAM} on\n"),
+      site.replace("\timport tls\n", "\tbind {$PDS_UPSTREAM}\n"),
+      site.replace("\timport tls\n", "\timport {$ACME_EMAIL}\n"),
+      site.replace("\timport tls\n", "\tlog_append x {$ACME_EMAIL}{args[0]}\n"),
+    ]) {
+      caught(() => pds(text));
+    }
+    caught(() => withSites({}, env, { "snippets/ratelimit.caddy": limits.replace("zone global {", "zone overall {") }));
+    caught(() => withSites({}, env, { "snippets/upstream.caddy": upstream.replace("\t\theader_up -X-Real-IP\n", "") }));
+    caught(() =>
+      withSites({ "sites/other.caddy": "other.unset.test {\n\ttls {$ACME_EMAIL}\n\trespond 200\n}\n" }, env),
+    );
+    caught(() =>
+      withSites(
+        {
+          "sites/other.caddy":
+            "other.unset.test {\n\troute {\n\t\timport pds-ratelimit\n\t\timport upstream {$PDS_UPSTREAM}\n\t}\n}\n",
+        },
+        env,
+      ),
+    );
+    // A snippet no site imports is read later, by snippet(); its errors are redacted too (verification of #541, F1).
+    const unimported = site.replace("\t\timport pds-ratelimit\n", "");
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      const limitsWith = limits.replace("\trate_limit {\n", `\t{$${name}} on\n\trate_limit {\n`);
+      caught(() => withSites({}, env, { "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith }));
+    }
+    // Each UNECHOED name is pinned: its value comes back as its placeholder, in a read and in snippet().
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+      expect(messages).toContainEqual(expect.stringContaining(`directive {$${name}} is not allowed in site`));
+      const snippet = new RegExp(
+        `^the zones snippet is unreadable: line \\d+: directive \\{\\$${name}\\} is not allowed`,
+      );
+      expect(messages).toContainEqual(expect.stringMatching(snippet));
+    }
+    expect(messages.length).toBeGreaterThan(10);
+    for (const message of messages) {
+      expect(message).not.toContain(env.ACME_EMAIL);
+      expect(message).not.toContain(env.PDS_UPSTREAM);
+    }
   });
 });
 

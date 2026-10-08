@@ -2,7 +2,17 @@
 // image, so it lives in an *.image.test.ts file (step book P1.28i; architecture record
 // 2026-10-07-test-timing-fuzz-and-image-tests), apart from the reader's unit tests in caddyfile.test.ts.
 import { spawnSync } from "node:child_process";
-import { lstatSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import {
+  cpSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -121,15 +131,19 @@ const nanoseconds = (duration: string): number => {
   return Number(amount) * { s: 1, m: 60, h: 3600 }[unit as "s" | "m" | "h"] * 1e9;
 };
 
-/** The shipped Caddyfile through the one edge reader (P1.28e), with sites/enabled linking to the PDS site as P1.29 and
- * P5 mount it. */
+/** The shipped Caddyfile through the one edge reader (P1.28e), copied with sites/enabled linking to the PDS site as
+ * P1.29 and P5 mount it: the reader refuses a sites directory outside the edge's sites/ (P1.28f). */
 function shippedConfig(env: Record<string, string>): Caddyfile {
-  const sitesDir = mkdtempSync(join(tmpdir(), "edge-sites-"));
+  const edgeDir = mkdtempSync(join(tmpdir(), "edge-"));
   try {
-    symlinkSync(join(EDGE, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
-    return readEdgeConfig(EDGE, sitesDir, env, FILES);
+    for (const part of ["Caddyfile", "snippets", "sites"])
+      cpSync(join(EDGE, part), join(edgeDir, part), { recursive: true });
+    const sitesDir = join(edgeDir, "sites", "enabled");
+    mkdirSync(sitesDir);
+    symlinkSync(join(edgeDir, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
+    return readEdgeConfig(edgeDir, sitesDir, env, FILES);
   } finally {
-    rmSync(sitesDir, { recursive: true, force: true });
+    rmSync(edgeDir, { recursive: true, force: true });
   }
 }
 
@@ -138,7 +152,8 @@ const FILES: EdgeFiles = {
   list: (dir) => readdirSync(dir),
   kind: (path) => {
     const stat = lstatSync(path);
-    return stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+    const type = stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
+    return { type, links: stat.nlink };
   },
   realpath: (path) => {
     try {
