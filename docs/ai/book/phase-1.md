@@ -8578,7 +8578,7 @@ Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
-Phase 1, after P1.29e, in parallel with P1.29n.
+Phase 1, after P1.29g (P1.29e and P1.29n merged; p129f-corpus-gaps record, amendment 1, 02:10Z).
 
 **What:** the image test `image_privileges_match_list`, for every kind in `deployment/images/kinds.json` (p129g record,
 amendment 1). It walks each built image's filesystem; every file with a `security.capability` xattr, and every setuid or
