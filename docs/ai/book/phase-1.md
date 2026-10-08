@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29m, P1.29f, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29m, P1.29f, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -201,6 +201,7 @@ flowchart LR
   P1_28e["P1.28e one edge config reader"]
   P1_28f["P1.28f edge reader containment"]
   P1_28g["P1.28g edge never imports preflight"]
+  P1_28k["P1.28k no root-absolute or unresolved imports"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -369,6 +370,7 @@ flowchart LR
   P1_28e --> P1_28g
   P1_28f --> P1_30u
   P1_28g --> P1_30u
+  P1_28g --> P1_28k
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7659,6 +7661,40 @@ fixture for an edge test importing a preflight file, and a green fixture for pre
 built-ins and npm packages". The next step that touches the trusted section of the matrix books it.
 
 Done when `npm run check` is green, and the red fixture fails on the new rule.
+
+---
+
+### P1.28k — Refuse root-absolute and unresolved imports
+Tags: [SEC]            Depends on: P1.28g (merged, #540)
+Slice 1, issue #544, check (`scripts/lint/.dependency-cruiser.cjs`, its fixtures and its tests); book edit
+2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z), from architecture's second note under amendment 8
+(01:10Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and
+relayed at 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its
+only dependency, and nothing waits for it; P1.30u does not.
+
+**Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
+with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
+root.
+
+**What:** one `forbidden` rule, severity error, applying to every file.
+- **Root-absolute specifiers fail even when they resolve.** Their meaning depends on which tool does the resolving.
+- **Unresolved specifiers fail** when they are relative, root-absolute or `@unset/*`.
+- **One exception:** the `RENDER_BUILD_IMPORT` edge (`.dependency-cruiser.cjs:38`). It is read from that same config
+  value, as `scripts/test/image-rules.test.ts:41` already does, with no second copy.
+- **Existing imports:** any root-absolute import on main is listed in the PR body and rewritten as relative. On 485cd61
+  a grep for `from "/`, `import("/` and `require("/` in source files finds none, so none is expected. If the build finds
+  one in a product or trusted file, the step stops and says so: a check PR cannot rewrite those files under SE-6, so
+  that rewrite would become its own step.
+
+Fixtures: red, a root-absolute import from an edge test into preflight; red, an unresolved relative import; red, an
+unresolved `@unset/x`; green, the render-build edge.
+
+Done when `npm run check` is green, and each red fixture fails on the new rule.
+
+**Noted, not booked:** depcruise's blind spots (`createRequire`, computed specifiers, `vi.importActual`,
+`import.meta.glob`, `import("x").T`, triple-slash references, JSDoc import types). The general fix is a parse-based
+check that trusted code imports only trusted code. The next step that touches the trusted section of the matrix books
+it, together with amendment 8 item 2's general rule.
 
 ---
 
