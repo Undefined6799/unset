@@ -39,14 +39,17 @@ COPY --from=build /app/apps/web/dist /app/apps/web/dist
 # own dependencies Trivy flags) and any yarn, corepack or pnpm, then the OS's own apt, debconf, dpkg and libapt, each
 # through its own removal verb and dpkg last, then dpkg's maintainer scripts. dpkg's database stays, without a script,
 # so image scanners still see the OS packages (P1.29n; package-manager.image.test.ts proves it on disk). The build and
-# deps stages keep npm.
+# deps stages keep npm. Last, every setuid and setgid file the Debian base ships goes too: the server runs as 65532 and
+# needs none, so the node kind's privilege list is empty (P1.29p).
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
   /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
   /usr/local/bin/pnpm /usr/local/bin/pnpx \
   && apt-get purge --allow-remove-essential -y apt \
   && dpkg --purge --force-remove-essential --force-depends debconf dpkg libapt-pkg7.0 \
   && rm -f /var/lib/dpkg/info/*.preinst /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.prerm \
-    /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config
+    /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config \
+  && rm -f /usr/bin/chage /usr/bin/chfn /usr/bin/chsh /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp \
+    /usr/bin/passwd /usr/bin/su /usr/bin/umount /usr/sbin/unix_chkpwd
 USER 65532:65532
 EXPOSE 8080
 HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
