@@ -7639,6 +7639,7 @@ is under "What I am unsure about".
 
 ### P1.28g — Refuse preflight imports from the edge
 Tags: [SEC]            Depends on: P1.28e (merged, #533)
+As built: merged by Alex at 2026-10-08T00:40:42Z as `485cd61` (#540).
 Slice 1, issue #537, check (`scripts/lint/.dependency-cruiser.cjs` and its lint fixtures and tests); book edit
 2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
 2026-10-07-p130s-networks-and-caddyfile-reader. A tightening, so the coordinator clears it; not a classifier path.
@@ -8243,6 +8244,7 @@ Done when `npm run check` is green, and the rule runs over the edge Dockerfile, 
 
 ### P1.29n — Ship the node runtime without a package manager
 Tags: [SEC]            Depends on: P1.29e (merged, #532)
+As built: merged by Alex at 2026-10-08T00:34:04Z as `41810fa` (#538).
 Slice 1, issue #529, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z; amendment 1, final 01:15Z, from architecture's notes under amendment 7 there, 00:50Z F1 and
 after), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
@@ -8331,7 +8333,7 @@ Done when the test is green on every built image, and a fixture image with one e
 ---
 
 ### P1.29f — Turn final-stage rules into per-kind allowlists
-Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538)
 Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
 items 5 and 6 at 01:00Z), from architecture's amendment 7 (00:45Z) and its 00:50Z note in
 2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e (#532), relayed by the coordinator at 00:27Z. A
