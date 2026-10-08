@@ -1,12 +1,18 @@
-// The raw-specifier allowlist in scripts/lint/specifiers.ts, on throwaway fixtures and on the real tree (P1.28k).
+// The raw-specifier allowlist in scripts/lint/specifiers.ts, on throwaway fixtures and on the real tree (P1.28k, P1.28m).
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { cruise, type ICruiseResult } from "dependency-cruiser";
 import { afterAll, expect, test } from "vitest";
+import VITEST from "../../vitest.config.ts";
 import { config, ROOT, removeFixtures, tempDir, write } from "./depcruise-fixture.ts";
-import { type Packages, readPackages, refusal, specifierViolations } from "./specifiers.ts";
+import { type Packages, readPackages, refusal, specifierViolations, testFileByGlobs } from "./specifiers.ts";
 
 afterAll(removeFixtures);
+
+/** The Vitest include globs, read from the root vitest.config.ts rather than copied (P1.28m). */
+const TEST_GLOBS = (VITEST.test?.projects ?? []).flatMap((project) =>
+  typeof project === "object" && "test" in project ? (project.test?.include ?? []) : [],
+);
 
 const PACKAGES: Packages = {
   rootName: "unset.sh",
@@ -15,6 +21,7 @@ const PACKAGES: Packages = {
     ["shared/http", { name: "@unset/shared-http", declared: new Set(["hono"]) }],
     ["infrastructure/net-guard", { name: "@unset/infrastructure-net-guard", declared: new Set(["undici"]) }],
   ]),
+  testFile: testFileByGlobs(TEST_GLOBS),
 };
 const FROM = "shared/http/a.ts";
 
@@ -42,6 +49,8 @@ test("refused_forms_fail", () => {
     ["left-pad", "a package neither its workspace nor the root package.json declares"],
     ["@scope", "a malformed package name"],
     ["@/x", "a malformed package name"],
+    [".foo", "a malformed package name"],
+    ["vitest", "a root-only package outside a test file"],
   ];
   for (const [spec, reason] of refused) expect(refusal(PACKAGES, FROM, spec), spec).toBe(reason);
 });
@@ -56,14 +65,30 @@ test("allowed_forms_pass", () => {
     "@unset/infrastructure-net-guard/x",
     "hono",
     "hono/cookie",
-    "vitest",
-    "@types/node",
   ]) {
     expect(refusal(PACKAGES, FROM, spec), spec).toBeUndefined();
   }
   // A root-level file draws on the root package.json only.
   expect(refusal(PACKAGES, "scripts/a.ts", "vitest")).toBeUndefined();
-  expect(refusal(PACKAGES, "scripts/a.ts", "hono")).toBeTypeOf("string");
+  expect(refusal(PACKAGES, "scripts/a.ts", "hono")).toBe("a package the root package.json does not declare");
+});
+
+test("root_only_packages_only_in_test_files", () => {
+  // P1.28m: a workspace file may use a root-only package only when Vitest would run it as a test.
+  expect(TEST_GLOBS).toContain("shared/**/*.test.{ts,tsx,mts,cts}");
+  const packages = { ...PACKAGES, root: new Set(["dependency-cruiser"]) };
+  for (const file of [
+    "shared/http/main.ts",
+    "shared/http/test.ts",
+    "shared/http/a.tests.ts",
+    "shared/http/a.test.js",
+  ]) {
+    expect(refusal(packages, file, "dependency-cruiser"), file).toBe("a root-only package outside a test file");
+  }
+  for (const file of ["shared/http/main.test.ts", "shared/http/x/a.test.tsx", "shared/http/a.image.test.mts"]) {
+    expect(refusal(packages, file, "dependency-cruiser"), file).toBeUndefined();
+  }
+  expect(refusal(packages, "scripts/budgets/check.ts", "dependency-cruiser")).toBeUndefined();
 });
 
 async function cruiseSpecs(from: string, spellings: (root: string) => string[]): Promise<string[]> {
@@ -76,7 +101,7 @@ async function cruiseSpecs(from: string, spellings: (root: string) => string[]):
   }
   const { output } = await cruise(["."], { ...config.options, baseDir: root, outputType: "json" });
   const result: ICruiseResult = JSON.parse(String(output));
-  return specifierViolations(result, { rootName: "unset.sh", root: new Set(), workspaces: new Map() });
+  return specifierViolations(result, { ...PACKAGES, root: new Set(), workspaces: new Map() });
 }
 
 test("cruise_specifiers_reach_the_check", async () => {
@@ -101,7 +126,7 @@ test("real_tree_uses_only_allowed_specifiers", async () => {
     readdirSync(join(ROOT, dir), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => `${dir}/${entry.name}`);
-  const packages = readPackages(ROOT, list);
+  const packages = readPackages(ROOT, list, TEST_GLOBS);
   const { output } = await cruise(["."], { ...config.options, baseDir: ROOT, outputType: "json" });
   expect(specifierViolations(JSON.parse(String(output)), packages)).toEqual([]);
 });
