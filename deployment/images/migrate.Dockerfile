@@ -24,9 +24,12 @@ COPY --from=deps /app/shared shared
 # config.ts checks PG_HOST through net-guard's address classes (its `classifyAddress`), so net-guard ships too.
 COPY --from=deps /app/infrastructure/net-guard infrastructure/net-guard
 COPY --from=deps /app/infrastructure/postgres infrastructure/postgres
-# The CLI needs node only, so every package manager the base may ship leaves the runtime, as in node-app.Dockerfile.
+# The CLI needs node only, so every package manager the base may ship leaves the runtime, apt and dpkg included, as
+# in node-app.Dockerfile.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
   /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-  /usr/local/bin/pnpm /usr/local/bin/pnpx
+  /usr/local/bin/pnpm /usr/local/bin/pnpx \
+  && apt-get purge --allow-remove-essential -y apt \
+  && dpkg --purge --force-remove-essential --force-depends debconf dpkg
 USER 65532:65532
 ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]
