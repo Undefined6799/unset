@@ -5489,6 +5489,7 @@ follow-ups ride P1.25 (product class; P1.26 is check class and cannot carry prod
 
 ### P1.25k — Add the error-page hook to the server kit
 Tags: [SEC], trusted            Depends on: P1.04, P1.08 (both merged; P1.08 is #66)
+As built: merged by Alex at 2026-10-07T12:38:20Z as `78e9033` (#445).
 Slice 1, trusted base (`/shared/http/` is in CODEOWNERS' trusted section, "CSRF gate, session and CSP builder"); book
 edits 2026-10-07-p125-split and architecture's 2026-10-07-p125k-error-page-hook (which wins where they differ).
 Letter `k` is the server-kit part, the letter architecture named. No word from Alex is needed: the 404 change is the
@@ -6655,6 +6656,8 @@ below (every stage, no allowlist, `ADD` local only).
 `deployment/images/images.test.ts` only, under the `/deployment/` security-review line (not trusted base, not a check
 path, no `.github/` file) · **Slice:** 1, after P1.28v · **Owner:** Phase 1 (it touches no file P1.29 touches)
 
+As built: merged by Alex at 2026-10-07T12:38:32Z as `5fcbb38` (#449).
+
 Book edits 2026-10-07-p128u-image-refs-outside-from and architecture's 2026-10-07-p128-copy-from-image-ref (which
 wins where they differ). Letter `u` is architecture's suggestion (P1.28's taken letters are b, d, q, v, w and x). No
 word from Alex: a tightening outside `.github/`.
@@ -7731,8 +7734,8 @@ p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z; amendment 2, fin
 third thread's recon on b2188a9, relayed at 01:50Z), from architecture's second note under amendment 8 (01:10Z) in
 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and relayed at
 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its only
-dependency, and nothing waits for it; P1.30u does not. Amendments 1 and 2 ride PR #549; the narrow couldNotResolve fix
-is declined.
+dependency. P1.28m (#553) depends on it; P1.30u does not. Amendments 1 and 2 ride PR #549; the narrow couldNotResolve
+fix is declined.
 
 **Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
 with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
@@ -7799,7 +7802,7 @@ As built: merged by Alex at 2026-10-08T03:12:28Z as `e1edc1e` (#555).
 Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
 2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
 amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
-Nothing depends on it.
+P1.28p (#556) depends on it.
 
 **Why:** #549 lets a bare import be declared in the importing file's own workspace or in the root package.json. While
 that fallback applies to every file, a production file could import a root devDependency, such as `dependency-cruiser`
@@ -7832,7 +7835,7 @@ As built: merged by Alex at 2026-10-08T11:36:42Z as `ee892fa` (#558).
 Slice 1, issue #556, check (scripts/lint, kind/build); book edit 2026-10-08-p128p-product-never-imports-tooling (final
 03:20Z; amendment 1, 03:25Z), from architecture's p130s amendments 11 (03:20Z) and 11a (03:25Z), asked by the
 coordinator at 03:12Z after the #555 (P1.28m) verification and relayed at 03:14Z. A tightening; the coordinator clears
-it, no word from Alex. Owner: the third thread, which built P1.28m. Nothing depends on it.
+it, no word from Alex. Owner: the third thread, which built P1.28m. P1.28z (#561) depends on it.
 
 **Why:** `shared/http/via.ts` can import `./helper.test.ts`, which imports `dependency-cruiser`. The specifier check
 passes the import because its importer is a test file, and depcruise passes the edge because the `shared` MATRIX row
@@ -7862,19 +7865,35 @@ PR carries no product or trusted path; the step book then books the move as its 
 
 ---
 
-### P1.28z — Pin the tooling set's image-test anchor
+### P1.28z — Pin tooling anchor, bound the depcruise test
 Tags: [SEC]            Depends on: P1.28p (merged, #558)
-Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor
-(final 05:00Z), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator
-clears it, no word from Alex. Owner: the third thread, after P1.28p (#556, PR #558) merges. Nothing depends on it. It
-cannot ride P1.29j (#560), which is product class and owned by Phase 1. If another third-thread step that touches
-scripts/lint opens first, it may carry this instead; that PR says so, and this step closes as carried.
+As built: merged by Alex at 2026-10-08T12:04:23Z as `a595ab8` (#565).
+Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor (final
+05:00Z; amendment 1, 11:50Z, from the coordinator's relay at 11:46Z of the "does the app work" thread's run on main
+95a3fab), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator clears
+it, no word from Alex. Owner: the third thread, after P1.28p (#556, PR #558) merges. Nothing depends on it. It cannot
+ride P1.29j (#560), which is product class and owned by Phase 1. If another third-thread step that touches scripts/lint
+opens first, it may carry this instead; that PR says so, and this step closes as carried.
 
 **What:** nothing pins the `$` on the tooling set's image member `\.image\.test\.[^/]*$` (`tooling.ts:48-49` on #558's
 head), so dropping it would make a path like `x.image.test.d/b.ts` count as tooling. Add one non-member assertion for a
 path with text after the image-test name, such as `deployment/images/x.image.test.d/b.ts`, so that the mutant fails.
 
-Done when `npm run check` is green and the anchor-removal mutant fails a test.
+**Bound `depcruise_cruised_nonzero`** (amendment 1). It (`scripts/lint/depcruise.test.ts:114-133`) timed out at 5205 ms
+against the 5000 ms default while a docker build competed for CPU; run alone it takes about 3.0 s (3030, 2938 and 3011
+ms), because its second half (:127-132) spawns depcruise synchronously over the whole repo. The P1.28p verifier saw it
+go red under parallel load too. A timeout bump, retry or skip is not a fix.
+- The fixture half (:115-125) stays as it is.
+- The whole-repo half is replaced by the real config cruising a fixed list of real files, one per top-level area (apps/,
+  shared/, infrastructure/, interfaces/, deployment/, scripts/), and the test asserts that every listed file appears in
+  `modules`. That is stronger than today's `totalCruised >= 1`, because it fails if an `exclude` or path rule silently
+  drops any area, and it does not grow with the repo.
+- The list lives in the test, and a listed file that no longer exists fails the test by name.
+- The full-tree cruise still runs in `npm run lint` on every check. If the builder finds a property only the whole-repo
+  run in this test proved, the PR stops and lists it under "What I am unsure about", and architecture rules.
+
+Done when `npm run check` is green, the anchor-removal mutant fails a test, and `depcruise_cruised_nonzero` passes well
+inside the default timeout; the PR body gives three isolated timings, each at most about 1 s.
 
 ---
 
@@ -8403,6 +8422,7 @@ still passes. The PR body lists the per-kind lists with file and line.
 
 ### P1.28o — Remove apk-tools from the edge image
 Tags: [SEC], trusted            Depends on: P1.29x (merged, #507)
+As built: merged by Alex at 2026-10-07T22:53:28Z as `8b7bad2` (#513).
 Slice 1, trusted base (`deployment/edge/`); book edit 2026-10-07-p128o-edge-apk-tools (final 22:10Z), from
 architecture's amendment 3, point 4, in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; no word from
 Alex. Owner: Phase 1. It follows P1.29x, which carries amendments 2 and 3 (the Dockerfile kind map and the inverted
@@ -8445,7 +8465,7 @@ apk-tools, the edge stays kind `edge` and no extra step is needed.
 ---
 
 ### P1.28y — Forbid a package manager in the edge runtime
-Tags: [SEC]            Depends on: P1.28o, P1.29x (merged, #507)
+Tags: [SEC]            Depends on: P1.28o (merged, #513), P1.29x (merged, #507)
 As built: merged by Alex at 2026-10-08T00:15:49Z as `c14bc1b` (#535).
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p128o-edge-apk-tools (P1.28y, 22:40Z), from
 architecture's amendment in that record ("Afterwards", 22:45Z), relayed by the coordinator at 22:36Z. A tightening; the
