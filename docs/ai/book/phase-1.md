@@ -8061,6 +8061,7 @@ the real Dockerfiles on main still pass.
 
 ### P1.29e — Close the final-stage recipe holes
 Tags: [SEC]            Depends on: P1.29r (merged, #519)
+As built: merged by Alex at 2026-10-08T00:04:13Z as `68bbe75` (#532).
 Slice 1, issue #528, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
@@ -8139,6 +8140,7 @@ apk-tools, the edge stays kind `edge` and no extra step is needed.
 
 ### P1.28y — Forbid a package manager in the edge runtime
 Tags: [SEC]            Depends on: P1.28o, P1.29x (merged, #507)
+As built: merged by Alex at 2026-10-08T00:15:49Z as `c14bc1b` (#535).
 Slice 1, product (`deployment/images/images.test.ts`); book edit 2026-10-07-p128o-edge-apk-tools (P1.28y, 22:40Z), from
 architecture's amendment in that record ("Afterwards", 22:45Z), relayed by the coordinator at 22:36Z. A tightening; the
 coordinator clears it, no word from Alex. Owner: Phase 1. It replaces the earlier plan to ride the next `images.test.ts`
