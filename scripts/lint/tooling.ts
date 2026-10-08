@@ -45,6 +45,8 @@ export const TOOLING_SET: string[] = [
   "(^|/)(fixtures|__fixtures__)/",
   "\\.fixture\\.[^/]*$",
   "\\.vector\\.json$",
+  // The record's **/*.image.test.*, any extension; TEST_FILE keeps Vitest's own, so the P1.28m fallback stays narrow.
+  "\\.image\\.test\\.[^/]*$",
 ];
 
 export const TOOLING_PATTERN = TOOLING_SET.map((source) => `(?:${source})`).join("|");

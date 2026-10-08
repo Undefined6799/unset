@@ -77,6 +77,11 @@ test("root_only_packages_only_in_test_files", () => {
     "shared/http/test.ts",
     "shared/http/a.tests.ts",
     "shared/http/a.test.js",
+    // The rest of the tooling set does not widen the fallback (#558 verification): fixtures and vectors still declare.
+    "shared/http/fixtures/x.ts",
+    "shared/http/a.fixture.ts",
+    "shared/http/a.image.test.js",
+    "shared/http/vectors.vector.json",
   ]) {
     expect(refusal(packages, file, "dependency-cruiser"), file).toBe("a root-only package outside a test file");
   }

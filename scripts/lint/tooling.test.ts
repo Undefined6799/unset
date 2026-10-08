@@ -27,6 +27,18 @@ const PATHS = [
   "deployment/x/a.image.test.mts",
   ".h/a.image.test.ts",
   "scripts/ui/a.test.ts",
+  // Text after the extension: the trailing anchor keeps these out (#558 verification).
+  "shared/a.test.ts/b.ts",
+  "shared/http/__snapshots__/a.test.ts.snap",
+  "shared/http/a.test.tsx.orig",
+  // One test per Vitest project, so dropping any glob shows.
+  "apps/web/a.test.tsx",
+  "interfaces/http/a.test.ts",
+  "domains/identity/a.test.ts",
+  "infrastructure/pds/a.test.ts",
+  "deployment/edge/a.test.ts",
+  "scripts/lint/a.test.ts",
+  "tests/e2e/a.test.ts",
 ];
 
 test("glob_source_reads_globs_as_matchesGlob_does", () => {
@@ -63,6 +75,8 @@ test("tooling_set_members", () => {
     "shared/http/__fixtures__/a.ts",
     "fixtures/a.ts",
     "shared/http/a.fixture.ts",
+    "shared/http/a.fixture.tsx",
+    "deployment/x/a.image.test.js",
     "shared/http/a.vector.json",
   ]) {
     expect(tooling.test(path), path).toBe(true);
