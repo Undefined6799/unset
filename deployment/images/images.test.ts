@@ -419,7 +419,7 @@ const APT_FLAGS = ["-y", "-q", "--purge", "--auto-remove", "--no-install-recomme
 const REMOVAL_FLAGS = new Map<string, readonly string[]>([
   ["apk", ["--no-network", "--purge", "--no-cache", "-q"]],
   ["apt", APT_FLAGS],
-  // P1.29n: the node runtime purges apt, then debconf, dpkg and libapt, apt and dpkg essential (node-app.Dockerfile:46-47 and
+  // P1.29n: the node runtime purges apt, then debconf, dpkg and libapt, apt and dpkg essential (node-app.Dockerfile:47-48 and
   // migrate.Dockerfile:32-33); each kind's image test proves the result.
   ["apt-get", [...APT_FLAGS, "--allow-remove-essential"]],
   ["dpkg", ["--force-remove-essential", "--force-depends"]],
@@ -474,7 +474,7 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
 /**
  * The only rm each kind's final stage runs that names a package manager, word for word as written (fourth
  * architecture note under amendment 7): the node kind drops dpkg's maintainer scripts once dpkg is gone
- * (node-app.Dockerfile:48-49, migrate.Dockerfile:34-35). Any other rm naming one, and this one in a stage the final
+ * (node-app.Dockerfile:49-50, migrate.Dockerfile:34-35). Any other rm naming one, and this one in a stage the final
  * stage is built FROM (P1.29g), still meets the floor.
  */
 const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
@@ -493,16 +493,16 @@ const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
     ],
   ],
 ]);
+const GLOB = /[*?[{]/;
 /**
  * The only glob words each kind's final stage runs, word for word as written (P1.29g, record
  * 2026-10-08-p129f-corpus-gaps item 6), so no spelling hides a package manager's name from the floor: node's yarn
- * removal (node-app.Dockerfile:43, migrate.Dockerfile:29) and its maintainer-script rm (RM_BY_KIND).
+ * removal (node-app.Dockerfile:44, migrate.Dockerfile:29) and its maintainer-script rm (RM_BY_KIND).
  */
 const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
-  ["node", ["/opt/yarn-*", ...(RM_BY_KIND.get("node")?.[0]?.slice(1) ?? [])]],
+  ["node", ["/opt/yarn-*", ...(RM_BY_KIND.get("node")?.[0]?.filter((word) => GLOB.test(word)) ?? [])]],
 ]);
-const GLOB = /[*?[{]/;
 
 /** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
 function globProblem(command: Token[], kind: Kind | undefined, final: boolean): string | undefined {
@@ -654,9 +654,34 @@ function destinationProblem(destination: string, kind: Kind | undefined): string
   return listed ? undefined : `copies into ${target}, not on the ${kind ?? "unknown"} list`;
 }
 
+/** A --chmod value BuildKit reads as octal, at most 07777, or else as a symbolic mode (convert_copy.go:68-87). */
+const OCTAL_MODE = /^[0-7]+$/;
+const SYMBOLIC_MODE = /^[ugoa]*(?:[-+=][rwxXst]*)+(?:,[ugoa]*(?:[-+=][rwxXst]*)+)*$/;
+
+/**
+ * Why a COPY or ADD's --chmod may ship a privilege (P1.29p, record 2026-10-08-p129f-corpus-gaps): a setuid, setgid or
+ * sticky bit, or a value that is not plain octal or symbolic, a variable included. BuildKit's own parse is in
+ * moby/buildkit frontend/dockerfile/dockerfile2llb/convert_copy.go:68-87 (master, read 2026-10-08).
+ */
+function chmodProblem(flags: readonly string[]): string | undefined {
+  for (const flag of flags.filter((word) => /^--chmod(?:=|$)/.test(word))) {
+    const mode = flag.slice("--chmod=".length);
+    const octal = OCTAL_MODE.test(mode) ? Number.parseInt(mode, 8) : undefined;
+    if (octal === undefined ? !SYMBOLIC_MODE.test(mode) : octal > 0o7777) {
+      return `--chmod=${mode} is not a plain octal or symbolic mode`;
+    }
+    if (octal === undefined ? /[st]/.test(mode) : (octal & 0o7000) !== 0) {
+      return `--chmod=${mode} sets a setuid, setgid or sticky bit`;
+    }
+  }
+  return undefined;
+}
+
 /** Why one COPY or ADD may not run in a shipped stage; its destination is the last word, decoded in JSON form. */
 function copyProblem(keyword: string, args: string, kind: Kind | undefined): string | undefined {
-  const { rest } = splitFlags(args);
+  const { flags, rest } = splitFlags(args);
+  const chmod = chmodProblem(flags);
+  if (chmod !== undefined) return chmod;
   const words = rest.startsWith("[") ? execCommand(rest) : rest.split(/\s+/);
   const destination = words?.at(-1);
   if (destination === undefined || words === undefined || words.length < 2) return `cannot parse ${keyword}`;
@@ -1234,6 +1259,43 @@ describe("base images", () => {
     expect(copyDestinationProblems(`FROM ${pinnedNode} AS deps\nCOPY x /usr/bin/x\nFROM ${pinnedNode}`)).toEqual([]);
   });
 
+  test("shipped_copy_chmod_sets_no_special_bit", () => {
+    // P1.29p (record 2026-10-08-p129f-corpus-gaps): a shipped COPY's --chmod sets no setuid, setgid or sticky bit, and
+    // is plain octal or symbolic. Case x_chmod_setuid first; the built-image test catches what this text rule misses.
+    const node = `FROM ${pinnedNode}\n`;
+    const special = (mode: string): string => `line 2: --chmod=${mode} sets a setuid, setgid or sticky bit`;
+    const unparsed = (mode: string): string => `line 2: --chmod=${mode} is not a plain octal or symbolic mode`;
+    for (const [flag, problems] of [
+      ["--chmod=4755", [special("4755")]],
+      ["--chmod=2755", [special("2755")]],
+      ["--chmod=1777", [special("1777")]],
+      ["--chmod=u+s", [special("u+s")]],
+      ["--chmod=04755", [special("04755")]],
+      ["--chmod=g=rxs", [special("g=rxs")]],
+      ["--chmod=a+rx,+t", [special("a+rx,+t")]],
+      ["--CHMOD=4755", [special("4755")]],
+      ["--chown=1:1 --chmod=6755", [special("6755")]],
+      ["--chmod=0755 --chmod=4755", [special("4755")]],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a JS template.
+      ["--chmod=${MODE}", [unparsed("${MODE}")]],
+      ["--chmod=", [unparsed("")]],
+      ["--chmod=75x", [unparsed("75x")]],
+      ["--chmod=99755", [unparsed("99755")]],
+      ["--chmod", [unparsed("")]],
+      ["--chmod=0755", []],
+      ["--chmod=644", []],
+      ["--chmod=u=rwx,go=rx", []],
+      ["--chmod=a+X", []],
+    ] as const) {
+      expect(copyDestinationProblems(`${node}COPY ${flag} x /app/x`), flag).toEqual(problems);
+    }
+    // ADD takes the same flag, and a stage the final stage only copies from is not shipped.
+    expect(copyDestinationProblems(`${node}ADD --chmod=4755 x /app/x`)).toEqual([special("4755")]);
+    expect(copyDestinationProblems(`FROM ${pinnedNode} AS b\nCOPY --chmod=4755 x /app/x\nFROM ${pinnedNode}`)).toEqual(
+      [],
+    );
+  });
+
   test("shipped_environment_keys_on_the_kind_list", () => {
     // P1.29f (amendment 7 point 3): a shipped ENV sets only its kind's listed keys, and a shipped stage has no ARG.
     for (const file of dockerfiles) expect(environmentProblems(read(file)), file).toEqual([]);
@@ -1354,6 +1416,11 @@ describe("base images", () => {
     expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN rm -rf /opt/yarn-*\nFROM base`)).toEqual([
       "line 2: rm -rf /opt/yarn-*: /opt/yarn-* is a glob not on the node list",
     ]);
+    // P1.29p (record 2026-10-08-p129f-corpus-gaps, amendment 2): a word that holds a listed glob without being it
+    // is not on the list.
+    for (const word of ["/opt/yarn-*x", "/x/opt/yarn-*", "/opt/yarn-*/x"]) {
+      expect(osPackageProblems(`${node}RUN rm -rf ${word}`), word).toEqual([notListed(`rm -rf ${word}`, word, "node")]);
+    }
     for (const file of ["images/node-app.Dockerfile", "images/migrate.Dockerfile"]) {
       expect(osPackageProblems(read(file)), file).toEqual([]);
     }
