@@ -272,6 +272,12 @@ module.exports = {
       { pathNot: ["^shared/ui/", ...ISLAND_NPM_MODULES.map(npmModule)], dependencyTypesNot: ["type-only"] },
     ),
     forbidden(
+      "edge-not-preflight",
+      "The edge is trusted base and the preflight is product: no deployment/edge/ file, tests included, imports deployment/preflight/ (P1.28g; architecture amendment 8 item 2 in 2026-10-07-p130s-networks-and-caddyfile-reader.md).",
+      { path: "^deployment/edge/" },
+      { path: "^deployment/preflight/" },
+    ),
+    forbidden(
       "fake-only-in-composition-root",
       "A *.fake.ts is imported only by tests and interfaces/*/compose.ts (rule TE-1).",
       { pathNot: ["^tests/", "\\.test\\.(ts|tsx|mts|cts)$", "^interfaces/[^/]+/compose\\.ts$"] },
