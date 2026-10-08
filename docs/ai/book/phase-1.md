@@ -7828,6 +7828,7 @@ statically, the PR lists the pattern it uses instead and says why, under "What I
 
 ### P1.28p — Product code never imports test tooling
 Tags: [SEC]            Depends on: P1.28m (merged, #555)
+As built: merged by Alex at 2026-10-08T11:36:42Z as `ee892fa` (#558).
 Slice 1, issue #556, check (scripts/lint, kind/build); book edit 2026-10-08-p128p-product-never-imports-tooling (final
 03:20Z; amendment 1, 03:25Z), from architecture's p130s amendments 11 (03:20Z) and 11a (03:25Z), asked by the
 coordinator at 03:12Z after the #555 (P1.28m) verification and relayed at 03:14Z. A tightening; the coordinator clears
@@ -7862,7 +7863,7 @@ PR carries no product or trusted path; the step book then books the move as its 
 ---
 
 ### P1.28z — Pin the tooling set's image-test anchor
-Tags: [SEC]            Depends on: P1.28p
+Tags: [SEC]            Depends on: P1.28p (merged, #558)
 Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor
 (final 05:00Z), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator
 clears it, no word from Alex. Owner: the third thread, after P1.28p (#556, PR #558) merges. Nothing depends on it. It
@@ -8672,6 +8673,7 @@ P1.29g and before P1.29p; the PR says so under "What I am unsure about".
 
 ### P1.29p — Pin file capabilities and setuid in every image
 Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g (merged, #554)
+As built: merged by Alex at 2026-10-08T11:37:04Z as `95a3fab` (#559).
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
@@ -8706,7 +8708,7 @@ bypassed. The glob-list substring mutant fails a test.
 ---
 
 ### P1.29j — Pin image test guards with mutant fixtures
-Tags: [SEC]            Depends on: P1.29p (#530, PR #559)
+Tags: [SEC]            Depends on: P1.29p (merged, #559)
 Slice 1, issue #560, product (`deployment/images/`, test files only); book edit
 2026-10-08-p129j-image-test-mutant-fixtures (final 03:55Z), from the coordinator's verification of #559 (P1.29p),
 relayed at 03:52Z. A tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after
