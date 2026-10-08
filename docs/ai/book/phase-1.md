@@ -7878,13 +7878,15 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    2026-10-07-p129e-p129n-p129p-image-outcome-checks (23:48Z): its final stage (`RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in P1.29e (h) and (i) are empty. Its
    final RUN uses P1.29n's verbs and flags, and postgres is covered by P1.29n's kind-wide test as soon as it joins the
-   kind map; a separate `postgres_image_has_no_package_manager` is optional (amendment 1, 01:00Z). Because P1.29p fails
-   a kind with no list, it adds the postgres privilege list, and that list is empty: the official Debian trixie Postgres
-   image ships setuid binaries (for example su, passwd, mount), and since the image runs as 999:999 with gosu gone,
-   P1.29d removes their setuid bits or the files in its final RUN. If `chmod u-s` is needed, it is added to
-   FINAL_STAGE_COMMANDS, citing the line; anything it keeps goes under "What I am unsure about", with the reason. Test:
-   `image_privileges_match_list` covers postgres. From book edit 2026-10-08-p129f-final-stage-allowlists (00:55Z): it
-   adds the postgres entries to P1.29f's destination-prefix and ENV-key allowlists, each cited.
+   kind map; a separate `postgres_image_has_no_package_manager` is optional (amendment 1). If the postgres image's
+   maintainer scripts need removing, P1.29d adds the postgres entry to `RM_BY_KIND`, token-exact, with the same three
+   red fixtures (amendment 1, 01:15Z). Because P1.29p fails a kind with no list, it adds the postgres privilege list,
+   and that list is empty: the official Debian trixie Postgres image ships setuid binaries (for example su, passwd,
+   mount), and since the image runs as 999:999 with gosu gone, P1.29d removes their setuid bits or the files in its
+   final RUN. If `chmod u-s` is needed, it is added to FINAL_STAGE_COMMANDS, citing the line; anything it keeps goes
+   under "What I am unsure about", with the reason. Test: `image_privileges_match_list` covers postgres. From book edit
+   2026-10-08-p129f-final-stage-allowlists (00:55Z): it adds the postgres entries to P1.29f's destination-prefix and
+   ENV-key allowlists, each cited.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
    P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p and P1.29f, so no image is composed before every image is
    scanned):
@@ -8242,7 +8244,7 @@ Done when `npm run check` is green, and the rule runs over the edge Dockerfile, 
 ### P1.29n — Ship the node runtime without a package manager
 Tags: [SEC]            Depends on: P1.29e (merged, #532)
 Slice 1, issue #529, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
-23:40Z, amended 23:48Z; amendment 1, final 01:12Z, from architecture's notes under amendment 7 there, 00:50Z F1 and
+23:40Z, amended 23:48Z; amendment 1, final 01:15Z, from architecture's notes under amendment 7 there, 00:50Z F1 and
 after), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex unless it
 needs a base change. Owner: Phase 1, after P1.29e, in either order or in parallel with P1.29p.
@@ -8266,10 +8268,12 @@ main change.
 **The package databases stay, as inert data** (architecture's third note under amendment 7, 01:00Z). Deleting them would
 blind Trivy and break "shipped images scanned in full", so the test requires:
 - `/var/lib/dpkg` holds only `status` and `status-old`; `info/*.list`, `info/*.md5sums`, and `info/format` if present;
-  and any other non-executable data file that main's image actually has (for example `diversions`, `statoverride`,
-  `alternatives/*`, `triggers/*`), each listed exactly in the PR body. Maintainer scripts (`*.preinst`, `*.postinst`,
-  `*.prerm`, `*.postrm`, `*.config`) are absent.
-- `/lib/apk/db` holds only `installed`, `lock`, `triggers` and `scripts.tar`, each only if present.
+  and the node data files accepted by architecture's fourth note: `info/*.conffiles`, `*.shlibs`, `*.symbols`,
+  `*.templates` and `*.triggers`; `arch-native`, `available`, `cmethopt`, `diversions`, `diversions-old`, `lock` and
+  `lock-frontend`; `alternatives/*` and `triggers/*`. Each pattern is listed in the PR body. Maintainer scripts
+  (`*.preinst`, `*.postinst`, `*.prerm`, `*.postrm`, `*.config`) are absent.
+- `/lib/apk/db` holds only `installed`, `lock`, `triggers` and `scripts.tar.gz`, each only if present (fourth note,
+  01:05Z: `scripts.tar.gz`, not `scripts.tar`).
 - No file under either tree has an execute bit.
 - The scanner still sees packages: dpkg `status` has at least one `Package:` stanza, and apk `installed` has at least
   one `P:` line.
@@ -8278,6 +8282,22 @@ blind Trivy and break "shipped images scanned in full", so the test requires:
 
 Red fixtures: a dpkg `.postinst` left in `info/`; an executable file under `/lib/apk/db`; an emptied `status` with no
 `Package:` stanza.
+
+**RM_BY_KIND** (architecture's fourth note under amendment 7, 01:05Z): an exact per-kind rm allowlist, shaped like
+SETCAP_BY_KIND.
+- Node has exactly one entry:
+  `rm -f /var/lib/dpkg/info/*.preinst /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.prerm /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config`.
+  It deletes 61 maintainer scripts. Removing them beats disabling them, so chmod is not used.
+- The exemption matches only when the parsed command equals the entry token for token: the same flags, the same five
+  arguments, the same order, nothing added. It applies only in a final stage of a node-kind Dockerfile. Any other rm
+  naming dpkg still fails the floor.
+- Edge has no entry. Postgres adds its own entry in P1.29d if it needs one.
+- This is one exact constant entry in a per-kind allowlist, not a loosening in substance; the coordinator clears it, and
+  no line from Alex is needed.
+- Fixtures: red, the entry plus one extra argument; red, the entry with `-rf`; red, `rm -f /var/lib/dpkg/status`; green,
+  the exact entry.
+- Outcome: the built image has no maintainer script under `/var/lib/dpkg/info`, and no execute bit anywhere in either
+  database tree.
 
 **No kind passes by being skipped** (architecture's second note under amendment 7). The kind-wide test iterates
 `KIND_BY_FINAL_ENTRY` itself. It fails if any kind has zero Dockerfiles that are built and checked, or if any image
