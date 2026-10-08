@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 171 steps: 150 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 172 steps: 151 from `phase-1.md`, 21 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -265,9 +265,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30t | Deploy preflight C17: compose networks against the table | [SEC] | P1.30 | `phase-1.md` |
 | P1.28e | One edge config reader and site rules in deployment/edge (trusted) | [SEC] | P1.28h | `phase-1.md` |
 | P1.28f | Edge reader containment, mutation pins, one site per upstream (trusted) | [SEC] | P1.28e | `phase-1.md` |
+| P1.28l | Edge reader: exact env placeholder positions, placeholder-only upstreams, full env-sentinel test, directive lookup guard (trusted) | [SEC] | P1.28f | `phase-1.md` |
 | P1.28g | depcruise: deployment/edge never imports deployment/preflight | [SEC] | P1.28e | `phase-1.md` |
 | P1.28k | depcruise: refuse root-absolute and unresolved relative or @unset/* imports | [SEC] | P1.28g | `phase-1.md` |
-| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g | `phase-1.md` |
+| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -425,6 +426,7 @@ flowchart TD
   P1_28h["P1.28h Caddyfile reader"]
   P1_28e["P1.28e One edge config reader"]
   P1_28f["P1.28f Edge reader containment"]
+  P1_28l["P1.28l Edge reader echo and aliases"]
   P1_28g["P1.28g Edge never imports preflight"]
   P1_28k["P1.28k No root-absolute or unresolved imports"]
   P1_28s["P1.28s Quoted top-level tokens refused"]
@@ -713,6 +715,8 @@ flowchart TD
   P1_28e --> P1_28f
   P1_28e --> P1_28g
   P1_28f --> P1_30u
+  P1_28f --> P1_28l
+  P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_28g --> P1_28k
   P1_30u --> P2_13a

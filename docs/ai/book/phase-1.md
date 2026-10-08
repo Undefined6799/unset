@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -200,6 +200,7 @@ flowchart LR
   P1_28h["P1.28h Caddyfile reader"]
   P1_28e["P1.28e one edge config reader"]
   P1_28f["P1.28f edge reader containment"]
+  P1_28l["P1.28l edge reader echo and aliases"]
   P1_28g["P1.28g edge never imports preflight"]
   P1_28k["P1.28k no root-absolute or unresolved imports"]
   P1_28s["P1.28s quoted top-level tokens refused"]
@@ -373,6 +374,8 @@ flowchart LR
   P1_28e --> P1_28f
   P1_28e --> P1_28g
   P1_28f --> P1_30u
+  P1_28f --> P1_28l
+  P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_28g --> P1_28k
   P1_30u --> P1_34
@@ -7607,7 +7610,8 @@ outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` w
 
 ### P1.28f — Close the edge reader's containment gaps
 Tags: [SEC], trusted            Depends on: P1.28e (merged, #533)
-As built: merged by Alex at 2026-10-08T01:22:05Z as `b2188a9` (#541).
+As built: merged by Alex at 2026-10-08T01:22:05Z as `b2188a9` (#541). Its gaps follow in P1.28l (book edit
+2026-10-08-p128f-p128g-edge-reader-follow-ups, amendment 1, 01:50Z).
 Slice 1, issue #536, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
 2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
 2026-10-07-p130s-networks-and-caddyfile-reader, relayed by the coordinator at 00:22Z. A tightening; the coordinator
@@ -7646,6 +7650,46 @@ mutation pins above. Green: the shipped edge, and a legitimate link into `sites/
 Done when `npm run check` is green, with the existing line warning disclosed and no other new warning; each red fixture
 fails for its stated reason; the mutation-to-pin table is in the body; and any new warning or paraphrased record phrase
 is under "What I am unsure about".
+
+---
+
+### P1.28l — Close the edge reader's echo and alias gaps
+Tags: [SEC], trusted            Depends on: P1.28f (merged, #541)
+Slice 1, issue #551, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
+2026-10-08-p128l-edge-reader-echo-and-aliases (final 01:55Z; the `{$ACME_EMAIL}` position corrected at 02:00Z), from the
+coordinator's check of #541, relayed at 01:42Z, and architecture's amendment 9 (01:50Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader. A tightening; the coordinator clears it, no word from Alex. Owner: Phase
+2, ahead of P1.30u (#448), which gains it as a dependency.
+
+**What** (architecture's amendment 9):
+1. **Each env placeholder has one exact position** in `caddyfile.ts`: `{$PDS_HOST}` only as the public PDS site's
+   address; `{$PDS_UPSTREAM}` only as a `reverse_proxy` upstream on the `{$PDS_HOST}` site; `{$ACME_EMAIL}` only as the
+   `email` subdirective of `issuer acme` inside a `tls` directive, as shipped at `snippets/tls.caddy:9` (architecture's
+   correction under amendment 9; not the global options block, and it needs no config change and no "unsure" note). Any
+   other placement fails: as a site address, in a header value, or in a matcher.
+   - **Literal site addresses:** only the loopback health site (`127.0.0.1:<port>` or `[::1]:<port>`, with no upstream)
+     may use one. Any other literal site address fails.
+   - **Messages name the token, never the substituted value.** A message identifies a site by its address token before
+     substitution, or by its loopback literal.
+   - **Red fixtures:** `{$ACME_EMAIL}` as a site address, and `{$PDS_UPSTREAM}` as a site address, each failing on
+     position with neither sentinel value in its message; a placeholder in a header value; a placeholder in a matcher;
+     and a non-loopback literal site address.
+2. **Every upstream is a placeholder.** Every `reverse_proxy` upstream must be a placeholder from the table; literal
+   hosts, IP literals (v4 and v6), `localhost` and written-out service names all fail. The one-site-per-upstream rule
+   compares placeholder names, so at most one site proxies `{$PDS_UPSTREAM}`. DNS-alias equivalence between env values
+   is out of scope by construction. The PR body corrects #541's claim that IPv4 literals were refused. Red fixtures:
+   `localhost:3000`, `127.0.0.1:3000`, `[::1]:3000`, `pds:3000`, and a second site proxying `{$PDS_UPSTREAM}`. Green:
+   the shipped config.
+3. **The env sentinel test covers every rule.** `edge_messages_never_carry_env_values` runs every rule's failure path
+   under the sentinel values: the zones-snippet count, the global-zone matcher, the canonical-form message, and item 1's
+   position cases.
+4. **Directive lookup guard.** Add `Object.hasOwn(DIRECTIVES, level)` at `caddyfile.ts:313-317`. Fixtures:
+   `header { constructor { x } }` and `header { __proto__ { x } }` each fail as a `CaddyfileError`, not a `TypeError`.
+
+**Later changes:** adding a placeholder or a position changes the table in the trusted file and goes under "What I am
+unsure about". Widening a position is a loosening.
+
+Done when `npm run check` is green, and every red fixture fails with its stated message and no env value in it.
 
 ---
 
@@ -7711,7 +7755,7 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -8326,8 +8370,10 @@ body gives Trivy counts before and after.
 
 ### P1.29m — Finish the kind-wide package manager test
 Tags: [SEC]            Depends on: P1.29n (merged, #538)
-As built: merged by Alex at 2026-10-08T01:21:37Z as `901e1c5` (#545). Gaps the verification found follow in P1.29g
-(book edit 2026-10-08-p129m-kind-wide-package-manager-test, amendment 1, 01:45Z).
+As built: merged by Alex at 2026-10-08T01:21:37Z as `901e1c5` (#545). Gaps the verification found follow in P1.29g (book
+edit 2026-10-08-p129m-kind-wide-package-manager-test, amendment 1, 01:45Z). `901e1c5` had no CI run of its own; the
+concurrency group cancelled it when `b2188a9` queued, and `b2188a9`'s green run covers its tree (p128f-p128g record,
+amendment 1).
 Slice 1, issue #543, product (`deployment/images/`); book edit 2026-10-08-p129m-kind-wide-package-manager-test (final
 01:30Z; the coordinator's nits on #542 folded in at 01:40Z), from the coordinator's relay at 00:51Z: #538 merged at
 00:34:04Z as `41810fa` with only its first commit, so none of P1.29n's amendments 1 and 2 (in
