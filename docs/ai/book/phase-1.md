@@ -7867,6 +7867,7 @@ PR carries no product or trusted path; the step book then books the move as its 
 
 ### P1.28z — Pin tooling anchor, bound the depcruise test
 Tags: [SEC]            Depends on: P1.28p (merged, #558)
+As built: merged by Alex at 2026-10-08T12:04:23Z as `a595ab8` (#565).
 Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor (final
 05:00Z; amendment 1, 11:50Z, from the coordinator's relay at 11:46Z of the "does the app work" thread's run on main
 95a3fab), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator clears
