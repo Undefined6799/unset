@@ -1,6 +1,8 @@
 // The boundary rules in scripts/lint/.dependency-cruiser.cjs, checked edge by edge on throwaway fixture trees (P0.05).
 import { spawnSync } from "node:child_process";
-import type { ICruiseResult } from "dependency-cruiser";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { cruise, type ICruiseResult } from "dependency-cruiser";
 import { afterAll, describe, expect, test } from "vitest";
 import { sourceFiles } from "../guards/files.ts";
 import {
@@ -110,8 +112,25 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   ],
 };
 
+/** One real file per top-level area, cruised with the real config (P1.28z). */
+const REAL_FILES = [
+  "apps/web/render.tsx",
+  "domains/identity/index.ts",
+  "shared/errors/index.ts",
+  "infrastructure/net-guard/index.ts",
+  "interfaces/http/main.ts",
+  "deployment/preflight/index.ts",
+  "scripts/guards/files.ts",
+];
+
+const REAL_RULES: object = {
+  allowed: config.allowed,
+  allowedSeverity: config.allowedSeverity,
+  forbidden: config.forbidden,
+};
+
 describe("dependency-cruiser runs", () => {
-  test("depcruise_cruised_nonzero", () => {
+  test("depcruise_cruised_nonzero", async () => {
     const root = fixture([edge("scripts/a.ts", "./b.ts")]);
     const small = spawnSync(DEPCRUISE, ["--config", CONFIG_PATH, "--output-type", "json", "."], {
       cwd: root,
@@ -124,12 +143,21 @@ describe("dependency-cruiser runs", () => {
       "scripts/b.ts",
     ]);
 
-    const real = spawnSync(DEPCRUISE, ["--config", CONFIG_PATH, "--output-type", "json", "."], {
-      cwd: ROOT,
-      encoding: "utf8",
+    // The real config on one real file per top-level area (P1.28z): no `exclude` or path rule may drop an area. The
+    // whole tree is cruised by `npm run lint`; cruising it here as well took about 3 s and timed out under load.
+    for (const file of REAL_FILES) expect(existsSync(join(ROOT, file)), `${file} no longer exists`).toBe(true);
+    // In process with the config's own options and rules: the fixture half above already covers the CLI loading it.
+    const { output } = await cruise(REAL_FILES, {
+      ...config.options,
+      baseDir: ROOT,
+      validate: true,
+      ruleSet: REAL_RULES,
+      outputType: "json",
     });
-    expect(real.status, real.stderr).toBe(0);
-    expect((JSON.parse(real.stdout) as ICruiseResult).summary.totalCruised).toBeGreaterThanOrEqual(1);
+    const real: ICruiseResult = JSON.parse(String(output));
+    expect(real.summary.error).toBe(0);
+    const cruised = real.modules.map((m) => m.source);
+    for (const file of REAL_FILES) expect(cruised, file).toContain(file);
   });
 });
 
