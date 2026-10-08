@@ -74,12 +74,17 @@ export function refusal(packages: Packages, file: string, spec: string): string 
   if (!bare) return "a malformed package name";
   if (bare.rest.some((part) => part === "." || part === ".." || part === "")) return "a dot or empty segment";
   if (bare.name === packages.rootName) return "the root package's own name";
-  const workspaces = [...packages.workspaces.values()];
-  if (bare.name.startsWith("@unset/")) {
-    return workspaces.some((w) => w.name === bare.name) ? undefined : "an @unset name that is no workspace";
+  return declaredRefusal(packages, file, bare.name);
+}
+
+/** Why the package `name`, imported by `file`, is not one this repository declares for that file. */
+function declaredRefusal(packages: Packages, file: string, name: string): string | undefined {
+  if (name.startsWith("@unset/")) {
+    const known = [...packages.workspaces.values()].some((w) => w.name === name);
+    return known ? undefined : "an @unset name that is no workspace";
   }
   // Amendment 2: the importing file's own workspace, or the root package.json (which root-level files use).
-  if (owner(packages, file)?.has(bare.name) || packages.root.has(bare.name)) return undefined;
+  if (owner(packages, file)?.has(name) || packages.root.has(name)) return undefined;
   return "a package neither its workspace nor the root package.json declares";
 }
 
