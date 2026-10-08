@@ -626,6 +626,17 @@ describe("image package managers", () => {
     expect(privilegeProblems("postgres", [])).toEqual(["the postgres kind has no privilege list"]);
   });
 
+  test("attribute_agreement_reader", () => {
+    // P1.29j: GNU tar's names and the PAX headers' values agree member by member, and each way they differ throws.
+    const entry = (path: string, xattrs: string[]): Entry => ({ mode: "-rwxr-xr-x", path, xattrs });
+    const values = (path: string, ...names: string[]): Map<string, Map<string, string>> =>
+      new Map([[path, new Map(names.map((name) => [name, "00"]))]]);
+    expect(withValues([entry("/a", ["user.x"])], values("/a", "user.x"))).toEqual([entry("/a", ["user.x=00"])]);
+    expect(() => withValues([entry("/a", ["user.x"])], values("/a", "user.y"))).toThrow("no PAX header holds it");
+    expect(() => withValues([entry("/a", ["user.x"])], values("/a", "user.x", "user.y"))).toThrow("disagree on /a");
+    expect(() => withValues([entry("/a", [])], values("/b", "user.x"))).toThrow("tar lists no such member");
+  });
+
   test("pax_xattr_reader_on_a_real_archive", () => {
     // A ustar header with its checksum (POSIX.1-2008 pax, "ustar Interchange Format"), then the data padded to 512.
     const block = (name: string, type: string, data: Buffer, mode = "0000755"): Buffer => {
