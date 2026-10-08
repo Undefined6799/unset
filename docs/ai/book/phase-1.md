@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -203,6 +203,7 @@ flowchart LR
   P1_28l["P1.28l edge reader echo and aliases"]
   P1_28g["P1.28g edge never imports preflight"]
   P1_28k["P1.28k no root-absolute or unresolved imports"]
+  P1_28m["P1.28m root-only dependencies in tests only"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -378,6 +379,7 @@ flowchart LR
   P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_28g --> P1_28k
+  P1_28k --> P1_28m
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7780,6 +7782,38 @@ Done when `npm run check` is green, and each red fixture fails on the new rule.
 `import.meta.glob`, `import("x").T`, triple-slash references, JSDoc import types). The general fix is a parse-based
 check that trusted code imports only trusted code. The next step that touches the trusted section of the matrix books
 it, together with amendment 8 item 2's general rule.
+
+---
+
+### P1.28m — Allow root-only dependencies in test files only
+Tags: [SEC]            Depends on: P1.28k (#544, PR #549)
+Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
+2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
+amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
+Nothing depends on it.
+
+**Why:** #549 lets a bare import be declared in the importing file's own workspace or in the root package.json. While
+that fallback applies to every file, a production file could import a root devDependency, such as `dependency-cruiser`
+or `vite`, without declaring it anywhere it ships. Main's six uses are all tests: `fast-check` from
+infrastructure/net-guard, shared/http and shared/ui; `vite` from interfaces/http and shared/ui-build;
+`dependency-cruiser` from interfaces/http/main.test.ts. The fallback is narrowed, not closed: closing it would change
+five product package.json files, the trusted shared/http/package.json and package-lock.json, across two classes, and a
+trusted PR may not carry the lockfile. Shared test tooling in the root package.json is a normal hoisted-monorepo
+pattern.
+
+**What:**
+- In the raw-specifier check from P1.28k, a bare name declared only in the root package.json passes **only when the
+  importing file is a test file**: one matching the vitest `include` globs in the root vitest.config.ts, read from that
+  file rather than copied.
+- Every other file must declare the name in its own workspace's package.json. Root-level non-test files use the root
+  package.json, as before.
+- The six current uses stay green.
+
+Fixtures: red, a non-test file under a workspace importing `dependency-cruiser`, which is declared only at root; green,
+a `*.test.ts` file in the same workspace with the same import; green, a root-level script importing a root dependency.
+
+Done when `npm run check` is green and the red fixture fails for this reason. If the vitest globs cannot be read
+statically, the PR lists the pattern it uses instead and says why, under "What I am unsure about".
 
 ---
 
