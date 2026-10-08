@@ -8,7 +8,7 @@
 // it; `file:`, `data:` and `bun:` stay in `module`, and its prefix match is case-sensitive. So a built-in is allowed by
 // `protocol` plus `coreModule`, and every other scheme is still visible in `module`.
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, matchesGlob } from "node:path";
 import type { ICruiseResult } from "dependency-cruiser";
 
 type Manifest = {
@@ -23,13 +23,24 @@ export type Packages = {
   root: ReadonlySet<string>;
   /** Workspace directory (repo-relative, no trailing slash) to its name and declared packages. */
   workspaces: ReadonlyMap<string, { name: string; declared: ReadonlySet<string> }>;
+  /** Whether a repo-relative file is a test file, the only kind the root package.json covers inside a workspace. */
+  testFile: (file: string) => boolean;
 };
 
 const declared = (manifest: Manifest): Set<string> =>
   new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {})]);
 
+/**
+ * Test files by the Vitest `include` globs (P1.28m). node:path matchesGlob is stable since Node v24.8.0 (Node v26.10.0
+ * doc/api/path.md, "path.matchesGlob"); the docs do not name brace expansion, so the tests show `{ts,tsx}` matching.
+ */
+export const testFileByGlobs =
+  (globs: string[]) =>
+  (file: string): boolean =>
+    globs.some((glob) => matchesGlob(file, glob));
+
 /** Reads the root package.json and every workspace it lists (`dir/*` patterns, as this repo writes them). */
-export function readPackages(root: string, list: (dir: string) => string[]): Packages {
+export function readPackages(root: string, list: (dir: string) => string[], testGlobs: string[]): Packages {
   const read = (dir: string): Manifest => JSON.parse(readFileSync(join(root, dir, "package.json"), "utf8"));
   const top = read(".");
   const workspaces = new Map<string, { name: string; declared: ReadonlySet<string> }>();
@@ -41,7 +52,7 @@ export function readPackages(root: string, list: (dir: string) => string[]): Pac
       workspaces.set(dir, { name: manifest.name ?? "", declared: declared(manifest) });
     }
   }
-  return { rootName: top.name ?? "", root: declared(top), workspaces };
+  return { rootName: top.name ?? "", root: declared(top), workspaces, testFile: testFileByGlobs(testGlobs) };
 }
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
@@ -83,9 +94,13 @@ function declaredRefusal(packages: Packages, file: string, name: string): string
     const known = [...packages.workspaces.values()].some((w) => w.name === name);
     return known ? undefined : "an @unset name that is no workspace";
   }
-  // Amendment 2: the importing file's own workspace, or the root package.json (which root-level files use).
-  if (owner(packages, file)?.has(name) || packages.root.has(name)) return undefined;
-  return "a package neither its workspace nor the root package.json declares";
+  // P1.28k amendment 2 and P1.28m: a root-level file uses the root package.json; a workspace file uses its own, and
+  // falls back to the root one only when it is a test file (shared test tooling is hoisted to the root).
+  const own = owner(packages, file);
+  if (!own) return packages.root.has(name) ? undefined : "a package the root package.json does not declare";
+  if (own.has(name)) return undefined;
+  if (!packages.root.has(name)) return "a package neither its workspace nor the root package.json declares";
+  return packages.testFile(file) ? undefined : "a root-only package outside a test file";
 }
 
 /** Every refused dependency in a cruise result, as "file → specifier: reason". */
