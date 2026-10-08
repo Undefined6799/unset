@@ -195,24 +195,40 @@ const INSTRUCTION = /^([A-Za-z]+)(?:\s+(.*))?$/;
  * body would read as instructions, so a fake `FROM` in it could hide the real final stage from every rule here: any
  * `<<` outside a comment fails, in every stage, whatever follows it (P1.29f, amendment 7 point 1; the repo uses none).
  */
+/**
+ * BuildKit's line continuation for the default `\` escape (moby/buildkit frontend/dockerfile/parser/parser.go,
+ * setEscapeToken and trimContinuationCharacter): a line ending in an unescaped backslash, spaces after it allowed.
+ */
+const CONTINUATION = /([^\\])\\[ \t]*$|^\\[ \t]*$/;
+
+/**
+ * A Dockerfile's instructions, joined as BuildKit joins them (P1.29g, record 2026-10-08-p129f-corpus-gaps item 5):
+ * only the backslash-newline goes, a continuation line keeps its leading whitespace, and comment and empty lines inside
+ * one are skipped (parser.go, Parse). A here-doc is refused on the joined text, so none hides across a continuation.
+ */
 function instructions(text: string): { line: number; text: string }[] {
   const out: { line: number; text: string }[] = [];
   let open: { line: number; text: string } | undefined;
+  const close = (instruction: { line: number; text: string }): void => {
+    if (instruction.text.includes("<<")) throw new Unparsed("heredoc not supported", instruction.line);
+    out.push({ line: instruction.line, text: instruction.text.trimEnd() });
+  };
   for (const [at, raw] of text.split("\n").entries()) {
     const line = raw.trim();
     const directive = /^#\s*(syntax|escape)\s*=/i.exec(line)?.[1];
     if (directive !== undefined)
       throw new Unparsed(`parser directive ${directive.toLowerCase()} not supported`, at + 1);
     if (line === "" || line.startsWith("#")) continue;
-    if (line.includes("<<")) throw new Unparsed("heredoc not supported", at + 1);
-    const body = line.endsWith("\\") ? line.slice(0, -1).trimEnd() : line;
-    open = open === undefined ? { line: at + 1, text: body } : { line: open.line, text: `${open.text} ${body}` };
-    if (!line.endsWith("\\")) {
-      out.push(open);
+    const continued = CONTINUATION.test(raw);
+    const piece = continued ? raw.replace(CONTINUATION, "$1") : raw;
+    open =
+      open === undefined ? { line: at + 1, text: piece.trimStart() } : { line: open.line, text: open.text + piece };
+    if (!continued) {
+      close(open);
       open = undefined;
     }
   }
-  if (open !== undefined) out.push(open);
+  if (open !== undefined) close(open);
   return out;
 }
 
@@ -456,9 +472,10 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
 ]);
 
 /**
- * The only rm each kind's shipped stages run that names a package manager, word for word as written (fourth
+ * The only rm each kind's final stage runs that names a package manager, word for word as written (fourth
  * architecture note under amendment 7): the node kind drops dpkg's maintainer scripts once dpkg is gone
- * (node-app.Dockerfile:48-49, migrate.Dockerfile:34-35). Any other rm naming one still meets the floor.
+ * (node-app.Dockerfile:48-49, migrate.Dockerfile:34-35). Any other rm naming one, and this one in a stage the final
+ * stage is built FROM (P1.29g), still meets the floor.
  */
 const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", []],
@@ -476,7 +493,26 @@ const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
     ],
   ],
 ]);
-const listedRm = (command: Token[], kind: Kind | undefined): boolean =>
+/**
+ * The only glob words each kind's final stage runs, word for word as written (P1.29g, record
+ * 2026-10-08-p129f-corpus-gaps item 6), so no spelling hides a package manager's name from the floor: node's yarn
+ * removal (node-app.Dockerfile:43, migrate.Dockerfile:29) and its maintainer-script rm (RM_BY_KIND).
+ */
+const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
+  ["edge", []],
+  ["node", ["/opt/yarn-*", ...(RM_BY_KIND.get("node")?.[0]?.slice(1) ?? [])]],
+]);
+const GLOB = /[*?[{]/;
+
+/** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
+function globProblem(command: Token[], kind: Kind | undefined, final: boolean): string | undefined {
+  const listed = final ? (GLOBS_BY_KIND.get(kind as Kind) ?? []) : [];
+  const glob = command.find(({ raw }) => GLOB.test(raw) && !listed.includes(raw));
+  if (glob === undefined) return undefined;
+  return `${command.map((token) => token.word).join(" ")}: ${glob.raw} is a glob not on the ${kind ?? "unknown"} list`;
+}
+const listedRm = (command: Token[], kind: Kind | undefined, final: boolean): boolean =>
+  final &&
   command[0]?.raw === "rm" &&
   (RM_BY_KIND.get(kind as Kind) ?? []).some((allowed) =>
     isDeepStrictEqual(
@@ -512,8 +548,8 @@ const managerNames = (text: string): number => text.match(PACKAGE_MANAGER_WORD)?
  * word and its package names when the command is a removal that passes, and none in a kind's listed rm. A word counts
  * as written and without quotes.
  */
-function unexemptManagerNames(command: Token[], kind: Kind | undefined): number {
-  if (listedRm(command, kind)) return 0;
+function unexemptManagerNames(command: Token[], kind: Kind | undefined, final: boolean): number {
+  if (listedRm(command, kind, final)) return 0;
   const [name = "", ...args] = command.map((token) => token.word);
   const flags = REMOVAL_FLAGS.get(name) ?? [];
   const removal = REMOVAL_VERBS.has(name) && commandProblem(command, kind) === undefined;
@@ -566,7 +602,7 @@ function unreadableRun(rest: string): string | undefined {
 }
 
 /** Why one shipped instruction may install OS packages; SHELL is refused because it changes what every RUN runs. */
-function shippedInstructionProblems(instruction: string, kind: Kind | undefined): string[] {
+function shippedInstructionProblems(instruction: string, kind: Kind | undefined, final: boolean): string[] {
   const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
   const keyword = word.toUpperCase();
   if (keyword === "ONBUILD") return ["ONBUILD is not allowed"];
@@ -581,11 +617,15 @@ function shippedInstructionProblems(instruction: string, kind: Kind | undefined)
   const exec = rest.startsWith("[") ? execCommand(rest) : undefined;
   const commands = exec === undefined ? shellCommands(rest) : [exec.map((word) => ({ raw: word, word }))];
   for (const command of commands) {
-    const problem = commandProblem(command, kind);
-    if (problem !== undefined) problems.push(problem);
+    // Exec form runs no shell, so it expands no glob.
+    const glob = exec === undefined ? globProblem(command, kind, final) : undefined;
+    for (const problem of [commandProblem(command, kind), glob]) {
+      if (problem !== undefined) problems.push(problem);
+    }
   }
   // Layer 1 reads the flags too (amendment 6, step A b); nothing in them is exempt.
-  const named = managerNames(flags.join(" ")) + commands.reduce((sum, c) => sum + unexemptManagerNames(c, kind), 0);
+  const named =
+    managerNames(flags.join(" ")) + commands.reduce((sum, c) => sum + unexemptManagerNames(c, kind, final), 0);
   return named > 0 ? [...problems, FLOOR] : problems;
 }
 
@@ -707,8 +747,10 @@ function apkKeptProblems(dockerfile: string): string[] {
 function osPackageProblems(dockerfile: string): string[] {
   try {
     const kind = kindOf(dockerfile, lock);
-    return shippedInstructions(instructions(dockerfile)).flatMap(({ line, text }) =>
-      shippedInstructionProblems(text, kind).map((problem) => `line ${line}: ${problem}`),
+    const all = instructions(dockerfile);
+    const finalFrom = all.findLast(({ text }) => FROM.test(text))?.line ?? 0;
+    return shippedInstructions(all).flatMap(({ line, text }) =>
+      shippedInstructionProblems(text, kind, line > finalFrom).map((problem) => `line ${line}: ${problem}`),
     );
   } catch (error) {
     if (!(error instanceof Unparsed)) throw error;
@@ -1103,11 +1145,24 @@ describe("base images", () => {
       [node, `RUN rm -f ${scripts} /x`],
       [node, `RUN rm -rf ${scripts}`],
       [node, "RUN rm -f /var/lib/dpkg/status"],
-      [node, `RUN rm -f ${scripts.replace("*.preinst", "'*.preinst'")}`],
-      [edge, `RUN rm -f ${scripts}`],
     ] as const) {
       expect(osPackageProblems(`${base}${run}`), run).toEqual([`line ${base.split("\n").length}: ${floor}`]);
     }
+    // The same two with their glob words off the list as well (P1.29g, item 6): quoted, and in an edge image.
+    const quoted = scripts.replace("*.preinst", "'*.preinst'");
+    expect(osPackageProblems(`${node}RUN rm -f ${quoted}`)).toEqual([
+      `line 3: rm -f ${scripts}: /var/lib/dpkg/info/'*.preinst' is a glob not on the node list`,
+      `line 3: ${floor}`,
+    ]);
+    expect(osPackageProblems(`${edge}RUN rm -f ${scripts}`)).toEqual([
+      `line 2: rm -f ${scripts}: /var/lib/dpkg/info/*.preinst is a glob not on the edge list`,
+      `line 2: ${floor}`,
+    ]);
+    // P1.29g: the listed rm and its globs pass in the final stage only, not in a stage the final stage is built FROM.
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN rm -f ${scripts}\nFROM base`)).toEqual([
+      `line 2: rm -f ${scripts}: /var/lib/dpkg/info/*.preinst is a glob not on the node list`,
+      `line 2: ${floor}`,
+    ]);
   });
 
   test("no_dockerfile_uses_onbuild", () => {
@@ -1244,6 +1299,64 @@ describe("base images", () => {
       }
     }
     expect(referenceProblems(`FROM ${pinnedNode}\n# cat <<EOF\nRUN rm -f /x`)).toEqual([]);
+  });
+
+  test("continuation_lines_join_as_buildkit_does", () => {
+    // P1.29g (record 2026-10-08-p129f-corpus-gaps, item 5): BuildKit drops only the backslash-newline, so the rules
+    // read the text the shell gets. Case g_procsub_cont first.
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    const floor = "a package manager is named outside a removal command";
+    expect(osPackageProblems(`${node}RUN rm -f <\\\n(echo x)`)).toEqual([
+      "line 3: a process substitution hides what runs",
+    ]);
+    expect(osPackageProblems(`${node}RUN rm -f >\\\n(cat)`)).toEqual([
+      "line 3: a process substitution hides what runs",
+    ]);
+    expect(osPackageProblems(`${node}RUN ap\\\nk add curl`)).toEqual([
+      "line 3: apk add curl: apk may only remove packages",
+      `line 3: ${floor}`,
+    ]);
+    // A here-doc split over a continuation is still one.
+    expect(referenceProblems(`${node}RUN cat <\\\n<EOF\nx\nEOF`)).toEqual(["line 3: heredoc not supported"]);
+    // A continuation line keeps its leading whitespace, and comment and empty lines inside one are skipped.
+    expect(instructions("RUN a \\\n  b\\\n# c\n\nd")).toEqual([{ line: 1, text: "RUN a   bd" }]);
+    // A line ending in an escaped backslash is no continuation (BuildKit's `([^\\])\\[ \t]*$`).
+    expect(instructions("RUN a\\\\\nRUN b")).toEqual([
+      { line: 1, text: "RUN a\\\\" },
+      { line: 2, text: "RUN b" },
+    ]);
+  });
+
+  test("final_stage_globs_on_the_kind_list", () => {
+    // P1.29g (record 2026-10-08-p129f-corpus-gaps, item 6): a glob word in a shipped RUN is only one on the kind's
+    // list, word for word, in the final stage, so no spelling hides a package manager's name. Case x_glob_rm_dpkg first.
+    const node = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\n`;
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    const floor = "a package manager is named outside a removal command";
+    const notListed = (shown: string, word: string, kind: string): string =>
+      `line ${kind === "node" ? 3 : 2}: ${shown}: ${word} is a glob not on the ${kind} list`;
+    for (const word of ["/usr/bin/dp?g", "/usr/bin/ap[t]", "/usr/bin/dpk*"]) {
+      expect(osPackageProblems(`${node}RUN rm -rf ${word}`), word).toEqual([notListed(`rm -rf ${word}`, word, "node")]);
+    }
+    // Brace expansion spells the names out, so the floor sees them too.
+    expect(osPackageProblems(`${node}RUN rm -rf /usr/bin/{apt,dpkg}`)).toEqual([
+      notListed("rm -rf /usr/bin/{apt,dpkg}", "/usr/bin/{apt,dpkg}", "node"),
+      `line 3: ${floor}`,
+    ]);
+    // Exec form runs no shell, so its words are not globs.
+    expect(osPackageProblems(`${node}RUN ["rm", "-f", "/x*"]`)).toEqual([]);
+    expect(osPackageProblems(`${node}RUN rm -rf /opt/yarn-*`)).toEqual([]);
+    expect(osPackageProblems(`${edge}RUN rm -rf /opt/yarn-*`)).toEqual([
+      notListed("rm -rf /opt/yarn-*", "/opt/yarn-*", "edge"),
+    ]);
+    // A listed glob in a stage the final stage is built FROM is not on the list.
+    expect(osPackageProblems(`FROM ${pinnedNode} AS base\nRUN rm -rf /opt/yarn-*\nFROM base`)).toEqual([
+      "line 2: rm -rf /opt/yarn-*: /opt/yarn-* is a glob not on the node list",
+    ]);
+    for (const file of ["images/node-app.Dockerfile", "images/migrate.Dockerfile"]) {
+      expect(osPackageProblems(read(file)), file).toEqual([]);
+    }
   });
 
   test("dl3026_ignore_only_on_upstream_base", () => {

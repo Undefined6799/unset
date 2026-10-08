@@ -2,10 +2,10 @@
 // 2026-10-07-p129-migrate-image-and-run-only-images, amendment 6, step B; step book record
 // 2026-10-07-p129e-p129n-p129p-image-outcome-checks). The recipe rules in images.test.ts are a fast pre-check; this is
 // the deciding check on what ships: each image is built, its filesystem exported, and every file or link whose name is
-// a package manager's fails, wherever it sits. images.test.ts holds every kind in KIND_BY_FINAL_ENTRY to a test named
-// `<kind>_image_has_no_package_manager` here. It builds images, so it lives in an *.image.test.ts file (P1.28r).
+// a package manager's fails, wherever it sits. One `<kind>_image_has_no_package_manager` test runs for each kind in
+// kinds.json (P1.29m), so no kind goes unchecked. It builds images, so it lives in an *.image.test.ts file (P1.28r).
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -59,8 +59,67 @@ function build(dockerfile: string, context: string): string {
   return result.out.trim();
 }
 
-/** An image's whole filesystem: its `tar -tv` listing, and a file's text by absolute path ("" when absent). */
-type Filesystem = { lines: string[]; text: (path: string) => string };
+/** One archive member: the mode `tar -tv` prints for it, and its absolute path. */
+type Entry = { mode: string; path: string };
+/** An image's whole filesystem: every member, and a file's text by absolute path ("" when absent). */
+type Filesystem = { entries: Entry[]; text: (path: string) => string };
+
+/** GNU tar's escape quoting, asked for by name: C escapes for control characters, a backslash doubled, octal bytes. */
+const TAR_ESCAPES = new Map([
+  ["a", 7],
+  ["b", 8],
+  ["f", 12],
+  ["n", 10],
+  ["r", 13],
+  ["t", 9],
+  ["v", 11],
+  ["\\", 92],
+]);
+
+/** A member name as `tar --quoting-style=escape` prints it, decoded to the name itself; an unknown escape throws. */
+function memberName(quoted: string): string {
+  const bytes = quoted.split(/(\\[0-7]{3}|\\[\s\S]?)/).map((part) => {
+    if (!part.startsWith("\\")) return Buffer.from(part, "utf8");
+    const octal = /^\\([0-7]{3})$/.exec(part)?.[1];
+    const byte = octal === undefined ? TAR_ESCAPES.get(part.slice(1)) : Number.parseInt(octal, 8);
+    if (byte === undefined) throw new Error(`tar member ${quoted} has an unknown escape ${part}`);
+    return Buffer.from([byte]);
+  });
+  return Buffer.concat(bytes).toString("utf8");
+}
+
+/**
+ * Every member of a listing, its mode from the `tar -tv` line and its name from the `tar -tf` line at the same index
+ * (P1.29g): a hard link's verbose line ends in its target, and a name may hold spaces, so no name is cut from a verbose
+ * line. Fails closed when the lists differ in length, a verbose line does not hold its name, or a name holds a newline.
+ */
+function listing(verbose: string, names: string): Entry[] {
+  const lines = verbose.split("\n").filter((line) => line !== "");
+  const quoted = names.split("\n").filter((line) => line !== "");
+  if (lines.length !== quoted.length) throw new Error(`tar listed ${lines.length} modes but ${quoted.length} names`);
+  return quoted.map((name, at) => {
+    const line = lines[at] ?? "";
+    if (!line.includes(` ${name}`)) throw new Error(`tar line ${at + 1} does not list ${name}`);
+    const path = memberName(name);
+    if (path.includes("\n")) throw new Error(`tar member ${name} has a newline in its name`);
+    return { mode: line.slice(0, 10), path: path.replace(/^\.?\/?/, "/").replace(/\/$/, "") };
+  });
+}
+
+/** An exported image's tar file as a filesystem; tar is GNU tar, whose listings quote names by `--quoting-style`. */
+function readTar(tar: string): Filesystem {
+  const list = (flags: string): string => {
+    const listed = spawnSync("tar", [flags, "--quoting-style=escape", "-f", tar], {
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+    });
+    if (listed.status !== 0) throw new Error(`tar failed: ${listed.stderr.slice(-2000)}`);
+    return listed.stdout;
+  };
+  const text = (path: string): string =>
+    spawnSync("tar", ["-xOf", tar, path.slice(1)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
+  return { entries: listing(list("-tv"), list("-t")), text };
+}
 
 /** Exports an image's filesystem from a container that never starts, and hands it to `use`. */
 function inspect<T>(image: string, use: (filesystem: Filesystem) => T): T {
@@ -72,30 +131,19 @@ function inspect<T>(image: string, use: (filesystem: Filesystem) => T): T {
   try {
     const exported = docker(["export", "-o", tar, container]);
     if (exported.code !== 0) throw new Error(`docker export failed: ${exported.err.slice(-2000)}`);
-    const listed = spawnSync("tar", ["-tvf", tar], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
-    if (listed.status !== 0) throw new Error(`tar failed: ${listed.stderr.slice(-2000)}`);
-    const text = (path: string): string =>
-      spawnSync("tar", ["-xOf", tar, path.slice(1)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
-    return use({ lines: listed.stdout.split("\n").filter((line) => line !== ""), text });
+    return use(readTar(tar));
   } finally {
     docker(["rm", "-f", container]);
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
-/** A listing line's mode and absolute path. */
-const entry = (line: string): { mode: string; path: string } => ({
-  mode: line.slice(0, 10),
-  path: (/ (\S+?)(?: -> \S+)?$/.exec(line)?.[1] ?? "").replace(/^\.?\/?/, "/").replace(/\/$/, ""),
-});
-
 /**
  * Every file or link in a listing whose name is a package manager's or its library's, wherever it sits; directories
  * are left out (architecture note under amendment 7: an empty directory runs nothing).
  */
-function packageManagers(lines: readonly string[]): string[] {
-  return lines
-    .map(entry)
+function packageManagers(entries: readonly Entry[]): string[] {
+  return entries
     .filter(({ mode, path }) => !mode.startsWith("d") && PACKAGE_MANAGER.test(path.slice(path.lastIndexOf("/") + 1)))
     .map(({ path }) => path);
 }
@@ -132,13 +180,13 @@ const DATABASE_BY_KIND = new Map([
 function databaseProblems(kind: string, filesystem: Filesystem): string[] {
   const database = DATABASE_BY_KIND.get(kind);
   if (database === undefined) return [`the ${kind} kind has no package-database list`];
-  const problems = filesystem.lines
-    .map(entry)
+  const problems = filesystem.entries
     .filter(({ mode, path }) => !mode.startsWith("d") && path.startsWith(`${database.root}/`))
     .flatMap(({ mode, path }) => {
       const relative = path.slice(database.root.length + 1);
       if (!mode.startsWith("-") || !database.data.test(relative)) return [`${path} is not on the ${kind} list`];
-      return mode.includes("x") ? [`${path} is executable`] : [];
+      // P1.29g: no execute bit, and no setuid, setgid or sticky bit, which tar prints as s, S, t or T.
+      return /[xsStT]/.test(mode.slice(1)) ? [`${path} has an execute or special mode bit`] : [];
     });
   const index = `${database.root}/${database.index}`;
   return database.names.test(filesystem.text(index)) ? problems : [...problems, `${index} names no package`];
@@ -163,7 +211,7 @@ function kindProblems(kind: string, files: readonly string[], check: (file: stri
 function imageProblems(kind: string, file: string): string[] {
   const image = build(join(DEPLOYMENT, file), contextOf(file));
   return inspect(image, (filesystem) => [
-    ...packageManagers(filesystem.lines).map((path) => `${path} is a package manager`),
+    ...packageManagers(filesystem.entries).map((path) => `${path} is a package manager`),
     ...databaseProblems(kind, filesystem),
   ]);
 }
@@ -173,21 +221,35 @@ describe("image package managers", () => {
     for (const image of built) docker(["rmi", "-f", image]);
   });
 
+  /** A listing as tar prints it, from [mode, quoted name, verbose suffix] rows: `-tv` lines and `-tf` names. */
+  const tarListing = (rows: readonly (readonly [string, string, string?])[]): [string, string] => [
+    rows.map(([mode, name, suffix = ""]) => `${mode} 0/0 10 2026-10-07 00:00 ${name}${suffix}\n`).join(""),
+    rows.map(([, name]) => `${name}\n`).join(""),
+  ];
+
   test("package_manager_listing_reader", () => {
-    const lines = [
-      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/bin/apt-get",
-      "-rw-r--r-- 0/0          10 2026-10-07 00:00 usr/share/doc/dpkg-dev",
-      "lrwxrwxrwx 0/0           0 2026-10-07 00:00 usr/sbin/dpkg-reconfigure -> ../share/debconf/x",
-      "drwxr-xr-x 0/0           0 2026-10-07 00:00 etc/apt/",
-      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 ./opt/x/dpkg",
-      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/bin/node",
-      "-rw-r--r-- 0/0        1000 2026-10-07 00:00 usr/lib/x86_64-linux-gnu/libapt-pkg.so.7.0.0",
-      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 opt/tools/apk.static",
-      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/lib/libapk.so.2.14.0",
-      "-rwxr-xr-x 0/0        1000 2026-10-07 00:00 usr/bin/microdnf",
-      "drwxr-xr-x 0/0           0 2026-10-07 00:00 etc/apk/",
-    ];
-    expect(packageManagers(lines)).toEqual([
+    const entries = listing(
+      ...tarListing([
+        ["-rwxr-xr-x", "usr/bin/apt-get"],
+        ["-rw-r--r--", "usr/share/doc/dpkg-dev"],
+        ["lrwxrwxrwx", "usr/sbin/dpkg-reconfigure", " -> ../share/debconf/x"],
+        ["drwxr-xr-x", "etc/apt/"],
+        ["-rwxr-xr-x", "./opt/x/dpkg"],
+        ["-rwxr-xr-x", "usr/bin/node"],
+        ["-rw-r--r--", "usr/lib/x86_64-linux-gnu/libapt-pkg.so.7.0.0"],
+        ["-rwxr-xr-x", "opt/tools/apk.static"],
+        ["-rwxr-xr-x", "usr/lib/libapk.so.2.14.0"],
+        ["-rwxr-xr-x", "usr/bin/microdnf"],
+        ["drwxr-xr-x", "etc/apk/"],
+        // P1.29g: a hard link's verbose line ends in its target, so the name comes from the name list.
+        ["hrwxr-xr-x", "usr/bin/dpkg", " link to usr/bin/node"],
+        ["hrwxr-xr-x", "usr/bin/x", " link to usr/bin/apt"],
+        // Names with spaces are read whole, and a symlink's target with a space is no name.
+        ["-rwxr-xr-x", "opt/a b/apt"],
+        ["lrwxrwxrwx", "usr/bin/y", " -> /opt/a b/rpm"],
+      ]),
+    );
+    expect(packageManagers(entries)).toEqual([
       "/usr/bin/apt-get",
       "/usr/share/doc/dpkg-dev",
       "/usr/sbin/dpkg-reconfigure",
@@ -196,11 +258,73 @@ describe("image package managers", () => {
       "/opt/tools/apk.static",
       "/usr/lib/libapk.so.2.14.0",
       "/usr/bin/microdnf",
+      "/usr/bin/dpkg",
+      "/opt/a b/apt",
     ]);
   });
 
+  test("listing_reader_fails_closed", () => {
+    const [verbose, names] = tarListing([
+      ["-rw-r--r--", "usr/bin/a"],
+      ["-rw-r--r--", "usr/bin/b"],
+    ]);
+    // P1.29g: the two lists must pair one to one, line for line.
+    expect(() => listing(verbose, "usr/bin/a\n")).toThrow("tar listed 2 modes but 1 names");
+    expect(() => listing(verbose, "usr/bin/b\nusr/bin/a\n")).toThrow("does not list usr/bin/b");
+    expect(listing(verbose, names).map(({ path }) => path)).toEqual(["/usr/bin/a", "/usr/bin/b"]);
+    // GNU tar's escape quoting: octal bytes decode as UTF-8, a backslash is doubled, and a newline fails closed.
+    expect(listing(...tarListing([["-rw-r--r--", "opt/\\303\\251\\\\x"]]))).toEqual([
+      { mode: "-rw-r--r--", path: "/opt/\u00e9\\x" },
+    ]);
+    expect(() => listing(...tarListing([["-rw-r--r--", "usr/bin/n\\nl"]]))).toThrow("has a newline in its name");
+    expect(() => listing(...tarListing([["-rw-r--r--", "usr/bin/n\\q"]]))).toThrow("unknown escape");
+  });
+
+  test("tar_reader_on_a_real_archive", () => {
+    const dir = mkdtempSync(join(tmpdir(), "image-tar-"));
+    const tar = (args: readonly string[]): void => {
+      const result = spawnSync("tar", args, { cwd: join(dir, "root"), encoding: "utf8" });
+      if (result.status !== 0) throw new Error(`tar failed: ${result.stderr}`);
+    };
+    try {
+      const info = join(dir, "root", "var", "lib", "dpkg", "info");
+      mkdirSync(info, { recursive: true });
+      mkdirSync(join(dir, "root", "usr", "bin"), { recursive: true });
+      writeFileSync(join(dir, "root", "x"), "x", { mode: 0o755 });
+      linkSync(join(dir, "root", "x"), join(dir, "root", "usr", "bin", "dpkg"));
+      writeFileSync(join(info, "a b.list"), "y", { mode: 0o755 });
+      linkSync(join(info, "a b.list"), join(info, "x.postinst"));
+      writeFileSync(join(dir, "root", "var", "lib", "dpkg", "status"), "Package: x\n");
+      // Explicit order, so each hard link is archived as the link and not as the file it points to.
+      tar([
+        "-cf",
+        join(dir, "fs.tar"),
+        "x",
+        "usr/bin/dpkg",
+        "var/lib/dpkg/status",
+        "var/lib/dpkg/info/a b.list",
+        "var/lib/dpkg/info/x.postinst",
+      ]);
+      const filesystem = readTar(join(dir, "fs.tar"));
+      expect(packageManagers(filesystem.entries)).toEqual(["/usr/bin/dpkg"]);
+      expect(databaseProblems("node", filesystem)).toEqual([
+        "/var/lib/dpkg/info/a b.list has an execute or special mode bit",
+        "/var/lib/dpkg/info/x.postinst is not on the node list",
+      ]);
+      writeFileSync(join(dir, "root", "n\nl"), "z");
+      tar(["-cf", join(dir, "newline.tar"), "n\nl"]);
+      expect(() => readTar(join(dir, "newline.tar"))).toThrow("has a newline in its name");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("package_database_reader", () => {
-    const line = (mode: string, path: string): string => `${mode} 0/0 10 2026-10-07 00:00 ${path}`;
+    const line = (mode: string, path: string): readonly [string, string, string?] => {
+      const [name = "", target] = path.split(" -> ");
+      return target === undefined ? [mode, name] : [mode, name, ` -> ${target}`];
+    };
+    const files = (rows: readonly (readonly [string, string, string?])[]): Entry[] => listing(...tarListing(rows));
     const dpkg = [
       line("drwxr-xr-x", "var/lib/dpkg/"),
       line("-rw-r--r--", "var/lib/dpkg/status"),
@@ -210,27 +334,42 @@ describe("image package managers", () => {
       line("lrwxrwxrwx", "var/lib/dpkg/alternatives/x -> /tmp/x"),
       line("-rw-r--r--", "var/lib/dpkg/info/tzdata.config"),
     ];
-    const status = (text: string): Filesystem => ({ lines: dpkg, text: () => text });
+    const status = (text: string): Filesystem => ({ entries: files(dpkg), text: () => text });
     expect(databaseProblems("node", status("Package: tar\n"))).toEqual([
       "/var/lib/dpkg/info/tar.postinst is not on the node list",
-      "/var/lib/dpkg/info/tar.md5sums is executable",
+      "/var/lib/dpkg/info/tar.md5sums has an execute or special mode bit",
       "/var/lib/dpkg/alternatives/x is not on the node list",
       "/var/lib/dpkg/info/tzdata.config is not on the node list",
     ]);
-    expect(databaseProblems("node", { lines: dpkg.slice(0, 3), text: () => "" })).toEqual([
+    expect(databaseProblems("node", { entries: files(dpkg.slice(0, 3)), text: () => "" })).toEqual([
       "/var/lib/dpkg/status names no package",
     ]);
     const apk = [line("-rw-r--r--", "lib/apk/db/installed"), line("-rw-r--r--", "lib/apk/db/scripts.tar.gz")];
-    expect(databaseProblems("edge", { lines: apk, text: () => "C:x\nP:musl\n" })).toEqual([]);
-    expect(databaseProblems("edge", { lines: [...apk, line("-rw-r--r--", "lib/apk/db/x")], text: () => "" })).toEqual([
-      "/lib/apk/db/x is not on the edge list",
-      "/lib/apk/db/installed names no package",
+    expect(databaseProblems("edge", { entries: files(apk), text: () => "C:x\nP:musl\n" })).toEqual([]);
+    expect(
+      databaseProblems("edge", { entries: files([...apk, line("-rw-r--r--", "lib/apk/db/x")]), text: () => "" }),
+    ).toEqual(["/lib/apk/db/x is not on the edge list", "/lib/apk/db/installed names no package"]);
+    // P1.29g: inert data carries no execute, setuid, setgid or sticky bit, whichever letter tar prints for it.
+    for (const mode of [
+      "-rwxr-xr-x",
+      "-rwsr--r--",
+      "-rwSr--r--",
+      "-rw-r-sr--",
+      "-rw-r-Sr--",
+      "-rw-r--r-t",
+      "-rw-r--r-T",
+    ]) {
+      const special = [...apk, line(mode, "lib/apk/db/triggers")];
+      expect(databaseProblems("edge", { entries: files(special), text: () => "P:musl\n" }), mode).toEqual([
+        "/lib/apk/db/triggers has an execute or special mode bit",
+      ]);
+    }
+    // A hard link in the database is no plain data file, whatever it links to.
+    const linked = [...apk, ["hrw-r--r--", "lib/apk/db/triggers", " link to lib/apk/db/installed"] as const];
+    expect(databaseProblems("edge", { entries: files(linked), text: () => "P:musl\n" })).toEqual([
+      "/lib/apk/db/triggers is not on the edge list",
     ]);
-    const executable = [...apk, line("-rwxr-xr-x", "lib/apk/db/triggers")];
-    expect(databaseProblems("edge", { lines: executable, text: () => "P:musl\n" })).toEqual([
-      "/lib/apk/db/triggers is executable",
-    ]);
-    expect(databaseProblems("postgres", { lines: [], text: () => "" })).toEqual([
+    expect(databaseProblems("postgres", { entries: [], text: () => "" })).toEqual([
       "the postgres kind has no package-database list",
     ]);
   });
