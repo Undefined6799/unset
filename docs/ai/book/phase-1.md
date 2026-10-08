@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -205,6 +205,7 @@ flowchart LR
   P1_28k["P1.28k no root-absolute or unresolved imports"]
   P1_28m["P1.28m root-only dependencies in tests only"]
   P1_28p["P1.28p product never imports tooling"]
+  P1_28z["P1.28z tooling image-test anchor pinned"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -384,6 +385,7 @@ flowchart LR
   P1_28g --> P1_28k
   P1_28k --> P1_28m
   P1_28m --> P1_28p
+  P1_28p --> P1_28z
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7856,6 +7858,22 @@ importing a test helper; green, a test importing product code.
 Done when `npm run check` is green, each red fixture fails on this rule, and the F1 mutant fails a test. If moving
 shared code off an existing edge would touch a trusted or product file, the PR stops and lists the edge, because a check
 PR carries no product or trusted path; the step book then books the move as its own step, ahead of this one.
+
+---
+
+### P1.28z — Pin the tooling set's image-test anchor
+Tags: [SEC]            Depends on: P1.28p
+Slice 1, issue #561, check (scripts/lint, kind/build, test only); book edit 2026-10-08-p128z-tooling-image-anchor
+(final 05:00Z), from the coordinator's verification of #558 (P1.28p), relayed at 04:59Z. A tightening; the coordinator
+clears it, no word from Alex. Owner: the third thread, after P1.28p (#556, PR #558) merges. Nothing depends on it. It
+cannot ride P1.29j (#560), which is product class and owned by Phase 1. If another third-thread step that touches
+scripts/lint opens first, it may carry this instead; that PR says so, and this step closes as carried.
+
+**What:** nothing pins the `$` on the tooling set's image member `\.image\.test\.[^/]*$` (`tooling.ts:48-49` on #558's
+head), so dropping it would make a path like `x.image.test.d/b.ts` count as tooling. Add one non-member assertion for a
+path with text after the image-test name, such as `deployment/images/x.image.test.d/b.ts`, so that the mutant fails.
+
+Done when `npm run check` is green and the anchor-removal mutant fails a test.
 
 ---
 
