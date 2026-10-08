@@ -8402,13 +8402,13 @@ allows.
 ---
 
 ### P1.29f — Turn final-stage rules into per-kind allowlists
-Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538), P1.29m
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538), P1.29m (merged, #545)
 Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
 items 5 and 6 at 01:00Z), from architecture's amendment 7 (00:45Z) and its 00:50Z note in
 2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e (#532), relayed by the coordinator at 00:27Z. A
-tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after P1.29n. It is not tied to
-P1.29p: privileges are a separate concern, so either can land first. It goes before P1.29d and P1.29, which both gain it
-as a dependency; P1.29d adds the postgres entries to every list below.
+tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after P1.29n. The order is
+P1.29f, then P1.29g, then P1.29p (see the p129g record, amendment 1, final 01:55Z). It goes before P1.29d and P1.29,
+which both gain it as a dependency; P1.29d adds the postgres entries to every list below.
 
 **What:**
 1. **Here-docs.** Any `<<` in any instruction of any stage, outside comments, fails, whatever follows it. That covers
@@ -8476,11 +8476,11 @@ Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
 Phase 1, after P1.29e, in parallel with P1.29n.
 
-**What:** the image test `image_privileges_match_list`, for every kind in `KIND_BY_FINAL_ENTRY`. It walks each built
-image's filesystem; every file with a `security.capability` xattr, and every setuid or setgid file, must be in an exact
-per-kind list. Today's lists: edge, caddy with `cap_net_bind_service`, if main has it; node, none (the base's setuid
-files are removed in the final RUN, or the body lists each one that must stay, with the reason). A kind that has no list
-fails the test, so a new image cannot arrive unlisted.
+**What:** the image test `image_privileges_match_list`, for every kind in `deployment/images/kinds.json` (p129g record,
+amendment 1). It walks each built image's filesystem; every file with a `security.capability` xattr, and every setuid or
+setgid file, must be in an exact per-kind list. Today's lists: edge, caddy with `cap_net_bind_service`, if main has it;
+node, none (the base's setuid files are removed in the final RUN, or the body lists each one that must stay, with the
+reason). A kind that has no list fails the test, so a new image cannot arrive unlisted.
 
 Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
 
