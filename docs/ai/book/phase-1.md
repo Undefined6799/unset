@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.28k, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -200,8 +200,10 @@ flowchart LR
   P1_28h["P1.28h Caddyfile reader"]
   P1_28e["P1.28e one edge config reader"]
   P1_28f["P1.28f edge reader containment"]
+  P1_28l["P1.28l edge reader echo and aliases"]
   P1_28g["P1.28g edge never imports preflight"]
   P1_28k["P1.28k no root-absolute or unresolved imports"]
+  P1_28m["P1.28m root-only dependencies in tests only"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -373,8 +375,11 @@ flowchart LR
   P1_28e --> P1_28f
   P1_28e --> P1_28g
   P1_28f --> P1_30u
+  P1_28f --> P1_28l
+  P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_28g --> P1_28k
+  P1_28k --> P1_28m
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7607,7 +7612,8 @@ outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` w
 
 ### P1.28f — Close the edge reader's containment gaps
 Tags: [SEC], trusted            Depends on: P1.28e (merged, #533)
-As built: merged by Alex at 2026-10-08T01:22:05Z as `b2188a9` (#541).
+As built: merged by Alex at 2026-10-08T01:22:05Z as `b2188a9` (#541). Its gaps follow in P1.28l (book edit
+2026-10-08-p128f-p128g-edge-reader-follow-ups, amendment 1, 01:50Z).
 Slice 1, issue #536, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
 2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
 2026-10-07-p130s-networks-and-caddyfile-reader, relayed by the coordinator at 00:22Z. A tightening; the coordinator
@@ -7649,6 +7655,47 @@ is under "What I am unsure about".
 
 ---
 
+### P1.28l — Close the edge reader's echo and alias gaps
+Tags: [SEC], trusted            Depends on: P1.28f (merged, #541)
+As built: merged by Alex at 2026-10-08T03:12:07Z as `11b6801` (#552).
+Slice 1, issue #551, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
+2026-10-08-p128l-edge-reader-echo-and-aliases (final 01:55Z; the `{$ACME_EMAIL}` position corrected at 02:00Z), from the
+coordinator's check of #541, relayed at 01:42Z, and architecture's amendment 9 (01:50Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader. A tightening; the coordinator clears it, no word from Alex. Owner: Phase
+2, ahead of P1.30u (#448), which gains it as a dependency.
+
+**What** (architecture's amendment 9):
+1. **Each env placeholder has one exact position** in `caddyfile.ts`: `{$PDS_HOST}` only as the public PDS site's
+   address; `{$PDS_UPSTREAM}` only as a `reverse_proxy` upstream on the `{$PDS_HOST}` site; `{$ACME_EMAIL}` only as the
+   `email` subdirective of `issuer acme` inside a `tls` directive, as shipped at `snippets/tls.caddy:9` (architecture's
+   correction under amendment 9; not the global options block, and it needs no config change and no "unsure" note). Any
+   other placement fails: as a site address, in a header value, or in a matcher.
+   - **Literal site addresses:** only the loopback health site (`127.0.0.1:<port>` or `[::1]:<port>`, with no upstream)
+     may use one. Any other literal site address fails.
+   - **Messages name the token, never the substituted value.** A message identifies a site by its address token before
+     substitution, or by its loopback literal.
+   - **Red fixtures:** `{$ACME_EMAIL}` as a site address, and `{$PDS_UPSTREAM}` as a site address, each failing on
+     position with neither sentinel value in its message; a placeholder in a header value; a placeholder in a matcher;
+     and a non-loopback literal site address.
+2. **Every upstream is a placeholder.** Every `reverse_proxy` upstream must be a placeholder from the table; literal
+   hosts, IP literals (v4 and v6), `localhost` and written-out service names all fail. The one-site-per-upstream rule
+   compares placeholder names, so at most one site proxies `{$PDS_UPSTREAM}`. DNS-alias equivalence between env values
+   is out of scope by construction. The PR body corrects #541's claim that IPv4 literals were refused. Red fixtures:
+   `localhost:3000`, `127.0.0.1:3000`, `[::1]:3000`, `pds:3000`, and a second site proxying `{$PDS_UPSTREAM}`. Green:
+   the shipped config.
+3. **The env sentinel test covers every rule.** `edge_messages_never_carry_env_values` runs every rule's failure path
+   under the sentinel values: the zones-snippet count, the global-zone matcher, the canonical-form message, and item 1's
+   position cases.
+4. **Directive lookup guard.** Add `Object.hasOwn(DIRECTIVES, level)` at `caddyfile.ts:313-317`. Fixtures:
+   `header { constructor { x } }` and `header { __proto__ { x } }` each fail as a `CaddyfileError`, not a `TypeError`.
+
+**Later changes:** adding a placeholder or a position changes the table in the trusted file and goes under "What I am
+unsure about". Widening a position is a loosening.
+
+Done when `npm run check` is green, and every red fixture fails with its stated message and no env value in it.
+
+---
+
 ### P1.28g — Refuse preflight imports from the edge
 Tags: [SEC]            Depends on: P1.28e (merged, #533)
 As built: merged by Alex at 2026-10-08T00:40:42Z as `485cd61` (#540).
@@ -7671,11 +7718,15 @@ Done when `npm run check` is green, and the red fixture fails on the new rule.
 
 ### P1.28k — Refuse root-absolute and unresolved imports
 Tags: [SEC]            Depends on: P1.28g (merged, #540)
+As built: merged by Alex at 2026-10-08T02:52:17Z as `0864d39` (#549).
 Slice 1, issue #544, check (`scripts/lint/.dependency-cruiser.cjs`, its fixtures and its tests); book edit
-2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z), from architecture's second note under amendment 8
-(01:10Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and
-relayed at 00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its
-only dependency, and nothing waits for it; P1.30u does not.
+2026-10-08-p128k-root-absolute-and-unresolved-imports (final 01:35Z; amendment 1, final 02:05Z, from architecture's
+p130s amendment 10, 02:00Z, asked by the coordinator at 01:46Z; amendment 2, final 02:15Z, three tightenings from the
+third thread's recon on b2188a9, relayed at 01:50Z), from architecture's second note under amendment 8 (01:10Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader, written after the coordinator's post-merge check of #540 and relayed at
+00:53Z. A tightening; the coordinator clears it, no word from Alex. Owner: the third thread. P1.28g is its only
+dependency, and nothing waits for it; P1.30u does not. Amendments 1 and 2 ride PR #549; the narrow couldNotResolve fix
+is declined.
 
 **Why:** an edge test can import `"/deployment/preflight/compose-parse.ts"`. Depcruise leaves that specifier unresolved,
 with its leading slash intact, so `^deployment/preflight/` never matches it. Vitest, though, resolves it from the repo
@@ -7683,6 +7734,7 @@ root.
 
 **What:** one `forbidden` rule, severity error, applying to every file.
 - **Root-absolute specifiers fail even when they resolve.** Their meaning depends on which tool does the resolving.
+  Amendment 1's item 1 enforces it.
 - **Unresolved specifiers fail** when they are relative, root-absolute or `@unset/*`.
 - **One exception:** the `RENDER_BUILD_IMPORT` edge (`.dependency-cruiser.cjs:38`). It is read from that same config
   value, as `scripts/test/image-rules.test.ts:41` already does, with no second copy.
@@ -7691,8 +7743,40 @@ root.
   one in a product or trusted file, the step stops and says so: a check PR cannot rewrite those files under SE-6, so
   that rewrite would become its own step.
 
+**Raw-specifier allowlist and the package.json route** (amendment 1). The verifier found three gaps: a root package.json
+`exports` entry plus an `unset.sh/p` import reaches preflight with 0 depcruise errors; `FILE:///` passes, because the
+match is case-sensitive; and `/proc/self/cwd/...` resolves, so the import is not refused.
+
+1. **The raw-specifier allowlist.** A scripts/lint check reads each dependency's raw `module` from the cruise JSON. It
+   allows only `./` and `../`; `@unset/<workspace>` and its subpaths; `node:` built-ins (as amendment 2, item 1 defines
+   them); and bare names declared in `dependencies` or `devDependencies` of the importing file's own workspace
+   package.json (the root package.json for root-level files). If main has violations, the PR lists them and fixes each
+   by declaring the dependency where it is used; where that is impractical, amendment 2, item 2's fallback applies.
+   Refused: the root package's own name; `#` imports; any URL scheme, case-insensitively; a leading `/` or `\`, or any
+   backslash; tsconfig `paths` aliases. RENDER_BUILD_IMPORT stays the single exemption, from its one config value.
+2. **The package.json route, pinned under the check-job pinning test (scripts/ci).** The root package.json has no
+   `exports`, `imports`, `main`, `module` or `browser` field. Every workspace's `exports` and `imports` targets realpath
+   inside that workspace's directory. A current target outside the directory goes under unsure.
+
+**Amendment 2** (02:15Z), three tightenings:
+
+1. **Built-ins.** Depcruise 18.5.0 moves the `node:` prefix out of `module` into a separate `protocol` field
+   (`src/extract/helpers.mjs:76-100`), so the allowance is `protocol` equal to `node:` with `coreModule` true. A bare
+   built-in such as `fs` is refused. Main has none: all 464 core imports use `node:`.
+2. **Bare-name fallback.** A bare name must be declared in the importing file's own workspace package.json or the root
+   package.json. Main's six exceptions are test files importing root devDependencies, and fixing them would need
+   workspace package.json edits a check PR cannot make, so the PR lists them under "What I am unsure about":
+   `fast-check` from infrastructure/net-guard, shared/http and shared/ui; `vite` from interfaces/http and
+   shared/ui-build; `dependency-cruiser` from interfaces/http/main.test.ts.
+3. **Excluded folders.** Depcruise's `exclude` also drops any dependency that resolves into `dist/`, `coverage/`,
+   `.worktrees/` or `graphify-out/`, so a tracked deployment/preflight/dist/b.ts imported from an edge test shows no
+   dependency at all. The pinning test (scripts/ci) also requires that no tracked file sits under a folder with one of
+   those names, anywhere in the repo. Main has none; the two fixture folders stay the only tracked excluded paths.
+
 Fixtures: red, a root-absolute import from an edge test into preflight; red, an unresolved relative import; red, an
-unresolved `@unset/x`; green, the render-build edge.
+unresolved `@unset/x`; green, the render-build edge. Amendment 1 adds: red, one per refused form, including `FILE:///`
+and `/proc/self/cwd/...`; red, a root `exports` field; red, a workspace export target outside its directory; green, one
+per allowed form. Amendment 2 adds: red, a tracked file under an excluded folder.
 
 Done when `npm run check` is green, and each red fixture fails on the new rule.
 
@@ -7700,6 +7784,39 @@ Done when `npm run check` is green, and each red fixture fails on the new rule.
 `import.meta.glob`, `import("x").T`, triple-slash references, JSDoc import types). The general fix is a parse-based
 check that trusted code imports only trusted code. The next step that touches the trusted section of the matrix books
 it, together with amendment 8 item 2's general rule.
+
+---
+
+### P1.28m — Root dependency fallback for test files only
+Tags: [SEC]            Depends on: P1.28k (merged, #549)
+As built: merged by Alex at 2026-10-08T03:12:28Z as `e1edc1e` (#555).
+Slice 1, issue #553, check (scripts/lint, the raw-specifier check from P1.28k); book edit
+2026-10-08-p128m-root-fallback-tests-only (final 02:25Z), from the coordinator's question at 02:21Z about #549 (P1.28k,
+amendment 2 item 2). A tightening; the coordinator clears it, no word from Alex. Owner: the third thread, after P1.28k.
+Nothing depends on it.
+
+**Why:** #549 lets a bare import be declared in the importing file's own workspace or in the root package.json. While
+that fallback applies to every file, a production file could import a root devDependency, such as `dependency-cruiser`
+or `vite`, without declaring it anywhere it ships. Main's six uses are all tests: `fast-check` from
+infrastructure/net-guard, shared/http and shared/ui; `vite` from interfaces/http and shared/ui-build;
+`dependency-cruiser` from interfaces/http/main.test.ts. The fallback is narrowed, not closed: closing it would change
+five product package.json files, the trusted shared/http/package.json and package-lock.json, across two classes, and a
+trusted PR may not carry the lockfile. Shared test tooling in the root package.json is a normal hoisted-monorepo
+pattern.
+
+**What:**
+- In the raw-specifier check from P1.28k, a bare name declared only in the root package.json passes **only when the
+  importing file is a test file**: one matching the vitest `include` globs in the root vitest.config.ts, read from that
+  file rather than copied.
+- Every other file must declare the name in its own workspace's package.json. Root-level non-test files use the root
+  package.json, as before.
+- The six current uses stay green.
+
+Fixtures: red, a non-test file under a workspace importing `dependency-cruiser`, which is declared only at root; green,
+a `*.test.ts` file in the same workspace with the same import; green, a root-level script importing a root dependency.
+
+Done when `npm run check` is green and the red fixture fails for this reason. If the vitest globs cannot be read
+statically, the PR lists the pattern it uses instead and says why, under "What I am unsure about".
 
 ---
 
@@ -7711,7 +7828,7 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -8326,8 +8443,10 @@ body gives Trivy counts before and after.
 
 ### P1.29m — Finish the kind-wide package manager test
 Tags: [SEC]            Depends on: P1.29n (merged, #538)
-As built: merged by Alex at 2026-10-08T01:21:37Z as `901e1c5` (#545). Gaps the verification found follow in P1.29g
-(book edit 2026-10-08-p129m-kind-wide-package-manager-test, amendment 1, 01:45Z).
+As built: merged by Alex at 2026-10-08T01:21:37Z as `901e1c5` (#545). Gaps the verification found follow in P1.29g (book
+edit 2026-10-08-p129m-kind-wide-package-manager-test, amendment 1, 01:45Z). `901e1c5` had no CI run of its own; the
+concurrency group cancelled it when `b2188a9` queued, and `b2188a9`'s green run covers its tree (p128f-p128g record,
+amendment 1).
 Slice 1, issue #543, product (`deployment/images/`); book edit 2026-10-08-p129m-kind-wide-package-manager-test (final
 01:30Z; the coordinator's nits on #542 folded in at 01:40Z), from the coordinator's relay at 00:51Z: #538 merged at
 00:34:04Z as `41810fa` with only its first commit, so none of P1.29n's amendments 1 and 2 (in
@@ -8403,6 +8522,7 @@ allows.
 
 ### P1.29f — Turn final-stage rules into per-kind allowlists
 Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n (merged, #538), P1.29m (merged, #545)
+As built: merged by Alex at 2026-10-08T02:52:04Z as `ed761f3` (#548).
 Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
 items 5 and 6 at 01:00Z), from architecture's amendment 7 (00:45Z) and its 00:50Z note in
 2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e (#532), relayed by the coordinator at 00:27Z. A
@@ -8440,13 +8560,17 @@ passes, and the body lists every allowlist entry with its citation.
 ---
 
 ### P1.29g — Harden the package manager image reader
-Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f
-Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final
-01:45Z), from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the
-verification finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green
-and nothing is weaker than main, but the verifier found gaps that would have held the PR. A tightening; the coordinator
-clears it, with no architecture ruling and no word from Alex. Owner: Phase 1, after P1.29f (a dependency for order) and
-before P1.29p, which gains it as a dependency: P1.29p walks the same exported filesystem and reuses this reader.
+Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f (merged, #548)
+As built: merged by Alex at 2026-10-08T03:12:19Z as `718fb69` (#554), with items 5 and 6.
+Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final 01:45Z),
+from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the verification
+finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green and nothing is
+weaker than main, but the verifier found gaps that would have held the PR. A tightening; the coordinator clears it, with
+no architecture ruling and no word from Alex. Owner: Phase 1, after P1.29f (a dependency for order) and before P1.29p,
+which gains it as a dependency: P1.29p walks the same exported filesystem and reuses this reader. Items 5 and 6 come
+from book edit 2026-10-08-p129f-corpus-gaps (final 02:05Z), from the coordinator's verification of #548 (P1.29f),
+relayed at 01:54Z and 01:56Z; Phase 1 ran the rules read-only on main b2188a9 and #548's head 5937e9b at 01:59Z, and
+none refuses the three cases. A tightening the coordinator clears.
 
 **What** (line numbers are on main b2188a9):
 1. **Names come from a real name list, not the last token of each line.** `package-manager.image.test.ts:87-90`
@@ -8463,18 +8587,37 @@ before P1.29p, which gains it as a dependency: P1.29p walks the same exported fi
    exact rm in an ancestor stage fails.
 4. **Header comment.** `package-manager.image.test.ts:5-6` still describes the dropped source scan of
    `KIND_BY_FINAL_ENTRY`. It should describe the kind-wide test over `kinds.json`.
+5. **Join continuation lines the way BuildKit does.** `instructions()` (`images.test.ts:204-205`) trims the text before
+   `\` and joins with a space, while BuildKit removes only the backslash-newline. So `RUN rm -f <\` followed by
+   `(echo x)` reads as `rm -f < (echo x)` to the rules, and the process-substitution check at :556 (`/[<>]\(/`) misses
+   it; Docker hands the shell `rm -f <(echo x)`. The fix: drop the backslash and newline and nothing else, with no trim
+   and no added space. Any rule or fixture on main that relied on the space is listed under "What I am unsure about".
+   Fixtures: red, `RUN rm -f <\` + `(echo x)` (case g_procsub_cont); red, `RUN rm -f >\` + `(cat)`; red, `RUN ap\` +
+   `k add curl` in the final stage; green, the current node-app and migrate Dockerfiles.
+6. **Glob words in the final stage need an exact per-kind list.** `RUN rm -rf /usr/bin/dp?g` passes: `rm` is allowed
+   (:415), PACKAGE_MANAGER_WORD (:422) needs `\bdpkg\b`, and RM_BY_KIND (:460) only exempts, so spelling routes around
+   the "package manager named outside a removal command" floor. The built-image test still decides the outcome, but the
+   text rule should not be blind to it. The fix: in the final stage, any RUN word containing `*`, `?`, `[` or `{` fails
+   unless it is token-exact in a per-kind glob list, shaped like RM_BY_KIND. Node's list holds `/opt/yarn-*`
+   (`node-app.Dockerfile:43`, `migrate.Dockerfile:29`) and the RM_BY_KIND maintainer-script globs (:48 and :34); every
+   other kind's list is empty; P1.29d adds postgres entries if it needs any. Fixtures: red, `rm -rf /usr/bin/dp?g` (case
+   x_glob_rm_dpkg), `rm -rf /usr/bin/ap[t]`, `rm -rf /usr/bin/dpk*` and `rm -rf /usr/bin/{apt,dpkg}`; green, both
+   current Dockerfiles.
 
 Done when `npm run check` and the image tests are green, every red fixture fails for its stated reason, and the
 space-name fixture is read correctly.
 
+**Size:** P1.29g stays one PR. If it passes about 550 lines, items 5 and 6 split out as P1.29i, owned by Phase 1, after
+P1.29g and before P1.29p; the PR says so under "What I am unsure about".
+
 ---
 
 ### P1.29p — Pin file capabilities and setuid in every image
-Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g
+Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29g (merged, #554)
 Slice 1, issue #530, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
 23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex. Owner:
-Phase 1, after P1.29e, in parallel with P1.29n.
+Phase 1, after P1.29g (P1.29e and P1.29n merged).
 
 **What:** the image test `image_privileges_match_list`, for every kind in `deployment/images/kinds.json` (p129g record,
 amendment 1). It walks each built image's filesystem; every file with a `security.capability` xattr, and every setuid or
@@ -8482,7 +8625,16 @@ setgid file, must be in an exact per-kind list. Today's lists: edge, caddy with 
 node, none (the base's setuid files are removed in the final RUN, or the body lists each one that must stay, with the
 reason). A kind that has no list fails the test, so a new image cannot arrive unlisted.
 
-Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
+**Static `--chmod` check** (book edit 2026-10-08-p129f-corpus-gaps, final 02:05Z). `COPY --chmod=4755 x /app/x` passes
+today: `copyProblem` (`images.test.ts:607`) drops every flag via splitFlags, and nothing in deployment/ checks
+`--chmod`. In `copyProblem`, a `--chmod` value with a setuid, setgid or sticky bit fails: an octal mode with a nonzero
+digit before the last three, or a symbolic mode containing `s` or `t`. A `--chmod` value that is not plain octal or
+symbolic also fails. Fixtures: red, `COPY --chmod=4755`, `--chmod=2755`, `--chmod=1777` and `--chmod=u+s` (case
+x_chmod_setuid); green, `--chmod=0755` and `--chmod=644`.
+
+Done when the test is green on every built image, and a fixture image with one extra setuid file fails. That fixture
+image is built from `COPY --chmod=4755 x /app/x`, which shows the built-image test catches it even if the text rule is
+bypassed.
 
 ---
 
