@@ -25,13 +25,15 @@ COPY --from=deps /app/shared /app/shared
 COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard
 COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres
 # The CLI needs node only, so every package manager the base may ship leaves the runtime, apt and dpkg included, and
-# dpkg's maintainer scripts with them, as in node-app.Dockerfile.
+# dpkg's maintainer scripts with them, then the base's setuid and setgid files, as in node-app.Dockerfile.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
   /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
   /usr/local/bin/pnpm /usr/local/bin/pnpx \
   && apt-get purge --allow-remove-essential -y apt \
   && dpkg --purge --force-remove-essential --force-depends debconf dpkg libapt-pkg7.0 \
   && rm -f /var/lib/dpkg/info/*.preinst /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.prerm \
-    /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config
+    /var/lib/dpkg/info/*.postrm /var/lib/dpkg/info/*.config \
+  && rm -f /usr/bin/chage /usr/bin/chfn /usr/bin/chsh /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp \
+    /usr/bin/passwd /usr/bin/su /usr/bin/umount /usr/sbin/unix_chkpwd
 USER 65532:65532
 ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]
