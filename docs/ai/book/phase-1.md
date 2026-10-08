@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29p, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -199,6 +199,8 @@ flowchart LR
   P1_28b["P1.28b edge leftovers"]
   P1_28h["P1.28h Caddyfile reader"]
   P1_28e["P1.28e one edge config reader"]
+  P1_28f["P1.28f edge reader containment"]
+  P1_28g["P1.28g edge never imports preflight"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -353,6 +355,10 @@ flowchart LR
   P1_28h --> P1_30u
   P1_28h --> P1_28e
   P1_28e --> P1_30u
+  P1_28e --> P1_28f
+  P1_28e --> P1_28g
+  P1_28f --> P1_30u
+  P1_28g --> P1_30u
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33 -.-> P1_33a
@@ -7530,7 +7536,8 @@ all-good fixture still exits 0.
 
 ### P1.28e — Share one edge config reader and the site rules
 Tags: [SEC], trusted            Depends on: P1.28h (merged, #463)
-As built: merged by Alex at 2026-10-08T00:05:28Z as `59bee6a` (#533).
+As built: merged by Alex at 2026-10-08T00:05:28Z as `59bee6a` (#533). Containment, mutation pins and one-site-per-upstream
+follow in P1.28f (book edit 2026-10-08-p128f-p128g-edge-reader-follow-ups, 00:40Z).
 Slice 1, issue #524, trusted (`deployment/edge/caddyfile.ts`, with the matching tests `edge.test.ts`,
 `caddyfile.test.ts` and `caddyfile.image.test.ts`); book edit 2026-10-07-p128e-edge-config-reader (final 23:25Z), from
 architecture's amendment 7 (23:20Z) in 2026-10-07-p130s-networks-and-caddyfile-reader, with its amendment 1 (23:55Z)
@@ -7558,9 +7565,10 @@ stays as it is; P1.28y also touches the edge, and whichever lands second merges 
    the parameter in its own PR. **Trigger:** the rule applies to every site whose parsed tree has any `reverse_proxy`.
    **Route:** such a site has exactly one plain route, whose first handler is the `pds-ratelimit` snippet's
    `rate_limit`, and every `reverse_proxy` of the site is inside it. **Rate limits:** no other `rate_limit` anywhere in
-   the site. **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (ADR
-   0018). **A site with no upstream** is exempt because it has no `reverse_proxy`, not because of its name or address;
-   it must bind loopback only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
+   the site. **Upstreams:** at most one site may `reverse_proxy` to a given upstream (amendment 8 point 4; P1.28f).
+   **Headers:** every `reverse_proxy` carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (ADR 0018).
+   **A site with no upstream** is exempt because it has no `reverse_proxy`, not because of its name or address; it must
+   bind loopback only (`127.0.0.1:<port>` or `[::1]:<port>`), or it fails with "public site without rate limit".
 4. **Switch the tests:** `edge.test.ts` and `caddyfile.image.test.ts` (shippedConfig) switch to both functions, and both
    hand expansions are deleted. The image test still proves byte for byte that the image carries the repo's Caddyfile
    and snippets.
@@ -7581,6 +7589,68 @@ outside `caddyfile.ts`, shown by `grep -n "import " deployment/edge/*.test.ts` w
 
 ---
 
+### P1.28f — Close the edge reader's containment gaps
+Tags: [SEC], trusted            Depends on: P1.28e (merged, #533)
+Slice 1, issue #536, trusted (`deployment/edge/caddyfile.ts` and its tests); book edit
+2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader, relayed by the coordinator at 00:22Z. A tightening; the coordinator
+clears it, no word from Alex. Owner: Phase 2. It lands before P1.30u (#448), which gains it as a dependency, and does
+not wait on P1.28g. C18 builds on its reader.
+
+**What:**
+1. **Containment** (amendment 8 point 1). Realpath every path: `edgeDir`, `sites/`, `sitesDir`, and every entry, regular
+   files included. Each entry's real path must start with `realpath(edgeDir)/sites/` on a path boundary. `sitesDir`'s
+   real path must lie inside `realpath(edgeDir)/sites/`, and the reader enforces this itself. The reader checks the
+   adapter's answers: every `realpath` result must be absolute, equal to `path.normalize` of itself, and free of `..`
+   segments, or the read fails. A regular entry with nlink > 1 fails, using the link count that `kind` reports. **Out of
+   scope, stated in the body:** hard links beyond the nlink guard, and a swap between `kind` and `read`; it is a
+   build-time reader over the checkout.
+2. **Mutation pins** (point 3). Each pin is red under exactly its own mutation, and the PR body lists each mutation
+   beside its pin: an inline `rate_limit`-first fixture that does not come via the pds-ratelimit snippet fails (the via
+   check); a byte-order fixture, `B.caddy` before `a.caddy`, with a rule that depends on the order (the sort); and the
+   containment fixtures below (the sites-root realpath).
+3. **One proxied site per upstream** (point 4). At most one site may `reverse_proxy` to a given upstream; a second fails
+   as "upstream proxied by more than one site". This narrows amendment 7 point 3 and fails closed until shared zone
+   state is proven. Relaxing it later to "same zone name" needs an image test proving shared state, and Alex's word,
+   because it is a loosening.
+4. **No env values in messages** (point 5). A message may name the site address, and nothing else from env;
+   `{$ACME_EMAIL}` is never echoed. Test: every rule's failure path runs with a recognizable ACME_EMAIL fixture, and the
+   test asserts it appears in no message.
+5. **No split** (architecture's note under amendment 8, 00:40Z). `caddyfile.ts` stays one file. The PR body discloses
+   the `noExcessiveLinesPerFile` warning at :26 with its line count under "What I am unsure about". If a real need to
+   split appears later, the depcruise row for the second `deployment/edge` file goes to Alex as its own named line.
+6. **Restore the exact phrase** at :422: "exempt because it has no `reverse_proxy`, not because of its name or address".
+
+Fixtures (real `node:fs` adapter over a temporary tree): red, `sites/enabled` as a symlinked directory pointing outside;
+`sites/` symlinked outside; a `sitesDir` outside the tree; a regular file reached through a symlinked parent; an nlink-2
+file; a fake adapter returning `root/../x` from `realpath`; a second site proxying the same upstream; plus the two
+mutation pins above. Green: the shipped edge, and a legitimate link into `sites/`.
+
+Done when `npm run check` is green, with the existing line warning disclosed and no other new warning; each red fixture
+fails for its stated reason; the mutation-to-pin table is in the body; and any new warning or paraphrased record phrase
+is under "What I am unsure about".
+
+---
+
+### P1.28g — Refuse preflight imports from the edge
+Tags: [SEC]            Depends on: P1.28e (merged, #533)
+Slice 1, issue #537, check (`scripts/lint/.dependency-cruiser.cjs` and its lint fixtures and tests); book edit
+2026-10-08-p128f-p128g-edge-reader-follow-ups (final 00:40Z), from architecture's amendment 8 (00:35Z) in
+2026-10-07-p130s-networks-and-caddyfile-reader. A tightening, so the coordinator clears it; not a classifier path.
+Owner: the third thread (the coordinator, 00:22Z). It lands before P1.30u (#448), which gains it as a dependency, and
+does not wait on P1.28f.
+
+**What:** a depcruise `forbidden` rule at severity error. Nothing under `^deployment/edge/`, sources and tests alike,
+may import from `^deployment/preflight/`. It is pinned by the scripts/lint fixtures the other forbidden rules use: a red
+fixture for an edge test importing a preflight file, and a green fixture for preflight importing edge.
+
+**Noted, not booked:** the general form is "trusted-base paths and their tests may import only trusted-base paths, node
+built-ins and npm packages". The next step that touches the trusted section of the matrix books it.
+
+Done when `npm run check` is green, and the red fixture fails on the new rule.
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
@@ -7589,7 +7659,7 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e · **Plan:** as P1.30
+**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -7597,7 +7667,11 @@ of one syntax drift (amendment 7).
 directory that is the source of the compose edge service's bind mount at `/etc/caddy/sites/enabled`, which must be a
 directory inside `deployment/edge/` whose entries follow P1.28e's symlink rules; and the env from `serviceEnv("edge")`.
 The edge service mounts nothing else at or under `/etc/caddy`: a file, a directory, or a parent such as `/etc/caddy` or
-`/etc` each fails. No edge service, no such mount, or an empty directory gives `input missing: <path>`.
+`/etc` each fails. No edge service, no such mount, or an empty directory gives `input missing: <path>`. C18 imports
+`readEdgeConfig` and `edgeSiteProblems` from `deployment/edge/caddyfile.ts` as it stands, through its own thin adapter.
+It passes its compose mount source as `sitesDir`, and the reader itself refuses one outside `deployment/edge/sites/`.
+Its rules include at most one site per upstream (P1.28f). (Book edit 2026-10-08-p128f-p128g-edge-reader-follow-ups,
+00:40Z.)
 
 **The import fork:** the depcruise matrix needs a row that lets `deployment/preflight` import
 `deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
@@ -7622,13 +7696,13 @@ P1.30u stays C18 alone.
 
 **Done when (tests):** `c18_missing_edge_ratelimit_fails`, `c18_forwarded_header_passed_fails`,
 `c18_mount_over_caddyfile_fails`, `c18_mount_over_etc_caddy_parent_fails`, `c18_sites_symlink_out_of_repo_fails`,
-`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, `c18_real_tree_symlink_containment` (C18 through
-its real adapter over a temporary tree: an escaping link, a `sites-evil/` sibling, an outward chain and a dangling link
-fail; a legitimate link passes), and the riders' tests; fixtures carry a compose file; the all-good fixture, now
-covering all 24 checks, exits 0. C18 fails with "input missing" on every real run until P1.29 adds compose.dev.yaml.
-That is expected, because the preflight is not a gate yet.
+`c18_input_missing_fails`, `c18_public_site_without_rate_limit_fails`, `c18_upstream_proxied_by_two_sites_fails`,
+`c18_real_tree_symlink_containment` (C18 through its real adapter over a temporary tree: an escaping link, a
+`sites-evil/` sibling, an outward chain and a dangling link fail; a legitimate link passes), and the riders' tests;
+fixtures carry a compose file; the all-good fixture, now covering all 24 checks, exits 0. C18 fails with "input missing"
+on every real run until P1.29 adds compose.dev.yaml. That is expected, because the preflight is not a gate yet.
 
-**Not in this step:** any change to `deployment/edge/` (P1.28e owns the reader and the site rules).
+**Not in this step:** any change to `deployment/edge/` (P1.28e and P1.28f own the reader and the site rules).
 
 ---
 
