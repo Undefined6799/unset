@@ -31,7 +31,7 @@
     "@capsizecss/metrics": "4.3.0",
     "@capsizecss/unpack": "4.0.1",
     "@swc/core": "1.16.13",
-    "@types/node": "26.6.3",
+    "@types/node": "26.6.4",
     "dependency-cruiser": "18.5.0",
     "fast-check": "4.10.2",
     "jscpd": "5.4.0",
