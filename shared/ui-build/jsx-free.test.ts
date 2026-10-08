@@ -4,23 +4,38 @@
 // whole-statement `import type { ... }`, which Node erases entirely. `import { type X }` is refused: under
 // verbatimModuleSyntax it leaves `import {} from` behind, which still loads the module.
 // Each file is parsed (oxc through vite 8.3.1's parseSync, as scripts/budgets/count-glue-lines.ts does), so comments,
-// quotes and line breaks cannot hide an import (P1.25r; architecture's N4 amendment, 2026-10-07-p125h-follow-ups.md,
-// and its parser note). No string may name the kit except the specifier of that `import type`; require, createRequire
-// and import() of anything but a literal are refused; a relative import must resolve, through symlinks, inside this
-// workspace. ui_build_entries_run_in_node (scripts/ui/entries.test.ts) is the end-to-end proof.
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+// quotes and line breaks cannot hide an import (P1.25r, P1.25s; architecture's N4 amendment and its two notes,
+// 2026-10-07-p125h-follow-ups.md). No string may contain the kit's name except the specifier of an
+// `import type { ... }` of its index; require, createRequire, eval, Function, vm and import() of anything but a literal
+// are refused; a relative import must resolve, through symlinks, inside this workspace and outside its node_modules.
+// Splitting the name across a concatenation is out of reach for any text test; P1.25w's depcruise row is the fence.
+// ui_build_entries_run_in_node (scripts/ui/entries.test.ts) is the end-to-end proof.
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseSync } from "vite";
-import { expect, test } from "vitest";
+import { afterAll, expect, test } from "vitest";
 
 const HERE = realpathSync(import.meta.dirname);
-const ROOT = resolve(HERE, "..", "..");
-const KIT_DIR = realpathSync(resolve(HERE, "..", "ui"));
 const KIT = "@unset/shared-ui";
+/** The kit's name as a whole specifier inside any string: not followed by a character a new npm name can hold. */
+const NAMES_KIT = /@unset\/shared-ui(?![a-z0-9._-])/;
 const REACT = /^react(?:-dom)?(?:\/.*)?$/;
 const DECLARATIONS = new Set(["ImportDeclaration", "ExportNamedDeclaration", "ExportAllDeclaration"]);
-/** Names that load a module outside the static import graph (rule 2), refused wherever they appear. */
-const LOADERS = new Set(["require", "createRequire"]);
+/** Names that load or run code outside the static import graph (rule 2), refused wherever they appear. */
+const LOADERS = new Set(["require", "createRequire", "eval", "Function"]);
+/** Node's module for running code strings, refused as an import (P1.25s). */
+const VM = new Set(["vm", "node:vm"]);
 /** The parse settings each scanned extension takes (oxc `ParserOptions`, rolldown 1.2.12). */
 const PARSE: Record<string, { lang: "ts" | "tsx"; sourceType: "module" | "commonjs" }> = {
   ".ts": { lang: "ts", sourceType: "module" },
@@ -31,10 +46,6 @@ const PARSE: Record<string, { lang: "ts" | "tsx"; sourceType: "module" | "common
 
 type Source = { path: string; text: string };
 type Node = { type: string; [key: string]: unknown };
-
-/** The kit's exact name or a path under it; `@unset/shared-uix` is another package. */
-const namesKit = (value: string): boolean => value === KIT || value.startsWith(`${KIT}/`);
-const within = (path: string, dir: string): boolean => path === dir || path.startsWith(dir + sep);
 
 /** Every node of a parsed tree, depth first. */
 function* nodes(value: unknown): Generator<Node> {
@@ -51,6 +62,13 @@ function stringValue(node: Node): string | undefined {
   if (node.type === "Literal") return typeof node.value === "string" ? node.value : undefined;
   if (node.type !== "TemplateLiteral" || (node.expressions as unknown[]).length > 0) return undefined;
   return (node.quasis as { value: { cooked: string } }[])[0]?.value.cooked;
+}
+
+/** The text the floor reads: a string's value, or each piece of a template, substitutions or not. */
+function floorTexts(node: Node): string[] {
+  if (node.type !== "TemplateElement") return [stringValue(node) ?? ""];
+  const { cooked, raw } = node.value as { cooked: string | null; raw: string };
+  return [cooked ?? "", raw];
 }
 
 /** The parsed tree of `path`, or the reason it cannot be read; a file that does not parse is never "no imports". */
@@ -75,67 +93,70 @@ function landing(specifier: string, file: string): string | undefined {
   return existsSync(target) ? realpathSync(target) : undefined;
 }
 
-/** What is wrong with one module specifier written in `path`. */
-function specifierProblems(path: string, specifier: string): string[] {
+/**
+ * What is wrong with one module specifier written in `path`, a file of the workspace `dir`. A relative target is
+ * judged on its path from `dir`, so a checkout that itself sits under a node_modules folder still passes.
+ */
+function specifierProblems(path: string, specifier: string, dir: string): string[] {
   if (REACT.test(specifier)) return [`${path}: imports react`];
-  if (specifier.startsWith(".")) {
-    const target = landing(specifier, join(HERE, path));
-    if (target === undefined) return [`${path}: "${specifier}" resolves to nothing`];
-    const inside = within(target, HERE) && !target.includes(`${sep}node_modules${sep}`);
-    return inside ? [] : [`${path}: "${specifier}" leaves shared/ui-build`];
+  if (VM.has(specifier)) return [`${path}: imports "${specifier}"`];
+  if (!specifier.startsWith(".")) return [];
+  const target = landing(specifier, join(dir, path));
+  if (target === undefined) return [`${path}: "${specifier}" resolves to nothing`];
+  const fromDir = relative(dir, target);
+  if (fromDir === ".." || fromDir.startsWith(`..${sep}`) || isAbsolute(fromDir)) {
+    return [`${path}: "${specifier}" resolves outside the workspace`];
   }
-  if (namesKit(specifier)) return []; // the string floor refuses it, once
-  const workspace = /^@unset\/[^/]+/.exec(specifier)?.[0];
-  const link = workspace === undefined ? undefined : join(ROOT, "node_modules", workspace);
-  if (link !== undefined && existsSync(link) && within(realpathSync(link), KIT_DIR)) {
-    return [`${path}: "${specifier}" reaches shared/ui`];
-  }
+  if (fromDir.split(sep).includes("node_modules")) return [`${path}: "${specifier}" resolves into node_modules`];
   return [];
 }
 
+/** The one allowed way in (rule 1): `import type { A, B } from "@unset/shared-ui"`, named specifiers only. */
+function isNamedTypeImportOfKit(node: Node, specifier: string): boolean {
+  if (node.type !== "ImportDeclaration" || node.importKind !== "type" || specifier !== KIT) return false;
+  return (node.specifiers as Node[]).every((s) => s.type === "ImportSpecifier");
+}
+
 /**
- * Rules 2 to 4 for one node. The kit specifier of a whole `import type` (rule 1's one exception) is recorded in
+ * Rules 2 to 4 for one node. The kit specifier of an allowed type import (rule 1's one exception) is recorded in
  * `allowed` instead.
  */
-function nodeProblems(path: string, node: Node, allowed: Set<unknown>): string[] {
+function nodeProblems(path: string, node: Node, dir: string, allowed: Set<unknown>): string[] {
   const source = node.source as Node | null | undefined;
   if (DECLARATIONS.has(node.type) && source) {
     const specifier = stringValue(source) ?? "";
-    if (node.type !== "ImportDeclaration" || node.importKind !== "type" || specifier !== KIT) {
-      return specifierProblems(path, specifier);
-    }
+    if (!isNamedTypeImportOfKit(node, specifier)) return specifierProblems(path, specifier, dir);
     allowed.add(source);
     return [];
   }
   if (node.type === "ImportExpression") {
     const specifier = source ? stringValue(source) : undefined;
     if (specifier === undefined) return [`${path}: import() of something other than a literal`];
-    return specifierProblems(path, specifier);
+    return specifierProblems(path, specifier, dir);
   }
   if (node.type === "TSExternalModuleReference") return [`${path}: import = require(...)`];
   if (node.type === "Identifier" && LOADERS.has(node.name as string)) return [`${path}: uses ${node.name as string}`];
   return [];
 }
 
-/** The four rules of the N4 amendment for one file. */
-function fileProblems({ path, text }: Source): string[] {
+/** The four rules of the N4 amendment for one file of the workspace `dir`, each problem named once. */
+function fileProblems({ path, text }: Source, dir: string): string[] {
   const problems: string[] = [];
   if (path.endsWith(".tsx")) problems.push(`${path}: .tsx file`);
   const tree = parsed(path, text);
   if ("problem" in tree) return [...problems, tree.problem];
   const allowed = new Set<unknown>();
-  for (const node of nodes(tree.program)) problems.push(...nodeProblems(path, node, allowed));
+  for (const node of nodes(tree.program)) problems.push(...nodeProblems(path, node, dir, allowed));
   for (const node of nodes(tree.program)) {
-    const value = stringValue(node);
-    if (value !== undefined && namesKit(value) && !allowed.has(node)) {
-      problems.push(`${path}: names ${KIT} other than as the specifier of a whole "import type" of its index`);
+    if (floorTexts(node).some((text) => NAMES_KIT.test(text)) && !allowed.has(node)) {
+      problems.push(`${path}: names ${KIT} other than as the specifier of an "import type { … }" of its index`);
     }
   }
-  return problems;
+  return [...new Set(problems)];
 }
 
-function jsxFreeProblems(sources: Source[]): string[] {
-  return sources.flatMap(fileProblems);
+function jsxFreeProblems(sources: Source[], dir: string = HERE): string[] {
+  return sources.flatMap((source) => fileProblems(source, dir));
 }
 
 function workspaceSources(dir: string): Source[] {
@@ -230,4 +251,87 @@ test("ui_build_jsx_free_check_parses", () => {
   expect(jsxFreeProblems([{ path: "a.ts", text: "const a = <b />;\n" }])).toHaveLength(1);
   expect(jsxFreeProblems([{ path: "a.mts", text: "export const a = 1;\n" }])).toEqual([]);
   expect(jsxFreeProblems([{ path: "a.js", text: "" }])).toHaveLength(1);
+});
+
+const temps: string[] = [];
+afterAll(() => {
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * A throwaway workspace at `<tmp>/<parent>/ws`: its own file, a real file under its own node_modules, and a symlink
+ * `kit` into shared/ui. `parent` lets a checkout sit under a folder named node_modules.
+ */
+function scratchWorkspace(parent: string): string {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "jsx-free-")));
+  temps.push(base);
+  const dir = join(base, parent, "ws");
+  mkdirSync(join(dir, "node_modules"), { recursive: true });
+  writeFileSync(join(dir, "own.ts"), "export const own = 1;\n");
+  writeFileSync(join(dir, "node_modules", "dep.ts"), "export const dep = 1;\n");
+  symlinkSync(realpathSync(resolve(HERE, "..", "ui")), join(dir, "kit"));
+  return dir;
+}
+
+test("ui_build_jsx_free_check_pins_each_check", () => {
+  // P1.25s (architecture's second N4 note, 2026-10-07 23:25Z): each fixture is caught by exactly one check, so
+  // removing that check turns this test red.
+  const dir = scratchWorkspace("plain");
+  const floor = 'a.ts: names @unset/shared-ui other than as the specifier of an "import type { … }" of its index';
+  const pinned: [string, string, string[]][] = [
+    [
+      "realpath",
+      'import { safeHref } from "./kit/safe-href.ts";\n',
+      ['a.ts: "./kit/safe-href.ts" resolves outside the workspace'],
+    ],
+    [
+      "node_modules segment",
+      'import { dep } from "./node_modules/dep.ts";\n',
+      ['a.ts: "./node_modules/dep.ts" resolves into node_modules'],
+    ],
+    ["import =", 'import fs = require("node:fs");\n', ["a.ts: import = require(...)"]],
+    [
+      "createRequire",
+      'import { createRequire } from "node:module";\nexport const load = createRequire(import.meta.url);\n',
+      ["a.ts: uses createRequire"],
+    ],
+    ["eval", 'eval("1 + 1");\n', ["a.ts: uses eval"]],
+    ["indirect eval", '(0, eval)("1 + 1");\n', ["a.ts: uses eval"]],
+    ["Function", 'Function("return 1")();\n', ["a.ts: uses Function"]],
+    ["new Function", 'new Function("return 1")();\n', ["a.ts: uses Function"]],
+    ["vm", 'import vm from "node:vm";\nvm.runInThisContext("1 + 1");\n', ['a.ts: imports "node:vm"']],
+    ["vm, bare", 'const vm = await import("vm");\n', ['a.ts: imports "vm"']],
+    ["contains-floor", "setTimeout('import(\"@unset/shared-ui\")', 0);\n", [floor]],
+    [
+      "contains-floor, template with a substitution",
+      // The fixture's own template has a substitution; "$" is split off so this file holds no placeholder.
+      '(() => {}).constructor(`return import("@unset/shared-ui")$' + '{""}`)();\n',
+      [floor],
+    ],
+    ["named type imports only", 'import type * as K from "@unset/shared-ui";\n', [floor]],
+    ["named type imports only", 'import type K from "@unset/shared-ui";\n', [floor]],
+  ];
+  for (const [check, text, problems] of pinned) {
+    expect(jsxFreeProblems([{ path: "a.ts", text }], dir), check).toEqual(problems);
+  }
+  // The record's other red fixtures (amendment 3): caught, by one check or more.
+  for (const text of [
+    "eval('import(\"@unset/shared-ui\")');\n",
+    "(0, eval)('import(\"@unset/shared-ui\")');\n",
+    "Function('return import(\"@unset/shared-ui\")')();\n",
+    "new Function('return import(\"@unset/shared-ui\")')();\n",
+    'import type { FontMetrics } from "@unset/shared-ui";\nimport { safeHref } from "@unset/shared-ui";\n',
+  ]) {
+    expect(jsxFreeProblems([{ path: "a.ts", text }], dir), text).not.toEqual([]);
+  }
+  for (const text of [
+    'import { own } from "./own.ts";\n',
+    'const other = "@unset/shared-uix";\n',
+    'import type { FontMetrics, FallbackFace } from "@unset/shared-ui";\n',
+  ]) {
+    expect(jsxFreeProblems([{ path: "a.ts", text }], dir), text).toEqual([]);
+  }
+  // A checkout whose own path holds a node_modules folder still accepts its own files.
+  const nested = scratchWorkspace("node_modules");
+  expect(jsxFreeProblems([{ path: "a.ts", text: 'import { own } from "./own.ts";\n' }], nested)).toEqual([]);
 });

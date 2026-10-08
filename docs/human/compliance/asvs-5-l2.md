@@ -53,7 +53,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V1.2.8 | LaTeX processors are configured securely (such as not using the "--shell-escape" flag) … | n/a | n/a: no LaTeX processor | — |
 | V1.2.9 | The application escapes special characters in regular expressions (typically using a … | open |  | — |
 | V1.3.1 | All untrusted HTML input from WYSIWYG editors or similar is sanitized using a well-known … | open |  | — |
-| V1.3.2 | The application avoids the use of eval() or other dynamic code execution features such as … | partial | `lint:computed-import`, `test:shared/http/csp/policies.test.ts#no_unsafe_tokens` | — |
+| V1.3.2 | The application avoids the use of eval() or other dynamic code execution features such as … | partial | `lint:computed-import`, `test:shared/http/csp/policies.test.ts#no_unsafe_tokens`, `test:shared/ui-build/jsx-free.test.ts#ui_build_jsx_free_check_pins_each_check` | — |
 | V1.3.3 | Data being passed to a potentially dangerous context is sanitized beforehand to enforce … | open |  | — |
 | V1.3.4 | User-supplied Scalable Vector Graphics (SVG) scriptable content is validated or sanitized … | open |  | — |
 | V1.3.5 | The application sanitizes or disables user-supplied scriptable or expression template … | open | `step:P2.20` | P2.20 |
