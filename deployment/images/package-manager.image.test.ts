@@ -222,6 +222,26 @@ function xattrValues(tar: string): Map<string, Map<string, string>> {
 }
 
 /**
+ * A listing's entries with each attribute's value from the PAX headers, as `<name>=<hex>`. Two readers, one archive:
+ * GNU tar names each attribute and the PAX headers hold its value, and they must agree member by member.
+ */
+function withValues(entries: readonly Entry[], values: ReadonlyMap<string, ReadonlyMap<string, string>>): Entry[] {
+  const valued = entries.map((entry) => {
+    const own = values.get(entry.path);
+    const xattrs = entry.xattrs.map((name) => {
+      const value = own?.get(name);
+      if (value === undefined) throw new Error(`tar lists ${name} on ${entry.path} but no PAX header holds it`);
+      return `${name}=${value}`;
+    });
+    if (xattrs.length !== (own?.size ?? 0)) throw new Error(`tar and the PAX headers disagree on ${entry.path}`);
+    return { ...entry, xattrs };
+  });
+  const unlisted = [...values.keys()].find((path) => !entries.some((entry) => entry.path === path));
+  if (unlisted !== undefined) throw new Error(`a PAX header gives ${unlisted} attributes but tar lists no such member`);
+  return valued;
+}
+
+/**
  * An exported image's tar file as a filesystem; tar is GNU tar, whose listings quote names by `--quoting-style` and
  * print every extended attribute with `-tvv --xattrs --xattrs-include=*` (GNU tar 1.35 manual, "Extended File
  * Attributes"), so no attribute is filtered out before the privilege check reads it.
@@ -238,21 +258,7 @@ function readTar(tar: string): Filesystem {
   const text = (path: string): string =>
     spawnSync("tar", ["-xOf", tar, path.slice(1)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
   const entries = listing(list(["-tvv", "--xattrs", "--xattrs-include=*"]), list(["-t"]));
-  // Two readers, one archive: GNU tar names each attribute and the PAX headers hold its value, and they must agree.
-  const values = xattrValues(tar);
-  const valued = entries.map((entry) => {
-    const own = values.get(entry.path);
-    const xattrs = entry.xattrs.map((name) => {
-      const value = own?.get(name);
-      if (value === undefined) throw new Error(`tar lists ${name} on ${entry.path} but no PAX header holds it`);
-      return `${name}=${value}`;
-    });
-    if (xattrs.length !== (own?.size ?? 0)) throw new Error(`tar and the PAX headers disagree on ${entry.path}`);
-    return { ...entry, xattrs };
-  });
-  const unlisted = [...values.keys()].find((path) => !entries.some((entry) => entry.path === path));
-  if (unlisted !== undefined) throw new Error(`a PAX header gives ${unlisted} attributes but tar lists no such member`);
-  return { entries: valued, text };
+  return { entries: withValues(entries, xattrValues(tar)), text };
 }
 
 /** Exports an image's filesystem from a container that never starts, and hands it to `use`. */
@@ -618,6 +624,17 @@ describe("image package managers", () => {
     ]);
     expect(privilegeProblems("edge", [entry("-rwxr-xr-x", "/usr/bin/caddy", [caddy.split(" ")[1] ?? ""])])).toEqual([]);
     expect(privilegeProblems("postgres", [])).toEqual(["the postgres kind has no privilege list"]);
+  });
+
+  test("attribute_agreement_reader", () => {
+    // P1.29j: GNU tar's names and the PAX headers' values agree member by member, and each way they differ throws.
+    const entry = (path: string, xattrs: string[]): Entry => ({ mode: "-rwxr-xr-x", path, xattrs });
+    const values = (path: string, ...names: string[]): Map<string, Map<string, string>> =>
+      new Map([[path, new Map(names.map((name) => [name, "00"]))]]);
+    expect(withValues([entry("/a", ["user.x"])], values("/a", "user.x"))).toEqual([entry("/a", ["user.x=00"])]);
+    expect(() => withValues([entry("/a", ["user.x"])], values("/a", "user.y"))).toThrow("no PAX header holds it");
+    expect(() => withValues([entry("/a", ["user.x"])], values("/a", "user.x", "user.y"))).toThrow("disagree on /a");
+    expect(() => withValues([entry("/a", [])], values("/b", "user.x"))).toThrow("tar lists no such member");
   });
 
   test("pax_xattr_reader_on_a_real_archive", () => {

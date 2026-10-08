@@ -1281,6 +1281,8 @@ describe("base images", () => {
       ["--chmod=", [unparsed("")]],
       ["--chmod=75x", [unparsed("75x")]],
       ["--chmod=99755", [unparsed("99755")]],
+      // P1.29j: octal past 07777, whose special-bit digits read as 0 once the bound is gone.
+      ["--chmod=10755", [unparsed("10755")]],
       ["--chmod", [unparsed("")]],
       ["--chmod=0755", []],
       ["--chmod=644", []],
@@ -1418,7 +1420,8 @@ describe("base images", () => {
     ]);
     // P1.29p (record 2026-10-08-p129f-corpus-gaps, amendment 2): a word that holds a listed glob without being it
     // is not on the list.
-    for (const word of ["/opt/yarn-*x", "/x/opt/yarn-*", "/opt/yarn-*/x"]) {
+    // P1.29j: and a word a listed glob holds without being it is not on the list either.
+    for (const word of ["/opt/yarn-*x", "/x/opt/yarn-*", "/opt/yarn-*/x", "yarn-*", "*.config"]) {
       expect(osPackageProblems(`${node}RUN rm -rf ${word}`), word).toEqual([notListed(`rm -rf ${word}`, word, "node")]);
     }
     for (const file of ["images/node-app.Dockerfile", "images/migrate.Dockerfile"]) {
