@@ -279,7 +279,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29n | Node runtime ships no package manager (built-image test) | [SEC] | P1.29e | `phase-1.md` |
 | P1.29m | Kind-wide package manager test: kinds.json, full basename match, inert database allowlist, RM_BY_KIND | [SEC] | P1.29n | `phase-1.md` |
 | P1.29f | Final stages: no here-docs, absolute destinations, && only, per-kind allowlists for destinations, ENV keys, no ARG | [SEC] | P1.29e, P1.29n, P1.29m | `phase-1.md` |
-| P1.29g | Package manager image reader: names by tar -tf, hard links, special mode bits, final-stage-only rm exemption | [SEC] | P1.29m, P1.29f | `phase-1.md` |
+| P1.29g | Image readers: tar -tf names, hard links, special mode bits, final-stage-only rm exemption, BuildKit line joins, per-kind glob list | [SEC] | P1.29m, P1.29f | `phase-1.md` |
 | P1.29p | Built-image file capabilities and setuid match an exact per-kind list | [SEC] | P1.29e, P1.29g | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |

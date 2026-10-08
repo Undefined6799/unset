@@ -8523,12 +8523,15 @@ passes, and the body lists every allowlist entry with its citation.
 
 ### P1.29g — Harden the package manager image reader
 Tags: [SEC]            Depends on: P1.29m (merged, #545), P1.29f
-Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final
-01:45Z), from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the
-verification finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green
-and nothing is weaker than main, but the verifier found gaps that would have held the PR. A tightening; the coordinator
-clears it, with no architecture ruling and no word from Alex. Owner: Phase 1, after P1.29f (a dependency for order) and
-before P1.29p, which gains it as a dependency: P1.29p walks the same exported filesystem and reuses this reader.
+Slice 1, issue #547, product (`deployment/images/`); book edit 2026-10-08-p129g-image-reader-hardening (final 01:45Z),
+from the coordinator's verification of #545 (P1.29m), relayed at 01:23Z. Alex merged #545 before the verification
+finished; on main it is `901e1c5` (squash), and the coordinator's `5bbbec6` is the PR head. CI was green and nothing is
+weaker than main, but the verifier found gaps that would have held the PR. A tightening; the coordinator clears it, with
+no architecture ruling and no word from Alex. Owner: Phase 1, after P1.29f (a dependency for order) and before P1.29p,
+which gains it as a dependency: P1.29p walks the same exported filesystem and reuses this reader. Items 5 and 6 come
+from book edit 2026-10-08-p129f-corpus-gaps (final 02:05Z), from the coordinator's verification of #548 (P1.29f),
+relayed at 01:54Z and 01:56Z; Phase 1 ran the rules read-only on main b2188a9 and #548's head 5937e9b at 01:59Z, and
+none refuses the three cases. A tightening the coordinator clears.
 
 **What** (line numbers are on main b2188a9):
 1. **Names come from a real name list, not the last token of each line.** `package-manager.image.test.ts:87-90`
@@ -8545,9 +8548,28 @@ before P1.29p, which gains it as a dependency: P1.29p walks the same exported fi
    exact rm in an ancestor stage fails.
 4. **Header comment.** `package-manager.image.test.ts:5-6` still describes the dropped source scan of
    `KIND_BY_FINAL_ENTRY`. It should describe the kind-wide test over `kinds.json`.
+5. **Join continuation lines the way BuildKit does.** `instructions()` (`images.test.ts:204-205`) trims the text before
+   `\` and joins with a space, while BuildKit removes only the backslash-newline. So `RUN rm -f <\` followed by
+   `(echo x)` reads as `rm -f < (echo x)` to the rules, and the process-substitution check at :556 (`/[<>]\(/`) misses
+   it; Docker hands the shell `rm -f <(echo x)`. The fix: drop the backslash and newline and nothing else, with no trim
+   and no added space. Any rule or fixture on main that relied on the space is listed under "What I am unsure about".
+   Fixtures: red, `RUN rm -f <\` + `(echo x)` (case g_procsub_cont); red, `RUN rm -f >\` + `(cat)`; red, `RUN ap\` +
+   `k add curl` in the final stage; green, the current node-app and migrate Dockerfiles.
+6. **Glob words in the final stage need an exact per-kind list.** `RUN rm -rf /usr/bin/dp?g` passes: `rm` is allowed
+   (:415), PACKAGE_MANAGER_WORD (:422) needs `\bdpkg\b`, and RM_BY_KIND (:460) only exempts, so spelling routes around
+   the "package manager named outside a removal command" floor. The built-image test still decides the outcome, but the
+   text rule should not be blind to it. The fix: in the final stage, any RUN word containing `*`, `?`, `[` or `{` fails
+   unless it is token-exact in a per-kind glob list, shaped like RM_BY_KIND. Node's list holds `/opt/yarn-*`
+   (`node-app.Dockerfile:43`, `migrate.Dockerfile:29`) and the RM_BY_KIND maintainer-script globs (:48 and :34); every
+   other kind's list is empty; P1.29d adds postgres entries if it needs any. Fixtures: red, `rm -rf /usr/bin/dp?g` (case
+   x_glob_rm_dpkg), `rm -rf /usr/bin/ap[t]`, `rm -rf /usr/bin/dpk*` and `rm -rf /usr/bin/{apt,dpkg}`; green, both
+   current Dockerfiles.
 
 Done when `npm run check` and the image tests are green, every red fixture fails for its stated reason, and the
 space-name fixture is read correctly.
+
+**Size:** P1.29g stays one PR. If it passes about 550 lines, items 5 and 6 split out as P1.29i, owned by Phase 1, after
+P1.29g and before P1.29p; the PR says so under "What I am unsure about".
 
 ---
 
@@ -8564,7 +8586,16 @@ setgid file, must be in an exact per-kind list. Today's lists: edge, caddy with 
 node, none (the base's setuid files are removed in the final RUN, or the body lists each one that must stay, with the
 reason). A kind that has no list fails the test, so a new image cannot arrive unlisted.
 
-Done when the test is green on every built image, and a fixture image with one extra setuid file fails.
+**Static `--chmod` check** (book edit 2026-10-08-p129f-corpus-gaps, final 02:05Z). `COPY --chmod=4755 x /app/x` passes
+today: `copyProblem` (`images.test.ts:607`) drops every flag via splitFlags, and nothing in deployment/ checks
+`--chmod`. In `copyProblem`, a `--chmod` value with a setuid, setgid or sticky bit fails: an octal mode with a nonzero
+digit before the last three, or a symbolic mode containing `s` or `t`. A `--chmod` value that is not plain octal or
+symbolic also fails. Fixtures: red, `COPY --chmod=4755`, `--chmod=2755`, `--chmod=1777` and `--chmod=u+s` (case
+x_chmod_setuid); green, `--chmod=0755` and `--chmod=644`.
+
+Done when the test is green on every built image, and a fixture image with one extra setuid file fails. That fixture
+image is built from `COPY --chmod=4755 x /app/x`, which shows the built-image test catches it even if the text rule is
+bypassed.
 
 ---
 
