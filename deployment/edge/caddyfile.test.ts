@@ -2,7 +2,7 @@
 // (architecture record 2026-10-07-p130s-networks-and-caddyfile-reader, point 2), and agrees with `caddy adapt` on the
 // shipped config (caddyfile_reader_matches_caddy_adapt, in caddyfile.image.test.ts).
 import { describe, expect, test } from "vitest";
-import { type Directive, readCaddyfile } from "./caddyfile.ts";
+import { CaddyfileError, type Directive, readCaddyfile } from "./caddyfile.ts";
 
 const ENV = { PDS_HOST: "pds.unset.test", PDS_UPSTREAM: "upstream:3000" };
 const read = (text: string) => readCaddyfile(text, ENV);
@@ -94,6 +94,33 @@ describe("caddyfile reader", () => {
     );
     expect(() => read("site {\n\troute {\n\t\t@m remote_ip 192.0.2.1\n\t}\n}")).toThrow("matcher remote_ip");
     expect(() => read("site {\n\tbind 127.0.0.1 {\n\t\tx\n\t}\n}")).toThrow("bind does not take a block");
+  });
+
+  test("directive_lookup_ignores_object_prototype", () => {
+    // P1.28l (amendment 9, point 4): a data key named after an Object.prototype member is not a block level, so its
+    // block fails as a CaddyfileError and never reaches the prototype.
+    for (const key of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      const text = `site {\n\theader {\n\t\t${key} {\n\t\t\tx\n\t\t}\n\t}\n}`;
+      expect(() => read(text), key).toThrow(CaddyfileError);
+      expect(() => read(text), key).toThrow(`${key} does not take a block`);
+    }
+  });
+
+  test("placeholder_is_a_whole_word", () => {
+    // P1.28l (amendment 9, point 1): an env placeholder is a whole word, so each one has a position the rules can see.
+    for (const text of [
+      "site {\n\trespond x{$PDS_HOST}\n}",
+      "site {\n\trespond {$PDS_HOST}{$PDS_UPSTREAM}\n}",
+      "(s) {\n\trespond x{args[0]}\n}\nsite {\n\timport s {$PDS_HOST}\n}",
+    ]) {
+      expect(() => read(text), text).toThrow("an environment placeholder must be a whole word");
+    }
+    expect(() => read("site {\n\t{$PDS_HOST} on\n}")).toThrow("{$PDS_HOST} cannot name a directive");
+    expect(() => read("site {\n\timport {$PDS_HOST}\n}")).toThrow("{$PDS_HOST} cannot name a snippet");
+    // Through a snippet argument, the placeholder keeps its name.
+    const config = read("(s) {\n\trespond {args[0]}\n}\nsite {\n\timport s {$PDS_HOST}\n}");
+    expect(config.sites[0]?.directives[0]?.placeholders).toEqual(["PDS_HOST"]);
+    expect(config.sites[0]?.directives[0]?.args).toEqual([ENV.PDS_HOST]);
   });
 
   test("named_route_and_invoke_refused", () => {
