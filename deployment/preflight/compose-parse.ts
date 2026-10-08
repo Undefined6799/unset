@@ -19,6 +19,7 @@ import {
   parseAllDocuments,
   type Scalar,
   visit,
+  type YAMLMap,
 } from "yaml";
 
 /** A published port; `hostIp` null binds every interface, `published` null lets the engine pick the host port. */
@@ -34,7 +35,11 @@ export type Service = {
   /** The networks the service joins, by their key in the file. */
   networks: string[];
   networkMode: string | null;
+  /** The service's `volumes`; a bind source is as written, relative to the compose file's directory. */
+  mounts: Mount[];
 };
+/** One entry of a service's `volumes` (compose-spec 05-services.md "volumes"), in the strict subset. */
+export type Mount = { type: "bind" | "volume" | "tmpfs"; source: string | null; target: string; readOnly: boolean };
 /** A top-level network: only `internal`, a `bridge` driver and `name` are read; anything else is refused. */
 export type Network = { name: string; internal: boolean };
 export type Compose = { name: string | null; services: Service[]; networks: Network[]; secretFiles: string[] };
@@ -154,6 +159,8 @@ export function refuseAliasesByOption(doc: Document, file: string): void {
 function service(r: Reader, name: string, spec: unknown): Service {
   if (!isMap(spec)) return r.fail(spec, `service ${name} is not a mapping`);
   if (spec.has("extends")) r.fail(spec.get("extends", true), "extends");
+  // Another service's mounts would arrive unread (P1.30u).
+  if (spec.has("volumes_from")) r.fail(spec.get("volumes_from", true), "volumes_from");
   for (const field of NO_INTERPOLATION) if (spec.has(field)) r.noDollar(spec.get(field, true), field);
   const image = spec.get("image", true);
   return {
@@ -164,6 +171,55 @@ function service(r: Reader, name: string, spec: unknown): Service {
     ports: r.list(spec.get("ports", true), "ports").map((n) => port(r, n)),
     networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
     networkMode: spec.has("network_mode") ? r.text(spec.get("network_mode", true), "network_mode") : null,
+    mounts: r.list(spec.get("volumes", true), "volumes").map((n) => mount(r, n)),
+  };
+}
+
+/** A bind source as Compose tells it from a volume name: absolute, or starting `.` or `..` (05-services.md). */
+const BIND_SOURCE = /^(?:\/|\.\/|\.\.\/|\.$|\.\.$)/;
+const VOLUME_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+const MOUNT_KEYS = new Set(["type", "source", "target", "read_only"]);
+const MOUNT_TYPES = new Set(["bind", "volume", "tmpfs"]);
+
+/**
+ * `[SOURCE:]TARGET[:ro|rw]` or the long form with only type, source, target and read_only. A `~`, a Windows path, a
+ * SELinux or other mode, a relative target and every other long-form key are refused rather than read.
+ */
+function mount(r: Reader, node: unknown): Mount {
+  if (isMap(node)) return longMount(r, node);
+  const text = r.text(node, "volume");
+  const parts = text.split(":");
+  if (text.includes("\\") || parts.length > 3) return r.fail(node, `volume ${text} is not [SOURCE:]TARGET[:ro|rw]`);
+  const [first = "", target = "", mode = "rw"] = parts.length === 1 ? ["", text] : parts;
+  if (!target.startsWith("/")) r.fail(node, `volume target ${target} is not absolute`);
+  if (mode !== "ro" && mode !== "rw") r.fail(node, `volume mode ${mode} is refused`);
+  const readOnly = mode === "ro";
+  if (parts.length === 1) return { type: "volume", source: null, target, readOnly };
+  if (BIND_SOURCE.test(first)) return { type: "bind", source: first, target, readOnly };
+  if (!VOLUME_NAME.test(first)) r.fail(node, `volume source ${first} is neither a path nor a volume name`);
+  return { type: "volume", source: first, target, readOnly };
+}
+
+function longMount(r: Reader, node: YAMLMap): Mount {
+  for (const pair of node.items) {
+    if (!MOUNT_KEYS.has(r.text(pair.key, "volume key"))) r.fail(pair.key, `volume key ${r.text(pair.key, "key")}`);
+  }
+  const field = (key: string) => (node.has(key) ? r.text(node.get(key, true), `volume ${key}`) : null);
+  const type = field("type") ?? "";
+  if (!MOUNT_TYPES.has(type)) return r.fail(node, `volume type ${type} is refused`);
+  const target = field("target");
+  if (target === null || !target.startsWith("/")) return r.fail(node, "volume target is not absolute");
+  const source = field("source");
+  if (type === "bind" && source === null) r.fail(node, "bind volume has no source");
+  const readOnly = node.get("read_only", true);
+  if (readOnly !== undefined && (!isScalar(readOnly) || typeof readOnly.value !== "boolean")) {
+    r.fail(readOnly, "read_only is not true or false");
+  }
+  return {
+    type: type as Mount["type"],
+    source,
+    target,
+    readOnly: isScalar(readOnly) && readOnly.value === true,
   };
 }
 
