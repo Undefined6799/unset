@@ -277,6 +277,22 @@ module.exports = {
       { path: "^deployment/edge/" },
       { path: "^deployment/preflight/" },
     ),
+    // P1.28k (architecture amendment 8, second note, 2026-10-08 01:10Z): an import nothing here can follow escapes every
+    // path rule above, so our own relative and @unset/* specifiers must resolve. RENDER_BUILD_IMPORT is the one
+    // exception. How a specifier may be spelled (no root-absolute path, URL scheme or undeclared package) is the
+    // raw-specifier allowlist in scripts/lint/specifiers.ts, because these rules see only where it resolved.
+    forbidden(
+      "specifier-must-resolve",
+      "A relative or @unset/* specifier must resolve (P1.28k).",
+      { pathNot: oneOfFiles([RENDER_BUILD_IMPORT.from]) },
+      { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)" },
+    ),
+    forbidden(
+      "specifier-must-resolve",
+      "The render loader's only unresolved import is RENDER_BUILD_IMPORT's specifier (P1.28k, P1.23w).",
+      { path: oneOfFiles([RENDER_BUILD_IMPORT.from]) },
+      { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)", pathNot: oneOfFiles([RENDER_BUILD_IMPORT.module]) },
+    ),
     forbidden(
       "fake-only-in-composition-root",
       "A *.fake.ts is imported only by tests and interfaces/*/compose.ts (rule TE-1).",

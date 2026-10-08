@@ -25,7 +25,8 @@ export const config: Config = createRequire(import.meta.url)(CONFIG_PATH);
 
 /**
  * One import in a fixture: `from` (repo-relative) imports `spec`, statically unless `kind` says otherwise. An
- * `unresolved` bare specifier gets no stub package, so dependency-cruiser cannot resolve it.
+ * `unresolved` specifier gets no target: no stub package for a bare one, no file for a relative one, so
+ * dependency-cruiser cannot resolve it.
  */
 export type Edge = { from: string; spec: string; kind?: "type" | "dynamic"; unresolved?: true };
 export type Outcome = { exitCode: number; rules: string[] };
@@ -58,9 +59,10 @@ export function fixture(edges: Edge[]): string {
   const packages = new Set<string>();
   edges.forEach((edge, n) => {
     write(root, edge.from, importLine(edge, n));
+    if (edge.unresolved) return;
     if (edge.spec.startsWith(".")) {
       write(root, posix.join(posix.dirname(edge.from), edge.spec), "export const x = 1;\n");
-    } else if (!edge.spec.startsWith("node:") && !edge.unresolved) {
+    } else if (!edge.spec.startsWith("node:")) {
       packages.add(edge.spec);
     }
   });
