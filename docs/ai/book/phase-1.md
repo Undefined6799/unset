@@ -7876,12 +7876,13 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    after.
    It adds `postgres` to `KIND_BY_FINAL_ENTRY` (P1.29x), with the generic rules applying to it. From book edit
    2026-10-07-p129e-p129n-p129p-image-outcome-checks (23:48Z): its final stage (`RUN rm -f /usr/local/bin/gosu`,
-   `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in P1.29e (h) and (i) are empty. It
-   carries `postgres_image_has_no_package_manager`, using P1.29n's verbs and flags. Because P1.29p fails a kind with no
-   list, it adds the postgres privilege list, and that list is empty: the official Debian trixie Postgres image ships
-   setuid binaries (for example su, passwd, mount), and since the image runs as 999:999 with gosu gone, P1.29d removes
-   their setuid bits or the files in its final RUN. If `chmod u-s` is needed, it is added to FINAL_STAGE_COMMANDS,
-   citing the line; anything it keeps goes under "What I am unsure about", with the reason. Test:
+   `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in P1.29e (h) and (i) are empty. Its
+   final RUN uses P1.29n's verbs and flags, and postgres is covered by P1.29n's kind-wide test as soon as it joins the
+   kind map; a separate `postgres_image_has_no_package_manager` is optional (amendment 1, 01:00Z). Because P1.29p fails
+   a kind with no list, it adds the postgres privilege list, and that list is empty: the official Debian trixie Postgres
+   image ships setuid binaries (for example su, passwd, mount), and since the image runs as 999:999 with gosu gone,
+   P1.29d removes their setuid bits or the files in its final RUN. If `chmod u-s` is needed, it is added to
+   FINAL_STAGE_COMMANDS, citing the line; anything it keeps goes under "What I am unsure about", with the reason. Test:
    `image_privileges_match_list` covers postgres. From book edit 2026-10-08-p129f-final-stage-allowlists (00:55Z): it
    adds the postgres entries to P1.29f's destination-prefix and ENV-key allowlists, each cited.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
@@ -8241,9 +8242,10 @@ Done when `npm run check` is green, and the rule runs over the edge Dockerfile, 
 ### P1.29n — Ship the node runtime without a package manager
 Tags: [SEC]            Depends on: P1.29e (merged, #532)
 Slice 1, issue #529, product (`deployment/images/`); book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (final
-23:40Z, amended 23:48Z), from architecture's amendment 6 (23:35Z) and its 23:45Z note in
-2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the coordinator clears it, no word from Alex unless it
-needs a base change. Owner: Phase 1, after P1.29e, in either order or in parallel with P1.29p.
+23:40Z, amended 23:48Z; amendment 1, 01:00Z, from architecture's 00:50Z note F1 under amendment 7), from architecture's
+amendment 6 (23:35Z) and its 23:45Z note in 2026-10-07-p129-migrate-image-and-run-only-images. A tightening; the
+coordinator clears it, no word from Alex unless it needs a base change. Owner: Phase 1, after P1.29e, in either order or
+in parallel with P1.29p.
 
 **What:** the node-kind image test `node_image_has_no_package_manager`, the twin of P1.28o's `edge_image_has_no_apk`:
 the built web and migrate images contain no `apt`, `apt-get`, `dpkg` or `dpkg-*` executable anywhere on disk. The
@@ -8252,10 +8254,13 @@ removal uses the package managers' own verbs in the final RUN, for example
 The step adds exactly the flags it needs to the layer-3 flag allowlist, and the body lists each flag and the line that
 uses it.
 
-**General rule** (architecture, 23:45Z): every image kind's built image has no package manager; edge (P1.28o), node
-(this step) and postgres (P1.29d) cover the existing kinds. This step adds a kind-map test: every kind in
-`KIND_BY_FINAL_ENTRY` must have its `<kind>_image_has_no_package_manager` test, or the test fails. A new kind brings its
-test in the PR that adds it. Until P1.29d lands, postgres is not in the map, so the test passes with edge and node.
+**Every kind** (amendment 1, 01:00Z): the whole-disk test runs over the kind map, not node only: edge and node now, and
+postgres once P1.29d lands. On each built image it fails if any file's basename matches `apk`, `apk.static`, `apk-*`,
+`libapk*`, `apt`, `apt-get`, `apt-*`, `libapt*`, `dpkg`, `dpkg-*`, `rpm`, `yum`, `dnf` or `microdnf`, or if
+`/lib/apk/db` or `/var/lib/dpkg` exists. The general rule from 23:45Z (every image kind's built image has no package
+manager) holds by construction, because the test iterates the kind map; that replaces the per-kind completeness check.
+`edge_image_has_no_apk` (P1.28o) stays as it is, redundant and harmless. This step stays product class and may build the
+edge image; no trusted step is needed. The heading stays, because the node removal is still its main change.
 
 **Stop condition:** if this cannot work on Debian slim, the step stops and says so. Changing the runtime base would undo
 Alex's "Debian slim" card (03:56:37Z), and that needs his word on a new card.
@@ -8284,11 +8289,12 @@ Done when the test is green on every built image, and a fixture image with one e
 
 ### P1.29f — Turn final-stage rules into per-kind allowlists
 Tags: [SEC]            Depends on: P1.29e (merged, #532), P1.29n
-Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z),
-from architecture's amendment 7 (00:45Z) in 2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e
-(#532), relayed by the coordinator at 00:27Z. A tightening; the coordinator clears it, no word from Alex. Owner:
-Phase 1, the next slot after P1.29n. It is not tied to P1.29p: privileges are a separate concern, so either can land first. It
-goes before P1.29d and P1.29, which both gain it as a dependency; P1.29d adds the postgres entries to every list below.
+Slice 1, issue #539, product (`deployment/images/`); book edit 2026-10-08-p129f-final-stage-allowlists (final 00:55Z;
+items 5 and 6 at 01:00Z), from architecture's amendment 7 (00:45Z) and its 00:50Z note in
+2026-10-07-p129-migrate-image-and-run-only-images, written after P1.29e (#532), relayed by the coordinator at 00:27Z. A
+tightening; the coordinator clears it, no word from Alex. Owner: Phase 1, the next slot after P1.29n. It is not tied to
+P1.29p: privileges are a separate concern, so either can land first. It goes before P1.29d and P1.29, which both gain it
+as a dependency; P1.29d adds the postgres entries to every list below.
 
 **What:**
 1. **Here-docs.** Any `<<` in any instruction of any stage, outside comments, fails, whatever follows it. That covers
@@ -8308,6 +8314,11 @@ goes before P1.29d and P1.29, which both gain it as a dependency; P1.29d adds th
    - **No ARG in a final stage.**
 4. **The pin for P1.29e (c).** `RUN apk del ap\k-tools && rm -f /apk\x` is red under the count-based mutant and green
    otherwise. The PR body lists it next to the mutation.
+5. **Separator allowlist** (architecture's 00:50Z note under amendment 7, F2). In final stages and the stages they build
+   on, a shell-form RUN may join commands only with `&&`. These fail: `;`, `||`, `&`, `|`, a newline without `&&`, and
+   any `#` inside a RUN. Any shipped final-stage RUN that uses another separator today is listed under "What I am unsure
+   about" and rewritten with `&&`. Fixtures: the three shipped forms the coordinator found.
+6. **The removalProblem pin.** `RUN apk del --no-network apk-tools && apk add apk-tools` fails.
 
 Done when `npm run check` is green, every red fixture fails for its stated rule, every real Dockerfile on main still
 passes, and the body lists every allowlist entry with its citation.
