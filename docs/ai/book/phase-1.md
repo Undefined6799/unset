@@ -7875,19 +7875,19 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    file (65532 for our Node images, 999 for postgres, never "any non-zero"), `postgres_test_image_matches_lock`, and
    `stripped_paths_removed_in_every_final_stage` covering the new entry; the body gives Trivy counts before and
    after.
-   It adds `postgres` to `KIND_BY_FINAL_ENTRY` (P1.29x), with the generic rules applying to it. From book edit
-   2026-10-07-p129e-p129n-p129p-image-outcome-checks (23:48Z): its final stage (`RUN rm -f /usr/local/bin/gosu`,
-   `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in P1.29e (h) and (i) are empty. Its
-   final RUN uses P1.29n's verbs and flags, and postgres is covered by P1.29n's kind-wide test as soon as it joins the
-   kind map; a separate `postgres_image_has_no_package_manager` is optional (amendment 1). If the postgres image's
-   maintainer scripts need removing, P1.29d adds the postgres entry to `RM_BY_KIND`, token-exact, with the same three
-   red fixtures (amendment 1, 01:15Z). Because P1.29p fails a kind with no list, it adds the postgres privilege list,
-   and that list is empty: the official Debian trixie Postgres image ships setuid binaries (for example su, passwd,
-   mount), and since the image runs as 999:999 with gosu gone, P1.29d removes their setuid bits or the files in its
-   final RUN. If `chmod u-s` is needed, it is added to FINAL_STAGE_COMMANDS, citing the line; anything it keeps goes
-   under "What I am unsure about", with the reason. Test: `image_privileges_match_list` covers postgres. From book edit
-   2026-10-08-p129f-final-stage-allowlists (00:55Z): it adds the postgres entries to P1.29f's destination-prefix and
-   ENV-key allowlists, each cited.
+   It adds `postgres` to `deployment/images/kinds.json` (amendment 2, 01:20Z), with the generic rules applying to it.
+   From book edit 2026-10-07-p129e-p129n-p129p-image-outcome-checks (23:48Z): its final stage
+   (`RUN rm -f /usr/local/bin/gosu`, `USER 999:999`) must pass P1.29e's tightened text rules, and its per-kind lists in
+   P1.29e (h) and (i) are empty. Its final RUN uses P1.29n's verbs and flags, and postgres is covered by P1.29n's
+   kind-wide test as soon as it joins the kind map; a separate `postgres_image_has_no_package_manager` is optional
+   (amendment 1). If the postgres image's maintainer scripts need removing, P1.29d adds the postgres entry to
+   `RM_BY_KIND`, token-exact, with the same three red fixtures (amendment 1, 01:15Z). Because P1.29p fails a kind with
+   no list, it adds the postgres privilege list, and that list is empty: the official Debian trixie Postgres image ships
+   setuid binaries (for example su, passwd, mount), and since the image runs as 999:999 with gosu gone, P1.29d removes
+   their setuid bits or the files in its final RUN. If `chmod u-s` is needed, it is added to FINAL_STAGE_COMMANDS,
+   citing the line; anything it keeps goes under "What I am unsure about", with the reason. Test:
+   `image_privileges_match_list` covers postgres. From book edit 2026-10-08-p129f-final-stage-allowlists (00:55Z): it
+   adds the postgres entries to P1.29f's destination-prefix and ENV-key allowlists, each cited.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
    P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p and P1.29f, so no image is composed before every image is
    scanned):
@@ -8261,11 +8261,14 @@ uses it.
 **Every kind** (amendment 1): the whole-disk test runs over the kind map, not node only: edge and node now, and postgres
 once P1.29d lands. On each built image it fails if any non-directory entry's basename matches `apk`, `apk.static`,
 `apk-*`, `libapk*`, `apt`, `apt-get`, `apt-*`, `libapt*`, `dpkg`, `dpkg-*`, `rpm`, `yum`, `dnf` or `microdnf`.
-Directories stay out of the match. libapt-pkg is purged. The general rule from 23:45Z (every image kind's built image
-has no package manager) holds by construction, because the test iterates the kind map; that replaces the per-kind
-completeness check. `edge_image_has_no_apk` (P1.28o) stays as it is, redundant and harmless. This step stays product
-class and may build the edge image; no trusted step is needed. The heading stays, because the node removal is still its
-main change.
+Directories stay out of the match. libapt-pkg is purged. `edge_image_has_no_apk` (P1.28o) stays as it is, redundant and
+harmless. This step stays product class and may build the edge image; no trusted step is needed. The heading stays,
+because the node removal is still its main change.
+
+**General rule** (architecture, 23:45Z; amendment 7 notes; amendment 2, 01:20Z): every image kind's built image has no
+package manager. The kind map lives in `deployment/images/kinds.json`. The kind-wide test iterates that file and fails
+if any kind has no Dockerfile that was built and checked, or if any image fails to build. A new kind is covered as soon
+as it is added there, and needs no test of its own.
 
 **The package databases stay, as inert data** (architecture's third note under amendment 7, 01:00Z). Deleting them would
 blind Trivy and break "shipped images scanned in full", so the test requires:
@@ -8301,17 +8304,16 @@ SETCAP_BY_KIND.
 - Outcome: the built image has no maintainer script under `/var/lib/dpkg/info`, and no execute bit anywhere in either
   database tree.
 
-**No kind passes by being skipped** (architecture's second note under amendment 7). The kind-wide test iterates
-`KIND_BY_FINAL_ENTRY` itself. It fails if any kind has zero Dockerfiles that are built and checked, or if any image
-fails to build. Red fixtures: a kind in the map with no matching Dockerfile, and a Dockerfile that fails to build.
+Red fixtures for the general rule (architecture's second note under amendment 7): a kind in the map with no matching
+Dockerfile, and a Dockerfile that fails to build.
 
 **Stop condition:** if this cannot work on Debian slim, the step stops and says so. Changing the runtime base would undo
 Alex's "Debian slim" card (03:56:37Z), and that needs his word on a new card.
 
-Done when the kind-wide test is green on every kind in `KIND_BY_FINAL_ENTRY` (edge and node today), and on every built
-image of each kind; its red fixtures fail, including a kind with no Dockerfile, an image that fails to build, and the
-database fixtures above; `npm run check` is green; and the body gives Trivy counts before and after, and lists the dpkg
-data files it allows.
+Done when the kind-wide test is green on every kind in the kind map in `deployment/images/kinds.json` (edge and node
+today), and on every built image of each kind; its red fixtures fail, including a kind with no Dockerfile, an image that
+fails to build, and the database fixtures above; `npm run check` is green; and the body gives Trivy counts before and
+after, and lists the dpkg data files it allows.
 
 ---
 
