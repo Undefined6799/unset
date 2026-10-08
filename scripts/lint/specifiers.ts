@@ -8,8 +8,9 @@
 // it; `file:`, `data:` and `bun:` stay in `module`, and its prefix match is case-sensitive. So a built-in is allowed by
 // `protocol` plus `coreModule`, and every other scheme is still visible in `module`.
 import { existsSync, readFileSync } from "node:fs";
-import { join, matchesGlob } from "node:path";
+import { join } from "node:path";
 import type { ICruiseResult } from "dependency-cruiser";
+import { TEST_FILE } from "./tooling.ts";
 
 type Manifest = {
   name?: string;
@@ -30,17 +31,11 @@ export type Packages = {
 const declared = (manifest: Manifest): Set<string> =>
   new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {})]);
 
-/**
- * Test files by the Vitest `include` globs (P1.28m). node:path matchesGlob is stable since Node v24.8.0 (Node v26.10.0
- * doc/api/path.md, "path.matchesGlob"); the docs do not name brace expansion, so the tests show `{ts,tsx}` matching.
- */
-export const testFileByGlobs =
-  (globs: string[]) =>
-  (file: string): boolean =>
-    globs.some((glob) => matchesGlob(file, glob));
+/** A test file, by the tooling set's Vitest part (tooling.ts, P1.28p): the definition the depcruise rule reads too. */
+export const isTestFile = (file: string): boolean => new RegExp(TEST_FILE).test(file);
 
 /** Reads the root package.json and every workspace it lists (`dir/*` patterns, as this repo writes them). */
-export function readPackages(root: string, list: (dir: string) => string[], testGlobs: string[]): Packages {
+export function readPackages(root: string, list: (dir: string) => string[]): Packages {
   const read = (dir: string): Manifest => JSON.parse(readFileSync(join(root, dir, "package.json"), "utf8"));
   const top = read(".");
   const workspaces = new Map<string, { name: string; declared: ReadonlySet<string> }>();
@@ -52,7 +47,7 @@ export function readPackages(root: string, list: (dir: string) => string[], test
       workspaces.set(dir, { name: manifest.name ?? "", declared: declared(manifest) });
     }
   }
-  return { rootName: top.name ?? "", root: declared(top), workspaces, testFile: testFileByGlobs(testGlobs) };
+  return { rootName: top.name ?? "", root: declared(top), workspaces, testFile: isTestFile };
 }
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
