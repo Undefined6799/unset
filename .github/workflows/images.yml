@@ -13,6 +13,12 @@
 #
 # Tool images are pinned by index digest (scripts/guards/workflows.ts). The image under test is referenced by the
 # content id `docker build --iidfile` wrote, so it too is pinned by digest.
+#
+# P1.29w adds discover, scan-image and scan. discover runs scripts/ci/list-dockerfiles.ts and publishes one JSON
+# object per Dockerfile under deployment/. scan-image builds and Trivy-scans each of them (fail-fast off). scan is
+# the stable aggregate: it is green only when discover and scan-image both succeeded. The images and edge jobs stay,
+# so hadolint, the SBOM and the health checks are unchanged. Values from the matrix reach run: only through env
+# (scripts/guards/workflows.ts refuses an expression inside run:).
 
 name: images
 
@@ -170,3 +176,95 @@ jobs:
           docker rm -f "$id" > /dev/null
           echo "not healthy within 20 s (last status: $status)"
           exit 1
+
+  # P1.29w. One JSON object per Dockerfile, written to $GITHUB_OUTPUT by the script (GitHub Actions
+  # workflow commands, "Setting an output parameter"). Job outputs are a map the next job reads through
+  # needs (docs.github.com workflow-syntax, jobs.<job_id>.outputs). contents: read, no secrets.
+  discover:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - id: list
+        run: node scripts/ci/list-dockerfiles.ts
+
+  # Matrix include is the JSON array discover printed (workflow-syntax, jobs.<job_id>.strategy.matrix.include,
+  # the include-only example; expressions fromJSON). fail-fast defaults to true and is off here so one image
+  # does not hide another (workflow-syntax, jobs.<job_id>.strategy.fail-fast). The job name includes the image
+  # name. A custom if without a status function still requires success(), so this job does not run when
+  # discover failed (expressions, "Status check functions"). Dockerfile and ignore file reach the shell only
+  # as env. A file named Dockerfile is built from its own directory (the edge image); a *.Dockerfile is built
+  # from the repository root (node-app and migrate COPY the repo). Trivy v0.74.0 image:
+  # --severity HIGH,CRITICAL, --ignore-unfixed, --ignorefile (default .trivyignore, so /dev/null reads no
+  # ignore file), --exit-code, and --timeout from the parent command (default 5m; 10m matches the other jobs).
+  # https://github.com/aquasecurity/trivy/blob/v0.74.0/docs/guide/references/configuration/cli/trivy_image.md
+  scan-image:
+    name: scan ${{ matrix.name }}
+    needs: discover
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.discover.outputs.images) }}
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: |
+          case "$DOCKERFILE" in
+            */Dockerfile) CONTEXT="${DOCKERFILE%/*}" ;;
+            *) CONTEXT="." ;;
+          esac
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
+            --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" "$CONTEXT"
+      - name: Scan
+        env:
+          IGNOREFILE: ${{ matrix.ignorefile }}
+        run: |
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
+            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$IGNOREFILE" \
+            --timeout 10m "$APP_IMAGE"
+
+  # The one stable name (P1.27r requires `scan`, not the per-image names). always() runs this job when
+  # discover or scan-image failed, was skipped or was cancelled (workflow-syntax, jobs.<job_id>.needs;
+  # expressions, always()). needs.<job_id>.result is success, failure, cancelled or skipped
+  # (contexts reference). Anything but success is red. Drafts stay skipped, same as the other jobs.
+  scan:
+    needs: [discover, scan-image]
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require discover and every image scan to have succeeded
+        env:
+          DISCOVER: ${{ needs.discover.result }}
+          SCAN_RESULT: ${{ needs.scan-image.result }}
+        run: |
+          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ]; then
+            echo "discover=$DISCOVER scan-image=$SCAN_RESULT"
+            exit 1
+          fi

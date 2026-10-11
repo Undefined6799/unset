@@ -8097,7 +8097,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    against a live walk of `deployment/`; today exactly {edge, node-app}, the name being the Dockerfile's stem) and
    `list_dockerfiles_refuses_bad_entries` (an empty tree, a bad name and a path outside `deployment/` fail; a
    Dockerfile-named file under `node_modules` is ignored). Alex's typed line "yes P1.29w every shipped image" covers
-   this design (asked 18:57Z); line: (pending). Order: it lands before P1.29k and P1.29d, so each new image is scanned
+   this design (asked 18:57Z); line: "yes P1.29w every shipped image" (Alex, 2026-10-11). Order: it lands before P1.29k and P1.29d, so each new image is scanned
    from its first PR and neither edits `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not
    waiting on Alex's line; discovery picks a merged migrate image up when P1.29w lands). A check step pinning the
    exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
