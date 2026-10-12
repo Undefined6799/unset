@@ -4,7 +4,7 @@
 import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { readLock } from "./images.ts";
-import { reachesSecretsFolder } from "./secrets.ts";
+import { holdsEnvFile, reachesSecretsFolder } from "./secrets.ts";
 import { type Check, fail, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
@@ -68,6 +68,7 @@ export const c26: Check = {
       if (reachesSecretsFolder(build.context, inputs)) {
         return fail(`${name} builds from a context that reaches the secrets folder`);
       }
+      if (holdsEnvFile(build.context, inputs)) return fail(`${name} builds from a context that holds an env file`);
       if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
         return fail(`${name} builds from a Dockerfile the images workflow does not scan`);
       }

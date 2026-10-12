@@ -437,6 +437,16 @@ describe("preflight", () => {
       "FAIL C9 parent 2 of the secrets folder can be changed by another user",
     );
     expect(failed((await run({ [dirname(base)]: 0 })).lines)).toEqual([]);
+    // A secrets folder on procfs, known by its filesystem type (architecture, Amendment 2 of the P1.27u record).
+    for (const onProc of [dir, base]) {
+      const procfs = await preflight(["--env", "prod", "--compose", file], {
+        root,
+        run: fakeRun().run,
+        ...fakeFs(root),
+        statfs: (path) => ({ type: path === onProc ? 0x9fa0 : 0xef53 }),
+      });
+      expect(procfs.lines).toContain("FAIL C9 the secrets folder is on procfs");
+    }
     // The walk reaches "/" itself.
     const depth = dir.split("/").length - 1;
     expect((await run({ "/": 4242 })).lines).toContain(
@@ -704,9 +714,22 @@ describe("preflight", () => {
     expect(linkedReal.lines).toContain(changeable);
     expect((await run("./nowhere", () => undefined)).lines).toContain("FAIL C9 pds binds a path that does not exist");
     // /proc resolves in the preflight's own context, not the container's.
+    const underProc = "FAIL C9 pds binds a path under /proc";
     for (const source of ["/proc/self/cwd", "/proc"]) {
-      expect((await run(source, () => undefined)).lines).toContain("FAIL C9 pds binds a path under /proc");
+      expect((await run(source, () => undefined)).lines).toContain(underProc);
     }
+    // procfs under another name is known by its filesystem type, on every directory of both walks (Amendment 2).
+    const PROC = 0x9fa0;
+    for (const onProc of ["/deployment/data/shared", "/deployment/data"]) {
+      const statfs = (path: string) => ({ type: path.endsWith(onProc) ? PROC : 0xef53 });
+      expect((await run("./data/shared", () => undefined, { statfs })).lines).toContain(underProc);
+    }
+    const throwing = {
+      statfs: () => {
+        throw Object.assign(new Error("denied"), { code: "EACCES" });
+      },
+    };
+    expect((await run("./data/shared", () => undefined, throwing)).lines).toContain("FAIL C9 check error");
   });
 
   // P1.30o: every mounted secret shares one locked folder, so one directory check covers them all.
@@ -1487,6 +1510,15 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     expect(
       (await run("../../unset-dev-secrets/sub", "../../repo/deployment/images/node-app.Dockerfile", within)).lines,
     ).toContain(reaches);
+    // An env file Compose reads, inside a root context (architecture, Amendment 2 of the record above).
+    const envInside = (root: string) => {
+      renameSync(join(envOf(root), "pds.env"), join(root, "deployment/pds.env"));
+      const file = join(root, "deployment/compose.yaml");
+      writeFileSync(file, readFileSync(file, "utf8").replace("../../unset-dev-env/pds.env", "pds.env"));
+    };
+    expect((await run("..", "deployment/images/node-app.Dockerfile", envInside)).lines).toContain(
+      "FAIL C26 web builds from a context that holds an env file",
+    );
     // The sibling layout passes.
     expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);
   });

@@ -51,15 +51,18 @@ function mountedProblem(inputs: Inputs): Outcome | null {
  * link (Docker resolves a bind source again at every start), and no user but root and the deploy user can change any
  * directory above it, sticky or not (OpenSSH safe_path, misc.c; CERT FIO15-C). Ancestors are named by position.
  */
-function lockedDirectoryProblem(dir: string, { lstat, uid }: Inputs): Outcome | null {
+function lockedDirectoryProblem(dir: string, inputs: Inputs): Outcome | null {
+  const { lstat, uid } = inputs;
   const info = lstat(dir);
   if (info === null) return missing(dir);
   if (!info.isDirectory() || (info.mode & 0o7777) !== 0o700 || info.uid !== uid) {
     return fail(`${dir} must be a directory with mode 0700 owned by the deploy user`);
   }
+  if (onProcfs(dir, inputs)) return fail("the secrets folder is on procfs");
   let level = 1;
   for (let parent = dirname(dir); ; parent = dirname(parent), level++) {
     const above = lstat(parent);
+    if (above?.isDirectory() === true && onProcfs(parent, inputs)) return fail("the secrets folder is on procfs");
     if (above === null || !above.isDirectory())
       return fail(`parent ${level} of the secrets folder is a link or not a directory`);
     const othersOwn = above.uid !== 0 && above.uid !== uid;
@@ -94,6 +97,11 @@ export function reachesSecretsFolder(path: string, inputs: Inputs): boolean {
   return [...dirs].some((dir) => reaches(path, dir, inputs));
 }
 
+/** Whether `path` is or contains a file Compose reads values from (an env file or the `.env`), by the same tests. */
+export function holdsEnvFile(path: string, inputs: Inputs): boolean {
+  return inputs.secretPaths.some((file) => reaches(path, file, inputs));
+}
+
 function reaches(path: string, dir: string, inputs: Inputs): boolean {
   const folders = [dir, inputs.realpath(dir) ?? dir];
   const paths = [path, inputs.realpath(path) ?? path];
@@ -118,27 +126,34 @@ function bindSourceProblem(inputs: Inputs): Outcome | null {
       if ([mount.source, real].some((path) => path !== null && within(path, "/proc")))
         return fail(`${why} under /proc`);
       if (real === null) return fail(`${why} that does not exist`);
-      if (!lockedPath(mount.source, inputs, true) || !lockedPath(real, inputs, false)) {
-        return fail(`${why} that another user can change`);
-      }
+      const walked = pathProblem(mount.source, inputs, true) ?? pathProblem(real, inputs, false);
+      if (walked === "procfs") return fail(`${why} under /proc`);
+      if (walked === "changeable") return fail(`${why} that another user can change`);
     }
   }
   return null;
 }
 
 /**
- * Whether only root and the deploy user own `path` and every directory above it, and none has group or other write.
- * On the path as written a link may stand in for a directory, because its target is judged on the real path, but the
- * link must be theirs too; its own mode means nothing on Linux.
+ * What, if anything, is wrong with `path` and every directory above it: one on procfs under any name, or one that a
+ * user other than root and the deploy user owns or that has group or other write. On the path as written a link may
+ * stand in for a directory, because its target is judged on the real path, but the link must be theirs too; its own
+ * mode means nothing on Linux.
  */
-function lockedPath(path: string, { lstat, uid }: Inputs, linksAllowed: boolean): boolean {
+function pathProblem(path: string, inputs: Inputs, linksAllowed: boolean): "procfs" | "changeable" | null {
+  const { lstat, uid } = inputs;
   for (let at = path; ; at = dirname(at)) {
     const info = lstat(at);
-    if (info === null || (info.uid !== 0 && info.uid !== uid)) return false;
-    if (info.isSymbolicLink() ? !linksAllowed : (info.mode & 0o022) !== 0) return false;
-    if (dirname(at) === at) return true;
+    if (info === null || (info.uid !== 0 && info.uid !== uid)) return "changeable";
+    if (info.isSymbolicLink() ? !linksAllowed : (info.mode & 0o022) !== 0) return "changeable";
+    if (!info.isSymbolicLink() && onProcfs(at, inputs)) return "procfs";
+    if (dirname(at) === at) return null;
   }
 }
+
+/** PROC_SUPER_MAGIC (linux/magic.h): procfs by filesystem type, so a bind-mounted alias of /proc is known too. */
+const PROC_SUPER_MAGIC = 0x9fa0;
+const onProcfs = (path: string, { statfs }: Inputs) => statfs(path).type === PROC_SUPER_MAGIC;
 
 /**
  * The (dev, ino) of a path and of each directory above it, nearest first; null where nothing exists. A second name
