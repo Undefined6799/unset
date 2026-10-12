@@ -276,6 +276,9 @@ describe("compose subset", () => {
       ['    build: {context: "git@github.com:x/y.git", dockerfile: Dockerfile}\n', "build context is not a local path"],
       ["    build: {context: github.com/x/y, dockerfile: Dockerfile}\n", "build context is not a local path"],
       ['    build: {context: "..#main", dockerfile: Dockerfile}\n', "build context is not a local path"],
+      // Architecture's compose-inputs ruling (step book record 2026-10-12-p130a-p130l-compose-inputs-booked): no `~`.
+      ["    build: {context: ~/unset, dockerfile: Dockerfile}\n", "build context is not a local path"],
+      ["    build: {context: .., dockerfile: ~/x.Dockerfile}\n", "build dockerfile starts with ~"],
       ["    tmpfs: [/etc/caddy/snippets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: [/run/secrets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: /tmp\n", "tmpfs is not a list"],
@@ -301,6 +304,7 @@ describe("compose subset", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
     for (const [yaml, key] of [
       ['    build: {context: .., dockerfile: "${D}"}\n', "build"],
+      ['    build: {context: "${C}", dockerfile: Dockerfile}\n', "build"],
       ['    tmpfs: ["${T}"]\n', "tmpfs"],
       ['    depends_on: ["${S}"]\n', "depends_on"],
       ['    secrets: ["${S}"]\n', "secrets"],
