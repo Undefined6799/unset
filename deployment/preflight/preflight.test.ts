@@ -2,9 +2,11 @@
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
 
 import { execFileSync } from "node:child_process";
+import type { Stats } from "node:fs";
 import {
   chmodSync,
   cpSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -69,6 +71,8 @@ services:
       PDS_HOSTNAME: pds.example.test
   web:
     image: ${WEB}
+    user: "65532:65532"
+    secrets: [db_password]
     environment:
       FINGERPRINT_CHECK: arachnid
 secrets:
@@ -140,7 +144,10 @@ function stack({
   };
   const env = Object.entries({ ...PDS_ENV, ...pdsEnv }).flatMap(([k, v]) => (v === null ? [] : [`${k}=${v}\n`]));
   secret("deployment/pds.env", env.join(""));
+  // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; checkDeps reads it as owned by web's uid.
   secret("deployment/secrets/db_password", `${CANARY}\n`);
+  chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
+  chmodSync(join(root, "deployment/secrets"), 0o700);
   if (dotEnv !== undefined) secret("deployment/.env", dotEnv);
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
@@ -192,9 +199,32 @@ function fakeRun(answers: Answers = {}) {
   return { run, calls };
 }
 
+/** web's uid in the all-good compose, which owns its mounted secret (P1.30o). */
+const WEB_UID = 65532;
+/**
+ * The real lstat, except that a file inside a deployment/secrets/ directory reads as owned by `owner`: a test cannot
+ * chown to another uid, and C9 compares the owner of a mounted secret with the uid of the service that mounts it.
+ */
+function lstatOwnedBy(owner: number): (path: string) => Stats | null {
+  return (path) => {
+    let info: Stats;
+    try {
+      info = lstatSync(path);
+    } catch {
+      return null;
+    }
+    if (!dirname(path).endsWith("/deployment/secrets")) return info;
+    return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid: owner });
+  };
+}
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   const { root, file } = stack(s);
-  return preflight(["--env", env, "--compose", file], { root, run: fakeRun().run, ...deps });
+  return preflight(["--env", env, "--compose", file], {
+    root,
+    run: fakeRun().run,
+    lstat: lstatOwnedBy(WEB_UID),
+    ...deps,
+  });
 }
 const failed = (lines: string[]) => lines.filter((l) => l.startsWith("FAIL")).map((l) => l.split(" ")[1]);
 async function expectOnly(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
@@ -308,23 +338,93 @@ describe("preflight", () => {
     await expectOnly("C8", { compose: edgeEnv });
   });
 
-  test("c9_secret_file_fails", async () => {
-    const { root, file } = stack();
-    chmodSync(join(root, "deployment/secrets/db_password"), 0o644);
-    const loose = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
-    expect(loose.lines).toContain(
-      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
-    );
-    // Too few bits fails the same way as too many (Codex review on #650).
-    chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
-    const tight = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
-    expect(tight.lines).toContain(
-      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
-    );
-    const other = await check({}, "prod", { uid: 4242 });
-    expect(failed(other.lines)).toEqual(["C9"]);
+  // P1.30o: files Compose itself reads keep the deploy user's 0600 (architecture record 2026-10-12-c9-secret-file-owner).
+  test("c9_compose_read_file_fails", async () => {
+    for (const env of ["dev", "prod"]) {
+      const { root, file } = stack(env === "dev" ? { compose: DEV, pdsEnv: DEV_ENV } : {});
+      const run = (deps: Partial<Deps> = {}) =>
+        preflight(["--env", env, "--compose", file], {
+          root,
+          run: fakeRun().run,
+          lstat: lstatOwnedBy(WEB_UID),
+          ...deps,
+        });
+      const pdsEnv = join(root, "deployment/pds.env");
+      for (const mode of [0o644, 0o400]) {
+        chmodSync(pdsEnv, mode);
+        expect((await run()).lines).toContain(`FAIL C9 ${pdsEnv} must have exactly owner read and write permissions`);
+      }
+      chmodSync(pdsEnv, 0o600);
+      expect(failed((await run()).lines)).toEqual([]);
+      const other = (await run({ uid: 4242 })).lines.find((l) => l.startsWith("FAIL C9"));
+      expect(other).toBe(`FAIL C9 ${pdsEnv} is not owned by the deploy user`);
+    }
     const absent = await check({ compose: COMPOSE.replace("secrets/db_password", "secrets/absent") });
     expect(failed(absent.lines)).toEqual(["C9"]);
+  });
+
+  // P1.30o: a mounted secret is mode 0400, owned by the one uid that mounts it, in a 0700 directory of the deploy user.
+  test("c9_mounted_secret_owner_and_mode", async () => {
+    const path = (root: string) => join(root, "deployment/secrets/db_password");
+    const { root, file } = stack();
+    const run = (owner = WEB_UID) =>
+      preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, lstat: lstatOwnedBy(owner) });
+    expect(failed((await run()).lines)).toEqual([]);
+    const deployUid = process.getuid?.() ?? -1;
+    expect((await run(deployUid)).lines).toContain(
+      `FAIL C9 ${path(root)} is not owned by uid ${WEB_UID}, the user of web`,
+    );
+    for (const mode of [0o600, 0o440, 0o404, 0o4400]) {
+      chmodSync(path(root), mode);
+      expect((await run()).lines).toContain(`FAIL C9 ${path(root)} must have mode 0400`);
+    }
+  });
+
+  test("c9_secrets_directory_locked", async () => {
+    const { root, file } = stack();
+    const run = () =>
+      preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, lstat: lstatOwnedBy(WEB_UID) });
+    const dir = join(root, "deployment/secrets");
+    chmodSync(dir, 0o755);
+    expect((await run()).lines).toContain(`FAIL C9 ${dir} must be a directory with mode 0700 owned by the deploy user`);
+    chmodSync(dir, 0o700);
+    expect(failed((await run()).lines)).toEqual([]);
+    // A parent another user could write lets them swap the directory.
+    chmodSync(join(root, "deployment"), 0o777);
+    expect((await run()).lines).toContain(`FAIL C9 ${join(root, "deployment")} can be changed by another user`);
+    chmodSync(join(root, "deployment"), 0o755);
+    const other = await check({}, "prod", { uid: 4242 });
+    expect(other.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/is not owned by the deploy user$/);
+  });
+
+  test("c9_mounted_secret_readers", async () => {
+    const pdsReads = (user: string) =>
+      COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n${user}    secrets: [db_password]`);
+    const secret = (root: string) => join(root, "deployment/secrets/db_password");
+    // Two services with different uids.
+    const two = await check({ compose: pdsReads('    user: "1000:1000"\n') });
+    expect(two.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/db_password is mounted by more than one uid$/);
+    // A mounting service with no user: the image default is invisible to the preflight.
+    const none = await check({ compose: pdsReads("") });
+    expect(none.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(
+      /^FAIL C9 pds mounts .*db_password but sets no user$/,
+    );
+    // Declared but mounted by nobody.
+    const unmounted = await check({ compose: COMPOSE.replace("    secrets: [db_password]\n", "") });
+    expect(unmounted.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(
+      /db_password is declared but no service mounts it$/,
+    );
+    // A symlinked secret.
+    const { root, file } = stack();
+    rmSync(secret(root));
+    writeFileSync(join(root, "deployment/real"), "x\n");
+    symlinkSync(join(root, "deployment/real"), secret(root));
+    const linked = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      lstat: lstatOwnedBy(WEB_UID),
+    });
+    expect(linked.lines).toContain(`FAIL C9 ${secret(root)} is empty, a link or not a file`);
   });
 
   test("c10_published_port_fails", async () => {
@@ -730,7 +830,7 @@ describe("preflight C17 (P1.30t)", () => {
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: [edge]\n      inner:',
   )
     .replace("    env_file: pds.env", "    env_file: pds.env\n    networks: [inner]")
-    .replace("secrets:", "networks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
+    .replace("\nsecrets:", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
   const NETWORKED_TABLE = {
     default: { internal: false, members: ["web"] },
     front: { internal: false, members: ["edge"] },
@@ -751,7 +851,7 @@ describe("preflight C17 (P1.30t)", () => {
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks: [default, pds_net]',
         )
         .replace(`    image: ${WEB}`, `    image: ${WEB}\n    networks: ${webNetworks}`)
-        .replace("secrets:", "networks:\n  pds_net:\n    internal: true\nsecrets:");
+        .replace("\nsecrets:", "\nnetworks:\n  pds_net:\n    internal: true\nsecrets:");
     const table = {
       default: { internal: false, members: ["edge", "web"] },
       pds_net: { internal: true, members: ["edge", "pds"] },
@@ -767,7 +867,7 @@ describe("preflight C17 (P1.30t)", () => {
     await expectOnly("C17", { networks: {} });
     await expectOnly("C17", { networks: { default: { internal: false, members: ["edge", "pds"] } } });
     // A top-level networks.default changes that network's settings.
-    const internal = COMPOSE.replace("secrets:", "networks:\n  default:\n    internal: true\nsecrets:");
+    const internal = COMPOSE.replace("\nsecrets:", "\nnetworks:\n  default:\n    internal: true\nsecrets:");
     await expectOnly("C17", { compose: internal });
     const table = { default: { internal: true, members: ["edge", "pds", "web"] } };
     expect(failed((await check({ compose: internal, networks: table })).lines)).toEqual([]);
@@ -861,11 +961,16 @@ describe("preflight C25 (P1.30x)", () => {
     "deployment/edge/Dockerfile": "FROM scratch\n",
     "deployment/images/node-app.Dockerfile": "FROM scratch\n",
   };
-  const built = (service: string, image: string, dockerfile: string, adds = "") =>
-    COMPOSE.replace(
+  // Each Dockerfile from the context the images workflow builds it from (C26): the edge's own folder, else the root.
+  const built = (service: string, image: string, dockerfile: string, adds = "") => {
+    const [context, file] = dockerfile.endsWith("/Dockerfile")
+      ? [`./${dockerfile.slice(0, -"/Dockerfile".length).replace(/^deployment\//, "")}`, "Dockerfile"]
+      : ["..", dockerfile];
+    return COMPOSE.replace(
       `  ${service}:\n    image: ${image}\n`,
-      `  ${service}:\n    image: ${image}\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n${adds}`,
+      `  ${service}:\n    image: ${image}\n    build:\n      context: ${context}\n      dockerfile: ${file}\n${adds}`,
     );
+  };
   const adds = "    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n";
 
   test("c25_edge_image_built_from_another_dockerfile_fails", async () => {
@@ -899,9 +1004,11 @@ describe("preflight C25 (P1.30x)", () => {
 describe("preflight C26 and C27 (P1.30y)", () => {
   const DOCKERFILES = {
     Dockerfile: "FROM scratch\n",
+    "deployment/edge/Dockerfile": "FROM scratch\n",
     "deployment/images/node-app.Dockerfile": "FROM scratch\n",
     "deployment/images/postgres.Dockerfile": "FROM scratch\n",
     "deployment/images/node_modules/x/Dockerfile": "FROM scratch\n",
+    "deployment/images/node-app": "FROM scratch\n",
   };
   const webBuilds = (context: string, dockerfile: string) =>
     COMPOSE.replace(
@@ -910,8 +1017,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     );
   const webTmpfs = (yaml: string) => COMPOSE.replace(`    image: ${WEB}\n`, `    image: ${WEB}\n${yaml}`);
 
-  // Architecture record 2026-10-12-p129-compose-service-keys: a context is the repository root, and a Dockerfile is one
-  // the images workflow discovers and scans (scripts/ci/list-dockerfiles.ts, images.test.ts's rule).
+  // Architecture record 2026-10-12-p129-compose-service-keys: a Dockerfile is one the images workflow discovers and
+  // scans (scripts/ci/list-dockerfiles.ts, images.test.ts's rule), built from the context that workflow builds it from:
+  // a file named Dockerfile from its own folder (the edge), any *.Dockerfile from the repository root (images.yml,
+  // scan-image "Build"). Another context builds other files than the scanned image holds.
   test("c26_build_from_the_root_and_a_scanned_dockerfile_passes", async () => {
     const result = await check({
       compose: webBuilds("..", "deployment/images/node-app.Dockerfile"),
@@ -921,11 +1030,93 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   });
 
   test("c26_context_other_than_the_root_fails", async () => {
-    for (const context of ["../..", ".", "../deployment"]) {
+    // Each names the scanned node-app Dockerfile, from another context.
+    for (const [context, dockerfile] of [
+      [".", "images/node-app.Dockerfile"],
+      ["../deployment", "images/node-app.Dockerfile"],
+      ["./images", "node-app.Dockerfile"],
+    ]) {
       expect(
-        await expectOnly("C26", { compose: webBuilds(context, "images/node-app.Dockerfile"), files: DOCKERFILES }),
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
         context,
-      ).toBe("FAIL C26 web builds from a context other than the repository root");
+      ).toBe("FAIL C26 web builds from a context other than the images workflow's");
+    }
+  });
+
+  // As the images workflow refuses them (scripts/ci/list-dockerfiles.ts entryProblems): a symlinked Dockerfile or
+  // folder, and an image name outside ^[a-z0-9-]+$. That workflow's discover job is not a required check, so C26 is.
+  test("c26_symlinks_and_bad_image_names_fail", async () => {
+    const files = { ...DOCKERFILES, "deployment/images/Web_App.Dockerfile": "FROM scratch\n" };
+    const name = await expectOnly("C26", { compose: webBuilds("..", "deployment/images/Web_App.Dockerfile"), files });
+    expect(name).toBe("FAIL C26 web builds from a Dockerfile the images workflow does not scan");
+    const linked = stack({ compose: webBuilds("..", "deployment/images/linked.Dockerfile"), files: DOCKERFILES });
+    symlinkSync(
+      join(linked.root, "deployment/images/node-app.Dockerfile"),
+      join(linked.root, "deployment/images/linked.Dockerfile"),
+    );
+    const viaLink = await preflight(["--env", "prod", "--compose", linked.file], {
+      root: linked.root,
+      run: fakeRun().run,
+      lstat: lstatOwnedBy(WEB_UID),
+    });
+    expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+      "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+    ]);
+    const folder = stack({ compose: webBuilds("..", "deployment/linked/node-app.Dockerfile"), files: DOCKERFILES });
+    symlinkSync(join(folder.root, "deployment/images"), join(folder.root, "deployment/linked"));
+    const viaFolder = await preflight(["--env", "prod", "--compose", folder.file], {
+      root: folder.root,
+      run: fakeRun().run,
+      lstat: lstatOwnedBy(WEB_UID),
+    });
+    expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+      "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+    ]);
+  });
+
+  // P1.27n (verifier N2 on #675): one fixture per rule, each refused by that rule alone, so removing any one turns
+  // this red. The others in c26_dockerfile_the_images_workflow_does_not_scan_fails trip several rules at once.
+  test("c26_each_scan_rule_refuses_on_its_own", async () => {
+    const files = {
+      ...DOCKERFILES,
+      // Outside deployment/, an existing regular file with a listable name: only the prefix rule refuses it.
+      "other/web.Dockerfile": "FROM scratch\n",
+      // A folder whose name the Dockerfile rule lists: only the is-a-file rule refuses it.
+      "deployment/images/folder.Dockerfile/x": "FROM scratch\n",
+    };
+    for (const dockerfile of ["other/web.Dockerfile", "deployment/images/folder.Dockerfile"]) {
+      expect(await expectOnly("C26", { compose: webBuilds("..", dockerfile), files }), dockerfile).toBe(
+        "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+      );
+    }
+  });
+
+  // P1.27n (verifier N5 on #675): list-dockerfiles refuses two Dockerfiles that give one image name, since the scan
+  // matrix would build one and publish the other's name; C26 refuses a build of either.
+  test("c26_image_name_another_dockerfile_takes_fails", async () => {
+    const files = { ...DOCKERFILES, "deployment/images/edge.Dockerfile": "FROM scratch\n" };
+    for (const [context, dockerfile] of [
+      ["..", "deployment/images/edge.Dockerfile"],
+      ["./edge", "Dockerfile"],
+    ]) {
+      expect(
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files }),
+        dockerfile,
+      ).toBe("FAIL C26 web builds an image whose name another Dockerfile also takes");
+    }
+  });
+
+  test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
+    expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
+    for (const [context, dockerfile] of [
+      ["..", "deployment/edge/Dockerfile"],
+      ["./edge/sites", "../Dockerfile"],
+      [".", "edge/Dockerfile"],
+    ]) {
+      expect(
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
+        context,
+      ).toBe("FAIL C26 web builds from a context other than the images workflow's");
     }
   });
 
@@ -934,7 +1125,11 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "Dockerfile",
       "deployment/images/missing.Dockerfile",
       "deployment/images/node_modules/x/Dockerfile",
-      "deployment/images/bases.lock.json",
+      // Files that exist under the root, so only the name rule refuses them.
+      "deployment/compose.yaml",
+      "deployment/images.lock.json",
+      // A name the workflow's name rule accepts, on a file its Dockerfile rule does not list.
+      "deployment/images/node-app",
       "../outside.Dockerfile",
     ]) {
       expect(await expectOnly("C26", { compose: webBuilds("..", dockerfile), files: DOCKERFILES }), dockerfile).toBe(
@@ -950,9 +1145,17 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "    volumes:\n      - type: tmpfs\n        target: /var/run/postgresql\n",
     ]) {
       expect(await expectOnly("C27", { compose: webTmpfs(yaml) }), yaml).toBe(
-        "FAIL C27 web mounts a tmpfs on /var/run/postgresql but does not run the postgres image",
+        "FAIL C27 web mounts the socket-directory tmpfs but does not run the lock's database image",
       );
     }
+  });
+
+  // P1.30j's rule: a reason names keys and services, never text a configured value could hold (PGHOST, POSTGRES_USER).
+  test("c27_reason_survives_withholding", async () => {
+    const pdsEnv = { PGHOST: "/var/run/postgresql", POSTGRES_USER: "postgres" };
+    expect(await expectOnly("C27", { compose: webTmpfs("    tmpfs: [/var/run/postgresql]\n"), pdsEnv })).toBe(
+      "FAIL C27 web mounts the socket-directory tmpfs but does not run the lock's database image",
+    );
   });
 
   test("c27_postgres_socket_tmpfs_on_the_postgres_image_passes", async () => {
@@ -965,8 +1168,16 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       `    image: ${WEB}\n    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n    tmpfs: [/var/run/postgresql]\n`,
     );
     expect(await expectOnly("C27", { compose: pg, lock, files: DOCKERFILES })).toBe(
-      "FAIL C27 web mounts a tmpfs on /var/run/postgresql but its image and build name different images",
+      "FAIL C27 web mounts the socket-directory tmpfs but its image and build name different images",
     );
     expect((await check({ compose: webTmpfs("    tmpfs: [/tmp]\n"), lock: null })).lines).toContain("PASS C27 ok");
+  });
+
+  // P1.27n (verifier N4 on #659): a socket-directory tmpfs with no lock to judge it by fails closed.
+  test("c27_socket_tmpfs_without_a_lock_fails", async () => {
+    const result = await check({ compose: webTmpfs("    tmpfs: [/var/run/postgresql]\n"), lock: null });
+    expect(result.lines.find((l) => l.startsWith("FAIL C27"))).toMatch(
+      /^FAIL C27 input missing: .*images\.lock\.json$/,
+    );
   });
 });

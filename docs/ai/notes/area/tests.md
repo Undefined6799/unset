@@ -4,7 +4,7 @@ type: area
 status: current
 areas: ["[[tests]]"]
 summary: "Hub for tests/: integration tests against real Postgres, and the one helper that starts it."
-code: [tests/support/postgres.ts, tests/integration/setup/pg.setup.ts]
+code: [tests/support/postgres.ts, tests/support/docker.ts, tests/integration/setup/pg.setup.ts]
 sources: []
 importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
@@ -20,6 +20,12 @@ Unit tests sit beside the file they test, not here.
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
   `postgres` entry pins, the base of our gosu-free image (P1.29d), run as upstream ships it (root, then gosu).
+- `support/docker.ts`: every synchronous docker call in tests goes through `docker(args, { timeoutMs })`, which kills
+  the call with SIGKILL at its timeout and throws a message naming it (P1.27k). A blocked `spawnSync` cannot be
+  interrupted by vitest's test timeout, so without this a hung daemon held the event loop until `scripts/test/run.ts`
+  killed the whole run at 600 s, naming nothing. `killBefore(budget)` sets a call's timeout 5 s under the test's
+  budget; `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g). Hooks that end
+  in `stopAllPostgres` take `STOP_ALL_MS`, never vitest's 10 s default.
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.

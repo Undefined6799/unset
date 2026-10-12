@@ -9,7 +9,13 @@ import { join } from "node:path";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createPool, migrate, type Pool, withClient } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
@@ -52,7 +58,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.close()));
   stopAllPostgres();
-});
+}, STOP_ALL_MS);
 
 function poolAs(role: Writer, max = 1): Pool {
   const pool = createPool({

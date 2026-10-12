@@ -5,6 +5,8 @@ import type { Compose, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 
 export type Env = "dev" | "prod";
+/** A file secret bind-mounted into containers, with the `user` of each service that mounts it (null when unset). */
+export type MountedSecret = { path: string; mountedBy: { service: string; user: string | null }[] };
 export type VerifyResult = { ok: true } | { ok: false; failures: string[] };
 /** Runs the verify-images CLI on a lock; production calls it by fixed path and arguments, tests pass a fake. */
 export type Verifier = (lockPath: string, signal: AbortSignal) => Promise<VerifyResult>;
@@ -19,13 +21,15 @@ export type Run = (
 
 export type Inputs = {
   env: Env;
-  /** The repository root: the only build context (C26), and where the edge and postgres Dockerfiles live. */
+  /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */
   serviceEnv: ReadonlyMap<string, SecretMap>;
-  /** Absolute paths of every env file and secret file the compose files name. */
+  /** Absolute paths of every file Compose itself reads for values: env files and the project's `.env`. */
   secretPaths: string[];
+  /** Every top-level file secret, by absolute path, with the services that mount it (P1.30o). */
+  mountedSecrets: MountedSecret[];
   lockPath: string;
   cosignKeyPath: string;
   verify: Verifier;
@@ -40,6 +44,8 @@ export type Inputs = {
   edgeDir: string;
   readText: (path: string) => string | null;
   stat: (path: string) => Stats | null;
+  /** Like `stat`, but a symlink is reported as itself (C9 refuses a linked secret or secrets directory). */
+  lstat: (path: string) => Stats | null;
   uid: number;
 };
 

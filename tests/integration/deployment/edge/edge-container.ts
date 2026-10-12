@@ -3,18 +3,27 @@
 // stub upstream on the Docker bridge that records what reached it. Hardening as for Postgres (tests/support/
 // postgres.ts): --rm-like removal even on failure, the ports published on 127.0.0.1 only, a read-only root, no
 // --privileged or host network, and the mounts read-only.
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders, type Server } from "node:http"; // guard-allow: egress local edge test only
 import { request } from "node:https"; // guard-allow: egress local edge test only
 import { connect as tcpConnect } from "node:net"; // guard-allow: egress local edge test only
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls"; // guard-allow: egress local edge test only
+import { docker, killBefore } from "../../../support/docker.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 export const EDGE = join(REPOSITORY, "deployment", "edge");
 export const PDS_HOST = "pds.unset.test";
 const OWNER_LABEL = "sh.unset.test-owner";
+// Every docker call is killed at its own budget (P1.27k), so a hung daemon fails the calling test or hook with a named
+// message instead of blocking the event loop until scripts/test/run.ts kills the whole run at 600 s. A daemon call (inspect, port, exec, logs, rm) may
+// queue behind CI's parallel image builds but never for a minute. The pull and the build share beforeAll's 600 s with
+// the start; a probe run fits inside the 120 s budget of the tests that probe (CONTAINER_MS in edge.image.test.ts).
+const CALL_MS = 60_000;
+const PULL_MS = 180_000;
+const BUILD_MS = 300_000;
+const PROBE_MS = killBefore(120_000);
 
 /** One request as the stub upstream saw it. */
 export interface Seen {
@@ -67,15 +76,19 @@ function nodeImage(): string {
  * runner the first probe used to pull it inside edge_logs_no_client_address and pass vitest's 5 s (P1.28b).
  */
 export function pullProbeImage(): void {
-  if (docker(["image", "inspect", nodeImage()]).code === 0) return;
-  const pulled = docker(["pull", "-q", nodeImage()]);
+  if (docker(["image", "inspect", nodeImage()], { timeoutMs: CALL_MS }).code === 0) return;
+  const pulled = docker(["pull", "-q", nodeImage()], { timeoutMs: PULL_MS });
   if (pulled.code !== 0) throw new Error(`probe image pull failed: ${pulled.err.slice(-2000)}`);
 }
 
-/** Runs docker without blocking the event loop, which answers for the stub upstream. */
-function dockerAsync(args: readonly string[]): Promise<{ code: number; out: string; err: string }> {
+/** Runs docker without blocking the event loop, which answers for the stub upstream; killed at `timeoutMs` (P1.27k). */
+function dockerAsync(args: readonly string[], timeoutMs: number): Promise<{ code: number; out: string; err: string }> {
   return new Promise((resolve) => {
-    const child = spawn("docker", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("docker", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
+    });
     let out = "";
     let err = "";
     child.stdout.on("data", (chunk) => {
@@ -84,25 +97,28 @@ function dockerAsync(args: readonly string[]): Promise<{ code: number; out: stri
     child.stderr.on("data", (chunk) => {
       err += chunk;
     });
-    child.on("close", (code) => resolve({ code: code ?? -1, out, err }));
+    child.on("close", (code, signal) =>
+      resolve({
+        code: code ?? -1,
+        out,
+        err: signal === "SIGKILL" ? `docker ${args[0]} killed after ${timeoutMs} ms` : err,
+      }),
+    );
   });
-}
-
-export function docker(args: readonly string[], input?: string): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, { encoding: "utf8", input, maxBuffer: 64 * 1024 * 1024 });
-  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? "" };
 }
 
 /** Builds deployment/edge/Dockerfile and returns the image id. */
 export function buildEdgeImage(): string {
-  const built = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE]);
+  const built = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE], { timeoutMs: BUILD_MS });
   if (built.code !== 0) throw new Error(`edge image build failed: ${built.err.slice(-2000)}`);
   return built.out.trim();
 }
 
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */
-function bridgeGateway(): string {
-  const inspected = docker(["network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}"]);
+function bridgeGateway(callMs: number): string {
+  const inspected = docker(["network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}"], {
+    timeoutMs: callMs,
+  });
   if (inspected.code !== 0 || inspected.out.trim() === "") throw new Error("no docker bridge gateway");
   return inspected.out.trim();
 }
@@ -127,7 +143,7 @@ function startStub(host: string, seen: Seen[]): Promise<{ server: Server; port: 
 }
 
 function hostPort(name: string, port: number): number {
-  const mapped = docker(["port", name, `${port}/tcp`]);
+  const mapped = docker(["port", name, `${port}/tcp`], { timeoutMs: CALL_MS });
   const found = /127\.0\.0\.1:(\d+)/.exec(mapped.out)?.[1];
   if (found === undefined) throw new Error(`no published port for ${port}: ${mapped.out}${mapped.err}`);
   return Number(found);
@@ -136,64 +152,72 @@ function hostPort(name: string, port: number): number {
 async function waitHealthy(name: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const status = docker(["inspect", "--format", "{{.State.Health.Status}}", name]).out.trim();
+    const status = docker(["inspect", "--format", "{{.State.Health.Status}}", name], { timeoutMs: CALL_MS }).out.trim();
     if (status === "healthy") return;
     if (status === "") break;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error(`edge not healthy: ${docker(["logs", name]).err.slice(-2000)}`);
+  throw new Error(`edge not healthy: ${docker(["logs", name], { timeoutMs: CALL_MS }).err.slice(-2000)}`);
 }
 
-/** Starts the edge with the shipped config and a fresh stub upstream. */
-export async function startEdge(image: string): Promise<Edge> {
+/**
+ * Starts the edge with the shipped config and a fresh stub upstream. `callMs` kills the docker calls the start and the
+ * removal make; only a test of a killed start lowers it.
+ */
+export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> {
   const seen: Seen[] = [];
-  const gateway = bridgeGateway();
+  const gateway = bridgeGateway(callMs);
   const stub = await startStub(gateway, seen);
   const name = `unset-edge-${process.pid}-${Date.now()}`;
   const ro = (from: string, to: string) => ["-v", `${from}:${to}:ro`];
-  const run = docker([
-    "run",
-    "-d",
-    "--name",
-    name,
-    "--label",
-    `${OWNER_LABEL}=${process.pid}`,
-    "--read-only",
-    "--tmpfs",
-    "/tmp",
-    "--tmpfs",
-    "/data:uid=65532,gid=65532",
-    "--tmpfs",
-    "/config:uid=65532,gid=65532",
-    "--add-host",
-    `${PDS_HOST}:127.0.0.1`,
-    "-p",
-    "127.0.0.1::443",
-    "-e",
-    "ACME_EMAIL=edge@unset.test",
-    "-e",
-    `PDS_HOST=${PDS_HOST}`,
-    "-e",
-    `PDS_UPSTREAM=${gateway}:${stub.port}`,
-    ...ro(join(import.meta.dirname, "fixtures", "tls.caddy"), "/etc/caddy/snippets/tls.caddy"),
-    ...ro(join(EDGE, "sites", "pds.caddy"), "/etc/caddy/sites/enabled/pds.caddy"),
-    image,
-  ]);
-  if (run.code !== 0) {
-    stub.server.close();
-    throw new Error(`edge did not start: ${run.err}`);
-  }
+  // Defined before the run: a killed `run -d` may still have created the container, and the stub must close (N6).
   const stop = async () => {
-    docker(["rm", "-f", name]);
-    await new Promise((resolve) => stub.server.close(resolve));
+    try {
+      docker(["rm", "-f", name], { timeoutMs: callMs });
+    } finally {
+      await new Promise((resolve) => stub.server.close(resolve));
+    }
   };
   try {
+    const run = docker(
+      [
+        "run",
+        "-d",
+        "--name",
+        name,
+        "--label",
+        `${OWNER_LABEL}=${process.pid}`,
+        "--read-only",
+        "--tmpfs",
+        "/tmp",
+        "--tmpfs",
+        "/data:uid=65532,gid=65532",
+        "--tmpfs",
+        "/config:uid=65532,gid=65532",
+        "--add-host",
+        `${PDS_HOST}:127.0.0.1`,
+        "-p",
+        "127.0.0.1::443",
+        "-e",
+        "ACME_EMAIL=edge@unset.test",
+        "-e",
+        `PDS_HOST=${PDS_HOST}`,
+        "-e",
+        `PDS_UPSTREAM=${gateway}:${stub.port}`,
+        ...ro(join(import.meta.dirname, "fixtures", "tls.caddy"), "/etc/caddy/snippets/tls.caddy"),
+        ...ro(join(EDGE, "sites", "pds.caddy"), "/etc/caddy/sites/enabled/pds.caddy"),
+        image,
+      ],
+      { timeoutMs: callMs },
+    );
+    if (run.code !== 0) throw new Error(`edge did not start: ${run.err}`);
     await waitHealthy(name, 30_000);
     const port = hostPort(name, 443);
     const ca = await readRootCa(name);
     return edgeHandle(name, image, port, ca, seen, stop);
   } catch (error) {
-    await stop();
+    // A killed removal must not hide why the start failed.
+    await stop().catch(() => undefined);
     throw error;
   }
 }
@@ -202,7 +226,7 @@ export async function startEdge(image: string): Promise<Edge> {
 async function readRootCa(name: string): Promise<string> {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
-    const root = docker(["exec", name, "cat", "/data/caddy/pki/authorities/local/root.crt"]);
+    const root = docker(["exec", name, "cat", "/data/caddy/pki/authorities/local/root.crt"], { timeoutMs: CALL_MS });
     if (root.code === 0 && root.out.includes("BEGIN CERTIFICATE")) return root.out;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -232,25 +256,28 @@ function edgeHandle(
       }),
     probe: async (source, steps) => {
       const probe = join(import.meta.dirname, "fixtures", "probe.ts");
-      const ran = await dockerAsync([
-        "run",
-        "--rm",
-        "--network",
-        `container:${name}`,
-        "--read-only",
-        "--user",
-        "65532:65532",
-        "-e",
-        `CA=${ca}`,
-        ...["-v", `${probe}:/probe/probe.ts:ro`],
-        nodeImage(),
-        ...["node", "/probe/probe.ts", source, JSON.stringify(steps)],
-      ]);
+      const ran = await dockerAsync(
+        [
+          "run",
+          "--rm",
+          "--network",
+          `container:${name}`,
+          "--read-only",
+          "--user",
+          "65532:65532",
+          "-e",
+          `CA=${ca}`,
+          ...["-v", `${probe}:/probe/probe.ts:ro`],
+          nodeImage(),
+          ...["node", "/probe/probe.ts", source, JSON.stringify(steps)],
+        ],
+        PROBE_MS,
+      );
       if (ran.code !== 0) throw new Error(`probe failed: ${ran.err.slice(-2000)}`);
       return JSON.parse(ran.out) as ProbeResult[];
     },
     exec: (args) => {
-      const ran = docker(["exec", name, ...args]);
+      const ran = docker(["exec", name, ...args], { timeoutMs: CALL_MS });
       return { code: ran.code, out: ran.out + ran.err };
     },
     garbage: (bytes) =>
@@ -268,7 +295,7 @@ function edgeHandle(
         socket.resume();
       }),
     logs: () => {
-      const logs = docker(["logs", name]);
+      const logs = docker(["logs", name], { timeoutMs: CALL_MS });
       return { stdout: logs.out, stderr: logs.err };
     },
     stop,

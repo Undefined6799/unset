@@ -11,7 +11,7 @@
 // read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
 // configured value is withheld whole.
 import { execFile } from "node:child_process";
-import { readFileSync, type Stats, statSync } from "node:fs";
+import { lstatSync, readFileSync, type Stats, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -23,6 +23,7 @@ import {
   type Inputs,
   type ManifestKind,
   MISSING,
+  type MountedSecret,
   type Outcome,
   type Run,
   type Verifier,
@@ -48,6 +49,7 @@ export type Deps = {
   run: Run;
   readText?: (path: string) => string | null;
   stat?: (path: string) => Stats | null;
+  lstat?: (path: string) => Stats | null;
   uid?: number;
   checks?: readonly Check[];
   timeoutMs?: number;
@@ -68,6 +70,14 @@ const readTextOrNull = (path: string): string | null => {
 const statOrNull = (path: string): Stats | null => {
   try {
     return statSync(path);
+  } catch {
+    return null;
+  }
+};
+
+const lstatOrNull = (path: string): Stats | null => {
+  try {
+    return lstatSync(path);
   } catch {
     return null;
   }
@@ -104,7 +114,9 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   const projectDir = dirname(files[0] as string);
   const services: Service[] = [];
   const networks: Network[] = [];
-  const secretPaths: string[] = [];
+  const secretFiles: string[] = [];
+  const secretFileByName = new Map<string, string>();
+  const mounted = new Map<string, MountedSecret["mountedBy"]>();
   let name: string | null = null;
   for (const file of files) {
     const text = readText(file);
@@ -123,17 +135,27 @@ export function loadCompose(files: string[], readText: (path: string) => string 
       const build = service.build === null ? null : resolveBuild(service.build, projectDir);
       services.push({ ...service, mounts, envFiles, build });
     }
+    // A service names secrets declared in its own file (compose-parse Scope), so each name resolves within the file.
+    for (const [secret, path] of compose.secretFileByName) {
+      const users = compose.services
+        .filter((service) => service.secrets.includes(secret))
+        .map((service) => ({ service: service.name, user: service.hardening.user }));
+      const absolute = resolve(projectDir, path);
+      secretFileByName.set(secret, absolute);
+      mounted.set(absolute, [...(mounted.get(absolute) ?? []), ...users]);
+    }
     for (const network of compose.networks) {
       if (networks.some((n) => n.name === network.name))
         throw new CannotRun(`network ${network.name} is defined twice`);
       networks.push(network);
     }
-    secretPaths.push(...compose.secretFiles.map((path) => resolve(projectDir, path)));
+    secretFiles.push(...compose.secretFiles.map((path) => resolve(projectDir, path)));
   }
-  const compose: Compose = { name, services, networks, secretFiles: secretPaths };
+  const compose: Compose = { name, services, networks, secretFiles, secretFileByName };
   const [undeclared] = undeclaredNetworks(compose);
   if (undeclared !== undefined) throw new CannotRun(undeclared);
-  return { compose, secretPaths };
+  const mountedSecrets = [...mounted].map(([path, mountedBy]) => ({ path, mountedBy }));
+  return { compose, mountedSecrets };
 }
 
 /** A build's context resolves from the project directory, and its Dockerfile from the context (compose-spec build.md
@@ -156,7 +178,8 @@ type Loaded = { inputs: Inputs; configured: ConfiguredValues };
 function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
   const { env, files } = parseCli(argv);
-  const { compose, secretPaths } = loadCompose(files, readText);
+  const { compose, mountedSecrets } = loadCompose(files, readText);
+  const secretPaths: string[] = [];
   // Compose interpolates from the `.env` beside the first file; a name it lacks becomes empty, as in Compose.
   const dotEnvPath = join(dirname(files[0] as string), ".env");
   const dotEnv = readText(dotEnvPath) === null ? [] : readEnvFile(dotEnvPath, readText);
@@ -179,6 +202,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
     compose,
     serviceEnv,
     secretPaths: [...new Set(secretPaths)],
+    mountedSecrets,
     lockPath: join(deps.root, "deployment/images.lock.json"),
     cosignKeyPath: join(deps.root, "deployment/cosign.pub"),
     verify: verifier(deps),
@@ -189,6 +213,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
     edgeDir: join(deps.root, "deployment/edge"),
     readText,
     stat: deps.stat ?? statOrNull,
+    lstat: deps.lstat ?? lstatOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };
   return { inputs, configured: new ConfiguredValues(values) };
