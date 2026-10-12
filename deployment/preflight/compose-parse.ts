@@ -38,7 +38,16 @@ export type Service = {
   /** The service's `volumes`; a bind source is as written, relative to the project directory (the first file's). */
   mounts: Mount[];
   hardening: Hardening;
+  /** `build` as written: the context relative to the project directory, the Dockerfile relative to the context. */
+  build: Build | null;
+  tmpfs: Tmpfs[];
+  dependsOn: Dependency[];
+  /** Declared secret names; Compose mounts each at /run/secrets/<name>. */
+  secrets: string[];
 };
+export type Build = { context: string; dockerfile: string };
+export type Tmpfs = { target: string; options: string | null };
+export type Dependency = { service: string; condition: string };
 /**
  * The hardening and limit keys (P1.30x), each null or empty when the service leaves it out. Values are as written: a
  * dev contract that they be present and sized lives in that environment's compose tests, not here.
@@ -83,6 +92,10 @@ const NO_INTERPOLATION = [
   "devices",
   "read_only",
   "env_file",
+  "build",
+  "tmpfs",
+  "depends_on",
+  "secrets",
 ];
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -130,15 +143,21 @@ export function parseCompose(text: string, file: string): Compose {
     if (!TOP_LEVEL_KEYS.has(key)) r.fail(pair.key, `top-level key ${key}`);
   }
   const volumes = namedVolumes(r, root.get("volumes", true));
+  const secrets = secretFiles(r, root.get("secrets", true));
   const name = root.get("name", true);
   if (name !== undefined) r.noDollar(name, "name");
   const servicesNode = root.get("services", true);
   if (!isMap(servicesNode)) return r.fail(servicesNode, "services is not a mapping");
+  const scope: Scope = {
+    volumes,
+    secrets: new Set(secrets.keys()),
+    services: new Set(servicesNode.items.map((pair) => r.text(pair.key, "service name"))),
+  };
   return {
     name: name === undefined ? null : r.text(name, "name"),
-    services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value, volumes)),
+    services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value, scope)),
     networks: networks(r, root.get("networks", true)),
-    secretFiles: secretFiles(r, root.get("secrets", true)),
+    secretFiles: [...secrets.values()],
   };
 }
 
@@ -216,7 +235,8 @@ export function refuseAliasesByOption(doc: Document, file: string): void {
  * could change what runs while every check passes (`configs`, `secrets` or `tmpfs` over /etc/caddy, `entrypoint`,
  * `command`, `extends`, or `volumes_from` bringing another service's mounts), so any other key is refused by name.
  * Later keys come one at a time, each with a ruling, in the step that first needs it: P1.30x added the hardening and
- * limit keys (architecture record 2026-10-12-p129-compose-service-keys).
+ * limit keys, and P1.30y build, tmpfs, depends_on and short-form secrets (architecture record
+ * 2026-10-12-p129-compose-service-keys).
  */
 const SERVICE_KEYS = new Set([
   "image",
@@ -235,9 +255,16 @@ const SERVICE_KEYS = new Set([
   "cpus",
   "pids_limit",
   "restart",
+  "build",
+  "tmpfs",
+  "depends_on",
+  "secrets",
 ]);
 
-function service(r: Reader, name: string, spec: unknown, volumes: ReadonlySet<string>): Service {
+/** What a service may name in its own file: named volumes, top-level secrets and other services. */
+type Scope = { volumes: ReadonlySet<string>; secrets: ReadonlySet<string>; services: ReadonlySet<string> };
+
+function service(r: Reader, name: string, spec: unknown, scope: Scope): Service {
   if (!isMap(spec)) return r.fail(spec, `service ${name} is not a mapping`);
   for (const pair of spec.items) {
     const key = r.text(pair.key, "service key");
@@ -253,9 +280,114 @@ function service(r: Reader, name: string, spec: unknown, volumes: ReadonlySet<st
     ports: r.list(spec.get("ports", true), "ports").map((n) => port(r, n)),
     networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
     networkMode: spec.has("network_mode") ? r.text(spec.get("network_mode", true), "network_mode") : null,
-    mounts: r.list(spec.get("volumes", true), "volumes").map((n) => declared(r, mount(r, n), n, volumes)),
+    mounts: r.list(spec.get("volumes", true), "volumes").map((n) => declared(r, mount(r, n), n, scope.volumes)),
     hardening: hardening(r, spec),
+    build: build(r, spec.get("build", true)),
+    tmpfs: tmpfs(r, spec.get("tmpfs", true)),
+    dependsOn: dependsOn(r, spec.get("depends_on", true), scope.services),
+    secrets: serviceSecrets(r, spec.get("secrets", true), scope.secrets),
   };
+}
+
+/**
+ * `build` in its long form with exactly `context` and `dockerfile`, kept as written; C26 resolves and judges them.
+ * `target` would pick a stage the "last stage ships" tests never check, and every other build key changes what is
+ * built, so each is refused by name.
+ */
+function build(r: Reader, node: unknown): Build | null {
+  if (node === undefined) return null;
+  if (!isMap(node)) return r.fail(node, "build is not {context, dockerfile}");
+  for (const pair of node.items) {
+    const key = r.text(pair.key, "build key");
+    if (key !== "context" && key !== "dockerfile") r.fail(pair.key, `build key ${key}`);
+  }
+  const context = node.get("context", true);
+  const dockerfile = node.get("dockerfile", true);
+  if (context === undefined || dockerfile === undefined) return r.fail(node, "build is not {context, dockerfile}");
+  const contextText = r.text(context, "build context");
+  if (!LOCAL_CONTEXT.test(contextText)) r.fail(context, "build context is not a local path");
+  const dockerfileText = r.text(dockerfile, "build dockerfile");
+  // A leading ~ may name a home directory rather than a path under the context, so it is refused, not guessed.
+  if (dockerfileText.startsWith("~")) r.fail(dockerfile, "build dockerfile starts with ~");
+  return { context: contextText, dockerfile: dockerfileText };
+}
+
+/**
+ * A context written as a path (`.`, `..`, or starting `./`, `../` or `/`) with no `:` or `#`: compose-go passes a URL
+ * or git context (`https://…`, `git@…:…`, `github.com/…`, a `#ref` fragment) through unresolved, so it is refused, not
+ * resolved.
+ */
+const LOCAL_CONTEXT = /^(?:\.\.?|\.\.?\/[^:#]*|\/[^:#]*)$/;
+
+/** The only tmpfs targets, in either form; a later one needs a ruling. C27 keeps the socket directory to postgres. */
+export const TMPFS_TARGETS = ["/tmp", "/var/run/postgresql"];
+const TMPFS_WHY = "target is not /tmp or /var/run/postgresql";
+const TMPFS_OPTION = /^(?:(?:uid|gid)=[0-9]+|mode=[0-7]{3,4}|size=[1-9][0-9]*[kmg]?|noexec|nosuid|nodev)$/;
+
+/** `tmpfs` as a list of TARGET or TARGET:OPTIONS (05-services.md "tmpfs"), with only the ruling's options. */
+function tmpfs(r: Reader, node: unknown): Tmpfs[] {
+  if (node === undefined) return [];
+  if (!isSeq(node)) return r.fail(node, "tmpfs is not a list");
+  return node.items.map((item) => {
+    const [target = "", ...rest] = r.text(item, "tmpfs").split(":");
+    const options = rest.length === 0 ? null : rest.join(":");
+    if (!TMPFS_TARGETS.includes(target)) r.fail(item, `tmpfs ${TMPFS_WHY}`);
+    if (options !== null && !options.split(",").every((option) => TMPFS_OPTION.test(option))) {
+      r.fail(item, "tmpfs option is refused");
+    }
+    return { target, options };
+  });
+}
+
+const CONDITIONS = ["service_started", "service_healthy", "service_completed_successfully"];
+const CONDITIONS_TEXT = "service_started, service_healthy or service_completed_successfully";
+
+/**
+ * `depends_on` as a list of names, which Compose reads as `service_started`, or a map of name to `{condition}`.
+ * `required: false` would let a service start without what it waits on, and `restart` couples restarts, so both are
+ * refused; every name is a service in the same file.
+ */
+function dependsOn(r: Reader, node: unknown, services: ReadonlySet<string>): Dependency[] {
+  if (node === undefined) return [];
+  let entries: [unknown, string, string][];
+  if (isSeq(node)) entries = node.items.map((n) => [n, r.text(n, "depends_on"), "service_started"]);
+  else if (isMap(node)) entries = node.items.map((p) => [p.key, r.text(p.key, "depends_on"), condition(r, p.value)]);
+  else return r.fail(node, "depends_on is not a list or mapping");
+  return entries.map(([n, service, condition]) => {
+    if (!services.has(service)) r.fail(n, "depends_on names a service not in this file");
+    return { service, condition };
+  });
+}
+
+function condition(r: Reader, node: unknown): string {
+  if (!isMap(node)) return r.fail(node, "depends_on entry is not {condition}");
+  for (const pair of node.items) {
+    const key = r.text(pair.key, "depends_on key");
+    if (key !== "condition") r.fail(pair.key, `depends_on key ${key}`);
+  }
+  const value = node.get("condition", true);
+  if (value === undefined) return r.fail(node, "depends_on entry is not {condition}");
+  const text = r.text(value, "condition");
+  return CONDITIONS.includes(text) ? text : r.fail(value, `depends_on condition is not ${CONDITIONS_TEXT}`);
+}
+
+/** A secret name whose fixed target, /run/secrets/<name>, cannot leave that directory. */
+const SECRET_NAME = /^[a-z0-9_]+$/;
+
+/**
+ * Service `secrets` in the short form only: the long form's `target` could mount a secret over /etc/caddy or anything
+ * else (ruling B1). Each name is declared in the same file's top-level `secrets`.
+ */
+function serviceSecrets(r: Reader, node: unknown, declared: ReadonlySet<string>): string[] {
+  if (node === undefined) return [];
+  if (!isSeq(node)) return r.fail(node, "secrets is not a list");
+  return node.items.map((item) => {
+    if (!isScalar(item)) return r.fail(item, "secrets long form is refused");
+    const name = r.text(item, "secret");
+    if (!SECRET_NAME.test(name)) r.fail(item, "secret name is refused");
+    if (!declared.has(name)) r.fail(item, "secret is not declared");
+    return name;
+  });
 }
 
 /** A numeric UID or UID:GID, neither 0: a name resolves inside the image, where the preflight cannot see it. */
@@ -304,9 +436,9 @@ const isString = (node: unknown): boolean => isScalar(node) && typeof node.value
 function cpus(r: Reader, node: unknown): number | null {
   if (node === undefined) return null;
   const text = isScalar(node) && typeof node.value === "number" ? (node as Scalar).source : r.text(node, "cpus");
-  return typeof text === "string" && CPUS.test(text) && Number(text) > 0
-    ? Number(text)
-    : r.fail(node, "cpus is not a positive number");
+  // A decimal of about 310 digits matches CPUS yet reads as Infinity, so the value must be finite as well.
+  const value = typeof text === "string" && CPUS.test(text) ? Number(text) : Number.NaN;
+  return Number.isFinite(value) && value > 0 ? value : r.fail(node, "cpus is not a positive number");
 }
 
 /** A positive integer up to PIDS_MAX; 0 and -1 would mean no limit at all. */
@@ -381,6 +513,7 @@ function longMount(r: Reader, node: YAMLMap): Mount {
   if (!MOUNT_TYPES.has(type)) return r.fail(node, `volume type ${type} is refused`);
   const target = field("target");
   if (target === null || !target.startsWith("/")) return r.fail(node, "volume target is not absolute");
+  if (type === "tmpfs" && !TMPFS_TARGETS.includes(target)) r.fail(node, `volume tmpfs ${TMPFS_WHY}`);
   const source = field("source");
   if (type === "bind" && source === null) r.fail(node, "bind volume has no source");
   const readOnly = node.get("read_only", true);
@@ -511,13 +644,27 @@ function port(r: Reader, node: unknown): Port {
   return { hostIp: ip?.replace(/^\[|\]$/g, "") ?? null, published: published ?? null, target: target as string };
 }
 
-function secretFiles(r: Reader, node: unknown): string[] {
-  if (node === undefined) return [];
+/**
+ * Top-level `secrets:`, each exactly `{file: <path>}` (Codex ruling 4, batch 33): a secret from `environment`,
+ * `content` or an external store holds a value no check reads, so every other key is refused by name and every other
+ * shape as a whole.
+ */
+function secretFiles(r: Reader, node: unknown): Map<string, string> {
+  if (node === undefined) return new Map();
   if (!isMap(node)) return r.fail(node, "secrets is not a mapping");
-  return node.items.flatMap((pair) => {
-    const file = isMap(pair.value) ? pair.value.get("file", true) : undefined;
-    return file === undefined ? [] : [r.text(file, "secret file")];
-  });
+  return new Map(
+    node.items.map((pair): [string, string] => {
+      const name = r.text(pair.key, "secret name");
+      const notFile = `secret ${name} is not exactly {file}`;
+      if (!isMap(pair.value)) return r.fail(pair.value ?? pair.key, notFile);
+      for (const key of pair.value.items) {
+        const field = r.text(key.key, "secret key");
+        if (field !== "file") r.fail(key.key, `secret ${name}: ${field} is refused`);
+      }
+      const file = pair.value.get("file", true);
+      return isString(file) ? [name, r.text(file, "secret file")] : r.fail(file ?? pair.value, notFile);
+    }),
+  );
 }
 
 /**

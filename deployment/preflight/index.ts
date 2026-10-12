@@ -31,6 +31,7 @@ import {
 export type { Run };
 
 import {
+  type Build,
   type Compose,
   type EnvValue,
   type Network,
@@ -119,7 +120,8 @@ export function loadCompose(files: string[], readText: (path: string) => string 
         m.type === "bind" && m.source !== null ? { ...m, source: resolve(projectDir, m.source) } : m,
       );
       const envFiles = service.envFiles.map((path) => resolve(projectDir, path));
-      services.push({ ...service, mounts, envFiles });
+      const build = service.build === null ? null : resolveBuild(service.build, projectDir);
+      services.push({ ...service, mounts, envFiles, build });
     }
     for (const network of compose.networks) {
       if (networks.some((n) => n.name === network.name))
@@ -132,6 +134,13 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   const [undeclared] = undeclaredNetworks(compose);
   if (undeclared !== undefined) throw new CannotRun(undeclared);
   return { compose, secretPaths };
+}
+
+/** A build's context resolves from the project directory, and its Dockerfile from the context (compose-spec build.md
+ * "context" and "dockerfile"). */
+function resolveBuild(build: Build, projectDir: string): Build {
+  const context = resolve(projectDir, build.context);
+  return { context, dockerfile: resolve(context, build.dockerfile) };
 }
 
 function readEnvFile(path: string, readText: (path: string) => string | null): [string, string][] {
@@ -166,6 +175,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   }
   const inputs: Inputs = {
     env,
+    root: resolve(deps.root),
     compose,
     serviceEnv,
     secretPaths: [...new Set(secretPaths)],

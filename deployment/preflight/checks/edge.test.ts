@@ -55,7 +55,11 @@ describe("C18 inputs (P1.30u)", () => {
     const { edgeDir, sitesDir } = repository();
     const over = compose([sitesFrom(sitesDir), `${edgeDir}/Caddyfile:/etc/caddy/Caddyfile:ro`]);
     expect(edgeSitesDir(over, edgeDir)).toEqual({ pass: false, reason: "the edge mounts over /etc/caddy/Caddyfile" });
-    const snippets = compose([sitesFrom(sitesDir), "type: tmpfs\n        target: /etc/caddy/snippets"]);
+    // A tmpfs there is refused by the parser first (P1.30y's tmpfs targets); C18 still answers for a volume.
+    expect(() => compose([sitesFrom(sitesDir), "type: tmpfs\n        target: /etc/caddy/snippets"])).toThrow(
+      /volume tmpfs target is not \/tmp or \/var\/run\/postgresql/,
+    );
+    const snippets = compose([sitesFrom(sitesDir), "config:/etc/caddy/snippets"]);
     expect(edgeSitesDir(snippets, edgeDir)).toEqual({
       pass: false,
       reason: "the edge mounts over /etc/caddy/snippets",

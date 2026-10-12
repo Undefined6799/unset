@@ -19,6 +19,8 @@ export type Run = (
 
 export type Inputs = {
   env: Env;
+  /** The repository root: the only build context (C26), and where the edge and postgres Dockerfiles live. */
+  root: string;
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */
   serviceEnv: ReadonlyMap<string, SecretMap>;
@@ -56,4 +58,18 @@ export const missing = (path: string): Outcome => fail(`${MISSING}${path}`);
 
 export function serviceNamed(inputs: Inputs, name: string): Service | undefined {
   return inputs.compose.services.find((service) => service.name === name);
+}
+
+/**
+ * Whether a service runs one image, judged by every identity it gives (Codex ruling 3, batch 33): its image against
+ * the lock's `ref`, and its build's resolved Dockerfile against `dockerfile`. A service whose two disagree is
+ * "mismatch", so neither one alone can make it pass.
+ */
+export function runsImage(service: Service, ref: unknown, dockerfile: string): "yes" | "no" | "mismatch" {
+  const views = [
+    service.image === null ? null : service.image === ref,
+    service.build === null ? null : service.build.dockerfile === dockerfile,
+  ];
+  if (views.includes(true) && views.includes(false)) return "mismatch";
+  return views.includes(true) ? "yes" : "no";
 }
