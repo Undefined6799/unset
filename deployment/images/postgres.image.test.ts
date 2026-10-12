@@ -18,13 +18,14 @@ const serving = (logs: string): boolean =>
 // A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
-const BUILD_MS = 600_000;
+const BUILD_MS = 300_000;
 const ROOT_START_MS = 60_000;
 // Each docker call is killed just under the budget of the test or hook that makes it, so a hung daemon fails that
-// test with a named message instead of holding the job (P1.27k).
+// test with a named message before scripts/test/run.ts kills the whole run at 600 s (P1.27k, P1.27g).
 const BUILD_CALL_MS = killBefore(BUILD_MS);
 const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const ROOT_START_CALL_MS = killBefore(ROOT_START_MS);
+const REMOVE_CALL_MS = 35_000;
 
 describe("postgres image", () => {
   let image = "";
@@ -38,9 +39,22 @@ describe("postgres image", () => {
     image = built.out.trim();
   }, BUILD_MS);
 
+  // Every removal is tried, even after one is killed, and each is killed at REMOVE_CALL_MS so the two containers and
+  // the image fit in the hook's budget; the kills are reported together (P1.27g).
   afterAll(() => {
-    for (const name of containers) docker(["rm", "-f", "-v", name], { timeoutMs: CONTAINER_CALL_MS });
-    if (image !== "") docker(["rmi", "-f", image], { timeoutMs: CONTAINER_CALL_MS });
+    const removals = [
+      ...containers.map((name) => ["rm", "-f", "-v", name]),
+      ...(image === "" ? [] : [["rmi", "-f", image]]),
+    ];
+    const failures: unknown[] = [];
+    for (const args of removals) {
+      try {
+        docker(args, { timeoutMs: REMOVE_CALL_MS });
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} removal(s) killed`);
   }, CONTAINER_MS);
 
   /** Starts the image detached with no network and a throwaway superuser password; returns the container name. */

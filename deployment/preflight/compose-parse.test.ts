@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
+import { docker } from "../../tests/support/docker.ts";
 import { fail, pass } from "./checks/types.ts";
 import {
   interpolatedNames,
@@ -163,6 +164,9 @@ describe("compose subset", () => {
     ).toMatchObject({ user: "999", cpus: 1.5, memLimit: "1g" });
     // Codex 4249566407: `2.0` is a positive number as written, not an ambiguous one (phase-4.md plans `cpus: 2.0`).
     expect(parseCompose(`${base}    cpus: 2.0\n`, "c.yaml").services[0]?.hardening.cpus).toBe(2);
+    // P1.27n (verifier N3 on #675): the 0.01 floor is inclusive, and a fraction under 0.5 is a limit too.
+    expect(parseCompose(`${base}    cpus: 0.01\n`, "c.yaml").services[0]?.hardening.cpus).toBe(0.01);
+    expect(parseCompose(`${base}    cpus: 0.25\n`, "c.yaml").services[0]?.hardening.cpus).toBe(0.25);
     expect(parseCompose(base, "c.yaml").services[0]?.hardening).toEqual({
       readOnly: null,
       capDrop: [],
@@ -547,19 +551,18 @@ secrets:
     file: ./pds-admin.secret
 `;
 
+// `docker compose config` reads files and never the daemon, so a call takes well under a second; it is killed at
+// 10 s, so a hung CLI fails the test naming the call instead of blocking the event loop until scripts/test/run.ts
+// kills the whole run at 600 s (P1.27k, P1.27g). The tests that call it give 60 s, room for several compose files.
+const COMPOSE_CALL_MS = 10_000;
+const COMPOSE_TEST_MS = 60_000;
+
 /** Whether `docker compose` runs here; CI must have it (the architecture record's anti-drift test runs there). */
-const hasCompose = (() => {
-  try {
-    execFileSync("docker", ["compose", "version"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-})();
+const hasCompose = docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
 
 /** `docker compose version --short`, recorded by each agreement test (ruling F4: CI's Compose is accepted, not pinned). */
 const composeVersion = (): string =>
-  execFileSync("docker", ["compose", "version", "--short"], { encoding: "utf8" }).trim();
+  docker(["compose", "version", "--short"], { timeoutMs: COMPOSE_CALL_MS }).out.trim();
 
 /** The only variables the wrapper passes to Compose (ruling F3.3), from this process where set. */
 function allowlisted(): Record<string, string> {
@@ -610,10 +613,16 @@ type Theirs = {
 
 /** Compose's reading of `file` (never the preflight's: only this test runs Compose), with nothing interpolated. */
 function composeConfig(file: string): Theirs {
-  const json = execFileSync("docker", ["compose", "-f", file, "config", "--format", "json", "--no-interpolate"], {
-    encoding: "utf8",
+  return composeJson(["-f", file]);
+}
+
+/** `docker compose <files> config` as JSON, nothing interpolated; a failure throws Compose's own message. */
+function composeJson(files: readonly string[]): Theirs {
+  const ran = docker(["compose", ...files, "config", "--format", "json", "--no-interpolate"], {
+    timeoutMs: COMPOSE_CALL_MS,
   });
-  return JSON.parse(json) as Theirs;
+  if (ran.code !== 0) throw new Error(`docker compose config failed: ${ran.err.slice(-2000)}`);
+  return JSON.parse(ran.out) as Theirs;
 }
 
 /** The parser's whole view of `file`, in Compose's terms: paths resolved beside the file, values as written. */
@@ -754,96 +763,109 @@ describe("compose agreement", () => {
   // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
   // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
   // with its internal flag) against Compose's, for the fixture and every compose*.yaml in the repository.
-  test.runIf(hasCompose || process.env.CI)("preflight_matches_compose_config", async ({ annotate }) => {
-    await annotate(`docker compose version ${composeVersion()}`);
-    const fixture = join(dir, "compose.yaml");
-    writeFileSync(fixture, STACK);
-    writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
-    writeFileSync(join(dir, "pds-admin.secret"), "");
-    const real = repositoryFiles();
-    if (real.length === 0)
-      await annotate(
-        "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
-      );
-    for (const file of [fixture, ...real]) {
-      expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
-    }
-  });
+  test.runIf(hasCompose || process.env.CI)(
+    "preflight_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      await annotate(`docker compose version ${composeVersion()}`);
+      const fixture = join(dir, "compose.yaml");
+      writeFileSync(fixture, STACK);
+      writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
+      writeFileSync(join(dir, "pds-admin.secret"), "");
+      const real = repositoryFiles();
+      if (real.length === 0)
+        await annotate(
+          "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
+        );
+      for (const file of [fixture, ...real]) {
+        expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
+      }
+    },
+  );
 
   // P1.30a (ruling 2026-10-12-preflight-compose-inputs, F3.5): with and without the env file flag, the preflight interpolates
   // from the file Compose does, on a fixture whose .env and env file disagree; a shell value, which Compose would prefer,
   // makes the preflight refuse to run. Compose runs with only the wrapper's allowlist (F3.3) plus the one name tried.
-  test.runIf(hasCompose || process.env.CI)("env_file_matches_compose_config", async ({ annotate }) => {
-    await annotate(`docker compose version ${composeVersion()}`);
-    const inputs = join(dir, "inputs");
-    mkdirSync(inputs);
-    const file = join(inputs, "compose.yaml");
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
-    writeFileSync(file, "name: unset-prod\nservices:\n  pds:\n    image: x\n    environment:\n      HOST: ${HOST}\n");
-    writeFileSync(join(inputs, ".env"), "HOST=dot.example.test\n");
-    const flag = join(inputs, "flag.env");
-    writeFileSync(flag, "HOST=flag.example.test\n");
-    const compose = (args: string[], shell: Record<string, string> = {}) =>
-      execFileSync("docker", ["compose", "-f", file, ...args], {
-        encoding: "utf8",
-        env: { ...allowlisted(), ...shell },
-      });
-    const theirHost = (extra: string[], shell?: Record<string, string>) =>
-      (JSON.parse(compose([...extra, "config", "--format", "json"], shell)) as Theirs).services.pds?.environment?.HOST;
-    const ours = (extra: string[], environment: Record<string, string>, want: string | null | undefined) =>
-      preflight(["--env", "prod", "--compose", file, ...extra], {
-        root: dir,
-        run: async () => ({ code: 0, stdout: "", stderr: "" }),
-        environment,
-        checks: [
-          { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
+  test.runIf(hasCompose || process.env.CI)(
+    "env_file_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      await annotate(`docker compose version ${composeVersion()}`);
+      const inputs = join(dir, "inputs");
+      mkdirSync(inputs);
+      const file = join(inputs, "compose.yaml");
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+      writeFileSync(file, "name: unset-prod\nservices:\n  pds:\n    image: x\n    environment:\n      HOST: ${HOST}\n");
+      writeFileSync(join(inputs, ".env"), "HOST=dot.example.test\n");
+      const flag = join(inputs, "flag.env");
+      writeFileSync(flag, "HOST=flag.example.test\n");
+      const compose = (args: string[], shell: Record<string, string> = {}) =>
+        execFileSync("docker", ["compose", "-f", file, ...args], {
+          encoding: "utf8",
+          env: { ...allowlisted(), ...shell },
+          timeout: COMPOSE_CALL_MS,
+          killSignal: "SIGKILL",
+        });
+      const theirHost = (extra: string[], shell?: Record<string, string>) =>
+        (JSON.parse(compose([...extra, "config", "--format", "json"], shell)) as Theirs).services.pds?.environment
+          ?.HOST;
+      const ours = (extra: string[], environment: Record<string, string>, want: string | null | undefined) =>
+        preflight(["--env", "prod", "--compose", file, ...extra], {
+          root: dir,
+          run: async () => ({ code: 0, stdout: "", stderr: "" }),
+          environment,
+          checks: [
+            { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
+          ],
+        });
+      // Compose's --env-file is the preflight's --interpolation-env (ruling Amendment 3).
+      const flagPairs: [theirs: string[], ours: string[]][] = [
+        [[], []],
+        [
+          ["--env-file", flag],
+          ["--interpolation-env", flag],
         ],
+      ];
+      for (const [extra, ourExtra] of flagPairs) {
+        const theirs = theirHost(extra);
+        expect(theirs, extra.join(" ")).toBe(extra.length === 0 ? "dot.example.test" : "flag.example.test");
+        expect(await ours(ourExtra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+        expect(compose([...extra, "config", "--environment"]).split("\n"), extra.join(" ")).toContain(`HOST=${theirs}`);
+      }
+      // Uninterpolated, Compose shows the reference the parser read; the interpolated value above came from the file.
+      const raw = JSON.parse(compose(["config", "--format", "json", "--no-interpolate"])) as Theirs;
+      expect(raw.services.pds?.environment?.HOST).toBe(oursAsCompose(file).services.pds?.environment.HOST);
+      const shell = { HOST: "shell.example.test" };
+      expect(theirHost(["--env-file", flag], shell)).toBe("shell.example.test");
+      expect(await ours(["--interpolation-env", flag], shell, "shell.example.test")).toEqual({
+        code: 2,
+        lines: ["ERROR HOST is set in the environment"],
       });
-    // Compose's --env-file is the preflight's --interpolation-env (ruling Amendment 3).
-    const flagPairs: [theirs: string[], ours: string[]][] = [
-      [[], []],
-      [
-        ["--env-file", flag],
-        ["--interpolation-env", flag],
-      ],
-    ];
-    for (const [extra, ourExtra] of flagPairs) {
-      const theirs = theirHost(extra);
-      expect(theirs, extra.join(" ")).toBe(extra.length === 0 ? "dot.example.test" : "flag.example.test");
-      expect(await ours(ourExtra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
-      expect(compose([...extra, "config", "--environment"]).split("\n"), extra.join(" ")).toContain(`HOST=${theirs}`);
-    }
-    // Uninterpolated, Compose shows the reference the parser read; the interpolated value above came from the file.
-    const raw = JSON.parse(compose(["config", "--format", "json", "--no-interpolate"])) as Theirs;
-    expect(raw.services.pds?.environment?.HOST).toBe(oursAsCompose(file).services.pds?.environment.HOST);
-    const shell = { HOST: "shell.example.test" };
-    expect(theirHost(["--env-file", flag], shell)).toBe("shell.example.test");
-    expect(await ours(["--interpolation-env", flag], shell, "shell.example.test")).toEqual({
-      code: 2,
-      lines: ["ERROR HOST is set in the environment"],
-    });
-  });
+    },
+  );
 
-  test.runIf(hasCompose || process.env.CI)("project_directory_matches_compose_config", async ({ annotate }) => {
-    await annotate(`docker compose version ${composeVersion()}`);
-    const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
-    mkdirSync(join(dir, "a"));
-    mkdirSync(join(dir, "b"));
-    writeFileSync(first, FIRST);
-    writeFileSync(second, SECOND);
-    writeFileSync(join(dir, "a", "e.env"), "");
-    const json = execFileSync(
-      "docker",
-      ["compose", "-f", first, "-f", second, "config", "--format", "json", "--no-interpolate"],
-      { encoding: "utf8" },
-    );
-    const theirs = theirsAsOurs(JSON.parse(json) as Theirs);
-    const pds = theirs.services.pds;
-    expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
-      binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
-      envFiles: pds?.envFiles,
-      secretFiles: theirs.secretFiles,
-      build: pds?.build && { context: pds.build.context, dockerfile: resolve(pds.build.context, pds.build.dockerfile) },
-    });
-  });
+  test.runIf(hasCompose || process.env.CI)(
+    "project_directory_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      await annotate(`docker compose version ${composeVersion()}`);
+      const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
+      mkdirSync(join(dir, "a"));
+      mkdirSync(join(dir, "b"));
+      writeFileSync(first, FIRST);
+      writeFileSync(second, SECOND);
+      writeFileSync(join(dir, "a", "e.env"), "");
+      const theirs = theirsAsOurs(composeJson(["-f", first, "-f", second]));
+      const pds = theirs.services.pds;
+      expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
+        binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+        envFiles: pds?.envFiles,
+        secretFiles: theirs.secretFiles,
+        build: pds?.build && {
+          context: pds.build.context,
+          dockerfile: resolve(pds.build.context, pds.build.dockerfile),
+        },
+      });
+    },
+  );
 });
