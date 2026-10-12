@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../tests/support/docker.ts";
+import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const POSTGRES_DOCKERFILE = join(DEPLOYMENT, "images/postgres.Dockerfile");
@@ -35,28 +36,24 @@ describe("postgres image", () => {
   const containers: string[] = [];
 
   beforeAll(() => {
-    const built = docker(["build", "-q", "-f", POSTGRES_DOCKERFILE, join(DEPLOYMENT, "..")], {
-      timeoutMs: BUILD_CALL_MS,
-    });
-    expect(built.code, built.err.slice(-2000)).toBe(0);
-    image = built.out.trim();
+    image = buildTestImage(POSTGRES_DOCKERFILE, join(DEPLOYMENT, ".."), { timeoutMs: BUILD_CALL_MS });
   }, BUILD_MS);
 
-  // Every removal is tried, even after one is killed, and the kills are reported together (P1.27g).
+  // Every removal is tried, even after one fails, and the failures are reported together (P1.27g, P1.27x).
   afterAll(() => {
     const removals = [
-      ...containers.map((name) => ["rm", "-f", "-v", name]),
-      ...(image === "" ? [] : [["rmi", "-f", image]]),
+      ...containers.map((name) => () => docker(["rm", "-f", "-v", name], { timeoutMs: REMOVE_CALL_MS })),
+      ...(image === "" ? [] : [() => removeTestImage(image, { timeoutMs: REMOVE_CALL_MS })]),
     ];
     const failures: unknown[] = [];
-    for (const args of removals) {
+    for (const remove of removals) {
       try {
-        docker(args, { timeoutMs: REMOVE_CALL_MS });
+        remove();
       } catch (error) {
         failures.push(error);
       }
     }
-    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} removal(s) killed`);
+    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} removal(s) failed`);
   }, REMOVE_HOOK_MS);
 
   /** Starts the image detached with no network and a throwaway superuser password; returns the container name. */

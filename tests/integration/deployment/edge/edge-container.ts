@@ -11,6 +11,7 @@ import { connect as tcpConnect } from "node:net"; // guard-allow: egress local e
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls"; // guard-allow: egress local edge test only
 import { docker, killBefore, subcommand } from "../../../support/docker.ts";
+import { buildTestImage } from "../../../support/image-build.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 export const EDGE = join(REPOSITORY, "deployment", "edge");
@@ -108,11 +109,9 @@ function dockerAsync(args: readonly string[], timeoutMs: number): Promise<{ code
   });
 }
 
-/** Builds deployment/edge/Dockerfile and returns the image id. */
+/** Builds deployment/edge/Dockerfile under its own tag (P1.27x) and returns the tag; removeTestImage removes it. */
 export function buildEdgeImage(): string {
-  const built = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE], { timeoutMs: BUILD_MS });
-  if (built.code !== 0) throw new Error(`edge image build failed: ${built.err.slice(-2000)}`);
-  return built.out.trim();
+  return buildTestImage(join(EDGE, "Dockerfile"), EDGE, { timeoutMs: BUILD_MS });
 }
 
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */

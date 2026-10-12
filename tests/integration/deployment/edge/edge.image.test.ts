@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../../support/docker.ts";
+import { removeTestImage } from "../../../support/image-build.ts";
 import {
   buildEdgeImage,
   EDGE,
@@ -22,6 +23,8 @@ const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 const CONTAINER_MS = 120_000;
 // A `docker run` inside one of those tests is killed before the test's own budget, naming the call (P1.27k).
 const RUN_CALL_MS = killBefore(CONTAINER_MS);
+// The afterAll's image removal follows the container's (edge-container.ts, 60 s), and both fit in CONTAINER_MS.
+const REMOVE_CALL_MS = 50_000;
 const ADMIN_NSIDS = [
   "com.atproto.admin.getAccountInfo",
   "com.atproto.temp.checkSignupQueue",
@@ -82,7 +85,12 @@ beforeAll(async () => {
   edge = await startEdge(image);
 }, 600_000);
 afterAll(async () => {
-  await edge?.stop();
+  try {
+    await edge?.stop();
+  } finally {
+    // The tag only: an image another test built from the same context stays (P1.27x).
+    if (image !== undefined) removeTestImage(image, { timeoutMs: REMOVE_CALL_MS });
+  }
 }, CONTAINER_MS);
 
 describe("edge", () => {
