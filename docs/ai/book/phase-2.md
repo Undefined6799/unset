@@ -719,7 +719,10 @@ As built: merged by Alex at 2026-10-12T13:55:19Z as `ecfbb85` (#613).
 
 ### P2.03 — Session store and lifecycle
 Tags: [SEC]            Depends on: P2.03q, P2.03x, P2.03e, P2.03c            Plan: §2 rule 7; §5.3 "Sessions"
-As built: merged by Alex at 2026-10-12T14:26:38Z as `fe33d0c` (#630).
+As built: merged by Alex at 2026-10-12T14:26:38Z as `fe33d0c` (#630, head 8009f32), with 16 integration tests (the PR
+body says 15; 16 is the verified count). Records: 2026-10-07-p203-session-store-trusted,
+2026-10-12-p203c-session-workspace, 2026-10-12-p203-departures and its booked record,
+2026-10-12-p204s-p130x-p130y-booked (book edit 2026-10-12-p203-as-built-and-p426-session-hash).
 Trusted class; never opens before P2.03q and P2.03c merge (book edits 2026-10-07-p203-repath and
 2026-10-12-p203c-session-workspace; architecture 2026-10-07-p203-session-store-trusted, amended on placement by
 2026-10-12-p203-session-workspace-and-c18-image). P2.03i depends on it.
@@ -745,8 +748,8 @@ Outputs:
   - Table `app.session(id_hash bytea primary key /* sha256 of the 32-byte id */, did types.did not null,
     created_at timestamptz not null, last_seen_at timestamptz not null, absolute_expires_at timestamptz not null,
     email_confirmed boolean null /* cache, P2.11 */, email_checked_at timestamptz null)`; index `(did)`;
-    index `(absolute_expires_at)` (added by P2.03i). Registry row: `app.session.did`, `delete_row`. Table, grants and
-    row are P2.03x's.
+    no expiry index (the sweep seq-scans; P2.03i ruling). Registry row: `app.session.did`, `delete_row`.
+    Table, grants and row are P2.03x's.
   - `sessions.create(tx, did, opts: {replacingCookie?: string}) -> {cookieValue: string, expiresAt}`.
   - `sessions.read(ctx) -> Session | null` where `Session = {did, idHash, createdAt, emailConfirmed: boolean | null}`;
     memoised in `ctx.memo` for the request.
@@ -835,23 +838,26 @@ Not in this step: OAuth token storage (P2.04); `destroyAllForDid` and the token-
   the email gate logic (P2.11).
 Diagram: see "State diagram: app session lifecycle" at the top of this file.
 
-### P2.03i — Add the session indexes after the store
+### P2.03i — Session index on did, annotated with store.ts
 Tags: [SEC]            Depends on: P2.03, P2.03x (merged, #579)            Plan: §5.3 "Sessions"
 Product class (issue #576), `infrastructure/postgres/migrations/` only (book edit
   2026-10-12-p203x-indexes-move-to-p203i, from the coordinator's question at 2026-10-08 12:18Z). Owner: Phase 2, the
   next slot after P2.03 merges. Slice: as P2.03. P2.04 depends on it.
 Why: sqlLint (`infrastructure/postgres/sqlLint.ts:50-86`) requires every CREATE INDEX to carry a `-- query: <file>`
-  naming an existing file that runs the query. The queries for `(did)` and `(absolute_expires_at)` live in
+  naming an existing file that runs the query. The query for `(did)` lives in
   `infrastructure/session/store.ts` (path per book edit 2026-10-12-p203c-session-workspace), which P2.03 creates, and
   P2.03x merges before it, so P2.03x can't carry an honest annotation. A trusted P2.03 carrying a migration would
-  widen what trusted PRs may carry, so the indexes move here and every PR class stays unchanged.
+  widen what trusted PRs may carry, so the index moves here and every PR class stays unchanged.
 Contents: one migration, on the next free number at open time, containing only:
   - `CREATE INDEX … ON app.session (did)` with `-- query: infrastructure/session/store.ts` (`app.end_sessions_for_did`
     (P2.04), called through `sessions.destroyAllForDid` (P2.04s), ends every session of a DID; the index stays, because
-    that delete still filters by `did`);
-  - `CREATE INDEX … ON app.session (absolute_expires_at)` with the same annotation (`sessions.sweep()`).
-  No grants, no registry change and no other DDL. It does not edit 0011_app_session.sql (applied migrations are
-  checksummed, `infrastructure/postgres/migrate.ts:2`).
+    that delete still filters by `did`).
+  No `(absolute_expires_at)` and no `last_seen_at` index: the OR's `last_seen_at` arm forces the sweep to seq-scan
+  whatever exists, and a `last_seen_at` index would make the touch a non-HOT update (architecture's
+  2026-10-12-p203i-sweep-index, option (a); book edit 2026-10-12-p203i-did-index-only). Revisit when the sweep's p99
+  passes 1 s or the table passes about 2M rows (P5.11's rider). Optional: `ms` on `session.sweep {count}` if that is a
+  one-line change; the PR body says which. No grants, no registry change and no other DDL. It does not edit
+  0011_app_session.sql (applied migrations are checksummed, `infrastructure/postgres/migrate.ts:2`).
 Done when (tests): `npm run check` is green, sqlLint passes on honest annotations, and the migration test applies it
   after P2.03x's.
 Size: ~10 source lines
