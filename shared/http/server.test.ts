@@ -1,7 +1,7 @@
 // The server kit against in-process requests (P1.04k; the P1.04 test list except the two that need entrypoints).
 import { AppError, type ErrorCode } from "@unset/shared-errors";
-import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
+import { captureLogger } from "./capture-logger.ts";
 import type { HttpKitConfig } from "./config.ts";
 import { type ErrorPage, errorResponse, kitErrorResponse } from "./errors.ts";
 import { defineRoute, type RouteSpec } from "./routes.ts";
@@ -39,7 +39,7 @@ const page = (spec: Partial<RouteSpec> & Pick<RouteSpec, "method" | "path">) =>
 
 function kit(options: Partial<ServerOptions> = {}) {
   const lines: string[] = [];
-  const log = createLogger({ service: "http", commit: COMMIT, env: "test", write: (line) => lines.push(line) });
+  const log = captureLogger((line) => lines.push(line));
   const server = createServer({
     config: CONFIG,
     routes: [page({ method: "GET", path: "/" }), page({ method: "POST", path: "/form" })],

@@ -2,7 +2,7 @@
 // so free text never reaches the database, and audit.append checks it again (book P1.15, algorithm step 2). The
 // writer is the database role of the caller's connection, stamped by audit.append; actorDid and actorKey are what the
 // calling process asserts about the human.
-import { type Did, parseDid } from "@unset/domains-identity";
+import { type Did, parseDid } from "@unset/domains-identity/syntax";
 import {
   AUDIT_ACTIONS,
   AUDIT_OUTCOMES,

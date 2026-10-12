@@ -3,8 +3,8 @@
 // route-registration guard (P1.04q, scripts/guards/route-registration.ts), which already runs on every check.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
+import { captureLogger } from "../capture-logger.ts";
 import type { HttpKitConfig } from "../config.ts";
 import { defineRoute, type RouteGroup } from "../routes.ts";
 import { createServer, type RouteInfo } from "../server.ts";
@@ -72,7 +72,7 @@ describe("csrf coverage", () => {
       config: CONFIG,
       routes,
       policies: { default: [{ capacity: 1000, refillPerSec: 10, scope: "ip" }] },
-      log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
+      log: captureLogger(),
     });
     for (const route of server.routeTable().filter((r) => r.method === "POST")) {
       expect(gatedAfterBodyLimit(route), route.path).toBe(true);

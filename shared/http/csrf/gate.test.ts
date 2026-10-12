@@ -1,6 +1,6 @@
 // The CSRF gate (P1.07) through the server kit: a POST reaches its handler only when the request is same-origin.
-import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
+import { captureLogger } from "../capture-logger.ts";
 import type { HttpKitConfig } from "../config.ts";
 import { defineRoute } from "../routes.ts";
 import { createServer } from "../server.ts";
@@ -49,7 +49,7 @@ function kit() {
     config: CONFIG,
     routes: [route("/follow"), route("/api-like", ["application/json"])],
     policies: POLICIES,
-    log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: (l) => lines.push(l) }),
+    log: captureLogger((l) => lines.push(l)),
   });
   const post = (headers: Record<string, string>, path = "/follow", type = "application/x-www-form-urlencoded") =>
     server.request(

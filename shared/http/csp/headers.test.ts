@@ -1,6 +1,6 @@
 // The security headers (P1.08) through the server kit: every response, error pages included, carries its group's set.
-import { createLogger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
+import { captureLogger } from "../capture-logger.ts";
 import type { HttpKitConfig } from "../config.ts";
 import { defineRoute } from "../routes.ts";
 import { createServer } from "../server.ts";
@@ -60,7 +60,7 @@ function kit() {
       }),
     ],
     policies: POLICIES,
-    log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: (l) => lines.push(l) }),
+    log: captureLogger((l) => lines.push(l)),
   });
   const send = (path: string, init: RequestInit & { headers?: Record<string, string> } = {}) =>
     server.request(
