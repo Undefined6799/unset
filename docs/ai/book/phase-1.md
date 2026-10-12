@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.34c, P1.34d, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -6063,10 +6063,13 @@ Slice 1, check class (`.github/CODEOWNERS`, `scripts/lint/`, `scripts/budgets/`)
 P1.25; P1.25o only adds paths, so no trusted file is ever unowned.
 1. **CODEOWNERS:** add `/shared/islands/` under "Islands and links" and under "Islands props serialiser" (the
    trusted-base section). Remove nothing.
-2. **The depcruise edges the move needs** (a trusted PR never widens the MATRIX, so they land here first): a row for
-   `^shared/islands/` allowing only itself and npm, no CORE; the shared/ui row and apps/web may import the
-   `@unset/shared-islands` index; the island rule (`.dependency-cruiser.cjs:263-265`) allows `^shared/islands/` beside
-   `^shared/ui/`. AB-1 fixtures: pass a kit import of the islands index; fail `node:fs` from shared/islands and
+2. **The depcruise edges the move needs** (a trusted PR never widens the MATRIX, so they land here first), in
+   `scripts/lint/.dependency-cruiser.cjs`: `islands` joins `LEAF_SHARED` (:55), so the general `shared` row (:120)
+   grants it no CORE, and `shared/islands` gets its own row allowing only itself and npm, like `shared-ui-lexicons`
+   (:121); a row of its own ahead of :120 is refused, since that row's `pathNot` would still have to exclude it. The
+   shared/ui row and apps/web may import the `@unset/shared-islands` index; the island rule (:286-291) allows
+   `^shared/islands/` beside `^shared/ui/` (book edit 2026-10-12-batch-44-refocus, amendment 2).
+   AB-1 fixtures: pass a kit import of the islands index; fail `node:fs` from shared/islands and
    shared/islands importing shared/ui.
 3. **Budgets:** a `"shared/islands"` key in `budgets.json` and in `check.ts`'s duplicate map, the moved lines rounded
    up to the next hundred, at least 300.
@@ -6093,11 +6096,14 @@ subpath (DC-2).
 
 ### P1.25u — Drop the island runtime's old owner paths
 Tags: check            Depends on: P1.25i
-Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks. Owner: the third thread
-(moved from Phase 2 by the coordinator at 22:38Z). Removes `/shared/ui/islands/`, `/shared/ui/src/islands/`,
-`/shared/ui/islands/props.ts` and `/shared/ui/src/islands/readProps.ts` (CODEOWNERS:50-51, 118-119), keeping
-`/shared/ui/safe-href.ts`, then confirms with `git ls-files` that none of the removed paths exists and that the
-trusted-base tests pass. A tightening: it removes ownership only from paths that no longer exist.
+Slice 1, check class (`.github/CODEOWNERS`); book edit 2026-10-07-p125l-islands-lazy-chunks, and amendment 2 of
+2026-10-12-batch-44-refocus. Owner: Phase 2 (the refocus order's lanes). P1.25i moves only the runtime; the six kit
+islands (`copy`, `header-menu`, `modal`, `select`, `tabs`, `toast`) stay in `shared/ui/islands/` by design. So it
+keeps the `/shared/ui/islands/` ownership lines (CODEOWNERS:50-51) while any file remains under that path, and
+removes only the trusted-section lines for the moved files, `/shared/ui/islands/props.ts` and
+`/shared/ui/src/islands/readProps.ts` (:118-119), plus `/shared/ui/src/islands/` if `git ls-files` shows it empty.
+Its check also asserts that no remaining `*.island.tsx` loses an owner, and the trusted-base tests pass. A
+tightening: nothing becomes unowned.
 
 ---
 
@@ -7231,7 +7237,8 @@ Done when the existing preflight tests pass untouched, no line in the touched fi
 green.
 
 As built: merged at 2026-10-12T22:24:20Z as `e8491f2` (#712, head bbc6586) (merge data read by REST, 22:35Z). The
-coordinator's verifier passed it at bbc6586; N-B rode P1.11f, and P1.34f was built stacked on it.
+coordinator's verifier passed it at bbc6586. It moved input loading to `deployment/preflight/inputs.ts`; N-B rode
+P1.11f, and P1.34f was built stacked on it.
 
 ---
 
@@ -7319,6 +7326,7 @@ carries the label (inspect), and check is green.
 
 As built: merged at 2026-10-12T21:46:33Z as `6d39468` (#723, head 4e70585) (merge data read by REST, 21:50Z). The
 edge-test cleanup items E1 and E2 (21:27Z amendment) are in `deployment/edge/`, the trusted base, so they are P1.11r.
+Its follow-up is P1.11s (#734, PR #737).
 
 ---
 
@@ -7362,11 +7370,16 @@ on it.
 Done when a `stop()` whose removal exits non-zero rejects naming the container (red on db10ce2), the item 2 test goes
 red on the revert, and check is green.
 
+As verified (PR #737, with nits, at 000bc41; book edit 2026-10-12-batch-44-refocus, amendment 1): the afterAll pin
+is an image test, not a plain test, because `scripts/test/image-rules.test.ts:22-28` classes anything reaching
+`removeTestImage` as an image build. The PR says so under "What I am unsure about"; its nits are parked in the refocus
+order, section 4. The As built line follows its merge.
+
 ---
 
 ### P1.11n — Name test helpers apart; keep them out of images
 Tags: —            Depends on: P0.09n
-Slice 1, issue to come, product (helpers under `shared/` and `tests/support/`, and the node-app build in
+Slice 1, issue #740, product (helpers under `shared/` and `tests/support/`, and the node-app build in
 `deployment/images/`), kind/refactor, lane Phase 1; book edit 2026-10-12-p111n-test-support-out-of-images (22:40Z),
 from item 1 of architecture's Amendment 6 of 2026-10-12-workspace-imports-and-remote-daemon. A renamed file under a
 trusted path (for example `shared/http/capture-logger.ts`) goes in its own trusted PR (SE-6); the step book splits it
@@ -7449,8 +7462,8 @@ count toward the ~400.
 Done when the red-first tests pass as stated and check is green.
 
 As built: merged at 2026-10-12T21:54:51Z as `c20a107` (#726, head 62f2563) (merge data read by REST, 22:35Z); its
-first commit `e5c2b5e` carries amendment 4. The coordinator's post-merge verify found the env reader reading before
-the walk; P1.34r fixes that order.
+first commit `e5c2b5e` carries amendment 4. Its env reader reads before the walk, a departure from the ruled order
+that P1.34r (#735) fixes (Amendment 9 of 2026-10-12-p127u-bind-ancestors-and-build-context).
 
 ---
 
@@ -7576,6 +7589,46 @@ every id for a path read twice.
 Done when, red first, a real swap between the walk and the open fails on the real reader with no test double (mutant
 M9, an id taken from `statSync(path)`, dies), an oversize file is refused without being read in full, a FIFO is
 refused without a hang, the nit tests pass, and check is green.
+
+---
+
+### P1.34c — Add the local app site and dev CA to the edge
+Tags: [SEC] trusted            Depends on: —
+Slice 1, issue #741, trusted base (`deployment/edge/local/` only, beside P1.27m's `tls.caddy`; never `snippets/` or
+`sites/`, so the shipped image never carries it), kind/feature, lane the third thread; book edit
+2026-10-12-p134c-p134d-local-dev-root-ca (22:48Z), from architecture's ruling 1 of
+2026-10-12-refocus-local-signin-rulings. On the sign-in path, so not paused. Inert until P1.34d mounts it. Nothing from
+Alex. P1.34d depends on it.
+
+**What:** the app host site for the `local` env, under `tls internal`, proxying to `web`; and the
+`pki { ca local { root { cert … key … } } }` block, so `tls internal` issues from our dev root, not Caddy's
+auto-generated one. Paths name the mount points P1.34d creates.
+
+Done when the edge reader or C18 fixtures accept the local files only under `--env local` (P1.27l's rule), the shipped
+image's file list does not contain them, and check is green.
+
+---
+
+### P1.34d — Trust one dev root CA on the local stack
+Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l
+Slice 1, issue #742, product (`deployment/` compose and env files, `docs/human/runbooks/dev-stack-secrets.md`, which is
+code-owned but not trusted base), kind/feature, lane the third thread; book edit
+2026-10-12-p134c-p134d-local-dev-root-ca, from architecture's ruling 1. Not paused. Nothing from Alex. P1.29t depends
+on it.
+
+**What:**
+1. The runbook gives the commands with which the deploy user generates a dev root CA once.
+2. The key goes in `unset-dev-secrets` as a C9 secret (0400, owned by uid 65532, nlink 1), mounted only into the edge.
+   It never leaves the edge, and nothing is copied out of the edge's 0700 data volume.
+3. The public root cert goes in `unset-dev-env/` as a deploy-owned file, bind-mounted read-only into the PDS, whose env
+   sets `NODE_EXTRA_CA_CERTS` to it, so the PDS trusts exactly one dev root.
+4. `web` joins the edge network on `local` through the app site's row in the networks table.
+
+Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether the preflight's PDS env
+check (C13 to C16) refuses `NODE_EXTRA_CA_CERTS`, and whether P1.27l's C18 allowance must grow to three mounts; each is
+booked or ruled when the builder measures it.
+
+Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), and check is green.
 
 ---
 
@@ -9978,7 +10031,12 @@ P1.29h, P1.29s, P1.29t.
    reader and the real `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one
    `logging` entry: exactly `{driver: "none"}`, on the seed service only (book edit
    2026-10-12-p129s-seed-file-location, amendments 2 and 3).
-10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s): `pds_device_row_has_no_client_ip`
+10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s and P1.34d): its first assertion,
+    before any browser flow, is a probe from inside the PDS container: an HTTPS GET of web's `client_id` over
+    `pds_egress` succeeds, the chain verifies against the dev root, and the body parses as client metadata. If the
+    PDS's own fetch refuses the app host's private address, the builder stops and sends architecture the exact error
+    and the PDS version; no workaround (book edit 2026-10-12-p134c-p134d-local-dev-root-ca). Then
+    `pds_device_row_has_no_client_ip`
     (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
     that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
     measures it, and it needs Alex's typed line.
@@ -10749,6 +10807,9 @@ start (Q1 → Phase 6; Q2 → P1.33; Q3 → admin phase; Q4 → P1.31/P1.35).
 ---
 
 ### P1.31 — Lexicons package
+
+Refocus note (architecture's ruling 2 of 2026-10-12-refocus-local-signin-rulings): the en and fr consent text ship
+together for Alex's review, with the fr text marked draft in the PR body. Nothing is published before P1.35.
 
 **Tags:** [PERMANENT] [SEC] [ALEX] [STOP] (Alex reviews the schemas' fields and the permission set's EN/FR consent text in this step's PR; nothing is published until he approves it: answered by Alex 2026-10-03 11:48Z) · **Depends on:** P1.01, P1.32 (Q4, the permission-set NSID) · **Plan:** §3 (lexicons, scope string), §5.2, §5.3; fable 01
 
@@ -11724,6 +11785,8 @@ another key); `probe_gap_not_counted_as_up`; `backup_script_encrypts_and_leaves_
 ---
 
 ### P1.35 — Lexicon authority on the dev PDS; schemas and permission set published (Alex)
+
+Before this step publishes, someone fluent reviews P1.31's French consent text; Alex picks who (refocus ruling 2).
 
 Split (SE-6 `q` rule, ruled 2026-10-05 01:47Z): all of `.github/` is a check path, because even a workflow that only
 schedules a monitor holds the repository token, its permissions and a runner. **P1.35q** holds

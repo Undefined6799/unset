@@ -1799,7 +1799,9 @@ Size: ~90 source lines, ~120 test lines, plus the documents (~1 page each)
 
 Goal: One-page terms and privacy notice in EN and FR, an "our domains" page and `security.txt`, live with sign-up.
 
-Inputs: P1.25 legal route slots; P1.37 incident-response page; config `PRIVACY_OFFICER_NAME` (required, Law 25),
+Inputs: P1.25 legal route slots; P1.37 incident-response page; config `PRIVACY_OFFICER_TITLE` (required, Law 25:
+  a role title such as "Privacy Officer", never a personal name; who holds the role stays in Alex's own records, per
+  architecture's ruling 3 of 2026-10-12-refocus-local-signin-rulings, to be confirmed in his lawyer hour),
   `PRIVACY_OFFICER_CONTACT` (required), `SUPPORT_EMAIL`, `SECURITY_CONTACT` (required), `SECURITY_TXT_EXPIRES` (ISO date,
   required).
 Outputs:
@@ -1853,7 +1855,7 @@ Edge cases and failures:
 Done when (tests):
   - `legal.items_present`: each document contains every checklist marker (T1–T8, P1–P8, domains list).
   - `legal.zero_js`: the three pages have no `<script>`; CSP equals the `static` snapshot.
-  - `legal.config_escaped`: `PRIVACY_OFFICER_NAME = '<b>x</b>'` in a test config renders escaped.
+  - `legal.config_escaped`: `PRIVACY_OFFICER_TITLE = '<b>x</b>'` in a test config renders escaped.
   - `securitytxt.fields`: all five fields present; `Expires` parses; content type correct.
   - `securitytxt.expiry_soon`: expiry 20 days ahead → test fails (guard works).
   - `legal.axe`: both themes × EN/FR.

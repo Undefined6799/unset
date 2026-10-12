@@ -168,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 240 steps: 216 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 242 steps: 218 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -379,6 +379,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34e | Allow the edge's two ownership commands | [SEC] | — | `phase-1.md` |
 | P1.34x | Admit only chown and chmod in run lists | [SEC] | P1.34e | `phase-1.md` |
 | P1.34r | Walk, open, then fstat in the env reader | [SEC] | P1.27j | `phase-1.md` |
+| P1.34c | Add the local app site and dev CA to the edge (trusted base) | [SEC] | — | `phase-1.md` |
+| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
@@ -388,7 +390,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
-| P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
+| P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
@@ -593,6 +595,8 @@ flowchart TD
   P1_11n["P1.11n Test helpers out of images"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
+  P1_34c["P1.34c Local app site and dev CA"]
+  P1_34d["P1.34d PDS trusts one dev root"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27w["P1.27w Compose only through the wrapper"]
   P1_27o["P1.27o Edge data and config owned by caddy"]
@@ -898,6 +902,10 @@ flowchart TD
   P1_29a --> P1_29s
   P1_29a --> P1_29t
   P1_29s --> P1_29t
+  P1_34c --> P1_34d
+  P1_29a --> P1_34d
+  P1_27l --> P1_34d
+  P1_34d --> P1_29t
   P1_29t --> P2_13a
   P1_30 --> P2_13a
   P1_30 --> P1_30s

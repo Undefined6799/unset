@@ -2469,7 +2469,7 @@ The fix:
   exactly like static imports, and any non-literal specifier in those forms fails. Belt: any string literal or
   template head starting `@unset/` that is not an already-judged import specifier fails, which catches specifiers
   passed as text to a child process (`node -e`, `--import`). It extends P1.25's pinned list (createRequire, eval,
-  vm) and does not replace it (Amendment 4 of that record).
+  vm) and does not replace it (Amendment 4 of that record; p009n record amendment 9).
 - Amendment 7 (22:08Z, from the coordinator's verify of #724): `domains/identity/package.json` stays untrusted, so
   the guard judges trusted imports across the whole tree on every PR, not only changed files, and a red fixture
   repoints `"./syntax"` to another file. dependency-cruiser 18.5.0 ignores `exports` (`exportsFields: []`,
