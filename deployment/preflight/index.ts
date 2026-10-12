@@ -183,6 +183,11 @@ function manifestKind(deps: Deps): ManifestKind {
 
 /** One check, failing closed: a throw is a failure, and a network check that outlasts its timeout fails. */
 async function runCheck(check: Check, inputs: Inputs, timeoutMs: number): Promise<Outcome> {
+  return settle(check, inputs, timeoutMs);
+}
+
+/** The check's outcome, a timeout for a network check past its deadline, or a failure for a throw. */
+async function settle(check: Check, inputs: Inputs, timeoutMs: number): Promise<Outcome> {
   const signal = AbortSignal.timeout(timeoutMs);
   const timedOut = new Promise<Outcome>((done) => {
     signal.addEventListener("abort", () => done({ pass: false, reason: "timed out" }), { once: true });
