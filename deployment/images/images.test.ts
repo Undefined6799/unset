@@ -2009,4 +2009,15 @@ describe("postgres image", () => {
     expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([]);
     expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");
   });
+
+  // P1.29 (architecture record 2026-10-12-p129-compose-service-keys): the health check lives in the image, so Compose's
+  // `depends_on: service_healthy` needs no `healthcheck` key, whose `test` would be a command the preflight reads. Exec
+  // form only: shell form runs `/bin/sh -c`, a shell the final-stage rules refuse as a command (Dockerfile reference,
+  // HEALTHCHECK, "CMD" takes the same forms as the CMD instruction).
+  test("postgres_healthcheck_is_exec_form", () => {
+    const postgres = runtimeStage(read(POSTGRES_DOCKERFILE));
+    expect(postgres.filter((line) => line.startsWith("HEALTHCHECK "))).toEqual([
+      'HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 CMD ["pg_isready", "-h", "/var/run/postgresql"]',
+    ]);
+  });
 });
