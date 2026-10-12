@@ -905,9 +905,10 @@ describe("local stack files (P1.34c)", () => {
     expect(local("tls.caddy")).toBe("(tls) {\n\ttls /run/secrets/local_tls_cert /run/secrets/local_tls_key\n}");
   });
 
-  test("local_app_site_mirrors_the_pds_site", () => {
+  test("local_app_site_has_the_pds_sites_shared_snippets", () => {
     // TLS, the access log and the security headers as every public host has them; the zones first, then the upstream
-    // snippet, which drops the client's address headers, so web sees only the edge (ADR 0018, invariant 3).
+    // snippet, which drops the client's address headers, so web sees only the edge (ADR 0018, invariant 3). Unlike the
+    // PDS site it has no pds-route-class or xrpc-guard: those are the PDS's routes.
     expect(local("app.caddy")).toBe(
       [
         "{$APP_HOST} {",
@@ -924,11 +925,25 @@ describe("local stack files (P1.34c)", () => {
   });
 
   test("local_files_never_in_the_image", () => {
-    const sources = dockerfile
-      .split("\n")
-      .filter((line) => /^COPY /.test(line) && !line.includes("--from="))
-      .map((line) => line.split(/\s+/)[1]);
-    expect(sources).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    // COPY and ADD from the build context, in any case and indentation Docker accepts (moby/buildkit
+    // frontend/dockerfile/docs/reference.md, "Format": instructions are not case-sensitive); flags dropped, the last
+    // word is the destination.
+    const sources = (text: string): string[] =>
+      text
+        .split("\n")
+        .filter((line) => /^\s*(COPY|ADD)\s/i.test(line) && !/--from=/i.test(line))
+        .flatMap((line) =>
+          line
+            .trim()
+            .split(/\s+/)
+            .slice(1)
+            .filter((word) => !word.startsWith("--"))
+            .slice(0, -1),
+        );
+    expect(sources(dockerfile)).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    for (const line of ["copy local/ /etc/caddy/local/", "  COPY local/app.caddy /etc/caddy/", "ADD local/ /srv/"]) {
+      expect(sources(`${dockerfile}${line}\n`), line).toContain(line.trim().split(/\s+/)[1]);
+    }
     expect(readdirSync(join(EDGE, "local")).sort()).toEqual(["app.caddy", "tls.caddy"]);
   });
 });
