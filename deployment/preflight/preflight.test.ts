@@ -1063,6 +1063,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     const viaLink = await preflight(["--env", "prod", "--compose", linked.file], {
       root: linked.root,
       run: fakeRun().run,
+      lstat: lstatOwnedBy(WEB_UID),
     });
     expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
@@ -1072,6 +1073,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     const viaFolder = await preflight(["--env", "prod", "--compose", folder.file], {
       root: folder.root,
       run: fakeRun().run,
+      lstat: lstatOwnedBy(WEB_UID),
     });
     expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
       "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
