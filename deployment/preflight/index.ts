@@ -1,9 +1,11 @@
 // The deploy preflight (P1.30; plan section 2 rule 23, sections 5.2, 5.3, 6.1): before any `compose up` on a server,
 // one command checks the stack against every rule that, if broken, would leak data or cannot be fixed later.
 //
-//   node deployment/preflight/index.ts --env dev|prod --compose <file> [--compose <file>...]
+//   node deployment/preflight/index.ts --env dev|prod --compose <file> [--compose <file>...] [--env-file <file>]
 //
-// The first --compose file's directory is the project directory: every relative path resolves from it.
+// The first --compose file's directory is the project directory: every relative path resolves from it. Interpolation
+// reads the one --env-file, or else the project directory's .env, as Compose does; the preflight refuses to run when
+// its environment could change what Compose reads (P1.30a).
 //
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
 // malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3 to C5,
@@ -35,6 +37,8 @@ import {
   type Build,
   type Compose,
   type EnvValue,
+  interpolatedNames,
+  isHomeOrInterpolated,
   type Network,
   ParseError,
   parseCompose,
@@ -53,6 +57,8 @@ export type Deps = {
   uid?: number;
   checks?: readonly Check[];
   timeoutMs?: number;
+  /** The process environment, where Compose would find overrides (P1.30a); `process.env` unless a test passes one. */
+  environment?: Readonly<Record<string, string | undefined>>;
 };
 export type Result = { code: 0 | 1 | 2; lines: string[] };
 
@@ -85,21 +91,62 @@ const lstatOrNull = (path: string): Stats | null => {
 
 class CannotRun extends Error {}
 
-function parseCli(argv: string[]): { env: Env; files: string[] } {
-  let values: { env?: string; compose?: string[] };
+function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
+  let values: { env?: string; compose?: string[]; "env-file"?: string[] };
   try {
     ({ values } = parseArgs({
       args: argv,
-      options: { env: { type: "string" }, compose: { type: "string", multiple: true } },
+      options: {
+        env: { type: "string" },
+        compose: { type: "string", multiple: true },
+        "env-file": { type: "string", multiple: true },
+      },
       strict: true,
       allowPositionals: false,
     }));
   } catch {
-    throw new CannotRun("usage: --env dev|prod --compose <file> [--compose <file>...]");
+    throw new CannotRun("usage: --env dev|prod --compose <file> [--compose <file>...] [--env-file <file>]");
   }
   if (values.env !== "dev" && values.env !== "prod") throw new CannotRun("--env must be dev or prod");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
-  return { env: values.env, files: values.compose.map((file) => resolve(file)) };
+  return {
+    env: values.env,
+    files: values.compose.map((file) => resolve(file)),
+    envFile: envFileOf(values["env-file"]),
+  };
+}
+
+/**
+ * The one --env-file, absolute from the working directory as Compose makes it (cmd/compose/compose.go, `filepath.Abs`,
+ * in 2.38.2 and v5.3.1). Several are refused rather than merged in Compose's order, and a leading `~` or a `$` is
+ * refused as in a compose path field: v5.3.1 expands `~` there and 2.38.2 does not (ruling F2, F3.2).
+ */
+function envFileOf(given: string[] | undefined): string | null {
+  if (given === undefined) return null;
+  const [file, second] = given as [string, string?];
+  if (second !== undefined) throw new CannotRun("--env-file may be given once");
+  if (isHomeOrInterpolated(file)) throw new CannotRun("--env-file: a leading ~ or a $ is refused");
+  return resolve(file);
+}
+
+/**
+ * Variables that change which compose or env files Compose reads (compose-go consts/consts.go, v2.13.0; Compose
+ * cmd/compose/compose.go, v5.3.1). The ruling lists the first four; COMPOSE_DISABLE_ENV_FILE, which drops the .env, is
+ * the fifth. No pinned source reads COMPOSE_PROJECT_DIR: it is refused because the ruling names it, and closes nothing.
+ */
+const COMPOSE_VARIABLES = [
+  "COMPOSE_ENV_FILES",
+  "COMPOSE_FILE",
+  "COMPOSE_PROJECT_DIR",
+  "COMPOSE_PROFILES",
+  "COMPOSE_DISABLE_ENV_FILE",
+];
+
+/** Refuses to run when any of `names` is set, even empty, in the environment; only the name is printed. */
+function refuseWhenSet(names: Iterable<string>, environment: Readonly<Record<string, string | undefined>>): void {
+  for (const name of names) {
+    if (environment[name] !== undefined) throw new CannotRun(`${name} is set in the environment`);
+  }
 }
 
 /** The compose files as one stack: one project name, and each service defined in exactly one file. Exported for the
@@ -117,11 +164,13 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   const secretFiles: string[] = [];
   const secretFileByName = new Map<string, string>();
   const mounted = new Map<string, MountedSecret["mountedBy"]>();
+  const interpolated = new Set<string>();
   let name: string | null = null;
   for (const file of files) {
     const text = readText(file);
     if (text === null) throw new CannotRun(`cannot read ${file}`);
     const compose = parseCompose(text, file);
+    for (const used of interpolatedNames(text, file)) interpolated.add(used);
     if (compose.name !== null && name !== null && compose.name !== name) throw new CannotRun("project names differ");
     name = compose.name ?? name;
     for (const service of compose.services) {
@@ -155,7 +204,7 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   const [undeclared] = undeclaredNetworks(compose);
   if (undeclared !== undefined) throw new CannotRun(undeclared);
   const mountedSecrets = [...mounted].map(([path, mountedBy]) => ({ path, mountedBy }));
-  return { compose, mountedSecrets };
+  return { compose, mountedSecrets, interpolated };
 }
 
 /** A build's context resolves from the project directory, and its Dockerfile from the context (compose-spec build.md
@@ -177,18 +226,28 @@ type Loaded = { inputs: Inputs; configured: ConfiguredValues };
 /** Inputs for the checks; anything that keeps the preflight from judging the stack throws CannotRun or ParseError. */
 function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
-  const { env, files } = parseCli(argv);
-  const { compose, mountedSecrets } = loadCompose(files, readText);
+  const environment = deps.environment ?? process.env;
+  const { env, files, envFile } = parseCli(argv);
+  refuseWhenSet(COMPOSE_VARIABLES, environment);
+  const { compose, mountedSecrets, interpolated } = loadCompose(files, readText);
+  // Compose takes a shell value over the env file (Docker docs, "Interpolation"; compose-go Mapping.Merge).
+  refuseWhenSet(interpolated, environment);
   const secretPaths: string[] = [];
-  // Compose interpolates from the `.env` beside the first file; a name it lacks becomes empty, as in Compose.
-  const dotEnvPath = join(dirname(files[0] as string), ".env");
-  const dotEnv = readText(dotEnvPath) === null ? [] : readEnvFile(dotEnvPath, readText);
-  if (dotEnv.length > 0) secretPaths.push(dotEnvPath);
-  const interpolation = new Map(dotEnv);
+  // Compose interpolates from the --env-file, or else the `.env` in the project directory (compose-go cli/options.go
+  // WithEnvFiles, v2.7.1 and v2.13.0); a name the file lacks becomes empty, as in Compose.
+  const interpolationPath = envFile ?? join(dirname(files[0] as string), ".env");
+  const interpolationFile =
+    envFile === null && readText(interpolationPath) === null ? [] : readEnvFile(interpolationPath, readText);
+  if (interpolationFile.length > 0) secretPaths.push(interpolationPath);
+  // Compose copies the env file's COMPOSE_* keys into its environment when the shell lacks them (cmd/compose/compose.go
+  // setEnvWithDotEnv, v5.3.1 :683-717), so the file must not set them either.
+  const fileNames = new Set(interpolationFile.map(([name]) => name));
+  for (const name of COMPOSE_VARIABLES) if (fileNames.has(name)) throw new CannotRun(`${name} is set in the env file`);
+  const interpolation = new Map(interpolationFile);
   const resolveValue = (value: EnvValue): string =>
     "literal" in value ? value.literal : (interpolation.get(value.ref) ?? "");
   const serviceEnv = new Map<string, SecretMap>();
-  const values = dotEnv.map(([, value]) => value);
+  const values = interpolationFile.map(([, value]) => value);
   for (const service of compose.services) {
     secretPaths.push(...service.envFiles);
     const fromFiles = service.envFiles.flatMap((path) => readEnvFile(path, readText));

@@ -579,6 +579,7 @@ describe("preflight", () => {
       ["--env", "prod", "--compose", file, "--project-directory", root],
       ["--env", "prod", "--compose", file, `--project-directory=${root}`],
       ["--env", "prod", "--compose", file, "--workdir", root],
+      ["--env", "prod", "--compose", file, `--workdir=${root}`],
     ]) {
       expect((await preflight(argv, { root, run: fakeRun().run })).code).toBe(2);
     }
@@ -588,6 +589,11 @@ describe("preflight", () => {
     // Every script that runs `docker compose` gives it the file list the preflight read, and never moves the base
     // directory (architecture record 2026-10-12-preflight-project-directory, item 3). Docs and tests may name the flags.
     // `--workdir` is Compose's hidden, deprecated alias for the same option (cmd/compose/compose.go in 2.38.2, v5.3.1).
+    // The match is a plain substring, so `docker run --workdir` or `docker compose run --workdir` in a script fails
+    // too. That over-match is deliberate and fails closed: telling Compose's top-level flag from a subcommand's needs a
+    // parse of every argv a script builds. A script that sets a container's working directory writes `-w`, which
+    // Compose's top level does not take: both flags are StringVar with no shorthand (compose.go :229-230 in 2.38.2,
+    // :231-232 in v5.3.1).
     const flags = [["--project", "directory"].join("-"), ["--work", "dir"].join("")];
     const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8" }).split("\0");
     const scripts = tracked.filter((path) => path !== "" && !/(^docs\/|\.md$|\.test\.ts$)/.test(path));
@@ -1137,5 +1143,104 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "FAIL C27 web mounts the socket-directory tmpfs but its image and build name different images",
     );
     expect((await check({ compose: webTmpfs("    tmpfs: [/tmp]\n"), lock: null })).lines).toContain("PASS C27 ok");
+  });
+});
+
+// P1.30a (architecture ruling 2026-10-12-preflight-compose-inputs, F3.2 and F3.4): the preflight judges the stack against
+// the interpolation inputs Compose would use, and refuses to run when the environment could change them.
+describe("compose inputs (P1.30a)", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+  const REF = COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", "      PDS_HOSTNAME: ${HOST_NAME}");
+  /** Passes only when pds's PDS_HOSTNAME is `want`; the value itself never leaves the map. */
+  const hostnameIs = (want: string): Check => ({
+    id: "CP",
+    run: (inputs) => (inputs.serviceEnv.get("pds")?.use("PDS_HOSTNAME", (v) => v === want) ? pass() : fail("other")),
+  });
+  function envFile(root: string, name: string, text: string, mode = 0o600): string {
+    const path = join(root, "deployment", name);
+    writeFileSync(path, text);
+    chmodSync(path, mode);
+    return path;
+  }
+  const argv = (file: string, ...extra: string[]) => ["--env", "prod", "--compose", file, ...extra];
+
+  test("env_file_flag_replaces_dot_env", async () => {
+    const { root, file } = stack({ compose: REF, dotEnv: "HOST_NAME=dot.example.test\n" });
+    const flag = envFile(root, "flag.env", "HOST_NAME=flag.example.test\n");
+    const other = envFile(root, "other.env", "OTHER=x\n");
+    const run = (extra: string[], want: string) =>
+      preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {}, checks: [hostnameIs(want)] });
+    expect(await run([], "dot.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+    expect(await run(["--env-file", flag], "flag.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+    // The flag replaces the .env whole: a name only the .env holds is empty, as in Compose.
+    expect(await run([`--env-file=${other}`], "")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+  });
+
+  test("env_file_flag_is_permission_checked", async () => {
+    const { root, file } = stack({ compose: REF });
+    const flag = envFile(root, "flag.env", "HOST_NAME=pds.example.test\n", 0o644);
+    const result = await preflight(argv(file, "--env-file", flag), { root, run: fakeRun().run, environment: {} });
+    expect(failed(result.lines)).toEqual(["C9"]);
+    expect(result.lines).toContain(`FAIL C9 ${flag} must have exactly owner read and write permissions`);
+  });
+
+  test("env_file_flag_refusals_cannot_run", async () => {
+    const { root, file } = stack();
+    const flag = envFile(root, "flag.env", "");
+    const refusal = async (extra: string[]) =>
+      (await preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {} })).lines;
+    expect(await refusal(["--env-file", flag, "--env-file", flag])).toEqual(["ERROR --env-file may be given once"]);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    for (const path of ["~/flag.env", "$HOME/flag.env", "/srv/${STAGE}.env"]) {
+      expect(await refusal(["--env-file", path]), path).toEqual(["ERROR --env-file: a leading ~ or a $ is refused"]);
+    }
+    expect((await refusal(["--env-file", join(root, "absent.env")]))[0]).toMatch(/^ERROR cannot read .*absent\.env$/);
+  });
+
+  test("compose_variables_in_the_environment_cannot_run", async () => {
+    // Each one but COMPOSE_PROJECT_DIR changes which files or env files Compose reads (compose-go consts.go v2.13.0;
+    // compose cmd/compose/compose.go v5.3.1). No pinned source reads COMPOSE_PROJECT_DIR; it is refused because the
+    // ruling names it, and closes nothing today.
+    const { root, file } = stack();
+    for (const name of [
+      "COMPOSE_ENV_FILES",
+      "COMPOSE_FILE",
+      "COMPOSE_PROJECT_DIR",
+      "COMPOSE_PROFILES",
+      "COMPOSE_DISABLE_ENV_FILE",
+    ]) {
+      for (const value of [SENTINEL, ""]) {
+        const result = await preflight(argv(file), { root, run: fakeRun().run, environment: { [name]: value } });
+        expect(result, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the environment`] });
+      }
+    }
+  });
+
+  test("compose_variables_in_the_env_file_cannot_run", async () => {
+    // Compose copies every COMPOSE_* key of the env file into its own environment when the shell lacks it
+    // (cmd/compose/compose.go setEnvWithDotEnv, v5.3.1 :683-717), so the file can set them as the shell can.
+    for (const name of ["COMPOSE_FILE", "COMPOSE_PROFILES", "COMPOSE_DISABLE_ENV_FILE"]) {
+      const { root, file } = stack({ dotEnv: `${name}=${SENTINEL}\n` });
+      const fromDotEnv = await preflight(argv(file), { root, run: fakeRun().run, environment: {} });
+      expect(fromDotEnv, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });
+      const flag = envFile(root, "flag.env", `${name}=\n`);
+      const fromFlag = await preflight(argv(file, "--env-file", flag), { root, run: fakeRun().run, environment: {} });
+      expect(fromFlag, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });
+    }
+  });
+
+  test("interpolated_name_in_the_environment_cannot_run", async () => {
+    // Compose takes a shell value over the env file (Docker docs "Interpolation"; compose-go Mapping.Merge), so a name
+    // the files interpolate must not be set where the preflight runs.
+    const { root, file } = stack({ compose: REF, dotEnv: "HOST_NAME=pds.example.test\n" });
+    const deps = { root, run: fakeRun().run, checks: [hostnameIs("pds.example.test")] };
+    expect(await preflight(argv(file), { ...deps, environment: { HOST_NAME: SENTINEL } })).toEqual({
+      code: 2,
+      lines: ["ERROR HOST_NAME is set in the environment"],
+    });
+    expect(await preflight(argv(file), { ...deps, environment: { UNRELATED: SENTINEL } })).toEqual({
+      code: 0,
+      lines: ["PASS CP ok"],
+    });
   });
 });
