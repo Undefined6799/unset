@@ -52,20 +52,24 @@ function mountedProblem(inputs: Inputs): Outcome | null {
  * directory above it, sticky or not (OpenSSH safe_path, misc.c; CERT FIO15-C). Ancestors are named by position.
  */
 function lockedDirectoryProblem(dir: string, inputs: Inputs): Outcome | null {
-  const { lstat, uid } = inputs;
-  const info = lstat(dir);
+  const info = inputs.lstat(dir);
   if (info === null) return missing(dir);
-  if (!info.isDirectory() || (info.mode & 0o7777) !== 0o700 || info.uid !== uid) {
+  if (!info.isDirectory() || (info.mode & 0o7777) !== 0o700 || info.uid !== inputs.uid) {
     return fail(`${dir} must be a directory with mode 0700 owned by the deploy user`);
   }
   if (onProcfs(dir, inputs)) return fail("the secrets folder is on procfs");
+  return ancestorProblem(dir, inputs);
+}
+
+/** The secrets folder's parents, nearest first, each named by its position. */
+function ancestorProblem(dir: string, inputs: Inputs): Outcome | null {
   let level = 1;
   for (let parent = dirname(dir); ; parent = dirname(parent), level++) {
-    const above = lstat(parent);
+    const above = inputs.lstat(parent);
     if (above?.isDirectory() === true && onProcfs(parent, inputs)) return fail("the secrets folder is on procfs");
     if (above === null || !above.isDirectory())
       return fail(`parent ${level} of the secrets folder is a link or not a directory`);
-    const othersOwn = above.uid !== 0 && above.uid !== uid;
+    const othersOwn = above.uid !== 0 && above.uid !== inputs.uid;
     if (othersOwn || (above.mode & 0o022) !== 0) {
       return fail(`parent ${level} of the secrets folder can be changed by another user`);
     }
@@ -121,16 +125,20 @@ function bindSourceProblem(inputs: Inputs): Outcome | null {
   for (const service of inputs.compose.services) {
     for (const mount of service.mounts) {
       if (mount.type !== "bind" || mount.source === null) continue;
-      const real = inputs.realpath(mount.source);
-      const why = `${service.name} binds a path`;
-      if ([mount.source, real].some((path) => path !== null && within(path, "/proc")))
-        return fail(`${why} under /proc`);
-      if (real === null) return fail(`${why} that does not exist`);
-      const walked = pathProblem(mount.source, inputs, true) ?? pathProblem(real, inputs, false);
-      if (walked === "procfs") return fail(`${why} under /proc`);
-      if (walked === "changeable") return fail(`${why} that another user can change`);
+      const problem = sourceProblem(mount.source, inputs);
+      if (problem !== null) return fail(`${service.name} binds a path ${problem}`);
     }
   }
+  return null;
+}
+
+function sourceProblem(source: string, inputs: Inputs): string | null {
+  const real = inputs.realpath(source);
+  if ([source, real].some((path) => path !== null && within(path, "/proc"))) return "under /proc";
+  if (real === null) return "that does not exist";
+  const walked = pathProblem(source, inputs, true) ?? pathProblem(real, inputs, false);
+  if (walked === "procfs") return "under /proc";
+  if (walked === "changeable") return "that another user can change";
   return null;
 }
 
