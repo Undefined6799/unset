@@ -17,7 +17,7 @@
 // read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
 // configured value is withheld whole.
 import { execFile } from "node:child_process";
-import { lstatSync, readFileSync, realpathSync, type Stats, statSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync, realpathSync, type Stats, statfsSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -59,6 +59,8 @@ export type Deps = {
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
   realpath?: (path: string) => string | null;
+  readlink?: (path: string) => string;
+  statfs?: (path: string) => { type: number };
   uid?: number;
   checks?: readonly Check[];
   timeoutMs?: number;
@@ -94,10 +96,16 @@ const lstatOrNull = (path: string): Stats | null => {
   }
 };
 
-/** Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. */
+/**
+ * Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. It asks the
+ * kernel through realpath(3) ("Synchronous realpath(3)", Node v26.10.0 doc/api/fs.md, fs.realpathSync.native; glibc
+ * build). The JavaScript realpathSync joins each link target with path.resolve(previous, target), which collapses
+ * `x/..` as text before following x, so a link through `x/..` read as a folder the kernel never reaches, and some
+ * such links never resolved at all (verifier B3 on #700).
+ */
 const realpathOrNull = (path: string): string | null => {
   try {
-    return realpathSync(path);
+    return realpathSync.native(path);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") return null;
@@ -116,7 +124,8 @@ export const CLI_OPTIONS = {
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
 } as const;
-const USAGE = "usage: --env dev|prod --compose <file> [--compose <file>...] [--interpolation-env <file>]";
+const USAGE =
+  "usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...] [--interpolation-env <absolute file>]";
 
 function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
   // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any other
@@ -310,6 +319,8 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
     realpath: deps.realpath ?? realpathOrNull,
+    readlink: deps.readlink ?? ((path) => readlinkSync(path)),
+    statfs: deps.statfs ?? ((path) => statfsSync(path)),
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };
   return { inputs, configured: new ConfiguredValues(values) };
