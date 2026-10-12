@@ -1,7 +1,7 @@
 // P1.11t, P1.12t: the integration setup's TE-2 conditions. A test file gets the process roles (web, api, indexer, retention),
 // never migrator or the superuser, and its own database; a setup that fails after starting the container leaves no
 // container behind.
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterAll, describe, expect, inject, test } from "vitest";
@@ -33,6 +33,17 @@ async function asRole(role: { user: string; password: string }, sql: string): Pr
   }
 }
 
+/** Runs `body` on a migrations folder whose one migration fails, then removes the folder whatever happened. */
+async function withBrokenMigrations<T>(body: (migrationsDir: string) => Promise<T>): Promise<T> {
+  const migrationsDir = mkdtempSync(join(tmpdir(), "unset-broken-migrations-"));
+  try {
+    writeFileSync(join(migrationsDir, "0001_broken.sql"), "-- phase: expand\nCREATE TABLE (;\n");
+    return await body(migrationsDir);
+  } finally {
+    rmSync(migrationsDir, { recursive: true, force: true });
+  }
+}
+
 describe("integration postgres setup", () => {
   test("test_files_connect_as_process_role", async () => {
     // Ruling 2026-10-06 03:15Z (a): what a test file receives names only the process roles, and each connects as itself.
@@ -59,21 +70,21 @@ describe("integration postgres setup", () => {
 
   test("teardown_after_failure", async () => {
     expect(ownContainers()).toEqual([]);
-    const migrationsDir = mkdtempSync(join(tmpdir(), "unset-broken-migrations-"));
-    writeFileSync(join(migrationsDir, "0001_broken.sql"), "-- phase: expand\nCREATE TABLE (;\n");
-    await expect(startTestDatabase({ migrationsDir, files: [] })).rejects.toThrow(/sql_error/);
+    await withBrokenMigrations(async (migrationsDir) => {
+      await expect(startTestDatabase({ migrationsDir, files: [] })).rejects.toThrow(/sql_error/);
+    });
     expect(ownContainers()).toEqual([]);
   }, 120_000);
 
   test("failing_teardown_keeps_the_setup_error", async () => {
     // pg.setup.ts's catch reports a failed removal with the setup error, never in its place (P1.11c, N1 on #706).
-    const migrationsDir = mkdtempSync(join(tmpdir(), "unset-broken-migrations-"));
-    writeFileSync(join(migrationsDir, "0001_broken.sql"), "-- phase: expand\nCREATE TABLE (;\n");
     const stop = () => {
       stopAllPostgres();
       throw new Error("docker rm killed after 55000 ms");
     };
-    const failed = await startTestDatabase({ migrationsDir, files: [], stop }).catch((error: unknown) => error);
+    const failed = await withBrokenMigrations((migrationsDir) =>
+      startTestDatabase({ migrationsDir, files: [], stop }).catch((error: unknown) => error),
+    );
     expect(failed).toBeInstanceOf(AggregateError);
     expect((failed as AggregateError).message).toMatch(/sql_error \(cleanup also failed: docker rm killed/);
     expect(ownContainers()).toEqual([]);
