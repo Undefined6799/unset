@@ -2,7 +2,7 @@
 // one command checks the stack against every rule that, if broken, would leak data or cannot be fixed later.
 //
 //   node deployment/preflight/index.ts -- --env dev|prod --compose <absolute file> [--compose <absolute file>...]
-//     [--interpolation-env <file>]
+//     [--interpolation-env <absolute file>]
 //
 // The first --compose file's directory is the project directory: every relative path resolves from it. Interpolation
 // reads the one --interpolation-env file (Compose's --env-file), or else the project directory's .env, as Compose
@@ -117,7 +117,8 @@ export const CLI_OPTIONS = {
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
 } as const;
-const USAGE = "usage: --env dev|prod --compose <file> [--compose <file>...] [--interpolation-env <file>]";
+const USAGE =
+  "usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...] [--interpolation-env <absolute file>]";
 
 function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
   // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any
