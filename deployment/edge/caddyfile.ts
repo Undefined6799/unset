@@ -430,25 +430,28 @@ export function readEdgeConfig(edgeDir: string, sitesDir: string, env: Env, file
 /** `readEdgeConfig` before its errors are scrubbed. */
 function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
   const root = resolved(files, edgeDir, "the edge directory");
-  const sitesRoot = `${root}/sites`;
-  if (resolved(files, sitesRoot, "the sites directory") !== sitesRoot) {
+  const sites: Bound = { path: `${root}/sites`, area: "sites/" };
+  if (resolved(files, sites.path, "the sites directory") !== sites.path) {
     throw new CaddyfileError("sites/ leaves the edge directory");
   }
-  if (!resolved(files, sitesDir, "the enabled sites directory").startsWith(`${sitesRoot}/`)) {
-    throw new CaddyfileError("the enabled sites directory is not inside sites/");
+  const siteBounds = [sites];
+  const enabled = resolved(files, sitesDir, "the enabled sites directory");
+  if (!siteBounds.some((bound) => enabled.startsWith(`${bound.path}/`))) {
+    throw new CaddyfileError(`the enabled sites directory is not inside ${areas(siteBounds)}`);
   }
   const lines = files
-    .read(entry(files, root, "Caddyfile", { path: root, area: "the edge directory" }, false))
+    .read(entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false))
     .split("\n");
   for (const line of FILE_IMPORTS) {
     if (lines.filter((l) => l === line).length !== 1) {
       throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
     }
   }
+  const snippets: Bound = { path: `${root}/snippets`, area: "snippets/" };
+  const read: Reader = (dir, name, bounds, links) => files.read(entry(files, dir, name, bounds, links));
   const expanded = lines.map((line) => {
-    if (line === FILE_IMPORTS[0])
-      return globbed(files, `${root}/snippets`, { path: `${root}/snippets`, area: "snippets/" }, false, line);
-    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, { path: sitesRoot, area: "sites/" }, true, line);
+    if (line === FILE_IMPORTS[0]) return globbed(files, snippets.path, [snippets], false, line, read);
+    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, siteBounds, true, line, read);
     return line;
   });
   return readCaddyfile(expanded.join("\n"), env);
@@ -470,34 +473,38 @@ function resolved(files: EdgeFiles, path: string, what: string): string {
   return real;
 }
 
-/** A directory every entry must resolve inside, and how a message names it. */
+/** A directory an entry may resolve inside, and how a message names it. */
 type Bound = { path: string; area: string };
+/** How `globbed` reads one entry of a directory. */
+type Reader = (dir: string, name: string, bounds: Bound[], links: boolean) => string;
+const areas = (bounds: Bound[]): string => bounds.map((bound) => bound.area).join(" and ");
 
-/** The text of every entry of `dir` in byte order, each checked to resolve inside `bound`. */
-function globbed(files: EdgeFiles, dir: string, bound: Bound, links: boolean, line: string): string {
+/** The text of every entry of `dir` in byte order, each read through `read`, which checks where it resolves. */
+function globbed(files: EdgeFiles, dir: string, bounds: Bound[], links: boolean, line: string, read: Reader): string {
   const names = files.list(dir).sort();
   if (names.length === 0) throw new CaddyfileError(`${line} matches nothing`);
   return names
     .map((name) => {
       if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
-      return files.read(entry(files, dir, name, bound, links));
+      return read(dir, name, bounds, links);
     })
     .join("\n");
 }
 
 /**
- * Where `dir/name` really is: a regular file with one hard link whose resolved path lies inside `bound`. When `links`
- * is true it may also be a symlink to such a file; the link's own place does not matter, only where it leads.
+ * Where `dir/name` really is: a regular file with one hard link whose resolved path lies inside one of `bounds`. When
+ * `links` is true it may also be a symlink to such a file; the link's own place does not matter, only where it leads.
  */
-function entry(files: EdgeFiles, dir: string, name: string, bound: Bound, links: boolean): string {
+function entry(files: EdgeFiles, dir: string, name: string, bounds: Bound[], links: boolean): string {
   const path = `${dir}/${name}`;
   const own = files.kind(path).type;
   if (own !== "file" && !(own === "link" && links)) throw new CaddyfileError(`${name}: not a regular file`);
   if (own === "link" && files.realpath(path) === null) throw new CaddyfileError(`${name}: dangling link`);
   const target = resolved(files, path, name);
-  if (!target.startsWith(`${bound.path}/`)) {
+  if (!bounds.some((bound) => target.startsWith(`${bound.path}/`))) {
+    const area = areas(bounds);
     throw new CaddyfileError(
-      own === "link" ? `${name}: the link leaves ${bound.area}` : `${name}: the file is not inside ${bound.area}`,
+      own === "link" ? `${name}: the link leaves ${area}` : `${name}: the file is not inside ${area}`,
     );
   }
   const real = files.kind(target);
@@ -533,12 +540,11 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
  */
 export function edgeSiteProblems(config: Caddyfile): string[] {
-  const found = [...zoneProblems(config), ...positionProblems(config.global ?? [], "the global options", false)];
+  const found = [...zoneProblems(config), ...positionProblems(config.global ?? [], "the global options", null)];
   const proxied = new Set<string>();
   for (const site of config.sites) {
     found.push(...addressProblems(site), ...siteProblems(site));
-    const pds = site.placeholders.includes("PDS_HOST");
-    found.push(...positionProblems(site.directives, siteName(site), pds));
+    found.push(...positionProblems(site.directives, siteName(site), hostOf(site)));
     const proxies = named(flatten(site.directives), "reverse_proxy");
     const upstreams = new Set(proxies.map(upstreamOf).filter((upstream) => upstream !== null));
     if ([...upstreams].some((upstream) => proxied.has(upstream))) {
@@ -568,7 +574,7 @@ function zoneProblems(config: Caddyfile): string[] {
     throw error;
   }
   const limits = named(directives, "rate_limit");
-  const found = positionProblems(directives, "the zones snippet", false);
+  const found = positionProblems(directives, "the zones snippet", null);
   if (limits.length !== 1) found.push(`the zones snippet holds ${limits.length} rate_limit blocks`);
   const global = named(limits[0]?.block ?? [], "zone").find((zone) => zone.args[0] === "global");
   if (global === undefined) found.push("there is no global zone");
@@ -576,18 +582,25 @@ function zoneProblems(config: Caddyfile): string[] {
   return found;
 }
 
-/** Only `{$PDS_HOST}` may be a site address, alone; a literal address is loopback, on a site with no upstream. */
+/** The host placeholders a site address may be, each alone on its site. */
+const HOSTS: readonly EnvName[] = ["PDS_HOST"];
+/** The host placeholder a site is written as, or null when it has none. */
+const hostOf = (site: Site): EnvName | null =>
+  site.placeholders.find((env) => env !== null && HOSTS.includes(env)) ?? null;
+
+/** Only a host placeholder may be a site address, alone; a literal address is loopback, on a site with no upstream. */
 function addressProblems(site: Site): string[] {
   const name = siteName(site);
   const found: string[] = [];
-  const pds = site.placeholders.includes("PDS_HOST");
-  if (pds && site.addresses.length !== 1) found.push(`${name}: {$PDS_HOST} shares its site with another address`);
+  const host = hostOf(site);
+  if (host !== null && site.addresses.length !== 1)
+    found.push(`${name}: {$${host}} shares its site with another address`);
   site.addresses.forEach((address, at) => {
     const env = site.placeholders[at] ?? null;
-    if (env !== null && env !== "PDS_HOST") found.push(`${name}: {$${env}} is not a site address`);
+    if (env !== null && !HOSTS.includes(env)) found.push(`${name}: {$${env}} is not a site address`);
     if (env === null && !LOOPBACK_ADDRESS.test(address)) found.push(`${name}: a literal site address is not loopback`);
   });
-  if (!pds && named(flatten(site.directives), "reverse_proxy").length > 0) {
+  if (host === null && named(flatten(site.directives), "reverse_proxy").length > 0) {
     found.push(`${name}: a site other than {$PDS_HOST} has an upstream`);
   }
   return found;
@@ -602,8 +615,7 @@ function addressProblems(site: Site): string[] {
  */
 const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>> = {
   PDS_HOST: () => false,
-  PDS_UPSTREAM: ({ directive, arg, pds }) =>
-    pds && directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null,
+  PDS_UPSTREAM: (at) => at.host === "PDS_HOST" && isUpstream(at),
   ACME_EMAIL: ({ directive, arg, parents }) => {
     // The chain from the block root, so a data block (header, map, fields) that opens a level named tls or issuer
     // cannot hold it (coordinator verification of #552).
@@ -619,17 +631,26 @@ const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>
     );
   },
 };
-type Position = { directive: Directive; arg: number; parents: Directive[]; pds: boolean };
+/** Where a placeholder is: its directive, argument, enclosing directives, and the host of the site it is on. */
+type Position = { directive: Directive; arg: number; parents: Directive[]; host: EnvName | null };
+/** The placeholder is a reverse_proxy's one upstream, its last argument. */
+const isUpstream = ({ directive, arg }: Position): boolean =>
+  directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null;
 
 /** Every placeholder in `directives` (at any depth) that is outside its position, named for `owner`. */
-function positionProblems(directives: Directive[], owner: string, pds: boolean, parents: Directive[] = []): string[] {
+function positionProblems(
+  directives: Directive[],
+  owner: string,
+  host: EnvName | null,
+  parents: Directive[] = [],
+): string[] {
   return directives.flatMap((directive) => [
     ...directive.placeholders.flatMap((env, arg) =>
-      env === null || PLACEHOLDER_POSITIONS[env]({ directive, arg, parents, pds })
+      env === null || PLACEHOLDER_POSITIONS[env]({ directive, arg, parents, host })
         ? []
         : [`${owner}: {$${env}} is outside its position in ${directive.name}`],
     ),
-    ...positionProblems(directive.block ?? [], owner, pds, [...parents, directive]),
+    ...positionProblems(directive.block ?? [], owner, host, [...parents, directive]),
   ]);
 }
 
