@@ -1,7 +1,7 @@
 // The preflight's inputs (P1.30, P1.30a): the command line, the compose files as one stack, the interpolation and
 // service env files, and the readers and runners the checks use. Anything that keeps the preflight from judging the
 // stack throws CannotRun or ParseError; index.ts turns either into exit 2.
-import { lstatSync, readFileSync, realpathSync, type Stats, statSync } from "node:fs";
+import { lstatSync, readFileSync, readlinkSync, realpathSync, type Stats, statfsSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { undeclaredNetworks } from "./checks/networks.ts";
@@ -27,6 +27,8 @@ export type Deps = {
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
   realpath?: (path: string) => string | null;
+  readlink?: (path: string) => string;
+  statfs?: (path: string) => { type: number };
   uid?: number;
   checks?: readonly Check[];
   timeoutMs?: number;
@@ -60,10 +62,16 @@ const lstatOrNull = (path: string): Stats | null => {
   }
 };
 
-/** Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. */
+/**
+ * Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. It asks the
+ * kernel through realpath(3) ("Synchronous realpath(3)", Node v26.10.0 doc/api/fs.md, fs.realpathSync.native; glibc
+ * build). The JavaScript realpathSync joins each link target with path.resolve(previous, target), which collapses
+ * `x/..` as text before following x, so a link through `x/..` read as a folder the kernel never reaches, and some
+ * such links never resolved at all (verifier B3 on #700).
+ */
 const realpathOrNull = (path: string): string | null => {
   try {
-    return realpathSync(path);
+    return realpathSync.native(path);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") return null;
@@ -278,6 +286,8 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
     realpath: deps.realpath ?? realpathOrNull,
+    readlink: deps.readlink ?? ((path) => readlinkSync(path)),
+    statfs: deps.statfs ?? ((path) => statfsSync(path)),
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };
   return { inputs, configured: new ConfiguredValues(values) };

@@ -487,7 +487,8 @@ const digest = `sha256:${"a".repeat(64)}`;
 // Every field the parser reads, so the comparison covers its whole view: a whole-reference and a `$$` value, env
 // files and file secrets (the files exist, as Compose requires), and networks in both service forms beside a service
 // on the implicit default network (P1.30t), every hardening and limit key in each scalar form it accepts (P1.30x), and
-// build, tmpfs, both depends_on forms and a short-form service secret (P1.30y).
+// build, tmpfs, both depends_on forms and a short-form service secret (P1.30y), and a build-only service with no
+// image, which Compose leaves out and the parser reads as null (P1.27w).
 const STACK = `name: unset-prod
 services:
   edge:
@@ -539,6 +540,11 @@ services:
     mem_limit: 1g
     cpus: "1.5"
     restart: "no"
+  migrate:
+    build:
+      context: ./edge
+      dockerfile: migrate.Dockerfile
+    networks: [inner]
 networks:
   front: {}
   inner:
@@ -640,7 +646,7 @@ function oursAsCompose(file: string) {
       ours.services.map((service) => [
         service.name,
         {
-          image: service.image,
+          image: service.image ?? null,
           envFiles: service.envFiles.map((path) => resolve(dirname(file), path)),
           environment: Object.fromEntries(
             service.environment.map(([key, value]) => [
@@ -683,7 +689,7 @@ function theirsAsOurs(theirs: Theirs) {
       Object.entries(theirs.services).map(([name, service]) => [
         name,
         {
-          image: service.image,
+          image: service.image ?? null,
           envFiles: (service.env_file ?? []).map((entry) => entry.path),
           environment: service.environment ?? {},
           ports: (service.ports ?? []).map((p) => ({

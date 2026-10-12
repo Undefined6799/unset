@@ -4,7 +4,7 @@ type: pitfall
 status: current
 areas: ["[[deployment]]"]
 summary: "Node reads --env-file anywhere before a literal --, even after the script name, and runs the file's NODE_OPTIONS."
-code: [deployment/preflight/inputs.ts, deployment/preflight/cli.test.ts]
+code: [deployment/preflight/inputs.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts]
 sources: [unset-plan/book-edits/2026-10-12-preflight-compose-inputs.md]
 importance: high
 related: ["[[deployment]]"]
@@ -26,3 +26,8 @@ and `HOME`.
 `node <script> -- <args>`; an env file a CLI judges may not hold `NODE_OPTIONS`.
 `deployment/preflight/cli.test.ts` enforces all three for the preflight, whose flags are `CLI_OPTIONS` in
 `deployment/preflight/inputs.ts` (moved out of `index.ts` by P1.27j).
+`deployment/preflight/stack.ts` (P1.27w), the one way to start the dev stack, calls the preflight in that form and also
+sets an empty `NODE_OPTIONS` for both children; `stack.test.ts` spawns the hook case with only `PATH` and `HOME`.
+
+Re-checked at P1.27u (#700), which changed the preflight only in how it resolves real paths; the flag parsing
+and the three rules above are unchanged.

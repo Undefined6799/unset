@@ -2380,14 +2380,50 @@ Done when (tests, planted fixtures in the guard's tests):
 
 ---
 
+### P0.09p — Export the identity syntax module
+Tags: —            Depends on: P0.09c            Plan: rule SE-6
+Product (`domains/identity/package.json` and one test), kind/build; slice 1; book edit
+  2026-10-12-p009n-trusted-test-imports, amendment 5 (21:16Z), from architecture's Amendment 2 of
+  2026-10-12-workspace-imports-and-remote-daemon (the three-PR split). Lane: Phase 0. PR (i) of P0.09n's three; lands
+  first. Nothing from Alex.
+
+**What:** `domains/identity/package.json` gains the subpath export `"./syntax": "./syntax.ts"`, so a trusted file can
+import `parseDid` without loading the package root, whose `index.ts` re-exports untrusted modules.
+
+Done when a test importing `@unset/domains-identity/syntax` typechecks and gets the same `parseDid` as `syntax.ts`
+(red first: TS2307 and "not exported"), and check is green.
+
+---
+
+### P0.09q — Trusted code imports only trusted modules
+Tags: trusted            Depends on: P0.09p            Plan: rule SE-6
+Trusted base (four `shared/http` tests, `infrastructure/audit/append.ts`), kind/refactor; slice 1; book edit
+  2026-10-12-p009n-trusted-test-imports, amendment 5 (21:16Z). Lane: Phase 0. PR (ii) of P0.09n's three. Its PR body
+  says it is inert until P0.09n lands. Nothing from Alex.
+
+**What:**
+- `shared/http/csp/headers.test.ts`, `shared/http/csrf/coverage.test.ts`, `shared/http/csrf/gate.test.ts` and
+  `shared/http/server.test.ts` drop their runtime import of `createLogger` from `@unset/shared-log` for a local capture
+  logger typed with `import type { Logger }` (amendment 3). shared/log stays untrusted.
+- `infrastructure/audit/append.ts:5` imports `parseDid` and `type Did` from `@unset/domains-identity/syntax`
+  (amendment 4).
+
+Done when the four tests still assert the same log lines, the audit tests pass unchanged, and check is green.
+
+---
+
 ### P0.09n — Bar trusted tests from product helpers
-Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Tags: [SEC] [ALEX] (typed line: scripts/guards, CODEOWNERS)            Depends on: P0.09q            Plan: rule SE-6
 Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
   1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
-  2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686. Lane: P0.09t's
-  (Phase 0). It gets its own PR (D3, one step per PR), though the record allowed sharing P0.09t's.
-Waits for: Alex's typed line "yes P0.09n scripts/guards trusted-base imports", asked with the other lines after
-  P0.16a. The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`.
+  2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686, with amendments 1
+  (19:36Z), 2 (19:58Z, architecture's 2026-10-12-workspace-imports-and-remote-daemon), 3 (21:02Z), 4 (21:12Z) and
+  5 (21:16Z). P0.09o (#707) is folded in (amendment 4). Lane: Phase 0. It is the third of three PRs (amendment 5):
+  P0.09p (product), P0.09q (trusted), then this one, the check class. Each stays in one SE-6 class and is green alone.
+Waits for: Alex's combined typed line "yes P0.09n scripts/guards CODEOWNERS trusted-base imports shared-config
+  shared-errors identity-syntax", on this PR only. If he has already typed P0.09n's earlier line, only "yes P0.09n
+  CODEOWNERS shared-config shared-errors identity-syntax trusted" is added. A tightening that widens the trusted
+  section: later changes to shared/config, shared/errors and syntax.ts become trusted-class PRs.
 Where: `scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`.
 
 The gap: depcruise lets any `*.test.ts` import anything, and `deployment/postgres/init/00-bootstrap.test.ts:4` imports
@@ -2401,12 +2437,38 @@ The fix:
 - `tests/support/postgres.ts`, `tests/support/docker.ts`, `tests/integration/postgres-helper.test.ts` and
   `tests/integration/docker-helper.test.ts` join the CODEOWNERS trusted section in the same PR, so the bootstrap test's
   import stays legal. Cost: a later change to those helpers is a trusted-class PR of its own.
+- Amendment 1: `tests/support/image-build.ts` (from P1.27x) and its test join the trusted section too. The builder
+  lists every `tests/support` file a trusted test imports on main at build time and makes each one trusted, or the
+  guard fails.
+- Amendment 2: the guard resolves `@unset/*` specifiers through the workspace map (each package.json `name` to its
+  folder) before the npm exemption and applies the trusted-file rule to the resolved path; an unresolvable `@unset/*`
+  name fails closed. `import type { X }` and type-only `import { type X }` clauses are exempt; a mixed clause counts
+  as a value import. The trusted tests' `@unset/shared-log` imports become capture loggers in P0.09q (amendment 3).
+- Amendment 4 (P0.09o folded in): the boundary covers every trusted file, tests and product alike. `shared/config`
+  and `shared/errors` join the trusted section (trusted `shared/http/config.ts:3`, `csp/sources.ts:3`, `errors.ts:4`
+  and `server.ts:9` import them, and `server.test.ts:2` and `config.test.ts:1` too). `/domains/identity/syntax.ts`
+  joins it alone (56 lines, no imports; trusted `verify-handle.ts:10` already imports it); the package stays
+  untrusted because `index.ts` re-exports untrusted modules. The guard resolves `@unset/*` subpaths through the
+  package's `exports`; `append.ts` uses the subpath from P0.09q.
 - Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
-- Sequencing: P1.27g (#690) and P1.27i (#697), which edit those helpers, merged first, so nothing has to move.
+- Sequencing: P1.27g (#690), P1.27i (#697), P1.27x (#702) and P1.11c (#706), which edit those helpers, have all
+  merged, so nothing has to move. P1.11f and P1.11i, which edit them next, become trusted-class PRs once this lands.
 
 Done when (tests, planted fixtures in the guard's tests):
   - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
+  - Red (amendment 2): a value import of an untrusted `@unset/*` package fails; an unresolvable `@unset/*` name
+    fails; a mixed clause fails; a type-only import passes.
+  - Red (amendment 4): a trusted product file with a value import of an untrusted package fails; an `@unset/*` subpath
+    resolves through `exports` to a trusted file and passes; a subpath missing from `exports` fails closed.
   - The guard is green on the real tree, and the full suite is green.
+
+---
+
+### P0.09o — Bar trusted code from untrusted packages (folded into P0.09n)
+Retired 2026-10-12 21:12Z: book edit 2026-10-12-p009o-trusted-product-imports, amendment 1, from architecture's
+Amendment 1 item 4 of 2026-10-12-workspace-imports-and-remote-daemon. The resolver, the product-file boundary and the
+CODEOWNERS move only go green together, so all of this step now lives in P0.09n (its amendment 4). Issue #707 is
+folded into #692. The id is not reused.
 
 ---
 
