@@ -8,7 +8,13 @@ import { join } from "node:path";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { type MigrateOptions, migrate } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 const initDir = join(import.meta.dirname, "..", "..", "..", "deployment", "postgres", "init");
 const migratorPassword = randomPassword();
@@ -21,7 +27,7 @@ beforeAll(async () => {
     secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
   });
 }, 120_000);
-afterAll(stopAllPostgres);
+afterAll(stopAllPostgres, STOP_ALL_MS);
 
 /** A fresh database owned by migrator, an empty migrations folder, and the log lines the run writes. */
 function setup(user = "migrator", password = migratorPassword) {

@@ -17,7 +17,7 @@ export const EDGE = join(REPOSITORY, "deployment", "edge");
 export const PDS_HOST = "pds.unset.test";
 const OWNER_LABEL = "sh.unset.test-owner";
 // Every docker call is killed at its own budget (P1.27k), so a hung daemon fails the calling test or hook with a named
-// message instead of blocking the event loop until the job's timeout. A daemon call (inspect, port, exec, logs, rm) may
+// message instead of blocking the event loop until scripts/test/run.ts kills the whole run at 600 s. A daemon call (inspect, port, exec, logs, rm) may
 // queue behind CI's parallel image builds but never for a minute. The pull and the build share beforeAll's 600 s with
 // the start; a probe run fits inside the 120 s budget of the tests that probe (CONTAINER_MS in edge.image.test.ts).
 const CALL_MS = 60_000;
@@ -115,9 +115,9 @@ export function buildEdgeImage(): string {
 }
 
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */
-function bridgeGateway(): string {
+function bridgeGateway(callMs: number): string {
   const inspected = docker(["network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}"], {
-    timeoutMs: CALL_MS,
+    timeoutMs: callMs,
   });
   if (inspected.code !== 0 || inspected.out.trim() === "") throw new Error("no docker bridge gateway");
   return inspected.out.trim();
@@ -160,56 +160,57 @@ async function waitHealthy(name: string, timeoutMs: number): Promise<void> {
   throw new Error(`edge not healthy: ${docker(["logs", name], { timeoutMs: CALL_MS }).err.slice(-2000)}`);
 }
 
-/** Starts the edge with the shipped config and a fresh stub upstream. */
-export async function startEdge(image: string): Promise<Edge> {
+/**
+ * Starts the edge with the shipped config and a fresh stub upstream. `callMs` kills the docker calls the start and the
+ * removal make; only a test of a killed start lowers it.
+ */
+export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> {
   const seen: Seen[] = [];
-  const gateway = bridgeGateway();
+  const gateway = bridgeGateway(callMs);
   const stub = await startStub(gateway, seen);
   const name = `unset-edge-${process.pid}-${Date.now()}`;
   const ro = (from: string, to: string) => ["-v", `${from}:${to}:ro`];
-  const run = docker(
-    [
-      "run",
-      "-d",
-      "--name",
-      name,
-      "--label",
-      `${OWNER_LABEL}=${process.pid}`,
-      "--read-only",
-      "--tmpfs",
-      "/tmp",
-      "--tmpfs",
-      "/data:uid=65532,gid=65532",
-      "--tmpfs",
-      "/config:uid=65532,gid=65532",
-      "--add-host",
-      `${PDS_HOST}:127.0.0.1`,
-      "-p",
-      "127.0.0.1::443",
-      "-e",
-      "ACME_EMAIL=edge@unset.test",
-      "-e",
-      `PDS_HOST=${PDS_HOST}`,
-      "-e",
-      `PDS_UPSTREAM=${gateway}:${stub.port}`,
-      ...ro(join(import.meta.dirname, "fixtures", "tls.caddy"), "/etc/caddy/snippets/tls.caddy"),
-      ...ro(join(EDGE, "sites", "pds.caddy"), "/etc/caddy/sites/enabled/pds.caddy"),
-      image,
-    ],
-    { timeoutMs: CALL_MS },
-  );
-  if (run.code !== 0) {
-    stub.server.close();
-    throw new Error(`edge did not start: ${run.err}`);
-  }
+  // Defined before the run: a killed `run -d` may still have created the container, and the stub must close (N6).
   const stop = async () => {
     try {
-      docker(["rm", "-f", name], { timeoutMs: CALL_MS });
+      docker(["rm", "-f", name], { timeoutMs: callMs });
     } finally {
       await new Promise((resolve) => stub.server.close(resolve));
     }
   };
   try {
+    const run = docker(
+      [
+        "run",
+        "-d",
+        "--name",
+        name,
+        "--label",
+        `${OWNER_LABEL}=${process.pid}`,
+        "--read-only",
+        "--tmpfs",
+        "/tmp",
+        "--tmpfs",
+        "/data:uid=65532,gid=65532",
+        "--tmpfs",
+        "/config:uid=65532,gid=65532",
+        "--add-host",
+        `${PDS_HOST}:127.0.0.1`,
+        "-p",
+        "127.0.0.1::443",
+        "-e",
+        "ACME_EMAIL=edge@unset.test",
+        "-e",
+        `PDS_HOST=${PDS_HOST}`,
+        "-e",
+        `PDS_UPSTREAM=${gateway}:${stub.port}`,
+        ...ro(join(import.meta.dirname, "fixtures", "tls.caddy"), "/etc/caddy/snippets/tls.caddy"),
+        ...ro(join(EDGE, "sites", "pds.caddy"), "/etc/caddy/sites/enabled/pds.caddy"),
+        image,
+      ],
+      { timeoutMs: callMs },
+    );
+    if (run.code !== 0) throw new Error(`edge did not start: ${run.err}`);
     await waitHealthy(name, 30_000);
     const port = hostPort(name, 443);
     const ca = await readRootCa(name);

@@ -22,7 +22,13 @@ import {
   sealedColumns,
   withClient,
 } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 const POSTGRES = join(REPOSITORY, "infrastructure", "postgres");
@@ -42,7 +48,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.close()));
   stopAllPostgres();
-});
+}, STOP_ALL_MS);
 
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
   const pool = createPool({

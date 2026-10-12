@@ -24,7 +24,13 @@ import {
   withClient,
   withTransaction,
 } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 const ROLES = ["web", "admin", "auditor"] as const;
@@ -66,7 +72,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.close()));
   stopAllPostgres();
-});
+}, STOP_ALL_MS);
 
 function poolAs(role: Role): Pool {
   const pool = createPool({
