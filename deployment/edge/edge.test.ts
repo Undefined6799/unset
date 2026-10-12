@@ -33,16 +33,22 @@ const lock = JSON.parse(readFileSync(join(EDGE, "..", "images", "bases.lock.json
   { ref: string; tag: string; digest: string; source: string }
 >;
 
-/** The final stage's instructions before USER, each with its continuation lines joined by newlines. */
+/**
+ * The final stage's RUN instructions before USER, each with its continuation lines joined by newlines. Keywords are
+ * matched in any case with any whitespace after them, and a line continues only after one ending in a backslash
+ * (moby/buildkit frontend/dockerfile/docs/reference.md, "Format" and "escape", read 2026-10-12).
+ */
 const runsBeforeUser = (text: string): string[] => {
-  const runtime = text.split(/^FROM .*$/m).at(-1) ?? "";
+  const runtime = text.split(/^FROM\s.*$/im).at(-1) ?? "";
   const instructions: string[] = [];
-  for (const line of runtime.slice(0, runtime.indexOf("\nUSER ")).split("\n")) {
-    if (line === "" || line.startsWith("#")) continue;
-    if (/^\s/.test(line)) instructions.push(`${instructions.pop() ?? ""}\n${line}`);
-    else instructions.push(line);
+  let continued = false;
+  for (const line of runtime.split("\n")) {
+    if (!continued && (line.trim() === "" || /^\s*#/.test(line))) continue;
+    instructions.push(continued ? `${instructions.pop() ?? ""}\n${line}` : line);
+    continued = line.endsWith("\\");
   }
-  return instructions.filter((instruction) => instruction.startsWith("RUN "));
+  const user = instructions.findIndex((instruction) => /^\s*USER\s/i.test(instruction));
+  return instructions.slice(0, user === -1 ? undefined : user).filter((instruction) => /^\s*RUN\s/i.test(instruction));
 };
 /** The setcap line as P1.28o wrote it; Amendment 3 keeps it unchanged. */
 const SETCAP_RUN = [
@@ -911,7 +917,7 @@ describe("edge image", () => {
       return (
         setcap === SETCAP_RUN &&
         exec.length === listed.length &&
-        exec.every((run, at) => JSON.stringify(JSON.parse(run.slice("RUN ".length))) === JSON.stringify(listed[at]))
+        exec.every((run, at) => JSON.stringify(JSON.parse(run.replace(/^RUN /, ""))) === JSON.stringify(listed[at]))
       );
     };
     expect(listed).toHaveLength(2);
@@ -924,6 +930,11 @@ describe("edge image", () => {
       dockerfile.replace(chmod, `${chmod}RUN ["/bin/true"]\n`),
       dockerfile.replace("rm -rf /usr/share/caddy /etc/caddy", "rm -rf /usr/share/caddy"),
       dockerfile.replace("COPY Caddyfile", 'RUN ["/bin/true"]\nCOPY Caddyfile'),
+      // Instructions are case-insensitive and any whitespace follows the keyword; an indented line is not a
+      // continuation unless the line before ends in a backslash (Dockerfile reference, "Format").
+      dockerfile.replace(chmod, `${chmod}run ["/bin/true"]\n`),
+      dockerfile.replace(chmod, `${chmod}RUN\t["/bin/true"]\n`),
+      dockerfile.replace(chmod, `${chmod}  RUN ["/bin/true"]\n`),
     ]) {
       expect(fixture).not.toBe(dockerfile);
       expect(ruled(fixture), fixture).toBe(false);
