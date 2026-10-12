@@ -8413,7 +8413,8 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
    never starts as root has no use for it, and if anything ever starts it as root, the entrypoint's gosu call fails
    instead of running Postgres as root. Postgres (`docker.io/library/postgres`, official) joins `LIBRARY_IMAGES`, the
    lock (`stripped: ["/usr/local/bin/gosu"]`, a new key by name at `images.test.ts:143`) and the mirror list as a
-   runtime entry, at `74935e72` (pushed 2026-10-07; fc973eb9 went stale) under the age-rule exception, provided the
+   runtime entry, at `74935e72` (pushed 2026-10-07; the repo pinned `5a5a84b1`, and the book's `fc973eb9` was already
+   stale) under the age-rule exception, provided the
    body quotes the fixed HIGH or CRITICAL Trivy lines on both digests (at least OpenSSL CVE-2026-75804 and
    CVE-2026-84782 and pcre2 CVE-2026-103111 where they appear); otherwise not before 2026-10-14.
    `tests/support/postgres.ts` reads the lock entry; tests keep running the upstream image as root with gosu,
@@ -8440,7 +8441,10 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
    other kinds keep at least 2. The postgres kind's package-database list is `statoverride` only, under amendment 7's
    test (book edit 2026-10-12-p129d-departures-recorded, from architecture's 2026-10-12-p129d-departures).
 
-   As built: merged by Alex at 2026-10-12T03:46:41Z as `46bedab` (#594).
+   As built: merged by Alex at 2026-10-12T03:46:41Z as `46bedab` (#594). The pin moved from `5a5a84b1` (the repo's
+   actual pin; the book's `fc973eb9` was already stale) to `74935e72` under the age-rule exception. Four departures,
+   ruled neutral or tightening (book edit 2026-10-12-p129d-departures-recorded). Follow-ups (book edit
+   2026-10-12-p129d-post-merge-follow-ups): F1 and a nit to P1.29c, F2 to P1.29l, F3 to P1.29y.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d (merged,
    #594), P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f and P1.29m, so no image is composed before
    every image is scanned):
@@ -8503,6 +8507,10 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     - Per-image values (expected uid, health command) come from one exact map in list-dockerfiles.ts, beside
       IGNOREFILES. An image missing from the map fails discovery, so a new image cannot arrive unchecked.
     - Every check that ran for node-app or edge before still runs for it; migrate gains them, which is a tightening.
+    - F3 (book edit 2026-10-12-p129d-post-merge-follow-ups): the per-image map includes postgres (uid 999 and its own
+      health check, for example `pg_isready`), and migrate's entry says explicitly that it has no long-running health
+      check rather than leaving it empty. postgres.Dockerfile and migrate.Dockerfile get hadolint for the first time
+      (a tightening).
     - The pins in image-workflows.test.ts and mirror-scan.test.ts move to the matrix job.
     [ALEX] because it deletes workflow jobs: even with every check preserved, the CI-bypass classifier needs his typed
     line, for example "yes P1.29y images.yml". The PR shows, check by check, the old job line and the matrix line that
@@ -8540,7 +8548,11 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     test derives it through the same `fromImages` and stage reading the kind tests use, and fails if the lock disagrees
     in either direction or the field is missing. Expected today: node `true`; postgres `false`; caddy runtime `false`
     unless a build stage uses it; the caddy-builder entry stays `stage: build`. Red fixtures: a lock with node `false`,
-    a lock with postgres `true`, and an entry with no field. P1.29l depends on it.
+    a lock with postgres `true`, and an entry with no field. Riders (book edit 2026-10-12-p129d-post-merge-follow-ups):
+    F1, the three postgres red fixtures for the allowed package-manager rm commands that P1.29d asked for and did not
+    add, mirroring node's (`images.test.ts:1196-1202`), so the postgres row is proven wired to `DPKG_SCRIPTS_RM`; and
+    the nit, moving the long doc comment at `package-manager.image.test.ts:298-303` back above the map it describes.
+    P1.29l depends on it.
 15. **P1.29l "Scan build-stage bases whole in the mirror"** ([SEC], check: `.github/workflows/mirror.yml`,
     `scripts/ci/mirror-scan.test.ts`, a tightening, kind/build; issue #605; depends on P1.29c; owner Phase 2 or the
     third lane, not Phase 1 (`.github`); slice 1; same book edit, from architecture's F1 part 2, F2 and F3). For every
@@ -8548,9 +8560,14 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     threshold (fail on CRITICAL, warn on HIGH); the runtime run is unchanged. F2: the test's fake docker parses both
     `--flag value` and `--flag=value`, and the test fails on any `TRIVY_*` variable reaching the scan step that the
     workflow does not set itself; both mutants are red. F3: `mirror.yml:46` says the lock is read for the shape check
-    and the skips, and `:53` says Trivy 0.75.0. If the CI-bypass classifier refuses the edit, the coordinator asks Alex
-    for "yes P1.29l mirror build-stage scan". Done when the test shows node's extra whole-base invocation and none for
-    postgres, both mutants are red, and the full suite is green. Nothing depends on it.
+    and the skips, and `:53` says Trivy 0.75.0. F2 (book edit 2026-10-12-p129d-post-merge-follow-ups): the scan loop
+    runs every entry even after a failure, records each failure, and fails the job at the end naming every failed entry
+    by source, and the summary lists each entry with its result; on main (run 38201096441) the mirror stops at the caddy
+    runtime entry before postgres, the last entry, so postgres has never had a mirror scan. Its test: with the fake
+    docker failing the first entry, every later entry is still invoked and the job still fails. If the CI-bypass
+    classifier refuses the edit, the coordinator asks Alex for "yes P1.29l mirror build-stage scan and scan-all". Done
+    when the test shows node's extra whole-base invocation and none for postgres, both mutants are red, the scan-all
+    test passes, and the full suite is green. Nothing depends on it.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries

@@ -15,9 +15,9 @@ checked: 2026-10-12
 # Postgres tests need Docker and never skip
 
 **What goes wrong.** `npm run check` runs the integration tests, and they start Postgres with `docker run` from the
-test process (`tests/support/postgres.ts`, which reads the image from the lock's `postgres` entry). On a machine or agent container without Docker, the run fails. It does
-not skip, by design: the test runner fails on any discovered test that did not run, and a skip would hide a broken
-gate.
+test process (`tests/support/postgres.ts`, which reads the image from the lock's `postgres` entry). On a machine or
+agent container without Docker, the run fails. It does not skip, by design: the test runner fails on any discovered
+test that did not run, and a skip would hide a broken gate.
 
 **Why one mechanism.** The bootstrap test must start a fresh cluster with `deployment/postgres/init/00-bootstrap.sh`
 mounted, which only runs at initdb, and the local gate must run exactly what CI runs. So there is no CI service
