@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27g, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27w, P1.27n, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -238,6 +238,10 @@ flowchart LR
   P1_27k["P1.27k kill hung docker calls"]
   P1_27t["P1.27t kill hung edge docker calls"]
   P1_27g["P1.27g docker kill timeout follow-ups"]
+  P1_27h["P1.27h edge image test kill follow-ups"]
+  P1_27i["P1.27i docker test cleanup follow-ups"]
+  P1_27x["P1.27x unique test image tags"]
+  P1_27z["P1.27z unique edge test image tags"]
   P1_27m["P1.27m local edge TLS snippet ALEX"]
   P1_27l["P1.27l local stacks pass C2-C5 unsigned ALEX"]
   P1_27y["P1.27y build contexts match scan"]
@@ -246,6 +250,8 @@ flowchart LR
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27f["P1.27f C26 test gets a C9-valid fixture"]
   P1_27n["P1.27n P1.27y verifier test gaps"]
+  P1_27u["P1.27u C9 bind reach gaps"]
+  P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_29l["P1.29l mirror scans build-stage bases whole"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
@@ -467,6 +473,14 @@ flowchart LR
   P1_27a --> P1_29
   P1_27y --> P1_27f
   P1_30o --> P1_27f
+  P1_27t --> P1_27h
+  P1_27g --> P1_27i
+  P1_27i --> P1_27x
+  P1_27x --> P1_27z
+  P1_27t --> P1_27z
+  P1_27a --> P1_27u
+  P1_27u --> P1_29
+  P1_30a --> P1_27j
   P1_30k --> P1_30x
   P1_30x --> P1_29
   P1_30y --> P1_29
@@ -6699,8 +6713,34 @@ Done when both files pass a timeout on every docker `spawnSync`, and check is gr
 
 ---
 
+### P1.27h — Fix the edge image test kill follow-ups
+Tags: trusted            Depends on: P1.27t
+Slice 1, not urgent, issue #691, trusted base (`deployment/edge/*.image.test.ts` and
+`deployment/postgres/init/00-bootstrap.test.ts`, kind/fix), lane Phase 1, after P1.27t merges; book edit
+2026-10-12-p127h-p127t-follow-ups (17:50Z, amendment 1 18:12Z), from the coordinator's verifiers on #686 and #690.
+SE-6 keeps these out of P1.27g and #686. Nothing from Alex: it tightens tests only. Nothing depends on it.
+
+**What:**
+- N1: each test's call budgets in `caddyfile.image.test.ts` sum to less than its vitest budget (they add up to 850 s
+  against a 600 s test today), and every budget stays under `run.ts`'s 600 s (builds 295 s under 300 s).
+- N2: the local `subcommand()` names the subcommand, not the image, for `docker run busybox`.
+- N3: correct the comment at :36 ("two removals", and `cat` listed as a docker subcommand).
+- N4: a kill-path test whose stand-in outlives a short budget, red first.
+- N6: after a killed run, `afterAll` checks each `rmi` result and attempts every removal, not only up to the first kill.
+- Amendment 1 (18:12Z, P1 of the verifier on #690): the ninth `afterAll(stopAllPostgres)`, in
+  `deployment/postgres/init/00-bootstrap.test.ts:8`, runs three containers on the 10 s default; it gets an explicit
+  budget of about 185 s with a comment.
+
+Not here: N5 (trusted tests importing `tests/support`) is a check path; architecture ruled it as P0.09n.
+
+Done when N4's test is red before the change and green after, the PR body shows each test's call budgets summing
+below its budget, and check is green.
+
+---
+
 ### P1.27g — Fix the docker kill timeout follow-ups
 Tags: —            Depends on: P1.27k (merged, #674)
+As built: merged at 2026-10-12T18:47:42Z as `e1a5e39` (#690, head d609000) (merge data read by REST, 19:27Z).
 Slice 1, not urgent, issue #688, product only (`tests/`, `deployment/images/*.image.test.ts`,
 `deployment/preflight/compose-parse.test.ts`, `docs/ai/notes`; no check or trusted-base path), kind/fix, lane Phase 1;
 book edit 2026-10-12-p127g-p127k-follow-ups (17:28Z), from the coordinator's verifier on #674. One PR of about 150
@@ -6728,8 +6768,73 @@ docker build kill above 300 s, and check is green.
 
 ---
 
+### P1.27i — Fix the docker test cleanup follow-ups
+Tags: —            Depends on: P1.27g (merged, #690)
+As built: merged at 2026-10-12T19:20:13Z as `7636024` (#697, head 62280f2) (merge data read by REST, 19:27Z).
+Slice 1, not urgent, issue #693, product (`tests/support/`, `tests/integration/`, `deployment/images/*.image.test.ts`),
+kind/fix, lane Phase 1; book edit 2026-10-12-p127i-p127g-follow-ups (18:12Z), from the coordinator's verifier on #690
+(passed at d609000). Its P1 rides P1.27h. It merged before P0.09n, so P2 and P9 stayed in this product step.
+
+**What:**
+- P2 [red first]: `remove()` in `tests/support/postgres.ts` no longer swallows a killed `rm`; a hung removal fails the
+  hook by name.
+- P3: a test that the edge stub closes after a killed `run -d`.
+- P4: the postgres image removal kill rises above the 60 s queueing allowance and stays under its hook budget.
+- P6: `dockerAsync`'s kill message names the full subcommand (`edge-container.ts:104`).
+- P7: `GROUPS` gains `checkpoint` and the swarm commands.
+- P8: wrap the three comment lines over 120 columns.
+- P9 [red first]: `withCleanup` refuses an async body (a type error or a runtime throw, whichever the builder shows
+  red).
+- P10: the SIGTERM test waits for the stand-in's ready signal before starting the budget, instead of assuming Node
+  starts within 300 ms.
+
+P5 is a wording error in #690's PR body, corrected there; nothing to build.
+
+Done when P2 and P9 are red on the base and green after, and check is green.
+
+---
+
+### P1.27x — Tag each test image build uniquely
+Tags: —            Depends on: P1.27i (merged, #697)
+Slice 1, issue #698, product (`deployment/images/{migrate,package-manager,postgres}.image.test.ts`,
+`tests/integration/deployment/edge/{edge-container,edge.image.test}.ts`), kind/fix, lane Phase 1, ahead of other Phase 1
+work; book edit 2026-10-12-p127x-p127z-image-tag-race (19:15Z), from Phase 1's finding on #686
+(https://github.com/Undefined6799/unset/pull/686#issuecomment-6130885833). P1.27z depends on it.
+
+**Why:** `migrate.image.test.ts` and `package-manager.image.test.ts` both build `migrate.Dockerfile` from the same
+context, so BuildKit gives both the same image id. migrate's cleanup runs `rmi -f <id>` while package-manager still
+uses it, which fails with "No such image: sha256:…". The four edge image tests share the edge image id the same way.
+Any PR's check can go red from it. This is the root-cause fix, not a retry.
+
+**What:**
+- Each build gets its own tag, `-t unset-test-<random>`, and every later `run`, `inspect` and cleanup uses that tag.
+  Cleanup is `rmi <tag>` without `-f`, so Docker removes the image only when its last tag goes.
+- Red first: a test that builds the same Dockerfile and context twice under two tags, removes one, and shows the other
+  still runs. It fails with the old `rmi -f <id>` cleanup.
+- The `xcaddy build` failure message keeps enough of stderr to name the cause (for example the last Go error line, not a
+  fixed byte tail). The PR body says whether #686's `xcaddy` failure was this race or a module fetch; a module fetch
+  goes back to the step book as its own issue, not a retry. (Unverified when booked.)
+
+Done when a grep in the PR body shows no product image test removing an image by id or with `-f`, the red-first test
+passes, and check is green.
+
+---
+
+### P1.27z — Tag each edge test image build uniquely
+Tags: trusted            Depends on: P1.27x, P1.27t
+Slice 1, issue #699, trusted base (`deployment/edge/{caddyfile,package-manager}.image.test.ts`), kind/fix, lane
+Phase 1; book edit 2026-10-12-p127x-p127z-image-tag-race (19:15Z). SE-6 splits it from P1.27x. It may land beside
+P1.27h or stacked on it, whichever merges first. Nothing from Alex. Nothing depends on it.
+
+**What:** the same unique tag and `rmi <tag>` without `-f` as P1.27x.
+
+Done when a grep in the PR body shows no trusted image test removing an image by id or with `-f`, and check is green.
+
+---
+
 ### P1.27m — Local edge TLS snippet for the local stack
 Tags: [SEC] [ALEX] trusted            Depends on: —
+As built: merged at 2026-10-12T19:23:34Z as `7816758` (#678, head ab64101) (merge data read by REST, 19:27Z).
 Slice 1, issue #670, trusted base (`deployment/edge/`, kind/feature), lane Phase 2, before P1.27l; book edit
 2026-10-12-p127l-p127m-local-unsigned-path (16:50Z), from architecture's 2026-10-12-p129-local-build-preflight and
 2026-10-12-p129-tls-override-and-edge-sites (item 1). Alex's card "Let a local-only stack built from source pass the
@@ -6808,7 +6913,7 @@ folder in the agreement test, architecture's confirmation is linked in the PR bo
 
 ---
 
-### P1.27f — Give the C26 symlink test a C9-valid fixture
+### P1.27f — Give the C26 symlink test a C9-valid fixture (**superseded** by P1.27g)
 Tags: —            Depends on: P1.27y (merged, #675), P1.30o (merged, #676)
 Slice 1, issue #682, product (preflight tests only), lane Phase 2, first, in its own small PR ahead of P1.27a; book
 edit 2026-10-12-p127f-main-red-c26-c9 (17:14Z), from the coordinator (17:11Z). Nothing depends on it.
@@ -6824,10 +6929,14 @@ locked directory), so only C26's own refusals fire. No assertion is weakened, an
 
 Done when check is green on the PR and on main after the merge.
 
+Superseded: #684 was closed unmerged; #690 (P1.27g, merged 18:47:42Z as `e1a5e39`) carried the same fixture fix to
+main, which went green. Nothing is left to build; issue #682 closes on Alex's word.
+
 ---
 
 ### P1.27a — Refuse sticky writable ancestors in C9
 Tags: [SEC]            Depends on: P1.30o (merged, #676)
+As built: merged at 2026-10-12T19:21:16Z as `3915cfc` (#689, head c9df6a0) (merge data read by REST, 19:27Z).
 Slice 1, issue #681, product (`deployment/preflight/checks/secrets.ts` and its tests), lane Phase 2; book edit
 2026-10-12-p127a-c9-sticky-ancestors (17:15Z), from architecture's amendment 1 (a) to 2026-10-12-c9-secret-file-owner.
 Nothing new from Alex: it tightens within his C9 card ("Yes", 16:45:14Z). P1.29 depends on it, so the C9 rule is
@@ -6855,8 +6964,55 @@ sticky bit (the `/tmp` shape), which P1.30o's item 2 forbids.
   name, `./secrets:/s:ro`, and a bind of the folder's parent. Past about 400 lines the builder splits it into P1.27a
   and a lettered follow-up from the step book.
 
-Done when the sticky-ancestor fixture and amendment 1's fixtures are red on `520422e` and green after, and check is
-green.
+- Amendment 2 (18:12Z, architecture's Amendment 3 of 2026-10-12-c9-secret-file-owner), each red first:
+  1. `--compose` must be absolute and already normal (no `.` or `..` segment, no trailing slash); otherwise the
+     preflight fails closed with a fixed reason that echoes no value.
+  2. Containment compares realpaths with a separator-aware test in both directions, plus a `(dev, ino)` match between
+     the bind source and the secrets folder and each of its ancestors, both ways.
+
+  Red-first tests: a bind of `/`; a bind of the stack folder's parent; a bind of the secrets folder itself; a sibling
+  `secrets-old` that passes; a relative `--compose` and one with `..`, both refused; and a link on the `$PWD` path that
+  is walked when the absolute path names it.
+
+Done when the sticky-ancestor fixture and amendments 1 and 2's fixtures are red on `520422e` and green after, and
+check is green. The verifier's later gaps on #689 are P1.27u.
+
+---
+
+### P1.27u — Close the C9 bind reach gaps
+Tags: [SEC]            Depends on: P1.27a (merged, #689)
+Slice 1, issue #695, product (`deployment/preflight/checks/` and its tests), kind/fix, lane Phase 2 (the C9 owner),
+before P1.29 lays out the secrets folder; book edit 2026-10-12-p127u-c9-bind-reach-gaps (18:47Z, amendment 1 18:55Z),
+from the coordinator's verifier on #689 at c6aa877, and architecture's ruling
+2026-10-12-p127u-bind-ancestors-and-build-context for item 4. Nothing from Alex: every item tightens within his C9 card
+("Yes", 16:45:14Z). P1.29 depends on it.
+
+**What:**
+1. Tests only: the suite fails for each surviving mutant, namely a one-direction `sharesIdentity`; no ancestor line;
+   no path containment; `within()` reverted to the old `/` bug; and a `realpathOrNull` that swallows every error.
+   New fixtures: an alias of the folder's parent; a missing child under an alias; one run with `stat: () => null`; and
+   a real self-loop link with the default realpath. The PR body shows each mutant killed.
+2. [red first] A bind source that is a link whose target resolves lexically inside the secrets folder
+   (`./dangle -> secrets/newdir`) is refused, even when the target does not exist yet.
+3. [red first] A bind source under `/proc` is refused.
+4. [red first] Architecture's ruling:
+   - (a) For every bind mount, `:ro` included, the source and every ancestor up to `/` meet the secrets folder's
+     ancestor rule (root- or deploy-owned, no group or other write, no sticky exception) on both walks, with `lstat`.
+     A missing source fails. Named volumes are out of scope. Fixtures: a `:ro` bind under a uid-2000 ancestor, a bind
+     under a 0777 sticky ancestor, an as-written path crossing a writable link folder (all fail), and a clean
+     deploy-owned path (passes).
+   - (b) C26 refuses a build context whose realpath equals, contains or sits inside the secrets folder, using the
+     two-way test plus the `(dev, ino)` match; `.dockerignore` never counts. Fixtures: a root context with the secrets
+     folder inside the checkout, a context equal to it and one inside it (all fail), a sibling layout (passes), and a
+     `.dockerignore` that lists the folder (still fails).
+
+If items 1 to 4 pass about 400 lines, the builder splits 4b out as a lettered follow-up from the step book.
+
+**Layout consequence:** because `images.yml` builds `*.Dockerfile` images from the repository root, the secrets folder
+lives outside the checkout: a deploy-owned 0700 sibling folder `unset-dev-secrets`, reached from
+`deployment/compose.dev.yaml` as `../../unset-dev-secrets/`. P1.29 lays it out that way.
+
+Done when every mutant in item 1 is killed, items 2 to 4 are red on the base and green after, and check is green.
 
 ---
 
@@ -6875,6 +7031,18 @@ no line from Alex. P1.29 depends on it; P1.27l uses the same wrapper with `--env
 - The child environment is built from an allowlist only: exactly `PATH`, `HOME`, `DOCKER_HOST`, `DOCKER_CONTEXT`,
   `DOCKER_CONFIG` and `DOCKER_CERT_PATH`, and a unit test asserts it is exactly that.
 - The tests are the ones the ruling lists.
+- Amendment (18:12Z, C9 Amendment 3 and architecture's 18:07Z addendum): the wrapper hands the same absolute,
+  normalized compose path string to the preflight's `--compose` and to `docker compose -f`, and never adds `PWD` to
+  the child environment. It may accept a relative path (so P1.34 step 11 stands): `stack.ts` resolves it once with
+  `path.resolve(process.cwd(), arg)` and never reads `$PWD`. Tests: both children receive the identical string, and a
+  cwd reached through a link gives both the same physical absolute string.
+- From P1.27n's verifier (17:42Z): N-a, `build.test.ts:36` requires exactly three `/\bCONTEXT\b/` matches (the two
+  arms plus the build line), red first on `CONTEXT+=`, `printf -v CONTEXT` or `read -r CONTEXT <<<`; a `cd` before the
+  buildx line stays a known limit, named in the test comment. N-b, the fixture at `preflight.test.ts:1082` gains
+  `deployment/images/web.Dockerfile`, so "only the prefix rule refuses it" is true.
+- Amendment (18:53Z, from the third lane): the agreement test `preflight_matches_compose_config` maps a missing image
+  as `image: service.image ?? null` (`compose-parse.test.ts:614`), red first on a fixture with a build-only service.
+  `compose.dev.yaml` is the first compose file with one, so P1.29 needs it.
 
 Done when the ruling's tests are red first where they can be, then green, and check is green.
 
@@ -6908,6 +7076,9 @@ passes with only the two added destinations, and check is green.
 
 ### P1.27n — Close the P1.27y verifier test gaps
 Tags: [SEC]            Depends on: P1.27y (merged, #675)
+As built: merged at 2026-10-12T18:48:41Z as `20835d3` (#687, head fd73623) (merge data read by REST, 19:27Z).
+The verifier passed it at 17:42Z; its test nits N-a and N-b ride P1.27w, and N-c goes in P1.29's PR body under
+"What I am unsure about".
 Slice 1, issue #685, product (preflight tests and comments, plus one small C26 refusal), lane the third thread, after
 P1.27w and before P1.29; book edit 2026-10-12-p127n-p127y-verifier-gaps (17:20Z), carrying the coordinator's verifier
 nits N1 to N6 on #675. Nothing depends on it; P1.29 does not wait for it.
@@ -6921,6 +7092,26 @@ nits N1 to N6 on #675. Nothing depends on it; P1.29 does not wait for it.
 - N6: the comment at `types.ts:22`.
 
 Done when the N5 fixture is red on main and green after, the other fixtures pass, and check is green.
+
+---
+
+### P1.27j — Tidy preflight comments and the tilde check
+Tags: —            Depends on: P1.30a
+Slice 1, not urgent, issue #694, product (`deployment/preflight/` and its docs/ai note), kind/refactor, lane Phase 1;
+book edit 2026-10-12-p127j-preflight-tidy (18:22Z), from the coordinator's verifier on #677 (passed at 3ca7476). It
+touches #677's lines, so it waits for P1.30a. Nothing from Alex. Nothing depends on it.
+
+**What:**
+1. Wrap the six comment lines in `deployment/preflight/index.ts` that run past 120 columns.
+2. As its own refactor-only commit: fold the duplicated `~` check at `compose-parse.ts:354` into `r.path`. The
+   existing `~` tests stay green unchanged.
+3. Record, beside the Compose-version comment in `index.ts` and in the preflight's docs/ai note, that compose-go's
+   `template/` changed between v2.7.1 and v2.13.0; P1.30l's revisit trigger watches for that kind of change.
+
+Not here: a hand run without `--` is P1.27w's and the runbook's.
+
+Done when the existing preflight tests pass untouched, no line in the touched files is over 120 columns, and check is
+green.
 
 ---
 
@@ -7872,7 +8063,8 @@ files; the network table (P1.29).
 
 **Outputs:**
 - `preflight --env dev|prod --compose <file>... → exit 0 (all pass) | 1 (a check failed) | 2 (preflight could not
-  run)`. No `--skip` flag of any kind.
+  run)`. No `--skip` flag of any kind. Each `--compose` path is absolute and normalized; a relative path is refused
+  (P1.27a amendment 2).
 - Output: one line per check, `PASS|FAIL <id> <short reason>`; never a secret value.
 - `SecretMap`: loads secret files into a map whose `toString`, `toJSON` and `inspect` return `[redacted]`; values
   are only reachable through `secretMap.use(name, fn)`.
@@ -8883,7 +9075,8 @@ F3.2, F3.4, F3.5). No line from Alex. P1.29, P1.27w, P1.27k (order only) and P1.
    Node v26 reads the `--env-file` family from argv even after the script name and applies that file's
    `NODE_OPTIONS`, so no preflight or wrapper flag starts with `--env-file`, `--require` or `--import` (a unit test
    over the accepted flags enforces it); npm scripts and the wrapper call `node <script> -- <args>`; and a
-   `NODE_OPTIONS` key in the interpolation env file is refused (exit 2, name only).
+   `NODE_OPTIONS` key in the interpolation env file is refused (exit 2, name only). Each `--compose` path is absolute
+   and normalized; a relative path is refused (P1.27a amendment 2).
 2. Refuse to run (exit 2, name only) when `COMPOSE_ENV_FILES`, `COMPOSE_FILE`, `COMPOSE_PROJECT_DIR` or
    `COMPOSE_PROFILES` is set, or when any name a compose file interpolates is set in the process environment.
 3. F2: a leading `~` or any `$` in a path field is a ParseError naming the field: `env_file`, top-level secret `file:`,
@@ -9245,7 +9438,9 @@ P1.29h, P1.29s, P1.29t.
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate and web
    (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
-   `deployment/env/dev.example.env`; `deployment/secrets/README.md`; `deployment/networks.dev.json` with only
+   `deployment/env/dev.example.env`; `docs/human/runbooks/dev-stack-secrets.md` (the secrets folder is the
+   deploy-owned 0700 sibling `unset-dev-secrets`, outside the checkout, reached as `../../unset-dev-secrets/`; the
+   runbook says its owner, its modes and how to create it; P1.27u); `deployment/networks.dev.json` with only
    `db {internal: true, members: [postgres, migrate, web]}`. No edge and no TLS override: the edge moves to P1.29a
    (book edit 2026-10-12-p129-edge-moves-to-p129a, from architecture's 2026-10-12-p129-tls-override-and-edge-sites,
    item 2), and the homelab `dev` env uses the image's own snippet; the `tls internal` mount belongs to P1.27l and
@@ -9433,10 +9628,10 @@ P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27a, P1.27y, P1.27w) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27a, P1.27u, P1.27y, P1.27w) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
-`deployment/networks.dev.json`; `deployment/env/dev.example.env`; `deployment/secrets/README.md`;
+`deployment/networks.dev.json`; `deployment/env/dev.example.env`; `docs/human/runbooks/dev-stack-secrets.md`;
 `scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests (each part carries its share, above).
 
 **Size:** ~230 lines of YAML, ~220 script lines, ~250 test lines.
@@ -9522,7 +9717,7 @@ dev-seed:
    (The seed container joins the edge network for this one call; it is a profile service that exits.)
 4. For each test account (alice, bob, carol .0x40.space): createAccount with a generated password (crypto
    random, 24 bytes base64url) and the invite code. Handle taken → skip and report "exists".
-5. Write .seeded.json { handle, did, password } with mode 0600 in deployment/secrets/ (gitignored); print handles
+5. Write .seeded.json { handle, did, password } with mode 0600 in the sibling secrets folder; print handles
    and DIDs only; never print passwords.
 6. Re-run → idempotent (existing accounts skipped).
 ```
@@ -9534,7 +9729,8 @@ dev-seed:
 - A container added to the `edge` network without a review → `compose_dev_networks_match_table` fails.
 - `tap` profile not enabled → nothing depends on it in Phase 1.
 - Someone runs `docker compose down -v` after P1.35 → the authority's PDS data is gone; recovery is P1.34's
-  restore runbook. The runbook and `deployment/secrets/README.md` open with that warning, and `npm run dev:down`
+  restore runbook. The runbook and `docs/human/runbooks/dev-stack-secrets.md` open with that warning, and
+  `npm run dev:down`
   never passes `-v`.
 
 **Threats:** the development stack's networks and the PDS's trust in private addresses.
