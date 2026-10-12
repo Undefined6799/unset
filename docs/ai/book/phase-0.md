@@ -100,7 +100,7 @@ flowchart TD
   P008 --> P014
   P010 --> P014
   P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"] --> P015a["P0.15a ADR 0019 accepted [ALEX][SEC]"]
-  P015a --> P016["P0.16 Delivery check asserts ADR 0019 [SEC]"]
+  P015a --> P016["P0.16 Delivery check asserts ADR 0019 [ALEX][SEC]"]
 ```
 
 The Alex halves of P0.11 and P0.13 can start on day one. P0.12's ceremony waits for P0.10's hardware keys. Every
@@ -3047,7 +3047,7 @@ Done when Alex merges it with his CLAUDE.md lines on the branch. Main then has 0
 ---
 
 ### P0.16 — Delivery check asserts the ADR 0019 merge rule
-Tags: [SEC]            Depends on: P0.15a (merged, #617)            Plan: —
+Tags: [SEC] [ALEX] (Alex commits CLAUDE.md, merges by hand)            Depends on: P0.15a (merged, #617)            Plan: —
 Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15a;
 book edit 2026-10-12-p016-delivery-check-adr-0019 (final 03:40Z), from architecture's ruling in
 2026-10-12-p015-delivery-check-wording (03:35Z). Owner: Phase 2 (amendment 3, 06:50Z). Nothing depends on it.
@@ -3071,8 +3071,9 @@ The existing test moves with the check (amendment 2, 04:22Z): `claude_md_agents_
 renamed `claude_md_author_threads_never_merge`, removes "author threads never merge" from CLAUDE.md and expects
 "Delivery does not say author threads never merge their PRs". A new case removes "ADR 0019" and expects the ADR 0019
 message. The `never push to` and `ADR 0009` cases are unchanged. The test asserts more, not less.
-Red fixtures: a Delivery section without "author threads never merge", and one without "ADR 0019". Each is red, and main's
-Delivery section (after P0.15a) is green.
+Red fixtures: a Delivery section without "author threads never merge", and one without "ADR 0019". Each is red, and the
+Delivery section is green with Alex's CLAUDE.md commit on the branch; main's lacks both phrases, so it is red until
+then (amendment 4, 07:20Z).
 Done when Alex's commit is on the branch, check and the other five required checks are green, the fixtures are red and
 green as above, and Alex merges it by hand.
 
