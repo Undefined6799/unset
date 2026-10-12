@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30x, P1.30y, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -252,6 +252,8 @@ flowchart LR
   P1_30w["P1.30w preflight key allowlist and value scrub"]
   P1_30k["P1.30k compose top-level key allowlist"]
   P1_30m["P1.30m preflight withholds value reasons"]
+  P1_30x["P1.30x compose hardening and limit keys"]
+  P1_30y["P1.30y compose build, tmpfs, depends_on, secrets"]
   P1_30u["P1.30u preflight C18 edge zones"]
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
@@ -412,6 +414,10 @@ flowchart LR
   P1_30h --> P1_30g
   P1_30w --> P1_30k
   P1_30w --> P1_30m
+  P1_30k --> P1_30x
+  P1_30k --> P1_30y
+  P1_30x --> P1_29
+  P1_30y --> P1_29
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
@@ -8286,6 +8292,8 @@ PDS_HOST case) surviving on main and killed on the PR. Mutants are run locally a
 
 Done when the four are killed, and the full suite is green.
 
+As built: merged by Alex at 2026-10-12T14:17:31Z as `4b9de09` (#621).
+
 ---
 
 ### P1.30w — Preflight refuses unread keys and scrubs values
@@ -8334,7 +8342,7 @@ through allowed keys. No new id.
 Tags: [SEC]            Depends on: P1.30w (merged, #615)
 Slice 1, issue #619, product (`deployment/preflight/` compose-parse and its tests), a tightening, kind/fix; book edit
 2026-10-12-p130k-compose-top-level-allowlist (final 04:40Z), from the end of architecture's 2026-10-12-c18-follow-ups
-(04:45Z). Owner: Phase 1; no line from Alex. In either order with P1.30m. Nothing depends on it.
+(04:45Z). Owner: Phase 1; no line from Alex. In either order with P1.30m. P1.30x and P1.30y depend on it.
 
 **What** (amendment 1, 07:00Z, from architecture's "P1.30k amendment", option (a)):
 - **Top level:** an exact key allowlist: `name`, `services`, `networks`, `secrets` and `volumes`, plus `include` only
@@ -8384,6 +8392,66 @@ with no value and no template-shaped remainder; C23 prints in full when it holds
 to end through the preflight entry point. Red evidence: each probe leaks with the withhold removed.
 
 Done when every probe is withheld, the reds are shown, and the full suite is green.
+
+---
+
+### P1.30x — Read the hardening and limit keys
+Tags: [SEC]            Depends on: P1.30k
+Slice 1, product (`deployment/preflight/` compose-parse, its checks and their tests), security-review, kind/feature;
+book edit 2026-10-12-p204s-p130x-p130y-booked, from architecture's 2026-10-12-p129-compose-service-keys (14:40Z),
+option (a). Owner: the coordinator places it; Phase 1 owns `compose-parse.ts` while #626 is open, so it starts after
+#626 merges. No line from Alex. In either order with P1.30y. P1.29 depends on it. Past about 400 lines, split it by
+key group.
+
+**Rules for every key** (the ruling): the parser reads it into the `Service` type; it accepts exactly one shape, and
+anything else is a ParseError naming the key only; no key is accepted and then ignored; each key joins
+`NO_INTERPOLATION`, so no `$` is allowed; long forms only where written. The checks hold for every compose file
+preflight reads, so they encode limits safe everywhere; the dev contract that values be present
+(`compose_dev_hardening`, `compose_dev_limits`) stays in P1.29's tests. The SERVICE_KEYS doc comment is updated and
+keeps "later keys one at a time, with a ruling, in the step that needs it".
+
+| Key | Accepted shape | Check (preflight fails otherwise) |
+|---|---|---|
+| `read_only` | boolean scalar | none beyond shape (P1.29 tests require `true` where the image allows) |
+| `cap_drop` | list of strings | exactly `[ALL]`; a partial drop list is refused, not read |
+| `cap_add` | list of strings | only `NET_BIND_SERVICE`, only on the edge service (image is the lock's `edge` ref or built from `deployment/edge/Dockerfile`), and only with `cap_drop: [ALL]` on the same service |
+| `security_opt` | list of strings | exactly `[no-new-privileges:true]`; this also refuses `seccomp:unconfined`, `apparmor:unconfined` and `label:disable` |
+| `user` | string `UID` or `UID:GID`, digits only | UID and GID both non-zero; names, including `root`, `postgres` and `node`, are refused (a name resolves inside the image, where preflight can't see it) |
+| `mem_limit` | string `^[1-9][0-9]*[mg]$` | shape only (a positive size) |
+| `cpus` | number or numeric string, > 0 | shape only |
+| `pids_limit` | positive integer | `0` and `-1` (unlimited) are refused |
+| `restart` | one of `no`, `on-failure`, `unless-stopped`, `always` | shape only; narrowing to the three values P1.29 uses is a tightening and needs no ruling |
+
+**Red fixtures:** `cap_drop: [NET_RAW]`; `cap_add: [SYS_ADMIN]` on edge; `cap_add: [NET_BIND_SERVICE]` on web;
+`security_opt: [seccomp:unconfined]`; `user: root`; `user: "0:0"`; `user: "1000:0"`; `pids_limit: -1`; `user: ${UID}`.
+
+Done when every red fixture is red, a service using all nine keys in their accepted shapes is green, and the full suite
+is green.
+
+---
+
+### P1.30y — Read build, tmpfs, depends_on and service secrets
+Tags: [SEC]            Depends on: P1.30k
+Slice 1, product (`deployment/preflight/` compose-parse, its checks and their tests), security-review, kind/feature;
+book edit 2026-10-12-p204s-p130x-p130y-booked, from architecture's 2026-10-12-p129-compose-service-keys (14:40Z),
+option (a): the B1 risk keys. Owner and order as P1.30x (after #626; either order with P1.30x; P1.29 depends on it).
+No line from Alex. Past about 400 lines, split it by key group. The rules for every key are P1.30x's.
+
+| Key | Accepted shape | Check |
+|---|---|---|
+| `build` | long form only, with exactly the keys `context` and `dockerfile`; the short string form is refused, and so are `target`, `args`, `secrets`, `ssh`, `additional_contexts`, `network`, `extra_hosts`, `cache_from` and every other build key | `context` resolves to the repository root, the only context our Dockerfiles are written for; `dockerfile` resolves to a file `images.test.ts`'s discovery rule finds under `deployment/`, so `images.yml` scans it; `target` is refused because it would select a stage the "last stage ships" tests never check |
+| `tmpfs` | list of `TARGET` or `TARGET:OPTIONS`; options only from `uid=`, `gid=`, `mode=`, `size=`, `noexec`, `nosuid`, `nodev` | the target is in an exact allowlist: `/tmp` on any service, `/var/run/postgresql` on the postgres-kind service only; every other target is refused, including anything under `/etc`, `/run/secrets` or the code directory. **The same allowlist applies to `type: tmpfs` entries under `volumes`**, which today accept any absolute target. A later target needs a ruling |
+| `depends_on` | list of service names, or a map of name to `{condition}` only, the condition one of `service_started`, `service_healthy`, `service_completed_successfully`; `required` and `restart` are refused | every named service exists in the same file |
+| service `secrets` | **short form only**: a list of names; the long form (`source`, `target`, `uid`, `gid`, `mode`) is refused, because `target` is the B1 path to mount over `/etc/caddy` or anything else | each name matches `^[a-z0-9_]+$`, so its fixed target `/run/secrets/<name>` cannot leave that directory, and is declared at top level with `file:` (the existing `secretFiles` reader) |
+
+**Red fixtures:** `build: .`; `build: {context: .., dockerfile: deployment/images/node-app.Dockerfile, target: deps}`; a
+`dockerfile` outside `deployment/`; `context: ../..`; `tmpfs: [/etc/caddy/snippets]`; a `volumes` entry
+`{type: tmpfs, target: /etc/caddy}`; `tmpfs: [/var/run/postgresql]` on web; `depends_on: {ghost: {condition:
+service_healthy}}`; a long-form service secret with `target: /etc/caddy/Caddyfile`; a secret name `../x`; an undeclared
+secret name.
+
+Done when every red fixture is red, a service using all four keys in their accepted shapes is green, and the full suite
+is green.
 
 ---
 
@@ -8591,7 +8659,8 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
    2026-10-12-p129d-post-merge-follow-ups): F1 and a nit to P1.29c, F2 to P1.29l, F3 to P1.29y.
 6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d (merged,
    #594), P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f and P1.29m, so no image is composed before
-   every image is scanned):
+   every image is scanned; and on P1.30x and P1.30y, which read the service keys it uses, book edit
+   2026-10-12-p204s-p130x-p130y-booked):
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and
    edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
@@ -8604,6 +8673,12 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
    `preflight_matches_compose_config` on `compose.dev.yaml` (CI only). Landing P1.29 first on today's test pin is
    refused: it would need an exception in `compose_images_match_lock` or a dev Postgres starting as root with gosu, a
    weakening to remove later. The cost: P1.29 waits on Alex's P1.29v and P1.29w lines.
+   It also carries the postgres image's health check (architecture's 2026-10-12-p129-compose-service-keys, for
+   `depends_on: service_healthy`): one exec-form `HEALTHCHECK CMD ["pg_isready", "-h", "/var/run/postgresql"]` in
+   `postgres.Dockerfile`'s final stage, plus an `images.test.ts` assertion that it is exec form. The compose
+   `healthcheck` key stays refused (its `test` is an arbitrary command preflight would have to read). If the image
+   form cannot work, the PR says why under "What I am unsure about", and a `healthcheck` reader gets its own ruling.
+   P1.29 still never touches `deployment/preflight/`.
 7. **P1.29a "Add the PDS to the dev stack"** ([ALEX] [SEC]; depends on P1.29; Alex's card answered "Allow pinned",
    2026-10-07T13:00:19Z, quoted in the body): the exact vendor allowlist entry `ghcr.io/bluesky-social/pds` (never
    the host or namespace); its lock and mirror entries with `stage: "runtime"` (a run-only image runs as shipped, so
