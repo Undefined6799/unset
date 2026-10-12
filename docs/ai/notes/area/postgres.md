@@ -10,7 +10,7 @@ importance: normal
 related: ["[[tests]]", "[[deployment]]", "[[postgres-tests-need-docker]]"]
 replaced_by: null
 tags: [area, postgres]
-checked: 2026-10-07
+checked: 2026-10-12
 ---
 # postgres
 
@@ -34,6 +34,9 @@ checked: 2026-10-07
 - `sealed-columns.json` and `sealedColumns.ts`: every `types.sealed` column (migration 0007) with the row key its
   seal context binds; `sealedContext` is the only way to get a context for a stored value. `rewrapAll.ts` and
   `unset-rewrap` move stored values to a new seal key; `--check <kid>` says when the old key may go (P1.14d).
+- The browser session store is not here: it is its own trusted workspace, `infrastructure/session/` (P2.03),
+  like `infrastructure/audit/`. It never imports this folder; each interface passes it a `withDb` built from
+  `withClient`. Only a SHA-256 of the session id is stored; its real-Postgres tests are `tests/integration/session/`.
 
 **Rules worth knowing.**
 - Each process connects as its own role (web, api, indexer, retention and others), never as a superuser.
