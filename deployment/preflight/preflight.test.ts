@@ -1,5 +1,7 @@
 // P1.30, P1.30s and P1.30t: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
+
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
@@ -32,6 +34,7 @@ const PDS = `ghcr.io/undefined6799/mirror/pds@${digest("b")}`;
 const WEB = `ghcr.io/undefined6799/web@${digest("d")}`;
 const CANARY = "canary-7f3c-never-printed";
 const EDGE_DIR = join(import.meta.dirname, "..", "edge");
+const REPO = join(import.meta.dirname, "..", "..");
 
 const PDS_ENV: Record<string, string> = {
   PDS_RECOVERY_DID_KEY: RECOVERY_KEY,
@@ -406,7 +409,11 @@ describe("preflight", () => {
     const marked = { dotEnv: "TOKEN=dotenv-only-value\nMARK=withheld\nWORD=missing\n" };
     expect((await check(marked, "prod", { checks: [dotEnvOnly] })).lines).toEqual(["FAIL CX "]);
     const absentMarked = quote(() => "dotenv-only-value", missing);
-    expect((await check(marked, "prod", { checks: [absentMarked] })).lines).toEqual(["FAIL CX "]);
+    expect(await check(marked, "prod", { checks: [absentMarked] })).toEqual({ code: 1, lines: ["FAIL CX "] });
+    expect(await check(marked, "prod", { checks: [dotEnvOnly] })).toEqual({ code: 1, lines: ["FAIL CX "] });
+    // A value only the missing-input prefix holds empties that reason too (P1.30z rider).
+    const prefixOnly = { dotEnv: "TOKEN=dotenv-only-value\nWORD=input\n" };
+    expect(await check(prefixOnly, "prod", { checks: [absentMarked] })).toEqual({ code: 1, lines: ["FAIL CX "] });
   });
 
   test("password_probe_is_withheld_whole", async () => {
@@ -433,9 +440,22 @@ describe("preflight", () => {
       ["--env", "prod", "--compose", file, "C3"],
       ["--env", "staging", "--compose", file],
       ["--env", "prod"],
+      // Compose resolves relative paths from --project-directory when given, which the preflight cannot see (P1.30z).
+      ["--env", "prod", "--compose", file, "--project-directory", root],
+      ["--env", "prod", "--compose", file, `--project-directory=${root}`],
     ]) {
       expect((await preflight(argv, { root, run: fakeRun().run })).code).toBe(2);
     }
+  });
+
+  test("no_repository_script_passes_project_directory", () => {
+    // Every script that runs `docker compose` gives it the file list the preflight read, and never moves the base
+    // directory (architecture record 2026-10-12-preflight-project-directory, item 3). Docs and tests may name the flag.
+    const flag = ["--project", "directory"].join("-");
+    const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8" }).split("\0");
+    const scripts = tracked.filter((path) => path !== "" && !/(^docs\/|\.md$|\.test\.ts$)/.test(path));
+    const offenders = scripts.filter((path) => readFileSync(join(REPO, path), "latin1").includes(flag));
+    expect(offenders).toEqual([]);
   });
 
   test("preflight_check_throws_fails_closed", async () => {

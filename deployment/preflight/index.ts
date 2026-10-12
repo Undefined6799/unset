@@ -92,7 +92,11 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
 /** The compose files as one stack: one project name, and each service defined in exactly one file. Exported for the
  * compose agreement test, which compares its resolved paths with `docker compose config`. */
 export function loadCompose(files: string[], readText: (path: string) => string | null) {
-  const services: { service: Service; dir: string }[] = [];
+  // With several files, every relative path resolves from the first file's directory, never from the file that names
+  // it: "Relative paths are resolved based on the first Compose file's parent folder" (compose-spec spec.md, merging
+  // multiple files; architecture record 2026-10-12-preflight-project-directory). Compose v5.3.1 agrees in CI.
+  const projectDir = dirname(files[0] as string);
+  const services: Service[] = [];
   const networks: Network[] = [];
   const secretPaths: string[] = [];
   let name: string | null = null;
@@ -103,26 +107,26 @@ export function loadCompose(files: string[], readText: (path: string) => string 
     if (compose.name !== null && name !== null && compose.name !== name) throw new CannotRun("project names differ");
     name = compose.name ?? name;
     for (const service of compose.services) {
-      if (services.some((s) => s.service.name === service.name)) {
+      if (services.some((s) => s.name === service.name)) {
         throw new CannotRun(`service ${service.name} is defined twice`);
       }
-      // A bind source is relative to its own compose file's directory (compose-spec 05-services.md "volumes").
       const mounts = service.mounts.map((m) =>
-        m.type === "bind" && m.source !== null ? { ...m, source: resolve(dirname(file), m.source) } : m,
+        m.type === "bind" && m.source !== null ? { ...m, source: resolve(projectDir, m.source) } : m,
       );
-      services.push({ service: { ...service, mounts }, dir: dirname(file) });
+      const envFiles = service.envFiles.map((path) => resolve(projectDir, path));
+      services.push({ ...service, mounts, envFiles });
     }
     for (const network of compose.networks) {
       if (networks.some((n) => n.name === network.name))
         throw new CannotRun(`network ${network.name} is defined twice`);
       networks.push(network);
     }
-    secretPaths.push(...compose.secretFiles.map((path) => resolve(dirname(file), path)));
+    secretPaths.push(...compose.secretFiles.map((path) => resolve(projectDir, path)));
   }
-  const compose: Compose = { name, services: services.map((s) => s.service), networks, secretFiles: secretPaths };
+  const compose: Compose = { name, services, networks, secretFiles: secretPaths };
   const [undeclared] = undeclaredNetworks(compose);
   if (undeclared !== undefined) throw new CannotRun(undeclared);
-  return { compose, services, secretPaths };
+  return { compose, secretPaths };
 }
 
 function readEnvFile(path: string, readText: (path: string) => string | null): [string, string][] {
@@ -138,7 +142,7 @@ type Loaded = { inputs: Inputs; configured: ConfiguredValues };
 function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
   const { env, files } = parseCli(argv);
-  const { compose, services, secretPaths } = loadCompose(files, readText);
+  const { compose, secretPaths } = loadCompose(files, readText);
   // Compose interpolates from the `.env` beside the first file; a name it lacks becomes empty, as in Compose.
   const dotEnvPath = join(dirname(files[0] as string), ".env");
   const dotEnv = readText(dotEnvPath) === null ? [] : readEnvFile(dotEnvPath, readText);
@@ -148,10 +152,9 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
     "literal" in value ? value.literal : (interpolation.get(value.ref) ?? "");
   const serviceEnv = new Map<string, SecretMap>();
   const values = dotEnv.map(([, value]) => value);
-  for (const { service, dir } of services) {
-    const envFiles = service.envFiles.map((path) => resolve(dir, path));
-    secretPaths.push(...envFiles);
-    const fromFiles = envFiles.flatMap((path) => readEnvFile(path, readText));
+  for (const service of compose.services) {
+    secretPaths.push(...service.envFiles);
+    const fromFiles = service.envFiles.flatMap((path) => readEnvFile(path, readText));
     const fromCompose = service.environment.map(([key, value]): [string, string] => [key, resolveValue(value)]);
     serviceEnv.set(service.name, new SecretMap([...fromFiles, ...fromCompose]));
     values.push(...[...fromFiles, ...fromCompose].map(([, value]) => value));
