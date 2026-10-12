@@ -4,12 +4,28 @@
 // the init folder and secrets mounted read-only, a random superuser password per run, and removal even on failure.
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-/** postgres:18 (18.6) by index digest, the image every Postgres test and the Compose file use. */
-export const POSTGRES_IMAGE = "postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722";
+type LockEntry = { ref: string; tag: string; digest: string };
+
+/**
+ * The upstream image our Postgres image builds on, read from the lock's `postgres` entry (P1.29d), so tests and the
+ * shipped image move together. Tests run it as shipped upstream, starting as root and dropping to postgres through
+ * gosu, test-only; the image we ship (deployment/images/postgres.Dockerfile) has no gosu and never starts as root.
+ */
+function lockedPostgres(): string {
+  const lock = JSON.parse(
+    readFileSync(join(import.meta.dirname, "../../deployment/images/bases.lock.json"), "utf8"),
+  ) as Record<string, LockEntry>;
+  const entry = lock.postgres;
+  if (entry === undefined) throw new Error("bases.lock.json has no postgres entry");
+  return `${entry.ref}:${entry.tag}@${entry.digest}`;
+}
+
+/** postgres:18-trixie by index digest, the image every Postgres test runs. */
+export const POSTGRES_IMAGE = lockedPostgres();
 
 export interface PostgresOptions {
   /** Folder mounted read-only at /docker-entrypoint-initdb.d. */

@@ -13,5 +13,10 @@
     "source": "docker.io/library/caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
     "mirror": "ghcr.io/undefined6799/mirror/caddy",
     "stage": "runtime"
+  },
+  {
+    "source": "docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
+    "mirror": "ghcr.io/undefined6799/mirror/postgres",
+    "stage": "runtime"
   }
 ]

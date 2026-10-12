@@ -8,12 +8,15 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
+import { POSTGRES_IMAGE } from "../../tests/support/postgres.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const DOCKERFILE = "images/node-app.Dockerfile";
 /** The migrate CLI's image (P1.29k; architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 1). */
 const MIGRATE_DOCKERFILE = "images/migrate.Dockerfile";
+/** Our gosu-free Postgres image (P1.29d). */
+const POSTGRES_DOCKERFILE = "images/postgres.Dockerfile";
 
 /**
  * What an image is built FROM; the deploy contract (images.lock.json, verify-images) arrives with P1.27s. `stage` says
@@ -35,7 +38,7 @@ type MirrorEntry = { source: string; mirror: string; stage: Stage };
 type Lock = Record<string, Base>;
 
 /** Where a base may come from: each official library image by name (interim; never a wildcard) and our GHCR namespace. */
-const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy"]);
+const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPACE.test(ref);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
@@ -145,11 +148,11 @@ function sharedRefProblems(lock: Lock): string[] {
 /**
  * What each image is, by its final stage's runtime lock entry, so the rules for a kind reach every image of that kind
  * (amendment 2): a Dockerfile on any other entry, scratch included, fails `every_dockerfile_has_a_known_kind` rather
- * than falling out of every kind's rules. P1.29d adds `postgres`. The edge kind's package-manager rule is
+ * than falling out of every kind's rules; P1.29d added `postgres`. The edge kind's package-manager rule is
  * `edge_runtime_has_no_package_manager`: P1.28o removed apk-tools from its Caddy Alpine runtime, and P1.28y fails any
  * edge image whose last apk command does not remove it.
  */
-type Kind = "node" | "edge";
+type Kind = "node" | "edge" | "postgres";
 /** Lock entry to kind, in kinds.json so the built-image tests iterate the same map (package-manager.image.test.ts). */
 const KIND_BY_FINAL_ENTRY = new Map(
   Object.entries(JSON.parse(readFileSync(join(import.meta.dirname, "kinds.json"), "utf8")) as Record<string, Kind>),
@@ -469,39 +472,42 @@ const BARE_NAME = /^[a-z][a-z0-9-]*$/;
 const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", [["cap_net_bind_service=+ep", "/usr/bin/caddy"]]], // edge/Dockerfile:26
   ["node", []],
+  ["postgres", []],
 ]);
+
+/** dpkg's maintainer scripts, which the Debian kinds drop once dpkg is gone, word for word as written. */
+const DPKG_SCRIPTS_RM = [
+  "-f",
+  "/var/lib/dpkg/info/*.preinst",
+  "/var/lib/dpkg/info/*.postinst",
+  "/var/lib/dpkg/info/*.prerm",
+  "/var/lib/dpkg/info/*.postrm",
+  "/var/lib/dpkg/info/*.config",
+];
 
 /**
  * The only rm each kind's final stage runs that names a package manager, word for word as written (fourth
  * architecture note under amendment 7): the node kind drops dpkg's maintainer scripts once dpkg is gone
- * (node-app.Dockerfile:49-50, migrate.Dockerfile:34-35). Any other rm naming one, and this one in a stage the final
- * stage is built FROM (P1.29g), still meets the floor.
+ * (node-app.Dockerfile:49-50, migrate.Dockerfile:34-35), and so does the postgres kind (postgres.Dockerfile:18-19).
+ * Any other rm naming one, and this one in a stage the final stage is built FROM (P1.29g), still meets the floor.
  */
 const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", []],
-  [
-    "node",
-    [
-      [
-        "-f",
-        "/var/lib/dpkg/info/*.preinst",
-        "/var/lib/dpkg/info/*.postinst",
-        "/var/lib/dpkg/info/*.prerm",
-        "/var/lib/dpkg/info/*.postrm",
-        "/var/lib/dpkg/info/*.config",
-      ],
-    ],
-  ],
+  ["node", [DPKG_SCRIPTS_RM]],
+  ["postgres", [DPKG_SCRIPTS_RM]],
 ]);
 const GLOB = /[*?[{]/;
 /**
  * The only glob words each kind's final stage runs, word for word as written (P1.29g, record
  * 2026-10-08-p129f-corpus-gaps item 6), so no spelling hides a package manager's name from the floor: node's yarn
- * removal (node-app.Dockerfile:44, migrate.Dockerfile:29) and its maintainer-script rm (RM_BY_KIND).
+ * removal (node-app.Dockerfile:44, migrate.Dockerfile:29) and its maintainer-script rm (RM_BY_KIND); postgres's
+ * maintainer-script rm only.
  */
+const DPKG_SCRIPT_GLOBS = DPKG_SCRIPTS_RM.filter((word) => GLOB.test(word));
 const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
-  ["node", ["/opt/yarn-*", ...(RM_BY_KIND.get("node")?.[0]?.filter((word) => GLOB.test(word)) ?? [])]],
+  ["node", ["/opt/yarn-*", ...DPKG_SCRIPT_GLOBS]],
+  ["postgres", DPKG_SCRIPT_GLOBS],
 ]);
 
 /** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
@@ -642,6 +648,7 @@ const PLAIN_PATH = /^\/[A-Za-z0-9._/-]+$/;
 const DESTINATIONS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", ["/usr/bin/caddy", "/etc/caddy/"]], // edge/Dockerfile:23 and :30-32
   ["node", ["/app/"]], // node-app.Dockerfile:32-37, migrate.Dockerfile:21-26
+  ["postgres", []], // postgres.Dockerfile copies nothing
 ]);
 
 /** Why one shipped COPY or ADD destination may not be written; undefined when it is on the kind's list. */
@@ -716,6 +723,7 @@ function copyDestinationProblems(dockerfile: string): string[] {
 const ENV_KEYS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
   ["node", ["NODE_ENV"]], // node-app.Dockerfile:30, migrate.Dockerfile:19
+  ["postgres", []],
 ]);
 const ENV_PAIR = /^([A-Za-z_][A-Za-z0-9_]*)=\S*$/;
 
@@ -838,7 +846,10 @@ describe("base images", () => {
   test("base_digest_matches_lock", () => {
     for (const file of dockerfiles) {
       expect(baseProblems(read(file), lock), file).toEqual([]);
-      expect(fromImages(read(file)).length, file).toBeGreaterThanOrEqual(2);
+      // The postgres image is one stage, the official image minus gosu (P1.29d); the others build in earlier stages.
+      const stages = fromImages(read(file)).length;
+      if (kindOf(read(file), lock) === "postgres") expect(stages, file).toBe(1);
+      else expect(stages, file).toBeGreaterThanOrEqual(2);
     }
     const other = `sha256:${"1".repeat(64)}`;
     expect(baseProblems(`FROM docker.io/library/node:${NODE.tag}@${other} AS build`, lock)).toEqual([
@@ -880,7 +891,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -904,6 +915,21 @@ describe("base images", () => {
         stage,
       });
     }
+    // The postgres image's base (P1.29d): the official Debian trixie image; every image on it deletes gosu.
+    expect(lock.postgres).toStrictEqual({
+      ref: "docker.io/library/postgres",
+      tag: expect.stringMatching(/^18(?:\.\d+)?-trixie$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      stripped: ["/usr/local/bin/gosu"],
+    });
+  });
+
+  test("postgres_test_image_matches_lock", () => {
+    // Tests run the upstream image the shipped one builds on (as root, with gosu, test-only), so both move together.
+    const postgres = lock.postgres as Base;
+    expect(POSTGRES_IMAGE).toBe(`${postgres.ref}:${postgres.tag}@${postgres.digest}`);
   });
 
   test("stripped_paths_removed_in_every_final_stage", () => {
@@ -959,20 +985,21 @@ describe("base images", () => {
     expect(kindOf(read("edge/Dockerfile"), lock)).toBe("edge");
     const builder = lock["caddy-builder"] as Base;
     const build = `${builder.ref}:${builder.tag}@${builder.digest}`;
-    // A runtime entry outside the map (here a Postgres base before P1.29d adds it) fails, as do scratch and a build base.
-    const postgres: Base = { ...NODE, ref: "docker.io/library/postgres", tag: "18-trixie" };
-    const pinnedPostgres = `${postgres.ref}:${postgres.tag}@${postgres.digest}`;
+    expect(kindOf(read(POSTGRES_DOCKERFILE), lock)).toBe("postgres");
+    // A runtime entry outside the map fails, as do scratch and a build base.
+    const other: Base = { ...NODE, ref: "docker.io/library/nginx", tag: "1-trixie" };
+    const pinnedOther = `${other.ref}:${other.tag}@${other.digest}`;
     expect(
       kindProblems(
         {
-          "pg.Dockerfile": `FROM ${pinnedPostgres}`,
+          "other.Dockerfile": `FROM ${pinnedOther}`,
           "scratch.Dockerfile": "FROM scratch",
           "b.Dockerfile": `FROM ${build}`,
         },
-        { ...lock, postgres },
+        { ...lock, other },
       ),
     ).toEqual([
-      "pg.Dockerfile builds on no known kind of image",
+      "other.Dockerfile builds on no known kind of image",
       "scratch.Dockerfile builds on no known kind of image",
       "b.Dockerfile builds on no known kind of image",
     ]);
@@ -1614,6 +1641,13 @@ describe("references outside FROM", () => {
   });
 });
 
+/** The one USER line each kind's final stage sets, numeric so the non-root check reads it. */
+const USER_BY_KIND = new Map<Kind, string>([
+  ["edge", "USER 65532:65532"],
+  ["node", "USER 65532:65532"],
+  ["postgres", "USER 999:999"],
+]);
+
 /** The instructions of the last stage, the one that becomes the image, with continuation lines joined. */
 const runtimeStage = (text: string): string[] =>
   (text.split(/^FROM .*$/m).at(-1) ?? "")
@@ -1625,16 +1659,21 @@ const runtimeStage = (text: string): string[] =>
 describe("runtime stage", () => {
   const runtime = runtimeStage(dockerfile);
 
-  test("runtime_runs_as_65532", () => {
+  test("runtime_user_matches_kind", () => {
+    // P1.29d: each image runs as its kind's exact uid and gid, never "any non-zero" (the postgres image keeps the
+    // official image's postgres user, which owns its data directories).
+    expect([...USER_BY_KIND.keys()].sort()).toEqual([...new Set(KIND_BY_FINAL_ENTRY.values())].sort());
     for (const file of dockerfiles) {
       const stage = runtimeStage(read(file));
+      const user = USER_BY_KIND.get(kindOf(read(file), lock) as Kind);
+      expect(user, file).toBeDefined();
       expect(
         stage.filter((line) => line.startsWith("USER ")),
         file,
-      ).toEqual(["USER 65532:65532"]);
+      ).toEqual([user]);
       // Nothing runs as root once the user is set: no RUN follows it.
       expect(
-        stage.slice(stage.indexOf("USER 65532:65532")).filter((line) => line.startsWith("RUN ")),
+        stage.slice(stage.indexOf(user as string)).filter((line) => line.startsWith("RUN ")),
         file,
       ).toEqual([]);
     }
@@ -1733,5 +1772,18 @@ describe("migrate image", () => {
     expect(migrate).toContain('ENTRYPOINT ["node", "infrastructure/postgres/migrate-cli.ts"]');
     // One-shot: it listens on nothing and Compose waits for its exit, not its health.
     expect(migrate.filter((line) => /^(?:EXPOSE|HEALTHCHECK|CMD) /.test(line))).toEqual([]);
+  });
+});
+
+// The postgres image (P1.29d): the official image, one stage, with gosu, the package managers and every setuid and
+// setgid file removed, run as the image's own postgres user. postgres.image.test.ts builds it and proves it boots.
+describe("postgres image", () => {
+  test("postgres_image_keeps_the_official_entrypoint", () => {
+    const postgres = runtimeStage(read(POSTGRES_DOCKERFILE));
+    const base = lock.postgres as Base;
+    expect(fromImages(read(POSTGRES_DOCKERFILE))).toEqual([`${base.ref}:${base.tag}@${base.digest}`]);
+    // Nothing is copied in and the official docker-entrypoint.sh and its CMD are inherited unchanged.
+    expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([]);
+    expect(finalStageRemovals(read(POSTGRES_DOCKERFILE))).toContain("/usr/local/bin/gosu");
   });
 });

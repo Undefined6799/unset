@@ -87,6 +87,11 @@ log in.
 
 ## Postgres 18 data path
 
-The pinned image (`postgres:18.6`, digest in `tests/support/postgres.ts`) sets `PGDATA=/var/lib/postgresql/18/docker`
-and declares the volume `/var/lib/postgresql` (read from `docker image inspect` on 2026-10-06). P1.29 mounts the data
-volume at `/var/lib/postgresql`, not at `/var/lib/postgresql/data`.
+The pinned image (`postgres:18-trixie`, 18.6, digest in `deployment/images/bases.lock.json`) sets
+`PGDATA=/var/lib/postgresql/18/docker` and declares the volume `/var/lib/postgresql` (read from `docker image inspect`
+on 2026-10-12). P1.29 mounts the data volume at `/var/lib/postgresql`, not at `/var/lib/postgresql/data`.
+
+Our image (`deployment/images/postgres.Dockerfile`, P1.29d) runs as `999:999` from the first start and has no gosu, so
+the server never runs as root and cannot fix ownership itself. A named volume takes 999 from the image, and one first
+created under the old root start is already 999. A bind-mounted data directory must be owned by 999 before the first
+start (`chown -R 999:999 <dir>` on the host), or the first start fails.
