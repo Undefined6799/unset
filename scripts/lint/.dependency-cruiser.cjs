@@ -129,11 +129,19 @@ const MATRIX = [
   { name: "shared-admin-envelope", from: { path: "^(shared/admin-envelope/)" }, to: [{ path: "^$1" }, CORE] },
   // The deploy preflight (P1.30; architecture record 2026-10-07-p130-preflight-location-and-yaml): product code under
   // deployment/, a leaf that reaches only itself, Node built-ins and the yaml parser. It runs verify-images as a
-  // child process, never by import, so no edge to scripts/.
+  // child process, never by import, so no edge to scripts/. The one file it may import outside itself is the edge
+  // reader, deployment/edge/caddyfile.ts, so C18 reads the Caddyfile with the parser the edge tests use and no second
+  // one (P1.30r, for P1.30u; architecture record 2026-10-07-p130s-networks-and-caddyfile-reader item 2; Alex's
+  // "Allow import", 2026-10-12T02:16:16Z). The edge may still never import the preflight (edge-not-preflight).
   {
     name: "deployment-preflight",
     from: { path: "^deployment/preflight/" },
-    to: [{ path: "^deployment/preflight/" }, { path: npmPackage("yaml") }, CORE],
+    to: [
+      { path: "^deployment/preflight/" },
+      { path: "^deployment/edge/caddyfile\\.ts$" },
+      { path: npmPackage("yaml") },
+      CORE,
+    ],
   },
   { name: "tooling", from: { path: TOOLING }, to: [{}] },
 ];
