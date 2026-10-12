@@ -15,10 +15,11 @@
 // preflight under that folder's import row (P1.27w), and runs the preflight as a process, never by import, so its exit
 // code is the gate.
 import { spawnSync } from "node:child_process";
-import { lstatSync } from "node:fs";
+import { lstatSync, readlinkSync, statfsSync } from "node:fs";
 import { hostname } from "node:os";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { resolveChecked, WALK_REASONS, type WalkInputs } from "./checks/secrets.ts";
 
 /** The only variables a child sees: where commands are, the home directory, and how the Docker CLI is configured. */
 export const CHILD_ENV_NAMES = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
@@ -28,7 +29,8 @@ export const DEFAULT_DOCKER_HOST = "unix:///var/run/docker.sock";
 
 const PREFLIGHT = resolve(import.meta.dirname, "index.ts");
 
-export type Command = { file: string; args: string[] };
+/** A program to run; `name` is the fixed label reasons use, so no reason prints a path (P1.34s, nit 4). */
+export type Command = { name: string; file: string; args: string[] };
 /** What spawnSync reports about a finished child: a missing program is `error`, a kill is `signal`. */
 export type Exit = { status: number | null; signal: NodeJS.Signals | null; error?: Error };
 /** How `run` starts a command and asks the daemon its name; the one double in the tests. */
@@ -41,6 +43,12 @@ export type Runner = {
 /** How long `docker info` may take before the wrapper gives up on the daemon (RE-1). */
 export const DOCKER_INFO_DEADLINE_MS = 10_000;
 export type Plan = { env: Record<string, string>; commands: Command[] };
+/** The wrapper's own flags: none of them is one Node also reads (`--env-file*`, `--require*`, `--import*`). */
+export const WRAPPER_OPTIONS = {
+  env: { type: "string" },
+  compose: { type: "string", multiple: true },
+  "interpolation-env": { type: "string", multiple: true },
+} as const;
 type Options = { action: "up" | "down"; env: string; files: string[]; envFile: string };
 
 const USAGE = "usage: up|down --env dev --compose <file> [--compose <file>...] --interpolation-env <file>";
@@ -49,22 +57,38 @@ export class UsageError extends Error {}
 /** A child that could not start or was killed: a fixed reason naming the program, never its arguments (DC-4). */
 export class StackError extends Error {}
 
+const NOT_LOCAL = "DOCKER_HOST must be a Docker socket on this machine";
+
 /**
- * The caller's DOCKER_HOST, or the local default, if it names a socket on this machine: `unix://` and an absolute path
- * whose lstat is a socket (a rootless /run/user/<uid>/docker.sock included). tcp://, ssh://, npipe:// and anything else
- * are refused with a fixed reason that never echoes the value.
+ * The caller's DOCKER_HOST, or the local default, if it names a socket on this machine that only root or the deploy
+ * user controls (P1.34s; architecture record 2026-10-12-workspace-imports-and-remote-daemon, Amendment 3): `unix://`
+ * and an absolute path. Its folder passes C9's own walk, resolveChecked, unchanged, so no hop through a link, a
+ * folder another user can write (a sticky /tmp too) or /proc reaches it; `/var/run -> /run` and a rootless
+ * /run/user/<uid>/docker.sock pass. The socket itself is a socket, not a link, owned by root or the deploy user, with
+ * one name (nlink 1). tcp://, ssh://, npipe:// and anything else are refused. Every reason is fixed text, never the
+ * value.
  */
-export function localDockerHost(
-  from: Readonly<Record<string, string | undefined>>,
-  isSocket: (path: string) => boolean,
-): string {
+export function localDockerHost(from: Readonly<Record<string, string | undefined>>, inputs: WalkInputs): string {
   const host = from.DOCKER_HOST ?? DEFAULT_DOCKER_HOST;
   const path = host.startsWith("unix://") ? host.slice("unix://".length) : "";
-  if (!isAbsolute(path) || !isSocket(path)) throw new UsageError("DOCKER_HOST must be a Docker socket on this machine");
+  if (!isAbsolute(path)) throw new UsageError(NOT_LOCAL);
+  const walked = resolveChecked(dirname(path), inputs);
+  if (walked !== null) throw new UsageError(`${NOT_LOCAL}: its folder is a path ${WALK_REASONS[walked]}`);
+  const socket = inputs.lstat(path);
+  if (socket?.isSymbolicLink() === true) throw new UsageError(`${NOT_LOCAL}: it is a link, not the socket`);
+  if (socket === null || !socket.isSocket()) throw new UsageError(NOT_LOCAL);
+  if (socket.uid !== 0 && socket.uid !== inputs.uid) throw new UsageError(`${NOT_LOCAL}: another user owns it`);
+  if (socket.nlink !== 1) throw new UsageError(`${NOT_LOCAL}: it has another name (a hard link)`);
   return host;
 }
 
-const lstatIsSocket = (path: string): boolean => lstatSync(path, { throwIfNoEntry: false })?.isSocket() ?? false;
+/** This machine's file system and the deploy user, as the preflight reads them (index.ts). */
+export const hostWalk: WalkInputs = {
+  lstat: (path) => lstatSync(path, { throwIfNoEntry: false }) ?? null,
+  readlink: (path) => readlinkSync(path),
+  statfs: (path) => statfsSync(path),
+  uid: process.getuid?.() ?? -1,
+};
 
 /**
  * The caller's environment narrowed to CHILD_ENV_NAMES (an unset name stays unset), plus DOCKER_HOST, always set: an
@@ -75,9 +99,9 @@ const lstatIsSocket = (path: string): boolean => lstatSync(path, { throwIfNoEntr
  */
 export function childEnv(
   from: Readonly<Record<string, string | undefined>>,
-  isSocket: (path: string) => boolean = lstatIsSocket,
+  inputs: WalkInputs = hostWalk,
 ): Record<string, string> {
-  const env: Record<string, string> = { NODE_OPTIONS: "", DOCKER_HOST: localDockerHost(from, isSocket) };
+  const env: Record<string, string> = { NODE_OPTIONS: "", DOCKER_HOST: localDockerHost(from, inputs) };
   for (const name of CHILD_ENV_NAMES) {
     const value = from[name];
     if (value !== undefined) env[name] = value;
@@ -92,16 +116,7 @@ function parse(argv: string[]): Options {
   if (args.includes("--")) throw new UsageError(USAGE);
   let parsed: ReturnType<typeof parseArgs>;
   try {
-    parsed = parseArgs({
-      args,
-      options: {
-        env: { type: "string" },
-        compose: { type: "string", multiple: true },
-        "interpolation-env": { type: "string", multiple: true },
-      },
-      strict: true,
-      allowPositionals: true,
-    });
+    parsed = parseArgs({ args, options: WRAPPER_OPTIONS, strict: true, allowPositionals: true });
   } catch {
     throw new UsageError(USAGE);
   }
@@ -129,7 +144,7 @@ function refuseComposeVariables(from: Readonly<Record<string, string | undefined
 export function plan(
   argv: string[],
   from: Readonly<Record<string, string | undefined>>,
-  isSocket: (path: string) => boolean = lstatIsSocket,
+  inputs: WalkInputs = hostWalk,
 ): Plan {
   refuseComposeVariables(from);
   const { action, env, files, envFile } = parse(argv);
@@ -138,6 +153,7 @@ export function plan(
     action === "up"
       ? [
           {
+            name: "the preflight",
             file: process.execPath,
             args: [
               PREFLIGHT,
@@ -149,10 +165,10 @@ export function plan(
               envFile,
             ],
           },
-          { file: "docker", args: [...compose, "up", "-d", "--build"] },
+          { name: "docker", file: "docker", args: [...compose, "up", "-d", "--build"] },
         ]
-      : [{ file: "docker", args: [...compose, "down"] }];
-  return { env: childEnv(from, isSocket), commands };
+      : [{ name: "docker", file: "docker", args: [...compose, "down"] }];
+  return { env: childEnv(from, inputs), commands };
 }
 
 /**
@@ -176,40 +192,65 @@ function refuseRemoteDaemon(env: Record<string, string>, runner: Runner): number
 export function run({ env, commands }: Plan, runner: Runner): number {
   const daemon = refuseRemoteDaemon(env, runner);
   if (daemon !== 0) return daemon;
-  for (const { file, args } of commands) {
-    const code = exitCode(file, runner.spawn(file, args, env));
+  for (const { name, file, args } of commands) {
+    const code = exitCode(name, runner.spawn(file, args, env));
     if (code !== 0) return code;
   }
   return 0;
 }
 
-/** The child's exit status, or a fixed reason when it never ran or was killed (spawnSync leaves status null then). */
-function exitCode(file: string, { status, signal, error }: Exit): number {
-  if (error !== undefined && signal === null) throw new StackError(`${file} could not be started`);
-  if (signal !== null) throw new StackError(`${file} was stopped by ${signal}`);
+/**
+ * The child's exit status, or a fixed reason naming it when it never ran, ran out of time or was killed (spawnSync
+ * leaves status null then). A timeout is named as one: spawnSync reports it as an ETIMEDOUT error with the kill
+ * signal set (Node v26.10.0, checked by stack.test.ts), and the signal alone would read as an unrelated kill.
+ */
+function exitCode(name: string, { status, signal, error }: Exit): number {
+  if ((error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT")
+    throw new StackError(`${name} did not answer in time`);
+  if (error !== undefined && signal === null) throw new StackError(`${name} could not be started`);
+  if (signal !== null) throw new StackError(`${name} was stopped by ${signal}`);
   return status ?? 1;
 }
 
-if (import.meta.main) {
-  try {
-    process.exitCode = run(plan(process.argv.slice(2), process.env), {
-      spawn: (file, args, env) => spawnSync(file, args, { env, stdio: "inherit", shell: false }),
-      capture: (file, args, env, timeoutMs) => {
-        const result = spawnSync(file, args, {
-          env,
-          stdio: ["ignore", "pipe", "inherit"],
-          encoding: "utf8",
-          shell: false,
-          timeout: timeoutMs,
-        });
-        const exit = { status: result.status, signal: result.signal, stdout: result.stdout ?? "" };
-        return result.error === undefined ? exit : { ...exit, error: result.error };
-      },
-      hostname: hostname(),
+/** Real child processes, with no shell. A capture past its deadline is killed with SIGKILL, which no child can trap. */
+export const processRunner: Runner = {
+  spawn: (file, args, env) => {
+    const result = spawnSync(file, args, { env, stdio: "inherit", shell: false });
+    const exit = { status: result.status, signal: result.signal };
+    return result.error === undefined ? exit : { ...exit, error: result.error };
+  },
+  capture: (file, args, env, timeoutMs) => {
+    const result = spawnSync(file, args, {
+      env,
+      stdio: ["ignore", "pipe", "inherit"],
+      encoding: "utf8",
+      shell: false,
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
     });
+    const exit = { status: result.status, signal: result.signal, stdout: result.stdout ?? "" };
+    return result.error === undefined ? exit : { ...exit, error: result.error };
+  },
+  hostname: hostname(),
+};
+
+/** Runs the wrapper; a refusal or a failed child prints one fixed line and exits 2. */
+export function main(
+  argv: string[],
+  from: Readonly<Record<string, string | undefined>>,
+  runner: Runner,
+  write: (line: string) => void,
+  inputs: WalkInputs = hostWalk,
+): number {
+  try {
+    return run(plan(argv, from, inputs), runner);
   } catch (error) {
     if (!(error instanceof UsageError || error instanceof StackError)) throw error;
-    process.stderr.write(`stack: ${error.message}\n`);
-    process.exitCode = 2;
+    write(`stack: ${error.message}\n`);
+    return 2;
   }
+}
+
+if (import.meta.main) {
+  process.exitCode = main(process.argv.slice(2), process.env, processRunner, (line) => process.stderr.write(line));
 }
