@@ -23,8 +23,30 @@ const built: string[] = [];
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
 
-function docker(args: readonly string[]): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+// Every docker call is killed at its own budget with SIGKILL (P1.27t, as P1.27k does for tests/support/docker.ts): a
+// blocked spawnSync holds the event loop, so vitest's budget cannot stop it, and a hung daemon would hold the run
+// until scripts/test/run.ts kills it whole at 600 s, failing with no name. A daemon call (run, cat, rmi) gets 50 s, so
+// the afterAll's two removals fit inside CONTAINER_MS; a build gets 300 s inside its test's 600 s. This trusted test
+// keeps its own helper rather than import product test code.
+const CALL_MS = 50_000;
+const BUILD_MS = 300_000;
+
+/** Docker's subcommand in full: up to two leading words (`run`, `image inspect`), never a flag or a reference. */
+function subcommand(args: readonly string[]): string {
+  const end = args.findIndex((arg) => !/^[a-z][a-z-]*$/.test(arg));
+  return args.slice(0, Math.min(end === -1 ? args.length : end, 2)).join(" ");
+}
+
+function docker(args: readonly string[], timeoutMs: number): { code: number; out: string; err: string } {
+  const result = spawnSync("docker", args, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: timeoutMs,
+    killSignal: "SIGKILL",
+  });
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    throw new Error(`docker ${subcommand(args)} killed after ${timeoutMs} ms`);
+  }
   return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
 }
 
@@ -36,7 +58,7 @@ function runtimeBase(): string {
 
 /** A file's bytes in an image, read with its own `cat` and no network. */
 function fileIn(image: string, path: string): string {
-  const read = docker(["run", "--rm", "--network", "none", "--entrypoint", "cat", image, path]);
+  const read = docker(["run", "--rm", "--network", "none", "--entrypoint", "cat", image, path], CALL_MS);
   if (read.code !== 0) throw new Error(`reading ${path} failed: ${read.err.slice(-2000)}`);
   return read.out;
 }
@@ -60,7 +82,7 @@ function bundleProblems(bundle: string): string[] {
 
 /** Builds deployment/edge/Dockerfile with deployment/edge as the context; the image id. */
 function buildEdgeImage(): string {
-  const result = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE]);
+  const result = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_MS);
   if (result.code !== 0) throw new Error(`edge image build failed: ${result.err.slice(-2000)}`);
   built.push(result.out.trim());
   return result.out.trim();
@@ -68,18 +90,21 @@ function buildEdgeImage(): string {
 
 describe("edge image package manager", () => {
   afterAll(() => {
-    for (const image of built) docker(["rmi", "-f", image]);
+    for (const image of built) docker(["rmi", "-f", image], CALL_MS);
   }, CONTAINER_MS);
 
   test("edge_image_has_no_apk", () => {
     const image = buildEdgeImage();
     // Docker exits 127 when the entrypoint cannot be found; the message says whether by path or on PATH.
-    const byPath = docker(["run", "--rm", "--network", "none", "--entrypoint", "/sbin/apk", image, "--version"]);
+    const byPath = docker(
+      ["run", "--rm", "--network", "none", "--entrypoint", "/sbin/apk", image, "--version"],
+      CALL_MS,
+    );
     expect({ code: byPath.code, missing: /no such file or directory/i.test(byPath.err) }, byPath.out).toEqual({
       code: 127,
       missing: true,
     });
-    const onPath = docker(["run", "--rm", "--network", "none", "--entrypoint", "apk", image, "--version"]);
+    const onPath = docker(["run", "--rm", "--network", "none", "--entrypoint", "apk", image, "--version"], CALL_MS);
     expect({ code: onPath.code, missing: /executable file not found in \$PATH/i.test(onPath.err) }, onPath.out).toEqual(
       { code: 127, missing: true },
     );
@@ -92,7 +117,10 @@ describe("edge image package manager", () => {
     expect(shipped === base, CA_BUNDLE).toBe(true);
     expect(bundleProblems(shipped)).toEqual([]);
     // busybox stat: "regular file", never "symbolic link" to a path a later deletion could remove.
-    const kind = docker(["run", "--rm", "--network", "none", "--entrypoint", "stat", image, "-c", "%F", CA_BUNDLE]);
+    const kind = docker(
+      ["run", "--rm", "--network", "none", "--entrypoint", "stat", image, "-c", "%F", CA_BUNDLE],
+      CALL_MS,
+    );
     expect(kind.out.trim(), kind.err).toBe("regular file");
     // The bundle check itself: an empty file, a block cut short and a block that is not a certificate all fail.
     const one = shipped.match(PEM_BLOCK)?.[0] ?? "";
