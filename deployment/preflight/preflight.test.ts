@@ -82,7 +82,7 @@ services:
       FINGERPRINT_CHECK: arachnid
 secrets:
   db_password:
-    file: secrets/db_password
+    file: ../../unset-secrets/db_password
 `;
 const LOCK = {
   edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
@@ -129,6 +129,9 @@ afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 });
 
+/** The stack's secrets folder: `unset-secrets` beside the checkout, as the compose file names it. */
+const secretsOf = (root: string) => join(dirname(root), "unset-secrets");
+
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
   compose = COMPOSE,
@@ -140,9 +143,13 @@ function stack({
   sites,
   files,
 }: Stack = {}) {
-  const root = mkdtempSync(join(tmpdir(), "preflight-"));
-  dirs.push(root);
-  mkdirSync(join(root, "deployment/secrets"), { recursive: true });
+  // The checkout and, beside it, the deploy user's secrets folder (P1.27u: never inside the checkout, which C26's
+  // root-context builds would send to the daemon).
+  const base = mkdtempSync(join(tmpdir(), "preflight-"));
+  dirs.push(base);
+  const root = join(base, "repo");
+  mkdirSync(join(root, "deployment"), { recursive: true });
+  mkdirSync(secretsOf(root));
   const secret = (path: string, text: string) => {
     writeFileSync(join(root, path), text);
     chmodSync(join(root, path), 0o600);
@@ -150,11 +157,12 @@ function stack({
   const env = Object.entries({ ...PDS_ENV, ...pdsEnv }).flatMap(([k, v]) => (v === null ? [] : [`${k}=${v}\n`]));
   secret("deployment/pds.env", env.join(""));
   // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; fakeFs reads it as owned by web's uid.
-  secret("deployment/secrets/db_password", `${CANARY}\n`);
-  chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
-  chmodSync(join(root, "deployment/secrets"), 0o700);
-  // C9 judges every parent of the secrets folder, so the fixture sets its own modes whatever the umask.
-  chmodSync(join(root, "deployment"), 0o755);
+  writeFileSync(join(secretsOf(root), "db_password"), `${CANARY}\n`);
+  chmodSync(join(secretsOf(root), "db_password"), 0o400);
+  chmodSync(secretsOf(root), 0o700);
+  // C9 judges every parent of the secrets folder and of each bind source, so the fixture sets its own modes whatever
+  // the umask.
+  for (const dir of [root, join(root, "deployment")]) chmodSync(dir, 0o755);
   if (dotEnv !== undefined) secret("deployment/.env", dotEnv);
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
@@ -212,20 +220,21 @@ function fakeRun(answers: Answers = {}) {
 const WEB_UID = 65532;
 /**
  * The real lstat with three changes a test cannot make for real (P1.30o, P1.27a):
- * - a directory above the stack root reads as the root itself (mkdtemp's 0700, the test's uid), because the temporary
- *   directory's own parents (often /tmp, sticky and world writable) are not the stack's to judge;
- * - a file inside a deployment/secrets/ directory reads as owned by `owner`, since a test cannot chown to another uid;
+ * - a directory above the stack's temporary folder reads as that folder itself (mkdtemp's 0700, the test's uid),
+ *   because its own parents (often /tmp, sticky and world writable) are not the stack's to judge;
+ * - a file inside an unset-secrets/ directory reads as owned by `owner`, since a test cannot chown to another uid;
  * - a path named in `uids` reads as owned by that uid.
  */
 function fakeFs(root: string, owner = WEB_UID, uids: Record<string, number> = {}): Pick<Deps, "lstat"> {
   const lstat = (path: string): Stats | null => {
     let info: Stats;
     try {
-      info = lstatSync(root.startsWith(`${path}/`) || path === "/" ? root : path);
+      const base = dirname(root);
+      info = lstatSync(base.startsWith(`${path}/`) || path === "/" ? base : path);
     } catch {
       return null;
     }
-    const uid = uids[path] ?? (dirname(path).endsWith("/deployment/secrets") ? owner : info.uid);
+    const uid = uids[path] ?? (dirname(path).endsWith("/unset-secrets") ? owner : info.uid);
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
   return { lstat };
@@ -378,7 +387,7 @@ describe("preflight", () => {
 
   // P1.30o: a mounted secret is mode 0400, owned by the one uid that mounts it, in a 0700 directory of the deploy user.
   test("c9_mounted_secret_owner_and_mode", async () => {
-    const path = (root: string) => join(root, "deployment/secrets/db_password");
+    const path = (root: string) => join(secretsOf(root), "db_password");
     const { root, file } = stack();
     const run = (owner = WEB_UID) =>
       preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root, owner) });
@@ -395,7 +404,7 @@ describe("preflight", () => {
 
   test("c9_secrets_directory_locked", async () => {
     const { root, file } = stack();
-    const dir = join(root, "deployment/secrets");
+    const dir = secretsOf(root);
     const run = (uids: Record<string, number> = {}) =>
       preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root, WEB_UID, uids) });
     const locked = `FAIL C9 ${dir} must be a directory with mode 0700 owned by the deploy user`;
@@ -411,16 +420,17 @@ describe("preflight", () => {
     // A parent another user could write, or owns, lets them swap the folder. The sticky bit does not make a shared
     // parent safe: others can still create entries in it (architecture, 2026-10-12, overruling P1.30o).
     const parent = "FAIL C9 parent 1 of the secrets folder can be changed by another user";
+    const base = dirname(dir);
     for (const mode of [0o777, 0o775, 0o1777]) {
-      chmodSync(join(root, "deployment"), mode);
+      chmodSync(base, mode);
       expect((await run()).lines).toContain(parent);
     }
-    chmodSync(join(root, "deployment"), 0o755);
-    expect((await run({ [join(root, "deployment")]: 4242 })).lines).toContain(parent);
-    expect((await run({ [root]: 4242 })).lines).toContain(
+    chmodSync(base, 0o700);
+    expect((await run({ [base]: 4242 })).lines).toContain(parent);
+    expect((await run({ [dirname(base)]: 4242 })).lines).toContain(
       "FAIL C9 parent 2 of the secrets folder can be changed by another user",
     );
-    expect(failed((await run({ [root]: 0 })).lines)).toEqual([]);
+    expect(failed((await run({ [dirname(base)]: 0 })).lines)).toEqual([]);
     // The walk reaches "/" itself.
     const depth = dir.split("/").length - 1;
     expect((await run({ "/": 4242 })).lines).toContain(
@@ -434,7 +444,7 @@ describe("preflight", () => {
   // anywhere on the path lets whoever controls its target swap the secret after the preflight passed.
   test("c9_secrets_path_has_no_links", async () => {
     const linkedFolder = stack();
-    const dir = join(linkedFolder.root, "deployment/secrets");
+    const dir = secretsOf(linkedFolder.root);
     renameSync(dir, `${dir}-real`);
     symlinkSync(`${dir}-real`, dir);
     const folder = await preflight(["--env", "prod", "--compose", linkedFolder.file], {
@@ -444,10 +454,11 @@ describe("preflight", () => {
     });
     expect(folder.lines).toContain(`FAIL C9 ${dir} must be a directory with mode 0700 owned by the deploy user`);
     // A deploy-owned link above the folder, pointing into a tree another user controls.
-    const linkedParent = stack();
-    const deployment = join(linkedParent.root, "deployment");
-    renameSync(deployment, join(linkedParent.root, "elsewhere"));
-    symlinkSync(join(linkedParent.root, "elsewhere"), deployment);
+    const linkedParent = stack({ compose: COMPOSE.replace("../../unset-secrets/", "../../linked/unset-secrets/") });
+    const elsewhere = join(dirname(linkedParent.root), "elsewhere");
+    mkdirSync(elsewhere, { mode: 0o700 });
+    renameSync(secretsOf(linkedParent.root), join(elsewhere, "unset-secrets"));
+    symlinkSync(elsewhere, join(dirname(linkedParent.root), "linked"));
     const parent = await preflight(["--env", "prod", "--compose", linkedParent.file], {
       root: linkedParent.root,
       run: fakeRun().run,
@@ -459,7 +470,7 @@ describe("preflight", () => {
   test("c9_mounted_secret_readers", async () => {
     const pdsReads = (user: string) =>
       COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n${user}    secrets: [db_password]`);
-    const secret = (root: string) => join(root, "deployment/secrets/db_password");
+    const secret = (root: string) => join(secretsOf(root), "db_password");
     // Two services with different uids.
     const two = await check({ compose: pdsReads('    user: "1000:1000"\n') });
     expect(two.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/db_password is mounted by more than one uid$/);
@@ -501,7 +512,13 @@ describe("preflight", () => {
     const binding = (source: string) =>
       COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    volumes:\n      - ${source}:/srv:ro`);
     // "/" and a ".." chain that Compose resolves to "/" contain every folder (verifier on #689).
-    for (const source of ["./secrets", "./secrets/db_password", ".", "..", "/", "../../../../../../../../../.."]) {
+    for (const source of [
+      "../../unset-secrets",
+      "../../unset-secrets/db_password",
+      "../..",
+      "/",
+      "../../../../../../../../../..",
+    ]) {
       const result = await check({ compose: binding(source) });
       expect(result.lines.find((l) => l.startsWith("FAIL C9"))).toBe(
         "FAIL C9 pds binds a path that reaches the secrets folder",
@@ -509,7 +526,7 @@ describe("preflight", () => {
     }
     // A link elsewhere in the project that resolves into the folder.
     const { root, file } = stack({ compose: binding("./alias") });
-    symlinkSync(join(root, "deployment/secrets"), join(root, "deployment/alias"));
+    symlinkSync(secretsOf(root), join(root, "deployment/alias"));
     const linked = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(linked.lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
     const rooted = stack({ compose: binding("./rootlink") });
@@ -537,7 +554,7 @@ describe("preflight", () => {
     expect(loop.lines).toContain("FAIL C9 check error");
     // A link into the folder whose target does not exist yet: Compose would create it there (P1.27u).
     const dangling = stack({ compose: binding("./dangle") });
-    symlinkSync("secrets/newdir", join(dangling.root, "deployment/dangle"));
+    symlinkSync("../../unset-secrets/newdir", join(dangling.root, "deployment/dangle"));
     const dangle = await preflight(["--env", "prod", "--compose", dangling.file], {
       root: dangling.root,
       run: fakeRun().run,
@@ -545,9 +562,9 @@ describe("preflight", () => {
     });
     expect(dangle.lines).toContain("FAIL C9 pds binds a path that does not exist");
     // A sibling whose name only starts with the folder's name is not inside it.
-    const sibling = stack({ compose: binding("./secrets-old") });
-    mkdirSync(join(sibling.root, "deployment/secrets-old"), { mode: 0o755 });
-    chmodSync(join(sibling.root, "deployment/secrets-old"), 0o755);
+    const sibling = stack({ compose: binding("../../unset-secrets-old") });
+    mkdirSync(`${secretsOf(sibling.root)}-old`, { mode: 0o755 });
+    chmodSync(`${secretsOf(sibling.root)}-old`, 0o755);
     const old = await preflight(["--env", "prod", "--compose", sibling.file], {
       root: sibling.root,
       run: fakeRun().run,
@@ -556,7 +573,7 @@ describe("preflight", () => {
     expect(failed(old.lines)).toEqual([]);
     // A second name for the folder that no link explains (a host bind mount): matched by (dev, ino), both ways.
     const aliased = stack({ compose: binding("/srv/alias") });
-    const folder = join(aliased.root, "deployment/secrets");
+    const folder = secretsOf(aliased.root);
     const asFolder = (path: string) => statSync(path === "/srv/alias" ? folder : path);
     const alias = await preflight(["--env", "prod", "--compose", aliased.file], {
       root: aliased.root,
@@ -569,7 +586,7 @@ describe("preflight", () => {
     // Each layer alone must catch what it owns (P1.27u, the verifier's surviving mutants on #689).
     const aliasing = async (source: string, names: Record<string, string | null>) => {
       const s = stack({ compose: binding(source) });
-      const real = join(s.root, "deployment/secrets");
+      const real = secretsOf(s.root);
       const named = Object.fromEntries(
         Object.entries(names).map(([path, to]) => [
           path,
@@ -595,7 +612,7 @@ describe("preflight", () => {
       (await aliasing("/srv/alias/newdir", { "/srv/alias": "FOLDER", "/srv/alias/newdir": null })).lines,
     ).toContain(reaches);
     // Path containment alone, with no identities to compare.
-    for (const source of ["./secrets", "./secrets/db_password", ".", "..", "/"]) {
+    for (const source of ["../../unset-secrets", "../../unset-secrets/db_password", "../..", "/"]) {
       const s = stack({ compose: binding(source) });
       const blind = await preflight(["--env", "prod", "--compose", s.file], {
         root: s.root,
@@ -672,8 +689,8 @@ describe("preflight", () => {
   // P1.30o: every mounted secret shares one locked folder, so one directory check covers them all.
   test("c9_mounted_secrets_share_one_folder", async () => {
     const second = COMPOSE.replace("    secrets: [db_password]", "    secrets: [db_password, api_key]").replace(
-      "    file: secrets/db_password\n",
-      "    file: secrets/db_password\n  api_key:\n    file: other/api_key\n",
+      "    file: ../../unset-secrets/db_password\n",
+      "    file: ../../unset-secrets/db_password\n  api_key:\n    file: other/api_key\n",
     );
     const { root, file } = stack({ compose: second });
     mkdirSync(join(root, "deployment/other"), { mode: 0o700 });
@@ -855,15 +872,16 @@ describe("preflight", () => {
         await preflight(["--env", "prod", "--compose", path], { root, run: fakeRun().run, ...fakeFs(root) }),
       ).toEqual(refused);
     }
-    // A link on the path the caller names is walked, not resolved away.
+    // A link on the path the caller names is walked, not resolved away: here another user's link, which the edge's
+    // bind source then crosses as written.
     const linked = join(root, "via");
     symlinkSync(dir, linked);
     const viaLink = await preflight(["--env", "prod", "--compose", join(linked, "compose.yaml")], {
       root,
       run: fakeRun().run,
-      ...fakeFs(root),
+      ...fakeFs(root, WEB_UID, { [linked]: 2000 }),
     });
-    expect(viaLink.lines).toContain("FAIL C9 parent 1 of the secrets folder is a link or not a directory");
+    expect(viaLink.lines).toContain("FAIL C9 edge binds a path that another user can change");
   });
 
   test("no_repository_script_passes_project_directory", () => {
