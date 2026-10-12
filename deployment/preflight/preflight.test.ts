@@ -384,11 +384,32 @@ describe("preflight", () => {
       }
       chmodSync(pdsEnv, 0o600);
       expect(failed((await run()).lines)).toEqual([]);
-      const other = (await run({ uid: 4242 })).lines.find((l) => l.startsWith("FAIL C9"));
-      expect(other).toBe(`FAIL C9 ${pdsEnv} is not owned by the deploy user`);
+      // Deploy user 4242, whose secrets folder it is: the env file, owned by root, is not theirs.
+      const other = await run({ uid: 4242, ...fakeFs(root, WEB_UID, { [secretsOf(root)]: 4242 }) });
+      expect(other.lines.filter((l) => l.includes(" C9 "))).toEqual([
+        `FAIL C9 ${pdsEnv} is not owned by the deploy user`,
+      ]);
     }
     const absent = await check({ compose: COMPOSE.replace("secrets/db_password", "secrets/absent") });
     expect(failed(absent.lines)).toEqual(["C9"]);
+    // Every file Compose reads is judged hop by hop too, and a second hard link would carry it past C26's path test
+    // (Amendment 6).
+    const { root, file } = stack();
+    const pdsEnv = join(envOf(root), "pds.env");
+    const run = (uids: Record<string, number> = {}) =>
+      preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root, WEB_UID, uids) });
+    linkSync(pdsEnv, join(dirname(root), "pds.env.copy"));
+    expect((await run()).lines).toContain(`FAIL C9 ${pdsEnv} has more than one hard link`);
+    rmSync(join(dirname(root), "pds.env.copy"));
+    expect((await run({ [envOf(root)]: 2000 })).lines).toContain(
+      `FAIL C9 ${pdsEnv} lies on a path that another user can change`,
+    );
+    renameSync(pdsEnv, join(envOf(root), "real.env"));
+    symlinkSync("real.env", pdsEnv);
+    expect(failed((await run()).lines)).toEqual([]);
+    expect((await run({ [pdsEnv]: 2000 })).lines).toContain(
+      `FAIL C9 ${pdsEnv} lies on a path that another user can change`,
+    );
   });
 
   // P1.30o: a mounted secret is mode 0400, owned by the one uid that mounts it, in a 0700 directory of the deploy user.
@@ -453,7 +474,9 @@ describe("preflight", () => {
       `FAIL C9 parent ${depth} of the secrets folder can be changed by another user`,
     );
     const other = await check({}, "prod", { uid: 4242 });
-    expect(other.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/is not owned by the deploy user$/);
+    expect(other.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(
+      /must be a directory with mode 0700 owned by the deploy user$/,
+    );
   });
 
   // P1.27a: the folder is judged where it really is. Docker resolves a bind source again at every start, so a link
@@ -707,19 +730,76 @@ describe("preflight", () => {
       return { [join(d, "via")]: 2000 };
     });
     expect(foreignLink.lines).toContain(changeable);
-    // A real path that still holds a link (one swapped in after it was resolved) is refused, not followed.
-    const linkedReal = await run("./via", (d) => void symlinkSync(join(d, "data/shared"), join(d, "via")), {
-      realpath: (path) => path,
+    // Every hop between the path as written and its real path is judged too (Amendment 6): a deploy-owned link to a
+    // link that another user owns, in a folder of theirs, which they re-point at the secrets folder after the run.
+    const evil = (d: string) => {
+      mkdirSync(join(d, "evil"));
+      chmodSync(join(d, "evil"), 0o755);
+      symlinkSync(join(d, "data/shared"), join(d, "evil/l"));
+      return { [join(d, "evil")]: 2000, [join(d, "evil/l")]: 2000 };
+    };
+    const twoHops = await run("./cfg", (d) => {
+      const uids = evil(d);
+      symlinkSync(join(d, "evil/l"), join(d, "cfg"));
+      return uids;
     });
-    expect(linkedReal.lines).toContain(changeable);
+    expect(twoHops.lines).toContain(changeable);
+    // The same hop in the middle of the path.
+    const midPath = await run("./d/shared", (d) => {
+      const uids = evil(d);
+      rmSync(join(d, "evil/l"));
+      symlinkSync(join(d, "data"), join(d, "evil/l"));
+      symlinkSync("evil/l", join(d, "d"));
+      return uids;
+    });
+    expect(midPath.lines).toContain(changeable);
+    // A clean chain of deploy-owned links, relative and absolute, passes; 40 hops pass and the 41st fails (Linux
+    // follows at most 40, man7.org path_resolution(7)).
+    const chain = (hops: number) => (d: string) => {
+      symlinkSync(join(d, "data/shared"), join(d, "h0"));
+      for (let i = 1; i < hops; i++) symlinkSync(`h${i - 1}`, join(d, `h${i}`));
+      return undefined;
+    };
+    expect(failed((await run("./h2", chain(3))).lines)).toEqual([]);
+    expect(failed((await run("./h39", chain(40))).lines)).toEqual([]);
+    // The 41st hop: realpath's own ELOOP fails the check first; with realpath out of the way, the walk's limit holds.
+    expect((await run("./h40", chain(41))).lines).toContain("FAIL C9 check error");
+    expect((await run("./h40", chain(41), { realpath: (path) => path })).lines).toContain(
+      "FAIL C9 pds binds a path through too many links",
+    );
+    // A file is not a folder to go on through: the kernel answers ENOTDIR for `file/..`.
+    const throughFile = await run("./up", (d) => {
+      writeFileSync(join(d, "data/f"), "x\n");
+      symlinkSync("data/f/..", join(d, "up"));
+    });
+    expect(throughFile.lines).toContain("FAIL C9 pds binds a path that does not exist");
+    // Neither a socket, a device nor a FIFO is a bind source.
+    const fifo = await run("./data/fifo", (d) => void execFileSync("mkfifo", ["-m", "0644", join(d, "data/fifo")]));
+    expect(fifo.lines).toContain("FAIL C9 pds binds a path that is not a file or directory");
     expect((await run("./nowhere", () => undefined)).lines).toContain("FAIL C9 pds binds a path that does not exist");
     // /proc resolves in the preflight's own context, not the container's.
     const underProc = "FAIL C9 pds binds a path under /proc";
     for (const source of ["/proc/self/cwd", "/proc"]) {
       expect((await run(source, () => undefined)).lines).toContain(underProc);
     }
-    // procfs under another name is known by its filesystem type, on every directory of both walks (Amendment 2).
+    // A link into /proc is refused by its target's name, even where statfs would not say procfs (Amendment 6).
+    const notProc = { statfs: () => ({ type: 0xef53 }) };
+    const intoProc = (target: (d: string) => string) => (d: string) => void symlinkSync(target(d), join(d, "p"));
+    for (const target of [() => "/proc/self/cwd", (d: string) => `/proc/self/root${d}/data/shared`]) {
+      expect((await run("./p", intoProc(target), notProc)).lines).toContain(underProc);
+    }
+    // procfs under another name is known by its filesystem type, wherever the walk enters it (Amendment 2).
     const PROC = 0x9fa0;
+    const alias = await run(
+      "./p",
+      (d) => {
+        mkdirSync(join(d, "data/pp"));
+        chmodSync(join(d, "data/pp"), 0o755);
+        symlinkSync("data/pp/self/cwd", join(d, "p"));
+      },
+      { statfs: (path) => ({ type: path.endsWith("/data/pp") ? PROC : 0xef53 }) },
+    );
+    expect(alias.lines).toContain(underProc);
     for (const onProc of ["/deployment/data/shared", "/deployment/data"]) {
       const statfs = (path: string) => ({ type: path.endsWith(onProc) ? PROC : 0xef53 });
       expect((await run("./data/shared", () => undefined, { statfs })).lines).toContain(underProc);
@@ -1518,6 +1598,16 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     };
     expect((await run("..", "deployment/images/node-app.Dockerfile", envInside)).lines).toContain(
       "FAIL C26 web builds from a context that holds an env file",
+    );
+    // The env file reached only through its folder's real path: a context that is a link to that folder.
+    const envLink = (root: string) => void symlinkSync(envOf(root), join(dirname(root), "envlink"));
+    expect((await run("../../envlink", "../repo/deployment/images/node-app.Dockerfile", envLink)).lines).toContain(
+      "FAIL C26 web builds from a context that holds an env file",
+    );
+    // The context is judged hop by hop like a bind source (Amendment 6): a group-writable checkout fails.
+    const open = (root: string) => chmodSync(root, 0o775);
+    expect((await run("..", "deployment/images/node-app.Dockerfile", open)).lines).toContain(
+      "FAIL C26 web builds from a context that another user can change",
     );
     // The sibling layout passes.
     expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);

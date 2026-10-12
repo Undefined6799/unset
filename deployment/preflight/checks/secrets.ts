@@ -8,26 +8,40 @@
 //   parents no other user can change (P1.27a). A uid that collides with a host account then still cannot reach it.
 
 import type { Stats } from "node:fs";
-import { dirname, isAbsolute, relative, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import { type Check, fail, type Inputs, type MountedSecret, missing, type Outcome, pass } from "./types.ts";
 
 export const c9: Check = {
   id: "C9",
-  run: (inputs) => {
-    for (const path of inputs.secretPaths) {
-      const info = inputs.stat(path);
-      if (info === null) return missing(path);
-      if (!info.isFile() || info.size === 0) return fail(`${path} is empty or not a file`);
-      if ((info.mode & 0o777) !== 0o600) return fail(`${path} must have exactly owner read and write permissions`);
-      if (info.uid !== inputs.uid) return fail(`${path} is not owned by the deploy user`);
-    }
-    const mounted = mountedProblem(inputs);
-    if (mounted !== null) return mounted;
-    const bound = bindSourceProblem(inputs);
-    if (bound !== null) return bound;
-    return pass(`${inputs.secretPaths.length} files, ${inputs.mountedSecrets.length} mounted secrets`);
-  },
+  run: (inputs) =>
+    mountedProblem(inputs) ??
+    bindSourceProblem(inputs) ??
+    composeReadProblem(inputs) ??
+    pass(`${inputs.secretPaths.length} files, ${inputs.mountedSecrets.length} mounted secrets`),
 };
+
+/** The files Compose itself reads values from: env files and the `.env`, each walked hop by hop (Amendment 6). */
+function composeReadProblem(inputs: Inputs): Outcome | null {
+  for (const path of inputs.secretPaths) {
+    const problem = composeReadFileProblem(path, inputs);
+    if (problem !== null) return problem;
+  }
+  return null;
+}
+
+function composeReadFileProblem(path: string, inputs: Inputs): Outcome | null {
+  const walked = resolveChecked(path, inputs);
+  if (walked === "missing") return missing(path);
+  if (walked !== null && walked !== "kind") return fail(`${path} lies on a path ${WALK_REASONS[walked]}`);
+  const info = inputs.stat(path);
+  if (info === null) return missing(path);
+  if (walked === "kind" || !info.isFile() || info.size === 0) return fail(`${path} is empty or not a file`);
+  // A second name, inside the checkout for instance, would carry the values past C26's path test (Amendment 6).
+  if (info.nlink !== 1) return fail(`${path} has more than one hard link`);
+  if ((info.mode & 0o777) !== 0o600) return fail(`${path} must have exactly owner read and write permissions`);
+  if (info.uid !== inputs.uid) return fail(`${path} is not owned by the deploy user`);
+  return null;
+}
 
 function mountedProblem(inputs: Inputs): Outcome | null {
   const { mountedSecrets } = inputs;
@@ -37,8 +51,6 @@ function mountedProblem(inputs: Inputs): Outcome | null {
   if (dir === undefined) return null;
   const locked = lockedDirectoryProblem(dir, inputs);
   if (locked !== null) return locked;
-  const bound = bindReachingProblem(dir, inputs);
-  if (bound !== null) return bound;
   for (const secret of mountedSecrets) {
     const problem = secretFileProblem(secret, inputs.lstat(secret.path));
     if (problem !== null) return problem;
@@ -78,21 +90,6 @@ function ancestorProblem(dir: string, inputs: Inputs): Outcome | null {
 }
 
 /**
- * Secrets reach containers only through `secrets:` (architecture, Amendment 2 of 2026-10-12-c9-secret-file-owner): a
- * bind mount whose source, as written or resolved, is the secrets folder, lies inside it or contains it is refused.
- */
-function bindReachingProblem(dir: string, inputs: Inputs): Outcome | null {
-  for (const service of inputs.compose.services) {
-    for (const mount of service.mounts) {
-      if (mount.type !== "bind" || mount.source === null) continue;
-      if (reaches(mount.source, dir, inputs))
-        return fail(`${service.name} binds a path that reaches the secrets folder`);
-    }
-  }
-  return null;
-}
-
-/**
  * Whether `path` is a mounted secret's folder, lies inside one or contains one: by path segments, as written and
  * resolved, and by (dev, ino) for a second name no link explains (Amendment 3). C26 asks it of build contexts too.
  */
@@ -115,48 +112,84 @@ function reaches(path: string, dir: string, inputs: Inputs): boolean {
 }
 
 /**
- * Every bind source, `:ro` included, is judged like the secrets folder's parents (architecture record
- * 2026-10-12-p127u-bind-ancestors-and-build-context, (a)): a user who can change a directory on its path can swap the
- * source after the preflight, onto the secrets folder or onto content of their own. It must exist, since Compose
- * creates a missing one (a dangling link's target too) as root, and never lie under /proc, which resolves in the
- * preflight's context, not the container's.
+ * Every bind source, `:ro` included, is walked hop by hop (architecture record
+ * 2026-10-12-p127u-bind-ancestors-and-build-context, (a) and Amendment 6): a user who can change an entry on its path
+ * can swap the source after the preflight, onto the secrets folder or onto content of their own. It must exist, since
+ * Compose creates a missing one (a dangling link's target too) as root, and never lie under /proc, which resolves in
+ * the preflight's context, not the container's.
  */
 function bindSourceProblem(inputs: Inputs): Outcome | null {
   for (const service of inputs.compose.services) {
     for (const mount of service.mounts) {
       if (mount.type !== "bind" || mount.source === null) continue;
-      const problem = sourceProblem(mount.source, inputs);
-      if (problem !== null) return fail(`${service.name} binds a path ${problem}`);
+      // Secrets reach containers only through `secrets:` (architecture, Amendment 2 of
+      // 2026-10-12-c9-secret-file-owner): a source that is the secrets folder, lies inside it or contains it fails.
+      if (reachesSecretsFolder(mount.source, inputs))
+        return fail(`${service.name} binds a path that reaches the secrets folder`);
+      const walked = resolveChecked(mount.source, inputs);
+      if (walked !== null) return fail(`${service.name} binds a path ${WALK_REASONS[walked]}`);
     }
   }
   return null;
 }
 
-function sourceProblem(source: string, inputs: Inputs): string | null {
-  const real = inputs.realpath(source);
-  if ([source, real].some((path) => path !== null && within(path, "/proc"))) return "under /proc";
-  if (real === null) return "that does not exist";
-  const walked = pathProblem(source, inputs, true) ?? pathProblem(real, inputs, false);
-  if (walked === "procfs") return "under /proc";
-  if (walked === "changeable") return "that another user can change";
-  return null;
-}
+/** Why a walk failed, completing "<service> binds a path ..." or "<service> builds from a context ...". */
+export const WALK_REASONS = {
+  missing: "that does not exist",
+  procfs: "under /proc",
+  changeable: "that another user can change",
+  loop: "through too many links",
+  kind: "that is not a file or directory",
+} as const;
+export type WalkProblem = keyof typeof WALK_REASONS;
+
+/** Linux follows at most 40 links while resolving one path (man7.org path_resolution(7)). */
+const MAX_LINKS = 40;
 
 /**
- * What, if anything, is wrong with `path` and every directory above it: one on procfs under any name, or one that a
- * user other than root and the deploy user owns or that has group or other write. On the path as written a link may
- * stand in for a directory, because its target is judged on the real path, but the link must be theirs too; its own
- * mode means nothing on Linux.
+ * Resolves `path` from `/` one component at a time, as the kernel and Docker do again at every start, and judges every
+ * entry met (architecture, Amendment 6 of 2026-10-12-p127u-bind-ancestors-and-build-context). Each directory entered
+ * and the final entry are owned by root or the deploy user, with no group or other write and no sticky exception, and
+ * are on neither `/proc` nor procfs. Each link is theirs too (its own mode means nothing on Linux); its target is
+ * pushed back onto the path: absolute from `/`, relative from the link's folder, `..` popping. A user who could swap
+ * any hop owns a directory or link on this walk. readlink and statfs errors throw, so C9 fails closed.
  */
-function pathProblem(path: string, inputs: Inputs, linksAllowed: boolean): "procfs" | "changeable" | null {
-  const { lstat, uid } = inputs;
-  for (let at = path; ; at = dirname(at)) {
-    const info = lstat(at);
-    if (info === null || (info.uid !== 0 && info.uid !== uid)) return "changeable";
-    if (info.isSymbolicLink() ? !linksAllowed : (info.mode & 0o022) !== 0) return "changeable";
-    if (!info.isSymbolicLink() && onProcfs(at, inputs)) return "procfs";
-    if (dirname(at) === at) return null;
+export function resolveChecked(path: string, inputs: Inputs): WalkProblem | null {
+  const pending = components(path);
+  let at: string = sep;
+  let links = 0;
+  for (;;) {
+    const info = inputs.lstat(at);
+    const problem = info === null ? "missing" : entryProblem(at, info, pending.length > 0, inputs);
+    if (problem !== null) return problem;
+    if (info?.isSymbolicLink() === true) {
+      if (++links > MAX_LINKS) return "loop";
+      at = followLink(at, pending, inputs);
+    }
+    const next = pending.shift();
+    if (next === undefined) return null;
+    at = next === ".." ? dirname(at) : join(at, next);
   }
+}
+
+/** Puts a link's target back onto the pending components, and returns where the walk continues from. */
+function followLink(link: string, pending: string[], inputs: Inputs): string {
+  const target = inputs.readlink(link);
+  pending.unshift(...components(target));
+  return isAbsolute(target) ? sep : dirname(link);
+}
+
+const components = (path: string) => path.split(sep).filter((part) => part !== "" && part !== ".");
+
+/** One entry on the walk; `more` when components remain, so the entry must be a directory to go on through. */
+function entryProblem(at: string, info: Stats, more: boolean, inputs: Inputs): WalkProblem | null {
+  if (within(at, "/proc")) return "procfs";
+  if (info.uid !== 0 && info.uid !== inputs.uid) return "changeable";
+  if (info.isSymbolicLink()) return null;
+  if (more && !info.isDirectory()) return "missing";
+  if (!info.isDirectory() && !info.isFile()) return "kind";
+  if ((info.mode & 0o022) !== 0) return "changeable";
+  return onProcfs(at, inputs) ? "procfs" : null;
 }
 
 /** PROC_SUPER_MAGIC (linux/magic.h): procfs by filesystem type, so a bind-mounted alias of /proc is known too. */

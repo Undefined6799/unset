@@ -4,8 +4,8 @@
 import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { readLock } from "./images.ts";
-import { holdsEnvFile, reachesSecretsFolder } from "./secrets.ts";
-import { type Check, fail, missing, pass, runsImage } from "./types.ts";
+import { holdsEnvFile, reachesSecretsFolder, resolveChecked, WALK_REASONS } from "./secrets.ts";
+import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
@@ -58,17 +58,25 @@ function namesakes(root: string, name: string): number {
  * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
  * scanned image holds. A context that reaches the secrets folder is refused first.
  */
+/**
+ * The whole context goes to the daemon, whatever .dockerignore says (P1.27u, architecture record
+ * 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder and every env file stay out of it. It
+ * is walked hop by hop like a bind source (Amendment 6): whoever can swap an entry on it chooses what is sent.
+ */
+function contextProblem(context: string, inputs: Inputs): string | null {
+  if (reachesSecretsFolder(context, inputs)) return "that reaches the secrets folder";
+  if (holdsEnvFile(context, inputs)) return "that holds an env file";
+  const walked = resolveChecked(context, inputs);
+  return walked === null ? null : WALK_REASONS[walked];
+}
+
 export const c26: Check = {
   id: "C26",
   run: (inputs) => {
     for (const { name, build } of inputs.compose.services) {
       if (build === null) continue;
-      // The whole context goes to the daemon, whatever .dockerignore says (P1.27u, architecture record
-      // 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder stays out of it.
-      if (reachesSecretsFolder(build.context, inputs)) {
-        return fail(`${name} builds from a context that reaches the secrets folder`);
-      }
-      if (holdsEnvFile(build.context, inputs)) return fail(`${name} builds from a context that holds an env file`);
+      const reach = contextProblem(build.context, inputs);
+      if (reach !== null) return fail(`${name} builds from a context ${reach}`);
       if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
         return fail(`${name} builds from a Dockerfile the images workflow does not scan`);
       }
