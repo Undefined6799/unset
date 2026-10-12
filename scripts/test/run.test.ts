@@ -7,12 +7,14 @@ import {
   compare,
   discoverByGlob,
   executedFiles,
+  failureSummary,
   filesToRun,
   imagesPlan,
   LIST_ARGS,
   type Mode,
   main,
   modeFor,
+  runArgs,
   skippedCases,
   skippedOnly,
   strayTestFiles,
@@ -313,5 +315,51 @@ describe("repository settings", () => {
     walk(JSON.parse(ls.stdout) as Node);
     expect(versions.length).toBeGreaterThan(0);
     for (const v of versions) expect(v).toMatch(/^7\.0\./);
+  });
+});
+
+// P1.01g (step book 2026-10-12 p101g-ci-names-failing-test): command-line reporters replace Vitest's config list, the
+// only place github-actions is enabled (node_modules/vitest/dist/config.cjs:66, vitest 5.0.3), so CI adds it here.
+describe("ci failure reporting", () => {
+  test("run_args_add_github_reporter_in_actions", () => {
+    const local = ["run", "unit", "--reporter=default", "--reporter=json", "--outputFile=/tmp/r.json"];
+    expect(runArgs(["unit"], "/tmp/r.json", {})).toEqual(local);
+    expect(runArgs(["unit"], "/tmp/r.json", { GITHUB_ACTIONS: "false" })).toEqual(local);
+    expect(runArgs(["unit"], "/tmp/r.json", { GITHUB_ACTIONS: "true" })).toEqual([
+      ...local,
+      "--reporter=github-actions",
+    ]);
+  });
+
+  test("failure_summary_lists_failing_tests", () => {
+    const failing: VitestJsonReport = {
+      testResults: [
+        {
+          name: "/repo/a/x.test.ts",
+          status: "failed",
+          assertionResults: [
+            { fullName: "suite ok", status: "passed" },
+            {
+              fullName: "suite a|b <i>",
+              status: "failed",
+              failureMessages: ["\u001b[31mError: Test timed out in 5000ms.\u001b[39m\n    at x.test.ts:3:1"],
+            },
+          ],
+        },
+      ],
+    };
+    expect(failureSummary("/repo", failing)).toBe(
+      "## Failing tests (1)\n\n| File | Test | First line |\n| --- | --- | --- |\n" +
+        "| a/x.test.ts | suite a\\|b &lt;i&gt; | Error: Test timed out in 5000ms. |\n",
+    );
+    expect(failureSummary("/repo", report({ "a/y.test.ts": ["passed"] }))).toBe("");
+  });
+
+  test("failure_summary_caps_rows", () => {
+    const many = report({ "a/z.test.ts": Array.from({ length: 52 }, () => "failed" as const) });
+    const summary = failureSummary("/repo", many);
+    expect(summary.split("\n").filter((line) => line.startsWith("| a/z.test.ts"))).toHaveLength(50);
+    expect(summary).toContain("## Failing tests (52)");
+    expect(summary).toContain("2 more not shown.");
   });
 });

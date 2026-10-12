@@ -7,10 +7,11 @@
 // 2026-10-07 p123d-p128i-p128r-test-timing, amendment 1): with CI=true they run after the unit projects; locally they
 // are not started and one line says so; `npm run test:images` runs only them, under CI's rules.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { stripVTControlCharacters } from "node:util";
 import { sourceFiles } from "../guards/files.ts";
 
 const TEST_FILE = /\.test\.(?:ts|tsx|mts|cts)$/;
@@ -29,7 +30,11 @@ export const LIST_ARGS = ["list", "--filesOnly", "--json"] as const;
 
 type Status = "passed" | "failed" | "skipped" | "pending" | "todo" | "disabled";
 export type VitestJsonReport = {
-  testResults: { name: string; status: string; assertionResults: { fullName: string; status: Status }[] }[];
+  testResults: {
+    name: string;
+    status: string;
+    assertionResults: { fullName: string; status: Status; failureMessages?: string[] }[];
+  }[];
 };
 export type Outcome = {
   notListed: string[];
@@ -41,14 +46,17 @@ export type Outcome = {
 /** Which projects run: all of them (CI), all but images (local), or images only (`npm run test:images`). */
 export type Mode = "ci" | "local" | "images";
 /** `quiet` keeps Vitest's own output off the terminal, and `dockerReady` replaces the Docker probe (the end-to-end
- * tests of this file). */
+ * tests of this file). `env` is where GITHUB_ACTIONS and GITHUB_STEP_SUMMARY are read; only the command line passes
+ * process.env, so a test's planted failures never reach a real CI annotation or summary. */
 export type RunOptions = {
   root: string;
   config: string;
   mode: Mode;
   quiet?: boolean;
   dockerReady?: () => boolean;
+  env?: Env;
 };
+type Env = Readonly<Record<string, string | undefined>>;
 /** The Vitest runs for one mode, in order; the files they must run; the local not-run line; why the mode cannot run. */
 export type ImagesPlan = { runs: string[][]; expected: string[]; notRun: string | null; problem: string | null };
 
@@ -226,12 +234,53 @@ export async function listByVitest(options: RunOptions): Promise<string[] | null
   }
 }
 
+/**
+ * The arguments for one `vitest run`. Command-line reporters replace the config's list, which is the only place
+ * Vitest enables github-actions (node_modules/vitest/dist/config.cjs:66, vitest 5.0.3), so CI adds it back here: each
+ * failing test then becomes an error annotation naming its file, line and full name (P1.01g).
+ */
+export function runArgs(projects: readonly string[], outputFile: string, env: Env): string[] {
+  const github = env.GITHUB_ACTIONS === "true" ? ["--reporter=github-actions"] : [];
+  return ["run", ...projects, "--reporter=default", "--reporter=json", `--outputFile=${outputFile}`, ...github];
+}
+
+const SUMMARY_ROWS = 50;
+/** One table cell: no colour codes, the first line only, and no character that ends the cell or opens HTML. */
+const cell = (text: string): string =>
+  (stripVTControlCharacters(text).split("\n")[0] ?? "")
+    .trim()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\|/g, "\\|");
+
+/**
+ * A Markdown table of the failing tests for the GitHub step summary, or "" when none failed: file, full name and the
+ * first line of the first message, at most SUMMARY_ROWS rows (P1.01g). Vitest's own summary has only counts and flaky
+ * tests (renderSummary, node_modules/vitest/dist/chunks/index.DpLw24bj.js:17833).
+ */
+export function failureSummary(root: string, report: VitestJsonReport): string {
+  const failed = report.testResults.flatMap((file) =>
+    file.assertionResults
+      .filter((test) => test.status === "failed")
+      .map((test) => ({
+        file: toPosix(root, file.name),
+        name: test.fullName,
+        message: test.failureMessages?.[0] ?? "",
+      })),
+  );
+  if (failed.length === 0) return "";
+  const rows = failed.slice(0, SUMMARY_ROWS).map((t) => `| ${cell(t.file)} | ${cell(t.name)} | ${cell(t.message)} |`);
+  const more = failed.length > SUMMARY_ROWS ? `\n${failed.length - SUMMARY_ROWS} more not shown.\n` : "";
+  return `## Failing tests (${failed.length})\n\n| File | Test | First line |\n| --- | --- | --- |\n${rows.join("\n")}\n${more}`;
+}
+
 async function runVitest(
   options: RunOptions,
   projects: readonly string[],
   outputFile: string,
 ): Promise<{ status: number; report: VitestJsonReport } | null> {
-  const args = ["run", ...projects, "--reporter=default", "--reporter=json", `--outputFile=${outputFile}`];
+  const args = runArgs(projects, outputFile, options.env ?? {});
   const run = await vitest(args, options, RUN_TIMEOUT_MS, options.quiet ? "pipe" : "inherit");
   if (run.timedOut) return null;
   try {
@@ -260,6 +309,16 @@ function printOutcome(outcome: Outcome): boolean {
     for (const item of items) console.error(`  ${item}`);
   }
   return clean;
+}
+
+/** Appends the failing-test table to the step summary file; a write failure is reported, never fatal. */
+function writeStepSummary(path: string | undefined, summary: string): void {
+  if (path === undefined || path === "" || summary === "") return;
+  try {
+    appendFileSync(path, summary);
+  } catch (error) {
+    console.error(`Could not write the step summary: ${(error as Error).message}`);
+  }
 }
 
 export async function main(given: RunOptions): Promise<number> {
@@ -301,6 +360,7 @@ export async function main(given: RunOptions): Promise<number> {
       strayTestFiles(root),
       filesToRun(options.mode, listed, plan.expected),
     );
+    writeStepSummary(options.env?.GITHUB_STEP_SUMMARY, failureSummary(root, report));
     if (plan.notRun !== null) console.error(`\n${plan.notRun}`);
     if (!printOutcome(outcome)) return 1;
     if (status === 0) console.error(`\nAll ${plan.expected.length} test files this run selects ran.`);
@@ -319,5 +379,5 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     console.error((error as Error).message);
     process.exit(1);
   }
-  process.exit(await main({ root, config: join(root, "vitest.config.ts"), mode }));
+  process.exit(await main({ root, config: join(root, "vitest.config.ts"), mode, env: process.env }));
 }
