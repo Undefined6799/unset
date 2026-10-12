@@ -1,7 +1,7 @@
 // The deploy preflight (P1.30; plan section 2 rule 23, sections 5.2, 5.3, 6.1): before any `compose up` on a server,
 // one command checks the stack against every rule that, if broken, would leak data or cannot be fixed later.
 //
-//   node deployment/preflight/index.ts --env dev|prod --compose <file> [--compose <file>...]
+//   node deployment/preflight/index.ts --env dev|prod --compose <absolute file> [--compose <absolute file>...]
 //
 // The first --compose file's directory is the project directory: every relative path resolves from it.
 //
@@ -12,7 +12,7 @@
 // configured value is withheld whole.
 import { execFile } from "node:child_process";
 import { lstatSync, readFileSync, realpathSync, type Stats, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { CHECKS } from "./checks/index.ts";
@@ -111,7 +111,13 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
   }
   if (values.env !== "dev" && values.env !== "prod") throw new CannotRun("--env must be dev or prod");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
-  return { env: values.env, files: values.compose.map((file) => resolve(file)) };
+  // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
+  // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
+  // 2026-10-12-c9-secret-file-owner). Only an absolute, normal path means the same to both; it is walked as written.
+  if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file)) {
+    throw new CannotRun("--compose must be an absolute, normalised path");
+  }
+  return { env: values.env, files: values.compose };
 }
 
 /** The compose files as one stack: one project name, and each service defined in exactly one file. Exported for the

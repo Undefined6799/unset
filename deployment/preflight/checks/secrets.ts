@@ -72,19 +72,42 @@ function lockedDirectoryProblem(dir: string, { lstat, uid }: Inputs): Outcome | 
  * Secrets reach containers only through `secrets:` (architecture, Amendment 2 of 2026-10-12-c9-secret-file-owner): a
  * bind mount whose source, as written or resolved, is the secrets folder, lies inside it or contains it is refused.
  */
-function bindReachingProblem(dir: string, { compose, realpath }: Inputs): Outcome | null {
+function bindReachingProblem(dir: string, inputs: Inputs): Outcome | null {
+  const { compose, realpath } = inputs;
   const folders = [dir, realpath(dir) ?? dir];
+  const folderLine = identities(folders[1] as string, inputs);
   const related = (a: string, b: string) => within(a, b) || within(b, a);
   for (const service of compose.services) {
     for (const mount of service.mounts) {
       if (mount.type !== "bind" || mount.source === null) continue;
       const sources = [mount.source, realpath(mount.source) ?? mount.source];
-      if (sources.some((source) => folders.some((folder) => related(source, folder)))) {
+      const byPath = sources.some((source) => folders.some((folder) => related(source, folder)));
+      if (byPath || sharesIdentity(identities(sources[1] as string, inputs), folderLine)) {
         return fail(`${service.name} binds a path that reaches the secrets folder`);
       }
     }
   }
   return null;
+}
+
+/**
+ * The (dev, ino) of a path and of each directory above it, nearest first; null where nothing exists. A second name for the secrets folder that no
+ * link explains (a host bind mount) has other path segments but the same identity (architecture, Amendment 3).
+ */
+function identities(path: string, { stat }: Inputs): (string | null)[] {
+  const line: (string | null)[] = [];
+  for (let at = path; ; at = dirname(at)) {
+    const info = stat(at);
+    line.push(info === null ? null : `${info.dev}:${info.ino}`);
+    if (dirname(at) === at) return line;
+  }
+}
+
+/** The bind source is the folder or above it (its own identity is on the folder's line), or lies inside it. */
+function sharesIdentity(sourceLine: (string | null)[], folderLine: (string | null)[]): boolean {
+  const [source = null] = sourceLine;
+  const [folder = null] = folderLine;
+  return (source !== null && folderLine.includes(source)) || (folder !== null && sourceLine.includes(folder));
 }
 
 /** Whether `path` is `folder` or lies under it, by path segments ("/" contains everything; "/a-b" is not in "/a"). */

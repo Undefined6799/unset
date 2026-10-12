@@ -16,11 +16,12 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
@@ -498,7 +499,7 @@ describe("preflight", () => {
     const binding = (source: string) =>
       COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    volumes:\n      - ${source}:/srv:ro`);
     // "/" and a ".." chain that Compose resolves to "/" contain every folder (verifier on #689).
-    for (const source of ["./secrets", "./secrets/db_password", ".", "/", "../../../../../../../../../.."]) {
+    for (const source of ["./secrets", "./secrets/db_password", ".", "..", "/", "../../../../../../../../../.."]) {
       const result = await check({ compose: binding(source) });
       expect(result.lines.find((l) => l.startsWith("FAIL C9"))).toBe(
         "FAIL C9 pds binds a path that reaches the secrets folder",
@@ -524,7 +525,19 @@ describe("preflight", () => {
     const unresolved = await check({ compose: binding("./edge/sites") }, "prod", { realpath: denied });
     expect(unresolved.lines).toContain("FAIL C9 check error");
     // A sibling whose name only starts with the folder's name is not inside it.
-    expect(failed((await check({ compose: binding("./secrets-other") })).lines)).toEqual([]);
+    expect(failed((await check({ compose: binding("./secrets-old") })).lines)).toEqual([]);
+    // A second name for the folder that no link explains (a host bind mount): matched by (dev, ino), both ways.
+    const aliased = stack({ compose: binding("/srv/alias") });
+    const folder = join(aliased.root, "deployment/secrets");
+    const asFolder = (path: string) => statSync(path === "/srv/alias" ? folder : path);
+    const alias = await preflight(["--env", "prod", "--compose", aliased.file], {
+      root: aliased.root,
+      run: fakeRun().run,
+      ...fakeFs(aliased.root),
+      realpath: (path) => path,
+      stat: (path) => (path === "/srv/alias" || path.startsWith(dirname(folder)) ? asFolder(path) : null),
+    });
+    expect(alias.lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
     expect(failed((await check({ compose: binding("./edge/sites") })).lines)).toEqual([]);
   });
 
@@ -696,6 +709,28 @@ describe("preflight", () => {
     ]) {
       expect((await preflight(argv, { root, run: fakeRun().run })).code).toBe(2);
     }
+  });
+
+  // P1.27a (architecture, Amendment 3): Compose resolves a relative --compose against $PWD, Node against the physical
+  // cwd, so the two can name different trees. The preflight takes only an absolute, normal path, the one both use.
+  test("compose_path_must_be_absolute_and_normal", async () => {
+    const { root, file } = stack();
+    const refused = { code: 2, lines: ["ERROR --compose must be an absolute, normalised path"] };
+    const dir = dirname(file);
+    for (const path of [relative(process.cwd(), file), `${dir}/../deployment/compose.yaml`, `${dir}/./compose.yaml`]) {
+      expect(
+        await preflight(["--env", "prod", "--compose", path], { root, run: fakeRun().run, ...fakeFs(root) }),
+      ).toEqual(refused);
+    }
+    // A link on the path the caller names is walked, not resolved away.
+    const linked = join(root, "via");
+    symlinkSync(dir, linked);
+    const viaLink = await preflight(["--env", "prod", "--compose", join(linked, "compose.yaml")], {
+      root,
+      run: fakeRun().run,
+      ...fakeFs(root),
+    });
+    expect(viaLink.lines).toContain("FAIL C9 parent 1 of the secrets folder is a link or not a directory");
   });
 
   test("no_repository_script_passes_project_directory", () => {
