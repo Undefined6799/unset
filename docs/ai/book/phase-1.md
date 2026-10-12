@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -227,6 +227,8 @@ flowchart LR
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29y["P1.29y old image jobs folded into the matrix ALEX"]
+  P1_29b["P1.29b mirror build stage scanned in full"]
+  P1_29u["P1.29u stripped paths and RUN separators fail closed"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
   P1_29a["P1.29a PDS in the dev stack ALEX"]
@@ -341,6 +343,8 @@ flowchart LR
   P1_29v --> P1_29d
   P1_29w --> P1_29y
   P1_29v --> P1_29y
+  P1_29v --> P1_29b
+  P1_29v --> P1_29u
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
@@ -8246,7 +8250,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    His typed line naming the change and branch is received (asked: "yes P1.29v mirror.yml"); line: "yes P1.29v
    mirror.yml" (Alex, 2026-10-12T02:13:47Z; book edit 2026-10-12-p129v-skip-dirs-and-images-ignorefile, amendment 1). A
    new stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
-   ship) are rejected. P1.29d and P1.29y depend on it.
+   ship) are rejected. P1.29d, P1.29y, P1.29b and P1.29u depend on it.
 
    As built: merged by Alex at 2026-10-12T02:57:23Z as `7a05bd5` (#583).
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v (merged, #583),
@@ -8337,7 +8341,8 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     edge a second time, at Trivy 0.75.0 while scan-image uses 0.74.0, and they carry checks the matrix lacks: hadolint,
     SBOM, runs as 65532, and the health checks (image-workflows.test.ts:69-103, mirror-scan.test.ts:149-160). migrate
     gets none of those checks, only the scan. Each check the old jobs run moves into `scan-image`, per discovered image,
-    and both old jobs are deleted:
+    and both old jobs are deleted, and the `images.yml:74` Trivy comment is corrected to 0.75.0 (book edit
+    2026-10-12-p129b-p129u-p129v-follow-ups):
     - Per-image values (expected uid, health command) come from one exact map in list-dockerfiles.ts, beside
       IGNOREFILES. An image missing from the map fails discovery, so a new image cannot arrive unchecked.
     - Every check that ran for node-app or edge before still runs for it; migrate gains them, which is a tightening.
@@ -8347,6 +8352,24 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     replaces it; a check that cannot be carried stops the PR rather than being dropped. Done when, on the PR, every
     check the old jobs ran shows per image in the matrix, `scan` aggregates them, the old jobs are gone, and the full
     suite is green. Nothing depends on it.
+12. **P1.29b "Scan build stages in full, no stripped skips"** ([SEC], check: `.github/workflows/mirror.yml`,
+    `scripts/ci/mirror-scan.test.ts`, a tightening, kind/build; issue #586; depends on P1.29v (merged, #583); owner
+    Phase 2 or the third lane, not Phase 1 (`.github`); slice 1; book edit 2026-10-12-p129b-p129u-p129v-follow-ups, from
+    architecture's ruling 1 in 2026-10-12-p129v-follow-ups). The lock's `stripped` list becomes `--skip-files` and
+    `--skip-dirs` only on the runtime-stage run. The build-stage run scans the whole base and keeps its threshold: fail
+    on CRITICAL, warn on HIGH (P1.28v, P1.28w). The three npm trivyignore entries are not restored. Test:
+    `mirror-scan.test.ts` proves the build-stage invocation carries no `--skip-files` or `--skip-dirs`, and the runtime
+    invocation still carries both for each lock-listed path; red on `7a05bd5`, green on the PR. If the CI-bypass
+    classifier refuses the mirror.yml edit, the coordinator asks Alex for "yes P1.29b mirror build-stage scans npm".
+    Nothing depends on it.
+13. **P1.29u "Fail closed on stripped paths and RUN separators"** ([SEC], product: `deployment/images/images.test.ts`
+    only, under the `/deployment/` security-review line, kind/fix; issue #587; depends on P1.29v (merged, #583); owner
+    Phase 1; slice 1; same book edit, from architecture's ruling 2). `STRIPPED_PATH` (`images.test.ts:786`) accepts only
+    a normalised absolute path with at least three segments. `finalStageRemovals` (`images.test.ts:369-381`) refuses any
+    final-stage RUN containing `||`, `;`, `|` or a lone `&` instead of splitting on it. The `toStrictEqual` pin at :891
+    stays. Red fixtures: `/usr/.`, `/./usr`, `/usr/../etc`, `/usr//bin`, `/usr/local/`, `/usr` and
+    `rm -rf /usr/local/lib/node_modules/npm || true`; each is red on the PR, and the shipped lock stays green. Nothing
+    depends on it.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries
