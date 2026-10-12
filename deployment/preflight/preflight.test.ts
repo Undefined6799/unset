@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import type { Check } from "./checks/types.ts";
+import { type Check, fail, pass } from "./checks/types.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -191,16 +191,28 @@ describe("preflight", () => {
   });
 
   test("c2_image_not_ours_or_unlocked_fails", async () => {
-    await expectOnly("C2", { compose: COMPOSE.replace(EDGE, `docker.io/library/caddy@${digest("a")}`) });
-    await expectOnly("C2", { compose: COMPOSE.replace(EDGE, "ghcr.io/undefined6799/edge:latest") });
-    await expectOnly("C2", { compose: COMPOSE.replace(EDGE, `ghcr.io/undefined6799/edge@${digest("c")}`) });
+    // Not the lock's edge ref, so C18 fails too (P1.30w).
+    for (const image of [
+      `docker.io/library/caddy@${digest("a")}`,
+      "ghcr.io/undefined6799/edge:latest",
+      `ghcr.io/undefined6799/edge@${digest("c")}`,
+    ]) {
+      const result = await check({ compose: COMPOSE.replace(EDGE, image) });
+      expect(failed(result.lines), image).toEqual(["C2", "C18"]);
+      expect(result.code, image).toBe(1);
+    }
   });
 
   test("missing_input_fails_check_not_run", async () => {
     const result = await check({ lock: null });
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5"]);
+    // C18 reads the lock's edge ref (P1.30w), so it fails closed with the lock too, and without the edge entry alone.
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18"]);
     expect(result.code).toBe(1);
+    const { edge: _, ...noEdge } = LOCK;
+    const unlisted = (await check({ lock: noEdge })).lines;
+    expect(failed(unlisted)).toEqual(["C2", "C18"]);
+    expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
   test("c3_c4_signature_fails", async () => {
@@ -344,6 +356,37 @@ describe("preflight", () => {
       check({}, "prod", { checks: [{ id: "CX", run: () => Promise.reject(new Error(CANARY)) }] }),
     ]);
     for (const { lines } of outputs) expect(lines.join("\n")).not.toContain(CANARY);
+  });
+
+  // P1.30w (record 2026-10-12-c18-follow-ups, rulings N1 and N2): the runner turns every value a check read back into
+  // its name before the line is printed, so no check has to remember to; a reason that would still print one is
+  // withheld whole.
+  test("runner_scrubs_values_a_check_read", async () => {
+    const quoting: Check = {
+      id: "CX",
+      run: ({ serviceEnv }) => fail(`host ${serviceEnv.get("pds")?.use("PDS_HOSTNAME", (v) => v) ?? ""} is wrong`),
+    };
+    expect(await check({}, "prod", { checks: [quoting] })).toEqual({
+      code: 1,
+      lines: ["FAIL CX host PDS_HOSTNAME is wrong"],
+    });
+    const passing: Check = {
+      id: "CX",
+      run: ({ serviceEnv }) => pass(serviceEnv.get("web")?.use("FINGERPRINT_CHECK", (v) => v)),
+    };
+    expect((await check({}, "prod", { checks: [passing] })).lines).toEqual(["PASS CX FINGERPRINT_CHECK"]);
+    // Naming one value can write out another (here HOST's name is UPSTREAM's value): the reason is withheld.
+    const compose = COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", "      HOST: h\n      UPSTREAM: HOST");
+    const both: Check = {
+      id: "CX",
+      run: ({ serviceEnv }) => {
+        const env = serviceEnv.get("pds");
+        return fail(`${env?.use("HOST", (v) => v)} ${env?.use("UPSTREAM", () => "") ?? ""}`.trim());
+      },
+    };
+    expect((await check({ compose }, "prod", { checks: [both] })).lines).toEqual([
+      "FAIL CX the reason is withheld: it would print a value",
+    ]);
   });
 
   test("preflight_no_skip_flag", async () => {

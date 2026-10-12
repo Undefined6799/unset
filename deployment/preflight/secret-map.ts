@@ -6,6 +6,8 @@ const REDACTED = "[redacted]";
 
 export class SecretMap {
   readonly #values: ReadonlyMap<string, string>;
+  /** The names `use` has read since `forgetReads`, so the runner can scrub their values from a reason (P1.30w). */
+  readonly #read = new Set<string>();
 
   constructor(values: Iterable<readonly [string, string]>) {
     this.#values = new Map(values);
@@ -21,7 +23,30 @@ export class SecretMap {
 
   /** Runs `fn` on the value, or on undefined when the name is absent; only `fn`'s answer leaves the map. */
   use<T>(name: string, fn: (value: string | undefined) => T): T {
+    this.#read.add(name);
     return fn(this.#values.get(name));
+  }
+
+  forgetReads(): void {
+    this.#read.clear();
+  }
+
+  /** `text` with every non-empty value `use` has read replaced by its name, longest value first. */
+  scrubReads(text: string): string {
+    const read = this.#readValues().sort(([a], [b]) => b.length - a.length);
+    return read.reduce((out, [value, name]) => out.replaceAll(value, name), text);
+  }
+
+  /** Whether `text` still holds a non-empty value `use` has read. */
+  holdsRead(text: string): boolean {
+    return this.#readValues().some(([value]) => text.includes(value));
+  }
+
+  #readValues(): [string, string][] {
+    return [...this.#read].flatMap((name) => {
+      const value = this.#values.get(name);
+      return value === undefined || value === "" ? [] : [[value, name] as [string, string]];
+    });
   }
 
   toString(): string {

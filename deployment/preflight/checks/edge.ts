@@ -8,6 +8,7 @@ import { posix } from "node:path";
 import { CaddyfileError, ENV_NAMES, type EnvName, edgeSiteProblems, readEdgeConfig } from "../../edge/caddyfile.ts";
 import type { Compose, Mount } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
+import { readLock } from "./images.ts";
 import { type Check, fail, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
@@ -60,9 +61,13 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
   return sitesSource(mount, edgeDir);
 }
 
-/** The sites mount's source: a bind of a non-empty directory inside the repository's deployment/edge/. */
+/**
+ * The sites mount's source: a read-only bind of a non-empty directory inside the repository's deployment/edge/. A
+ * writable mount would let the running edge change which sites it serves (P1.30w, architecture ruling B2b).
+ */
 function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
   if (mount.type !== "bind" || mount.source === null) return fail(`${SITES_TARGET} is not a bind mount`);
+  if (!mount.readOnly) return fail(`${SITES_TARGET} is not mounted read-only`);
   const dir = EDGE_FILES.realpath(mount.source);
   if (dir === null) return missing(mount.source);
   const root = EDGE_FILES.realpath(edgeDir);
@@ -77,12 +82,36 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
 /**
  * C18's verdict: the sites the edge mounts, read with the shipped Caddyfile and snippets and the edge's env, break
  * none of edgeSiteProblems' rules. The env values go only to the reader, whose messages name a placeholder, never its
- * value (P1.28l); a reader error is a failure, never a crash.
+ * value (P1.28l); a reader error is a failure, never a crash. The runner turns any value that still reaches the
+ * reason back into its name (P1.30w).
  */
-export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | undefined): Outcome {
+export function edgeZones(
+  compose: Compose,
+  edgeDir: string,
+  env: SecretMap | undefined,
+  edgeRef: string | undefined,
+): Outcome {
+  const image = edgeImage(compose, edgeRef);
+  if (image !== null) return image;
   const sites = edgeSitesDir(compose, edgeDir);
   if (!("dir" in sites)) return sites;
   if (env === undefined) return missing("the edge service's environment");
+  return readZones(edgeDir, sites.dir, env);
+}
+
+/**
+ * Why the edge service is not running the lock's `edge` ref exactly, or null when it is. Only the edge image carries
+ * the repository's Caddyfile and snippets, so C18's verdict describes nothing else; the published path lives only in
+ * the lock (P1.30w; record 2026-10-12-p203-session-workspace-and-c18-image, point 2a and its 04:25Z amendment).
+ */
+function edgeImage(compose: Compose, edgeRef: string | undefined): Outcome | null {
+  const edge = compose.services.find((service) => service.name === "edge");
+  if (edge === undefined) return missing("the edge service");
+  if (edgeRef === undefined) return missing("the lock's edge entry");
+  return edge.image === edgeRef ? null : fail("the edge service does not run the lock's edge image");
+}
+
+function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
   const values: Partial<Record<EnvName, string>> = {};
   for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
     const value = env.use(name, (v) => v);
@@ -90,7 +119,7 @@ export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | un
   }
   let problems: string[];
   try {
-    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sites.dir, values, EDGE_FILES));
+    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES));
   } catch (error) {
     if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
     throw error;
@@ -100,5 +129,15 @@ export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | un
 
 export const c18: Check = {
   id: "C18",
-  run: ({ compose, edgeDir, serviceEnv }) => edgeZones(compose, edgeDir, serviceEnv.get("edge")),
+  run: (inputs) => {
+    const lock = readLock(inputs);
+    if (lock === null) return missing(inputs.lockPath);
+    const ref = lock.edge?.ref;
+    return edgeZones(
+      inputs.compose,
+      inputs.edgeDir,
+      inputs.serviceEnv.get("edge"),
+      typeof ref === "string" ? ref : undefined,
+    );
+  },
 };

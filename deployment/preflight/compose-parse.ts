@@ -156,11 +156,19 @@ export function refuseAliasesByOption(doc: Document, file: string): void {
   }
 }
 
+/**
+ * The only service keys accepted: the ones `service` reads (P1.30w, architecture ruling B1). A key it never reads
+ * could change what runs while every check passes (`configs`, `secrets` or `tmpfs` over /etc/caddy, `entrypoint`,
+ * `command`, `extends`, or `volumes_from` bringing another service's mounts), so any other key is refused by name.
+ */
+const SERVICE_KEYS = new Set(["image", "env_file", "environment", "ports", "networks", "network_mode", "volumes"]);
+
 function service(r: Reader, name: string, spec: unknown): Service {
   if (!isMap(spec)) return r.fail(spec, `service ${name} is not a mapping`);
-  if (spec.has("extends")) r.fail(spec.get("extends", true), "extends");
-  // Another service's mounts would arrive unread (P1.30u).
-  if (spec.has("volumes_from")) r.fail(spec.get("volumes_from", true), "volumes_from");
+  for (const pair of spec.items) {
+    const key = r.text(pair.key, "service key");
+    if (!SERVICE_KEYS.has(key)) r.fail(pair.key, `service key ${key}`);
+  }
   for (const field of NO_INTERPOLATION) if (spec.has(field)) r.noDollar(spec.get(field, true), field);
   const image = spec.get("image", true);
   return {

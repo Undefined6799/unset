@@ -47,6 +47,23 @@ describe("compose subset", () => {
     for (const field of ["image: ${IMG}", "user: ${U}", 'ports: ["${P}:80"]', "env_file: ${F}", "privileged: ${P}"]) {
       refused(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`);
     }
+    // P1.30w (record 2026-10-12-c18-follow-ups, ruling N7): through the keys the parser reads, the $ refusal itself
+    // answers; `user` and `privileged` above now stop at the key allowlist first.
+    const dollar = (field: string) => () =>
+      parseCompose(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`, "c.yaml");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    const throughAllowedKeys: [string, string][] = [
+      ["image: ${IMG}", "image"],
+      ['ports: ["${P}:80"]', "ports"],
+      ["env_file: ${F}", "env_file"],
+      ['volumes: ["${V}:/data"]', "volumes"],
+      ["network_mode: ${N}", "network_mode"],
+    ];
+    for (const [field, key] of throughAllowedKeys) {
+      expect(dollar(field), field).toThrow(new ParseError(`c.yaml:4: $ in ${key}`));
+    }
+    expect(dollar("user: ${U}")).toThrow(new ParseError("c.yaml:4: service key user"));
+    expect(dollar("privileged: ${P}")).toThrow(new ParseError("c.yaml:4: service key privileged"));
     refused(`${base}    environment:\n      \${K}: v\n`);
     refused(`${base}    environment:\n      A: pre\${B}\n`);
     refused(`${base}    environment:\n      A:\n`);
@@ -96,6 +113,28 @@ describe("compose subset", () => {
       expect(() => mounts(`      - ${entry}\n`), entry).toThrow(ParseError);
     }
     refused(`${base}    volumes_from: [other]\n`);
+  });
+  // P1.30w (architecture ruling B1): a key the preflight never reads could change what runs while every check passes,
+  // so each service holds only the keys it reads, and a refusal names the key alone, never its value.
+  test("service_keys_outside_the_allowlist_are_refused", () => {
+    const caddyfile = "/etc/caddy/Caddyfile";
+    for (const [key, yaml] of [
+      [
+        "configs",
+        `    configs:\n      - source: edge\n        target: ${caddyfile}\nconfigs:\n  edge:\n    file: ./x\n`,
+      ],
+      [
+        "secrets",
+        `    secrets:\n      - source: edge\n        target: ${caddyfile}\nsecrets:\n  edge:\n    file: ./x\n`,
+      ],
+      ["tmpfs", "    tmpfs: [/etc/caddy/snippets]\n"],
+      ["entrypoint", '    entrypoint: ["caddy", "run", "--config", "/tmp/never-printed"]\n'],
+      ["command", "    command: caddy run --config /tmp/never-printed\n"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:5: service key ${key}`),
+      );
+    }
   });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
 });

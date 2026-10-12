@@ -12,7 +12,8 @@ const INDEX_TYPES = [
   "application/vnd.docker.distribution.manifest.list.v2+json",
 ];
 
-function readLock(inputs: Inputs): Record<string, LockEntry> | null {
+/** The deploy lock C2 to C5 and C18 read, or null when the file is missing. */
+export function readLock(inputs: Inputs): Record<string, LockEntry> | null {
   const text = inputs.readText(inputs.lockPath);
   if (text === null) return null;
   const lock = JSON.parse(text) as unknown;
