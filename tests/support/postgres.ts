@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { docker } from "./docker.ts";
 
 type LockEntry = { ref: string; tag: string; digest: string };
 
@@ -54,17 +55,17 @@ const STARTED = new Set<string>();
 const DIRS = new Set<string>();
 const INIT_COMPLETE = "PostgreSQL init process complete";
 const OWNER_LABEL = "sh.unset.test-owner";
+// One docker call (ps, run -d, logs, exec, port, rm) may queue behind CI's parallel image builds (P1.29z), but never
+// for a minute: it is killed at 60 s, so a hung daemon fails the calling test with a named message instead of
+// blocking the event loop until the job's timeout (P1.27k). The callers' own budgets are 60 s and up.
+const CALL_MS = 60_000;
 
 /** Names of the containers, running or stopped, that this process started and has not removed. */
 export function ownContainers(): string[] {
-  const listed = spawnSync(
-    "docker",
-    ["ps", "-a", "--filter", `label=${OWNER_LABEL}=${process.pid}`, "--format", "{{.Names}}"],
-    {
-      encoding: "utf8",
-    },
-  );
-  return listed.stdout.split("\n").filter((name) => name !== "");
+  const listed = docker(["ps", "-a", "--filter", `label=${OWNER_LABEL}=${process.pid}`, "--format", "{{.Names}}"], {
+    timeoutMs: CALL_MS,
+  });
+  return listed.out.split("\n").filter((name) => name !== "");
 }
 
 /** A password for one run: 32 random bytes, URL-safe. */
@@ -72,7 +73,7 @@ export const randomPassword = (): string => randomBytes(32).toString("base64url"
 
 /** Removes every container (with its anonymous data volume) and secrets folder this file created. Call it from afterAll; it never throws. */
 export function stopAllPostgres(): void {
-  for (const name of STARTED) spawnSync("docker", ["rm", "-f", "-v", name], { stdio: "ignore" });
+  for (const name of STARTED) remove(name);
   STARTED.clear();
   for (const dir of DIRS) rmSync(dir, { recursive: true, force: true });
   DIRS.clear();
@@ -81,12 +82,12 @@ export function stopAllPostgres(): void {
 /** Starts the image detached and waits until initdb finished and the server accepts connections again. */
 export async function startPostgres(options: PostgresOptions, timeoutMs = 90_000): Promise<PostgresContainer> {
   const name = containerName();
-  docker(["run", "-d", ...runArgs(name, options), POSTGRES_IMAGE]);
+  dockerOut(["run", "-d", ...runArgs(name, options), POSTGRES_IMAGE]);
   try {
     await waitUntilServing(name, timeoutMs);
     return container(name, hostPort(name));
   } catch (error) {
-    spawnSync("docker", ["rm", "-f", "-v", name], { stdio: "ignore" });
+    remove(name);
     throw error;
   }
 }
@@ -94,13 +95,15 @@ export async function startPostgres(options: PostgresOptions, timeoutMs = 90_000
 /** Runs the image in the foreground and reports how initdb ended: for scripts that must fail closed. */
 export function runUntilExit(options: PostgresOptions, timeoutMs = 90_000): InitExit {
   const name = containerName();
+  // Its own timeout reports a server still running as `code: null`, so it keeps spawnSync, now with SIGKILL (P1.27k).
   const result = spawnSync("docker", ["run", ...runArgs(name, options), POSTGRES_IMAGE], {
     encoding: "utf8",
     timeout: timeoutMs,
+    killSignal: "SIGKILL",
   });
   const logs = `${result.stdout}${result.stderr}`;
   if (result.error || result.status === null) {
-    spawnSync("docker", ["rm", "-f", "-v", name], { stdio: "ignore" });
+    remove(name);
     return { code: null, logs };
   }
   return { code: result.status, logs };
@@ -146,17 +149,17 @@ function secretsDir(files: Readonly<Record<string, string>>): string {
 async function waitUntilServing(name: string, timeoutMs: number): Promise<void> {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
-    const logs = spawnSync("docker", ["logs", name], { encoding: "utf8" });
-    if (logs.status !== 0) throw new Error(`${name} exited during init`);
-    const ready = `${logs.stdout}${logs.stderr}`.includes(INIT_COMPLETE);
-    if (ready && spawnSync("docker", ["exec", name, "pg_isready", "-h", "127.0.0.1"]).status === 0) return;
+    const logs = docker(["logs", name], { timeoutMs: CALL_MS });
+    if (logs.code !== 0) throw new Error(`${name} exited during init`);
+    const ready = `${logs.out}${logs.err}`.includes(INIT_COMPLETE);
+    if (ready && docker(["exec", name, "pg_isready", "-h", "127.0.0.1"], { timeoutMs: CALL_MS }).code === 0) return;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`${name} did not finish init within ${timeoutMs} ms`);
 }
 
 function hostPort(name: string): number {
-  const binding = docker(["port", name, "5432/tcp"]);
+  const binding = dockerOut(["port", name, "5432/tcp"]);
   const match = /^127\.0\.0\.1:(\d+)$/m.exec(binding);
   if (!match?.[1]) throw new Error(`${name} is not bound to 127.0.0.1 only`);
   return Number(match[1]);
@@ -167,9 +170,9 @@ function container(name: string, port: number): PostgresContainer {
     name,
     port,
     sql: (db, query) =>
-      docker(["exec", name, "psql", "-U", "postgres", "-d", db, "-v", "ON_ERROR_STOP=1", "-Atc", query]),
+      dockerOut(["exec", name, "psql", "-U", "postgres", "-d", db, "-v", "ON_ERROR_STOP=1", "-Atc", query]),
     login: (user, db, password, query) =>
-      docker([
+      dockerOut([
         "exec",
         "-e",
         `PGPASSWORD=${password}`,
@@ -182,8 +185,17 @@ function container(name: string, port: number): PostgresContainer {
   };
 }
 
-function docker(args: string[]): string {
-  const result = spawnSync("docker", args, { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`docker ${args[0]} failed: ${result.stderr.trim()}`);
-  return result.stdout.trim();
+/** Removes a container and its anonymous volume; a failure or kill here never masks the test's own outcome. */
+function remove(name: string): void {
+  try {
+    docker(["rm", "-f", "-v", name], { timeoutMs: CALL_MS });
+  } catch {
+    // A killed removal leaves the container for the job's runner cleanup; stopAllPostgres must never throw.
+  }
+}
+
+function dockerOut(args: string[]): string {
+  const result = docker(args, { timeoutMs: CALL_MS });
+  if (result.code !== 0) throw new Error(`docker ${args[0]} failed: ${result.err.trim()}`);
+  return result.out.trim();
 }
