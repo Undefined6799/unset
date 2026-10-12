@@ -92,19 +92,24 @@ type Token = { text: string; quoted: boolean; line: number; env: EnvName | null 
 type Line = { tokens: Token[]; via: string | null };
 type Env = Readonly<Partial<Record<EnvName, string>>>;
 
-/** The env values a message may never carry: only the site address (PDS_HOST) may appear (amendment 8, point 5). */
-const UNECHOED: readonly EnvName[] = ["ACME_EMAIL", "PDS_UPSTREAM"];
-
-/** `run`'s result; a reader error it throws comes back with each UNECHOED value replaced by its placeholder. */
+/**
+ * `run`'s result; a reader error it throws comes back with every value `env` was given replaced by its placeholder,
+ * the site address (PDS_HOST) included (P1.30h, record 2026-10-12-p130h-p130w-c18-follow-ups, ruling B2a; it widens
+ * amendment 8, point 5). It walks ENV_NAMES, so no second list of names can fall behind. Longer values go first, so a
+ * value inside another (a host inside an upstream) cannot leave part of the longer one behind.
+ */
 function unechoed<T>(env: Env, run: () => T): T {
   try {
     return run();
   } catch (error) {
     if (!(error instanceof CaddyfileError)) throw error;
-    const message = UNECHOED.reduce((text, name) => {
-      const value = env[name];
-      return value === undefined || value === "" ? text : text.replaceAll(value, `{$${name}}`);
-    }, error.message);
+    const given = (Object.keys(ENV_NAMES) as EnvName[])
+      .flatMap((name) => {
+        const value = env[name];
+        return value === undefined || value === "" ? [] : [{ name, value }];
+      })
+      .sort((a, b) => b.value.length - a.value.length);
+    const message = given.reduce((text, { name, value }) => text.replaceAll(value, `{$${name}}`), error.message);
     throw new CaddyfileError(message);
   }
 }
@@ -113,8 +118,8 @@ function unechoed<T>(env: Env, run: () => T): T {
 const MAX_IMPORTS = 1000;
 
 /**
- * The Caddyfile `text` with `env` put in. A reader error never carries an UNECHOED value, from the read or from a later
- * `snippet()` (P1.28f; amendment 8, point 5).
+ * The Caddyfile `text` with `env` put in. A reader error never carries a value from `env`, from the read or from a later
+ * `snippet()` (P1.28f; amendment 8, point 5; P1.30h).
  */
 export function readCaddyfile(text: string, env: Env): Caddyfile {
   const config = unechoed(env, () => parse(text, env));
@@ -416,8 +421,14 @@ const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
  * belongs. `sitesDir` lies inside `edgeDir/sites/`; a snippet is a regular file inside `edgeDir/snippets/`; a site is
  * a regular file, or a symlink to one, inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
  * beyond that count, and a file swapped between `kind` and `read`, since this is a build-time reader over a checkout.
+ * Any error it throws carries no value from `env` (P1.30h).
  */
 export function readEdgeConfig(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
+  return unechoed(env, () => readEdgeTree(edgeDir, sitesDir, env, files));
+}
+
+/** `readEdgeConfig` before its errors are scrubbed. */
+function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
   const root = resolved(files, edgeDir, "the edge directory");
   const sitesRoot = `${root}/sites`;
   if (resolved(files, sitesRoot, "the sites directory") !== sitesRoot) {
