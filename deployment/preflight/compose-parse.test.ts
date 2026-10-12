@@ -622,7 +622,8 @@ function theirsAsOurs(theirs: Theirs) {
 // from the first file's directory, never from the file that names it. The second file sits in another directory.
 const FIRST = "name: unset-prod\nservices:\n  edge:\n    image: x\n";
 const SECOND =
-  "services:\n  pds:\n    image: y\n    env_file: [e.env]\n    volumes: [./data:/data]\nsecrets:\n  s:\n    file: ./s\n";
+  "services:\n  pds:\n    image: y\n    env_file: [e.env]\n    volumes: [./data:/data]\n" +
+  "    build: {context: ., dockerfile: deployment/x.Dockerfile}\nsecrets:\n  s:\n    file: ./s\n";
 
 /** The paths loadCompose resolved, in the order the agreement test compares them. */
 function resolvedPaths(files: string[], readText: (path: string) => string | null) {
@@ -632,6 +633,7 @@ function resolvedPaths(files: string[], readText: (path: string) => string | nul
     binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
     envFiles: pds?.envFiles ?? [],
     secretFiles: compose.secretFiles,
+    build: pds?.build ?? null,
   };
 }
 
@@ -645,6 +647,8 @@ describe("compose project directory", () => {
       binds: ["/p/a/data"],
       envFiles: ["/p/a/e.env"],
       secretFiles: ["/p/a/s"],
+      // P1.30y: the context from the project directory, the Dockerfile from the context (compose-spec build.md).
+      build: { context: "/p/a", dockerfile: "/p/a/deployment/x.Dockerfile" },
     });
   });
 });
@@ -689,6 +693,7 @@ describe("compose agreement", () => {
       binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
       envFiles: pds?.envFiles,
       secretFiles: theirs.secretFiles,
+      build: pds?.build && { context: pds.build.context, dockerfile: resolve(pds.build.context, pds.build.dockerfile) },
     });
   });
 });
