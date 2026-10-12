@@ -107,7 +107,7 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
       allowPositionals: false,
     }));
   } catch {
-    throw new CannotRun("usage: --env dev|prod --compose <file> [--compose <file>...]");
+    throw new CannotRun("usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...]");
   }
   if (values.env !== "dev" && values.env !== "prod") throw new CannotRun("--env must be dev or prod");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");

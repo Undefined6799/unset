@@ -861,6 +861,11 @@ describe("preflight", () => {
   test("compose_path_must_be_absolute_and_normal", async () => {
     const { root, file } = stack();
     const refused = { code: 2, lines: ["ERROR --compose must be an absolute, normalised path"] };
+    // The usage line says so too (verifier on #689).
+    expect(await preflight(["--env", "prod", "--bogus"], { root, run: fakeRun().run })).toEqual({
+      code: 2,
+      lines: ["ERROR usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...]"],
+    });
     const dir = dirname(file);
     for (const path of [
       relative(process.cwd(), file),
