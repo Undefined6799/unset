@@ -197,7 +197,9 @@ describe("preflight", () => {
       "ghcr.io/undefined6799/edge:latest",
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
-      expect(failed((await check({ compose: COMPOSE.replace(EDGE, image) })).lines), image).toEqual(["C2", "C18"]);
+      const result = await check({ compose: COMPOSE.replace(EDGE, image) });
+      expect(failed(result.lines), image).toEqual(["C2", "C18"]);
+      expect(result.code, image).toBe(1);
     }
   });
 
