@@ -10,12 +10,17 @@ import { type Call, docker } from "./docker.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..");
 
-/** Builds `dockerfile` with `context` under a fresh `unset-test-<hex>` tag and returns the tag. */
+// The label the test containers carry (tests/support/postgres.ts, the edge helper), on every test image too, so a tag a
+// killed run leaked can be found with `docker images --filter label=sh.unset.test-owner` (P1.11i).
+const OWNER_LABEL = "sh.unset.test-owner";
+
+/** Builds `dockerfile` in `context` under a fresh `unset-test-<hex>` tag, labelled with this process; returns it. */
 export function buildTestImage(dockerfile: string, context: string, call: Call): string {
   const tag = `unset-test-${randomBytes(8).toString("hex")}`;
   // Plain progress, not -q: on a failure BuildKit then prints the failing step's last log lines, where the real cause
   // is (a Go error, a fetch refused); -q prints only the Dockerfile excerpt (docker buildx 0.35.0, docker CLI 29.6.2).
-  const built = docker(["build", "--progress=plain", "-t", tag, "-f", dockerfile, context], call);
+  const label = `${OWNER_LABEL}=${process.pid}`;
+  const built = docker(["build", "--progress=plain", "--label", label, "-t", tag, "-f", dockerfile, context], call);
   if (built.code !== 0) throw new Error(`${shown(dockerfile)} build failed: ${buildFailure(built.err)}`);
   return tag;
 }

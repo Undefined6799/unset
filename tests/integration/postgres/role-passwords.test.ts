@@ -17,7 +17,7 @@ import {
   syncRolePasswords,
   withClient,
 } from "../../../infrastructure/postgres/index.ts";
-import { docker } from "../../support/docker.ts";
+import { cleanUpAll, docker } from "../../support/docker.ts";
 import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -109,8 +109,8 @@ describe("role passwords on postgres", () => {
   }, 120_000);
   // One container removal, killed at the helper's 60 s (P1.27k), inside this budget.
   afterAll(() => {
-    stopAllPostgres();
-    rmSync(secretsDir, { recursive: true, force: true });
+    // The folder goes even when a removal is killed, and both failures are reported (P1.11c).
+    cleanUpAll(stopAllPostgres, () => rmSync(secretsDir, { recursive: true, force: true }));
   }, 120_000);
 
   test("password_sync", async () => {

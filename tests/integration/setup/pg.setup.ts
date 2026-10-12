@@ -10,6 +10,7 @@ import { join, relative } from "node:path";
 import { createLogger } from "@unset/shared-log";
 import type { TestProject } from "vitest/node";
 import { createPool, migrate, type PoolClient, withClient } from "../../../infrastructure/postgres/index.ts";
+import { failAfterCleanup } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -39,6 +40,8 @@ export type TestDatabaseOptions = {
   readonly migrationsDir: string;
   /** Repository-relative test files that each get a database. */
   readonly files: readonly string[];
+  /** What removes the container after a failure; a test passes one that throws (P1.11c). */
+  readonly stop?: () => void;
 };
 
 /** Starts Postgres, migrates the template and clones it per file. Any failure removes the container before throwing. */
@@ -67,8 +70,8 @@ export async function startTestDatabase(options: TestDatabaseOptions): Promise<P
     const roles = await asMigrator(connection, (client) => prepareRoles(client, Object.values(databases)));
     return { host: connection.host, port: connection.port, roles, databases };
   } catch (error) {
-    stopAllPostgres();
-    throw error;
+    // A killed removal is reported with the setup error, never in its place (P1.11c).
+    failAfterCleanup(error, options.stop ?? stopAllPostgres);
   }
 }
 

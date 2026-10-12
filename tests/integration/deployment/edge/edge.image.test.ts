@@ -13,6 +13,7 @@ import {
   type ProbeStep,
   pullProbeImage,
   startEdge,
+  stopEdgeAndRemoveImage,
 } from "./edge-container.ts";
 import { timeoutProblems } from "./timeouts.ts";
 
@@ -81,11 +82,9 @@ beforeAll(async () => {
   image = buildEdgeImage();
   edge = await startEdge(image);
 }, 600_000);
-// The image's tag stays: until P1.27z, the trusted edge tests hold the same image by id, so removing what may be its
-// last tag could delete it under them (P1.27x record, amendment 2).
-afterAll(async () => {
-  await edge?.stop();
-}, CONTAINER_MS);
+// A stop and a tag removal, each docker call killed at 60 s, with room to report both.
+const TEARDOWN_MS = 150_000;
+afterAll(() => stopEdgeAndRemoveImage(edge, image), TEARDOWN_MS);
 
 describe("edge", () => {
   test("edge_allows_normal_xrpc", async () => {

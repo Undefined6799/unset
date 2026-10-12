@@ -46,6 +46,20 @@ describe("buildTestImage", () => {
     );
   });
 
+  // P1.11i: a leaked tag can be found by the label the test containers carry, without guessing at names.
+  test("built_image_carries_the_owner_label", { timeout: TEST_MS }, () => {
+    const file = context("labelled", "FROM scratch\nCOPY labelled.marker /marker\n");
+    const tag = buildTestImage(file, dir, { timeoutMs: CALL_MS });
+    withCleanup(
+      () => {
+        const format = '{{index .Config.Labels "sh.unset.test-owner"}}';
+        const inspected = docker(["image", "inspect", "--format", format, tag], { timeoutMs: CALL_MS });
+        expect(inspected.out.trim()).toBe(String(process.pid));
+      },
+      () => removeTestImage(tag, { timeoutMs: CALL_MS }),
+    );
+  });
+
   test("failed_build_names_the_step_output", { timeout: FAILING_TEST_MS }, () => {
     // The step computes its message, so the Dockerfile excerpt and the error line, which quote the command, never hold
     // it: only the step's own output can.

@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { docker } from "../support/docker.ts";
+import { cleanUpAll, docker } from "../support/docker.ts";
 import { runUntilExit, STOP_ALL_MS, startPostgres, stopAllPostgres } from "../support/postgres.ts";
 
 const dirs: string[] = [];
@@ -13,8 +13,10 @@ const volumes: string[] = [];
 
 // Removal is one docker call per container, each killed at the helper's 60 s (P1.27k); the hook's budget holds two.
 afterAll(() => {
-  stopAllPostgres();
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  // The folders go even when a removal is killed, and every failure is reported (P1.11c).
+  cleanUpAll(stopAllPostgres, () => {
+    for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  });
 }, 120_000);
 
 // Inspecting is quick; 20 s kills a hung daemon. leaves_nothing_behind holds its removals (STOP_ALL_MS) plus the

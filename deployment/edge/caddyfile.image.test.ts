@@ -2,6 +2,7 @@
 // image, so it lives in an *.image.test.ts file (step book P1.28i; architecture record
 // 2026-10-07-test-timing-fuzz-and-image-tests), apart from the reader's unit tests in caddyfile.test.ts.
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   cpSync,
   lstatSync,
@@ -30,22 +31,56 @@ const built: string[] = [];
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
 
-function docker(args: readonly string[]): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+// Every docker call is killed at its own budget with SIGKILL (P1.27t, as P1.27k does for tests/support/docker.ts): a
+// blocked spawnSync holds the event loop, so vitest's budget cannot stop it, and a hung daemon would hold the run
+// until scripts/test/run.ts kills it whole at 600 s, failing with no name. A daemon call (run, cat, rmi) gets 50 s, so
+// the afterAll's two removals fit inside CONTAINER_MS; a build gets 300 s inside its test's 600 s. This trusted test
+// keeps its own helper rather than import product test code.
+const CALL_MS = 50_000;
+const BUILD_MS = 300_000;
+
+/** Docker's subcommand in full: up to two leading words (`run`, `image inspect`), never a flag or a reference. */
+function subcommand(args: readonly string[]): string {
+  const end = args.findIndex((arg) => !/^[a-z][a-z-]*$/.test(arg));
+  return args.slice(0, Math.min(end === -1 ? args.length : end, 2)).join(" ");
+}
+
+function docker(args: readonly string[], timeoutMs: number): { code: number; out: string; err: string } {
+  const result = spawnSync("docker", args, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: timeoutMs,
+    killSignal: "SIGKILL",
+  });
+  if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    throw new Error(`docker ${subcommand(args)} killed after ${timeoutMs} ms`);
+  }
   return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
 }
 
-/** Builds deployment/edge/Dockerfile with deployment/edge as the context; the image id. */
+/**
+ * Builds deployment/edge/Dockerfile with deployment/edge as the context under its own tag; the tag (P1.27z, as P1.27x
+ * does for product tests). Two builds of one context share an image id on CI's classic image store, so removing by id
+ * with -f removed the image under every other edge test; `rmi <tag>` removes the image only with its last tag
+ * (docs.docker.com, "docker image rm"). Plain progress, not -q, so a failure keeps the failing step's own log lines.
+ */
 function buildEdgeImage(): string {
-  const result = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE]);
-  if (result.code !== 0) throw new Error(`edge image build failed: ${result.err.slice(-2000)}`);
-  built.push(result.out.trim());
-  return result.out.trim();
+  const tag = `unset-test-${randomBytes(8).toString("hex")}`;
+  const result = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_MS);
+  if (result.code !== 0) throw new Error(`edge image build failed: ${failedStep(result.err)}`);
+  built.push(tag);
+  return tag;
+}
+
+/** BuildKit's summary of the failing step to the end of its output (docker buildx 0.35.0), else the last 4000 chars. */
+function failedStep(stderr: string): string {
+  const from = stderr.lastIndexOf("\n------\n > ");
+  return (from === -1 ? stderr : stderr.slice(from + 1)).slice(-4_000);
 }
 
 /** The config files the image holds under /etc/caddy, by their repository path under deployment/edge. */
 function imageConfig(image: string): Record<string, string> {
-  const listed = docker(["run", "--rm", "--entrypoint", "ls", image, "/etc/caddy/snippets"]);
+  const listed = docker(["run", "--rm", "--entrypoint", "ls", image, "/etc/caddy/snippets"], CALL_MS);
   if (listed.code !== 0) throw new Error(`listing the image's snippets failed: ${listed.err.slice(-2000)}`);
   const files = [
     "Caddyfile",
@@ -57,7 +92,7 @@ function imageConfig(image: string): Record<string, string> {
   ];
   return Object.fromEntries(
     files.map((file) => {
-      const read = docker(["run", "--rm", "--entrypoint", "cat", image, `/etc/caddy/${file}`]);
+      const read = docker(["run", "--rm", "--entrypoint", "cat", image, `/etc/caddy/${file}`], CALL_MS);
       if (read.code !== 0) throw new Error(`reading /etc/caddy/${file} failed: ${read.err.slice(-2000)}`);
       return [file, read.out];
     }),
@@ -67,7 +102,10 @@ function imageConfig(image: string): Record<string, string> {
 describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
   afterAll(() => {
-    for (const image of built) docker(["rmi", "-f", image]);
+    // The tag only, never -f: an image another edge test built from the same context stays (P1.27z).
+    const failed = built.map((tag) => docker(["rmi", tag], CALL_MS)).filter((removed) => removed.code !== 0);
+    if (failed.length > 0)
+      throw new Error(`docker rmi failed: ${failed.map((removed) => removed.err.trim()).join("; ")}`);
   }, CONTAINER_MS);
 
   test("caddyfile_reader_matches_caddy_adapt", () => {
@@ -170,22 +208,25 @@ const FILES: EdgeFiles = {
 };
 
 function adapt(image: string, env: Record<string, string>): Adapted {
-  const result = docker([
-    "run",
-    "--rm",
-    "--read-only",
-    "--entrypoint",
-    "caddy",
-    ...Object.entries(env).flatMap(([name, value]) => ["-e", `${name}=${value}`]),
-    "-v",
-    `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`,
-    image,
-    "adapt",
-    "--config",
-    "/etc/caddy/Caddyfile",
-    "--adapter",
-    "caddyfile",
-  ]);
+  const result = docker(
+    [
+      "run",
+      "--rm",
+      "--read-only",
+      "--entrypoint",
+      "caddy",
+      ...Object.entries(env).flatMap(([name, value]) => ["-e", `${name}=${value}`]),
+      "-v",
+      `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`,
+      image,
+      "adapt",
+      "--config",
+      "/etc/caddy/Caddyfile",
+      "--adapter",
+      "caddyfile",
+    ],
+    CALL_MS,
+  );
   if (result.code !== 0) throw new Error(`caddy adapt failed: ${result.err.slice(-2000)}`);
   return JSON.parse(result.out) as Adapted;
 }
