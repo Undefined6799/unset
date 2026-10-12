@@ -2,7 +2,7 @@
 
 Where each piece of legal paperwork stands (P1.37). Alex updates a row whenever its state changes; the doc check
 (`scripts/docs/legal.ts`) fails when a row is malformed, a submitted item has no date, or a `[lawyer to confirm: Ln]`
-marker in this folder has no row here. Dates are ISO (`2026-10-12`); `—` means none yet.
+marker in this folder has no row here, or an L row has no marker. Dates are ISO (`2026-10-12`); `—` means none yet.
 
 Status is one of: `to do`, `in progress`, `submitted`, `done`.
 
@@ -31,3 +31,5 @@ Status is one of: `to do`, `in progress`, `submitted`, `done`.
 | L17 OPC report and notices (s. 10.1, 10.2; SOR/2018-64) | to do | — | — | Lawyer hour |
 | L18 CAI notice and notices to persons (s. 3.5; A-2.1, r. 3.1) | to do | — | — | Lawyer hour |
 | L19 register kept 5 years | to do | — | — | Lawyer hour |
+| L20 hold design rule: fixed per case, regime switch, extensions, destruction | to do | — | — | Lawyer hour |
+| L21 answering a production order for preserved data | to do | — | — | Lawyer hour |

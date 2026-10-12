@@ -3,9 +3,12 @@
 What to do when a fingerprint match, a local check, a reviewer or a user report points at child sexual abuse and
 exploitation material (CSAEM) on our service. Plan §5.8 and §6 (decisions 9, 21 and 30). The law below was read on
 2026-10-12; every citation is marked for the lawyer hour, and each marker has a row in
-[`legal-status.md`](legal-status.md). This is an operating runbook, not legal advice.
+[`legal-status.md`](legal-status.md). This is an operating runbook, not legal advice. Decision 9's one-year
+preservation is ahead of the law in force: it applies only once C-16's amendments commence, and until then the rule
+is 21 days (section 4; plan §6 as restated on 2026-10-12).
 
-**Who:** Alex, the only person who reports. No one else opens, reviews or reports the item.
+**Who:** Alex, the only person who reports. Nobody opens or reviews the item, Alex included: every report works from
+the alert's metadata.
 
 **Never:** view more of the item than the alert already showed you; copy, download, screenshot, forward or attach it
 anywhere, including to Cybertip.ca, the police, an AI tool or a ticket; search for more material (the Act neither
@@ -21,12 +24,14 @@ Cybertip.ca says the same on its report page (https://www.cybertip.ca/en/report/
 1. The item is already blocked and sealed under the legal hold by the pipeline (a match or a "suspected" verdict
    blocks it; plan §5.8). Confirm in the admin panel that the hold exists; do not open the media.
 2. Freeze the uploader's uploads. Never freeze the reporter's account.
-3. Note the time you were alerted. Every deadline below runs "as soon as feasible" from here.
+3. Note the time you were alerted. The reporting steps in sections 2 and 3 run "as soon as feasible" from here; the
+   preservation clock in section 4 starts later, on the day the police notice is made.
 
 ## 2. Which duty applies
 
-The in-force law is the Mandatory Reporting Act, S.C. 2011, c. 4 (Justice Laws, current to 2026-09-21), and the
-Internet Child Pornography Reporting Regulations, SOR/2011-292 (current to 2026-06-21).
+The in-force law is An Act respecting the mandatory reporting of Internet child pornography by persons who provide an
+Internet service, S.C. 2011, c. 4 ("the Act"; Justice Laws, current to 2026-09-21), and the Internet Child Pornography
+Reporting Regulations, SOR/2011-292 (current to 2026-06-21). The Act has no short title until C-16 s. 178 commences.
 
 | Situation | Duty | Where |
 | --- | --- | --- |
@@ -35,8 +40,8 @@ Internet Child Pornography Reporting Regulations, SOR/2011-292 (current to 2026-
 | Both | Both | |
 
 The Cybertip.ca service-provider form takes a URL or IP only and gives a receipt. Keep the receipt with the case
-record for at least 2 years (Regs s. 5; the form's own advice). Its page sends material on our own network to law
-enforcement, which is the s. 3 duty.
+record; the form advises keeping it for 2 years [lawyer to confirm: L2]. For material on our own network, the page
+tells the provider to report to local police instead: that is the s. 3 notice in section 3.
 
 Suspected material that no fingerprint matched follows the same path; whether the duties and timing differ for
 suspected versus matched material is on the lawyer-hour list [lawyer to confirm: L4]. Written child sexual material in
@@ -63,14 +68,16 @@ Act amendments (ss. 178 to 183) come into force on a date the Governor in Counci
 fixed (Justice Laws, current to 2026-09-21) [lawyer to confirm: L7]. Check Justice Laws and the Canada Gazette Part II
 before every case until the order is made.
 
-- **Until then:** notify the police in writing (s. 3); preserve all related computer data for **21 days** (s. 4(1)) in
-  a secure offline location (Regs s. 12); then, as soon as feasible, destroy anything we would not keep in the
-  ordinary course of business (s. 4(2)), unless a judicial order requires otherwise [lawyer to confirm: L8].
+- **Until then:** notify the police in writing (s. 3); preserve all related computer data for **21 days**, counted
+  from the day the police notice is made (s. 4(1)), in a secure offline location (Regs s. 12); then, as soon as
+  feasible, destroy anything we would not keep in the ordinary course of business (s. 4(2)), unless a judicial order
+  requires otherwise [lawyer to confirm: L8].
 - **After commencement:** notify the law enforcement body the regulations designate; attach transmission data
   (Criminal Code s. 487.011: for example routing, IP address, date and time) when the material is manifestly CSAEM;
-  and preserve for **one year** [lawyer to confirm: L9].
+  and preserve for **one year**, counted from the day the police notice is made (s. 4(1)) [lawyer to confirm: L9].
 
-How we apply it (architecture's design rule of 2026-10-12, held for the lawyer hour, not a decision):
+How we apply it (architecture's design rule of 2026-10-12, held for the lawyer hour, not a decision)
+[lawyer to confirm: L20]:
 1. The hold length is fixed per case at notification: the case record stores the regime and the preserve-until date.
    A later regime change never shortens or extends a hold already running.
 2. The regime switches only through a reviewed config change that cites the order in council. A missing or bad value
@@ -81,12 +88,13 @@ How we apply it (architecture's design rule of 2026-10-12, held for the lawyer h
 
 Open for the lawyer hour: which regime governs a notice made before commencement [lawyer to confirm: L10]; what
 "ordinary course of business" means for our log retention, and so what the sealed transmission buffer may keep today
-[lawyer to confirm: L11]; and whether a report under a foreign duty counts (new s. 9.01) [lawyer to confirm: L12].
+[lawyer to confirm: L11]; whether a report under a foreign duty counts (new s. 9.01) [lawyer to confirm: L12]; and how
+we answer a production order for the preserved data [lawyer to confirm: L21].
 
 ## 5. Close the case
 
 1. Record in the case record: the alert time, the containment time, each report or notice with its time and receipt,
-   the preservation start, and the planned destruction date.
+   the preservation start (the day the police notice was made, s. 4(1)), and the planned destruction date.
 2. Set the hold's destruction date to match section 4.
 3. Do not discuss the case outside the case record.
 

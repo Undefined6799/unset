@@ -34,7 +34,8 @@ Both tests weigh how sensitive the information is and how likely it is to be mis
 
 - **PIPEDA:** is it reasonable to believe the breach creates a real risk of significant harm to an individual
   (s. 10.1(1), (7) and (8))? Significant harm includes bodily harm, humiliation, damage to reputation or
-  relationships, financial loss, identity theft and loss of opportunities [lawyer to confirm: L15].
+  relationships, loss of employment, business or professional opportunities, financial loss, identity theft, negative
+  effects on the credit record, and damage to or loss of property (s. 10.1(7)) [lawyer to confirm: L15].
 - **Quebec:** does the incident present a risk of serious injury (s. 3.5), weighing sensitivity, the anticipated
   consequences of its use and the likelihood of injurious use (s. 3.7)? The person in charge must be consulted, which
   here is Alex [lawyer to confirm: L16].
@@ -48,7 +49,9 @@ Write the reasoning in the register entry either way; a "no risk" finding is rec
    (https://services.priv.gc.ca/atteinte-breach-lprpde-pipeda/en/register; a PDF form,
    https://www.priv.gc.ca/media/4844/pipeda_pb_form_e.pdf, is uploaded through the same form). The report gives: the
    circumstances and cause; the day or period; the personal information involved; the number of people affected; the
-   steps taken to reduce harm; the steps to notify people; and a contact who can answer questions.
+   steps taken to reduce harm; the steps to notify people; and the name and contact information of a person who can
+   answer the Commissioner's questions (s. 2(1)(g)). That name goes only in the filing and Alex's own records, never
+   in this repository.
 2. Notify each affected person directly (email is allowed): the circumstances, the day or period, the information
    involved, what we did, what they can do, and our contact. Indirect, public notice only when direct notice would
    cause further harm or undue hardship, or we have no contact details.
@@ -75,9 +78,9 @@ Write the reasoning in the register entry either way; a "no risk" finding is rec
 ## 5. Register of incidents
 
 Every incident is recorded, whether or not it was reported. PIPEDA keeps each record 24 months after we determine the
-breach occurred (SOR/2018-64 s. 6); Quebec keeps it at least 5 years after we became aware (A-2.1, r. 3.1 s. 8). We
-keep 5 years, the longer of the two [lawyer to confirm: L19]. This repository is public, so the register is kept
-outside it, in Alex's own records, with these columns: became aware; incident period; information involved; number of
+breach occurred (SOR/2018-64 s. 6); Quebec keeps it at least 5 years after we became aware (A-2.1, r. 3.1 s. 8). We keep
+5 years, the longer of the two [lawyer to confirm: L19]. This repository is public, so the register is kept outside it,
+in Alex's own records, with these columns: became aware; incident period; circumstances; information involved; number of
 people (and in Quebec); risk found and why; reports and notices sent, with dates; measures taken.
 
 Sources read 2026-10-12: https://laws-lois.justice.gc.ca/eng/acts/P-8.6/page-3.html,
