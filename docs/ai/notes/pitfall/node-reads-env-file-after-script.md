@@ -30,3 +30,5 @@ sets an empty `NODE_OPTIONS` for both children; `stack.test.ts` spawns the hook 
 
 Re-checked at P1.27u (#700), which changed `index.ts`'s real-path resolution, its usage text and its `readlink`
 and `statfs` deps; the flag parsing and the three rules above are unchanged.
+Re-checked at P1.34p (#704), which reads env files through an `O_NOFOLLOW|O_NONBLOCK` descriptor; the rules
+above still hold, and the reader never loads a file into a Node process.
