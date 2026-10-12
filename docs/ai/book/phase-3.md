@@ -101,8 +101,8 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P1.33 | Tailscale with Tailnet Lock; `admin` reachable on the host's tailnet address only |
 | P2.01 | `resolveDid(did, {noCache?}) → {doc, pdsEndpoint, atprotoKey} \| null` through `net-guard` |
 | P2.02 | `verifyHandle(did, {fresh?}) → {handle: string \| null, status: "verified" \| "invalid" \| "unresolved", expiresAt}` |
-| P2.03 | session table `app.session`; `destroyAllForDid` (calls `app.end_sessions_for_did`, created by P2.04's migration) |
-| P2.04 | sealed OAuth token store `app.oauth_session` |
+| P2.03 | session table `app.session` |
+| P2.04 | sealed OAuth token store `app.oauth_session`; `destroyAllForDid` (calls `app.end_sessions_for_did`, created by P2.04's migration) |
 | P2.06 | callback creates the session in one transaction (this phase adds one insert there, P3.02) |
 | P2.09 | minimal `pds-admin` (`.mjs`, zero npm dependencies): `POST /v1/invite.issue {payload, kid, sig}`, keys in `/run/secrets/pds_admin_keys.json`, log line `{seq, ts, verb, kid, actorMac, targetMac, jti, outcome, codeMac?, prev, hash}`, `jti.log` lines `jti exp` |
 | P2.18 | object-storage client (draft prefixes) |
@@ -944,7 +944,7 @@ Outputs (contract):
     deletes `app.session` rows for the DID; deletes the `app.oauth_session` row **unless** `why = 'deactivated'`
     (allow-list, F17); `why` CHECKed against the closed enum {`deactivated`, `takendown`, `suspended`, `deleted`,
     `unknown`, `mod_suspended`, `mod_end_sessions`, `user_signout_all`, `underage`, `auth_dead`}. `web` already has
-    EXECUTE from Phase 2 (P2.03's `destroyAllForDid` calls it; no duplicated SQL); P3.06g (a grant on an existing
+    EXECUTE from Phase 2 (P2.04's `destroyAllForDid` calls it; no duplicated SQL); P3.06g (a grant on an existing
     function, SE-6) grants
     EXECUTE to `indexer` and `admin`.
   - Schema `mod` (P3.03 created it with its one table, `mod.account_state`; this step adds functions and views),
@@ -2954,7 +2954,7 @@ legal-hold key question is `P4a-A1`.
   `types.did` scan, so P1.13's registry needs a way to list them (this phase lists them by hand in `erase_did` and
   seeds them in the coverage test); strategy names here follow P1.13 (`delete_row`, `set_null`, `retain`).
 - **P1.30 / P5.02a**: the moderation-mailer preflight check (PI-6).
-- **P2.03**: `destroyAllForDid` calls `app.end_sessions_for_did` (no second copy of the SQL).
+- **P2.04**: `destroyAllForDid` calls `app.end_sessions_for_did` (no second copy of the SQL).
 - **P2.09**: its route, key file and log format are migrated by P3.16 (expand, then contract); the P2.09 writer
   should know its `/run/secrets/pds_admin_keys.json` is retired in favour of the roster's `service_keys`.
 - **Phase 4 part 1**: "the `P3.16a` verbs" (lines 41, 703, 1326 and the P4.07 deps) should read **P3.16c**; P4.07's

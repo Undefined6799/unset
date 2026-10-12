@@ -8353,8 +8353,8 @@ Slice 1, issue #619, product (`deployment/preflight/` compose-parse and its test
 
 **Red fixtures:** each refused: `driver_opts` with a host `device`, `driver: local`, `external: true` and `name:` under
 a volume; an undeclared named volume; two compose files, the volume declared in one and mounted in the other; a
-top-level `configs`; a long-form port with `mode` or `app_protocol`. Each is
-red, STACK keeps `volumes: data: {}` and stays green, and the compose files on main are green.
+top-level `configs`; a long-form port with `mode` or `app_protocol`. Each is red, STACK keeps `volumes: data: {}` and
+stays green, and the compose files on main are green.
 
 Done when the reds are red, main's compose files parse, and the full suite is green.
 

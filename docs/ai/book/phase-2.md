@@ -817,6 +817,8 @@ Done when (tests):
   - `session.touch_throttled`: two reads 10 s apart → one UPDATE; reads 6 min apart → two UPDATEs.
   - `session.malformed_cookie`: 10 malformed values (empty, 42 chars, `+/` chars, 1 KB) → null, no DB query (spy).
   - `session.memo`: three `read` calls in one request → one SELECT.
+  - `session.memo_is_a_snapshot`: after `destroy` or a rotating `create` in the same request, `read` still returns the
+    memoised session. Handlers must not call `read` after changing the session (doc comment on `read`).
   - `session.touch_outside_read_only_tx`: a GET handler running in a read-only transaction, session 6 min idle → the
     touch succeeds (own connection) and the handler's transaction stays read-only.
   - `session.db_error_is_503`: DB throws on read → the route answers 503, cookie not cleared. The route is test-only,
@@ -1417,7 +1419,7 @@ Size: ~180 source lines, ~300 test lines
 Goal: Every call `web` makes to a user's PDS goes through one function that restores the OAuth session, classifies
 failures, retries only what is safe, and never turns a nonce handshake or a transient error into a logout.
 
-Inputs: P2.04 client; P2.03 `sessions.destroyAllForDid`; `@atproto/lex` client (exact pin) built over the OAuth
+Inputs: P2.04 client; P2.04 `sessions.destroyAllForDid`; `@atproto/lex` client (exact pin) built over the OAuth
   session's fetch handler, with `com.atproto.*` and `app.bsky.*` types from P1.31's `lex install` (if the pinned `lex`
   client cannot take an OAuth fetch handler, `@atproto/api` `Agent` is used instead and the PR says why); config
   `PDS_CALL_TIMEOUT_MS` (10000), `PDS_UPLOAD_TIMEOUT_MS` (30000).
@@ -1538,7 +1540,8 @@ Size: ~120 source lines, ~180 test lines
 Goal: "Sign out" ends this browser's session; "Sign out everywhere" ends every app session of the DID and revokes the
 OAuth grant; both point the user to their PDS account page to end PDS browser sessions.
 
-Inputs: P2.03 `sessions` (`destroy`, `destroyAllForDid`); P2.04 client; P2.01 `resolveDid`; config `PDS_ISSUER`.
+Inputs: P2.03 `sessions.destroy`; P2.04 `sessions.destroyAllForDid`; P2.04 client; P2.01 `resolveDid`;
+  config `PDS_ISSUER`.
 Outputs:
   - `POST /logout` → 303 `/signed-out`. `POST /logout/everywhere` (field `confirm=yes` required, the checkbox on P2.13's
     form) → 303 `/signed-out?scope=everywhere` (or with `&e=logout.revoke_unconfirmed`); without `confirm=yes` → 303
@@ -4230,10 +4233,10 @@ Changes made, with the request that caused each:
   the id is not a P1.16 token, because the interstitial is a GET and may not consume anything (P1.07 step 10).
 - **P2.06** adds `/oauth/callback` as the one `GET_MUTATION_EXCEPTIONS` entry (phase-1-part1); its granted-scope check
   compares scopes expanded from the published set (phase-1-part2 note 14). Dependency P1.15 → P1.07.
-- **P2.03** calls `app.end_sessions_for_did` (phase-3 Notes) through `destroyAllForDid(tx, did, why)`; the session touch
-  runs on its own connection outside the read-only GET transaction (phase-1-part1). Because the function also deletes
-  the token set, P2.08 "everywhere" and P2.12's under-age path now revoke **before** ending sessions.
-- **P2.04**: `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
+- **P2.03**: the session touch runs on its own connection outside the read-only GET transaction (phase-1-part1).
+- **P2.04** calls `app.end_sessions_for_did` (phase-3 Notes) through `sessions.destroyAllForDid(tx, did, why)`. Because
+  the function also deletes the token set, P2.08 "everywhere" and P2.12's under-age path revoke **before** ending
+  sessions. `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
   fallback rule is stated (phase-1-part2 note 14; the retry itself stays in P2.05).
 - **P2.08** documents P6.16's two `chat.endSessions` calls (phase-6 item 2); it builds no hook now.
 - **P2.09**: the key file is a Phase 2 stand-in retired by P3.16 in favour of the roster's `service_keys` (phase-3
