@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type Caddyfile, type EdgeFiles, readEdgeConfig } from "./caddyfile.ts";
+import { removeEveryTag } from "./image-cleanup.ts";
 
 // The reader against Caddy itself: the shipped Caddyfile, with the PDS site enabled as P1.29 and P5 mount it, adapted
 // by the built edge image (`caddy adapt`, Caddy v2.11.7). It carries no skip of its own (P1.28j): without Docker it
@@ -102,10 +103,12 @@ function imageConfig(image: string): Record<string, string> {
 describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
   afterAll(() => {
-    // The tag only, never -f: an image another edge test built from the same context stays (P1.27z).
-    const failed = built.map((tag) => docker(["rmi", tag], CALL_MS)).filter((removed) => removed.code !== 0);
-    if (failed.length > 0)
-      throw new Error(`docker rmi failed: ${failed.map((removed) => removed.err.trim()).join("; ")}`);
+    // The tag only, never -f: an image another edge test built from the same context stays (P1.27z). Every tag is
+    // tried, even after a removal fails or is killed (P1.11r).
+    removeEveryTag(built, (tag) => {
+      const removed = docker(["rmi", tag], CALL_MS);
+      if (removed.code !== 0) throw new Error(removed.err.trim().slice(-500));
+    });
   }, CONTAINER_MS);
 
   test("caddyfile_reader_matches_caddy_adapt", () => {
