@@ -770,7 +770,7 @@ describe("compose agreement", () => {
     }
   });
 
-  // P1.30a (ruling 2026-10-12-preflight-compose-inputs, F3.5): with and without --env-file, the preflight interpolates
+  // P1.30a (ruling 2026-10-12-preflight-compose-inputs, F3.5): with and without the env file flag, the preflight interpolates
   // from the file Compose does, on a fixture whose .env and env file disagree; a shell value, which Compose would prefer,
   // makes the preflight refuse to run. Compose runs with only the wrapper's allowlist (F3.3) plus the one name tried.
   test.runIf(hasCompose || process.env.CI)("env_file_matches_compose_config", async ({ annotate }) => {
@@ -799,10 +799,18 @@ describe("compose agreement", () => {
           { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
         ],
       });
-    for (const extra of [[], ["--env-file", flag]]) {
+    // Compose's --env-file is the preflight's --interpolation-env (ruling Amendment 3).
+    const flagPairs: [theirs: string[], ours: string[]][] = [
+      [[], []],
+      [
+        ["--env-file", flag],
+        ["--interpolation-env", flag],
+      ],
+    ];
+    for (const [extra, ourExtra] of flagPairs) {
       const theirs = theirHost(extra);
       expect(theirs, extra.join(" ")).toBe(extra.length === 0 ? "dot.example.test" : "flag.example.test");
-      expect(await ours(extra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+      expect(await ours(ourExtra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
       expect(compose([...extra, "config", "--environment"]).split("\n"), extra.join(" ")).toContain(`HOST=${theirs}`);
     }
     // Uninterpolated, Compose shows the reference the parser read; the interpolated value above came from the file.
@@ -810,7 +818,7 @@ describe("compose agreement", () => {
     expect(raw.services.pds?.environment?.HOST).toBe(oursAsCompose(file).services.pds?.environment.HOST);
     const shell = { HOST: "shell.example.test" };
     expect(theirHost(["--env-file", flag], shell)).toBe("shell.example.test");
-    expect(await ours(["--env-file", flag], shell, "shell.example.test")).toEqual({
+    expect(await ours(["--interpolation-env", flag], shell, "shell.example.test")).toEqual({
       code: 2,
       lines: ["ERROR HOST is set in the environment"],
     });

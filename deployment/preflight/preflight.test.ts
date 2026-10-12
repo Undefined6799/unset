@@ -1166,37 +1166,47 @@ describe("compose inputs (P1.30a)", () => {
   }
   const argv = (file: string, ...extra: string[]) => ["--env", "prod", "--compose", file, ...extra];
 
-  test("env_file_flag_replaces_dot_env", async () => {
+  test("interpolation_env_replaces_dot_env", async () => {
     const { root, file } = stack({ compose: REF, dotEnv: "HOST_NAME=dot.example.test\n" });
     const flag = envFile(root, "flag.env", "HOST_NAME=flag.example.test\n");
     const other = envFile(root, "other.env", "OTHER=x\n");
     const run = (extra: string[], want: string) =>
       preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {}, checks: [hostnameIs(want)] });
     expect(await run([], "dot.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
-    expect(await run(["--env-file", flag], "flag.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+    expect(await run(["--interpolation-env", flag], "flag.example.test")).toEqual({ code: 0, lines: ["PASS CP ok"] });
     // The flag replaces the .env whole: a name only the .env holds is empty, as in Compose.
-    expect(await run([`--env-file=${other}`], "")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+    expect(await run([`--interpolation-env=${other}`], "")).toEqual({ code: 0, lines: ["PASS CP ok"] });
   });
 
-  test("env_file_flag_is_permission_checked", async () => {
+  test("interpolation_env_is_permission_checked", async () => {
     const { root, file } = stack({ compose: REF });
     const flag = envFile(root, "flag.env", "HOST_NAME=pds.example.test\n", 0o644);
-    const result = await preflight(argv(file, "--env-file", flag), { root, run: fakeRun().run, environment: {} });
+    const result = await preflight(argv(file, "--interpolation-env", flag), {
+      root,
+      run: fakeRun().run,
+      environment: {},
+    });
     expect(failed(result.lines)).toEqual(["C9"]);
     expect(result.lines).toContain(`FAIL C9 ${flag} must have exactly owner read and write permissions`);
   });
 
-  test("env_file_flag_refusals_cannot_run", async () => {
+  test("interpolation_env_refusals_cannot_run", async () => {
     const { root, file } = stack();
     const flag = envFile(root, "flag.env", "");
     const refusal = async (extra: string[]) =>
       (await preflight(argv(file, ...extra), { root, run: fakeRun().run, environment: {} })).lines;
-    expect(await refusal(["--env-file", flag, "--env-file", flag])).toEqual(["ERROR --env-file may be given once"]);
+    expect(await refusal(["--interpolation-env", flag, "--interpolation-env", flag])).toEqual([
+      "ERROR --interpolation-env may be given once",
+    ]);
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
     for (const path of ["~/flag.env", "$HOME/flag.env", "/srv/${STAGE}.env"]) {
-      expect(await refusal(["--env-file", path]), path).toEqual(["ERROR --env-file: a leading ~ or a $ is refused"]);
+      expect(await refusal(["--interpolation-env", path]), path).toEqual([
+        "ERROR --interpolation-env: a leading ~ or a $ is refused",
+      ]);
     }
-    expect((await refusal(["--env-file", join(root, "absent.env")]))[0]).toMatch(/^ERROR cannot read .*absent\.env$/);
+    expect((await refusal(["--interpolation-env", join(root, "absent.env")]))[0]).toMatch(
+      /^ERROR cannot read .*absent\.env$/,
+    );
   });
 
   test("compose_variables_in_the_environment_cannot_run", async () => {
@@ -1221,14 +1231,18 @@ describe("compose inputs (P1.30a)", () => {
 
   test("compose_variables_in_the_env_file_cannot_run", async () => {
     // Compose copies every COMPOSE_* key of the env file into its own environment when the shell lacks it
-    // (cmd/compose/compose.go setEnvWithDotEnv, v5.3.1 :683-717), so the file can set them as the shell can.
+    // (cmd/compose/compose.go setEnvWithDotEnv, v5.3.1 :683-719), so the file can set them as the shell can.
     // Amendment 1 of the ruling: any COMPOSE_* key, so COMPOSE_PROJECT_NAME too.
     for (const name of ["COMPOSE_FILE", "COMPOSE_PROFILES", "COMPOSE_DISABLE_ENV_FILE", "COMPOSE_PROJECT_NAME"]) {
       const { root, file } = stack({ dotEnv: `${name}=${SENTINEL}\n` });
       const fromDotEnv = await preflight(argv(file), { root, run: fakeRun().run, environment: {} });
       expect(fromDotEnv, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });
       const flag = envFile(root, "flag.env", `${name}=\n`);
-      const fromFlag = await preflight(argv(file, "--env-file", flag), { root, run: fakeRun().run, environment: {} });
+      const fromFlag = await preflight(argv(file, "--interpolation-env", flag), {
+        root,
+        run: fakeRun().run,
+        environment: {},
+      });
       expect(fromFlag, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });
     }
   });
