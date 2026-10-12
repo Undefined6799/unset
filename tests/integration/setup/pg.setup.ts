@@ -40,6 +40,8 @@ export type TestDatabaseOptions = {
   readonly migrationsDir: string;
   /** Repository-relative test files that each get a database. */
   readonly files: readonly string[];
+  /** What removes the container after a failure; a test passes one that throws (P1.11c). */
+  readonly stop?: () => void;
 };
 
 /** Starts Postgres, migrates the template and clones it per file. Any failure removes the container before throwing. */
@@ -69,7 +71,7 @@ export async function startTestDatabase(options: TestDatabaseOptions): Promise<P
     return { host: connection.host, port: connection.port, roles, databases };
   } catch (error) {
     // A killed removal is reported with the setup error, never in its place (P1.11c).
-    failAfterCleanup(error, stopAllPostgres);
+    failAfterCleanup(error, options.stop ?? stopAllPostgres);
   }
 }
 

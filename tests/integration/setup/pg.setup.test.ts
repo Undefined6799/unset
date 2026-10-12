@@ -64,4 +64,18 @@ describe("integration postgres setup", () => {
     await expect(startTestDatabase({ migrationsDir, files: [] })).rejects.toThrow(/sql_error/);
     expect(ownContainers()).toEqual([]);
   }, 120_000);
+
+  test("failing_teardown_keeps_the_setup_error", async () => {
+    // pg.setup.ts's catch reports a failed removal with the setup error, never in its place (P1.11c, N1 on #706).
+    const migrationsDir = mkdtempSync(join(tmpdir(), "unset-broken-migrations-"));
+    writeFileSync(join(migrationsDir, "0001_broken.sql"), "-- phase: expand\nCREATE TABLE (;\n");
+    const stop = () => {
+      stopAllPostgres();
+      throw new Error("docker rm killed after 55000 ms");
+    };
+    const failed = await startTestDatabase({ migrationsDir, files: [], stop }).catch((error: unknown) => error);
+    expect(failed).toBeInstanceOf(AggregateError);
+    expect((failed as AggregateError).message).toMatch(/sql_error \(cleanup also failed: docker rm killed/);
+    expect(ownContainers()).toEqual([]);
+  }, 120_000);
 });
