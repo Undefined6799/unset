@@ -20,5 +20,13 @@
     "digest": "sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
     "source": "upstream",
     "stage": "runtime"
+  },
+  "postgres": {
+    "ref": "docker.io/library/postgres",
+    "tag": "18-trixie",
+    "digest": "sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
+    "source": "upstream",
+    "stage": "runtime",
+    "stripped": ["/usr/local/bin/gosu"]
   }
 }

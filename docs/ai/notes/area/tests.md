@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-06
+checked: 2026-10-12
 ---
 # tests
 
@@ -18,7 +18,8 @@ checked: 2026-10-06
 Unit tests sit beside the file they test, not here.
 
 **Files.**
-- `support/postgres.ts`: the one way tests run Postgres, the pinned production image started with `docker run`.
+- `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
+  `postgres` entry pins, the base of our gosu-free image (P1.29d), run as upstream ships it (root, then gosu).
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.

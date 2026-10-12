@@ -10,12 +10,12 @@ importance: high
 related: ["[[tests]]", "[[postgres]]"]
 replaced_by: null
 tags: [pitfall, tests, postgres]
-checked: 2026-10-06
+checked: 2026-10-12
 ---
 # Postgres tests need Docker and never skip
 
 **What goes wrong.** `npm run check` runs the integration tests, and they start Postgres with `docker run` from the
-test process (`tests/support/postgres.ts`). On a machine or agent container without Docker, the run fails. It does
+test process (`tests/support/postgres.ts`, which reads the image from the lock's `postgres` entry). On a machine or agent container without Docker, the run fails. It does
 not skip, by design: the test runner fails on any discovered test that did not run, and a skip would hide a broken
 gate.
 

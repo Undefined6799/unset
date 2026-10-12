@@ -300,7 +300,7 @@ const PACKAGE_MANAGER =
  * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
  * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
  */
-/** Debian's dpkg database. */
+/** Debian's dpkg database (node and postgres both build on Debian trixie). */
 const DPKG_DATABASE = {
   root: "/var/lib/dpkg",
   data: /^(?:status|status-old|arch-native|available|cmethopt|diversions|diversions-old|lock|lock-frontend|info\/format|info\/[^/]+\.(?:list|md5sums|conffiles|shlibs|symbols|templates|triggers)|alternatives\/[^/]+|triggers\/[^/]+)$/,
@@ -309,6 +309,9 @@ const DPKG_DATABASE = {
 };
 const DATABASE_BY_KIND = new Map([
   ["node", DPKG_DATABASE],
+  // The official Postgres image also keeps dpkg's statoverride file, one text line (`root ssl-cert 710
+  // /etc/ssl/private`) that only dpkg reads when it installs a package, and dpkg is gone (dpkg-statoverride(1), FILES).
+  ["postgres", { ...DPKG_DATABASE, data: new RegExp(`^statoverride$|${DPKG_DATABASE.data.source}`) }],
   [
     "edge",
     { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },
@@ -343,6 +346,8 @@ const PRIVILEGES_BY_KIND = new Map<string, readonly string[]>([
   ["edge", ["/usr/bin/caddy security.capability=0100000200040000000000000000000000000000"]],
   // node-app.Dockerfile and migrate.Dockerfile remove every setuid and setgid file the Debian base ships.
   ["node", []],
+  // postgres.Dockerfile removes the same eleven files from the official Postgres image, also Debian trixie (P1.29d).
+  ["postgres", []],
 ]);
 
 /** Every privilege in a listing: setuid and setgid files, and every member's extended attributes. */
@@ -555,13 +560,13 @@ describe("image package managers", () => {
     expect(databaseProblems("edge", { entries: files(linked), text: () => "P:musl\n" })).toEqual([
       "/lib/apk/db/triggers is not on the edge list",
     ]);
-    expect(databaseProblems("postgres", { entries: [], text: () => "" })).toEqual([
-      "the postgres kind has no package-database list",
+    expect(databaseProblems("other", { entries: [], text: () => "" })).toEqual([
+      "the other kind has no package-database list",
     ]);
   });
 
   test("kind_problems_reader", () => {
-    expect(kindProblems("postgres", [], () => [])).toEqual(["the postgres kind has no Dockerfile"]);
+    expect(kindProblems("other", [], () => [])).toEqual(["the other kind has no Dockerfile"]);
     expect(
       kindProblems("node", ["a", "b"], (file) => (file === "b" ? ["/usr/bin/apt is a package manager"] : [])),
     ).toEqual(["b: /usr/bin/apt is a package manager"]);
@@ -622,7 +627,7 @@ describe("image package managers", () => {
       `${caddy} is listed but not held`,
     ]);
     expect(privilegeProblems("edge", [entry("-rwxr-xr-x", "/usr/bin/caddy", [caddy.split(" ")[1] ?? ""])])).toEqual([]);
-    expect(privilegeProblems("postgres", [])).toEqual(["the postgres kind has no privilege list"]);
+    expect(privilegeProblems("other", [])).toEqual(["the other kind has no privilege list"]);
   });
 
   test("attribute_agreement_reader", () => {

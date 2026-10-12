@@ -1,4 +1,5 @@
 {
   "node": "node",
-  "caddy": "edge"
+  "caddy": "edge",
+  "postgres": "postgres"
 }
