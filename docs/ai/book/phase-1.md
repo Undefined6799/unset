@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.34f, P1.34p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.34f, P1.34p, P1.34w, P1.34s, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -257,6 +257,8 @@ flowchart LR
   P1_11f["P1.11f cleanup errors in Postgres setup"]
   P1_34f["P1.34f require the interpolation env flag"]
   P1_34p["P1.34p secret inputs outside the project"]
+  P1_34w["P1.34w wrapper argument handling"]
+  P1_34s["P1.34s walk the Docker socket path"]
   P1_29l["P1.29l mirror scans build-stage bases whole"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
@@ -494,6 +496,9 @@ flowchart LR
   P1_27u --> P1_34p
   P1_34f --> P1_34
   P1_34p --> P1_34
+  P1_27u --> P1_34s
+  P1_34w --> P1_34
+  P1_34s --> P1_34
   P1_30k --> P1_30x
   P1_30x --> P1_29
   P1_30y --> P1_29
@@ -7116,18 +7121,16 @@ no line from Alex. P1.29 depends on it; P1.27l uses the same wrapper with `--env
   config.json with a remote `currentContext` does not reach the children; a daemon name mismatch refuses (injected
   docker runner).
 - Amendment (21:12Z, architecture's Amendment 1 item 2 of the same record, from Codex on #710) [SEC]: the primary
-  control is the socket path. The `DOCKER_HOST` socket path goes through the component walk (P1.27u's
-  `resolveChecked` once it is on main, otherwise the same rules inline, later replaced in a P1.27j-style tidy), and
-  the socket itself is owned by root, or by the deploy user for rootless. Red-first tests: a socket owned by another
-  uid fails; a socket reached through a link in a directory another user can write fails; a root-owned
-  `/var/run/docker.sock` passes (injected lstat). Book edit 2026-10-12-p127w-stack-wrapper (21:12Z amendment).
+  control is the socket path, walked with P1.27u's `resolveChecked` and owned by root or the deploy user. #711 merged
+  before it, so P1.34s carries it (book edits 2026-10-12-p127w-stack-wrapper, 21:12Z amendment, and
+  2026-10-12-p134w-p134s-wrapper-follow-ups).
 
 Done when the ruling's tests are red first where they can be, then green, and check is green.
 
 
 As built: merged at 2026-10-12T21:08:32Z as `9a4bdd0` (#711, head a5c5ad7) (merge data read by REST, 21:15Z). It
 carries the 19:58Z amendment, the Name belt documented as a misconfiguration check (`stack.ts:147`). The 21:12Z
-socket-walk amendment arrived after the merge and is not built; it needs a lettered follow-up from the step book.
+socket-walk amendment arrived after the merge and is not built; it is P1.34s. Argument follow-ups are P1.34w.
 ---
 
 ### P1.27o — Edge /data and /config owned by caddy
@@ -7331,9 +7334,47 @@ first:**
    walk saw before reading. Tests: a FIFO env file fails without hanging; a swap between walk and open fails.
 3. Any directory entered whose `statfs.type` is `0x65735546` (FUSE_SUPER_MAGIC, linux/magic.h) fails, beside the
    procfs check (`0x9fa0`). Test with an injected statfs.
+4. (amendment 3, 21:18Z) C18 (`checks/edge.ts:31`, edge sites containment) uses `fs.realpathSync.native` and fails
+   closed on ELOOP or any other error with a fixed reason, the class of P1.27u's B3. Tests: a sites entry `y -> x/..`
+   with `x -> /` fails C18; a link loop fails rather than hangs. It may be the split-off PR if one is needed.
 If the step passes about 400 lines, Phase 2 splits it and the step book gives the second PR a P1.34 letter.
 
 Done when the red-first tests pass as stated and check is green.
+
+---
+
+### P1.34w — Tighten the wrapper's argument handling
+Tags: [SEC]            Depends on: —
+Slice 1, issue #715, product (`deployment/preflight/stack.ts` and its tests), kind/fix, lane the third thread, before
+P1.34 runs the stack; book edit 2026-10-12-p134w-p134s-wrapper-follow-ups (21:20Z). A follow-up to the merged P1.27w
+(#711); the letter sits on P1.34, the wrapper's first host run, and P1.34's [ALEX] tag does not carry over. Nothing from
+Alex. P1.34 depends on it.
+
+**What, each red first:**
+1. Strip exactly one leading `--` (the form `node stack.ts -- up …`).
+2. A test lists the accepted flags and bans any flag starting `--env-file`, `--require` or `--import`.
+3. A fixed reason, echoing no value, when `spawnSync` returns `.error` or `.signal` (DC-4).
+4. A deadline on `docker info` (RE-1), killed and reported with a fixed reason.
+
+Done when each item is red first and green after, and check is green.
+
+---
+
+### P1.34s — Walk the Docker socket path
+Tags: [SEC]            Depends on: P1.27u
+Slice 1, issue #716, product (`deployment/preflight/stack.ts` and its tests), kind/fix, lane the third thread, before
+P1.34 runs the stack; book edit 2026-10-12-p134w-p134s-wrapper-follow-ups (21:20Z). It carries the 21:12Z amendment of
+P1.27w (2026-10-12-p127w-stack-wrapper), which arrived after #711 merged. It calls P1.27u's `resolveChecked`, with no
+inline walk (architecture's Amendment 2 of 2026-10-12-workspace-imports-and-remote-daemon). Nothing from Alex. P1.34
+depends on it.
+
+**What:** walk `dirname(socket)` with `resolveChecked`, then lstat the socket itself: a socket, not a link, owned by
+root or the deploy uid (`getuid`). The `docker info` Name check stays, described in the code comment and PR body as a
+misconfiguration check, not proof of locality.
+
+Done when, red first, a socket in sticky `/tmp`, a socket owned by another uid, a link hop through a directory another
+user can write and a `/proc` path each fail; `/var/run -> /run` and `/run/user/<uid>/docker.sock` pass; and check is
+green.
 
 ---
 
@@ -11288,7 +11329,7 @@ sequenceDiagram
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `0x40.space`** hosts the lexicon authority account until
