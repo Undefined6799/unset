@@ -8139,19 +8139,27 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
    check becomes `scan`.
 4. **P1.29v "Skip stripped files in the mirror scan"** ([ALEX] [SEC], check: `.github/workflows/mirror.yml`,
-   `.github/trivyignore.yaml`, the mirror-scan test, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x
-   and P1.28w, which both touch `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list
-   from the lock and passes `--skip-files` for exactly those paths, on that entry only; the three npm entries leave
-   `trivyignore.yaml`; the `"node-app"` entry leaves `IGNOREFILES` and the test pins the map as empty; the test proves a
-   declared path is skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files),
-   answered on Alex's card:
+   `.github/workflows/images.yml` (its `--ignorefile`), `.github/trivyignore.yaml`, the mirror-scan test with its
+   `images.yml` pin, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x and P1.28w, which both touch
+   `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list from the lock and passes each of
+   exactly those paths as both `--skip-dirs` and `--skip-files` (Trivy v0.75.0 skips directories only through
+   `--skip-dirs`), on that entry only; the three npm entries leave `trivyignore.yaml`; the `"node-app"` entry leaves
+   `IGNOREFILES` and the test pins the map as empty; the mirror-scan test proves that a declared directory skips its
+   contents, a declared file is skipped, and an undeclared sibling path is still scanned. The older `images` job stops
+   reading `.github/trivyignore.yaml`: its `--ignorefile` (`images.yml:81`) becomes `/dev/null` and the pin at
+   `mirror-scan.test.ts:152` follows, a tightening the coordinator cleared (book edit
+   2026-10-12-p129v-skip-dirs-and-images-ignorefile), so shipped images are scanned in full. If the CI-bypass classifier
+   refuses `images.yml` under Alex's line, which names only mirror.yml, the PR leaves images.yml unchanged and says so,
+   and the coordinator chooses between asking Alex and a separate step. A loosening (the base scan examines fewer
+   files), answered on Alex's card:
    - Question: "Let the mirror scan skip files our own images delete, like gosu and npm?"
    - Answer: "Skip stripped files"
    - Tapped: 2026-10-07T18:56:42Z (consequence line: "The mirror scan skips only listed files we delete. A test proves
      each is gone, and shipped images are scanned in full.")
 
-   It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
-   stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
+   His typed line naming the change and branch is received (asked: "yes P1.29v mirror.yml"); line: "yes P1.29v
+   mirror.yml" (Alex, 2026-10-12T02:13:47Z; book edit 2026-10-12-p129v-skip-dirs-and-images-ignorefile, amendment 1). A
+   new stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected.
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n,
    P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
