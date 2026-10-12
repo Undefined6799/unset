@@ -1,0 +1,125 @@
+# The development stack without the PDS (P1.29; plan section 8 Phase 1; step book phase-1.md P1.29 item 6): postgres,
+# migrate and web. The edge joins with the PDS and the site it serves in P1.29a (architecture record
+# 2026-10-12-p129-tls-override-and-edge-sites). One file for both env files, `dev` (the homelab) and `local` (an
+# agent's throwaway stack), chosen by the single --env-file the wrapper (deployment/preflight/stack.ts, P1.27w) passes
+# to the preflight and to Compose alike. Every image is built here from a Dockerfile images.yml scans; none is pulled,
+# so the preflight's signed-image checks (C2 to C5) refuse this stack until P1.27s publishes signed images
+# (architecture record 2026-10-12-p129-local-build-preflight).
+#
+# Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
+# `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
+# capability, cannot gain privileges, runs as its image's non-root user on a read-only root, and has memory, CPU and
+# process limits; a Node service's heap cap is at most 75 % of its memory limit (findings F-32).
+name: unset-dev
+
+services:
+  postgres:
+    build:
+      context: ..
+      dockerfile: deployment/images/postgres.Dockerfile
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # The socket directory and /tmp on tmpfs owned by the image's postgres user; the data on a named volume at the PG 18
+    # image's VOLUME (docker-library/postgres 18/trixie/Dockerfile: `VOLUME /var/lib/postgresql`).
+    tmpfs:
+      - /var/run/postgresql:uid=999,gid=999,mode=0755
+      - /tmp:uid=999,gid=999,mode=1777
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+    secrets: [pg_superuser_password, pg_migrator_password, pg_tap_password]
+    networks: [db]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deployment/images/migrate.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: migrator
+      PG_PASSWORD_FILE: /run/secrets/migrate_pg_password
+      PG_SSLMODE: disable
+      NODE_OPTIONS: --max-old-space-size=192
+    # The migrator's own password and the role passwords syncRolePasswords sets (infrastructure/postgres/roles.json
+    # passwordFrom), nothing else. Its copy of the migrator password is its own file: each mounted secret is owned by
+    # the one uid that reads it, and postgres (999) reads the bootstrap copy (secrets/README.md).
+    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [db]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    restart: "no"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/images/node-app.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: http
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8080"
+      PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN}
+      HTTP_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS}
+      MEDIA_ORIGIN: ${WEB_MEDIA_ORIGIN}
+      # Nothing fronts web yet: it joins the edge network with its app host site in Phase 2, so the address is the
+      # socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
+      TRUSTED_PROXY_MODE: socket
+      NODE_OPTIONS: --max-old-space-size=384
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [db]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    restart: unless-stopped
+
+networks:
+  db:
+    internal: true
+
+volumes:
+  pgdata:
+
+secrets:
+  pg_superuser_password:
+    file: ./secrets/pg_superuser_password
+  pg_migrator_password:
+    file: ./secrets/pg_migrator_password
+  pg_tap_password:
+    file: ./secrets/pg_tap_password
+  migrate_pg_password:
+    file: ./secrets/migrate_pg_password
+  pg_web_password:
+    file: ./secrets/pg_web_password
+  pg_api_password:
+    file: ./secrets/pg_api_password
+  pg_indexer_password:
+    file: ./secrets/pg_indexer_password
