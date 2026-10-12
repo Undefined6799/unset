@@ -7157,8 +7157,8 @@ Done when the N5 fixture is red on main and green after, the other fixtures pass
 ### P1.27j — Tidy preflight comments and the tilde check
 Tags: —            Depends on: P1.30a
 Slice 1, not urgent, issue #694, product (`deployment/preflight/` and its docs/ai note), kind/refactor, lane Phase 1;
-book edit 2026-10-12-p127j-preflight-tidy (18:22Z), from the coordinator's verifier on #677 (passed at 3ca7476). It
-touches #677's lines, so it waits for P1.30a. Nothing from Alex. Nothing depends on it.
+book edit 2026-10-12-p127j-preflight-tidy (18:22Z, amendment 20:28Z), from the coordinator's verifiers on #677 (passed
+at 3ca7476, then 7f34fd2). It touches #677's lines, so it waits for P1.30a. Nothing from Alex. Nothing depends on it.
 
 **What:**
 1. Wrap the six comment lines in `deployment/preflight/index.ts` that run past 120 columns.
@@ -7166,6 +7166,9 @@ touches #677's lines, so it waits for P1.30a. Nothing from Alex. Nothing depends
    existing `~` tests stay green unchanged.
 3. Record, beside the Compose-version comment in `index.ts` and in the preflight's docs/ai note, that compose-go's
    `template/` changed between v2.7.1 and v2.13.0; P1.30l's revisit trigger watches for that kind of change.
+4. (amendment 20:28Z, N-D) The usage text says `--interpolation-env <absolute file>`, matching the 20:05Z rule.
+5. (amendment 20:28Z, N-E) `deployment/preflight/index.ts` is over 300 lines: split it along an existing seam (for
+   example input loading apart from the check run), with no behaviour change and the existing tests unchanged.
 
 Not here: a hand run without `--` is P1.27w's and the runbook's.
 
