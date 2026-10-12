@@ -56,13 +56,25 @@ keeps every other host account out:
 | `pg_api_password` | `65532:65532` | migrate | the `api` role's password |
 | `pg_indexer_password` | `65532:65532` | migrate | the `indexer` role's password |
 
-Nothing else goes in this folder: the preflight fails any file here that is not a mounted secret. The dev seed
+Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
+lists the folder, so a stray file here passes (a P1.27 follow-up adds that listing). The dev seed
 (P1.29s) writes `.seeded.json`, the seeded test accounts' handles, DIDs and passwords, to `unset-dev-env/` instead,
 mode `0600` and owned by you (Amendment 7 of the bind-ancestors record). Nothing in a container reads it.
 
 Each password is at least 16 bytes (`PG_PASSWORD` and the role files are read as `secretFile({ minBytes: 16 })`).
 
 ## Creating or rotating a file
+
+Which files can be rotated on a running stack:
+
+- `pg_web_password`, `pg_api_password` and `pg_indexer_password` can. migrate sets these roles' passwords from the
+  files on every run (`syncRolePasswords`, infrastructure/postgres/roles.ts), so replace the file and restart the stack.
+- `pg_superuser_password`, `pg_migrator_password` and `pg_tap_password` cannot yet. The postgres image reads them only
+  at initdb, which runs only on an empty data volume (docker-library/postgres 18/trixie/docker-entrypoint.sh:347,
+  `if [ -z "$DATABASE_ALREADY_EXISTS" ]`). Changing one later changes nothing in the database, and changing
+  `pg_migrator_password` or `migrate_pg_password` alone locks migrate out. Before P1.35 the only way is to remove the
+  `pgdata` volume and start again, which loses the data; from P1.35 on, the warning above rules that out too.
+- `migrate_pg_password` must always hold the same value as `pg_migrator_password`.
 
 Setting another user as owner needs root once per file. From the folder that holds your checkout, write the value to
 a file only you can read, install it, then remove your copy:
