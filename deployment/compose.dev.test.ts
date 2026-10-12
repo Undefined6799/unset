@@ -1,7 +1,7 @@
 // P1.29: what the development stack's compose file must say, read with the preflight's own parser (no Docker). The
 // running stack is P1.29t's; Compose's own reading of this file is compared in compose-parse.test.ts
 // (preflight_matches_compose_config walks every compose*.yaml).
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
@@ -151,6 +151,31 @@ describe("compose.dev.yaml (P1.29)", () => {
     const folders = new Set(dev().secretFiles.map((file) => dirname(resolve(DEPLOYMENT, file))));
     expect([...folders]).toEqual([join(dirname(checkout), "unset-dev-secrets")]);
     for (const folder of folders) expect(relative(checkout, folder).startsWith(".."), folder).toBe(true);
+  });
+
+  test("compose_dev_env_files_live_beside_the_checkout", () => {
+    // Architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, Amendment 2 item 1: an env file under the
+    // checkout sits in postgres's root build context, so every env file the stack reads lives in unset-dev-env/, a
+    // sibling of the checkout; the checkout keeps only *.example.env templates (Amendment 3), and git ignores no env
+    // file there, so a stray live one shows up instead of looking safe.
+    const checkout = resolve(DEPLOYMENT, "..");
+    const envFolder = join(dirname(checkout), "unset-dev-env");
+    const scripts = (
+      JSON.parse(readFileSync(join(checkout, "package.json"), "utf8")) as { scripts: Record<string, string> }
+    ).scripts;
+    for (const name of ["dev:up", "dev:down"]) {
+      const file = /--interpolation-env (\S+)/.exec(scripts[name] ?? "")?.[1];
+      expect(file, name).toBeDefined();
+      expect(resolve(checkout, file ?? ""), name).toBe(join(envFolder, "dev.env"));
+    }
+    for (const s of dev().services) {
+      for (const file of s.envFiles) expect(dirname(resolve(DEPLOYMENT, file)), s.name).toBe(envFolder);
+    }
+    // The stack's own folders only: deployment/env holds templates, and Compose would load a `.env` beside this file.
+    const live = readdirSync(join(DEPLOYMENT, "env")).filter((entry) => !entry.endsWith(".example.env"));
+    const envFiles = [...live.map((entry) => `env/${entry}`), ...readdirSync(DEPLOYMENT).filter((e) => e === ".env")];
+    expect(envFiles).toEqual([]);
+    expect(readFileSync(join(checkout, ".gitignore"), "utf8")).not.toMatch(/^deployment\/env/m);
   });
 
   test("compose_dev_binds_are_read_only_and_state_is_a_named_volume", () => {

@@ -1,7 +1,7 @@
 # The development stack without the PDS (P1.29; plan section 8 Phase 1; step book phase-1.md P1.29 item 6): postgres,
 # migrate and web. The edge joins with the PDS and the site it serves in P1.29a (architecture record
 # 2026-10-12-p129-tls-override-and-edge-sites). One file for both env files, `dev` (the homelab) and `local` (an
-# agent's throwaway stack), chosen by the single --env-file the wrapper (deployment/preflight/stack.ts, P1.27w) passes
+# agent's throwaway stack), chosen by the single interpolation file the wrapper (deployment/preflight/stack.ts, P1.27w) passes
 # to the preflight and to Compose alike. Every image is built here from a Dockerfile images.yml scans; none is pulled,
 # so the preflight's signed-image checks (C2 to C5) refuse this stack until P1.27s publishes signed images
 # (architecture record 2026-10-12-p129-local-build-preflight).
@@ -14,7 +14,9 @@
 # The secret files live in unset-dev-secrets/, a sibling of the repository checkout, never inside it: postgres builds
 # from the repository root, and a build context that reaches the secrets folder fails C26 (architecture record
 # 2026-10-12-p127u-bind-ancestors-and-build-context (b); a .dockerignore entry does not count). `file:` paths resolve
-# from this file's folder, so ../../ is the checkout's parent.
+# from this file's folder, so ../../ is the checkout's parent. The interpolation file lives the same way in
+# unset-dev-env/, beside the checkout, and the checkout keeps only its template, deployment/env/dev.example.env
+# (Amendments 2 and 3 of the same record).
 name: unset-dev
 
 services:

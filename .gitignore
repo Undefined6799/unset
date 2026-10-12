@@ -19,6 +19,3 @@ docs/ai/.obsidian/*
 !docs/ai/.obsidian/graph.json
 jscpd-report/
 
-# The development stack (P1.29): its env files, except the committed example. Its secrets live outside the checkout.
-deployment/env/*.env
-!deployment/env/*.example.env

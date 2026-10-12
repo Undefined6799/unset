@@ -13,7 +13,8 @@ The secrets live in `unset-dev-secrets/`, a folder **beside** your checkout of t
 ```text
 ~/src/
 ├── unset/                 the repository checkout
-└── unset-dev-secrets/     the secret files below
+├── unset-dev-secrets/     the secret files below
+└── unset-dev-env/         dev.env, the stack's interpolation file
 ```
 
 Postgres builds from the repository root, so a secrets folder inside the checkout would sit inside a build context,
@@ -26,6 +27,11 @@ above each secret file: each must be owned by root or by you, and writable by no
 checkout and `unset-dev-secrets/` under your own home directory, not under `/tmp` or a shared folder. Database data is
 a named volume (`pgdata`), which Docker keeps under its own root-owned folder, so it needs nothing from you (Amendment 1
 of the same record).
+
+`unset-dev-env/` holds the live env files, apart from the secrets so that folder holds only mounted secrets. Make it
+yours with mode 0700 and each file 0600, and start `dev.env` from the template `deployment/env/dev.example.env`, whose
+values are all placeholders. No live env file stays in the checkout, even one with nothing secret in it today: it would
+sit in postgres's build context, and the preflight refuses that (Amendments 2 and 3 of the same record).
 
 ## Layout (architecture record 2026-10-12-c9-secret-file-owner)
 
