@@ -89,8 +89,9 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
   return { env: values.env, files: values.compose.map((file) => resolve(file)) };
 }
 
-/** The compose files as one stack: one project name, and each service defined in exactly one file. */
-function loadCompose(files: string[], readText: (path: string) => string | null) {
+/** The compose files as one stack: one project name, and each service defined in exactly one file. Exported for the
+ * compose agreement test, which compares its resolved paths with `docker compose config`. */
+export function loadCompose(files: string[], readText: (path: string) => string | null) {
   const services: { service: Service; dir: string }[] = [];
   const networks: Network[] = [];
   const secretPaths: string[] = [];
