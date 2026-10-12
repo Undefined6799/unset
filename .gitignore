@@ -5,11 +5,6 @@ coverage/
 *.sqlite
 *.sqlite-*
 *.db
-.env
-.env.*
-!.env.example
-secrets/*
-!secrets/*.example
 *.pem
 *.key
 .DS_Store

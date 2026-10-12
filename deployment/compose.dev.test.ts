@@ -1,11 +1,16 @@
 // P1.29: what the development stack's compose file must say, read with the preflight's own parser (no Docker). The
 // running stack is P1.29t's; Compose's own reading of this file is compared in compose-parse.test.ts
 // (preflight_matches_compose_config walks every compose*.yaml).
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import { c26 } from "./preflight/checks/build.ts";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
+import { c9 } from "./preflight/checks/secrets.ts";
+import type { Outcome } from "./preflight/checks/types.ts";
 import { type Compose, parseCompose, type Service } from "./preflight/compose-parse.ts";
+import { loadInputs } from "./preflight/inputs.ts";
 
 const DEPLOYMENT = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
@@ -55,10 +60,17 @@ describe("compose.dev.yaml (P1.29)", () => {
       { ref: string; tag: string; digest: string }
     >;
     const locked = new Set(Object.values(lock).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
-    for (const s of dev().services) {
-      if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), s.name).toBe(true);
-      // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile.
-      expect(s.build, s.name).not.toBeNull();
+    // Every compose file under deployment/ (P1.29 item 6), not only this one: a second file would add services too.
+    const files = readdirSync(DEPLOYMENT, { recursive: true, encoding: "utf8" }).filter(
+      (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
+    );
+    expect(files).toContain(FILE);
+    for (const file of files) {
+      for (const s of parseCompose(read(file), file).services) {
+        if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
+        // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile.
+        expect(s.build, `${file} ${s.name}`).not.toBeNull();
+      }
     }
   });
 
@@ -175,7 +187,32 @@ describe("compose.dev.yaml (P1.29)", () => {
     const live = readdirSync(join(DEPLOYMENT, "env")).filter((entry) => !entry.endsWith(".example.env"));
     const envFiles = [...live.map((entry) => `env/${entry}`), ...readdirSync(DEPLOYMENT).filter((e) => e === ".env")];
     expect(envFiles).toEqual([]);
-    expect(readFileSync(join(checkout, ".gitignore"), "utf8")).not.toMatch(/^deployment\/env/m);
+  });
+
+  test("git_ignores_no_env_or_secrets_file", () => {
+    // Architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, Amendment 2: gitignore nothing that would
+    // make a stray env or secrets file look safe. A stray file under the checkout sits in postgres's root build context
+    // and is copied by `COPY . .`, so it must show in `git status`. git check-ignore is the probe: it applies every
+    // .gitignore in the checkout as git does (git-check-ignore(1), --no-index so tracking does not matter). Exit 1
+    // means none of the paths is ignored. The user's own global excludes file is set aside: it is not the repo's.
+    const strays = [
+      ".env",
+      ".env.local",
+      "deployment/.env",
+      "deployment/.env.production",
+      "deployment/env/dev-public.env",
+      "deployment/env/postgres.env",
+      "deployment/web.env",
+      "secrets/postgres_password",
+      "deployment/secrets/postgres_password",
+      "unset-dev-secrets/postgres_password",
+    ];
+    const probe = spawnSync(
+      "git",
+      ["-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "--verbose", "--", ...strays],
+      { cwd: resolve(DEPLOYMENT, ".."), encoding: "utf8" },
+    );
+    expect({ status: probe.status, ignored: probe.stdout }).toEqual({ status: 1, ignored: "" });
   });
 
   test("compose_dev_binds_are_read_only_and_state_is_a_named_volume", () => {
@@ -201,5 +238,120 @@ describe("compose.dev.yaml (P1.29)", () => {
     ).scripts;
     expect(scripts["dev:down"]).toBeDefined();
     expect(scripts["dev:down"]).not.toMatch(/(^|\s)(-v|--volumes)(\s|=|$)/);
+  });
+});
+
+/**
+ * C9 and C26 as the preflight runs them on this checkout's compose.dev.yaml, the stack's folders beside it as the
+ * runbook lays them out (docs/human/runbooks/dev-stack-secrets.md). The file stats are injected, so the result does not
+ * depend on the runner's own owners and modes: the deploy user owns the checkout, root owns its parents, and the two
+ * sibling folders hold what the runbook puts there. The Dockerfiles and the compose file are the real ones.
+ */
+describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
+  const CHECKOUT = resolve(DEPLOYMENT, "..");
+  const SECRETS = join(dirname(CHECKOUT), "unset-dev-secrets");
+  const ENV = join(dirname(CHECKOUT), "unset-dev-env");
+  const ENV_FILE = join(ENV, "dev-public.env");
+  const DEPLOY_UID = 4242;
+  const DEV = 0x7fff0001;
+  /** Each mounted secret, owned by the uid of the one service that reads it (C9). */
+  const SECRET_OWNERS: Record<string, number> = {
+    pg_superuser_password: 999,
+    pg_migrator_password: 999,
+    pg_tap_password: 999,
+    migrate_pg_password: 65532,
+    pg_web_password: 65532,
+    pg_api_password: 65532,
+    pg_indexer_password: 65532,
+  };
+  /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
+  const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
+    Object.assign(lstatSync(DEPLOYMENT), {
+      mode: (kind === "dir" ? 0o040000 : 0o100000) | mode,
+      uid,
+      size: kind === "dir" ? 4096 : 24,
+      nlink: kind === "dir" ? 2 : 1,
+      dev: DEV,
+      ino,
+    });
+  const virtual = new Map<string, Stats>([
+    [SECRETS, made("dir", 0o700, DEPLOY_UID, 1)],
+    [ENV, made("dir", 0o700, DEPLOY_UID, 2)],
+    [ENV_FILE, made("file", 0o600, DEPLOY_UID, 3)],
+    ...Object.entries(SECRET_OWNERS).map(([name, uid], at): [string, Stats] => [
+      join(SECRETS, name),
+      made("file", 0o400, uid, 10 + at),
+    ]),
+  ]);
+  const inCheckout = (path: string) => path === CHECKOUT || path.startsWith(`${CHECKOUT}/`);
+  const aboveCheckout = (path: string) => path === "/" || CHECKOUT.startsWith(`${path}/`);
+  /** The real entry inside the checkout, as the deploy user's with no group or other write. */
+  const real = (read: (path: string) => Stats, path: string): Stats | null => {
+    try {
+      const info = read(path);
+      return Object.assign(info, { uid: DEPLOY_UID, mode: info.mode & ~0o022 });
+    } catch {
+      return null;
+    }
+  };
+  const look = (read: (path: string) => Stats) => (path: string) =>
+    virtual.get(path) ??
+    (inCheckout(path) ? real(read, path) : aboveCheckout(path) ? made("dir", 0o755, 0, 100 + path.length) : null);
+  const realpath = (path: string) => {
+    if (virtual.has(path) || aboveCheckout(path)) return path;
+    if (!inCheckout(path)) return null;
+    try {
+      return realpathSync.native(path);
+    } catch {
+      return null;
+    }
+  };
+
+  /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
+  const outcomes = async (edit: (text: string) => string = (text) => text): Promise<Outcome[]> => {
+    const file = join(DEPLOYMENT, FILE);
+    const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
+      root: CHECKOUT,
+      run: async () => ({ code: 1, stdout: "", stderr: "" }),
+      readText: (path) => (path === file ? edit(read(FILE)) : null),
+      readEnv: (path) => (path === ENV_FILE ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` } : null),
+      lstat: look(lstatSync),
+      stat: look(statSync),
+      realpath,
+      readlink: (path) => readlinkSync(path),
+      statfs: () => ({ type: 0xef53 }),
+      uid: DEPLOY_UID,
+      environment: {},
+    });
+    const signal = new AbortController().signal;
+    return [await c9.run(inputs, signal), await c26.run(inputs, signal)];
+  };
+
+  test("c9_and_c26_pass_on_the_dev_stack", async () => {
+    expect(await outcomes()).toEqual([
+      { pass: true, reason: "1 files, 7 mounted secrets" },
+      { pass: true, reason: "ok" },
+    ]);
+  });
+
+  test("c9_and_c26_refuse_the_dev_stacks_folders_in_reach", async () => {
+    const bind = (source: string) => (text: string) =>
+      text.replace(
+        "      - ./postgres/init:/docker-entrypoint-initdb.d:ro\n",
+        `      - ./postgres/init:/docker-entrypoint-initdb.d:ro\n      - ${source}:/srv:ro\n`,
+      );
+    expect((await outcomes(bind("../../unset-dev-secrets")))[0]).toEqual({
+      pass: false,
+      reason: "postgres binds a path that reaches the secrets folder",
+    });
+    expect((await outcomes(bind("../../unset-dev-env")))[0]).toEqual({
+      pass: false,
+      reason: "postgres binds a path that reaches an env file or the env folder",
+    });
+    const context = (text: string) => text.replace("      context: ..\n", "      context: .\n");
+    expect((await outcomes(context))[1]).toEqual({
+      pass: false,
+      reason: "postgres builds from a Dockerfile the images workflow does not scan",
+    });
   });
 });
