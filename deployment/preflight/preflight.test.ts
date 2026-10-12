@@ -53,6 +53,8 @@ const COMPOSE = `name: unset-prod
 services:
   edge:
     image: ${EDGE}
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     volumes:
       - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
@@ -93,6 +95,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C22",
   "C23",
   "C24",
+  "C25",
 ]);
 
 type Stack = {
@@ -197,14 +200,14 @@ describe("preflight", () => {
   });
 
   test("c2_image_not_ours_or_unlocked_fails", async () => {
-    // Not the lock's edge ref, so C18 fails too (P1.30w).
+    // Not the lock's edge ref, so C18 fails too (P1.30w), and C25, because the edge adds a capability (P1.30x).
     for (const image of [
       `docker.io/library/caddy@${digest("a")}`,
       "ghcr.io/undefined6799/edge:latest",
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
       const result = await check({ compose: COMPOSE.replace(EDGE, image) });
-      expect(failed(result.lines), image).toEqual(["C2", "C18"]);
+      expect(failed(result.lines), image).toEqual(["C2", "C18", "C25"]);
       expect(result.code, image).toBe(1);
     }
   });
@@ -212,12 +215,13 @@ describe("preflight", () => {
   test("missing_input_fails_check_not_run", async () => {
     const result = await check({ lock: null });
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
-    // C18 reads the lock's edge ref (P1.30w), so it fails closed with the lock too, and without the edge entry alone.
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18"]);
+    // C18 reads the lock's edge ref (P1.30w), and C25 does for the edge's cap_add (P1.30x), so both fail closed with
+    // the lock too, and without the edge entry alone.
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18", "C25"]);
     expect(result.code).toBe(1);
     const { edge: _, ...noEdge } = LOCK;
     const unlisted = (await check({ lock: noEdge })).lines;
-    expect(failed(unlisted)).toEqual(["C2", "C18"]);
+    expect(failed(unlisted)).toEqual(["C2", "C18", "C25"]);
     expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
@@ -801,5 +805,47 @@ describe("preflight C17 (P1.30t)", () => {
     expect(await expectOnly("C17", { networks: null })).toMatch(/^FAIL C17 input missing: .*networks\.prod\.json$/);
     const dev = await check({ compose: DEV, pdsEnv: DEV_ENV, networks: null }, "dev");
     expect(dev.lines.find((l) => l.startsWith("FAIL C17"))).toMatch(/networks\.dev\.json$/);
+  });
+});
+
+// P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 3 in 2026-10-12-batch33-codex-rulings):
+// the parser allows cap_add only as [NET_BIND_SERVICE] beside cap_drop [ALL]; C25 allows it only where the service runs
+// the lock's edge image, which needs the lock the parser never reads.
+describe("preflight C25 (P1.30x)", () => {
+  const webAdds = COMPOSE.replace(
+    `    image: ${WEB}\n`,
+    `    image: ${WEB}\n    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n`,
+  );
+
+  test("c25_cap_add_only_on_the_edge_image", async () => {
+    expect(await expectOnly("C25", { compose: webAdds })).toBe(
+      "FAIL C25 web adds a capability but does not run the lock's edge image",
+    );
+  });
+
+  test("c25_needs_the_lock_only_when_a_service_adds_a_capability", async () => {
+    // With no lock, C2 to C5 and C18 report it; C25 does too, because the edge adds a capability.
+    const result = await check({ lock: null });
+    expect(result.lines.find((l) => l.startsWith("FAIL C25"))).toMatch(
+      /^FAIL C25 input missing: .*images\.lock\.json$/,
+    );
+    const noAdd = COMPOSE.replace("    cap_add: [NET_BIND_SERVICE]\n", "");
+    expect((await check({ compose: noAdd, lock: null })).lines).toContain("PASS C25 ok");
+  });
+
+  // Codex ruling 3's mismatched pair, the edge ref with another Dockerfile: until P1.30y reads `build` and requires both
+  // to name the edge, the key itself is refused, so the pair cannot pass.
+  test("c25_edge_image_built_from_another_dockerfile_cannot_pass", async () => {
+    const build = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+    const result = await check({ compose: COMPOSE.replace(`    image: ${EDGE}\n`, `    image: ${EDGE}\n${build}`) });
+    expect(result.code).toBe(2);
+    expect(result.lines).toEqual([expect.stringMatching(/^ERROR .*compose\.yaml:5: service key build$/)]);
+  });
+
+  test("c25_lock_without_an_edge_entry_fails", async () => {
+    const { edge: _edge, ...noEdge } = LOCK;
+    expect((await check({ lock: noEdge })).lines).toContain(
+      "FAIL C25 edge adds a capability but does not run the lock's edge image",
+    );
   });
 });

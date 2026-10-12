@@ -49,7 +49,7 @@ describe("compose subset", () => {
       refused(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`);
     }
     // P1.30w (record 2026-10-12-c18-follow-ups, ruling N7): through the keys the parser reads, the $ refusal itself
-    // answers; `user` and `privileged` above now stop at the key allowlist first.
+    // answers; `privileged` above still stops at the key allowlist first (`user` is read from P1.30x).
     const dollar = (field: string) => () =>
       parseCompose(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`, "c.yaml");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
@@ -59,11 +59,11 @@ describe("compose subset", () => {
       ["env_file: ${F}", "env_file"],
       ['volumes: ["${V}:/data"]', "volumes"],
       ["network_mode: ${N}", "network_mode"],
+      ["user: ${U}", "user"],
     ];
     for (const [field, key] of throughAllowedKeys) {
       expect(dollar(field), field).toThrow(new ParseError(`c.yaml:4: $ in ${key}`));
     }
-    expect(dollar("user: ${U}")).toThrow(new ParseError("c.yaml:4: service key user"));
     expect(dollar("privileged: ${P}")).toThrow(new ParseError("c.yaml:4: service key privileged"));
     refused(`${base}    environment:\n      \${K}: v\n`);
     refused(`${base}    environment:\n      A: pre\${B}\n`);
@@ -134,6 +134,78 @@ describe("compose subset", () => {
         new ParseError(`c.yaml:5: service key ${key}`),
       );
     }
+  });
+  // P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 2 in 2026-10-12-batch33-codex-rulings):
+  // each hardening and limit key is read in one shape, and a value the ruling does not allow is refused by key name.
+  test("hardening_keys_read_in_the_subset", () => {
+    const hardened = parseCompose(
+      `${base}    read_only: true\n    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n` +
+        `    security_opt: [no-new-privileges:true]\n    user: "65532:65532"\n    mem_limit: 512m\n` +
+        `    cpus: 0.5\n    pids_limit: 128\n    restart: unless-stopped\n`,
+      "c.yaml",
+    );
+    expect(hardened.services[0]?.hardening).toEqual({
+      readOnly: true,
+      capDrop: ["ALL"],
+      capAdd: ["NET_BIND_SERVICE"],
+      securityOpt: ["no-new-privileges:true"],
+      user: "65532:65532",
+      memLimit: "512m",
+      cpus: 0.5,
+      pidsLimit: 128,
+      restart: "unless-stopped",
+    });
+    expect(
+      parseCompose(`${base}    user: "999"\n    cpus: "1.5"\n    mem_limit: 1g\n`, "c.yaml").services[0]?.hardening,
+    ).toMatchObject({ user: "999", cpus: 1.5, memLimit: "1g" });
+    // Codex 4249566407: `2.0` is a positive number as written, not an ambiguous one (phase-4.md plans `cpus: 2.0`).
+    expect(parseCompose(`${base}    cpus: 2.0\n`, "c.yaml").services[0]?.hardening.cpus).toBe(2);
+    expect(parseCompose(base, "c.yaml").services[0]?.hardening).toEqual({
+      readOnly: null,
+      capDrop: [],
+      capAdd: [],
+      securityOpt: [],
+      user: null,
+      memLimit: null,
+      cpus: null,
+      pidsLimit: null,
+      restart: null,
+    });
+  });
+  test("hardening_values_outside_the_ruling_are_refused", () => {
+    const drop = "    cap_drop: [ALL]\n";
+    for (const [yaml, why] of [
+      ["    cap_drop: [NET_RAW]\n", "cap_drop is not [ALL]"],
+      ["    cap_drop: [ALL, NET_RAW]\n", "cap_drop is not [ALL]"],
+      ["    cap_drop: ALL\n", "cap_drop is not a list"],
+      [`    cap_add: [SYS_ADMIN]\n${drop}`, "cap_add is not [NET_BIND_SERVICE]"],
+      ["    cap_add: [NET_BIND_SERVICE]\n", "cap_add without cap_drop [ALL]"],
+      ["    security_opt: [seccomp:unconfined]\n", "security_opt is not [no-new-privileges:true]"],
+      [
+        '    security_opt: ["no-new-privileges:true", "label:disable"]\n',
+        "security_opt is not [no-new-privileges:true]",
+      ],
+      ["    user: root\n", "user is not a non-zero UID[:GID] string"],
+      ['    user: "0:0"\n', "user is not a non-zero UID[:GID] string"],
+      ['    user: "1000:0"\n', "user is not a non-zero UID[:GID] string"],
+      ["    user: 0\n", "user is not a non-zero UID[:GID] string"],
+      ["    user: 65532\n", "user is not a non-zero UID[:GID] string"],
+      ["    pids_limit: -1\n", "pids_limit is not an integer from 1 to 4096"],
+      ["    pids_limit: 0\n", "pids_limit is not an integer from 1 to 4096"],
+      ["    pids_limit: 4097\n", "pids_limit is not an integer from 1 to 4096"],
+      ['    pids_limit: "128"\n', "pids_limit is not an integer from 1 to 4096"],
+      ['    read_only: "true"\n', "read_only is not true or false"],
+      ["    read_only: True\n", "read_only is ambiguous"],
+      ["    mem_limit: 536870912\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 0m\n", "mem_limit is not a size in m or g"],
+      ["    cpus: 0\n", "cpus is not a positive number"],
+      ["    cpus: -1\n", "cpus is not a positive number"],
+      ["    restart: sometimes\n", "restart is not no, on-failure, unless-stopped or always"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    expect(() => parseCompose(`${base}    user: \${UID}\n`, "c.yaml")).toThrow(new ParseError("c.yaml:5: $ in user"));
   });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
   // P1.30k (step book record 2026-10-12-p130k-compose-top-level-allowlist): the top level holds only the keys the
@@ -214,11 +286,20 @@ describe("env file subset", () => {
 const digest = `sha256:${"a".repeat(64)}`;
 // Every field the parser reads, so the comparison covers its whole view: a whole-reference and a `$$` value, env
 // files and file secrets (the files exist, as Compose requires), and networks in both service forms beside a service
-// on the implicit default network (P1.30t).
+// on the implicit default network (P1.30t), and every hardening and limit key in each scalar form it accepts (P1.30x).
 const STACK = `name: unset-prod
 services:
   edge:
     image: ghcr.io/undefined6799/edge@${digest}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    user: "65532:65532"
+    mem_limit: 256m
+    cpus: 2.0
+    pids_limit: 128
+    restart: unless-stopped
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     networks:
       front:
@@ -243,6 +324,11 @@ services:
     networks: [inner]
   web:
     image: ghcr.io/undefined6799/web@${digest}
+    read_only: false
+    user: "65532"
+    mem_limit: 1g
+    cpus: "1.5"
+    restart: "no"
 networks:
   front: {}
   inner:
@@ -285,6 +371,15 @@ type Theirs = {
       networks?: Record<string, unknown>;
       network_mode?: string;
       volumes?: { type: string; source?: string; target: string; read_only?: boolean }[];
+      read_only?: boolean;
+      cap_drop?: string[];
+      cap_add?: string[];
+      security_opt?: string[];
+      user?: string;
+      mem_limit?: string;
+      cpus?: number | string;
+      pids_limit?: number;
+      restart?: string;
     }
   >;
   networks?: Record<string, { internal?: boolean }>;
@@ -319,6 +414,7 @@ function oursAsCompose(file: string) {
           ports: service.ports,
           networks: [...service.networks].sort(),
           networkMode: service.networkMode,
+          hardening: service.hardening,
           mounts: service.mounts.map((m) => ({
             ...m,
             source: m.type === "bind" && m.source !== null ? resolve(dirname(file), m.source) : m.source,
@@ -348,6 +444,17 @@ function theirsAsOurs(theirs: Theirs) {
           })),
           networks: Object.keys(service.networks ?? {}).sort(),
           networkMode: service.network_mode ?? null,
+          hardening: {
+            readOnly: service.read_only ?? null,
+            capDrop: service.cap_drop ?? [],
+            capAdd: service.cap_add ?? [],
+            securityOpt: service.security_opt ?? [],
+            user: service.user ?? null,
+            memLimit: service.mem_limit ?? null,
+            cpus: service.cpus === undefined ? null : Number(service.cpus),
+            pidsLimit: service.pids_limit ?? null,
+            restart: service.restart ?? null,
+          },
           mounts: (service.volumes ?? []).map((v) => ({
             type: v.type,
             source: v.source ?? null,
