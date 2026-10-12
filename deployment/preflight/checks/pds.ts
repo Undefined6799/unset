@@ -123,7 +123,7 @@ export const c12: Check = {
   id: "C12",
   run: withPds((env) => {
     if (env.has("LOG_ENABLED") && !equals(env, "LOG_ENABLED", "false")) {
-      return fail("LOG_ENABLED is on; see docs/human/runbooks/pds-debug-logging.md");
+      return fail("LOG_ENABLED enables request logging; see docs/human/runbooks/pds-debug-logging.md");
     }
     if (env.has("LOG_LEVEL") && !env.use("LOG_LEVEL", (v) => LOG_LEVELS.has(v ?? ""))) {
       return fail("LOG_LEVEL is not one of the allowed levels");

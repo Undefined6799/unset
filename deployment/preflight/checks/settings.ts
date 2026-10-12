@@ -92,7 +92,7 @@ export const c22: Check = {
   id: "C22",
   run: withPds((env, inputs) => {
     const master = videoMasterMax(inputs);
-    if (master === null) return pass("n/a");
+    if (master === null) return pass("skipped: VIDEO_MASTER_MAX_BYTES is unset");
     if (master === "invalid") return fail("VIDEO_MASTER_MAX_BYTES is not an integer");
     const limit = value(env, "PDS_BLOB_UPLOAD_LIMIT") ?? "";
     if (!NON_NEGATIVE_INTEGER.test(limit)) return fail("PDS_BLOB_UPLOAD_LIMIT is not set to an integer");
@@ -105,7 +105,7 @@ export const c22: Check = {
 export const c23: Check = {
   id: "C23",
   run: ({ env: stage, serviceEnv }) => {
-    if (stage !== "prod") return pass("n/a");
+    if (stage !== "prod") return pass("skipped: dev stage");
     let checked = false;
     for (const [service, env] of serviceEnv) {
       if (present(env, "FAKE_FINGERPRINT_LIST")) return fail(`FAKE_FINGERPRINT_LIST is set in ${service}`);

@@ -20,7 +20,8 @@ export const c21: Check = {
   run: (inputs) => {
     // A hostname is case-insensitive and may end in the root's dot (RFC 4343 section 2, RFC 1034 section 3.1).
     const name = pdsHostname(inputs).toLowerCase();
-    if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space") return pass("n/a");
+    if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space")
+      return pass("skipped: PDS_HOSTNAME names a different host");
     const text = inputs.readText(inputs.retirementReportPath);
     if (text === null) return missing(inputs.retirementReportPath);
     let report: unknown;
@@ -39,7 +40,7 @@ export const c24: Check = {
   id: "C24",
   network: true,
   run: async (inputs, signal): Promise<Outcome> => {
-    if (pdsHostname(inputs).endsWith(".localhost")) return pass("n/a");
+    if (pdsHostname(inputs).endsWith(".localhost")) return pass("skipped: PDS_HOSTNAME is an agent's stack");
     const ntp = await inputs.run("timedatectl", ["show", "-p", "NTPSynchronized", "--value"], signal);
     if (ntp.missing === true) return fail("timedatectl is not installed");
     if (ntp.code !== 0) return fail("timedatectl failed");
