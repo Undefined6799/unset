@@ -85,7 +85,8 @@ describe("compose subset", () => {
   // short `SOURCE:TARGET[:ro|rw]` with a path source starting /, ./ or ../ or a plain volume name, or long syntax with
   // only type (bind, volume, tmpfs), source, target and read_only. Compose-spec 05-services.md "volumes".
   test("volumes_read_in_the_subset", () => {
-    const mounts = (lines: string) => parseCompose(`${base}    volumes:\n${lines}`, "c.yaml").services[0]?.mounts;
+    const mounts = (lines: string) =>
+      parseCompose(`${base}    volumes:\n${lines}volumes:\n  data: {}\n`, "c.yaml").services[0]?.mounts;
     expect(mounts("      - ./sites:/etc/caddy/sites/enabled:ro\n      - data:/data\n      - /cache\n")).toEqual([
       { type: "bind", source: "./sites", target: "/etc/caddy/sites/enabled", readOnly: true },
       { type: "volume", source: "data", target: "/data", readOnly: false },
@@ -119,10 +120,7 @@ describe("compose subset", () => {
   test("service_keys_outside_the_allowlist_are_refused", () => {
     const caddyfile = "/etc/caddy/Caddyfile";
     for (const [key, yaml] of [
-      [
-        "configs",
-        `    configs:\n      - source: edge\n        target: ${caddyfile}\nconfigs:\n  edge:\n    file: ./x\n`,
-      ],
+      ["configs", `    configs:\n      - source: edge\n        target: ${caddyfile}\n`],
       [
         "secrets",
         `    secrets:\n      - source: edge\n        target: ${caddyfile}\nsecrets:\n  edge:\n    file: ./x\n`,
@@ -137,6 +135,57 @@ describe("compose subset", () => {
     }
   });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
+  // P1.30k (step book record 2026-10-12-p130k-compose-top-level-allowlist): the top level holds only the keys the
+  // parser reads, a named volume is declared by name alone, and a long-form port holds only what port() reads.
+  test("top_level_keys_outside_the_allowlist_are_refused", () => {
+    for (const [key, yaml] of [
+      ["configs", "configs:\n  edge:\n    file: ./never-printed\n"],
+      ["x-shared", "x-shared:\n  a: 1\n"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:5: top-level key ${key}`),
+      );
+    }
+  });
+  test("include_keeps_its_own_refusal", () => {
+    expect(() => parseCompose(`${base}include: [never-printed.yaml]\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:5: include"),
+    );
+  });
+  test("named_volume_settings_are_refused", () => {
+    const bind =
+      "volumes:\n  data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
+    expect(() => parseCompose(`${base}${bind}`, "c.yaml")).toThrow(new ParseError("c.yaml:7: volume data: driver"));
+    for (const key of ["driver_opts", "external", "name", "labels"]) {
+      expect(() => parseCompose(`${base}volumes:\n  data:\n    ${key}: x\n`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:7: volume data: ${key}`),
+      );
+    }
+    expect(() => parseCompose(`${base}volumes:\n  data: never-printed\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:6: volume data is not a mapping"),
+    );
+    expect(() => parseCompose(`${base}volumes:\n  data:\n  logs: {}\n`, "c.yaml")).not.toThrow();
+    expect(() => parseCompose(`${base}volumes:\n  ../x: {}\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:6: volume name ../x is refused"),
+    );
+  });
+  test("undeclared_named_volume_is_refused", () => {
+    for (const mount of ["data:/data", "{type: volume, source: data, target: /data}"]) {
+      expect(() => parseCompose(`${base}    volumes: [${mount}]\n`, "c.yaml"), mount).toThrow(
+        new ParseError("c.yaml:5: volume data is not declared"),
+      );
+      expect(() => parseCompose(`${base}    volumes: [${mount}]\nvolumes:\n  data: {}\n`, "c.yaml")).not.toThrow();
+    }
+    // An anonymous volume and a bind need no declaration.
+    expect(() => parseCompose(`${base}    volumes: [/cache, ./x:/x]\n`, "c.yaml")).not.toThrow();
+  });
+  test("long_form_port_keys_outside_the_set_are_refused", () => {
+    for (const key of ["protocol", "mode", "name", "app_protocol"]) {
+      expect(() => parseCompose(`${base}    ports:\n      - target: 80\n        ${key}: x\n`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:7: port key ${key}`),
+      );
+    }
+  });
 });
 
 describe("env file subset", () => {

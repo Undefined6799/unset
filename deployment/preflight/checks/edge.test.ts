@@ -33,11 +33,12 @@ function repository() {
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const EDGE_IMAGE = `ghcr.io/undefined6799/edge@${DIGEST}`;
 /** A compose file whose edge service runs `image` and has `volumes` (already absolute, as loadCompose resolves them). */
+// The named volumes the fixtures mount are declared, as the compose reader requires (P1.30k).
 const compose = (volumes: string[] | null, image = EDGE_IMAGE) =>
   parseCompose(
     `name: unset-dev\nservices:\n  ${volumes === null ? "web" : "edge"}:\n    image: ${image}\n${
       volumes === null || volumes.length === 0 ? "" : `    volumes:\n${volumes.map((v) => `      - ${v}\n`).join("")}`
-    }`,
+    }volumes:\n  config: {}\n  sites: {}\n`,
     "compose.yaml",
   );
 const sitesFrom = (source: string) => `${source}:/etc/caddy/sites/enabled:ro`;

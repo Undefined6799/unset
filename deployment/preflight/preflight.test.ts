@@ -459,6 +459,21 @@ describe("preflight", () => {
     const loose = await check({ pdsEnv: { PDS_HOSTNAME: '"quoted"' } });
     expect(loose.code).toBe(2);
   });
+
+  test("volume_declared_in_another_compose_file_cannot_run", async () => {
+    // Each file declares the named volumes it mounts (architecture, 2026-10-12): Compose would merge the files, the
+    // preflight refuses, and the same empty declaration in both files is fine.
+    const files: Record<string, string> = {
+      "/s/a.yaml": "name: unset-prod\nservices:\n  edge:\n    image: x\nvolumes:\n  data: {}\n",
+      "/s/b.yaml": "services:\n  pds:\n    image: x\n    volumes: [data:/data]\n",
+    };
+    const readText = (path: string) => files[path] ?? null;
+    const argv = ["--env", "prod", "--compose", "/s/a.yaml", "--compose", "/s/b.yaml"];
+    const split = await preflight(argv, { root: "/s", run: fakeRun().run, readText });
+    expect(split).toEqual({ code: 2, lines: ["ERROR /s/b.yaml:4: volume data is not declared"] });
+    files["/s/b.yaml"] += "volumes:\n  data: {}\n";
+    expect((await preflight(argv, { root: "/s", run: fakeRun().run, readText })).lines[0]).not.toMatch(/^ERROR/);
+  });
 });
 
 const SENTINEL = "sentinel-5d2e-never-printed";
