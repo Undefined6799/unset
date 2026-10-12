@@ -186,7 +186,8 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   // multiple files; architecture record 2026-10-12-preflight-project-directory). The agreement test compares this with
   // `docker compose config`: v5.3.1 locally, and 2.38.2 on CI's ubuntu-24.04 runner (actions/runner-images,
   // images/ubuntu/toolsets/toolset-2404.json). Both take the first file's directory in compose-go's
-  // ProjectOptions.GetWorkingDir (cli/options.go, the same in v2.7.1 for 2.38.2 and v2.13.0 for v5.3.1).
+  // ProjectOptions.GetWorkingDir (cli/options.go, the same in v2.7.1 for 2.38.2 and v2.13.0 for v5.3.1). compose-go's
+  // template/ package did change between those versions (#677 verifier N5); P1.30l's revisit trigger watches for it.
   const projectDir = dirname(files[0] as string);
   const services: Service[] = [];
   const networks: Network[] = [];
