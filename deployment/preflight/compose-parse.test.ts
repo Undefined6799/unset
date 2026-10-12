@@ -322,7 +322,7 @@ describe("compose subset", () => {
       ['    build: {context: "..#main", dockerfile: Dockerfile}\n', "build context is not a local path"],
       // Architecture's compose-inputs ruling (step book record 2026-10-12-p130a-p130l-compose-inputs-booked): no `~`.
       ["    build: {context: ~/unset, dockerfile: Dockerfile}\n", "build context is not a local path"],
-      ["    build: {context: .., dockerfile: ~/x.Dockerfile}\n", "build dockerfile starts with ~"],
+      ["    build: {context: .., dockerfile: ~/x.Dockerfile}\n", "build dockerfile: a leading ~ or a $ is refused"],
       ["    tmpfs: [/etc/caddy/snippets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: [/run/secrets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: /tmp\n", "tmpfs is not a list"],
