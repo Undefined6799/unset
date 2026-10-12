@@ -594,8 +594,11 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * sets none again. A site with no reverse_proxy is
  * exempt because it has no `reverse_proxy`, not because of its name or address;
  * it must still be bound to loopback and named for it, or it is a public site without rate limit. At most one site may
- * proxy a given upstream (P1.28f; amendment 8, point 4): until shared zone state across sites is proven, two sites on
- * one upstream would each count their clients separately.
+ * proxy a given upstream (P1.28f; amendment 8, point 4), so each upstream sits behind one site's rules. Zone state is
+ * shared across sites by zone name: caddy-ratelimit at the pinned 5625512f24f6 keeps each zone's limiters in one
+ * process-wide pool keyed by its name (ratelimit.go:92-96, handler.go:385). So every site importing pds-ratelimit
+ * spends the same per-client budgets; the local app site does, which Amendment 2 of the refocus rulings accepts for
+ * local only, and a prod app site gets its own zone (Amendment 5, F3).
  *
  * Each env placeholder sits only in its position in PLACEHOLDER_POSITIONS, every upstream is a placeholder, and a
  * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
