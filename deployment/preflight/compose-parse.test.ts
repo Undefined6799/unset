@@ -155,6 +155,9 @@ describe("compose subset", () => {
     ).toMatchObject({ user: "999", cpus: 1.5, memLimit: "1g" });
     // Codex 4249566407: `2.0` is a positive number as written, not an ambiguous one (phase-4.md plans `cpus: 2.0`).
     expect(parseCompose(`${base}    cpus: 2.0\n`, "c.yaml").services[0]?.hardening.cpus).toBe(2);
+    // P1.27n (verifier N3 on #675): the 0.01 floor is inclusive, and a fraction under 0.5 is a limit too.
+    expect(parseCompose(`${base}    cpus: 0.01\n`, "c.yaml").services[0]?.hardening.cpus).toBe(0.01);
+    expect(parseCompose(`${base}    cpus: 0.25\n`, "c.yaml").services[0]?.hardening.cpus).toBe(0.25);
     expect(parseCompose(base, "c.yaml").services[0]?.hardening).toEqual({
       readOnly: null,
       capDrop: [],
