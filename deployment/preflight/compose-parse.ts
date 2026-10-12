@@ -104,16 +104,50 @@ export function parseCompose(text: string, file: string): Compose {
   const root = doc.contents;
   if (!isMap(root)) return r.fail(root, "the file is not a mapping");
   if (root.has("include")) r.fail(root.get("include", true), "include");
+  for (const pair of root.items) {
+    const key = r.text(pair.key, "top-level key");
+    if (!TOP_LEVEL_KEYS.has(key)) r.fail(pair.key, `top-level key ${key}`);
+  }
+  const volumes = namedVolumes(r, root.get("volumes", true));
   const name = root.get("name", true);
   if (name !== undefined) r.noDollar(name, "name");
   const servicesNode = root.get("services", true);
   if (!isMap(servicesNode)) return r.fail(servicesNode, "services is not a mapping");
   return {
     name: name === undefined ? null : r.text(name, "name"),
-    services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value)),
+    services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value, volumes)),
     networks: networks(r, root.get("networks", true)),
     secretFiles: secretFiles(r, root.get("secrets", true)),
   };
+}
+
+/**
+ * The only top-level keys accepted: the ones `parseCompose` reads or already refuses (P1.30k, step book record
+ * 2026-10-12-p130k-compose-top-level-allowlist, amendments 1 and 2). `include` is listed only because its own refusal
+ * above answers first; `configs` or an `x-` extension would carry text no check reads, so any other key is refused by
+ * name.
+ */
+const TOP_LEVEL_KEYS = new Set(["name", "services", "networks", "volumes", "secrets", "include"]);
+
+/**
+ * Top-level `volumes:`, which Compose requires for every named volume a service mounts (05-services.md "volumes",
+ * 07-volumes.md). A volume is declared by name alone: `driver`, `driver_opts` (a `local` driver with `o: bind` mounts
+ * any host path), `external`, `name` and `labels` all decide where the data lives, so each is refused by name.
+ */
+function namedVolumes(r: Reader, node: unknown): Set<string> {
+  if (node === undefined) return new Set();
+  if (!isMap(node)) r.fail(node, "volumes is not a mapping");
+  return new Set(
+    node.items.map((pair) => {
+      const name = r.text(pair.key, "volume name");
+      if (!VOLUME_NAME.test(name)) r.fail(pair.key, `volume name ${name} is refused`);
+      if (isEmpty(pair.value)) return name;
+      if (!isMap(pair.value)) r.fail(pair.value, `volume ${name} is not a mapping`);
+      const [setting] = pair.value.items;
+      if (setting !== undefined) r.fail(setting.key, `volume ${name}: ${r.text(setting.key, "volume setting")}`);
+      return name;
+    }),
+  );
 }
 
 /** A small data file (the retirement report, JSON being YAML 1.2) read under the same strict subset as Compose. */
@@ -163,7 +197,7 @@ export function refuseAliasesByOption(doc: Document, file: string): void {
  */
 const SERVICE_KEYS = new Set(["image", "env_file", "environment", "ports", "networks", "network_mode", "volumes"]);
 
-function service(r: Reader, name: string, spec: unknown): Service {
+function service(r: Reader, name: string, spec: unknown, volumes: ReadonlySet<string>): Service {
   if (!isMap(spec)) return r.fail(spec, `service ${name} is not a mapping`);
   for (const pair of spec.items) {
     const key = r.text(pair.key, "service key");
@@ -179,7 +213,7 @@ function service(r: Reader, name: string, spec: unknown): Service {
     ports: r.list(spec.get("ports", true), "ports").map((n) => port(r, n)),
     networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
     networkMode: spec.has("network_mode") ? r.text(spec.get("network_mode", true), "network_mode") : null,
-    mounts: r.list(spec.get("volumes", true), "volumes").map((n) => mount(r, n)),
+    mounts: r.list(spec.get("volumes", true), "volumes").map((n) => declared(r, mount(r, n), n, volumes)),
   };
 }
 
@@ -206,6 +240,14 @@ function mount(r: Reader, node: unknown): Mount {
   if (BIND_SOURCE.test(first)) return { type: "bind", source: first, target, readOnly };
   if (!VOLUME_NAME.test(first)) r.fail(node, `volume source ${first} is neither a path nor a volume name`);
   return { type: "volume", source: first, target, readOnly };
+}
+
+/** A named volume must be declared at the top level, as Compose requires (05-services.md "volumes"). */
+function declared(r: Reader, mount: Mount, node: unknown, volumes: ReadonlySet<string>): Mount {
+  if (mount.type === "volume" && mount.source !== null && !volumes.has(mount.source)) {
+    r.fail(node, `volume ${mount.source} is not declared`);
+  }
+  return mount;
 }
 
 function longMount(r: Reader, node: YAMLMap): Mount {
@@ -327,8 +369,15 @@ function envValue(r: Reader, raw: string, node: unknown, key: string): EnvValue 
 const SHORT_PORT =
   /^(?:(?:(\d{1,3}(?:\.\d{1,3}){3}|\[[0-9a-fA-F:.]+\]):)?(\d+(?:-\d+)?):)?(\d+(?:-\d+)?)(?:\/(?:tcp|udp))?$/;
 
+/** The long-form port keys `port` reads; `protocol`, `mode`, `name` and `app_protocol` are refused by name (P1.30k). */
+const PORT_KEYS = new Set(["target", "published", "host_ip"]);
+
 function port(r: Reader, node: unknown): Port {
   if (isMap(node)) {
+    for (const pair of node.items) {
+      const key = r.text(pair.key, "port key");
+      if (!PORT_KEYS.has(key)) r.fail(pair.key, `port key ${key}`);
+    }
     const field = (key: string) => (node.has(key) ? r.text(node.get(key, true), `port ${key}`) : null);
     const target = field("target");
     if (target === null) return r.fail(node, "port has no target");
