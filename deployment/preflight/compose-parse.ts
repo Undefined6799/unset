@@ -113,6 +113,8 @@ type Reader = {
   text(node: unknown, what: string): string;
   list(node: unknown, what: string): unknown[];
   noDollar(node: unknown, what: string): void;
+  /** The scalar's text as a path, refusing a leading `~` and any `$` (`isHomeOrInterpolated`). */
+  path(node: unknown, what: string): string;
 };
 
 function reader(file: string, lines: LineCounter): Reader {
@@ -135,8 +137,19 @@ function reader(file: string, lines: LineCounter): Reader {
   const noDollar = (node: unknown, what: string): void => {
     visit(node as Node, { Scalar: (_, s) => void (String(s.value ?? "").includes("$") && fail(s, `$ in ${what}`)) });
   };
-  return { fail, text, list, noDollar };
+  const path = (node: unknown, what: string): string => {
+    const value = text(node, what);
+    return isHomeOrInterpolated(value) ? fail(node, `${what}: a leading ~ or a $ is refused`) : value;
+  };
+  return { fail, text, list, noDollar, path };
 }
+
+/**
+ * A path Compose would read from the environment: a leading `~` it expands from $HOME (compose-go paths/home.go, v2.7.1
+ * and v2.13.0) or any `$` it interpolates (12-interpolation.md). Refused in every path field, so the preflight never
+ * resolves a path Compose reads another way (P1.30a; architecture ruling 2026-10-12-preflight-compose-inputs, F2).
+ */
+export const isHomeOrInterpolated = (path: string): boolean => path.startsWith("~") || path.includes("$");
 
 export function parseCompose(text: string, file: string): Compose {
   const lines = new LineCounter();
@@ -196,6 +209,28 @@ function namedVolumes(r: Reader, node: unknown): Set<string> {
       return name;
     }),
   );
+}
+
+/** `$NAME` or `${NAME...}`, the forms Compose interpolates (12-interpolation.md); `$$` is removed first. */
+const INTERPOLATED = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)|([A-Za-z_][A-Za-z0-9_]*))/g;
+
+/**
+ * Every name the file interpolates, in any key or value and inside a default (`${A:-$B}` names both), so the preflight
+ * can refuse to run when one is set in its environment: Compose would take that value over the env file (P1.30a, F3.4).
+ */
+export function interpolatedNames(text: string, file: string): string[] {
+  const names = new Set<string>();
+  const lines = new LineCounter();
+  visit(strictDocument(text, file, lines, reader(file, lines)), {
+    Scalar: (_, scalar) => {
+      for (const [, braced, bare] of String(scalar.value ?? "")
+        .replaceAll("$$", "")
+        .matchAll(INTERPOLATED)) {
+        names.add((braced ?? bare) as string);
+      }
+    },
+  });
+  return [...names];
 }
 
 /** A small data file (the retirement report, JSON being YAML 1.2) read under the same strict subset as Compose. */
@@ -283,7 +318,7 @@ function service(r: Reader, name: string, spec: unknown, scope: Scope): Service 
   return {
     name,
     image: image === undefined ? null : r.text(image, "image"),
-    envFiles: r.list(spec.get("env_file", true), "env_file").map((n) => r.text(n, "env_file")),
+    envFiles: r.list(spec.get("env_file", true), "env_file").map((n) => r.path(n, "env_file")),
     environment: environment(r, spec.get("environment", true), name),
     ports: r.list(spec.get("ports", true), "ports").map((n) => port(r, n)),
     networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
@@ -500,6 +535,7 @@ function mount(r: Reader, node: unknown): Mount {
   if (mode !== "ro" && mode !== "rw") r.fail(node, `volume mode ${mode} is refused`);
   const readOnly = mode === "ro";
   if (parts.length === 1) return { type: "volume", source: null, target, readOnly };
+  if (isHomeOrInterpolated(first)) r.fail(node, "volume source: a leading ~ or a $ is refused");
   if (BIND_SOURCE.test(first)) return { type: "bind", source: first, target, readOnly };
   if (!VOLUME_NAME.test(first)) r.fail(node, `volume source ${first} is neither a path nor a volume name`);
   return { type: "volume", source: first, target, readOnly };
@@ -527,7 +563,7 @@ function longMount(r: Reader, node: YAMLMap): Mount {
   const target = field("target");
   if (target === null || !target.startsWith("/")) return r.fail(node, "volume target is not absolute");
   if (type === "tmpfs" && !TMPFS_TARGETS.includes(target)) r.fail(node, `volume tmpfs ${TMPFS_WHY}`);
-  const source = field("source");
+  const source = node.has("source") ? r.path(node.get("source", true), "volume source") : null;
   if (type === "bind" && source === null) r.fail(node, "bind volume has no source");
   const readOnly = node.get("read_only", true);
   if (readOnly !== undefined && (!isScalar(readOnly) || typeof readOnly.value !== "boolean")) {
@@ -675,7 +711,7 @@ function secretFiles(r: Reader, node: unknown): Map<string, string> {
         if (field !== "file") r.fail(key.key, `secret ${name}: ${field} is refused`);
       }
       const file = pair.value.get("file", true);
-      return isString(file) ? [name, r.text(file, "secret file")] : r.fail(file ?? pair.value, notFile);
+      return isString(file) ? [name, r.path(file, "secret file")] : r.fail(file ?? pair.value, notFile);
     }),
   );
 }

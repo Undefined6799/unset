@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../tests/support/docker.ts";
+import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const POSTGRES_DOCKERFILE = join(DEPLOYMENT, "images/postgres.Dockerfile");
@@ -25,37 +26,35 @@ const ROOT_START_MS = 60_000;
 const BUILD_CALL_MS = killBefore(BUILD_MS);
 const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const ROOT_START_CALL_MS = killBefore(ROOT_START_MS);
-const REMOVE_CALL_MS = 35_000;
+// A removal may queue behind CI's image builds like any container call, so it gets the same 60 s (verifier P4 on
+// #690); the hook holds two containers and the image.
+const REMOVE_CALL_MS = 60_000;
+const REMOVE_HOOK_MS = 3 * REMOVE_CALL_MS + 5_000;
 
 describe("postgres image", () => {
   let image = "";
   const containers: string[] = [];
 
   beforeAll(() => {
-    const built = docker(["build", "-q", "-f", POSTGRES_DOCKERFILE, join(DEPLOYMENT, "..")], {
-      timeoutMs: BUILD_CALL_MS,
-    });
-    expect(built.code, built.err.slice(-2000)).toBe(0);
-    image = built.out.trim();
+    image = buildTestImage(POSTGRES_DOCKERFILE, join(DEPLOYMENT, ".."), { timeoutMs: BUILD_CALL_MS });
   }, BUILD_MS);
 
-  // Every removal is tried, even after one is killed, and each is killed at REMOVE_CALL_MS so the two containers and
-  // the image fit in the hook's budget; the kills are reported together (P1.27g).
+  // Every removal is tried, even after one fails, and the failures are reported together (P1.27g, P1.27x).
   afterAll(() => {
     const removals = [
-      ...containers.map((name) => ["rm", "-f", "-v", name]),
-      ...(image === "" ? [] : [["rmi", "-f", image]]),
+      ...containers.map((name) => () => docker(["rm", "-f", "-v", name], { timeoutMs: REMOVE_CALL_MS })),
+      ...(image === "" ? [] : [() => removeTestImage(image, { timeoutMs: REMOVE_CALL_MS })]),
     ];
     const failures: unknown[] = [];
-    for (const args of removals) {
+    for (const remove of removals) {
       try {
-        docker(args, { timeoutMs: REMOVE_CALL_MS });
+        remove();
       } catch (error) {
         failures.push(error);
       }
     }
-    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} removal(s) killed`);
-  }, CONTAINER_MS);
+    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} removal(s) failed`);
+  }, REMOVE_HOOK_MS);
 
   /** Starts the image detached with no network and a throwaway superuser password; returns the container name. */
   function start(timeoutMs: number, extra: readonly string[] = []): string {

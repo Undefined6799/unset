@@ -78,12 +78,25 @@ export function ownContainers(): string[] {
 /** A password for one run: 32 random bytes, URL-safe. */
 export const randomPassword = (): string => randomBytes(32).toString("base64url");
 
-/** Removes every container (with its anonymous data volume) and secrets folder this file created. Call it from afterAll; it never throws. */
+/**
+ * Removes every container (with its anonymous data volume) and secrets folder this file created. Call it from
+ * afterAll, as `afterAll(stopAllPostgres)` or in a hook. Every removal is tried; a killed one then fails the hook by
+ * name, after the folders are gone (P1.27i). It takes no argument, since vitest passes its hooks one.
+ */
 export function stopAllPostgres(): void {
-  for (const name of STARTED) remove(name);
+  stopAllPostgresWithin(CALL_MS);
+}
+
+/** stopAllPostgres with each removal killed at `removeMs`; only the test of a killed removal lowers it. */
+export function stopAllPostgresWithin(removeMs: number): void {
+  const failures = [...STARTED].flatMap((name) => {
+    const failure = remove(name, removeMs);
+    return failure === null ? [] : [failure];
+  });
   STARTED.clear();
   for (const dir of DIRS) rmSync(dir, { recursive: true, force: true });
   DIRS.clear();
+  if (failures.length > 0) throw new AggregateError(failures, failures.map((failure) => failure.message).join("; "));
 }
 
 /** Starts the image detached and waits until initdb finished and the server accepts connections again. */
@@ -192,13 +205,18 @@ function container(name: string, port: number): PostgresContainer {
   };
 }
 
-/** Removes a container and its anonymous volume; a failure or kill here never masks the test's own outcome. */
-function remove(name: string): void {
+/**
+ * Removes a container and its anonymous volume. A kill is returned, naming the container, and the name stays for
+ * stopAllPostgres to report; it is never thrown here, so it cannot mask the failure of a start that is cleaning up.
+ */
+function remove(name: string, timeoutMs = CALL_MS): Error | null {
   try {
-    docker(["rm", "-f", "-v", name], { timeoutMs: CALL_MS });
-  } catch {
-    // A killed removal leaves the container for the job's runner cleanup; stopAllPostgres must never throw.
+    docker(["rm", "-f", "-v", name], { timeoutMs });
+  } catch (error) {
+    return new Error(`${(error as Error).message} (${name})`);
   }
+  STARTED.delete(name);
+  return null;
 }
 
 function dockerOut(args: string[]): string {

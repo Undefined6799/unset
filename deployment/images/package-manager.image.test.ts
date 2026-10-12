@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../../tests/support/docker.ts";
+import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const REPO = join(DEPLOYMENT, "..");
@@ -30,8 +31,8 @@ const REPO = join(DEPLOYMENT, "..");
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
 // Each docker call is killed just under the smallest budget of a test that makes it, so a hung daemon fails that test
-// with a named message before scripts/test/run.ts kills the whole run at 600 s (P1.27k): a build under privileges_fixture_image's 300 s, and a
-// create, export or removal under CONTAINER_MS.
+// with a named message before scripts/test/run.ts kills the whole run at 600 s (P1.27k): a build under
+// privileges_fixture_image's 300 s, and a create, export or removal under CONTAINER_MS.
 const BUILD_CALL_MS = killBefore(300_000);
 const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8"));
@@ -69,17 +70,16 @@ function kindOf(dockerfile: string): string | undefined {
 const contextOf = (file: string): string => (file.startsWith("images/") ? REPO : join(DEPLOYMENT, dirname(file)));
 
 /**
- * Builds a Dockerfile with its context once per run; the image id. A failed build fails the test, so no kind passes
+ * Builds a Dockerfile with its context once per run; its tag. A failed build fails the test, so no kind passes
  * unbuilt.
  */
 function build(dockerfile: string, context: string): string {
   const key = `${dockerfile}\0${context}`;
   const cached = built.get(key);
   if (cached !== undefined) return cached;
-  const result = docker(["build", "-q", "-f", dockerfile, context], { timeoutMs: BUILD_CALL_MS });
-  if (result.code !== 0) throw new Error(`${dockerfile} build failed: ${result.err.slice(-2000)}`);
-  built.set(key, result.out.trim());
-  return result.out.trim();
+  const tag = buildTestImage(dockerfile, context, { timeoutMs: BUILD_CALL_MS });
+  built.set(key, tag);
+  return tag;
 }
 
 /**
@@ -420,7 +420,21 @@ function imagePrivilegeProblems(kind: string, file: string): string[] {
 
 describe("image package managers", () => {
   afterAll(() => {
-    for (const image of new Set(built.values())) docker(["rmi", "-f", image], { timeoutMs: CONTAINER_CALL_MS });
+    // Each tag is removed, even after one removal fails, and the failures are reported together (P1.27x). The removals
+    // share one deadline inside the hook's budget: a blocked spawnSync holds vitest's timer, so a full call budget per
+    // tag could run four times past it (Codex on #702).
+    const deadline = Date.now() + CONTAINER_CALL_MS;
+    const failures: unknown[] = [];
+    for (const tag of built.values()) {
+      const left = deadline - Date.now();
+      try {
+        if (left <= 0) throw new Error(`no time left to remove ${tag}`);
+        removeTestImage(tag, { timeoutMs: left });
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} image removal(s) failed`);
   }, CONTAINER_MS);
 
   /** A listing as tar prints it, from [mode, quoted name, verbose suffix] rows: `-tv` lines and `-tf` names. */

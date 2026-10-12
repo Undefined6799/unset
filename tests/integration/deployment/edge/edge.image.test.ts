@@ -81,6 +81,8 @@ beforeAll(async () => {
   image = buildEdgeImage();
   edge = await startEdge(image);
 }, 600_000);
+// The image's tag stays: until P1.27z, the trusted edge tests hold the same image by id, so removing what may be its
+// last tag could delete it under them (P1.27x record, amendment 2).
 afterAll(async () => {
   await edge?.stop();
 }, CONTAINER_MS);

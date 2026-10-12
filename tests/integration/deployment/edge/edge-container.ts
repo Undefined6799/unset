@@ -10,16 +10,18 @@ import { request } from "node:https"; // guard-allow: egress local edge test onl
 import { connect as tcpConnect } from "node:net"; // guard-allow: egress local edge test only
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls"; // guard-allow: egress local edge test only
-import { docker, killBefore } from "../../../support/docker.ts";
+import { docker, killBefore, subcommand } from "../../../support/docker.ts";
+import { buildTestImage } from "../../../support/image-build.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 export const EDGE = join(REPOSITORY, "deployment", "edge");
 export const PDS_HOST = "pds.unset.test";
 const OWNER_LABEL = "sh.unset.test-owner";
 // Every docker call is killed at its own budget (P1.27k), so a hung daemon fails the calling test or hook with a named
-// message instead of blocking the event loop until scripts/test/run.ts kills the whole run at 600 s. A daemon call (inspect, port, exec, logs, rm) may
-// queue behind CI's parallel image builds but never for a minute. The pull and the build share beforeAll's 600 s with
-// the start; a probe run fits inside the 120 s budget of the tests that probe (CONTAINER_MS in edge.image.test.ts).
+// message instead of blocking the event loop until scripts/test/run.ts kills the whole run at 600 s. A daemon call
+// (inspect, port, exec, logs, rm) may queue behind CI's parallel image builds but never for a minute. The pull and
+// the build share beforeAll's 600 s with the start; a probe run fits inside the 120 s budget of the tests that probe
+// (CONTAINER_MS in edge.image.test.ts).
 const CALL_MS = 60_000;
 const PULL_MS = 180_000;
 const BUILD_MS = 300_000;
@@ -101,17 +103,15 @@ function dockerAsync(args: readonly string[], timeoutMs: number): Promise<{ code
       resolve({
         code: code ?? -1,
         out,
-        err: signal === "SIGKILL" ? `docker ${args[0]} killed after ${timeoutMs} ms` : err,
+        err: signal === "SIGKILL" ? `docker ${subcommand(args)} killed after ${timeoutMs} ms` : err,
       }),
     );
   });
 }
 
-/** Builds deployment/edge/Dockerfile and returns the image id. */
+/** Builds deployment/edge/Dockerfile under its own tag (P1.27x) and returns the tag; removeTestImage removes it. */
 export function buildEdgeImage(): string {
-  const built = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE], { timeoutMs: BUILD_MS });
-  if (built.code !== 0) throw new Error(`edge image build failed: ${built.err.slice(-2000)}`);
-  return built.out.trim();
+  return buildTestImage(join(EDGE, "Dockerfile"), EDGE, { timeoutMs: BUILD_MS });
 }
 
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */
