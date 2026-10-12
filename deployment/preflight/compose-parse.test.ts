@@ -201,6 +201,13 @@ describe("compose subset", () => {
       [`    cpus: ${"1".padEnd(311, "0")}\n`, "cpus is not a positive number"],
       [`    cpus: "${"1".padEnd(311, "0")}"\n`, "cpus is not a positive number"],
       [`    cpus: ${"1".padEnd(311, "0")}.5\n`, "cpus is not a positive number"],
+      // Compose sends int64(cpus * 1e9) NanoCPUs, cpus a float32 (docker/compose v2.38.2 and v5.6.0
+      // pkg/compose/create.go:621 and :758; compose-go v2.7.1 and v2.16.1 types/types.go CPUS float32), and the engine
+      // reads 0 as no limit (moby v28.5.1 daemon/daemon_unix.go:505), so a tiny cpus is no limit at all; 0.01 is the
+      // smallest the engine's own error message names.
+      ["    cpus: 0.009\n", "cpus is below 0.01"],
+      ["    cpus: 0.0000000001\n", "cpus is below 0.01"],
+      ['    cpus: "0.0000000001"\n', "cpus is below 0.01"],
       ["    cap_drop: []\n", "cap_drop is not [ALL]"],
       ["    mem_limit: 512k\n", "mem_limit is not a size in m or g"],
       ["    mem_limit: 512M\n", "mem_limit is not a size in m or g"],
@@ -268,6 +275,31 @@ describe("compose subset", () => {
         "build key target",
       ],
       ["    build: {context: ..}\n", "build is not {context, dockerfile}"],
+      // Every other build key changes what is built, so each is refused by name (compose-spec build.md).
+      ...[
+        "additional_contexts",
+        "args",
+        "cache_from",
+        "cache_to",
+        "dockerfile_inline",
+        "entitlements",
+        "extra_hosts",
+        "isolation",
+        "labels",
+        "network",
+        "no_cache",
+        "platforms",
+        "privileged",
+        "pull",
+        "secrets",
+        "shm_size",
+        "ssh",
+        "tags",
+        "ulimits",
+      ].map((key) => [
+        `    build: {context: .., dockerfile: deployment/images/node-app.Dockerfile, ${key}: x}\n`,
+        `build key ${key}`,
+      ]),
       // compose-go passes URL and git contexts through unresolved, so only a local path is read (#652 verification).
       [
         "    build: {context: https://github.com/x/y.git, dockerfile: Dockerfile}\n",
@@ -447,8 +479,8 @@ services:
   web:
     image: ghcr.io/undefined6799/web@${digest}
     build:
-      context: .
-      dockerfile: deployment/edge/Dockerfile
+      context: ./edge
+      dockerfile: Dockerfile
     tmpfs: ["/tmp:size=16m,noexec,nosuid,nodev"]
     depends_on:
       edge:
@@ -627,7 +659,7 @@ function theirsAsOurs(theirs: Theirs) {
 const FIRST = "name: unset-prod\nservices:\n  edge:\n    image: x\n";
 const SECOND =
   "services:\n  pds:\n    image: y\n    env_file: [e.env]\n    volumes: [./data:/data]\n" +
-  "    build: {context: ., dockerfile: deployment/x.Dockerfile}\nsecrets:\n  s:\n    file: ./s\n";
+  "    build: {context: ./ctx, dockerfile: x.Dockerfile}\nsecrets:\n  s:\n    file: ./s\n";
 
 /** The paths loadCompose resolved, in the order the agreement test compares them. */
 function resolvedPaths(files: string[], readText: (path: string) => string | null) {
@@ -652,7 +684,8 @@ describe("compose project directory", () => {
       envFiles: ["/p/a/e.env"],
       secretFiles: ["/p/a/s"],
       // P1.30y: the context from the project directory, the Dockerfile from the context (compose-spec build.md).
-      build: { context: "/p/a", dockerfile: "/p/a/deployment/x.Dockerfile" },
+      // A context other than ".", so a Dockerfile resolved from the project directory (/p/a/x.Dockerfile) would differ.
+      build: { context: "/p/a/ctx", dockerfile: "/p/a/ctx/x.Dockerfile" },
     });
   });
 });

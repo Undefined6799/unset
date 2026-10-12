@@ -861,11 +861,16 @@ describe("preflight C25 (P1.30x)", () => {
     "deployment/edge/Dockerfile": "FROM scratch\n",
     "deployment/images/node-app.Dockerfile": "FROM scratch\n",
   };
-  const built = (service: string, image: string, dockerfile: string, adds = "") =>
-    COMPOSE.replace(
+  // Each Dockerfile from the context the images workflow builds it from (C26): the edge's own folder, else the root.
+  const built = (service: string, image: string, dockerfile: string, adds = "") => {
+    const [context, file] = dockerfile.endsWith("/Dockerfile")
+      ? [`./${dockerfile.slice(0, -"/Dockerfile".length).replace(/^deployment\//, "")}`, "Dockerfile"]
+      : ["..", dockerfile];
+    return COMPOSE.replace(
       `  ${service}:\n    image: ${image}\n`,
-      `  ${service}:\n    image: ${image}\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n${adds}`,
+      `  ${service}:\n    image: ${image}\n    build:\n      context: ${context}\n      dockerfile: ${file}\n${adds}`,
     );
+  };
   const adds = "    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n";
 
   test("c25_edge_image_built_from_another_dockerfile_fails", async () => {
@@ -899,9 +904,11 @@ describe("preflight C25 (P1.30x)", () => {
 describe("preflight C26 and C27 (P1.30y)", () => {
   const DOCKERFILES = {
     Dockerfile: "FROM scratch\n",
+    "deployment/edge/Dockerfile": "FROM scratch\n",
     "deployment/images/node-app.Dockerfile": "FROM scratch\n",
     "deployment/images/postgres.Dockerfile": "FROM scratch\n",
     "deployment/images/node_modules/x/Dockerfile": "FROM scratch\n",
+    "deployment/images/node-app": "FROM scratch\n",
   };
   const webBuilds = (context: string, dockerfile: string) =>
     COMPOSE.replace(
@@ -910,8 +917,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     );
   const webTmpfs = (yaml: string) => COMPOSE.replace(`    image: ${WEB}\n`, `    image: ${WEB}\n${yaml}`);
 
-  // Architecture record 2026-10-12-p129-compose-service-keys: a context is the repository root, and a Dockerfile is one
-  // the images workflow discovers and scans (scripts/ci/list-dockerfiles.ts, images.test.ts's rule).
+  // Architecture record 2026-10-12-p129-compose-service-keys: a Dockerfile is one the images workflow discovers and
+  // scans (scripts/ci/list-dockerfiles.ts, images.test.ts's rule), built from the context that workflow builds it from:
+  // a file named Dockerfile from its own folder (the edge), any *.Dockerfile from the repository root (images.yml,
+  // scan-image "Build"). Another context builds other files than the scanned image holds.
   test("c26_build_from_the_root_and_a_scanned_dockerfile_passes", async () => {
     const result = await check({
       compose: webBuilds("..", "deployment/images/node-app.Dockerfile"),
@@ -921,11 +930,59 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   });
 
   test("c26_context_other_than_the_root_fails", async () => {
-    for (const context of ["../..", ".", "../deployment"]) {
+    // Each names the scanned node-app Dockerfile, from another context.
+    for (const [context, dockerfile] of [
+      [".", "images/node-app.Dockerfile"],
+      ["../deployment", "images/node-app.Dockerfile"],
+      ["./images", "node-app.Dockerfile"],
+    ]) {
       expect(
-        await expectOnly("C26", { compose: webBuilds(context, "images/node-app.Dockerfile"), files: DOCKERFILES }),
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
         context,
-      ).toBe("FAIL C26 web builds from a context other than the repository root");
+      ).toBe("FAIL C26 web builds from a context other than the images workflow's");
+    }
+  });
+
+  // As the images workflow refuses them (scripts/ci/list-dockerfiles.ts entryProblems): a symlinked Dockerfile or
+  // folder, and an image name outside ^[a-z0-9-]+$. That workflow's discover job is not a required check, so C26 is.
+  test("c26_symlinks_and_bad_image_names_fail", async () => {
+    const files = { ...DOCKERFILES, "deployment/images/Web_App.Dockerfile": "FROM scratch\n" };
+    const name = await expectOnly("C26", { compose: webBuilds("..", "deployment/images/Web_App.Dockerfile"), files });
+    expect(name).toBe("FAIL C26 web builds from a Dockerfile the images workflow does not scan");
+    const linked = stack({ compose: webBuilds("..", "deployment/images/linked.Dockerfile"), files: DOCKERFILES });
+    symlinkSync(
+      join(linked.root, "deployment/images/node-app.Dockerfile"),
+      join(linked.root, "deployment/images/linked.Dockerfile"),
+    );
+    const viaLink = await preflight(["--env", "prod", "--compose", linked.file], {
+      root: linked.root,
+      run: fakeRun().run,
+    });
+    expect(viaLink.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+      "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+    ]);
+    const folder = stack({ compose: webBuilds("..", "deployment/linked/node-app.Dockerfile"), files: DOCKERFILES });
+    symlinkSync(join(folder.root, "deployment/images"), join(folder.root, "deployment/linked"));
+    const viaFolder = await preflight(["--env", "prod", "--compose", folder.file], {
+      root: folder.root,
+      run: fakeRun().run,
+    });
+    expect(viaFolder.lines.filter((l) => l.startsWith("FAIL"))).toEqual([
+      "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+    ]);
+  });
+
+  test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
+    expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
+    for (const [context, dockerfile] of [
+      ["..", "deployment/edge/Dockerfile"],
+      ["./edge/sites", "../Dockerfile"],
+      [".", "edge/Dockerfile"],
+    ]) {
+      expect(
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
+        context,
+      ).toBe("FAIL C26 web builds from a context other than the images workflow's");
     }
   });
 
@@ -934,7 +991,11 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "Dockerfile",
       "deployment/images/missing.Dockerfile",
       "deployment/images/node_modules/x/Dockerfile",
-      "deployment/images/bases.lock.json",
+      // Files that exist under the root, so only the name rule refuses them.
+      "deployment/compose.yaml",
+      "deployment/images.lock.json",
+      // A name the workflow's name rule accepts, on a file its Dockerfile rule does not list.
+      "deployment/images/node-app",
       "../outside.Dockerfile",
     ]) {
       expect(await expectOnly("C26", { compose: webBuilds("..", dockerfile), files: DOCKERFILES }), dockerfile).toBe(
@@ -950,9 +1011,17 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "    volumes:\n      - type: tmpfs\n        target: /var/run/postgresql\n",
     ]) {
       expect(await expectOnly("C27", { compose: webTmpfs(yaml) }), yaml).toBe(
-        "FAIL C27 web mounts a tmpfs on /var/run/postgresql but does not run the postgres image",
+        "FAIL C27 web mounts the socket-directory tmpfs but does not run the lock's database image",
       );
     }
+  });
+
+  // P1.30j's rule: a reason names keys and services, never text a configured value could hold (PGHOST, POSTGRES_USER).
+  test("c27_reason_survives_withholding", async () => {
+    const pdsEnv = { PGHOST: "/var/run/postgresql", POSTGRES_USER: "postgres" };
+    expect(await expectOnly("C27", { compose: webTmpfs("    tmpfs: [/var/run/postgresql]\n"), pdsEnv })).toBe(
+      "FAIL C27 web mounts the socket-directory tmpfs but does not run the lock's database image",
+    );
   });
 
   test("c27_postgres_socket_tmpfs_on_the_postgres_image_passes", async () => {
@@ -965,7 +1034,7 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       `    image: ${WEB}\n    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n    tmpfs: [/var/run/postgresql]\n`,
     );
     expect(await expectOnly("C27", { compose: pg, lock, files: DOCKERFILES })).toBe(
-      "FAIL C27 web mounts a tmpfs on /var/run/postgresql but its image and build name different images",
+      "FAIL C27 web mounts the socket-directory tmpfs but its image and build name different images",
     );
     expect((await check({ compose: webTmpfs("    tmpfs: [/tmp]\n"), lock: null })).lines).toContain("PASS C27 ok");
   });

@@ -438,8 +438,13 @@ function cpus(r: Reader, node: unknown): number | null {
   const text = isScalar(node) && typeof node.value === "number" ? (node as Scalar).source : r.text(node, "cpus");
   // A decimal of about 310 digits matches CPUS yet reads as Infinity, so the value must be finite as well.
   const value = typeof text === "string" && CPUS.test(text) ? Number(text) : Number.NaN;
-  return Number.isFinite(value) && value > 0 ? value : r.fail(node, "cpus is not a positive number");
+  if (!(Number.isFinite(value) && value > 0)) return r.fail(node, "cpus is not a positive number");
+  // Compose sends int64(cpus * 1e9) NanoCPUs from a float32 (docker/compose v5.6.0 pkg/compose/create.go:758;
+  // compose-go v2.16.1 types/types.go CPUS), and the engine reads 0 as no limit (moby v28.5.1
+  // daemon/daemon_unix.go:505), so a tiny value would silently mean none; 0.01 is the smallest the engine names.
+  return value >= MIN_CPUS ? value : r.fail(node, "cpus is below 0.01");
 }
+const MIN_CPUS = 0.01;
 
 /** A positive integer up to PIDS_MAX; 0 and -1 would mean no limit at all. */
 function pidsLimit(r: Reader, node: unknown): number | null {
