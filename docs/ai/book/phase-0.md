@@ -3020,6 +3020,9 @@ Done when Alex merges it by hand. No agent merge happens under ADR 0019 before t
 
 ### P0.15a — Mark ADR 0019 accepted
 Tags: [SEC] [ALEX] (Alex pastes CLAUDE.md, merges by hand)            Depends on: P0.15 (merged, #607)            Plan: —
+As built: merged by Alex at 2026-10-12T06:45:02Z as `56a186f` (#617), without his CLAUDE.md lines, so ADR 0019 reads
+accepted but its condition is unmet; P0.16 carries his CLAUDE.md commit (book edit
+2026-10-12-p016-delivery-check-adr-0019, amendment 3).
 Docs class, kind/docs; issue #614; slice 1, right after P0.15; book edit 2026-10-12-p015a-adr-0019-accepted (final
 04:29Z), from the coordinator at 04:27Z. Owner: Phase 2. P0.16 depends on it.
 Why: Alex merged #607 at 04:23:21Z at head `63e0c69`, before the status-line fix and before his CLAUDE.md paste. On main
@@ -3044,12 +3047,20 @@ Done when Alex merges it with his CLAUDE.md lines on the branch. Main then has 0
 ---
 
 ### P0.16 — Delivery check asserts the ADR 0019 merge rule
-Tags: [SEC]            Depends on: P0.15 (merged, #607), P0.15a            Plan: —
+Tags: [SEC]            Depends on: P0.15a (merged, #617)            Plan: —
 Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15a;
 book edit 2026-10-12-p016-delivery-check-adr-0019 (final 03:40Z), from architecture's ruling in
-2026-10-12-p015-delivery-check-wording (03:35Z). No line from Alex: scripts/docs is an SE-6 check path but not a
-classifier path, so any lane may take it, Phase 1 included. It starts after P0.15a merges, because its check asserts
-the CLAUDE.md text that only lands there. Nothing depends on it.
+2026-10-12-p015-delivery-check-wording (03:35Z). Owner: Phase 2 (amendment 3, 06:50Z). Nothing depends on it.
+Alex's CLAUDE.md commit (amendment 3): #617 merged without his CLAUDE.md lines, so CLAUDE.md:95-96 on main (`f062c81`)
+still says "Alex alone merges". His commit rides this PR's branch: exactly #612's two-line diff (the Merging line gains
+"ADR 0019"; "agents open PRs and never push to `main`; author threads never merge them. A separate verifier may merge
+checked PRs; ADR 0019 says what stays Alex's."), subject `P0.16 CLAUDE.md Merging line names ADR 0019`. CLAUDE.md stays
+at 119 lines. Phase 2 never edits CLAUDE.md itself (classifier). CLAUDE.md is `*.md`, which `trusted-base.ts:114-119`
+counts as documentation, so the PR stays one check-class PR under SE-6.
+Opened ready, red on purpose: Phase 2 opens it out of draft (ci.yml skips drafts) with check red, because main's
+CLAUDE.md lacks both phrases. This departs from the hand-off rule: it is handed off on Alex's commit, not on green, and
+the body gives him the exact diff and subject. It counts as one of the three waiting PRs. It is never verifier-merged;
+Alex merges it by hand, because ADR 0019 does not apply until it lands.
 What: `deliveryProblems` (`scripts/docs/docs.ts:76-87`) requires `author threads never merge` instead of the bare
 `never merge`, and adds a requirement for `ADR 0019`; it keeps ``never push to `main` `` and the ADR 0009 citation; its
 message becomes "Delivery does not say author threads never merge their PRs"; its doc comment cites ADR 0019. The
@@ -3062,7 +3073,8 @@ renamed `claude_md_author_threads_never_merge`, removes "author threads never me
 message. The `never push to` and `ADR 0009` cases are unchanged. The test asserts more, not less.
 Red fixtures: a Delivery section without "author threads never merge", and one without "ADR 0019". Each is red, and main's
 Delivery section (after P0.15a) is green.
-Done when the fixtures are red and green as above, and the full suite is green.
+Done when Alex's commit is on the branch, check and the other five required checks are green, the fixtures are red and
+green as above, and Alex merges it by hand.
 
 ---
 
