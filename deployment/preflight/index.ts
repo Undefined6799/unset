@@ -6,7 +6,8 @@
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
 // malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3 to C5,
 // and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a secret value: env files are
-// read into SecretMaps, and Compose is parsed here, never through `docker compose config`.
+// read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
+// configured value is withheld whole.
 import { execFile } from "node:child_process";
 import { readFileSync, type Stats, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -14,7 +15,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { CHECKS } from "./checks/index.ts";
 import { undeclaredNetworks } from "./checks/networks.ts";
-import type { Check, Env, Inputs, ManifestKind, Outcome, Run, Verifier } from "./checks/types.ts";
+import {
+  type Check,
+  type Env,
+  type Inputs,
+  type ManifestKind,
+  MISSING,
+  type Outcome,
+  type Run,
+  type Verifier,
+} from "./checks/types.ts";
 
 export type { Run };
 
@@ -27,7 +37,7 @@ import {
   parseEnvFile,
   type Service,
 } from "./compose-parse.ts";
-import { SecretMap } from "./secret-map.ts";
+import { ConfiguredValues, SecretMap } from "./secret-map.ts";
 
 export type Deps = {
   /** The repository root: the lock, the cosign key and the verify-images CLI are read below it. */
@@ -120,8 +130,11 @@ function readEnvFile(path: string, readText: (path: string) => string | null): [
   return parseEnvFile(text, path);
 }
 
+/** The checks' inputs, and every value the readers handed out on the way (P1.30m). */
+type Loaded = { inputs: Inputs; configured: ConfiguredValues };
+
 /** Inputs for the checks; anything that keeps the preflight from judging the stack throws CannotRun or ParseError. */
-function loadInputs(argv: string[], deps: Deps): Inputs {
+function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
   const { env, files } = parseCli(argv);
   const { compose, services, secretPaths } = loadCompose(files, readText);
@@ -133,14 +146,16 @@ function loadInputs(argv: string[], deps: Deps): Inputs {
   const resolveValue = (value: EnvValue): string =>
     "literal" in value ? value.literal : (interpolation.get(value.ref) ?? "");
   const serviceEnv = new Map<string, SecretMap>();
+  const values = dotEnv.map(([, value]) => value);
   for (const { service, dir } of services) {
     const envFiles = service.envFiles.map((path) => resolve(dir, path));
     secretPaths.push(...envFiles);
     const fromFiles = envFiles.flatMap((path) => readEnvFile(path, readText));
     const fromCompose = service.environment.map(([key, value]): [string, string] => [key, resolveValue(value)]);
     serviceEnv.set(service.name, new SecretMap([...fromFiles, ...fromCompose]));
+    values.push(...[...fromFiles, ...fromCompose].map(([, value]) => value));
   }
-  return {
+  const inputs: Inputs = {
     env,
     compose,
     serviceEnv,
@@ -157,6 +172,7 @@ function loadInputs(argv: string[], deps: Deps): Inputs {
     stat: deps.stat ?? statOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };
+  return { inputs, configured: new ConfiguredValues(values) };
 }
 
 /** The verify-images CLI (P1.27q) by fixed path and arguments; its stderr holds one failure per line. */
@@ -182,22 +198,21 @@ function manifestKind(deps: Deps): ManifestKind {
 }
 
 /** One check, failing closed: a throw is a failure, and a network check that outlasts its timeout fails. */
-async function runCheck(check: Check, inputs: Inputs, timeoutMs: number): Promise<Outcome> {
-  const envs = [...inputs.serviceEnv.values()];
-  for (const env of envs) env.forgetReads();
-  return withoutValues(await settle(check, inputs, timeoutMs), envs);
+async function runCheck(check: Check, loaded: Loaded, timeoutMs: number): Promise<Outcome> {
+  return withheldIfValued(await settle(check, loaded.inputs, timeoutMs), loaded.configured);
 }
 
-const WITHHELD = "the reason is withheld: it would print a value";
+const WITHHELD = "reason withheld (it contained a configured value)";
 
 /**
- * `outcome` with every value the check read from a SecretMap turned back into its name, so no reason prints one
- * whatever text a check built it from (P1.30w; record 2026-10-12-c18-follow-ups, ruling N1). A reason that would still
- * hold a value, because naming one wrote out another, is withheld whole.
+ * `outcome`, or, when its reason holds any value the run read, the same verdict with the reason withheld whole
+ * (P1.30m). Replacing a value with its name leaked across maps, against a check's fixed text and through the template,
+ * so nothing is printed in part, and there is no flag to see the reason.
  */
-function withoutValues(outcome: Outcome, envs: SecretMap[]): Outcome {
-  const reason = envs.reduce((text, env) => env.scrubReads(text), outcome.reason);
-  return { pass: outcome.pass, reason: envs.some((env) => env.holdsRead(reason)) ? WITHHELD : reason };
+function withheldIfValued(outcome: Outcome, configured: ConfiguredValues): Outcome {
+  if (!configured.occurIn(outcome.reason)) return outcome;
+  const reason = outcome.reason.startsWith(MISSING) ? `${MISSING}${WITHHELD}` : WITHHELD;
+  return { pass: outcome.pass, reason };
 }
 
 /** The check's outcome, a timeout for a network check past its deadline, or a failure for a throw. */
@@ -215,9 +230,9 @@ async function settle(check: Check, inputs: Inputs, timeoutMs: number): Promise<
 }
 
 export async function preflight(argv: string[], deps: Deps): Promise<Result> {
-  let inputs: Inputs;
+  let loaded: Loaded;
   try {
-    inputs = loadInputs(argv, deps);
+    loaded = loadInputs(argv, deps);
   } catch (error) {
     if (error instanceof CannotRun || error instanceof ParseError)
       return { code: 2, lines: [`ERROR ${error.message}`] };
@@ -226,7 +241,7 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
   const lines: string[] = [];
   let failed = false;
   for (const check of deps.checks ?? CHECKS) {
-    const outcome = await runCheck(check, inputs, deps.timeoutMs ?? NETWORK_TIMEOUT_MS);
+    const outcome = await runCheck(check, loaded, deps.timeoutMs ?? NETWORK_TIMEOUT_MS);
     failed ||= !outcome.pass;
     lines.push(`${outcome.pass ? "PASS" : "FAIL"} ${check.id} ${outcome.reason}`);
   }

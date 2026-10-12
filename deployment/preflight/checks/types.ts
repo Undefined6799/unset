@@ -50,7 +50,9 @@ export type Check = {
 
 export const pass = (reason = "ok"): Outcome => ({ pass: true, reason });
 export const fail = (reason: string): Outcome => ({ pass: false, reason });
-export const missing = (path: string): Outcome => fail(`input missing: ${path}`);
+/** The prefix of every missing-input reason; the runner keeps it when it withholds the rest (P1.30m). */
+export const MISSING = "input missing: ";
+export const missing = (path: string): Outcome => fail(`${MISSING}${path}`);
 
 export function serviceNamed(inputs: Inputs, name: string): Service | undefined {
   return inputs.compose.services.find((service) => service.name === name);
