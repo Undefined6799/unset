@@ -8183,6 +8183,8 @@ two rows with the same `(from, spec)`. Each is red, and main's rows are green.
 
 Done when the reds are red, and the full suite is green.
 
+As built: merged by Alex at 2026-10-12T13:19:40Z as `a224388` (#618).
+
 ---
 
 ### P1.30u — Check the edge's rate-limit zones
@@ -8338,16 +8340,20 @@ Slice 1, issue #619, product (`deployment/preflight/` compose-parse and its test
 - **Top level:** an exact key allowlist: `name`, `services`, `networks`, `secrets` and `volumes`, plus `include` only
   if the parser already reads or refuses it explicitly. Any other key, including `configs`, is a ParseError naming the
   key only. A later key needs a ruling and a reader. An explicit refusal stays a refusal: the allowlist only lets
-  `include` reach the parser's existing read or refusal, so a refused `include` still fails with its own refusal
-  (amendment 2, 07:20Z, restoring 2026-10-12-c18-follow-ups.md:72).
+  `include` reach the parser's existing read or refusal, so a refused `include` still fails with its own refusal; the
+  allowlist never turns a refusal into a read (amendment 2, 07:20Z, restoring 2026-10-12-c18-follow-ups.md:72).
 - **Top-level `volumes`, names only:** each name (matching `VOLUME_NAME`) maps to `null` or `{}` only. Any key under a
   volume (`driver`, `driver_opts`, `external`, `name`, `labels` or any other) is a ParseError naming only the key, so
-  no named volume hides a host bind. A service mount of a named volume not declared at the top level is a ParseError.
+  no named volume hides a host bind. A service mount of a named volume not declared at the top level, in the same
+  compose file as the service that mounts it, is a ParseError. This is stricter than Compose and fails closed, matching
+  `loadCompose`'s one-file-per-service rule (`preflight/index.ts:82-96`); the same names-only declaration in two files
+  is accepted (amendment 3, 13:35Z).
 - **Long-form `ports`:** `target`, `published` and `host_ip`, plus `protocol` only if `port()` reads it. Any other key
   fails by name.
 
 **Red fixtures:** each refused: `driver_opts` with a host `device`, `driver: local`, `external: true` and `name:` under
-a volume; an undeclared named volume; a top-level `configs`; a long-form port with `mode` or `app_protocol`. Each is
+a volume; an undeclared named volume; two compose files, the volume declared in one and mounted in the other; a
+top-level `configs`; a long-form port with `mode` or `app_protocol`. Each is
 red, STACK keeps `volumes: data: {}` and stays green, and the compose files on main are green.
 
 Done when the reds are red, main's compose files parse, and the full suite is green.

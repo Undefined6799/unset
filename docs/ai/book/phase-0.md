@@ -310,8 +310,8 @@ Outputs:
     check (rule SE-6). It is the **last** section of the file and runs from its heading to the end of the file with no
     blank line inside (P0.09c's parser reads it that way; a line after it or a blank line inside it fails). Its
     patterns, one per SE-6 entry: CSRF gate and session `/shared/http/`,
-    `/infrastructure/postgres/session/` (moved by P2.03q, #403), `/interfaces/http/session-cookie.ts`; `verifyHandle`
-    `/domains/identity/verify-handle.ts`; `net-guard` `/infrastructure/net-guard/`; serialiser
+    `/infrastructure/session/` (moved by P2.03q, #403, then P2.03c, #613), `/interfaces/http/session-cookie.ts`;
+    `verifyHandle` `/domains/identity/verify-handle.ts`; `net-guard` `/infrastructure/net-guard/`; serialiser
     `/shared/ui/islands/props.ts`, `/shared/ui/src/islands/readProps.ts`; `safeHref` `/shared/ui/safe-href.ts`; seal
     `/infrastructure/seal/`; CSP builder (inside `/shared/http/`); media sandbox headers `/interfaces/media/headers.ts`
     (P3.09 keeps them in that one file); roles and grants on objects that already exist: the role roster

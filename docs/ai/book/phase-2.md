@@ -713,6 +713,7 @@ What: in CODEOWNERS' trusted-base section, `/infrastructure/postgres/session/` (
   code plus its entry point. Nothing else changes, including :23 and :112 for `session-cookie.ts`.
 Classifier: if the harness refuses the `.github` edit, the coordinator asks Alex for "yes P2.03c CODEOWNERS session
   path".
+As built: merged by Alex at 2026-10-12T13:55:19Z as `ecfbb85` (#613).
 
 ### P2.03 — Session store and lifecycle
 Tags: [SEC]            Depends on: P2.03q, P2.03x, P2.03e, P2.03c            Plan: §2 rule 7; §5.3 "Sessions"
