@@ -141,7 +141,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 196 steps: 173 from `phase-1.md`, 23 from `phase-2.md` (including the
+Depth: **build-ready**. 199 steps: 175 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -293,6 +293,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30w | Compose reader exact key allowlist, C18 read-only sites mount and edge image pin, shared check value scrub | [SEC] | P1.30u | `phase-1.md` |
 | P1.30k | Compose reader exact top-level key allowlist and long-form port key set | [SEC] | P1.30w | `phase-1.md` |
 | P1.30m | Preflight runner withholds any reason containing a configured value (one run-wide set); C23 and literal-quoting templates name keys; scrubbed() deleted | [SEC] | P1.30w | `phase-1.md` |
+| P1.30x | Compose reader: hardening and limit keys (read_only, cap_drop, cap_add, security_opt, user, mem_limit, cpus, pids_limit, restart) | [SEC] | P1.30k | `phase-1.md` |
+| P1.30y | Compose reader: build, tmpfs (and volumes type tmpfs), depends_on, short-form service secrets | [SEC] | P1.30k | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -314,7 +316,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29c | Lock field buildStage, derived from the Dockerfiles and proven by a test | [SEC] | P1.29b | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
@@ -337,13 +339,14 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e, P2.03c | `phase-2.md` |
 | P2.03i | Session indexes (did, absolute_expires_at), annotated with store.ts | [SEC] | P2.03, P2.03x | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i | `phase-2.md` |
+| P2.04s | Session prelude for OAuth: destroyAllForDid, EndSessionsReason, has_token_set probe (trusted, split from P2.04) | [SEC] | P2.03, P2.04 | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
-| P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
-| P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04 | `phase-2.md` |
-| P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06 | `phase-2.md` |
+| P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
+| P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
+| P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06, P2.04s | `phase-2.md` |
 | P2.11 | Email-verify gate | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
-| P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
+| P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m | `phase-2.md` |
 
@@ -511,6 +514,8 @@ flowchart TD
   P1_30w["P1.30w Preflight key allowlist and value scrub"]
   P1_30k["P1.30k Compose top-level key allowlist"]
   P1_30m["P1.30m Preflight withholds value reasons"]
+  P1_30x["P1.30x Compose hardening and limit keys"]
+  P1_30y["P1.30y Compose build, tmpfs, depends_on, secrets"]
   P1_30u["P1.30u Preflight C18 edge zones"]
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
@@ -531,6 +536,7 @@ flowchart TD
   P2_03["P2.03 Session store and lifecycle"]
   P2_03i["P2.03i session indexes"]
   P2_04["P2.04 OAuth client"]
+  P2_04s["P2.04s Session prelude for OAuth"]
   P2_05["P2.05 Login"]
   P2_06["P2.06 Callback"]
   P2_07["P2.07 Resilience"]
@@ -694,6 +700,12 @@ flowchart TD
   P2_03i --> P2_04
   P2_03x --> P2_04
   P2_04 --> P2_05
+  P2_03 --> P2_04s
+  P2_04 --> P2_04s
+  P2_04s --> P2_06
+  P2_04s --> P2_07
+  P2_04s --> P2_08
+  P2_04s --> P2_12
   P1_09 --> P2_05
   P2_05 --> P2_06
   P2_03 --> P2_06
@@ -794,6 +806,10 @@ flowchart TD
   P1_30h --> P1_30g
   P1_30w --> P1_30k
   P1_30w --> P1_30m
+  P1_30k --> P1_30x
+  P1_30k --> P1_30y
+  P1_30x --> P1_29
+  P1_30y --> P1_29
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
