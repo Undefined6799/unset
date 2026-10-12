@@ -3,31 +3,35 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { MATRIX_SERVER_NAME, PERMISSION_SET_NSID } from "./index.ts";
+import * as permanent from "./permanent.ts";
 
-const ADR = readFileSync(
-  join(import.meta.dirname, "..", "..", "docs", "human", "decisions", "0020-permanent-choices.md"),
-  "utf8",
-);
+const HEADER = "PERMANENT — changing any value breaks existing users.";
+const read = (...parts: string[]): string => readFileSync(join(import.meta.dirname, ...parts), "utf8");
+const ADR = read("..", "..", "docs", "human", "decisions", "0020-permanent-choices.md");
 
 /** The ADR's row for one question: `| Q1 | ... |`. */
 const row = (question: string): string => ADR.split("\n").find((line) => line.startsWith(`| ${question} |`)) ?? "";
 
 describe("permanent choices", () => {
   test("permanent_constants_pinned", () => {
-    expect(MATRIX_SERVER_NAME).toBe("unset.sh");
-    expect(PERMISSION_SET_NSID).toBe("sh.unset.authApp");
+    // The full export list, so a new constant cannot land without a pin here.
+    expect(Object.keys(permanent).sort()).toEqual(["MATRIX_SERVER_NAME", "PERMISSION_SET_NSID"]);
+    expect(permanent.MATRIX_SERVER_NAME).toBe("unset.sh");
+    expect(permanent.PERMISSION_SET_NSID).toBe("sh.unset.authApp");
     // Each value is the one the ADR records as Alex's answer.
-    expect(row("Q1")).toContain(`\`${MATRIX_SERVER_NAME}\``);
-    expect(row("Q4")).toContain(`\`${PERMISSION_SET_NSID}\``);
+    expect(row("Q1")).toContain(`\`${permanent.MATRIX_SERVER_NAME}\``);
+    expect(row("Q4")).toContain(`\`${permanent.PERMISSION_SET_NSID}\``);
+    expect(read("permanent.ts").split("\n")[0]).toContain(`// ${HEADER}`);
   });
 
   test("permanent_doc_has_dates", () => {
-    // Every answered question carries the date and time of Alex's answer; the open one says so.
-    for (const question of ["Q1", "Q2", "Q4"]) {
-      expect(row(question), question).toMatch(/Answered by Alex 2026-10-03 \d{2}:\d{2}Z/);
-    }
-    expect(row("Q3")).toMatch(/Pending/);
-    expect(ADR).toMatch(/^PERMANENT: changing any value breaks existing users\.$/m);
+    // Each answered question carries the exact time of Alex's answer (book, phase-1.md P1.32 "Answers received").
+    expect(row("Q1")).toContain("Answered by Alex 2026-10-03 11:50Z");
+    expect(row("Q2")).toContain("Answered by Alex 2026-10-03 11:52Z");
+    expect(row("Q4")).toContain("Answered by Alex 2026-10-03 11:47Z");
+    expect(row("Q2")).toContain("Alex only, two sealed offline copies in separate places");
+    // Q3 (the admin RP id) is unanswered, so this record neither names it nor its default; it gets its own ADR.
+    expect(ADR).not.toMatch(/Q3|admin\.int/);
+    expect(ADR.split("\n")).toContain(HEADER);
   });
 });
