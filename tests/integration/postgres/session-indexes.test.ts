@@ -1,5 +1,6 @@
-// P2.03i (infrastructure/postgres/migrations/0012 and 0013): the two app.session indexes exist in this file's
-// database, cloned from the migrated template, so both migrations apply after P2.03x's 0011.
+// P2.03i (infrastructure/postgres/migrations/0012): the app.session `(did)` index exists in this file's database,
+// cloned from the migrated template, so 0012 applies after P2.03x's 0011. The sweep gets no index (architecture record
+// 2026-10-12-p203i-sweep-index): its OR has an unindexed last_seen_at arm.
 import { relative } from "node:path";
 import { afterAll, describe, expect, inject, test } from "vitest";
 import { createPool, withClient } from "../../../infrastructure/postgres/index.ts";
@@ -26,10 +27,6 @@ describe("session indexes", () => {
       return result.rows;
     });
     expect(rows).toEqual([
-      {
-        name: "session_absolute_expires_at",
-        definition: "CREATE INDEX session_absolute_expires_at ON app.session USING btree (absolute_expires_at)",
-      },
       { name: "session_did", definition: "CREATE INDEX session_did ON app.session USING btree (did)" },
       { name: "session_pkey", definition: "CREATE UNIQUE INDEX session_pkey ON app.session USING btree (id_hash)" },
     ]);
