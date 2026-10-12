@@ -1198,9 +1198,8 @@ describe("compose inputs (P1.30a)", () => {
   });
 
   test("compose_variables_in_the_environment_cannot_run", async () => {
-    // Each one but COMPOSE_PROJECT_DIR changes which files or env files Compose reads (compose-go consts.go v2.13.0;
-    // compose cmd/compose/compose.go v5.3.1). No pinned source reads COMPOSE_PROJECT_DIR; it is refused because the
-    // ruling names it, and closes nothing today.
+    // The ruling's names; all but COMPOSE_PROJECT_DIR change which files Compose reads (compose-go consts.go v2.13.0;
+    // compose cmd/compose/compose.go v5.3.1). No pinned source reads COMPOSE_PROJECT_DIR; the prefix covers it anyway.
     const { root, file } = stack();
     for (const name of [
       "COMPOSE_ENV_FILES",
@@ -1208,6 +1207,8 @@ describe("compose inputs (P1.30a)", () => {
       "COMPOSE_PROJECT_DIR",
       "COMPOSE_PROFILES",
       "COMPOSE_DISABLE_ENV_FILE",
+      // Ruling 2026-10-12-preflight-compose-inputs, Amendment 1: the whole COMPOSE_ prefix, not only these five.
+      "COMPOSE_PROJECT_NAME",
     ]) {
       for (const value of [SENTINEL, ""]) {
         const result = await preflight(argv(file), { root, run: fakeRun().run, environment: { [name]: value } });
@@ -1219,7 +1220,8 @@ describe("compose inputs (P1.30a)", () => {
   test("compose_variables_in_the_env_file_cannot_run", async () => {
     // Compose copies every COMPOSE_* key of the env file into its own environment when the shell lacks it
     // (cmd/compose/compose.go setEnvWithDotEnv, v5.3.1 :683-717), so the file can set them as the shell can.
-    for (const name of ["COMPOSE_FILE", "COMPOSE_PROFILES", "COMPOSE_DISABLE_ENV_FILE"]) {
+    // Amendment 1 of the ruling: any COMPOSE_* key, so COMPOSE_PROJECT_NAME too.
+    for (const name of ["COMPOSE_FILE", "COMPOSE_PROFILES", "COMPOSE_DISABLE_ENV_FILE", "COMPOSE_PROJECT_NAME"]) {
       const { root, file } = stack({ dotEnv: `${name}=${SENTINEL}\n` });
       const fromDotEnv = await preflight(argv(file), { root, run: fakeRun().run, environment: {} });
       expect(fromDotEnv, name).toEqual({ code: 2, lines: [`ERROR ${name} is set in the env file`] });

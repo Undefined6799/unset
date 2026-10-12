@@ -130,17 +130,14 @@ function envFileOf(given: string[] | undefined): string | null {
 }
 
 /**
- * Variables that change which compose or env files Compose reads (compose-go consts/consts.go, v2.13.0; Compose
- * cmd/compose/compose.go, v5.3.1). The ruling lists the first four; COMPOSE_DISABLE_ENV_FILE, which drops the .env, is
- * the fifth. No pinned source reads COMPOSE_PROJECT_DIR: it is refused because the ruling names it, and closes nothing.
+ * Compose's own variables: COMPOSE_FILE, COMPOSE_ENV_FILES, COMPOSE_PROFILES and COMPOSE_DISABLE_ENV_FILE change which
+ * compose or env files it reads (compose-go consts/consts.go, v2.13.0; Compose cmd/compose/compose.go, v5.3.1). The
+ * stack uses none of them, so the whole prefix is refused and fails closed on keys a later Compose adds (ruling
+ * 2026-10-12-preflight-compose-inputs, Amendment 1).
  */
-const COMPOSE_VARIABLES = [
-  "COMPOSE_ENV_FILES",
-  "COMPOSE_FILE",
-  "COMPOSE_PROJECT_DIR",
-  "COMPOSE_PROFILES",
-  "COMPOSE_DISABLE_ENV_FILE",
-];
+const COMPOSE_PREFIX = "COMPOSE_";
+const composeNames = (names: Iterable<string>): string[] =>
+  [...names].filter((name) => name.startsWith(COMPOSE_PREFIX));
 
 /** Refuses to run when any of `names` is set, even empty, in the environment; only the name is printed. */
 function refuseWhenSet(names: Iterable<string>, environment: Readonly<Record<string, string | undefined>>): void {
@@ -228,7 +225,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
   const environment = deps.environment ?? process.env;
   const { env, files, envFile } = parseCli(argv);
-  refuseWhenSet(COMPOSE_VARIABLES, environment);
+  refuseWhenSet(composeNames(Object.keys(environment)), environment);
   const { compose, mountedSecrets, interpolated } = loadCompose(files, readText);
   // Compose takes a shell value over the env file (Docker docs, "Interpolation"; compose-go Mapping.Merge).
   refuseWhenSet(interpolated, environment);
@@ -241,8 +238,8 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   if (interpolationFile.length > 0) secretPaths.push(interpolationPath);
   // Compose copies the env file's COMPOSE_* keys into its environment when the shell lacks them (cmd/compose/compose.go
   // setEnvWithDotEnv, v5.3.1 :683-717), so the file must not set them either.
-  const fileNames = new Set(interpolationFile.map(([name]) => name));
-  for (const name of COMPOSE_VARIABLES) if (fileNames.has(name)) throw new CannotRun(`${name} is set in the env file`);
+  const [inFile] = composeNames(interpolationFile.map(([name]) => name));
+  if (inFile !== undefined) throw new CannotRun(`${inFile} is set in the env file`);
   const interpolation = new Map(interpolationFile);
   const resolveValue = (value: EnvValue): string =>
     "literal" in value ? value.literal : (interpolation.get(value.ref) ?? "");
