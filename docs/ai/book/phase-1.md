@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30x, P1.30y, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30x, P1.30y, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -232,6 +232,7 @@ flowchart LR
   P1_29b["P1.29b mirror build stage scanned in full"]
   P1_29u["P1.29u stripped paths and RUN separators fail closed"]
   P1_29c["P1.29c lock records build-stage bases"]
+  P1_29z["P1.29z package-manager test deterministic"]
   P1_29l["P1.29l mirror scans build-stage bases whole"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
@@ -252,6 +253,7 @@ flowchart LR
   P1_30w["P1.30w preflight key allowlist and value scrub"]
   P1_30k["P1.30k compose top-level key allowlist"]
   P1_30m["P1.30m preflight withholds value reasons"]
+  P1_30v["P1.30v withheld marker carries no value"]
   P1_30x["P1.30x compose hardening and limit keys"]
   P1_30y["P1.30y compose build, tmpfs, depends_on, secrets"]
   P1_30u["P1.30u preflight C18 edge zones"]
@@ -360,6 +362,7 @@ flowchart LR
   P1_29v --> P1_29u
   P1_29b --> P1_29c
   P1_29c --> P1_29l
+  P1_29c --> P1_29z
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
@@ -414,6 +417,7 @@ flowchart LR
   P1_30h --> P1_30g
   P1_30w --> P1_30k
   P1_30w --> P1_30m
+  P1_30m --> P1_30v
   P1_30k --> P1_30x
   P1_30k --> P1_30y
   P1_30x --> P1_29
@@ -8373,7 +8377,7 @@ Tags: [SEC]            Depends on: P1.30w (merged, #615)
 Slice 1, issue #622, product (`deployment/preflight/` runner, readers, check templates and their tests), a tightening,
 kind/fix; book edit 2026-10-12-p130m-preflight-withhold (final 05:06Z, amendment 1 05:10Z), from architecture's ruling
 at the end of 2026-10-12-c18-follow-ups ("the runner withholds instead of replacing"). Owner: Phase 1; no line from
-Alex. Independent of P1.30k. Nothing depends on it.
+Alex. Independent of P1.30k. P1.30v depends on it (book edit 2026-10-12-p130v-marker-value-leak).
 
 **What** (architecture's ruling, unchanged):
 - **One run-wide value set** records every value the readers hand out: all SecretMaps, compose `environment` literals
@@ -8392,6 +8396,25 @@ with no value and no template-shaped remainder; C23 prints in full when it holds
 to end through the preflight entry point. Red evidence: each probe leaks with the withhold removed.
 
 Done when every probe is withheld, the reds are shown, and the full suite is green.
+
+---
+
+### P1.30v — Withheld marker never carries a configured value
+Tags: [SEC]            Depends on: P1.30m (merged, #627)
+As built: merged by Alex at 2026-10-12T15:03:24Z as `810f542` (#642).
+Slice 1, issue #641, product (`deployment/preflight/`), a regression fix and a tightening, kind/fix; book edit
+2026-10-12-p130v-marker-value-leak (final 14:56Z), from Codex's P1 finding on #627, which arrived after #627 merged at
+head eaba9e3. Owner: Phase 1, first in its order. No line from Alex.
+
+**What:** a configured value can be a substring of the marker text, for example a value of "withheld" or "missing".
+Then the runner leaves the reason empty instead of printing "reason withheld (it contained a configured value)": it
+rechecks the replacement against the value set before printing it.
+
+**Red fixtures:** configured values "withheld" and "missing"; each prints an empty reason, never the marker. Red
+evidence is captured against eaba9e3. Commit subject and PR title: "P1.30v Leave the reason empty if the marker holds a
+value".
+
+Done when both red fixtures are red without the recheck and green with it, and the full suite is green.
 
 ---
 
@@ -8783,7 +8806,9 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     nit, moving the long doc comment at `package-manager.image.test.ts:298-303` back above the map it describes. Rider
     (amendment 1 of book edit 2026-10-12-p129c-p129l-build-stage-scan): the refusal message at `images.test.ts:841`
     names the refused RUN line as well as the file, taking it from `instructions()`; a red fixture asserts the line
-    appears. P1.29l depends on it.
+    appears. P1.29l depends on it, and so does P1.29z (book edit 2026-10-12-p129z-package-manager-test-flake): the
+    package-manager image test `kind_problems_reader` must pass every run, fixed at its root cause (no timeout bump,
+    retry or skip), with the cause and repeated-run evidence in its PR body.
 15. **P1.29l "Scan build-stage bases whole in the mirror"** ([SEC], check: `.github/workflows/mirror.yml`,
     `scripts/ci/mirror-scan.test.ts`, a tightening, kind/build; issue #605; depends on P1.29c; owner Phase 2 or the
     third lane, not Phase 1 (`.github`); slice 1; same book edit, from architecture's F1 part 2, F2 and F3). For every
