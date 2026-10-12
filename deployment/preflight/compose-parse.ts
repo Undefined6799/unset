@@ -424,9 +424,9 @@ const isString = (node: unknown): boolean => isScalar(node) && typeof node.value
 function cpus(r: Reader, node: unknown): number | null {
   if (node === undefined) return null;
   const text = isScalar(node) && typeof node.value === "number" ? (node as Scalar).source : r.text(node, "cpus");
-  return typeof text === "string" && CPUS.test(text) && Number(text) > 0
-    ? Number(text)
-    : r.fail(node, "cpus is not a positive number");
+  // A decimal of about 310 digits matches CPUS yet reads as Infinity, so the value must be finite as well.
+  const value = typeof text === "string" && CPUS.test(text) ? Number(text) : Number.NaN;
+  return Number.isFinite(value) && value > 0 ? value : r.fail(node, "cpus is not a positive number");
 }
 
 /** A positive integer up to PIDS_MAX; 0 and -1 would mean no limit at all. */

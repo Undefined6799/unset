@@ -195,12 +195,41 @@ describe("compose subset", () => {
       ["    mem_limit: 0m\n", "mem_limit is not a size in m or g"],
       ["    cpus: 0\n", "cpus is not a positive number"],
       ["    cpus: -1\n", "cpus is not a positive number"],
+      // Amendment 6 of 2026-10-12-p204s-p130x-p130y-booked: decimal forms only, so no exponent and no Infinity.
+      ["    cpus: 1e1\n", "cpus is not a positive number"],
+      ['    cpus: "1e1"\n', "cpus is not a positive number"],
+      [`    cpus: ${"1".padEnd(311, "0")}\n`, "cpus is not a positive number"],
+      [`    cpus: "${"1".padEnd(311, "0")}"\n`, "cpus is not a positive number"],
+      [`    cpus: ${"1".padEnd(311, "0")}.5\n`, "cpus is not a positive number"],
+      ["    cap_drop: []\n", "cap_drop is not [ALL]"],
+      ["    mem_limit: 512k\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 512M\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1t\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1b\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1gb\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1G\n", "mem_limit is not a size in m or g"],
       ["    restart: sometimes\n", "restart is not no, on-failure, unless-stopped or always"],
     ]) {
       expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
     }
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
     expect(() => parseCompose(`${base}    user: \${UID}\n`, "c.yaml")).toThrow(new ParseError("c.yaml:5: $ in user"));
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    for (const [yaml, key] of [
+      ['    read_only: "${RO}"\n', "read_only"],
+      ['    cap_drop: ["${C}"]\n', "cap_drop"],
+      ['    cap_add: ["${C}"]\n', "cap_add"],
+      ['    security_opt: ["${S}"]\n', "security_opt"],
+      ["    mem_limit: ${M}\n", "mem_limit"],
+      ["    cpus: ${C}\n", "cpus"],
+      ["    pids_limit: ${P}\n", "pids_limit"],
+      ["    restart: ${R}\n", "restart"],
+    ] as [string, string][]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: $ in ${key}`));
+    }
+    for (const limit of [1, 4096]) {
+      expect(parseCompose(`${base}    pids_limit: ${limit}\n`, "c.yaml").services[0]?.hardening.pidsLimit).toBe(limit);
+    }
   });
   // P1.30y (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 4 in 2026-10-12-batch33-codex-rulings;
   // step book record 2026-10-12-late-codex-640-644): the B1 risk keys, each in one shape. `build` is kept as written
