@@ -85,18 +85,26 @@ export function withCleanup<T>(body: () => T, cleanup: () => void): T {
       throw new TypeError("withCleanup takes a synchronous body, not a promise");
     }
   } catch (failure) {
-    try {
-      cleanup();
-    } catch (cleanupFailure) {
-      throw new AggregateError(
-        [failure, cleanupFailure],
-        `${messageOf(failure)} (cleanup also failed: ${messageOf(cleanupFailure)})`,
-      );
-    }
-    throw failure;
+    failAfterCleanup(failure, cleanup);
   }
   cleanup();
   return result;
+}
+
+/**
+ * Runs `cleanup` after `failure`, then throws `failure`; when the cleanup fails too, both go in one AggregateError with
+ * `failure` first, so the reason the work failed is never replaced. Async callers use it from their own catch.
+ */
+export function failAfterCleanup(failure: unknown, cleanup: () => void): never {
+  try {
+    cleanup();
+  } catch (cleanupFailure) {
+    throw new AggregateError(
+      [failure, cleanupFailure],
+      `${messageOf(failure)} (cleanup also failed: ${messageOf(cleanupFailure)})`,
+    );
+  }
+  throw failure;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
