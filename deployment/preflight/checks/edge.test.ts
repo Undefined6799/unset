@@ -134,6 +134,15 @@ describe("C18 inputs (P1.30u)", () => {
       pass: false,
       reason: "/etc/caddy/sites/enabled is not mounted from inside deployment/edge/",
     });
+    // A link the JavaScript resolver loops on for ever (as text, `x/../en` is en itself) returns, judged where the
+    // kernel puts it: x is d/sub, its real parent d, so d/en.
+    mkdirSync(join(edgeDir, "d", "sub"), { recursive: true });
+    mkdirSync(join(edgeDir, "d", "en"));
+    writeFileSync(join(edgeDir, "d", "en", "x.caddy"), "");
+    symlinkSync("d/sub", join(edgeDir, "dx"));
+    const chased = join(edgeDir, "en");
+    symlinkSync("dx/../en", chased);
+    expect(edgeSitesDir(compose([sitesFrom(chased)]), edgeDir)).toEqual({ dir: join(edgeDir, "d", "en") });
     // A link loop throws ELOOP, which the runner reports as "check error", rather than hanging or reading as missing.
     const loop = join(edgeDir, "loop");
     symlinkSync("loop", loop);
