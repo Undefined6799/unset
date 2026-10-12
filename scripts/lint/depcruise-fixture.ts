@@ -58,16 +58,21 @@ export function target(edge: Edge): string | undefined {
   return edge.spec.startsWith(".") && !edge.unresolved ? posix.join(posix.dirname(edge.from), edge.spec) : undefined;
 }
 
-/** Writes the importing files, every relative target, and a stub package for every bare specifier. */
+/**
+ * Writes the importing files, every relative target once, and a stub package for every bare specifier. Edges from
+ * one file become separate imports in it.
+ */
 export function fixture(edges: Edge[]): string {
   const root = tempDir();
+  const targets = new Set<string>();
   const packages = new Set<string>();
   edges.forEach((edge, n) => {
     write(root, edge.from, importLine(edge, n));
     if (edge.unresolved) return;
     const file = target(edge);
     if (file) {
-      write(root, file, "export const x = 1;\n");
+      if (!targets.has(file)) write(root, file, "export const x = 1;\n");
+      targets.add(file);
     } else if (!edge.spec.startsWith("node:")) {
       packages.add(edge.spec);
     }

@@ -10,12 +10,16 @@ import {
   check,
   config,
   cruiseFixture,
+  cruiseResult,
   DEPCRUISE,
   type Edge,
   edge,
   fixture,
+  outcome,
   ROOT,
+  RULES,
   removeFixtures,
+  target,
   tempDir,
   write,
 } from "./depcruise-fixture.ts";
@@ -32,6 +36,12 @@ async function expectFail(rule: string | null, ...edges: Edge[]): Promise<void> 
     expect(exitCode, `${e.from} → ${e.spec}`).not.toBe(0);
     if (rule) expect(rules, `${e.from} → ${e.spec}`).toContain(rule);
   }
+}
+
+/** The cruise holds the edge as written, resolved unless the fixture left it unresolved on purpose. */
+function cruised(result: ICruiseResult, e: Edge): boolean {
+  const deps = result.modules.find((m) => m.source === e.from)?.dependencies ?? [];
+  return deps.some((d) => (d.protocol ?? "") + d.module === e.spec && d.couldNotResolve === (e.unresolved ?? false));
 }
 
 const FAKE = "infrastructure/arachnid/fingerprint-check.fake.ts";
@@ -399,7 +409,15 @@ describe("boundary rules", () => {
 
 describe("allowlist matrix", () => {
   test("depcruise_allowed_edges", async () => {
-    await expectPass(...Object.values(ROW_FIXTURES).flat());
+    // One cruise over every row edge (P1.30e): one per edge took about 3 s and timed out under full-suite load.
+    const edges = Object.values(ROW_FIXTURES).flat();
+    // A target that is also an importing file would mix two edges' contents in one file.
+    const importers = new Set(edges.map((e) => e.from));
+    expect(edges.map(target).filter((file) => file !== undefined && importers.has(file))).toEqual([]);
+    const result = await cruiseResult(edges, RULES);
+    for (const e of edges) expect(cruised(result, e), `${e.from} → ${e.spec} was not cruised`).toBe(true);
+    if (outcome(result).exitCode !== 0 || outcome(result).rules.length > 0) await expectPass(...edges);
+    expect(outcome(result), "edges that pass alone fail together").toEqual({ exitCode: 0, rules: [] });
   });
 
   test("depcruise_unlisted_edge_fails", async () => {
