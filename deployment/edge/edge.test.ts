@@ -248,7 +248,7 @@ describe("edge config", () => {
     // A second site whose route proxies without the zones; a proxy written straight in a site the reader refuses.
     expect(enable(extra("other.unset.test {\n\troute {\n\t\timport upstream other:80\n\t}\n}\n"))).toEqual([
       "other.unset.test: a literal site address is not loopback",
-      "other.unset.test: a site other than {$PDS_HOST} has an upstream",
+      "other.unset.test: a site other than {$PDS_HOST} or {$APP_HOST} has an upstream",
       "other.unset.test: the route does not apply the zones first",
       "other.unset.test: a reverse_proxy does not name one placeholder upstream",
       "other.unset.test: 0 rate_limit blocks",
@@ -572,12 +572,12 @@ describe("edge site rules (P1.28f)", () => {
     expect(withSites({ "sites/other.caddy": `{$PDS_HOST} {\n${route}}\n` })).toEqual([shared]);
     expect(withSites({ "sites/other.caddy": `other.unset.test {\n${route}}\n` })).toEqual([
       "other.unset.test: a literal site address is not loopback",
-      "other.unset.test: a site other than {$PDS_HOST} has an upstream",
+      "other.unset.test: a site other than {$PDS_HOST} or {$APP_HOST} has an upstream",
       "other.unset.test: {$PDS_UPSTREAM} is outside its position in reverse_proxy",
       shared,
     ]);
     expect(withSites({ "sites/other.caddy": `http://127.0.0.1:8082 {\n\tbind 127.0.0.1\n${route}}\n` })).toEqual([
-      "http://127.0.0.1:8082: a site other than {$PDS_HOST} has an upstream",
+      "http://127.0.0.1:8082: a site other than {$PDS_HOST} or {$APP_HOST} has an upstream",
       "http://127.0.0.1:8082: {$PDS_UPSTREAM} is outside its position in reverse_proxy",
       shared,
     ]);
@@ -825,7 +825,7 @@ describe("edge site rules (P1.28f)", () => {
         `{$PDS_HOST}: {$${name}} is outside its position in bind`,
         `{$PDS_HOST}: {$${name}} is outside its position in @host`,
         `{$${name}}: {$${name}} is not a site address`,
-        `{$${name}}: a site other than {$PDS_HOST} has an upstream`,
+        `{$${name}}: a site other than {$PDS_HOST} or {$APP_HOST} has an upstream`,
         `the global options: {$${name}} is outside its position in log`,
       ]) {
         expect(messages).toContainEqual(expect.stringContaining(expected));
