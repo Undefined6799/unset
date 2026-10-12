@@ -4,9 +4,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { docker, killBefore } from "../../../support/docker.ts";
 import {
   buildEdgeImage,
-  docker,
   EDGE,
   type Edge,
   logsWhen,
@@ -20,6 +20,8 @@ const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 // A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
+// A `docker run` inside one of those tests is killed before the test's own budget, naming the call (P1.27k).
+const RUN_CALL_MS = killBefore(CONTAINER_MS);
 const ADMIN_NSIDS = [
   "com.atproto.admin.getAccountInfo",
   "com.atproto.temp.checkSignupQueue",
@@ -188,7 +190,9 @@ describe("edge", () => {
   });
 
   test("edge_image_plugins_exact", { timeout: CONTAINER_MS }, () => {
-    const modules = docker(["run", "--rm", "--entrypoint", "caddy", image, "list-modules", "--skip-standard"]);
+    const modules = docker(["run", "--rm", "--entrypoint", "caddy", image, "list-modules", "--skip-standard"], {
+      timeoutMs: RUN_CALL_MS,
+    });
     expect(modules.code).toBe(0);
     expect(modules.out.split("\n").filter((line) => /^\S+\.\S+$/.test(line.trim()))).toEqual([
       "http.handlers.rate_limit",
@@ -197,12 +201,15 @@ describe("edge", () => {
 
   test("edge_caddyfile_validates", { timeout: CONTAINER_MS }, () => {
     // The built image with its own files (production tls.caddy included) and the PDS site enabled.
-    const validate = docker([
-      ...["run", "--rm", "--read-only", "--entrypoint", "caddy"],
-      ...["-e", "ACME_EMAIL=edge@unset.test", "-e", "PDS_HOST=pds.unset.test", "-e", "PDS_UPSTREAM=127.0.0.1:9"],
-      ...["-v", `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`],
-      ...[image, "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
-    ]);
+    const validate = docker(
+      [
+        ...["run", "--rm", "--read-only", "--entrypoint", "caddy"],
+        ...["-e", "ACME_EMAIL=edge@unset.test", "-e", "PDS_HOST=pds.unset.test", "-e", "PDS_UPSTREAM=127.0.0.1:9"],
+        ...["-v", `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`],
+        ...[image, "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
+      ],
+      { timeoutMs: RUN_CALL_MS },
+    );
     expect(validate.code, validate.err).toBe(0);
     expect(validate.out).toContain("Valid configuration");
   });
@@ -270,7 +277,7 @@ describe("edge", () => {
     expect(classes).toContain("other");
   });
 
-  test("edge_logs_no_client_address", async () => {
+  test("edge_logs_no_client_address", { timeout: CONTAINER_MS }, async () => {
     const spoofed = { "x-forwarded-for": "203.0.113.9" };
     const [, , , adminApi, health] = await probe("127.0.0.2", [
       { kind: "https", path: "/xrpc/com.atproto.server.createSession", count: 31, headers: spoofed },
@@ -290,9 +297,10 @@ describe("edge", () => {
     expect(stderr).toContain('"status":502');
     expect(stdout).toContain('"status":429');
     for (const address of ["127.0.0.2", "203.0.113.9"]) expect(`${stdout}\n${stderr}`).not.toContain(address);
-    // The probe image is pulled in beforeAll and every new probe connection has a 1 s connect deadline. The test took
-    // at most 581 ms over six local runs (P1.28b PR); 10 s leaves room for a shared CI runner.
-  }, 10_000);
+    // The probe image is pulled in beforeAll and every new probe connection has a 1 s connect deadline; the test took
+    // at most 581 ms over six local runs (P1.28b PR). Its probe is a `docker run` and its log reads are docker calls,
+    // each queued on the one daemon like any other container call, so it gets the same CONTAINER_MS (P1.27k).
+  });
 
   // One test per zone (architecture's values, limits.json): from its own loopback address, every request below the
   // limit passes and the next one gets 429 with Retry-After (the guard against caddy-ratelimit #94). The long-window

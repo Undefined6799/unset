@@ -22,12 +22,18 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { docker, killBefore } from "../../tests/support/docker.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const REPO = join(DEPLOYMENT, "..");
 // A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
+// Each docker call is killed just under the smallest budget of a test that makes it, so a hung daemon fails that test
+// with a named message instead of holding the job (P1.27k): a build under privileges_fixture_image's 300 s, and a
+// create, export or removal under CONTAINER_MS.
+const BUILD_CALL_MS = killBefore(300_000);
+const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8"));
 const lock = json("bases.lock.json") as Record<string, { ref: string; tag: string; digest: string }>;
 /** The same lock-entry-to-kind map images.test.ts reads, so every kind it knows is built and checked here. */
@@ -62,11 +68,6 @@ function kindOf(dockerfile: string): string | undefined {
 /** The images/ Dockerfiles build from the repository root; any other builds from its own folder. */
 const contextOf = (file: string): string => (file.startsWith("images/") ? REPO : join(DEPLOYMENT, dirname(file)));
 
-function docker(args: readonly string[]): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
-}
-
 /**
  * Builds a Dockerfile with its context once per run; the image id. A failed build fails the test, so no kind passes
  * unbuilt.
@@ -75,7 +76,7 @@ function build(dockerfile: string, context: string): string {
   const key = `${dockerfile}\0${context}`;
   const cached = built.get(key);
   if (cached !== undefined) return cached;
-  const result = docker(["build", "-q", "-f", dockerfile, context]);
+  const result = docker(["build", "-q", "-f", dockerfile, context], { timeoutMs: BUILD_CALL_MS });
   if (result.code !== 0) throw new Error(`${dockerfile} build failed: ${result.err.slice(-2000)}`);
   built.set(key, result.out.trim());
   return result.out.trim();
@@ -266,17 +267,17 @@ function readTar(tar: string): Filesystem {
 
 /** Exports an image's filesystem from a container that never starts, and hands it to `use`. */
 function inspect<T>(image: string, use: (filesystem: Filesystem) => T): T {
-  const created = docker(["create", image]);
+  const created = docker(["create", image], { timeoutMs: CONTAINER_CALL_MS });
   if (created.code !== 0) throw new Error(`docker create failed: ${created.err.slice(-2000)}`);
   const container = created.out.trim();
   const dir = mkdtempSync(join(tmpdir(), "image-fs-"));
   const tar = join(dir, "fs.tar");
   try {
-    const exported = docker(["export", "-o", tar, container]);
+    const exported = docker(["export", "-o", tar, container], { timeoutMs: CONTAINER_CALL_MS });
     if (exported.code !== 0) throw new Error(`docker export failed: ${exported.err.slice(-2000)}`);
     return use(readTar(tar));
   } finally {
-    docker(["rm", "-f", container]);
+    docker(["rm", "-f", container], { timeoutMs: CONTAINER_CALL_MS });
     rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -412,7 +413,7 @@ function imagePrivilegeProblems(kind: string, file: string): string[] {
 
 describe("image package managers", () => {
   afterAll(() => {
-    for (const image of new Set(built.values())) docker(["rmi", "-f", image]);
+    for (const image of new Set(built.values())) docker(["rmi", "-f", image], { timeoutMs: CONTAINER_CALL_MS });
   }, CONTAINER_MS);
 
   /** A listing as tar prints it, from [mode, quoted name, verbose suffix] rows: `-tv` lines and `-tf` names. */
