@@ -65,11 +65,9 @@ describe("list dockerfiles", () => {
     expect(listed.map((image) => image.name)).toEqual(walked.map(stem));
     // The book named {edge, node-app} on 2026-10-07. migrate.Dockerfile has since landed, so this
     // checks the live walk. A later Dockerfile is covered without editing this check (SE-6).
-    expect(IGNOREFILES).toEqual({ "node-app": ".github/trivyignore.yaml" });
-    for (const image of listed) {
-      const expected = image.name === "node-app" ? ".github/trivyignore.yaml" : "/dev/null";
-      expect(image.ignorefile, image.name).toBe(expected);
-    }
+    // P1.29v emptied the map: every shipped image is scanned in full. A new entry is a loosening (Alex's card and line).
+    expect(IGNOREFILES).toEqual({});
+    for (const image of listed) expect(image.ignorefile, image.name).toBe("/dev/null");
     const output = join(mkdtempSync(join(tmpdir(), "list-dockerfiles-out-")), "github-output");
     writeFileSync(output, "");
     const cli = runCli(ROOT, output);

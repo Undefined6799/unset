@@ -6,7 +6,8 @@
 // deployment/. realpathSync then refuses a path that resolves outside that directory.
 //
 // Ignore files are this map, never "a <name>.trivyignore beside the Dockerfile". P1.29v
-// empties the map. A later entry is a loosening and needs Alex's card and line.
+// emptied it, so every shipped image is scanned in full. A later entry is a loosening and
+// needs Alex's card and line.
 //
 // The CLI appends one `images=` line to $GITHUB_OUTPUT (GitHub Actions workflow commands:
 // docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands, "Setting an
@@ -21,10 +22,8 @@ const ROOT = join(import.meta.dirname, "..", "..");
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
 const NAME = /^[a-z0-9-]+$/;
 
-/** The only image whose scan reads an ignore file. Every other image gets /dev/null. */
-export const IGNOREFILES: Readonly<Record<string, string>> = {
-  "node-app": ".github/trivyignore.yaml",
-};
+/** Images whose scan reads an ignore file: none. Every image gets /dev/null. */
+export const IGNOREFILES: Readonly<Record<string, string>> = {};
 
 export type ListedImage = { name: string; dockerfile: string; ignorefile: string };
 

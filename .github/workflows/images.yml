@@ -71,14 +71,15 @@ jobs:
           export SOURCE_DATE_EPOCH
           docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
             --build-arg APP="$APP" --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" .
-      # Trivy v0.74.0: HIGH or CRITICAL with a fixed version fails (--ignore-unfixed), unless accepted in
-      # .github/trivyignore.yaml and not expired; a DB download failure or the timeout exits non-zero.
+      # Trivy v0.74.0: HIGH or CRITICAL with a fixed version fails (--ignore-unfixed); a DB download failure or the
+      # timeout exits non-zero. No accepted finding applies (--ignorefile /dev/null): the shipped image is scanned in
+      # full (P1.29v; Alex's card "Skip stripped files", 2026-10-07T18:56:42Z).
       - name: Scan
         if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
-            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile .github/trivyignore.yaml \
+            image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /dev/null \
             --timeout 10m "$APP_IMAGE"
       - name: SBOM
         if: steps.dockerfile.outputs.present == 'true'
