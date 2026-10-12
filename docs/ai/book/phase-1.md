@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -243,6 +243,7 @@ flowchart LR
   P1_30s["P1.30s preflight C13–C24 but C17, C18"]
   P1_30t["P1.30t preflight C17 networks"]
   P1_30r["P1.30r preflight-to-edge row"]
+  P1_30e["P1.30e row edges in one cruise"]
   P1_30u["P1.30u preflight C18 edge zones"]
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
@@ -394,6 +395,7 @@ flowchart LR
   P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_30r --> P1_30u
+  P1_30r --> P1_30e
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
@@ -8090,8 +8092,8 @@ Tags: [SEC] [ALEX]     Depends on: —
 As built: merged by Alex at 2026-10-12T03:16:42Z as `e6022bf` (#588).
 Slice 1, issue #584, check (`scripts/lint/.dependency-cruiser.cjs` and its depcruise test), kind/build; book edit
 2026-10-12-p130r-preflight-edge-depcruise-row (final 03:00Z), split from P1.30u because SE-6 refuses a PR that mixes
-check and product paths, and C18's import fails depcruise until this row is on main. Owner: Phase 2. P1.30u depends on
-it.
+check and product paths, and C18's import fails depcruise until this row is on main. Owner: Phase 2. P1.30u and P1.30e
+depend on it.
 
 **Authority:** Alex's "Allow import" card tap (2026-10-12T02:16:16Z) and his typed "yes ok" (2026-10-12T02:17:33Z). The
 PR body quotes both.
@@ -8105,6 +8107,34 @@ file importing any other edge file, such as another `deployment/edge/*.ts` modul
 non-preflight `deployment/` file importing `caddyfile.ts`.
 
 Done when the fixtures are green, and the full suite is green on main's rules plus the one row.
+
+---
+
+### P1.30e — Cruise all row edges in one pass
+Tags: [SEC]            Depends on: P1.30r (merged, #588)
+Slice 1, issue #600, check (`scripts/lint/depcruise.test.ts`, and `depcruise-fixture.ts` if it needs a multi-edge
+writer), kind/build; book edit 2026-10-12-p130e-depcruise-row-edges-one-cruise (final 03:45Z), from the third lane's
+finding relayed by the coordinator at 03:41Z. Neutral: no rule or assertion changes. Regression class, so it goes first
+in the third lane; scripts/lint is not a classifier path, and it needs no line from Alex. Nothing depends on it.
+
+**Why:** `depcruise.test.ts:401-403` passes every ROW_FIXTURES edge to `expectPass`, and `expectPass` (:25-27) runs one
+dependency-cruiser cruise per edge, one after another. With #588's extra row edge the test takes 2.8–3.2 s alone and
+passed the 5 s default under full-suite CI load on #593 (job 114652099182); main can go red the same way.
+
+**What:**
+- `depcruise_allowed_edges` writes all ROW_FIXTURES edges into one fixture and runs one cruise, expecting
+  `{ exitCode: 0, rules: [] }`. If that fails, it falls back to the per-edge cruises so the message still names the
+  failing edge.
+- Two guards keep the single cruise as strict as N cruises:
+  1. **No collisions:** edges sharing a `from` file go into that one file as separate imports; two edges writing
+     different contents to one path fail the test setup loudly instead of overwriting each other.
+  2. **No vacuous pass:** the cruise's output must contain every edge's `from → resolved` dependency, so a fixture edge
+     that silently did not resolve or was not cruised fails.
+- Other `expectPass` and `expectFail` callers stay as they are. No timeout bump, retry or skip.
+
+Done when the test is green with its time reported before and after in the body, alone and under the full suite; a
+planted bad row edge still fails and names that edge through the fallback (shown once in the body, not committed); and
+the full suite is green.
 
 ---
 

@@ -138,7 +138,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 185 steps: 163 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 186 steps: 164 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -282,6 +282,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28z | Tooling set image-test anchor; depcruise_cruised_nonzero cruises fixed real files, not the whole repo | [SEC] | P1.28p | `phase-1.md` |
 | P1.30c | Specifier cruise test: /proc/self/root spelling and a per-spelling presence guard | [SEC] | — | `phase-1.md` |
 | P1.30r | Depcruise row: deployment/preflight may import deployment/edge/caddyfile.ts only | [SEC] [ALEX] | — | `phase-1.md` |
+| P1.30e | depcruise_allowed_edges cruises all row edges once (collision and coverage guarded; per-edge fallback for messages) | [SEC] | P1.30r | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] [ALEX] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
@@ -489,6 +490,7 @@ flowchart TD
   P1_30s["P1.30s Preflight C13–C24 but C17, C18"]
   P1_30t["P1.30t Preflight C17 networks"]
   P1_30r["P1.30r preflight-to-edge row"]
+  P1_30e["P1.30e row edges in one cruise"]
   P1_30u["P1.30u Preflight C18 edge zones"]
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
@@ -761,6 +763,7 @@ flowchart TD
   P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_30r --> P1_30u
+  P1_30r --> P1_30e
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
