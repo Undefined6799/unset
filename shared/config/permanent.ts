@@ -1,5 +1,6 @@
-// PERMANENT: changing any value breaks existing users (P1.32; docs/human/decisions/0020-permanent-choices.md).
-// Each value is Alex's recorded answer, pinned by permanent.test.ts; a change needs a record superseding ADR 0020.
+// PERMANENT — changing any value breaks existing users.
+// P1.32, docs/human/decisions/0020-permanent-choices.md: each value is Alex's recorded answer, pinned by
+// permanent.test.ts; a change needs a record superseding ADR 0020.
 
 /** The Matrix `server_name`, part of every MXID forever (Q1, Alex 2026-10-03 11:50Z). */
 export const MATRIX_SERVER_NAME = "unset.sh";
