@@ -37,7 +37,7 @@ jobs:
     env:
       # The notes guard's code-moved rule diffs BASE_SHA...HEAD; a missing base fails it (P0.09d).
       BASE_SHA: ${{ github.event.before }}
-      RENOVATE_IMAGE: renovate/renovate:44.126.1@sha256:a49e9555e14cf51018cc819a45e15022b9151c601eb44141a18be5080701c352
+      RENOVATE_IMAGE: renovate/renovate:44.134.3@sha256:e6080ca2e19263106f51bfcea4c8aaacf14da7f74b71265c1ccff362f5784b94
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
