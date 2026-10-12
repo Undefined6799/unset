@@ -637,16 +637,19 @@ describe("preflight", () => {
     expect((await viaParent("../../unset-dev-env", "x/../unset-dev-secrets", decoy)).lines).toContain(
       "FAIL C9 pds binds a path that reaches the secrets folder",
     );
-    // A link the JavaScript resolver chases forever: refused, not hung.
+    // A link the JavaScript resolver chases for ever: as text, `x/../imgs` is imgs itself, so it loops; the kernel
+    // follows x to data/sub, takes its real parent and finds data/imgs. The bind is judged there and returns.
     const s = stack({ compose: binding("./imgs") });
-    symlinkSync("/", join(s.root, "deployment/x"));
+    mkdirSync(join(s.root, "deployment/data/sub"), { recursive: true });
+    mkdirSync(join(s.root, "deployment/data/imgs"));
+    symlinkSync("data/sub", join(s.root, "deployment/x"));
     symlinkSync("x/../imgs", join(s.root, "deployment/imgs"));
     const chased = await preflight(["--env", "prod", "--compose", s.file], {
       root: s.root,
       run: fakeRun().run,
       ...fakeFs(s.root),
     });
-    expect(chased.lines.find((l) => l.startsWith("FAIL C9"))).toBe("FAIL C9 pds binds a path that does not exist");
+    expect(failed(chased.lines)).not.toContain("C9");
     // A link the kernel itself cannot resolve (ELOOP) fails the check.
     const kernelLoop = stack({ compose: binding("./imgs") });
     mkdirSync(join(kernelLoop.root, "deployment/sub"));

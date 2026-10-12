@@ -28,5 +28,5 @@ and `HOME`.
 `deployment/preflight/stack.ts` (P1.27w), the one way to start the dev stack, calls the preflight in that form and also
 sets an empty `NODE_OPTIONS` for both children; `stack.test.ts` spawns the hook case with only `PATH` and `HOME`.
 
-Re-checked at P1.27u (#700), which changed `index.ts` only in how it resolves real paths; the flag parsing
-and the three rules above are unchanged.
+Re-checked at P1.27u (#700), which changed `index.ts`'s real-path resolution, its usage text and its `readlink`
+and `statfs` deps; the flag parsing and the three rules above are unchanged.

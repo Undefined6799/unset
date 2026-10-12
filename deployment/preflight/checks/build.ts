@@ -15,7 +15,10 @@ const NAME = /^[a-z0-9-]+$/;
 const imageName = (path: string): string =>
   basename(path) === "Dockerfile" ? basename(dirname(path)) : basename(path).replace(/\.Dockerfile$/, "");
 
-/** realpath(3), like index.ts's, so a link through `x/..` is judged where the kernel puts it (verifier B3 on #700). */
+/**
+ * realpath(3), so a link through `x/..` is judged where the kernel puts it (verifier B3 on #700). Unlike index.ts's,
+ * every error reads as null, so a Dockerfile whose real path cannot be found counts as not scanned (fails closed).
+ */
 const realpathOrNull = (path: string): string | null => {
   try {
     return realpathSync.native(path);
