@@ -34,3 +34,5 @@ Re-checked at P1.27u (#700), which changed `index.ts`'s real-path resolution, it
 and `statfs` deps; the flag parsing and the three rules above are unchanged.
 Re-checked at P1.34p (#704), which reads env files through an `O_NOFOLLOW|O_NONBLOCK` descriptor; the rules
 above still hold, and the reader never loads a file into a Node process.
+P1.34s lists the wrapper's own flags in `WRAPPER_OPTIONS`, and `stack.test.ts` bans any starting `env-file`, `require`
+or `import`, as `cli.test.ts` does for the preflight's.

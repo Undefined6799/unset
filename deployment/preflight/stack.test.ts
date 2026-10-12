@@ -1,30 +1,88 @@
 // P1.27w: the dev stack wrapper (deployment/preflight/stack.ts). Its process runner is the one double; nothing here starts Docker.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  type Stats,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import type { WalkInputs } from "./checks/secrets.ts";
 import {
   CHILD_ENV_NAMES,
   childEnv,
   DEFAULT_DOCKER_HOST,
   DOCKER_INFO_DEADLINE_MS,
   localDockerHost,
+  main,
   plan as planStack,
+  processRunner,
   type Runner,
   run,
   StackError,
   UsageError,
+  WRAPPER_OPTIONS,
 } from "./stack.ts";
 
-// The wrapper's file-system and process doubles: every socket path is a socket, and the daemon names this host.
-const SOCKET = (): boolean => true;
+/** One entry of the fake host's file system: what lstat reports for it, and a link's target. */
+type Entry = { kind: "dir" | "file" | "link" | "socket"; uid?: number; mode?: number; nlink?: number; target?: string };
+const DEPLOY_UID = 4242;
+/** A host file system for the socket walk (P1.34s): only the listed paths exist; /proc is procfs. */
+function fakeHost(entries: Readonly<Record<string, Entry>>): WalkInputs {
+  const stats = ({ kind, uid = 0, mode = 0o755, nlink = 1 }: Entry) =>
+    ({
+      uid,
+      mode,
+      nlink,
+      isDirectory: () => kind === "dir",
+      isFile: () => kind === "file",
+      isSymbolicLink: () => kind === "link",
+      isSocket: () => kind === "socket",
+    }) as unknown as Stats;
+  return {
+    lstat: (path) => (entries[path] === undefined ? null : stats(entries[path])),
+    readlink: (path) => {
+      const target = entries[path]?.target;
+      if (target === undefined) throw new Error("not a link");
+      return target;
+    },
+    statfs: (path) => ({ type: path === "/proc" || path.startsWith("/proc/") ? 0x9fa0 : 0xef53 }),
+    uid: DEPLOY_UID,
+  };
+}
+const DIR: Entry = { kind: "dir" };
+const SOCK: Entry = { kind: "socket", mode: 0o660 };
+// A Debian host: /var/run links to /run (as root), the root daemon's socket, a rootless daemon's under the deploy user.
+// The fake's lstat does not follow a link part way, so a path through /var/run is listed where it lands as well.
+const HOST: Record<string, Entry> = {
+  "/": DIR,
+  "/var": DIR,
+  "/var/run": { kind: "link", target: "/run" },
+  "/var/run/docker.sock": SOCK,
+  "/run": DIR,
+  "/run/docker.sock": SOCK,
+  "/run/user": DIR,
+  [`/run/user/${DEPLOY_UID}`]: { kind: "dir", uid: DEPLOY_UID, mode: 0o700 },
+  [`/run/user/${DEPLOY_UID}/docker.sock`]: { ...SOCK, uid: DEPLOY_UID },
+};
+
+// The wrapper's file-system and process doubles: the host above, and a daemon that names this host.
+const SOCKET = fakeHost(HOST);
 const plan = (argv: string[], from: Readonly<Record<string, string | undefined>>) => planStack(argv, from, SOCKET);
-const HOST = "devbox";
-const runner = (spawn: (file: string) => number | null, daemon = `Debian GNU/Linux 13 (trixie)|${HOST}`): Runner => ({
+const MACHINE = "devbox";
+const runner = (
+  spawn: (file: string) => number | null,
+  daemon = `Debian GNU/Linux 13 (trixie)|${MACHINE}`,
+): Runner => ({
   spawn: (file) => ({ status: spawn(file), signal: null }),
   capture: () => ({ status: 0, signal: null, stdout: `${daemon}\n` }),
-  hostname: HOST,
+  hostname: MACHINE,
 });
 
 const COMPOSE = ["--compose", "deployment/compose.dev.yaml"];
@@ -123,7 +181,10 @@ describe("stack wrapper (P1.27w)", () => {
       symlinkSync(join(dir, "real"), join(dir, "link"));
       const code = `import { plan } from ${JSON.stringify(join(import.meta.dirname, "stack.ts"))};
         const argv = ["up", "--env", "dev", "--compose", "compose.yaml", "--interpolation-env", "dev.env"];
-        process.stdout.write(JSON.stringify(plan(argv, {}, () => true).commands.map((c) => c.args)));`;
+        const dir = { isDirectory: () => true, isSymbolicLink: () => false, isSocket: () => false, uid: 0, mode: 0o755 };
+        const host = { lstat: (p) => p.endsWith(".sock") ? { ...dir, isDirectory: () => false, isSocket: () => true, nlink: 1 } : dir,
+          readlink: () => "", statfs: () => ({ type: 0 }), uid: 0 };
+        process.stdout.write(JSON.stringify(plan(argv, {}, host).commands.map((c) => c.args)));`;
       const out = spawnSync(process.execPath, ["--input-type=module", "-e", code], {
         cwd: join(dir, "link"),
         env: { PATH: process.env.PATH ?? "", HOME: dir, PWD: join(dir, "link") },
@@ -149,7 +210,7 @@ describe("stack wrapper (P1.27w)", () => {
     );
     expect(code).toBe(1);
     expect(ran).toEqual([process.execPath]);
-    // A child killed by a signal has no status; that stops the run too.
+    // A child that ends with neither a status nor a signal stops the run too.
     expect(
       run(
         plan(UP, {}),
@@ -185,8 +246,8 @@ describe("stack wrapper (P1.27w)", () => {
       ["down", "extra", "--env", "dev", ...COMPOSE, ...ENV_FILE],
       [...UP, "--project-directory", "/tmp"],
       [...UP, "--project-directory=/tmp"],
-      // The wrapper's own CLI takes no flag Node would also read (Amendment 3).
-      ["up", "--env", "dev", ...COMPOSE, "--env-file", "deployment/env/dev.env"],
+      // An unknown flag; the_wrapper_takes_no_flag_node_also_reads covers the flags Node reads.
+      [...UP, "--force-recreate"],
     ]) {
       expect(() => plan(argv, {}), argv.join(" ")).toThrow(UsageError);
     }
@@ -250,13 +311,13 @@ describe("stack wrapper (P1.27w)", () => {
       expect(() => planStack(UP, { DOCKER_HOST: host }, SOCKET), host).toThrow(UsageError);
     }
     // A unix path that is not a socket (a plain file, a missing path) is refused the same way.
-    expect(() => localDockerHost({ DOCKER_HOST: "unix:///tmp/not-a-socket" }, () => false)).toThrow(UsageError);
+    expect(() => localDockerHost({ DOCKER_HOST: "unix:///run/not-a-socket" }, SOCKET)).toThrow(UsageError);
     // Unset means the local root daemon, and a rootless socket is accepted; both children get the value set.
     expect(plan(UP, {}).env.DOCKER_HOST).toBe(DEFAULT_DOCKER_HOST);
-    expect(plan(DOWN, { DOCKER_HOST: "unix:///run/user/1000/docker.sock" }).env.DOCKER_HOST).toBe(
-      "unix:///run/user/1000/docker.sock",
+    expect(plan(DOWN, { DOCKER_HOST: `unix:///run/user/${DEPLOY_UID}/docker.sock` }).env.DOCKER_HOST).toBe(
+      `unix:///run/user/${DEPLOY_UID}/docker.sock`,
     );
-    // The real check is lstat: a regular file at the path is not a socket.
+    // By default the walk reads this machine: a temporary folder is sticky or the test user's, and a file is no socket.
     const dir = mkdtempSync(join(tmpdir(), "stack-"));
     try {
       writeFileSync(join(dir, "docker.sock"), "");
@@ -283,14 +344,14 @@ describe("stack wrapper (P1.27w)", () => {
     expect(ran).toEqual([]);
     // The question goes through the children's own environment.
     let asked: Record<string, string> = {};
-    run(plan(UP, { DOCKER_HOST: "unix:///run/user/1000/docker.sock" }), {
+    run(plan(UP, { DOCKER_HOST: `unix:///run/user/${DEPLOY_UID}/docker.sock` }), {
       ...runner(record),
       capture: (_file, _args, env) => {
         asked = env;
-        return { status: 0, signal: null, stdout: `x|${HOST}` };
+        return { status: 0, signal: null, stdout: `x|${MACHINE}` };
       },
     });
-    expect(asked.DOCKER_HOST).toBe("unix:///run/user/1000/docker.sock");
+    expect(asked.DOCKER_HOST).toBe(`unix:///run/user/${DEPLOY_UID}/docker.sock`);
   });
 
   test.runIf(spawnSync("docker", ["version"], { stdio: "ignore" }).status === 0 || process.env.CI)(
@@ -324,9 +385,16 @@ describe("stack wrapper (P1.27w)", () => {
   });
 
   test("the_wrapper_takes_no_flag_node_also_reads", () => {
-    // Amendment 3 item 2: no --env-file*, --require or --import, so a caller's `node stack.ts …` never hands Node one.
+    // Amendment 3 item 2: no --env-file*, --require* or --import*, so a caller's `node stack.ts …` never hands Node one.
+    // The accepted flags are listed, and none starts with a banned prefix (P1.34s, nit 1, as cli.test.ts does).
+    const names = Object.keys(WRAPPER_OPTIONS);
+    expect(names).toEqual(["env", "compose", "interpolation-env"]);
+    for (const name of names) expect(name, name).not.toMatch(/^(env-file|require|import)/);
     // Each is added to an otherwise valid command, so only the flag itself can be why it is refused.
     for (const flag of [
+      ["--env-file-dir", "x"],
+      ["--import-map", "x.json"],
+      ["--require-module", "x.cjs"],
       ["--env-file", "x.env"],
       ["--env-file=x.env"],
       ["--env-file-if-exists", "x.env"],
@@ -345,7 +413,8 @@ describe("stack wrapper (P1.27w)", () => {
       ...runner(() => 0),
       spawn: () => ({ status: null, signal: null, error: new Error("ENOENT") }),
     };
-    expect(() => run(plan(UP, {}), missing)).toThrow(new StackError(`${process.execPath} could not be started`));
+    // A reason names the program by a fixed label, never a path (P1.34s, nit 4).
+    expect(() => run(plan(UP, {}), missing)).toThrow(new StackError("the preflight could not be started"));
     const killed: Runner = { ...runner(() => 0), spawn: () => ({ status: null, signal: "SIGKILL" }) };
     expect(() => run(plan(DOWN, {}), killed)).toThrow(new StackError("docker was stopped by SIGKILL"));
     const noDocker: Runner = {
@@ -356,7 +425,7 @@ describe("stack wrapper (P1.27w)", () => {
   });
 
   test("docker_info_has_a_deadline", () => {
-    // RE-1: the daemon question is bounded; a timed-out spawnSync kills the child and reports a signal.
+    // RE-1: the daemon question is bounded, and a timeout is named as one (P1.34s, nit 3).
     expect(DOCKER_INFO_DEADLINE_MS).toBeGreaterThan(0);
     expect(DOCKER_INFO_DEADLINE_MS).toBeLessThanOrEqual(30_000);
     let deadline: number | undefined;
@@ -364,11 +433,160 @@ describe("stack wrapper (P1.27w)", () => {
       ...runner(() => 0),
       capture: (_file, _args, _env, timeoutMs) => {
         deadline = timeoutMs;
-        return { status: 0, signal: null, stdout: `x|${HOST}` };
+        return { status: 0, signal: null, stdout: `x|${MACHINE}` };
       },
     });
     expect(deadline).toBe(DOCKER_INFO_DEADLINE_MS);
-    const slow: Runner = { ...runner(() => 0), capture: () => ({ status: null, signal: "SIGTERM", stdout: "" }) };
-    expect(() => run(plan(UP, {}), slow)).toThrow(new StackError("docker was stopped by SIGTERM"));
+    const timedOut = Object.assign(new Error("spawnSync docker ETIMEDOUT"), { code: "ETIMEDOUT" });
+    const slow: Runner = {
+      ...runner(() => 0),
+      capture: () => ({ status: null, signal: "SIGKILL", stdout: "", error: timedOut }),
+    };
+    expect(() => run(plan(UP, {}), slow)).toThrow(new StackError("docker did not answer in time"));
+  });
+
+  test("the_socket_and_its_folder_are_only_root_or_the_deploy_user_s", () => {
+    // P1.34s (architecture record 2026-10-12-workspace-imports-and-remote-daemon, Amendment 3): the socket's folder
+    // passes resolveChecked unchanged, and the socket is a socket, not a link, root's or the deploy user's, nlink 1.
+    const host = (DOCKER_HOST: string, extra: Record<string, Entry> = {}) =>
+      localDockerHost({ DOCKER_HOST }, fakeHost({ ...HOST, ...extra }));
+    expect(host(DEFAULT_DOCKER_HOST)).toBe(DEFAULT_DOCKER_HOST);
+    expect(host("unix:///run/docker.sock")).toBe("unix:///run/docker.sock");
+    const rootless = `unix:///run/user/${DEPLOY_UID}/docker.sock`;
+    expect(host(rootless)).toBe(rootless);
+    const refused = (reason: string) => new UsageError(`DOCKER_HOST must be a Docker socket on this machine${reason}`);
+    const changeable = refused(": its folder is a path that another user can change");
+    for (const [name, DOCKER_HOST, extra, reason] of [
+      [
+        "sticky /tmp",
+        "unix:///tmp/docker.sock",
+        { "/tmp": { kind: "dir", mode: 0o1777 }, "/tmp/docker.sock": SOCK },
+        changeable,
+      ],
+      [
+        "another user's folder",
+        "unix:///run/user/7/docker.sock",
+        { "/run/user/7": { kind: "dir", uid: 7, mode: 0o700 }, "/run/user/7/docker.sock": SOCK },
+        changeable,
+      ],
+      [
+        "a link another user owns",
+        "unix:///srv/d/docker.sock",
+        { "/srv": DIR, "/srv/d": { kind: "link", uid: 7, target: "/run" }, "/srv/d/docker.sock": SOCK },
+        changeable,
+      ],
+      [
+        "a link into a writable folder",
+        "unix:///srv/d/docker.sock",
+        {
+          "/srv": DIR,
+          "/srv/d": { kind: "link", target: "/tmp" },
+          "/tmp": { kind: "dir", mode: 0o1777 },
+          "/srv/d/docker.sock": SOCK,
+        },
+        changeable,
+      ],
+      [
+        "under /proc",
+        "unix:///proc/1/root/run/docker.sock",
+        {
+          "/proc": DIR,
+          "/proc/1": DIR,
+          "/proc/1/root": DIR,
+          "/proc/1/root/run": DIR,
+          "/proc/1/root/run/docker.sock": SOCK,
+        },
+        refused(": its folder is a path under /proc"),
+      ],
+      [
+        "another user's socket",
+        "unix:///run/docker.sock",
+        { "/run/docker.sock": { ...SOCK, uid: 7 } },
+        refused(": another user owns it"),
+      ],
+      [
+        "a second hard link",
+        "unix:///run/docker.sock",
+        { "/run/docker.sock": { ...SOCK, nlink: 2 } },
+        refused(": it has another name (a hard link)"),
+      ],
+      [
+        "a link as the socket",
+        "unix:///run/docker.sock",
+        { "/run/docker.sock": { kind: "link", target: "/run/real.sock" }, "/run/real.sock": SOCK },
+        refused(": it is a link, not the socket"),
+      ],
+      ["a regular file", "unix:///run/docker.sock", { "/run/docker.sock": { kind: "file" } }, refused("")],
+      ["nothing there", "unix:///run/absent.sock", {}, refused("")],
+    ] as const) {
+      expect(() => host(DOCKER_HOST, extra as Record<string, Entry>), name).toThrow(reason);
+    }
+    // No reason echoes the value.
+    expect(() => host("unix:///tmp/secret-name.sock", { "/tmp": { kind: "dir", mode: 0o1777 } })).not.toThrow(/secret/);
+  });
+
+  test("real_children_report_missing_killed_and_timed_out", () => {
+    // P1.34s, nit 2: the process runner itself, with real children and no double. A child past its deadline is killed
+    // with SIGKILL even when it traps SIGTERM, and reported as a timeout (Node v26.10.0: ETIMEDOUT, signal SIGKILL).
+    const env = { PATH: process.env.PATH ?? "", HOME: tmpdir() };
+    const node = (code: string) => [process.execPath, ["-e", code]] as const;
+    expect(processRunner.spawn("/nonexistent/docker", [], env).error).toBeDefined();
+    expect(processRunner.capture("/nonexistent/docker", [], env, 1_000).error).toBeDefined();
+    const [file, args] = node("process.kill(process.pid, 'SIGKILL')");
+    expect(processRunner.spawn(file, [...args], env)).toMatchObject({ status: null, signal: "SIGKILL" });
+    const started = Date.now();
+    const [slow, slowArgs] = node("process.on('SIGTERM', () => {}); setTimeout(() => {}, 20_000)");
+    const late = processRunner.capture(slow, [...slowArgs], env, 300);
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(late.signal).toBe("SIGKILL");
+    expect((late.error as NodeJS.ErrnoException | undefined)?.code).toBe("ETIMEDOUT");
+    const [ok, okArgs] = node("process.stdout.write('x|y')");
+    expect(processRunner.capture(ok, [...okArgs], env, 5_000)).toMatchObject({
+      status: 0,
+      signal: null,
+      stdout: "x|y",
+    });
+  });
+
+  test("main_prints_one_fixed_line_and_exits_2", () => {
+    // P1.34s, nit 2: a refusal or a failed child is one line on stderr and exit 2; a run that passes exits 0.
+    const lines: string[] = [];
+    const write = (line: string) => lines.push(line);
+    expect(
+      main(
+        ["restart"],
+        {},
+        runner(() => 0),
+        write,
+        SOCKET,
+      ),
+    ).toBe(2);
+    expect(
+      main(UP, {}, { ...runner(() => 0), spawn: () => ({ status: null, signal: "SIGTERM" }) }, write, SOCKET),
+    ).toBe(2);
+    expect(lines).toEqual(["stack: the action is up or down\n", "stack: the preflight was stopped by SIGTERM\n"]);
+    expect(
+      main(
+        UP,
+        {},
+        runner(() => 0),
+        write,
+        SOCKET,
+      ),
+    ).toBe(0);
+    expect(() =>
+      main(
+        UP,
+        {},
+        {
+          ...runner(() => 0),
+          spawn: () => {
+            throw new RangeError("bug");
+          },
+        },
+        write,
+        SOCKET,
+      ),
+    ).toThrow(RangeError);
   });
 });
