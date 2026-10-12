@@ -322,7 +322,7 @@ describe("compose subset", () => {
       ['    build: {context: "..#main", dockerfile: Dockerfile}\n', "build context is not a local path"],
       // Architecture's compose-inputs ruling (step book record 2026-10-12-p130a-p130l-compose-inputs-booked): no `~`.
       ["    build: {context: ~/unset, dockerfile: Dockerfile}\n", "build context is not a local path"],
-      ["    build: {context: .., dockerfile: ~/x.Dockerfile}\n", "build dockerfile starts with ~"],
+      ["    build: {context: .., dockerfile: ~/x.Dockerfile}\n", "build dockerfile: a leading ~ or a $ is refused"],
       ["    tmpfs: [/etc/caddy/snippets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: [/run/secrets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: /tmp\n", "tmpfs is not a list"],
@@ -566,9 +566,15 @@ const COMPOSE_TEST_MS = 60_000;
 /** Whether `docker compose` runs here; CI must have it (the architecture record's anti-drift test runs there). */
 const hasCompose = docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
 
-/** `docker compose version --short`, recorded by each agreement test (ruling F4: CI's Compose is accepted, not pinned). */
-const composeVersion = (): string =>
-  docker(["compose", "version", "--short"], { timeoutMs: COMPOSE_CALL_MS }).out.trim();
+/**
+ * `docker compose version --short`, recorded by each agreement test (ruling F4: CI's Compose is accepted, not pinned).
+ * A failed call throws rather than recording an empty version (#677 verifier N-A).
+ */
+function composeVersion(): string {
+  const ran = docker(["compose", "version", "--short"], { timeoutMs: COMPOSE_CALL_MS });
+  if (ran.code !== 0) throw new Error(`docker compose version exited ${ran.code}`);
+  return ran.out.trim();
+}
 
 /** The only variables the wrapper passes to Compose (ruling F3.3), from this process where set. */
 function allowlisted(): Record<string, string> {

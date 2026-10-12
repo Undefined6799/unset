@@ -349,10 +349,8 @@ function build(r: Reader, node: unknown): Build | null {
   if (context === undefined || dockerfile === undefined) return r.fail(node, "build is not {context, dockerfile}");
   const contextText = r.text(context, "build context");
   if (!LOCAL_CONTEXT.test(contextText)) r.fail(context, "build context is not a local path");
-  const dockerfileText = r.text(dockerfile, "build dockerfile");
-  // A leading ~ may name a home directory rather than a path under the context, so it is refused, not guessed.
-  if (dockerfileText.startsWith("~")) r.fail(dockerfile, "build dockerfile starts with ~");
-  return { context: contextText, dockerfile: dockerfileText };
+  // A leading ~ may name a home directory rather than a path under the context, so r.path refuses it, not guesses.
+  return { context: contextText, dockerfile: r.path(dockerfile, "build dockerfile") };
 }
 
 /**

@@ -77,4 +77,13 @@ describe("preflight CLI", () => {
     expect(await preflight([...args, "--"], deps)).toEqual(usage);
     expect(await preflight([...args, "--env-file", join(dir, "deploy.env")], deps)).toEqual(usage);
   });
+
+  test("usage_names_absolute_paths", async () => {
+    // Every path flag takes only an absolute, normalised path (#689, #677), so the usage line says so (#677 N-D).
+    const deps = { root: dir, run: async () => ({ code: 0, stdout: "", stderr: "" }), environment: {}, checks: [] };
+    expect((await preflight(["--bogus"], deps)).lines).toEqual([
+      "ERROR usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...] " +
+        "[--interpolation-env <absolute file>]",
+    ]);
+  });
 });
