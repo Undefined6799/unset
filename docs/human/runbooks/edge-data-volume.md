@@ -12,7 +12,12 @@ they do on Docker 29.8.2. A volume created from an older edge image keeps the ol
 
 ## Steps
 
-1. Stop the edge, find the volume mounted at its `/data` (`docker volume ls`), and remove it with `docker volume rm`.
-2. Start the edge again. Docker seeds a fresh volume from the image, and Caddy issues new certificates on start.
+1. Find the volume mounted at the edge's `/data` with
+   `docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' <edge container>`
+   (`docker volume ls` lists volumes but not where they are mounted).
+2. Remove the edge container, not just stop it (`docker rm -f <edge container>`, or `docker compose rm -sf edge`):
+   `docker volume rm` refuses a volume that any container, stopped ones included, still uses.
+3. Remove the volume with `docker volume rm <volume>`.
+4. Start the edge again. Docker seeds a fresh volume from the image, and Caddy issues new certificates on start.
 
 Each re-issue counts against Let's Encrypt's rate limits, so do this once per volume, not on every deploy.

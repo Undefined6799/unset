@@ -229,6 +229,11 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
     await closeStub();
   };
   try {
+    // Created here, labelled like the container, so a volume a killed run leaks can be found by its owner label.
+    const created = docker(["volume", "create", "--label", `${OWNER_LABEL}=${process.pid}`, dataVolume], {
+      timeoutMs: callMs,
+    });
+    if (created.code !== 0) throw new Error(`docker volume create failed: ${created.err.trim()}`);
     const run = docker(
       [
         "run",
