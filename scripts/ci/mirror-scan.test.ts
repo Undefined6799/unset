@@ -5,8 +5,9 @@
 // answers from a findings table, on mirror lists written here (generated, because a real digest is long hex). The
 // shipped-image jobs in images.yml are only asserted.
 //
-// P1.29v: an entry whose lock entry declares `stripped` paths is scanned without them, because every final stage on
-// that base deletes them (stripped_paths_removed_in_every_final_stage) and the shipped image is scanned in full.
+// P1.29v: a runtime entry whose lock entry declares `stripped` paths is scanned without them, because every final
+// stage on that base deletes them (stripped_paths_removed_in_every_final_stage) and the shipped image is scanned in
+// full. P1.29b: a build-only entry is scanned in full, its declared paths included.
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -223,23 +224,26 @@ describe("mirror scan per stage", () => {
     // A declared path skips only on its own entry: the same file in a base that declares nothing still fails.
     const other = scan(entries, [[SOURCE.builder, "CRITICAL", gosu.slice(1)]], lock);
     expect(other.code).not.toBe(0);
-    // A build-only entry skips its declared paths in the HIGH report run as well as in the failing run.
-    const builderBase = { ref: "docker.io/library/b", tag: "1", digest: `sha256:${"1".repeat(64)}`, stripped: [npm] };
-    const builder = `${builderBase.ref}:${builderBase.tag}@${builderBase.digest}`;
-    const build = scan([{ source: builder, stage: "build" }], [[builder, "HIGH", `${npm.slice(1)}/package.json`]], {
-      builderBase,
-    });
-    expect(build.code, build.out).toBe(0);
-    expect(build.out).not.toContain("::warning");
-    expect(build.skips).toEqual([
-      `${builder} dirs=${npm.slice(1)} files=${npm.slice(1)}`,
-      `${builder} dirs=${npm.slice(1)} files=${npm.slice(1)}`,
-    ]);
     // The lock is read, never optional: a missing lock, or one that is not an object, fails before anything is scanned.
     for (const absent of [null, []]) {
       const missing = scan(entries, [], absent);
       expect(missing.code).not.toBe(0);
       expect(missing.calls).toEqual([]);
     }
+  });
+  test("mirror_scan_build_stage_scans_whole_base", () => {
+    // P1.29b (architecture ruling 1, 2026-10-12): a build-only base is scanned in full, its lock's `stripped` paths
+    // included, in the HIGH report run and in the failing CRITICAL run; only the runtime-stage run skips them.
+    const npm = "/usr/local/lib/node_modules/npm";
+    const builderBase = { ref: "docker.io/library/b", tag: "1", digest: `sha256:${"1".repeat(64)}`, stripped: [npm] };
+    const builder = `${builderBase.ref}:${builderBase.tag}@${builderBase.digest}`;
+    const lock = { builderBase };
+    const entries = [{ source: builder, stage: "build" }];
+    const high = scan(entries, [[builder, "HIGH", `${npm.slice(1)}/package.json`]], lock);
+    expect(high.code, high.out).toBe(0);
+    expect(high.out).toContain(`::warning title=mirror::HIGH findings in build-only base ${builder}`);
+    expect(high.skips).toEqual([`${builder} dirs= files=`, `${builder} dirs= files=`]);
+    const critical = scan(entries, [[builder, "CRITICAL", `${npm.slice(1)}/package.json`]], lock);
+    expect(critical.code).not.toBe(0);
   });
 });

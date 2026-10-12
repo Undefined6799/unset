@@ -54,18 +54,21 @@ jobs:
           # finds anything at --severity, so exit 2 below means HIGH findings and any other non-zero is a failure.
           while IFS=$'\t' read -r source stage; do
             case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
-            # P1.29v (Alex's card "Skip stripped files", 2026-10-07T18:56:42Z): the paths this entry's lock entry
+            # P1.29v (Alex's card "Skip stripped files", 2026-10-07T18:56:42Z): the paths a runtime entry's lock entry
             # declares `stripped` are left out of its scan, because every final stage on the base deletes them
             # (stripped_paths_removed_in_every_final_stage) and each shipped image is scanned in full (images.yml).
-            # Trivy v0.75.0 skips a directory's contents only through --skip-dirs and a file only through --skip-files
-            # (pkg/fanal/walker/tar.go:66-81), so each path is passed to both. The lock's paths are literal, absolute
-            # and free of glob characters (STRIPPED_PATH in deployment/images/images.test.ts).
-            stripped="$(jq -r --arg source "$source" \
-              '.[] | select("\(.ref):\(.tag)@\(.digest)" == $source) | .stripped // [] | .[]' "$BASES_LOCK")"
+            # P1.29b: a build-only entry is scanned in full, its declared paths included, because a build stage runs
+            # them before they are deleted. Trivy v0.75.0 skips a directory's contents only through --skip-dirs and a
+            # file only through --skip-files (pkg/fanal/walker/tar.go:66-81), so each path is passed to both. The
+            # lock's paths are literal, absolute and free of glob characters (STRIPPED_PATH in images.test.ts).
             skip=()
-            while IFS= read -r path; do
-              if [ -n "$path" ]; then skip+=(--skip-dirs "$path" --skip-files "$path"); fi
-            done <<< "$stripped"
+            if [ "$stage" = runtime ]; then
+              stripped="$(jq -r --arg source "$source" \
+                '.[] | select("\(.ref):\(.tag)@\(.digest)" == $source) | .stripped // [] | .[]' "$BASES_LOCK")"
+              while IFS= read -r path; do
+                if [ -n "$path" ]; then skip+=(--skip-dirs "$path" --skip-files "$path"); fi
+              done <<< "$stripped"
+            fi
             case "$stage" in
               runtime) severity=HIGH,CRITICAL ;;
               build)
@@ -74,7 +77,7 @@ jobs:
                 { echo "### HIGH findings in build-only base $source"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
                 docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
                   image --exit-code 2 --severity HIGH \
-                  --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "${skip[@]}" "$source" \
+                  --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source" \
                   | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
                 echo '```' >> "$GITHUB_STEP_SUMMARY"
                 case "$status" in
