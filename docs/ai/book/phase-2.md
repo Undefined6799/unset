@@ -754,14 +754,15 @@ Outputs:
   - `sessions.read(ctx) -> Session | null` where `Session = {did, idHash, createdAt, emailConfirmed: boolean | null}`;
     memoised in `ctx.memo` for the request.
   - `sessions.destroy(tx, idHash) -> void`.
-  - Definer `app.end_sessions_for_did(did types.did, why text) RETURNS int`, created by **P2.04's** migration (it needs
-    both `app.session` and `app.oauth_session`) with the contract P3.06 states: owned by `migrator`, `SECURITY DEFINER`,
-    `SET search_path = pg_catalog, app`; deletes the DID's `app.session` rows; deletes its `app.oauth_session` row
-    unless `why = 'deactivated'`; `why` CHECKed against one closed enum shared with P3.06: Phase 2 uses
-    `user_signout_all` (P2.08), `underage` (P2.12) and `auth_dead` (P2.07); P3.06 uses the account-state and moderation
-    values. EXECUTE to `web` here; P3.06 grants it to `indexer` and `admin`. Because the function also deletes the token
-    set, a caller that must revoke the grant at the authorization server calls `client.revoke` **before** it.
-    P2.04s adds `sessions.destroyAllForDid(tx, did, why: EndSessionsReason)` as its thin wrapper.
+  - Definer `app.end_sessions_for_did(did types.did, why text) RETURNS int`, created by **P2.04s's** migration (it needs
+    both `app.session` and `app.oauth_session`, and any new `SECURITY DEFINER` function is trusted base,
+    `scripts/guards/grant-parse.test.ts:320-322`) with the contract P3.06 states: owned by `migrator`,
+    `SECURITY DEFINER`, `SET search_path = pg_catalog, app`; deletes the DID's `app.session` rows; deletes its
+    `app.oauth_session` row unless `why = 'deactivated'`; `why` CHECKed against one closed enum shared with P3.06:
+    Phase 2 uses `user_signout_all` (P2.08), `underage` (P2.12) and `auth_dead` (P2.07); P3.06 uses the account-state
+    and moderation values. EXECUTE to `web` here; P3.06 grants it to `indexer` and `admin`. Because the function also deletes the token
+    set, a caller that must revoke the grant at the authorization server calls `client.revoke` **before** it. P2.04s
+    adds `sessions.destroyAllForDid(tx, did, why: EndSessionsReason)` as its thin wrapper.
   - `sessions.setEmailConfirmed(tx, idHash | {did}, value: boolean) -> void`.
   - `sessionCookie.set(ctx, value, maxAgeS)`, `sessionCookie.clear(ctx)`: `__Host-sid`, HttpOnly, Secure, SameSite=Lax, Path=/.
   - `sessions.sweep() -> number` (deletes rows past idle or absolute expiry), run hourly; idempotent, so no lock (DA-4).
@@ -772,7 +773,9 @@ Algorithm:
      a. If `replacingCookie` is a syntactically valid cookie value → `DELETE FROM app.session WHERE id_hash = sha256(decode(replacingCookie))`
         (rotation: the previous session of this browser dies, whoever it belonged to).
      b. `id = randomBytes(32)`; `value = base64url(id)` (43 chars).
-     c. `INSERT (sha256(id), did, now(), now(), now() + SESSION_ABSOLUTE_S)`; on a primary-key collision (2^-256) → retry once, then throw.
+     c. `INSERT (sha256(id), did, now(), now(), now() + SESSION_ABSOLUTE_S)`; on a primary-key collision → throw, and
+        the caller's transaction fails closed. No retry and no `random` option: the store calls `crypto.randomBytes(32)`
+        itself (P2.04s rider 2; book edit 2026-10-12-p204s-riders-and-p009t).
      d. Return `{cookieValue: value, expiresAt: absolute}`; the caller sets the cookie with `Max-Age = SESSION_ABSOLUTE_S`.
   2. `read(ctx)`:
      a. If `ctx.memo.session` is set → return it (one DB read per request).
@@ -850,7 +853,8 @@ Why: sqlLint (`infrastructure/postgres/sqlLint.ts:50-86`) requires every CREATE 
   widen what trusted PRs may carry, so the index moves here and every PR class stays unchanged.
 Contents: one migration, on the next free number at open time, containing only:
   - `CREATE INDEX … ON app.session (did)` with `-- query: infrastructure/session/store.ts` (`app.end_sessions_for_did`
-    (P2.04), called through `sessions.destroyAllForDid` (P2.04s), ends every session of a DID; the index stays, because
+    (P2.04s's migration), called through `sessions.destroyAllForDid` (P2.04s),
+    ends every session of a DID; the index stays, because
     that delete still filters by `did`).
   No `(absolute_expires_at)` and no `last_seen_at` index: the OR's `last_seen_at` arm forces the sweep to seq-scan
   whatever exists, and a `last_seen_at` index would make the touch a non-HOT update (architecture's
@@ -864,13 +868,16 @@ Size: ~10 source lines
 
 ### P2.04 — OAuth client
 Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x (merged, #579), P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
-Its migration creates `app.end_sessions_for_did`, which deletes from `app.session` by DID, so it needs the table and the
-  `(did)` index first (book edit 2026-10-12-p203x-indexes-move-to-p203i).
+It needs the session table and its `(did)` index first, because P2.04s, which follows it, creates
+  `app.end_sessions_for_did`, which deletes from `app.session` by DID (book edit
+  2026-10-12-p203x-indexes-move-to-p203i).
 Feature step (#161), changed but not split (book edit 2026-10-12-p204s-p130x-p130y-booked, from architecture's
   2026-10-12-p204-trusted-prelude-split): it changes nothing under `/infrastructure/session/` or `session-cookie.ts`.
   The wrapper, the `has_token_set` probe and their tests are P2.04s's, which lands after it. P2.04s depends on it.
-  Fallback: if the local trusted-base check rates `0202_app_oauth.sql` trusted or mixed, only the function moves into
-  a P2.04s migration; that needs no new ruling, and the PR body says so.
+  The fallback applies: any new `SECURITY DEFINER` function is trusted base
+  (`scripts/guards/grant-parse.test.ts:320-322`), so the definer `app.end_sessions_for_did`, its migration and its
+  four `end_sessions.*` SQL tests are P2.04s's too (Amendments 3 and 4 of that book edit; architecture's
+  2026-10-12-batch33-codex-rulings, item 1).
 Decision 34 (slice 1): this step needs P1.31's set JSON and NSID, not the publication. It used to depend on P1.35; it now
   builds in slice 1, before the set is published. Until P1.35, no authorization server can resolve `include:` for the set,
   so every login takes P2.05's tested fallback (`SCOPE_FALLBACK`: the same permissions written out); no scope is added
@@ -904,8 +911,8 @@ Outputs:
     `sealed-columns.json` (`app.oauth_state.sealed` row key `key`, `app.oauth_session.sealed` row key `did`). `client_kid` is the **OAuth client** key id
     the library bound this token set to (`value.authMethod.kid`), not secret, used only by the key-rotation runbook
     (review r1-part1 F4). Erasure registry: `app.oauth_session.did → delete_row`.
-  - The same migration creates the definer `app.end_sessions_for_did(did, why)` described in P2.03's Outputs, with its
-    `why` CHECK and EXECUTE to `web`. The `has_token_set` probe in `sessions.read` and the wrapper are P2.04s's.
+  - `0202_app_oauth.sql` creates only `app.oauth_state` and `app.oauth_session`. The definer
+    `app.end_sessions_for_did`, the `has_token_set` probe in `sessions.read` and the wrapper are P2.04s's.
   - `scopes.ts`: `SCOPE_PRIMARY: string`, `SCOPE_FALLBACK: string`, `SCOPE_METADATA: string` (union, deduplicated),
     `REQUIRED_GRANT: readonly ScopeRequirement[]`, `grantCovers(granted: string, req: ScopeRequirement[]) -> {ok: true} | {ok: false, missing: string[]}`.
   - `getOAuthClient() -> NodeOAuthClient` (built once in `web`'s composition root, `interfaces/http/main.ts`, and passed to the
@@ -1026,8 +1033,6 @@ Threats: OAuth tokens and client keys: the credentials that act on each member's
   - T Two replicas refresh one token set and one loses it → per-DID advisory lock (`lock.serialises`,
     `client.two_replicas_one_refresh`).
   - E OAuth over plain HTTP in production → boot fails (`client.allowHttp_prod`).
-  - E The definer ends the wrong rows or takes any reason → real-Postgres SQL tests on the function
-    (`end_sessions.*` below).
 
 Done when (tests):
   - `scopes.matches_plan`: `NS` equals a fixture copied from plan §3 plus the coordinator's 2026-10-03 additions; a drift
@@ -1063,11 +1068,6 @@ Done when (tests):
   - `client.foreign_pds_uses_public`: constructing the client and running `authorize()` against a fake foreign AS
     records every request on the net-guard spy under `atproto`; a bare `fetch` spy records none.
   - `client.allowHttp_prod`: `ENV=production` + `OAUTH_ALLOW_HTTP=true` → boot fails.
-  - Real-Postgres SQL tests on `app.end_sessions_for_did` (book edit 2026-10-12-p204s-p130x-p130y-booked):
-    - `end_sessions.deletes_did_sessions`: it deletes the DID's `app.session` rows;
-    - `end_sessions.keeps_token_set_when_deactivated`: `'deactivated'` keeps the `app.oauth_session` row;
-    - `end_sessions.refuses_unknown_why`: `'other'` raises (replaces `session.end_sessions_why_closed`);
-    - `end_sessions.other_dids_untouched`: another DID's `app.session` and `app.oauth_session` rows stay.
 
 Reuse (provisional — for reuse review):
   - `app/src/lib/oauth.ts:24-46` (metadata object) → SALVAGE with changes: rename to unset.sh, new scope constants, add
@@ -1087,19 +1087,34 @@ Trusted base, kind/feature (00-README.md:272-273); book edit 2026-10-12-p204s-p1
   2026-10-12-p204-trusted-prelude-split (14:25Z), which answered Codex's finding on #631. Owner: Phase 2. Slice: 1.
   P2.06, P2.07, P2.08 and P2.12 depend on it: until it merges, a deleted token set does not end a browser session,
   which is harmless only while nothing creates sessions from OAuth or calls the wrapper.
-Where: `infrastructure/session/` and its tests only (trusted base, CODEOWNERS:111), with the tests in
-  `tests/integration/session/`. Split from P2.04 because a PR may not mix trusted-base and feature paths
-  (`checkTrustedBaseIsolation`, `scripts/guards/trusted-base.ts`). No migration (the function is P2.04's, unless
-  P2.04's fallback moved it here).
-Size: ~40 source lines, ~120 test lines
+Where: `infrastructure/session/`, one migration after `0202_app_oauth.sql` holding only the definer, and their tests
+  (trusted base, CODEOWNERS:111), with the tests in `tests/integration/session/`. Split from P2.04 because a PR may
+  not mix trusted-base and feature paths (`checkTrustedBaseIsolation`, `scripts/guards/trusted-base.ts`). The
+  migration is here because any new `SECURITY DEFINER` function is trusted base
+  (`scripts/guards/grant-parse.test.ts:320-322`; book edit 2026-10-12-p204s-p130x-p130y-booked, Amendments 3 and 4).
+Riders from #630 (book edit 2026-10-12-p204s-riders-and-p009t, from architecture's
+  2026-10-12-p203-post-merge-follow-ups):
+  1. The store's public signatures take the branded `Did` (store.ts:28, 44, 47, 69, 86, 159), as
+     `infrastructure/audit/append.ts:5` does. Callers parse with `parseDid` at the boundary; the store does not
+     re-parse. `destroyAllForDid(tx, did: Did, why)` is typed this way from the start.
+  2. `create` loses its 23505 retry and its `random` option: on a primary-key collision it throws and the caller's
+     transaction fails closed (P2.03 Algorithm 1c). The store calls `crypto.randomBytes(32)` directly.
+  3. The `WithSessionDb` fake stays, only for logic-only unit tests (memo, cookie decisions). Anything that asserts
+     what the database does stays in real-Postgres tests.
+  4. A new test, `session.memo_after_rotating_create`, in `tests/integration/session/store.test.ts` beside :239-248.
+  5. Red evidence in the PR body: the four cookie tests, the two unit tests and the memo tests (item 4's included),
+     each shown red with its control removed (one mutation per test), then green. A "not implemented" stub does not
+     count.
+Size: ~70 source lines, ~160 test lines (one PR)
 
 Goal: End a browser session when its token set is gone, and give callers one call that ends every session of a DID
 inside their transaction.
 
 Outputs:
-  - `sessions.destroyAllForDid(tx, did, why: EndSessionsReason) -> number` (rows deleted), a thin wrapper over the
-    definer `app.end_sessions_for_did(did, why)` (P2.03's Outputs); there is no second copy of its SQL in TypeScript
-    (phase-3 Notes; one mechanism).
+  - The migration creating the definer `app.end_sessions_for_did(did, why)` with the contract in P2.03's Outputs, its
+    `why` CHECK and EXECUTE to `web`. It reads `app.oauth_session`, so P2.04 merges first.
+  - `sessions.destroyAllForDid(tx, did: Did, why: EndSessionsReason) -> number` (rows deleted), a thin wrapper over the
+    definer; there is no second copy of its SQL in TypeScript (phase-3 Notes; one mechanism).
   - `EndSessionsReason`: the closed union of the function's `why` values.
   - `sessions.read`'s SELECT gains `has_token_set`.
 
@@ -1123,6 +1138,8 @@ Threats: the session that outlives the grant behind it.
   - E A session outliving its token set → the probe ends it (`session.no_token_set_ends`).
   - E "Sign out everywhere" missing a path → one definer with a closed reason list, and TypeScript's list cannot
     drift from it (`session.end_sessions_single_sql`, `session.reasons_match_check`).
+  - E The definer ends the wrong rows or takes any reason → real-Postgres SQL tests on the function
+    (`end_sessions.*`).
 
 Done when (tests):
   - `session.destroyAllForDid_in_tx`: inside a tx that then rolls back → rows still there; committed → session rows
@@ -1134,6 +1151,12 @@ Done when (tests):
     the row is deleted, the cookie is cleared.
   - `session.reasons_match_check`: `EndSessionsReason`'s values equal the function's CHECK list, read from
     `pg_constraint` or the function body on the migrated test database.
+  - Real-Postgres SQL tests on `app.end_sessions_for_did`, moved from P2.04 (Amendment 3):
+    - `end_sessions.deletes_did_sessions`: it deletes the DID's `app.session` rows;
+    - `end_sessions.keeps_token_set_when_deactivated`: `'deactivated'` keeps the `app.oauth_session` row;
+    - `end_sessions.refuses_unknown_why`: `'other'` raises (replaces `session.end_sessions_why_closed`);
+    - `end_sessions.other_dids_untouched`: another DID's `app.session` and `app.oauth_session` rows stay.
+  - `session.memo_after_rotating_create` (rider 4).
   - The full suite is green, and the trusted-base check rates the PR trusted-only.
 
 ### P2.05 — Login
@@ -4317,7 +4340,7 @@ Rejected or not applied:
   resolution 2; both are in P5.07b.
 
 For other editors (conflicts this file cannot settle):
-- **phase-3 (P3.06):** `app.end_sessions_for_did` is now created by P2.04's migration (it must exist before P3.06);
+- **phase-3 (P3.06):** `app.end_sessions_for_did` is now created by P2.04s's migration (it must exist before P3.06);
   P3.06 should only grant EXECUTE to `indexer` and `admin`, and its `why` enum must include Phase 2's `underage` and
   `auth_dead` (`user_signout_all` is already there).
 - **phase-3 interfaces row P2.09:** the log line fields are `actorMac`, `targetMac`, `codeMac` (HMAC), not `actor`,

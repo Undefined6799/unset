@@ -8414,16 +8414,20 @@ keeps "later keys one at a time, with a ruling, in the step that needs it".
 |---|---|---|
 | `read_only` | boolean scalar | none beyond shape (P1.29 tests require `true` where the image allows) |
 | `cap_drop` | list of strings | exactly `[ALL]`; a partial drop list is refused, not read |
-| `cap_add` | list of strings | only `NET_BIND_SERVICE`, only on the edge service (image is the lock's `edge` ref or built from `deployment/edge/Dockerfile`), and only with `cap_drop: [ALL]` on the same service |
+| `cap_add` | list of strings | only `NET_BIND_SERVICE`, only on the edge service (image is the lock's `edge` ref or built from `deployment/edge/Dockerfile`; a service with both `image` and `build` needs both to name edge, and a service with one is judged by that one), and only with `cap_drop: [ALL]` on the same service |
 | `security_opt` | list of strings | exactly `[no-new-privileges:true]`; this also refuses `seccomp:unconfined`, `apparmor:unconfined` and `label:disable` |
 | `user` | string `UID` or `UID:GID`, digits only | UID and GID both non-zero; names, including `root`, `postgres` and `node`, are refused (a name resolves inside the image, where preflight can't see it) |
 | `mem_limit` | string `^[1-9][0-9]*[mg]$` | shape only (a positive size) |
-| `cpus` | number or numeric string, > 0 | shape only |
-| `pids_limit` | positive integer | `0` and `-1` (unlimited) are refused |
+| `cpus` | number or numeric string, > 0 | shape only; no ceiling, because the right size depends on the host (P1.29's `compose_dev_limits` pins the values) |
+| `pids_limit` | positive integer | at most 4096 (the pid space is shared with the host); `0` and `-1` (unlimited) are refused |
 | `restart` | one of `no`, `on-failure`, `unless-stopped`, `always` | shape only; narrowing to the three values P1.29 uses is a tightening and needs no ruling |
 
 **Red fixtures:** `cap_drop: [NET_RAW]`; `cap_add: [SYS_ADMIN]` on edge; `cap_add: [NET_BIND_SERVICE]` on web;
-`security_opt: [seccomp:unconfined]`; `user: root`; `user: "0:0"`; `user: "1000:0"`; `pids_limit: -1`; `user: ${UID}`.
+`security_opt: [seccomp:unconfined]`; `user: root`; `user: "0:0"`; `user: "1000:0"`; `pids_limit: -1`; `user: ${UID}`;
+`pids_limit: 4097`; `image` with the edge ref and `build` with `node-app.Dockerfile`, plus
+`cap_add: [NET_BIND_SERVICE]`.
+Rulings on the batch 33 Codex findings: book edit 2026-10-12-p204s-p130x-p130y-booked, Amendment 4, from architecture's
+2026-10-12-batch33-codex-rulings (items 2 and 3).
 
 Done when every red fixture is red, a service using all nine keys in their accepted shapes is green, and the full suite
 is green.
@@ -8443,12 +8447,15 @@ No line from Alex. Past about 400 lines, split it by key group. The rules for ev
 | `tmpfs` | list of `TARGET` or `TARGET:OPTIONS`; options only from `uid=`, `gid=`, `mode=`, `size=`, `noexec`, `nosuid`, `nodev` | the target is in an exact allowlist: `/tmp` on any service, `/var/run/postgresql` on the postgres-kind service only; every other target is refused, including anything under `/etc`, `/run/secrets` or the code directory. **The same allowlist applies to `type: tmpfs` entries under `volumes`**, which today accept any absolute target. A later target needs a ruling |
 | `depends_on` | list of service names, or a map of name to `{condition}` only, the condition one of `service_started`, `service_healthy`, `service_completed_successfully`; `required` and `restart` are refused | every named service exists in the same file |
 | service `secrets` | **short form only**: a list of names; the long form (`source`, `target`, `uid`, `gid`, `mode`) is refused, because `target` is the B1 path to mount over `/etc/caddy` or anything else | each name matches `^[a-z0-9_]+$`, so its fixed target `/run/secrets/<name>` cannot leave that directory, and is declared at top level with `file:` (the existing `secretFiles` reader) |
+| top-level `secrets` | each entry exactly `{file: <string>}` | `external`, `name`, `environment`, `content`, `driver`, `labels` and every other key are refused by name; a non-mapping entry and a non-string `file` are refused (the existing `secretFiles` reader, `compose-parse.ts:343-350`, is tightened so no key is accepted and ignored) |
 
 **Red fixtures:** `build: .`; `build: {context: .., dockerfile: deployment/images/node-app.Dockerfile, target: deps}`; a
 `dockerfile` outside `deployment/`; `context: ../..`; `tmpfs: [/etc/caddy/snippets]`; a `volumes` entry
 `{type: tmpfs, target: /etc/caddy}`; `tmpfs: [/var/run/postgresql]` on web; `depends_on: {ghost: {condition:
 service_healthy}}`; a long-form service secret with `target: /etc/caddy/Caddyfile`; a secret name `../x`; an undeclared
-secret name.
+secret name; top-level secrets `{file: x, external: true}`, `{environment: X}`, `{content: y}`, `{file: 3}` and a bare
+string. The top-level `secrets` row is Amendment 4 of book edit 2026-10-12-p204s-p130x-p130y-booked, from architecture's
+2026-10-12-batch33-codex-rulings (item 4).
 
 Done when every red fixture is red, a service using all four keys in their accepted shapes is green, and the full suite
 is green.
