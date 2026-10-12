@@ -4,7 +4,26 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { CHILD_ENV_NAMES, childEnv, plan, run, UsageError } from "./stack.ts";
+import {
+  CHILD_ENV_NAMES,
+  childEnv,
+  DEFAULT_DOCKER_HOST,
+  localDockerHost,
+  plan as planStack,
+  type Runner,
+  run,
+  UsageError,
+} from "./stack.ts";
+
+// The wrapper's file-system and process doubles: every socket path is a socket, and the daemon names this host.
+const SOCKET = (): boolean => true;
+const plan = (argv: string[], from: Readonly<Record<string, string | undefined>>) => planStack(argv, from, SOCKET);
+const HOST = "devbox";
+const runner = (spawn: Runner["spawn"], daemon = `Debian GNU/Linux 13 (trixie)|${HOST}`): Runner => ({
+  spawn,
+  capture: () => ({ status: 0, stdout: `${daemon}\n` }),
+  hostname: HOST,
+});
 
 const COMPOSE = ["--compose", "deployment/compose.dev.yaml"];
 const ENV_FILE = ["--interpolation-env", "deployment/env/dev.env"];
@@ -13,29 +32,24 @@ const DOWN = ["down", "--env", "dev", ...COMPOSE, ...ENV_FILE];
 
 describe("stack wrapper (P1.27w)", () => {
   test("child_env_is_exactly_the_allowlist", () => {
-    // Architecture record 2026-10-12-preflight-compose-inputs, F3.3: these six names and nothing else.
-    expect(CHILD_ENV_NAMES).toEqual([
-      "PATH",
-      "HOME",
-      "DOCKER_HOST",
-      "DOCKER_CONTEXT",
-      "DOCKER_CONFIG",
-      "DOCKER_CERT_PATH",
-    ]);
+    // Architecture records 2026-10-12-preflight-compose-inputs, F3.3, and 2026-10-12-workspace-imports-and-remote-daemon
+    // (2): these names and nothing else; DOCKER_HOST is always set by the wrapper, and DOCKER_CONTEXT never passes.
+    expect(CHILD_ENV_NAMES).toEqual(["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"]);
     const caller = {
       PATH: "/usr/bin",
       HOME: "/home/dev",
       DOCKER_HOST: "unix:///run/docker.sock",
+      DOCKER_CONTEXT: "remote",
       WEB_PUBLIC_ORIGIN: "https://elsewhere.example.net",
       NODE_OPTIONS: "--require=/tmp/x.js",
     };
-    expect(childEnv(caller)).toEqual({
+    expect(childEnv(caller, SOCKET)).toEqual({
       PATH: "/usr/bin",
       HOME: "/home/dev",
       DOCKER_HOST: "unix:///run/docker.sock",
       NODE_OPTIONS: "",
     });
-    expect(plan(UP, caller).env).toEqual(childEnv(caller));
+    expect(plan(UP, caller).env).toEqual(childEnv(caller, SOCKET));
   });
 
   test("up_runs_the_preflight_then_compose_with_the_same_inputs", () => {
@@ -107,7 +121,7 @@ describe("stack wrapper (P1.27w)", () => {
       symlinkSync(join(dir, "real"), join(dir, "link"));
       const code = `import { plan } from ${JSON.stringify(join(import.meta.dirname, "stack.ts"))};
         const argv = ["up", "--env", "dev", "--compose", "compose.yaml", "--interpolation-env", "dev.env"];
-        process.stdout.write(JSON.stringify(plan(argv, {}).commands.map((c) => c.args)));`;
+        process.stdout.write(JSON.stringify(plan(argv, {}, () => true).commands.map((c) => c.args)));`;
       const out = spawnSync(process.execPath, ["--input-type=module", "-e", code], {
         cwd: join(dir, "link"),
         env: { PATH: process.env.PATH ?? "", HOME: dir, PWD: join(dir, "link") },
@@ -124,15 +138,28 @@ describe("stack wrapper (P1.27w)", () => {
 
   test("a_failing_preflight_stops_compose", () => {
     const ran: string[] = [];
-    const code = run(plan(UP, {}), (file) => {
-      ran.push(file);
-      return file === "docker" ? 0 : 1;
-    });
+    const code = run(
+      plan(UP, {}),
+      runner((file) => {
+        ran.push(file);
+        return file === "docker" ? 0 : 1;
+      }),
+    );
     expect(code).toBe(1);
     expect(ran).toEqual([process.execPath]);
     // A child killed by a signal has no status; that stops the run too.
-    expect(run(plan(UP, {}), () => null)).toBe(1);
-    expect(run(plan(UP, {}), () => 0)).toBe(0);
+    expect(
+      run(
+        plan(UP, {}),
+        runner(() => null),
+      ),
+    ).toBe(1);
+    expect(
+      run(
+        plan(UP, {}),
+        runner(() => 0),
+      ),
+    ).toBe(0);
   });
 
   test("down_never_removes_volumes", () => {
@@ -203,4 +230,85 @@ describe("stack wrapper (P1.27w)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("only_a_docker_socket_on_this_machine_is_accepted", () => {
+    // Record 2026-10-12-workspace-imports-and-remote-daemon (2): C9, C18 and C26 walk this machine's files, and binds
+    // resolve on the daemon's, so a remote daemon is refused rather than checked against the wrong files.
+    for (const host of [
+      "tcp://192.0.2.10:2376",
+      "ssh://deploy@192.0.2.10",
+      "npipe:////./pipe/docker_engine",
+      "unix://run/docker.sock",
+      "fd://",
+      "",
+    ]) {
+      expect(() => localDockerHost({ DOCKER_HOST: host }, SOCKET), host).toThrow(
+        new UsageError("DOCKER_HOST must be a Docker socket on this machine"),
+      );
+      expect(() => planStack(UP, { DOCKER_HOST: host }, SOCKET), host).toThrow(UsageError);
+    }
+    // A unix path that is not a socket (a plain file, a missing path) is refused the same way.
+    expect(() => localDockerHost({ DOCKER_HOST: "unix:///tmp/not-a-socket" }, () => false)).toThrow(UsageError);
+    // Unset means the local root daemon, and a rootless socket is accepted; both children get the value set.
+    expect(plan(UP, {}).env.DOCKER_HOST).toBe(DEFAULT_DOCKER_HOST);
+    expect(plan(DOWN, { DOCKER_HOST: "unix:///run/user/1000/docker.sock" }).env.DOCKER_HOST).toBe(
+      "unix:///run/user/1000/docker.sock",
+    );
+    // The real check is lstat: a regular file at the path is not a socket.
+    const dir = mkdtempSync(join(tmpdir(), "stack-"));
+    try {
+      writeFileSync(join(dir, "docker.sock"), "");
+      expect(() => planStack(UP, { DOCKER_HOST: `unix://${join(dir, "docker.sock")}` })).toThrow(UsageError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a_daemon_on_another_machine_is_refused", () => {
+    const ran: string[] = [];
+    const record: Runner["spawn"] = (file) => {
+      ran.push(file);
+      return 0;
+    };
+    for (const argv of [UP, DOWN]) {
+      expect(() => run(plan(argv, {}), runner(record, "Debian GNU/Linux 13 (trixie)|elsewhere"))).toThrow(
+        new UsageError("the Docker daemon is not on this machine"),
+      );
+    }
+    expect(ran).toEqual([]);
+    // A daemon that does not answer stops the run before anything starts.
+    expect(run(plan(UP, {}), { ...runner(record), capture: () => ({ status: 1, stdout: "" }) })).toBe(1);
+    expect(ran).toEqual([]);
+    // The question goes through the children's own environment.
+    let asked: Record<string, string> = {};
+    run(plan(UP, { DOCKER_HOST: "unix:///run/user/1000/docker.sock" }), {
+      ...runner(record),
+      capture: (_file, _args, env) => {
+        asked = env;
+        return { status: 0, stdout: `x|${HOST}` };
+      },
+    });
+    expect(asked.DOCKER_HOST).toBe("unix:///run/user/1000/docker.sock");
+  });
+
+  test.runIf(spawnSync("docker", ["version"], { stdio: "ignore" }).status === 0 || process.env.CI)(
+    "a_stored_remote_context_never_reaches_the_children",
+    () => {
+      // Docker CLI 29.8.2: an explicit DOCKER_HOST overrides config.json's currentContext. Without it this config fails
+      // ("context \"remote\": context not found"); with the wrapper's environment the CLI uses the given socket.
+      const dir = mkdtempSync(join(tmpdir(), "stack-"));
+      try {
+        writeFileSync(join(dir, "config.json"), JSON.stringify({ currentContext: "remote" }));
+        const caller = { PATH: process.env.PATH ?? "", HOME: dir, DOCKER_CONFIG: dir, DOCKER_CONTEXT: "remote" };
+        const bare = spawnSync("docker", ["context", "show"], { env: { ...caller }, encoding: "utf8" });
+        expect(bare.stdout.trim()).toBe("remote");
+        const env = planStack(UP, caller).env;
+        expect(env.DOCKER_CONTEXT).toBeUndefined();
+        const shown = spawnSync("docker", ["context", "show"], { env, encoding: "utf8" });
+        expect(shown.stdout.trim()).toBe("default");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });
