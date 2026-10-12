@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -226,6 +226,7 @@ flowchart LR
   P1_29g["P1.29g image reader hardening"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
+  P1_29y["P1.29y old image jobs folded into the matrix ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
   P1_29a["P1.29a PDS in the dev stack ALEX"]
@@ -337,6 +338,8 @@ flowchart LR
   P1_29x --> P1_28y
   P1_28w --> P1_29v
   P1_29v --> P1_29d
+  P1_29w --> P1_29y
+  P1_29v --> P1_29y
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
@@ -4927,6 +4930,31 @@ Done when (tests): `ssr_class_equals_client_selector`, `scoped_name_deterministi
   pr-shape classes it as product.
 Diagram: none.
 
+### P1.23g — Isolate guard test fixtures from global git config
+Tags: [SEC] [ALEX]            Depends on: —            Plan: SE-6 (check paths)
+Check class (scripts/guards test files and git-env.ts), kind/build; issue #582; slice 1 (book edit
+2026-10-12-p123g-guard-fixture-git-isolation, from the coordinator's lead at 02:25Z on Cursor's #573 notes; it is the
+root cause of the `job_reads_git_safely` local timeout reported at 02:21Z). Owner: Phase 2 or the third lane (not Phase
+1: scripts/guards), with Alex's typed line, for example "yes P1.23g scripts/guards tests". Neutral: no rule changes; it
+needs his line only because of the CI-bypass classifier on scripts/guards. Nothing depends on it.
+Why: a container's global git config can set `commit.gpgsign=true`, `gpg.format=ssh` and `gpg.ssh.program`, so every
+  commit is signed by an external program. `withoutGitEnv()` (`scripts/guards/git-env.ts:8-10`) strips `GIT_*` variables
+  but not the global config, so the throwaway repositories in guard tests inherit it and every fixture commit runs the
+  signer (job_reads_git_safely makes 4 commits; pr-size, notes and git-env tests commit as well). The cost depends on
+  the signer and the machine, not the test, and signing throwaway fixture commits with a developer's or agent's key is
+  wrong in itself.
+Where:
+  - Add one helper, `fixtureGitEnv()`, in `scripts/guards/git-env.ts`: `withoutGitEnv()` plus
+    `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and a fixed author and committer.
+  - Every guard test that creates a throwaway repository uses it (change-shape-wiring, pr-size, notes and git-env tests;
+    the PR lists them by grep).
+  - The guards themselves are unchanged: they do not commit, and in CI they read the real checkout.
+Test: `fixture_git_ignores_global_config`. With `HOME` pointed at a temp dir whose .gitconfig sets `commit.gpgsign=true`
+  and a `gpg.program` that exits 1, a fixture commit still succeeds; without the helper, the same commit fails.
+Done when that test is green, the four suites are green, and the PR body gives job_reads_git_safely's isolated time
+  before and after, both measured in this kind of container.
+Diagram: none.
+
 ---
 
 ### P1.24 — UI kit, part 1: the "is it on the sheet?" gate and the static and form components
@@ -8192,7 +8220,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    His typed line naming the change and branch is received (asked: "yes P1.29v mirror.yml"); line: "yes P1.29v
    mirror.yml" (Alex, 2026-10-12T02:13:47Z; book edit 2026-10-12-p129v-skip-dirs-and-images-ignorefile, amendment 1). A
    new stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
-   ship) are rejected.
+   ship) are rejected. P1.29d and P1.29y depend on it.
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n,
    P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
@@ -8273,6 +8301,24 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
     that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
     measures it, and it needs Alex's typed line.
+11. **P1.29y "Fold the old image jobs into the scan matrix"** ([SEC] [ALEX], check: `.github/workflows/images.yml`,
+    `scripts/ci/list-dockerfiles.ts`, `image-workflows.test.ts`, `mirror-scan.test.ts`, kind/build; issue #581; depends
+    on P1.29w (merged, #571) and P1.29v, which also edits images.yml; owner Phase 2 or the third lane, not Phase 1
+    (`.github`); slice 1; book edit 2026-10-12-p129y-fold-old-image-jobs, from the coordinator's #571 verification
+    relayed at 02:25Z). The old `images` job (node-app) and `edge` job still build and scan node-app and edge a second
+    time, at Trivy 0.75.0 while scan-image uses 0.74.0, and they carry checks the matrix lacks: hadolint, SBOM, runs as
+    65532, and the health checks (image-workflows.test.ts:69-103, mirror-scan.test.ts:149-160). migrate gets none of
+    those checks, only the scan. Each check the old jobs run moves into `scan-image`, per discovered image, and both old
+    jobs are deleted:
+    - Per-image values (expected uid, health command) come from one exact map in list-dockerfiles.ts, beside
+      IGNOREFILES. An image missing from the map fails discovery, so a new image cannot arrive unchecked.
+    - Every check that ran for node-app or edge before still runs for it; migrate gains them, which is a tightening.
+    - The pins in image-workflows.test.ts and mirror-scan.test.ts move to the matrix job.
+    [ALEX] because it deletes workflow jobs: even with every check preserved, the CI-bypass classifier needs his typed
+    line, for example "yes P1.29y images.yml". The PR shows, check by check, the old job line and the matrix line that
+    replaces it; a check that cannot be carried stops the PR rather than being dropped. Done when, on the PR, every
+    check the old jobs ran shows per image in the matrix, `scan` aggregates them, the old jobs are gone, and the full
+    suite is green. Nothing depends on it.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries
