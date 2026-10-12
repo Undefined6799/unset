@@ -300,16 +300,15 @@ const PACKAGE_MANAGER =
  * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
  * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
  */
+/** Debian's dpkg database. */
+const DPKG_DATABASE = {
+  root: "/var/lib/dpkg",
+  data: /^(?:status|status-old|arch-native|available|cmethopt|diversions|diversions-old|lock|lock-frontend|info\/format|info\/[^/]+\.(?:list|md5sums|conffiles|shlibs|symbols|templates|triggers)|alternatives\/[^/]+|triggers\/[^/]+)$/,
+  index: "status",
+  names: /^Package: /m,
+};
 const DATABASE_BY_KIND = new Map([
-  [
-    "node",
-    {
-      root: "/var/lib/dpkg",
-      data: /^(?:status|status-old|arch-native|available|cmethopt|diversions|diversions-old|lock|lock-frontend|info\/format|info\/[^/]+\.(?:list|md5sums|conffiles|shlibs|symbols|templates|triggers)|alternatives\/[^/]+|triggers\/[^/]+)$/,
-      index: "status",
-      names: /^Package: /m,
-    },
-  ],
+  ["node", DPKG_DATABASE],
   [
     "edge",
     { root: "/lib/apk/db", data: /^(?:installed|lock|triggers|scripts\.tar\.gz)$/, index: "installed", names: /^P:/m },

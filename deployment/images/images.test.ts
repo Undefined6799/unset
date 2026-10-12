@@ -471,6 +471,16 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["node", []],
 ]);
 
+/** dpkg's maintainer scripts, which the Debian kinds drop once dpkg is gone, word for word as written. */
+const DPKG_SCRIPTS_RM = [
+  "-f",
+  "/var/lib/dpkg/info/*.preinst",
+  "/var/lib/dpkg/info/*.postinst",
+  "/var/lib/dpkg/info/*.prerm",
+  "/var/lib/dpkg/info/*.postrm",
+  "/var/lib/dpkg/info/*.config",
+];
+
 /**
  * The only rm each kind's final stage runs that names a package manager, word for word as written (fourth
  * architecture note under amendment 7): the node kind drops dpkg's maintainer scripts once dpkg is gone
@@ -479,19 +489,7 @@ const SETCAP_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
  */
 const RM_BY_KIND = new Map<Kind, readonly (readonly string[])[]>([
   ["edge", []],
-  [
-    "node",
-    [
-      [
-        "-f",
-        "/var/lib/dpkg/info/*.preinst",
-        "/var/lib/dpkg/info/*.postinst",
-        "/var/lib/dpkg/info/*.prerm",
-        "/var/lib/dpkg/info/*.postrm",
-        "/var/lib/dpkg/info/*.config",
-      ],
-    ],
-  ],
+  ["node", [DPKG_SCRIPTS_RM]],
 ]);
 const GLOB = /[*?[{]/;
 /**
@@ -499,9 +497,10 @@ const GLOB = /[*?[{]/;
  * 2026-10-08-p129f-corpus-gaps item 6), so no spelling hides a package manager's name from the floor: node's yarn
  * removal (node-app.Dockerfile:44, migrate.Dockerfile:29) and its maintainer-script rm (RM_BY_KIND).
  */
+const DPKG_SCRIPT_GLOBS = DPKG_SCRIPTS_RM.filter((word) => GLOB.test(word));
 const GLOBS_BY_KIND = new Map<Kind, readonly string[]>([
   ["edge", []],
-  ["node", ["/opt/yarn-*", ...(RM_BY_KIND.get("node")?.[0]?.filter((word) => GLOB.test(word)) ?? [])]],
+  ["node", ["/opt/yarn-*", ...DPKG_SCRIPT_GLOBS]],
 ]);
 
 /** Why a command's glob words may not run in this shipped stage; undefined when it has none off the kind's list. */
