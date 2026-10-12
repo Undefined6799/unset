@@ -144,7 +144,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 204 steps: 180 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 211 steps: 187 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -156,6 +156,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.01 | Workspace skeleton | — | P0.05 | `phase-1.md` |
 | P1.01s | Semgrep custom rules: computed imports and floating promises (parallel-safe) | [SEC] | P1.01, P0.07 | `phase-1.md` |
 | P1.01q | References test robust under the full suite (check step; 20 s per-test timeout) | — | — | `phase-1.md` |
+| P1.01g | CI test failures name the failing test (check step) | — | — | `phase-1.md` |
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
 | P1.03w | Fixed-word string fields in `shared/log` (SE-7 ruling) | [SEC] | P1.03 | `phase-1.md` |
@@ -297,8 +298,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30k | Compose reader exact top-level key allowlist and long-form port key set | [SEC] | P1.30w | `phase-1.md` |
 | P1.30m | Preflight runner withholds any reason containing a configured value (one run-wide set); C23 and literal-quoting templates name keys; scrubbed() deleted | [SEC] | P1.30w | `phase-1.md` |
 | P1.30v | Withheld marker never carries a configured value (regression fix to P1.30m) | [SEC] | P1.30m | `phase-1.md` |
-| P1.30j | Preflight reasons name keys not values; P1.30k literal fixtures; stale comments | [SEC] | P1.30k, P1.30m, P1.30v | `phase-1.md` |
+| P1.30j | Name keys in preflight reasons, not values (P1.30k literal fixtures; stale comments) | [SEC] | P1.30k, P1.30m, P1.30v | `phase-1.md` |
 | P1.30z | Resolve compose paths from the project directory | [SEC] | P1.30k | `phase-1.md` |
+| P1.30d | Correct project-directory notes and flag test | — | P1.30z, P1.30j | `phase-1.md` |
+| P1.30a | Preflight reads Compose's interpolation inputs | [SEC] | P1.30z, P1.30d | `phase-1.md` |
+| P1.30l | Pin the Compose version in CI (check step) | [SEC] [ALEX] (typed line, after P0.16 lands) | P1.30a, P0.16 | `phase-1.md` |
 | P1.30x | Compose reader: hardening and limit keys (read_only, cap_drop, cap_add, security_opt, user, mem_limit, cpus, pids_limit, restart) | [SEC] | P1.30k | `phase-1.md` |
 | P1.30y | Compose reader: build, tmpfs (and volumes type tmpfs), depends_on, short-form service secrets | [SEC] | P1.30k, P1.30z | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
@@ -322,10 +326,13 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29c | Lock field buildStage, derived from the Dockerfiles and proven by a test | [SEC] | P1.29b | `phase-1.md` |
 | P1.29z | Keep docker out of the kind problems reader test (regression fix to P1.29c) | [SEC] | P1.29c | `phase-1.md` |
 | P1.29o | Give docker-run image tests an explicit budget | — | P1.29z | `phase-1.md` |
+| P1.27e | Give edge image test hooks an explicit budget (trusted base) | — | P1.29z | `phase-1.md` |
+| P1.27k | Kill hung docker calls in image tests | — | P1.29o | `phase-1.md` |
+| P1.27t | Kill hung docker calls in edge image tests (trusted base) | — | P1.27k, P1.27e | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z | `phase-1.md` |
-| P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a | `phase-1.md` |
+| P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
 | P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
@@ -362,6 +369,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 flowchart TD
   P1_01["P1.01 Workspace skeleton"]
   P1_01q["P1.01q References test timeout"]
+  P1_01g["P1.01g CI names failing test"]
   P1_02["P1.02 Typed config loader per entrypoint"]
   P1_03["P1.03 Error model"]
   P1_04["P1.04 HTTP server skeleton per"]
@@ -504,10 +512,13 @@ flowchart TD
   P1_29c["P1.29c Lock records build-stage bases"]
   P1_29z["P1.29z Docker out of kind reader test"]
   P1_29o["P1.29o Docker-run test budgets"]
+  P1_27e["P1.27e Edge image hook budgets"]
+  P1_27k["P1.27k Kill hung docker calls"]
+  P1_27t["P1.27t Kill hung edge docker calls"]
   P1_29l["P1.29l Mirror scans build-stage bases whole"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
-  P1_29a["P1.29a PDS in the dev stack"]
+  P1_29a["P1.29a PDS and edge in the dev stack"]
   P1_29h["P1.29h Local email-token reader"]
   P1_29s["P1.29s Dev seed and precheck"]
   P1_29t["P1.29t Running-stack tests"]
@@ -525,8 +536,11 @@ flowchart TD
   P1_30k["P1.30k Compose top-level key allowlist"]
   P1_30m["P1.30m Preflight withholds value reasons"]
   P1_30v["P1.30v Withheld marker carries no value"]
-  P1_30j["P1.30j Preflight wording and fixtures"]
+  P1_30j["P1.30j Keys not values in reasons"]
   P1_30z["P1.30z Compose paths from project dir"]
+  P1_30d["P1.30d Project-directory notes and flag test"]
+  P1_30a["P1.30a Compose interpolation inputs"]
+  P1_30l["P1.30l Pin Compose in CI"]
   P1_30x["P1.30x Compose hardening and limit keys"]
   P1_30y["P1.30y Compose build, tmpfs, depends_on, secrets"]
   P1_30u["P1.30u Preflight C18 edge zones"]
@@ -758,6 +772,10 @@ flowchart TD
   P1_29c --> P1_29l
   P1_29c --> P1_29z
   P1_29z --> P1_29o
+  P1_29z --> P1_27e
+  P1_29o --> P1_27k
+  P1_27k --> P1_27t
+  P1_27e --> P1_27t
   P1_29x --> P1_29r
   P1_29r --> P1_29d
   P1_29r --> P1_29e
@@ -826,6 +844,11 @@ flowchart TD
   P1_30k --> P1_30j
   P1_30k --> P1_30z
   P1_30z --> P1_30y
+  P1_30z --> P1_30d
+  P1_30j --> P1_30d
+  P1_30d --> P1_30a
+  P1_30a --> P1_30l
+  P1_30a --> P1_29
   P1_30k --> P1_30x
   P1_30x --> P1_29
   P1_30y --> P1_29
@@ -903,7 +926,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.15a | Audit retention: segments, retention-checked redaction, erasure by lane | [SEC] | P1.15 | `phase-1.md` |
 | P1.18b | `net-guard` forward-proxy mode and the egress proxy for processes that are not ours | [SEC] | P1.18a | `phase-1.md` |
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
-| P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
+| P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.30a, P1.29 (its wrapper), P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
