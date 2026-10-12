@@ -903,7 +903,7 @@ Not in this step: account state (P3.06); handle rules (P3.08); likes (P4.19); la
 Diagram: see "An event from the relay to the index".
 
 ### P3.06g — Grants for the account-state machine (split from P3.06, SE-6)
-Tags: [SEC]            Depends on: P3.03, P2.04            Plan: §5.2 roles; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
+Tags: [SEC]            Depends on: P3.03, P2.04s           Plan: §5.2 roles; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
 Where: one migration `NNNN_account_state_grants.sql` (grant statements only), `grant-matrix.json` rows,
   `tests/integration/postgres/grants.test.ts` (matrix rows)
 Size: ~15 lines SQL, ~20 test lines

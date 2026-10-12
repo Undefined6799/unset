@@ -684,8 +684,8 @@ As built: merged by Alex at 2026-10-12T02:45:50Z as `2a34464` (#579).
 Feature class (issue #402), judged by its grant findings like P1.16's 0006 (book edit 2026-10-07-p203-repath; amended
   by 2026-10-12-p203x-indexes-move-to-p203i).
 Contents:
-  - `infrastructure/postgres/migrations/0011_app_session.sql`: the `app.session` table in P2.03's Outputs (its two
-    indexes are P2.03i's).
+  - `infrastructure/postgres/migrations/0011_app_session.sql`: the `app.session` table in P2.03's Outputs (its `(did)`
+    index is P2.03i's; there is no expiry index, per 2026-10-12-p203i-did-index-only).
     `migrate.ts` refuses a gap and 0008–0010 are booked for P1.15m, P1.15d and P1.15g, so it waits for P1.15g; it may
     be built locally on any free number and renumbered at open time.
   - `infrastructure/postgres/grant-matrix.json`: `app.session` for `web`, SELECT, INSERT and UPDATE by column list,
