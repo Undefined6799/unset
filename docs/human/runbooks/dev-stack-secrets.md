@@ -31,9 +31,9 @@ root-owned folder, so it needs nothing from you (Amendment 1 of the same record)
 
 `unset-dev-env/` holds the live env files, apart from the secrets so that folder holds only mounted secrets. Make it
 yours with mode 0700, and each file yours, mode 0600, with a single hard link; any symbolic link on the way must also be
-yours or root's (Amendment 6). Start `dev-public.env` from the template `deployment/env/dev-public.example.env`, whose values are all
-placeholders. No live env file stays in the checkout, even one with nothing secret in it today: it would sit in
-postgres's build context, and the preflight refuses that (Amendments 2 and 3 of the same record).
+yours or root's (Amendment 6). Start `dev-public.env` from the template `deployment/env/dev-public.example.env`,
+whose values are all placeholders. No live env file stays in the checkout, even one with nothing secret in it today: it
+would sit in postgres's build context, and the preflight refuses that (Amendments 2 and 3 of the same record).
 
 ## Layout (architecture record 2026-10-12-c9-secret-file-owner)
 

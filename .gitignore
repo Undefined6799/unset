@@ -18,4 +18,3 @@ graphify-out/cache/
 docs/ai/.obsidian/*
 !docs/ai/.obsidian/graph.json
 jscpd-report/
-
