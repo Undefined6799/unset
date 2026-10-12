@@ -262,7 +262,7 @@ describe("preflight", () => {
 
   test("c7_pds_rate_limits_unset_fails", async () => {
     expect(await expectOnly("C7", { pdsEnv: { PDS_RATE_LIMITS_ENABLED: null } })).toBe(
-      "FAIL C7 PDS_RATE_LIMITS_ENABLED is not exactly false",
+      "FAIL C7 PDS_RATE_LIMITS_ENABLED does not turn the PDS's own limits off",
     );
   });
 
@@ -329,7 +329,7 @@ describe("preflight", () => {
     // LOG_LEVEL is absent or one of five levels; debug and trace log personal data even with logging off for requests.
     for (const level of ["debug", "trace", "INFO", ""]) {
       expect(await expectOnly("C12", { pdsEnv: { LOG_LEVEL: level } })).toBe(
-        "FAIL C12 LOG_LEVEL is not info, warn, error, fatal or silent",
+        "FAIL C12 LOG_LEVEL is not one of the allowed levels",
       );
     }
     for (const level of ["info", "warn", "error", "fatal", "silent"]) {
@@ -529,7 +529,9 @@ describe("preflight C13 to C24 (P1.30s)", () => {
 
   test("c23_no_service_sets_fingerprint_check", async () => {
     const compose = COMPOSE.replace("    environment:\n      FINGERPRINT_CHECK: arachnid\n", "");
-    expect(await expectOnly("C23", { compose })).toBe("FAIL C23 no service sets FINGERPRINT_CHECK=arachnid");
+    expect(await expectOnly("C23", { compose })).toBe(
+      "FAIL C23 no service sets FINGERPRINT_CHECK to the real fingerprint service",
+    );
   });
 
   test("c24_time_tool_exit_nonzero_fails", async () => {
@@ -575,7 +577,10 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   });
 
   test("c23_prod_fake_fingerprint_fails", async () => {
-    await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake") });
+    // C23 names the key and the service, never a value it could hold, so its reason prints in full (P1.30m).
+    expect(
+      await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake") }),
+    ).toBe("FAIL C23 FINGERPRINT_CHECK in web is not the real fingerprint service");
     await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FAKE_FINGERPRINT_LIST: x") });
     const both = COMPOSE.replace(
       "FINGERPRINT_CHECK: arachnid",

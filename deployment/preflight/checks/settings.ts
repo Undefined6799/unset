@@ -22,9 +22,7 @@ export const c13: Check = {
 export const c14: Check = {
   id: "C14",
   run: withPds((env) =>
-    !present(env, "PDS_DEV_MODE") || value(env, "PDS_DEV_MODE") === "false"
-      ? pass()
-      : fail("PDS_DEV_MODE is not absent or false"),
+    !present(env, "PDS_DEV_MODE") || value(env, "PDS_DEV_MODE") === "false" ? pass() : fail("PDS_DEV_MODE is enabled"),
   ),
 };
 
@@ -35,10 +33,10 @@ export const c15: Check = {
     const domains = (value(env, "PDS_SERVICE_HANDLE_DOMAINS") ?? "").split(",").filter((d) => d !== "");
     if (domains.length === 0) return fail("PDS_SERVICE_HANDLE_DOMAINS is not set");
     if (domains.some((d) => d === ".0x40.me" || d.endsWith(".0x40.me"))) {
-      return fail("PDS_SERVICE_HANDLE_DOMAINS contains .0x40.me");
+      return fail("PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
     }
     if (stage === "dev" && !(domains.length === 1 && domains[0] === ".0x40.space")) {
-      return fail("PDS_SERVICE_HANDLE_DOMAINS is not .0x40.space in dev");
+      return fail("PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
     return pass();
   }),
@@ -50,7 +48,7 @@ export const c16: Check = {
   run: withPds((env) =>
     value(env, "PDS_EMAIL_DISABLE_CONFIRMATION_LINK") === "true"
       ? pass()
-      : fail("PDS_EMAIL_DISABLE_CONFIRMATION_LINK is not true"),
+      : fail("PDS_EMAIL_DISABLE_CONFIRMATION_LINK does not disable the link"),
   ),
 };
 
@@ -113,9 +111,9 @@ export const c23: Check = {
       if (present(env, "FAKE_FINGERPRINT_LIST")) return fail(`FAKE_FINGERPRINT_LIST is set in ${service}`);
       if (!present(env, "FINGERPRINT_CHECK")) continue;
       if (value(env, "FINGERPRINT_CHECK") !== "arachnid")
-        return fail(`FINGERPRINT_CHECK is not arachnid in ${service}`);
+        return fail(`FINGERPRINT_CHECK in ${service} is not the real fingerprint service`);
       checked = true;
     }
-    return checked ? pass() : fail("no service sets FINGERPRINT_CHECK=arachnid");
+    return checked ? pass() : fail("no service sets FINGERPRINT_CHECK to the real fingerprint service");
   },
 };
