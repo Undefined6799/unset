@@ -242,7 +242,11 @@ function mount(r: Reader, node: unknown): Mount {
   return { type: "volume", source: first, target, readOnly };
 }
 
-/** A named volume must be declared at the top level, as Compose requires (05-services.md "volumes"). */
+/**
+ * A named volume must be declared at the top level, as Compose requires (05-services.md "volumes"). The check is per
+ * file, stricter than Compose's merge: each file declares what it mounts, so it stays self-contained (architecture,
+ * 2026-10-12).
+ */
 function declared(r: Reader, mount: Mount, node: unknown, volumes: ReadonlySet<string>): Mount {
   if (mount.type === "volume" && mount.source !== null && !volumes.has(mount.source)) {
     r.fail(node, `volume ${mount.source} is not declared`);
