@@ -48,6 +48,10 @@ export type Inputs = {
   lstat: (path: string) => Stats | null;
   /** The path with every link resolved, null when it does not exist, throwing on any other error (C9 fails closed). */
   realpath: (path: string) => string | null;
+  /** A link's target as written (`fs.readlinkSync`), throwing on any error (C9 fails closed). */
+  readlink: (path: string) => string;
+  /** The filesystem a path is on (`fs.statfsSync`), throwing on any error (C9 fails closed). */
+  statfs: (path: string) => { type: number };
   uid: number;
 };
 
