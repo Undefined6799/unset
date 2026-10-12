@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 176 steps: 155 from `phase-1.md`, 21 from `phase-2.md` (including the
+Depth: **build-ready**. 178 steps: 156 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -272,6 +272,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28m | Raw-specifier check: root-only dependencies allowed in test files only | [SEC] | P1.28k | `phase-1.md` |
 | P1.28p | depcruise: product code never imports the tooling set (tests, check scripts, fixtures, vectors) | [SEC] | P1.28m | `phase-1.md` |
 | P1.28z | Tooling set image-test anchor; depcruise_cruised_nonzero cruises fixed real files, not the whole repo | [SEC] | P1.28p | `phase-1.md` |
+| P1.30c | Specifier cruise test: /proc/self/root spelling and a per-spelling presence guard | [SEC] | — | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
@@ -309,7 +310,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
 | P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
 | P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e | `phase-2.md` |
-| P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01 | `phase-2.md` |
+| P2.03i | Session indexes (did, absolute_expires_at), annotated with store.ts | [SEC] | P2.03, P2.03x | `phase-2.md` |
+| P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04 | `phase-2.md` |
@@ -437,6 +439,7 @@ flowchart TD
   P1_28m["P1.28m Root-only dependencies in tests only"]
   P1_28p["P1.28p Product never imports tooling"]
   P1_28z["P1.28z Tooling image-test anchor pinned"]
+  P1_30c["P1.30c Specifier cruise test checkout-independent"]
   P1_28s["P1.28s Quoted top-level tokens refused"]
   P1_28i["P1.28i Edge image builds in image tests"]
   P1_28j["P1.28j Edge image tests drop runIf"]
@@ -484,6 +487,7 @@ flowchart TD
   P2_03x["P2.03x session table and timeouts"]
   P2_03e["P2.03e session log events"]
   P2_03["P2.03 Session store and lifecycle"]
+  P2_03i["P2.03i session indexes"]
   P2_04["P2.04 OAuth client"]
   P2_05["P2.05 Login"]
   P2_06["P2.06 Callback"]
@@ -636,11 +640,15 @@ flowchart TD
   P2_03q --> P2_03
   P2_03x --> P2_03
   P2_03e --> P2_03
+  P2_03 --> P2_03i
+  P2_03x --> P2_03i
   P1_14 --> P2_04
   P1_14d --> P2_04
   P1_17 --> P2_04
   P1_31 --> P2_04
   P2_01 --> P2_04
+  P2_03i --> P2_04
+  P2_03x --> P2_04
   P2_04 --> P2_05
   P1_09 --> P2_05
   P2_05 --> P2_06
