@@ -733,7 +733,7 @@ Where: a new workspace `infrastructure/session/` (`index.ts`, `package.json`, `t
 Size: ~170 source lines, ~260 test lines, plus the workspace scaffold
 
 Goal: Durable browser sessions that map a random cookie to a DID, with server-checked idle and absolute timeouts,
-rotation at login and one call that ends every session of a DID inside the caller's transaction.
+rotation at login. Ending every session of a DID is P2.04's (book edit 2026-10-12-p203-departures-booked).
 
 Inputs: P1.12 roles (P2.03x's migration grants `web` SELECT/INSERT/UPDATE on `app.session` by column list and DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges); config `SESSION_IDLE_S` (604800),
   `SESSION_ABSOLUTE_S` (2592000), `SESSION_TOUCH_INTERVAL_S` (300).
@@ -746,9 +746,7 @@ Outputs:
   - `sessions.create(tx, did, opts: {replacingCookie?: string}) -> {cookieValue: string, expiresAt}`.
   - `sessions.read(ctx) -> Session | null` where `Session = {did, idHash, createdAt, emailConfirmed: boolean | null}`;
     memoised in `ctx.memo` for the request.
-  - `sessions.destroy(tx, idHash) -> void`; `sessions.destroyAllForDid(tx, did, why: EndSessionsReason) -> number` (rows
-    deleted), a thin wrapper over the definer `app.end_sessions_for_did(did, why)` (below); there is no second copy of
-    its SQL in TypeScript (phase-3 Notes; one mechanism).
+  - `sessions.destroy(tx, idHash) -> void`.
   - Definer `app.end_sessions_for_did(did types.did, why text) RETURNS int`, created by **P2.04's** migration (it needs
     both `app.session` and `app.oauth_session`) with the contract P3.06 states: owned by `migrator`, `SECURITY DEFINER`,
     `SET search_path = pg_catalog, app`; deletes the DID's `app.session` rows; deletes its `app.oauth_session` row
@@ -756,10 +754,11 @@ Outputs:
     `user_signout_all` (P2.08), `underage` (P2.12) and `auth_dead` (P2.07); P3.06 uses the account-state and moderation
     values. EXECUTE to `web` here; P3.06 grants it to `indexer` and `admin`. Because the function also deletes the token
     set, a caller that must revoke the grant at the authorization server calls `client.revoke` **before** it.
+    P2.04 also adds `sessions.destroyAllForDid(tx, did, why: EndSessionsReason)` as its thin wrapper.
   - `sessions.setEmailConfirmed(tx, idHash | {did}, value: boolean) -> void`.
   - `sessionCookie.set(ctx, value, maxAgeS)`, `sessionCookie.clear(ctx)`: `__Host-sid`, HttpOnly, Secure, SameSite=Lax, Path=/.
-  - `sessions.sweep() -> number` (deletes rows past idle or absolute expiry), run hourly under `withAdvisoryLock('session-sweep')`
-    from `infrastructure/postgres/lock.ts` (P1.17); it lives in the store.
+  - `sessions.sweep() -> number` (deletes rows past idle or absolute expiry), run hourly; idempotent, so no lock (DA-4).
+    It lives in the store.
 
 Algorithm:
   1. `create(tx, did, {replacingCookie})`:
@@ -786,11 +785,7 @@ Algorithm:
         session infrastructure, not a GET mutation, and the session layer's README says so). Best effort: an error here
         is logged and ignored, the session stays valid for this request.
      h. Memo and return the session.
-  3. `destroyAllForDid(tx, did, why)` → `SELECT app.end_sessions_for_did($1, $2)` inside the given transaction; return the
-     count. It never opens its own transaction, so the caller's state change (P2.12's block, P3.06's account state) and
-     this delete commit together. Until P2.04's migration exists the wrapper is not callable (P2.03 and P2.04 land before
-     any caller).
-  4. `sweep()` → `DELETE … WHERE absolute_expires_at < now() OR last_seen_at < now() - SESSION_IDLE_S`; return the count;
+  3. `sweep()` → `DELETE … WHERE absolute_expires_at < now() OR last_seen_at < now() - SESSION_IDLE_S`; return the count;
      log `session.sweep {count}`.
 
 Edge cases and failures:
@@ -798,7 +793,6 @@ Edge cases and failures:
   - Clock: all comparisons use database `now()` (one clock for every replica).
   - Two replicas touching the same row → last `UPDATE` wins; harmless.
   - `replacingCookie` belongs to another DID (shared computer) → still deleted (rotation is per browser).
-  - `destroyAllForDid` called outside a transaction → type error at compile time (`tx` parameter is required).
   - DB unavailable on `read` → 503 page, cookie kept (never logs out on a DB blip).
   - A session row whose DID was erased (P3.07) → no row → null.
   - The token set was deleted (library refresh failure, sign out everywhere, erasure) → `has_token_set` false →
@@ -812,8 +806,6 @@ Threats: the browser cookie that stands for a signed-in member.
     `SameSite=Lax`, no `Domain` (`session.cookie_attributes`).
   - E A session outliving its limits or its token set → idle and absolute expiry by the DB clock; no token set ends it
     (`session.idle_expiry`, `session.absolute_expiry`, `session.no_token_set_ends`).
-  - E "Sign out everywhere" missing a path → one definer with a closed reason list (`session.end_sessions_single_sql`,
-    `session.end_sessions_why_closed`).
   - D A database blip logs everyone out → 503, cookie kept (`session.db_error_is_503`).
 
 Done when (tests):
@@ -825,12 +817,8 @@ Done when (tests):
   - `session.touch_throttled`: two reads 10 s apart → one UPDATE; reads 6 min apart → two UPDATEs.
   - `session.malformed_cookie`: 10 malformed values (empty, 42 chars, `+/` chars, 1 KB) → null, no DB query (spy).
   - `session.memo`: three `read` calls in one request → one SELECT.
-  - `session.destroyAllForDid_in_tx` (runs after P2.04's migration): inside a tx that then rolls back → rows still there;
-    committed → session rows and the token-set row gone.
-  - `session.end_sessions_single_sql`: repo scan — `DELETE FROM app.session WHERE did` appears only in the definer's
-    migration, not in TypeScript.
-  - `session.end_sessions_why_closed`: `app.end_sessions_for_did(did, 'other')` raises; `'deactivated'` keeps the
-    `app.oauth_session` row.
+  - `session.memo_is_a_snapshot`: after `destroy` or a rotating `create` in the same request, `read` still returns the
+    memoised session. Handlers must not call `read` after changing the session (doc comment on `read`).
   - `session.touch_outside_read_only_tx`: a GET handler running in a read-only transaction, session 6 min idle → the
     touch succeeds (own connection) and the handler's transaction stays read-only.
   - `session.db_error_is_503`: DB throws on read → the route answers 503, cookie not cleared. The route is test-only,
@@ -840,15 +828,16 @@ Done when (tests):
   - `session.no_token_set_ends` (runs after P2.04's migration): a live session row whose DID has no `app.oauth_session`
     row → `read` returns null, the row is deleted, the cookie is cleared.
   - P1.13 DID-column test and P1.12 grant-matrix test: run in P2.03x.
-  - Built and run with P2.04, which creates `app.end_sessions_for_did` and `app.oauth_session` (book edit
-    2026-10-07-p203-repath): `session.destroyAllForDid_in_tx`, `session.end_sessions_single_sql`,
-    `session.end_sessions_why_closed`, `session.no_token_set_ends`. They are listed here as the store's contract.
+  - Built and run with P2.04, which creates `app.oauth_session` (book edit 2026-10-07-p203-repath):
+    `session.no_token_set_ends`. It is listed here as the store's contract. The `destroyAllForDid` tests moved to P2.04
+    (book edit 2026-10-12-p203-departures-booked).
 
 Reuse (provisional — for reuse review):
   - `app/src/lib/db.ts:94-121` (cookie session) → REJECT: stores the raw sid, absolute TTL only (14 d), no idle timeout,
     no rotation (review 01 §3 latent issue c).
   - `app/src/lib/session-policy.ts:1-3` (`SESSION_COOKIE_OPTS`) → LESSON: attributes are right; Max-Age changes to 30 d.
-Not in this step: OAuth token storage (P2.04); what happens on login (P2.06) or logout (P2.08); account-state wiring (P3.06);
+Not in this step: OAuth token storage and `destroyAllForDid` (P2.04);
+  what happens on login (P2.06) or logout (P2.08); account-state wiring (P3.06);
   the email gate logic (P2.11).
 Diagram: see "State diagram: app session lifecycle" at the top of this file.
 
@@ -866,7 +855,8 @@ Contents: one migration, on the next free number at open time, containing only:
   - `CREATE INDEX … ON app.session (did)` with `-- query: infrastructure/session/store.ts` (end every session
     of a DID);
   - `CREATE INDEX … ON app.session (absolute_expires_at)` with the same annotation (`sessions.sweep()`).
-  No grants, no registry change and no other DDL.
+  No grants, no registry change and no other DDL. It does not edit 0011_app_session.sql (applied migrations are
+  checksummed, `infrastructure/postgres/migrate.ts:2`).
 Done when (tests): `npm run check` is green, sqlLint passes on honest annotations, and the migration test applies it
   after P2.03x's.
 Size: ~10 source lines
@@ -909,6 +899,9 @@ Outputs:
     (review r1-part1 F4). Erasure registry: `app.oauth_session.did → delete_row`.
   - The same migration extends P2.03's `sessions.read` SELECT with the `has_token_set` probe (P2.03 step 2e2) and creates
     the definer `app.end_sessions_for_did(did, why)` described in P2.03's Outputs (EXECUTE to `web`).
+  - `sessions.destroyAllForDid(tx, did, why: EndSessionsReason) -> number` (rows deleted) in `infrastructure/session/`,
+    with the type `EndSessionsReason`: a thin wrapper over the definer; there is no second copy of its SQL in
+    TypeScript (phase-3 Notes; one mechanism). Moved from P2.03 (book edit 2026-10-12-p203-departures-booked).
   - `scopes.ts`: `SCOPE_PRIMARY: string`, `SCOPE_FALLBACK: string`, `SCOPE_METADATA: string` (union, deduplicated),
     `REQUIRED_GRANT: readonly ScopeRequirement[]`, `grantCovers(granted: string, req: ScopeRequirement[]) -> {ok: true} | {ok: false, missing: string[]}`.
   - `getOAuthClient() -> NodeOAuthClient` (built once in `web`'s composition root, `interfaces/http/main.ts`, and passed to the
@@ -999,6 +992,10 @@ Algorithm:
      `include:<PERMISSION_SET_NSID>`, treat it as granting the set's expansion (the spike in P2.06's tests records which
      form the dev PDS returns: the `include:` token or its expansion; both are handled). For each requirement check that
      a granted scope matches it with the library's matcher. Return the missing list.
+  9. `destroyAllForDid(tx, did, why)` → `SELECT app.end_sessions_for_did($1, $2)` inside the given transaction;
+     return the count. It never opens its own transaction, so the caller's state change (P2.12's block, P3.06's
+     account state) and this delete commit together. Called outside a transaction → type error at compile time (`tx`
+     is required).
 
 Edge cases and failures:
   - `OAUTH_CLIENT_KEYS` empty, malformed, a public-only key, a duplicate kid, or `OAUTH_ACTIVE_KID` not in the set → boot fails.
@@ -1029,6 +1026,8 @@ Threats: OAuth tokens and client keys: the credentials that act on each member's
   - T Two replicas refresh one token set and one loses it → per-DID advisory lock (`lock.serialises`,
     `client.two_replicas_one_refresh`).
   - E OAuth over plain HTTP in production → boot fails (`client.allowHttp_prod`).
+  - E "Sign out everywhere" missing a path → one definer with a closed reason list (`session.end_sessions_single_sql`,
+    `session.end_sessions_why_closed`).
 
 Done when (tests):
   - `scopes.matches_plan`: `NS` equals a fixture copied from plan §3 plus the coordinator's 2026-10-03 additions; a drift
@@ -1064,6 +1063,14 @@ Done when (tests):
   - `client.foreign_pds_uses_public`: constructing the client and running `authorize()` against a fake foreign AS
     records every request on the net-guard spy under `atproto`; a bare `fetch` spy records none.
   - `client.allowHttp_prod`: `ENV=production` + `OAUTH_ALLOW_HTTP=true` → boot fails.
+  - Moved from P2.03 (book edit 2026-10-12-p203-departures-booked):
+    - `session.destroyAllForDid_in_tx`: inside a tx that then rolls back → rows still there; committed → session rows
+      and the token-set row gone.
+    - `session.end_sessions_single_sql`: repo scan — `DELETE FROM app.session WHERE did` appears only in the definer's
+      migration, not in TypeScript.
+    - `session.end_sessions_why_closed`: `app.end_sessions_for_did(did, 'other')` raises; `'deactivated'` keeps the
+      `app.oauth_session` row.
+    - `session.destroyAllForDid_requires_tx`: calling it without a `tx` is a compile-time type error.
 
 Reuse (provisional — for reuse review):
   - `app/src/lib/oauth.ts:24-46` (metadata object) → SALVAGE with changes: rename to unset.sh, new scope constants, add
@@ -1412,7 +1419,7 @@ Size: ~180 source lines, ~300 test lines
 Goal: Every call `web` makes to a user's PDS goes through one function that restores the OAuth session, classifies
 failures, retries only what is safe, and never turns a nonce handshake or a transient error into a logout.
 
-Inputs: P2.04 client; P2.03 `sessions.destroyAllForDid`; `@atproto/lex` client (exact pin) built over the OAuth
+Inputs: P2.04 client; P2.04 `sessions.destroyAllForDid`; `@atproto/lex` client (exact pin) built over the OAuth
   session's fetch handler, with `com.atproto.*` and `app.bsky.*` types from P1.31's `lex install` (if the pinned `lex`
   client cannot take an OAuth fetch handler, `@atproto/api` `Agent` is used instead and the PR says why); config
   `PDS_CALL_TIMEOUT_MS` (10000), `PDS_UPLOAD_TIMEOUT_MS` (30000).
@@ -1533,7 +1540,8 @@ Size: ~120 source lines, ~180 test lines
 Goal: "Sign out" ends this browser's session; "Sign out everywhere" ends every app session of the DID and revokes the
 OAuth grant; both point the user to their PDS account page to end PDS browser sessions.
 
-Inputs: P2.03 `sessions` (`destroy`, `destroyAllForDid`); P2.04 client; P2.01 `resolveDid`; config `PDS_ISSUER`.
+Inputs: P2.03 `sessions.destroy`; P2.04 `sessions.destroyAllForDid`; P2.04 client; P2.01 `resolveDid`;
+  config `PDS_ISSUER`.
 Outputs:
   - `POST /logout` → 303 `/signed-out`. `POST /logout/everywhere` (field `confirm=yes` required, the checkbox on P2.13's
     form) → 303 `/signed-out?scope=everywhere` (or with `&e=logout.revoke_unconfirmed`); without `confirm=yes` → 303
@@ -4225,10 +4233,10 @@ Changes made, with the request that caused each:
   the id is not a P1.16 token, because the interstitial is a GET and may not consume anything (P1.07 step 10).
 - **P2.06** adds `/oauth/callback` as the one `GET_MUTATION_EXCEPTIONS` entry (phase-1-part1); its granted-scope check
   compares scopes expanded from the published set (phase-1-part2 note 14). Dependency P1.15 → P1.07.
-- **P2.03** calls `app.end_sessions_for_did` (phase-3 Notes) through `destroyAllForDid(tx, did, why)`; the session touch
-  runs on its own connection outside the read-only GET transaction (phase-1-part1). Because the function also deletes
-  the token set, P2.08 "everywhere" and P2.12's under-age path now revoke **before** ending sessions.
-- **P2.04**: `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
+- **P2.03**: the session touch runs on its own connection outside the read-only GET transaction (phase-1-part1).
+- **P2.04** calls `app.end_sessions_for_did` (phase-3 Notes) through `sessions.destroyAllForDid(tx, did, why)`. Because
+  the function also deletes the token set, P2.08 "everywhere" and P2.12's under-age path revoke **before** ending
+  sessions. `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
   fallback rule is stated (phase-1-part2 note 14; the retry itself stays in P2.05).
 - **P2.08** documents P6.16's two `chat.endSessions` calls (phase-6 item 2); it builds no hook now.
 - **P2.09**: the key file is a Phase 2 stand-in retired by P3.16 in favour of the roster's `service_keys` (phase-3
