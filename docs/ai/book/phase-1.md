@@ -9435,8 +9435,9 @@ P1.29h, P1.29s, P1.29t.
    2026-10-12-p130z-compose-project-directory; and on P1.30a, which reads Compose's interpolation inputs, book edit
    2026-10-12-p130a-p130l-compose-inputs-booked; and on P1.30o, so its non-root services can read their mounted
    secrets, book edit 2026-10-12-p130o-c9-mounted-secrets; and on P1.27y, without which `docker compose up` fails to
-   build the edge context, book edit 2026-10-12-p127y-build-context-follow-up; and on P1.27a, so the C9 rule is final
-   before the secrets folder is laid out, book edit 2026-10-12-p127a-c9-sticky-ancestors; and on P1.27w, whose
+   build the edge context, book edit 2026-10-12-p127y-build-context-follow-up; and on P1.27a and P1.27u, so the C9
+   rule, the bind-source checks and the build-context check are final before the sibling secrets folder is laid out,
+   book edits 2026-10-12-p127a-c9-sticky-ancestors and 2026-10-12-p127u-c9-bind-reach-gaps; and on P1.27w, whose
    wrapper `dev:up` calls, book edit 2026-10-12-p127w-stack-wrapper):
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate and web

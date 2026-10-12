@@ -2385,7 +2385,7 @@ Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c   
 Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
   1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
   2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686. Lane: P0.09t's
-  (Phase 0); it may share P0.09t's PR.
+  (Phase 0). It gets its own PR (D3, one step per PR), though the record allowed sharing P0.09t's.
 Waits for: Alex's typed line "yes P0.09n scripts/guards trusted-base imports", asked with the other lines after
   P0.16a. The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`.
 Where: `scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`.
