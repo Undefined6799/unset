@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -164,6 +164,7 @@ flowchart LR
   P1_23["P1.23 island runtime"]
   P1_23d["P1.23d props fuzz test bounded"]
   P1_23g["P1.23g guard fixtures isolated from global git"]
+  P1_23h["P1.23h fixture git sealed from the caller's home"]
   P1_24["P1.24 UI kit: gate + primitives"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
   P1_24k["P1.24k UI kit: chrome, no-JS"]
@@ -393,6 +394,7 @@ flowchart LR
   P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_30r --> P1_30u
+  P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
   P1_28m --> P1_28p
@@ -4970,11 +4972,12 @@ Diagram: none.
 
 ### P1.23g — Isolate guard test fixtures from global git config
 Tags: [SEC] [ALEX]            Depends on: —            Plan: SE-6 (check paths)
+As built: merged by Alex at 2026-10-12T03:24:00Z as `2473434` (#589).
 Check class (scripts/guards test files and git-env.ts), kind/build; issue #582; slice 1 (book edit
 2026-10-12-p123g-guard-fixture-git-isolation, from the coordinator's lead at 02:25Z on Cursor's #573 notes; it is the
 root cause of the `job_reads_git_safely` local timeout reported at 02:21Z). Owner: Phase 2 or the third lane (not Phase
 1: scripts/guards), with Alex's typed line, for example "yes P1.23g scripts/guards tests". Neutral: no rule changes; it
-needs his line only because of the CI-bypass classifier on scripts/guards. Nothing depends on it.
+needs his line only because of the CI-bypass classifier on scripts/guards. P1.23h depends on it.
 Why: a container's global git config can set `commit.gpgsign=true`, `gpg.format=ssh` and `gpg.ssh.program`, so every
   commit is signed by an external program. `withoutGitEnv()` (`scripts/guards/git-env.ts:8-10`) strips `GIT_*` variables
   but not the global config, so the throwaway repositories in guard tests inherit it and every fixture commit runs the
@@ -4992,6 +4995,39 @@ Test: `fixture_git_ignores_global_config`. With `HOME` pointed at a temp dir who
 Done when that test is green, the four suites are green, and the PR body gives job_reads_git_safely's isolated time
   before and after, both measured in this kind of container.
 Diagram: none.
+
+---
+
+### P1.23h — Seal fixture git from the caller's home
+Tags: [SEC]            Depends on: P1.23g (merged, #589)
+Check class (`scripts/guards/git-env.ts` and its tests, `scripts/ci/secrets-fixtures.ts`, the presence rule's test), a
+tightening, kind/build; issue #596; slice 1; book edit 2026-10-12-p123h-fixture-git-follow-ups (final 03:38Z), from the
+coordinator's check of #589 relayed at 03:30Z. Owner: the third lane after P1.17r (#590), or Phase 2 if that frees
+first; not Phase 1 (scripts/guards). His line is needed only for the CI-bypass classifier and approves nothing looser:
+"yes P1.23h scripts/guards scripts/ci". Nothing depends on it.
+Why:
+  - Git reads `$XDG_CONFIG_HOME/git/ignore` and `git/attributes` (or `~/.config/git/…`) as the default
+    `core.excludesFile` and `core.attributesFile` even with `GIT_CONFIG_GLOBAL=/dev/null`. A global `*.secret` ignore
+    hid `a.secret` in a fixture repository, which for a secrets-scanner fixture is a false green.
+  - `scripts/ci/secrets-fixtures.ts:87-91` still commits with `withoutGitEnv()` plus an identity, so a caller's global
+    signer and config apply there.
+  - The presence rule is a text match: importing `fixtureGitEnv` satisfies it even if a spawn in that file does not pass
+    it.
+What:
+  1. `fixtureGitEnv()` also pins `core.excludesFile=/dev/null` and `core.attributesFile=/dev/null` through
+     `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n` and `GIT_CONFIG_VALUE_n`, setting the count fresh rather than appending to a
+     caller's. Red tests: `fixture_git_ignores_xdg_excludes` (with `HOME` and `XDG_CONFIG_HOME` at a temp dir whose
+     `git/ignore` says `*.secret`, a `.secret` file is still tracked) and `fixture_git_ignores_xdg_attributes` (a home
+     attributes file that sets a filter or `-text` has no effect); `fixture_git_ignores_system_config` if cheap
+     (`GIT_CONFIG_SYSTEM` at a file with gpgsign and a failing signer, and the commit still succeeds).
+  2. `scripts/ci/secrets-fixtures.ts` uses `fixtureGitEnv()` with its identity, and scripts/ci joins the presence rule's
+     scope.
+  3. The presence rule checks each call: every `execFileSync`, `execFile`, `spawn` or `spawnSync` of `git` in an
+     in-scope file passes an `env` that is `fixtureGitEnv()` or spreads it, checked with the TypeScript AST already in
+     the repo, not a text match. Red fixtures: an import with no use, a git spawn with `withoutGitEnv()`, and a git spawn
+     with no `env`.
+Done when the reds are red on main and green on the PR, the four guard suites and the secrets fixtures are green, and
+the full suite is green.
 
 ---
 
@@ -8051,6 +8087,7 @@ and the item 2 guard fails if item 1 is reverted while running under `.worktrees
 
 ### P1.30r — Allow preflight to import the edge reader
 Tags: [SEC] [ALEX]     Depends on: —
+As built: merged by Alex at 2026-10-12T03:16:42Z as `e6022bf` (#588).
 Slice 1, issue #584, check (`scripts/lint/.dependency-cruiser.cjs` and its depcruise test), kind/build; book edit
 2026-10-12-p130r-preflight-edge-depcruise-row (final 03:00Z), split from P1.30u because SE-6 refuses a PR that mixes
 check and product paths, and C18's import fails depcruise until this row is on main. Owner: Phase 2. P1.30u depends on
@@ -8079,7 +8116,9 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] [ALEX] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r · **Plan:** as P1.30
+**Tags:** [SEC] [ALEX] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r (merged, #588) · **Plan:** as P1.30
+
+As built: merged by Alex at 2026-10-12T03:32:09Z as `3bcfd6f` (#592).
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 

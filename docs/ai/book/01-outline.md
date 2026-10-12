@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 32 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07).
+Depth: **build-ready**. 33 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15 added 2026-10-12).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -59,6 +59,7 @@ Depth: **build-ready**. 32 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.13 | Licence decision gates the first public commit (answered: AGPL-3.0 apps, MIT building blocks and lexicons; per-package licence files) | [STOP] (answered) | the question: —; ADR PR: P0.04, P0.07 | `phase-0.md` |
 | P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
 | P0.14 | Phase 0 exit: planted faults are blocked; protection drills run once the ruleset is applied (GitHub Pro, 2026-10-06; no merge attempts) | [ALEX] (tail: applies the ruleset) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
+| P0.15 | Verified agent merges: ADR 0019, CLAUDE.md Merging line, README row, 0001 log entry | [SEC] [ALEX] (Alex merges by hand) | — | `phase-0.md` |
 
 ```mermaid
 flowchart TD
@@ -94,6 +95,7 @@ flowchart TD
   P0_13["P0.13 Licence decision gates the first"]
   P0_13a["P0.13a Licence check speed"]
   P0_14["P0.14 Phase 0 exit"]
+  P0_15["P0.15 Verified agent merges"]
   P0_01 --> P0_02
   P0_02 --> P0_03
   P0_03 --> P0_04
@@ -133,7 +135,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 184 steps: 162 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 185 steps: 163 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -215,6 +217,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.23w | Allow the render-entry subpath import (one depcruise row; check step) | [SEC] [ALEX] | P1.23v | `phase-1.md` |
 | P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v, P1.23w | `phase-1.md` |
 | P1.23g | Guard test fixtures isolated from global git config (no signing, no system config) | [SEC] [ALEX] | — | `phase-1.md` |
+| P1.23h | Fixture git sealed from the caller's home (excludes, attributes, system), secrets-fixtures moved, presence rule per call | [SEC] | P1.23g | `phase-1.md` |
 | P1.24i | Icons and inventory (split from P1.24) | [SEC] | P1.22, P1.23r | `phase-1.md` |
 | P1.24h | `safeHref` (trusted base, split from P1.24) | [SEC] | P1.22 | `phase-1.md` |
 | P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
@@ -400,6 +403,7 @@ flowchart TD
   P1_23w["P1.23w Render-entry import row"]
   P1_23c["P1.23c CSS Modules glue"]
   P1_23g["P1.23g Guard fixtures isolated from global git"]
+  P1_23h["P1.23h Fixture git sealed from the caller's home"]
   P1_24i["P1.24i Icons and inventory"]
   P1_24h["P1.24h safeHref"]
   P1_24q["P1.24q UI inventory guard"]
@@ -754,6 +758,7 @@ flowchart TD
   P1_28l --> P1_30u
   P1_28g --> P1_30u
   P1_30r --> P1_30u
+  P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
   P1_28m --> P1_28p
