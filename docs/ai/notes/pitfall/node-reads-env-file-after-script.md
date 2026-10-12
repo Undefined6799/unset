@@ -4,7 +4,7 @@ type: pitfall
 status: current
 areas: ["[[deployment]]"]
 summary: "Node reads --env-file anywhere before a literal --, even after the script name, and runs the file's NODE_OPTIONS."
-code: [deployment/preflight/index.ts, deployment/preflight/cli.test.ts]
+code: [deployment/preflight/inputs.ts, deployment/preflight/cli.test.ts]
 sources: [unset-plan/book-edits/2026-10-12-preflight-compose-inputs.md]
 importance: high
 related: ["[[deployment]]"]
@@ -24,4 +24,5 @@ and `HOME`.
 
 **The rule.** No CLI of ours takes a flag named `--env-file*`, `--require` or `--import`; callers write
 `node <script> -- <args>`; an env file a CLI judges may not hold `NODE_OPTIONS`.
-`deployment/preflight/cli.test.ts` enforces all three for the preflight.
+`deployment/preflight/cli.test.ts` enforces all three for the preflight, whose flags are `CLI_OPTIONS` in
+`deployment/preflight/inputs.ts` (moved out of `index.ts` by P1.27j).
