@@ -1,10 +1,10 @@
 // tests/support/docker.ts (P1.27k, P1.27g): a call that outlives its budget is killed with SIGKILL and named, instead
 // of blocking the event loop until the run's own limit. The stand-ins sleep; no docker is needed.
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { killBefore, runOrKill, withCleanup } from "../support/docker.ts";
+import { cleanUpAll, failAfterCleanup, killBefore, runOrKill, withCleanup } from "../support/docker.ts";
 
 // The stand-ins sleep 10 s; the kill fires at 300 ms, well inside this test's budget.
 const SLEEP_MS = 10_000;
@@ -34,11 +34,16 @@ describe("tests/support/docker.ts", () => {
 
   test("call_ignoring_sigterm_is_still_killed", { timeout: TEST_MS }, () => {
     // The docker CLI forwards SIGTERM to the daemon and waits, so only SIGKILL ends a hung call promptly (N4). The
-    // shell ignores SIGTERM as its first command and `exec` keeps that for the sleep, so the stand-in is deaf to it
-    // within milliseconds; the 1 s budget leaves no doubt it was listening when the kill came (verifier P10 on #690).
+    // stand-in ignores SIGTERM, then writes a marker; `exec` keeps the ignore for the sleep. A stand-in descheduled
+    // before the trap would die of SIGTERM too, so the marker must exist: without it the run proves nothing and fails
+    // (Codex on #701, P1.11c). With the trap in place a SIGTERM kill leaves the sleep running past the test budget.
     const started = Date.now();
-    const ignoresTerm = `trap '' TERM; exec sleep ${SLEEP_MS / 1000}`;
-    expect(() => runOrKill("/bin/sh", ["-c", ignoresTerm], { timeoutMs: 1_000 })).toThrow(/killed after 1000 ms/);
+    const marker = join(dir, "trapped");
+    const ignoresTerm = `trap '' TERM; : > "$1"; exec sleep ${SLEEP_MS / 1000}`;
+    expect(() => runOrKill("/bin/sh", ["-c", ignoresTerm, "sh", marker], { timeoutMs: 1_000 })).toThrow(
+      /killed after 1000 ms/,
+    );
+    expect(existsSync(marker), "the stand-in was killed before it ignored SIGTERM").toBe(true);
     expect(Date.now() - started).toBeLessThan(TEST_MS);
   });
 
@@ -52,6 +57,47 @@ describe("tests/support/docker.ts", () => {
       }),
     ).toThrow(TypeError);
     expect(cleaned).toBe(true);
+  });
+
+  test("setup_error_survives_a_failing_cleanup", async () => {
+    // pg.setup.ts's async setup: a killed removal in the cleanup must not replace why the setup failed (verifier B2
+    // on #697, P1.11c).
+    const setup = new Error("test template migration failed: sql_error");
+    const failed = await (async () => {
+      try {
+        throw setup;
+      } catch (error) {
+        failAfterCleanup(error, () => {
+          throw new Error("docker rm killed after 60000 ms (unset-test-pg-x)");
+        });
+      }
+    })().catch((error: unknown) => error);
+    expect(failed).toBeInstanceOf(AggregateError);
+    expect((failed as AggregateError).errors[0]).toBe(setup);
+    expect((failed as AggregateError).message).toMatch(/^test template migration failed: sql_error \(cleanup also/);
+    // A cleanup that passes rethrows the setup error itself.
+    expect(() => failAfterCleanup(setup, () => undefined)).toThrow(setup);
+  });
+
+  test("every_cleanup_runs_and_every_failure_is_reported", () => {
+    // A hook's folder removal still runs after stopAllPostgres throws (P1.11c).
+    const ran: string[] = [];
+    const cleanups = [
+      () => {
+        ran.push("containers");
+        throw new Error("docker rm killed");
+      },
+      () => {
+        ran.push("folders");
+      },
+      () => {
+        ran.push("secrets");
+        throw new Error("EBUSY");
+      },
+    ];
+    expect(() => cleanUpAll(...cleanups)).toThrow("docker rm killed; EBUSY");
+    expect(ran).toEqual(["containers", "folders", "secrets"]);
+    expect(() => cleanUpAll(() => undefined)).not.toThrow();
   });
 
   test("finished_call_returns_its_output", () => {

@@ -15,7 +15,9 @@ export type Call = {
 
 const MARGIN_MS = 5_000;
 
-/** A call's kill budget inside a test or hook of `budgetMs`: just under it, so the kill fires first and names the call. */
+/**
+ * A call's kill budget inside a test or hook of `budgetMs`: just under it, so the kill fires first and names the call.
+ */
 export function killBefore(budgetMs: number): number {
   if (!(budgetMs > MARGIN_MS)) throw new RangeError(`a budget of ${budgetMs} ms leaves no time for the call`);
   return budgetMs - MARGIN_MS;
@@ -85,18 +87,39 @@ export function withCleanup<T>(body: () => T, cleanup: () => void): T {
       throw new TypeError("withCleanup takes a synchronous body, not a promise");
     }
   } catch (failure) {
-    try {
-      cleanup();
-    } catch (cleanupFailure) {
-      throw new AggregateError(
-        [failure, cleanupFailure],
-        `${messageOf(failure)} (cleanup also failed: ${messageOf(cleanupFailure)})`,
-      );
-    }
-    throw failure;
+    failAfterCleanup(failure, cleanup);
   }
   cleanup();
   return result;
 }
 
+/**
+ * Runs `cleanup` after `failure`, then throws `failure`; when the cleanup fails too, both go in one AggregateError with
+ * `failure` first, so the reason the work failed is never replaced. Async callers use it from their own catch.
+ */
+export function failAfterCleanup(failure: unknown, cleanup: () => void): never {
+  try {
+    cleanup();
+  } catch (cleanupFailure) {
+    throw new AggregateError(
+      [failure, cleanupFailure],
+      `${messageOf(failure)} (cleanup also failed: ${messageOf(cleanupFailure)})`,
+    );
+  }
+  throw failure;
+}
+
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** Runs every cleanup, even after one throws, then throws one AggregateError listing each failure in order. */
+export function cleanUpAll(...cleanups: (() => void)[]): void {
+  const failures: unknown[] = [];
+  for (const cleanup of cleanups) {
+    try {
+      cleanup();
+    } catch (failure) {
+      failures.push(failure);
+    }
+  }
+  if (failures.length > 0) throw new AggregateError(failures, failures.map(messageOf).join("; "));
+}

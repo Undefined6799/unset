@@ -30,6 +30,8 @@ lint, guards and the unit tests you touched, say in the PR that the Postgres tes
 **Hung daemon.** Every docker call the helper makes is killed at 60 s (`tests/support/docker.ts`, P1.27k), so a
 stuck daemon fails the test with a message naming the call instead of blocking until `scripts/test/run.ts` kills
 the whole run at 600 s. Hooks that end in `stopAllPostgres` take `STOP_ALL_MS` (P1.27g), and that hook fails
-naming the container when its `docker rm` is killed, so a leaked container is reported, not hidden (P1.27i).
+naming the container when its `docker rm` is killed, so a leaked container is reported, not hidden (P1.27i). When the
+shared setup (`tests/integration/setup/pg.setup.ts`) fails and its cleanup is killed too, both errors are reported,
+the setup's first (P1.11c).
 
 **Repair.** Nothing to repair; it is a property of the environment.
