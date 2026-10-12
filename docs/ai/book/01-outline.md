@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 35 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a and P0.16 added 2026-10-12).
+Depth: **build-ready**. 36 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16 and P0.09t added 2026-10-12).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -51,6 +51,7 @@ Depth: **build-ready**. 35 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09j | Guard fixtures isolate git from the caller's environment | — | P0.09g | `phase-0.md` |
 | P0.09k | Case-collision guard | — | P0.09j | `phase-0.md` |
 | P0.09m | Grant parser classifies one-part schema names (waits for Alex's typed word: a loosening) | [SEC] [ALEX] | P0.09e | `phase-0.md` |
+| P0.09t | Trusted file pattern carries only its own tests (folder patterns unchanged) | [SEC] [ALEX] (typed line: scripts/guards) | P0.09c | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -90,6 +91,7 @@ flowchart TD
   P0_09j["P0.09j Fixture git ignores hook env"]
   P0_09k["P0.09k Case-collision guard"]
   P0_09m["P0.09m One-part schema names"]
+  P0_09t["P0.09t Trusted file pattern tests only"]
   P0_10["P0.10 Secret scanning"]
   P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
@@ -117,6 +119,7 @@ flowchart TD
   P0_09b --> P0_09c
   P0_06 --> P0_09d
   P0_09c --> P0_09f
+  P0_09c --> P0_09t
   P0_09f --> P0_09g
   P0_13 --> P0_09g
   P0_09g --> P0_09i
@@ -1609,7 +1612,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1617,6 +1620,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 
 - **P0.16:** his own commit of the two CLAUDE.md lines on the PR's branch (exact diff and subject in its body), then
   he merges it by hand (amendments 3 and 4 of 2026-10-12-p016-delivery-check-adr-0019).
+- **P0.09t:** a typed line, "yes P0.09t scripts/guards trusted-base", for the classifier path.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
 - **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
 - **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).

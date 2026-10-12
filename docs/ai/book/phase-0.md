@@ -1647,6 +1647,8 @@ Where: new `scripts/guards/commit-msg.ts`, `scripts/guards/pr-size.ts`, `scripts
   `.github/required-checks.json` (appends `pr-shape`); `.github/labels.json` (appends labels); `renovate.json`
   (commit prefix). The grant classifier (`grant-sql.ts`, `grant-json.ts`, `grant-parse.ts` and their tests) is P0.09e's.
 Size: ~565 source lines as built
+Dependents: P0.09f, P0.09t (book edit 2026-10-12-p204s-riders-and-p009t), and the split guard steps P1.04q, P1.04c,
+  P1.06q and P2.01q.
 
 Why here (letter suffix): the plan's Phase 0 CI list gained these three checks with decision 35 (2026-10-04); they need
 the CI workflow (P0.07), the PR template (P0.09) and the label list (P0.09b), so they come after all three.
@@ -2345,6 +2347,29 @@ Done when (tests, planted fixtures in the guard's tests):
   - `name_two_part_unchanged`: existing two-part callers behave as before.
   - Any other caller of `name()` that expects a one-part name is listed in the PR, with a fixture for each one it
     changes.
+
+---
+
+### P0.09t — Trusted file pattern carries only its own tests
+Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Check class (`scripts/guards/trusted-base.ts` and its test), a tightening, kind/build; issue #639; slice 1; book edit
+  2026-10-12-p204s-riders-and-p009t, from item 6 of architecture's 2026-10-12-p203-post-merge-follow-ups (found
+  verifying #630). Owner: Phase 2 or the third lane, placed by the coordinator (a classifier path; Phase 1 refuses it).
+Waits for: Alex's typed line "yes P0.09t scripts/guards trusted-base", asked with the other lines after P0.16 lands.
+  The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`. Risk
+  until then is low: the only files that can ride are tests, which change no runtime behaviour.
+Where: `scripts/guards/trusted-base.ts` and its test only.
+
+The gap: a trusted *file* pattern adds its parent folder's name to the folder rule. For example,
+`/interfaces/http/session-cookie.ts` lets any `tests/**/http/**` file ride with a trusted change.
+
+The fix: a trusted file pattern lets only its own test files ride: the same basename with `.test.ts`, either beside it
+or under the mirrored `tests/` path. A trusted *folder* pattern keeps its folder rule.
+
+Done when (tests, planted fixtures in the guard's tests):
+  - Red: a PR touching `interfaces/http/session-cookie.ts` plus `tests/integration/http/unrelated.test.ts` fails.
+  - Green: `interfaces/http/session-cookie.test.ts` beside it; a folder pattern's `tests/**/<folder>/**` file.
+  - Main's history replays green under the check, and the full suite is green.
 
 ---
 
