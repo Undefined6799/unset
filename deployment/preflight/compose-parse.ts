@@ -50,7 +50,7 @@ export type Hardening = {
   securityOpt: string[];
   user: string | null;
   memLimit: string | null;
-  cpus: string | null;
+  cpus: number | null;
   pidsLimit: number | null;
   restart: string | null;
 };
@@ -289,13 +289,25 @@ function hardening(r: Reader, spec: YAMLMap): Hardening {
     // Compose takes `user` only as a string ("services.x.user must be a string", Compose v5.6.0).
     user: scalar("user", (t) => USER.test(t) && isString(node("user")), "is not a non-zero UID[:GID] string"),
     memLimit: scalar("mem_limit", (t) => MEM_LIMIT.test(t), "is not a size in m or g"),
-    cpus: scalar("cpus", (t) => CPUS.test(t) && Number(t) > 0, "is not a positive number"),
+    cpus: cpus(r, node("cpus")),
     pidsLimit: pidsLimit(r, node("pids_limit")),
     restart: scalar("restart", (t) => RESTART.includes(t), "is not no, on-failure, unless-stopped or always"),
   };
 }
 
 const isString = (node: unknown): boolean => isScalar(node) && typeof node.value === "string";
+
+/**
+ * A positive CPU count. A number is read from its source text: the canonical-form check would call `2.0` ambiguous,
+ * yet Compose reads it as the number 2 (Codex 4249566407; phase-4.md plans `cpus: 2.0`).
+ */
+function cpus(r: Reader, node: unknown): number | null {
+  if (node === undefined) return null;
+  const text = isScalar(node) && typeof node.value === "number" ? (node as Scalar).source : r.text(node, "cpus");
+  return typeof text === "string" && CPUS.test(text) && Number(text) > 0
+    ? Number(text)
+    : r.fail(node, "cpus is not a positive number");
+}
 
 /** A positive integer up to PIDS_MAX; 0 and -1 would mean no limit at all. */
 function pidsLimit(r: Reader, node: unknown): number | null {

@@ -150,13 +150,15 @@ describe("compose subset", () => {
       securityOpt: ["no-new-privileges:true"],
       user: "65532:65532",
       memLimit: "512m",
-      cpus: "0.5",
+      cpus: 0.5,
       pidsLimit: 128,
       restart: "unless-stopped",
     });
     expect(
       parseCompose(`${base}    user: "999"\n    cpus: "1.5"\n    mem_limit: 1g\n`, "c.yaml").services[0]?.hardening,
-    ).toMatchObject({ user: "999", cpus: "1.5", memLimit: "1g" });
+    ).toMatchObject({ user: "999", cpus: 1.5, memLimit: "1g" });
+    // Codex 4249566407: `2.0` is a positive number as written, not an ambiguous one (phase-4.md plans `cpus: 2.0`).
+    expect(parseCompose(`${base}    cpus: 2.0\n`, "c.yaml").services[0]?.hardening.cpus).toBe(2);
     expect(parseCompose(base, "c.yaml").services[0]?.hardening).toEqual({
       readOnly: null,
       capDrop: [],
@@ -286,7 +288,7 @@ services:
     security_opt: [no-new-privileges:true]
     user: "65532:65532"
     mem_limit: 256m
-    cpus: 0.5
+    cpus: 2.0
     pids_limit: 128
     restart: unless-stopped
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
@@ -440,7 +442,7 @@ function theirsAsOurs(theirs: Theirs) {
             securityOpt: service.security_opt ?? [],
             user: service.user ?? null,
             memLimit: service.mem_limit ?? null,
-            cpus: service.cpus === undefined ? null : `${service.cpus}`,
+            cpus: service.cpus === undefined ? null : Number(service.cpus),
             pidsLimit: service.pids_limit ?? null,
             restart: service.restart ?? null,
           },
