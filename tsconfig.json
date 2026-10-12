@@ -11,6 +11,7 @@
     { "path": "infrastructure/pds" },
     { "path": "infrastructure/postgres" },
     { "path": "infrastructure/seal" },
+    { "path": "infrastructure/session" },
     { "path": "interfaces/admin" },
     { "path": "interfaces/api" },
     { "path": "interfaces/http" },

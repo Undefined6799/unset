@@ -91,10 +91,10 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 |---|---|---|---|---|
 | V3.2.1 | Security controls are in place to prevent browsers from rendering content or … | covered | `test:shared/http/csp/headers.test.ts#headers_on_every_response`, `test:interfaces/http/routes/assets.test.ts#content_type_fixed_with_nosniff` | — |
 | V3.2.2 | Content intended to be displayed as text, rather than rendered as HTML, is handled using … | partial | `test:apps/web/render.test.tsx#island_props_xss_escaped`, `guard:inner-html` | P2.20 |
-| V3.3.1 | Cookies have the 'Secure' attribute set, and if the '__Host-' prefix is not used for the … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `guard:cookie-domain` | P2.03 |
-| V3.3.2 | Each cookie's 'SameSite' attribute value is set according to the purpose of the cookie … | partial | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `step:P2.03` | P2.03 |
-| V3.3.3 | Cookies have the '__Host-' prefix for the cookie name unless they are explicitly designed … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `guard:cookie-domain` | P2.03 |
-| V3.3.4 | If the value of a cookie is not meant to be accessible to client-side scripts (such as a … | partial | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `step:P2.03` | P2.03 |
+| V3.3.1 | Cookies have the 'Secure' attribute set, and if the '__Host-' prefix is not used for the … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `guard:cookie-domain` | P2.03 |
+| V3.3.2 | Each cookie's 'SameSite' attribute value is set according to the purpose of the cookie … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes` | P2.03 |
+| V3.3.3 | Cookies have the '__Host-' prefix for the cookie name unless they are explicitly designed … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `guard:cookie-domain` | P2.03 |
+| V3.3.4 | If the value of a cookie is not meant to be accessible to client-side scripts (such as a … | partial | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `step:P2.06` | P2.06 |
 | V3.4.1 | A Strict-Transport-Security header field is included on all responses to enforce an HTTP … | covered | `test:shared/http/csp/headers.test.ts#headers_on_every_response`, `test:shared/http/csp/headers.test.ts#handler_cannot_override` | — |
 | V3.4.2 | The Cross-Origin Resource Sharing (CORS) Access-Control-Allow-Origin header field is a … | open |  | — |
 | V3.4.3 | HTTP responses include a Content-Security-Policy response header field which defines … | covered | `test:shared/http/csp/policies.test.ts#snapshot_per_group`, `test:shared/http/csp/policies.test.ts#no_unsafe_tokens`, `test:shared/http/csp/headers.test.ts#error_pages_use_group_csp` | — |
@@ -187,10 +187,10 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V7.1.3 | All systems that create and manage user sessions as part of a federated identity … | open |  | — |
 | V7.2.1 | The application performs all session token verification using a trusted, backend service | open |  | — |
 | V7.2.2 | The application uses either self-contained or reference tokens that are dynamically … | open |  | — |
-| V7.2.3 | If reference tokens are used to represent user sessions, they are unique and generated … | open | `step:P2.03` | P2.03 |
+| V7.2.3 | If reference tokens are used to represent user sessions, they are unique and generated … | covered | `test:tests/integration/session/store.test.ts#session.create_stores_hash_only`, `test:tests/integration/session/store.test.ts#session.rotation` | P2.03 |
 | V7.2.4 | The application generates a new session token on user authentication, including … | open | `step:P2.06` | P2.06 |
-| V7.3.1 | There is an inactivity timeout such that re-authentication is enforced according to risk … | open |  | — |
-| V7.3.2 | There is an absolute maximum session lifetime such that re-authentication is enforced … | open |  | — |
+| V7.3.1 | There is an inactivity timeout such that re-authentication is enforced according to risk … | partial | `test:tests/integration/session/store.test.ts#session.idle_expiry`, `step:P2.06` | P2.06 |
+| V7.3.2 | There is an absolute maximum session lifetime such that re-authentication is enforced … | partial | `test:tests/integration/session/store.test.ts#session.absolute_expiry`, `step:P2.06` | P2.06 |
 | V7.4.1 | When session termination is triggered (such as logout or expiration), the application … | open | `step:P2.08` | P2.08 |
 | V7.4.2 | The application terminates all active sessions when a user account is disabled or deleted … | open |  | — |
 | V7.4.3 | The application gives the option to terminate all other active sessions after a … | open | `step:P2.08` | P2.08 |
