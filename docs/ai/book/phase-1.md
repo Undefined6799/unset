@@ -6772,23 +6772,29 @@ docker build kill above 300 s, and check is green.
 Tags: —            Depends on: P1.27g (merged, #690)
 As built: merged at 2026-10-12T19:20:13Z as `7636024` (#697, head 62280f2) (merge data read by REST, 19:27Z).
 Slice 1, not urgent, issue #693, product (`tests/support/`, `tests/integration/`, `deployment/images/*.image.test.ts`),
-kind/fix, lane Phase 1; book edit 2026-10-12-p127i-p127g-follow-ups (18:12Z), from the coordinator's verifier on #690
-(passed at d609000). Its P1 rides P1.27h. It merged before P0.09n, so P2 and P9 stayed in this product step.
+kind/fix, lane Phase 1; book edit 2026-10-12-p127i-p127g-follow-ups (18:12Z, amendment 1 19:40Z), from the
+coordinator's verifier on #690 (passed at d609000). Its P1 rides P1.27h. It merged before P0.09n, so P2 and P9
+stayed in this product step.
 
 **What:**
 - P2 [red first]: `remove()` in `tests/support/postgres.ts` no longer swallows a killed `rm`; a hung removal fails the
   hook by name.
 - P3: a test that the edge stub closes after a killed `run -d`.
-- P4: the postgres image removal kill rises above the 60 s queueing allowance and stays under its hook budget.
+- P4: the postgres image removal kill rises above the 60 s queueing allowance and stays under its hook budget. As
+  built (amendment 1, departure): each removal is killed at exactly 60 s, like every other helper call, inside a hook
+  of 3 × 60 s + 5 s (`deployment/images/postgres.image.test.ts:28-31`).
 - P6: `dockerAsync`'s kill message names the full subcommand (`edge-container.ts:104`).
 - P7: `GROUPS` gains `checkpoint` and the swarm commands.
 - P8: wrap the three comment lines over 120 columns.
 - P9 [red first]: `withCleanup` refuses an async body (a type error or a runtime throw, whichever the builder shows
   red).
 - P10: the SIGTERM test waits for the stand-in's ready signal before starting the budget, instead of assuming Node
-  starts within 300 ms.
+  starts within 300 ms. As built (amendment 1, departure): `runOrKill` uses `spawnSync`, so no ready signal can be
+  awaited; the stand-in is `/bin/sh -c "trap '' TERM; exec sleep 10"`, which ignores SIGTERM before it `exec`s, with
+  a 1 s kill budget (`tests/integration/docker-helper.test.ts:35-43`).
 
-P5 is a wording error in #690's PR body, corrected there; nothing to build.
+P5 is a wording error in #690's PR body, corrected there; nothing to build. The verifier's post-merge follow-ups on
+#697 (amendment 1: B2 in `pg.setup.ts`, leaked temp folders, a 123-column line) wait for the step book to place.
 
 Done when P2 and P9 are red on the base and green after, and check is green.
 
