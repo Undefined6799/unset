@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -163,6 +163,7 @@ flowchart LR
   P1_22["P1.22 base styles, theme, locale"]
   P1_23["P1.23 island runtime"]
   P1_23d["P1.23d props fuzz test bounded"]
+  P1_23g["P1.23g guard fixtures isolated from global git"]
   P1_24["P1.24 UI kit: gate + primitives"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
   P1_24k["P1.24k UI kit: chrome, no-JS"]
@@ -3521,7 +3522,7 @@ Edge cases and failures:
   - Pool exhaustion under a burst of logins → `lock.pool_exhausted` → the login fails with 503 `service.unavailable`
     (fail closed, retryable), not a double refresh.
 
-Done when (tests): (real Postgres; two separate pools simulate two replicas)
+Done when (tests): (real Postgres; two separate pools simulate two replicas; timing made start-driven by P1.17r)
   - serialises_same_key: replica A holds key `did:plc:aaa…` for 300 ms; replica B's call on the same key starts after
     A's `fn` ends (timestamps recorded in `fn`).
   - parallel_different_keys: keys X and Y run concurrently (overlapping timestamps).
@@ -3541,6 +3542,37 @@ Reuse: prototype `/home/claude/0x40/app/src/lib/crm/migrate.ts:70` (`pg_advisory
 Provisional — for reuse review.
 Not in this step: wiring into the OAuth client (P2.04); `docker-rollout` (P5.03).
 Diagram: none.
+
+---
+
+### P1.17r — Lock tests wait for the holder to start
+Tags: —            Depends on: P1.17 (merged)
+Slice 1, issue #590, product, test-only (`tests/integration/postgres/lock.test.ts`), kind/fix; book edit
+2026-10-12-p117r-lock-test-start-race (final 03:20Z), from the third lane's root cause relayed by the coordinator at
+03:14Z. Regression class, so it takes the front of the next free lane (Phase 1 or the third lane, as the coordinator
+assigns). Not on an SE-6 check path or a classifier path; no line from Alex. Nothing depends on it.
+
+**Why:** `serialises_same_key` (:78-86) starts holder A (300 ms), sleeps a fixed 50 ms (:82), starts B and asserts B
+started after A ended (:85). On a cold Postgres, A's pool connect takes longer than 50 ms, so B can take the lock first
+(observed once: a 313 ms inversion). The lock is not at fault. `wait_timeout` (:102), `wait_longer_than_role_timeout`
+(:117) and `pool_exhausted` (:182) make the same fixed-sleep assumption, and `parallel_different_keys` (:88-96) asserts
+overlap with no barrier.
+
+**What:**
+- `hold()` gains a `started` promise, resolved inside `fn` when `times.start` is set.
+- Each test that does `await sleep(N)` to mean "the first holder holds it" awaits `first.started` instead:
+  serialises_same_key, wait_timeout, wait_longer_than_role_timeout and pool_exhausted (its `busy` fn resolves a started
+  promise).
+- parallel_different_keys makes each holder wait inside `fn` until both have started (a barrier), so overlap holds by
+  construction.
+- No timeout bump, retry or skip. The 300 ms, 2000 ms and 6000 ms holds and every assertion bound stay; `sleep` stays
+  only inside `fn` bodies and `lock_lost_logged`'s fn.
+
+**Red evidence:** the PR shows the race reproduced before the fix by delaying A's connect (for example a pool wrapper
+whose `connect` waits 200 ms), with serialises_same_key red, and green with the fix. The wrapper stays in the test as
+`slow_connect_still_serialises`.
+
+Done when the lock suite is green on a cold Postgres and with the slow-connect wrapper, and the full suite is green.
 
 ---
 
@@ -8121,7 +8153,7 @@ prefixed name, plus one pass case, a project-level `name:` alone; `undeclared_se
 
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
-**Split into ten parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
+**Split into thirteen parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
 2026-10-07-p129-postgres-split; 2026-10-07-no-mailpit; architecture's 2026-10-07-p129-migrate-image-and-run-only-images
 with its 13:15Z amendment, 2026-10-07-p129-postgres-image-and-stripped-paths and
 2026-10-07-pds-mail-se7-and-local-verification, which win where they differ; every part is slice 1). Why: nothing calls
@@ -8132,7 +8164,8 @@ with Go 1.24.6 (one CRITICAL, CVE-2025-68121, and 21 HIGH, fixed in Go but in no
 gosu-free image, and the mirror scan must skip only paths our images provably delete; the running-stack tests need
 the whole stack in CI; and the single step was well over the ~550-line split line. The text below this note is the
 whole stack's spec; each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend
-on **P1.29t**, the last part, which implies the rest. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v,
+on **P1.29t**, the last part, which implies the first ten; P1.29y, P1.29b and P1.29u (items 11 to 13) are not implied,
+and nothing depends on them. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v, P1.29b, P1.29u, P1.29y,
 P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
    `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged,
@@ -8221,7 +8254,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    this design (asked 18:57Z); line: "yes P1.29w every shipped image" (Alex, 2026-10-11). Order: it lands before P1.29k and P1.29d, so each new image is scanned
    from its first PR and neither edits `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not
    waiting on Alex's line; discovery picks a merged migrate image up when P1.29w lands). A check step pinning the
-      exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
+   exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
    check becomes the Images workflow's aggregate job `scan` (images.yml), not the Mirror workflow's `scan` (mirror.yml).
 
    As built: merged by Alex as `94c0f03` (#571), a Cursor Agent PR, on Alex's line 'yes P1.29w every shipped image'

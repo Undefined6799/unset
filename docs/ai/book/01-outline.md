@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 183 steps: 161 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 184 steps: 162 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -197,6 +197,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
 | P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p, P1.17e | `phase-1.md` |
+| P1.17r | Lock integration tests wait for the holder to start, not a fixed sleep | — | P1.17 | `phase-1.md` |
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
 | P1.20 | Framework-glue spike | [SPIKE] | P1.04, P1.10 | `phase-1.md` |
@@ -383,6 +384,7 @@ flowchart TD
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17e["P1.17e Lock log events"]
   P1_17["P1.17 Per-DID Postgres advisory lock"]
+  P1_17r["P1.17r Lock tests wait for the holder"]
   P1_18["P1.18 net-guard core"]
   P1_18a["P1.18a net-guard requests"]
   P1_20["P1.20 Framework-glue spike"]
@@ -655,6 +657,7 @@ flowchart TD
   P1_14 --> P2_04
   P1_14d --> P2_04
   P1_17 --> P2_04
+  P1_17 --> P1_17r
   P1_31 --> P2_04
   P2_01 --> P2_04
   P2_03i --> P2_04
