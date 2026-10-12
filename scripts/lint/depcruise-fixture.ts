@@ -53,15 +53,26 @@ function importLine({ spec, kind }: Edge, n: number): string {
   return `import * as m${n} from "${spec}";\nexport { m${n} };\n`;
 }
 
-/** Writes the importing files, every relative target, and a stub package for every bare specifier. */
+/** The file a relative edge imports, repo-relative; undefined for a bare, `node:` or unresolved one. */
+export function target(edge: Edge): string | undefined {
+  return edge.spec.startsWith(".") && !edge.unresolved ? posix.join(posix.dirname(edge.from), edge.spec) : undefined;
+}
+
+/**
+ * Writes the importing files, every relative target once, and a stub package for every bare specifier. Edges from
+ * one file become separate imports in it.
+ */
 export function fixture(edges: Edge[]): string {
   const root = tempDir();
+  const targets = new Set<string>();
   const packages = new Set<string>();
   edges.forEach((edge, n) => {
     write(root, edge.from, importLine(edge, n));
     if (edge.unresolved) return;
-    if (edge.spec.startsWith(".")) {
-      write(root, posix.join(posix.dirname(edge.from), edge.spec), "export const x = 1;\n");
+    const file = target(edge);
+    if (file) {
+      if (!targets.has(file)) write(root, file, "export const x = 1;\n");
+      targets.add(file);
     } else if (!edge.spec.startsWith("node:")) {
       packages.add(edge.spec);
     }
@@ -81,7 +92,7 @@ export function fixture(edges: Edge[]): string {
   return root;
 }
 
-export async function cruiseFixture(edges: Edge[], ruleSet: object): Promise<Outcome> {
+export async function cruiseResult(edges: Edge[], ruleSet: object): Promise<ICruiseResult> {
   const root = fixture(edges);
   const { output } = await cruise(["."], {
     ...config.options,
@@ -90,13 +101,20 @@ export async function cruiseFixture(edges: Edge[], ruleSet: object): Promise<Out
     ruleSet,
     outputType: "json",
   });
-  const result: ICruiseResult = JSON.parse(String(output));
+  return JSON.parse(String(output));
+}
+
+export function outcome(result: ICruiseResult): Outcome {
   const rules = result.summary.violations.filter((v) => v.rule.severity === "error").map((v) => v.rule.name);
   // The API reports exit 0 for the json reporter; the CLI's err reporter exits with the error count.
   return { exitCode: result.summary.error > 0 ? 1 : 0, rules };
 }
 
-const RULES = { allowed: config.allowed, allowedSeverity: config.allowedSeverity, forbidden: config.forbidden };
+export async function cruiseFixture(edges: Edge[], ruleSet: object): Promise<Outcome> {
+  return outcome(await cruiseResult(edges, ruleSet));
+}
+
+export const RULES = { allowed: config.allowed, allowedSeverity: config.allowedSeverity, forbidden: config.forbidden };
 export const check = (edges: Edge[]): Promise<Outcome> => cruiseFixture(edges, RULES);
 export const edge = (from: string, spec: string, kind?: Edge["kind"]): Edge =>
   kind ? { from, spec, kind } : { from, spec };
