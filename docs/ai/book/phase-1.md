@@ -7975,6 +7975,9 @@ inside the default timeout; the PR body gives three isolated timings, each at mo
 
 ### P1.30c — Specifier cruise test independent of checkout
 Tags: [SEC]            Depends on: —
+As built: merged by Alex at 2026-10-12T02:47:56Z as `fb58af9` (#580). The five non-path refusals are pinned by count,
+not by name; a later edit to this test names all seven (book edit 2026-10-12-p130c-specifier-test-checkout-independent,
+amendment 1).
 Slice 1, issue #577, check (scripts/lint, kind/build, test only); book edit
 2026-10-12-p130c-specifier-test-checkout-independent (final 02:20Z), from Phase 2's root cause relayed by the
 coordinator at 02:08Z. Neutral (neither loosens nor tightens a rule); the coordinator clears it, no word from Alex.
@@ -8221,8 +8224,10 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    mirror.yml" (Alex, 2026-10-12T02:13:47Z; book edit 2026-10-12-p129v-skip-dirs-and-images-ignorefile, amendment 1). A
    new stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
    ship) are rejected. P1.29d and P1.29y depend on it.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n,
-   P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
+
+   As built: merged by Alex at 2026-10-12T02:57:23Z as `7a05bd5` (#583).
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v (merged, #583),
+   P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -8303,13 +8308,13 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     measures it, and it needs Alex's typed line.
 11. **P1.29y "Fold the old image jobs into the scan matrix"** ([SEC] [ALEX], check: `.github/workflows/images.yml`,
     `scripts/ci/list-dockerfiles.ts`, `image-workflows.test.ts`, `mirror-scan.test.ts`, kind/build; issue #581; depends
-    on P1.29w (merged, #571) and P1.29v, which also edits images.yml; owner Phase 2 or the third lane, not Phase 1
-    (`.github`); slice 1; book edit 2026-10-12-p129y-fold-old-image-jobs, from the coordinator's #571 verification
-    relayed at 02:25Z). The old `images` job (node-app) and `edge` job still build and scan node-app and edge a second
-    time, at Trivy 0.75.0 while scan-image uses 0.74.0, and they carry checks the matrix lacks: hadolint, SBOM, runs as
-    65532, and the health checks (image-workflows.test.ts:69-103, mirror-scan.test.ts:149-160). migrate gets none of
-    those checks, only the scan. Each check the old jobs run moves into `scan-image`, per discovered image, and both old
-    jobs are deleted:
+    on P1.29w (merged, #571) and P1.29v (merged, #583), which also edits images.yml; owner Phase 2 or the third lane,
+    not Phase 1 (`.github`); slice 1; book edit 2026-10-12-p129y-fold-old-image-jobs, from the coordinator's #571
+    verification relayed at 02:25Z). The old `images` job (node-app) and `edge` job still build and scan node-app and
+    edge a second time, at Trivy 0.75.0 while scan-image uses 0.74.0, and they carry checks the matrix lacks: hadolint,
+    SBOM, runs as 65532, and the health checks (image-workflows.test.ts:69-103, mirror-scan.test.ts:149-160). migrate
+    gets none of those checks, only the scan. Each check the old jobs run moves into `scan-image`, per discovered image,
+    and both old jobs are deleted:
     - Per-image values (expected uid, health command) come from one exact map in list-dockerfiles.ts, beside
       IGNOREFILES. An image missing from the map fails discovery, so a new image cannot arrive unchecked.
     - Every check that ran for node-app or edge before still runs for it; migrate gains them, which is a tightening.

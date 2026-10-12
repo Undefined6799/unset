@@ -678,6 +678,7 @@ matching P0.03 line in `phase-0.md` in its next carrier after this merges.
 
 ### P2.03x — Add the session table, registry rows and timeouts
 Tags: [SEC]            Depends on: P1.12, P1.15g (migration order)            Plan: §5.3 "Sessions"
+As built: merged by Alex at 2026-10-12T02:45:50Z as `2a34464` (#579).
 Feature class (issue #402), judged by its grant findings like P1.16's 0006 (book edit 2026-10-07-p203-repath; amended
   by 2026-10-12-p203x-indexes-move-to-p203i).
 Contents:
@@ -834,7 +835,7 @@ Not in this step: OAuth token storage (P2.04); what happens on login (P2.06) or 
 Diagram: see "State diagram: app session lifecycle" at the top of this file.
 
 ### P2.03i — Add the session indexes after the store
-Tags: [SEC]            Depends on: P2.03, P2.03x            Plan: §5.3 "Sessions"
+Tags: [SEC]            Depends on: P2.03, P2.03x (merged, #579)            Plan: §5.3 "Sessions"
 Product class (issue #576), `infrastructure/postgres/migrations/` only (book edit
   2026-10-12-p203x-indexes-move-to-p203i, from the coordinator's question at 2026-10-08 12:18Z). Owner: Phase 2, the
   next slot after P2.03 merges. Slice: as P2.03. P2.04 depends on it.
@@ -853,7 +854,7 @@ Done when (tests): `npm run check` is green, sqlLint passes on honest annotation
 Size: ~10 source lines
 
 ### P2.04 — OAuth client
-Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
+Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x (merged, #579), P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
 Its migration creates `app.end_sessions_for_did`, which deletes from `app.session` by DID, so it needs the table and the
   `(did)` index first (book edit 2026-10-12-p203x-indexes-move-to-p203i).
 Decision 34 (slice 1): this step needs P1.31's set JSON and NSID, not the publication. It used to depend on P1.35; it now
