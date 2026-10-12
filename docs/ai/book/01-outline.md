@@ -60,7 +60,7 @@ Depth: **build-ready**. 34 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
 | P0.14 | Phase 0 exit: planted faults are blocked; protection drills run once the ruleset is applied (GitHub Pro, 2026-10-06; no merge attempts) | [ALEX] (tail: applies the ruleset) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
 | P0.15 | Verified agent merges: ADR 0019, CLAUDE.md Merging line, README row, 0001 log entry | [SEC] [ALEX] (Alex merges by hand) | — | `phase-0.md` |
-| P0.16 | Delivery check asserts ADR 0019's merge rule ("never merge its own", "ADR 0019") | [SEC] | P0.15 | `phase-0.md` |
+| P0.16 | Delivery check asserts ADR 0019's merge rule ("author threads never merge", "ADR 0019") | [SEC] | P0.15 | `phase-0.md` |
 
 ```mermaid
 flowchart TD
@@ -138,7 +138,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 186 steps: 164 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 190 steps: 168 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -284,6 +284,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30r | Depcruise row: deployment/preflight may import deployment/edge/caddyfile.ts only | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.30e | depcruise_allowed_edges cruises all row edges once (collision and coverage guarded; per-edge fallback for messages) | [SEC] | P1.30r | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] [ALEX] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r | `phase-1.md` |
+| P1.30h | Edge reader scrubs every given env value from its errors (over ENV_NAMES) | [SEC] | P1.30u | `phase-1.md` |
+| P1.30w | Compose reader exact key allowlist, C18 read-only sites mount, shared check value scrub | [SEC] | P1.30u | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -302,6 +304,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29y | Fold the old images/edge jobs (hadolint, SBOM, uid, health) into the discovered scan matrix | [SEC] [ALEX] | P1.29w, P1.29v | `phase-1.md` |
 | P1.29b | Mirror build-stage run scans the whole base (stripped skips on runtime only) | [SEC] | P1.29v | `phase-1.md` |
 | P1.29u | Stripped-path syntax and final-stage RUN separators fail closed | [SEC] | P1.29v | `phase-1.md` |
+| P1.29c | Lock field buildStage, derived from the Dockerfiles and proven by a test | [SEC] | P1.29b | `phase-1.md` |
+| P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
@@ -478,6 +482,8 @@ flowchart TD
   P1_29y["P1.29y Old image jobs folded into the matrix"]
   P1_29b["P1.29b Mirror build stage scanned in full"]
   P1_29u["P1.29u Stripped paths and RUN separators fail closed"]
+  P1_29c["P1.29c Lock records build-stage bases"]
+  P1_29l["P1.29l Mirror scans build-stage bases whole"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
   P1_29a["P1.29a PDS in the dev stack"]
@@ -491,6 +497,8 @@ flowchart TD
   P1_30t["P1.30t Preflight C17 networks"]
   P1_30r["P1.30r preflight-to-edge row"]
   P1_30e["P1.30e row edges in one cruise"]
+  P1_30h["P1.30h Edge reader scrubs env values"]
+  P1_30w["P1.30w Preflight key allowlist and value scrub"]
   P1_30u["P1.30u Preflight C18 edge zones"]
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
@@ -707,6 +715,8 @@ flowchart TD
   P1_29v --> P1_29y
   P1_29v --> P1_29b
   P1_29v --> P1_29u
+  P1_29b --> P1_29c
+  P1_29c --> P1_29l
   P1_29x --> P1_29r
   P1_29r --> P1_29d
   P1_29r --> P1_29e
@@ -764,6 +774,8 @@ flowchart TD
   P1_28g --> P1_30u
   P1_30r --> P1_30u
   P1_30r --> P1_30e
+  P1_30u --> P1_30h
+  P1_30u --> P1_30w
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m

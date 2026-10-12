@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30w, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -231,6 +231,8 @@ flowchart LR
   P1_29y["P1.29y old image jobs folded into the matrix ALEX"]
   P1_29b["P1.29b mirror build stage scanned in full"]
   P1_29u["P1.29u stripped paths and RUN separators fail closed"]
+  P1_29c["P1.29c lock records build-stage bases"]
+  P1_29l["P1.29l mirror scans build-stage bases whole"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
   P1_29a["P1.29a PDS in the dev stack ALEX"]
@@ -244,6 +246,8 @@ flowchart LR
   P1_30t["P1.30t preflight C17 networks"]
   P1_30r["P1.30r preflight-to-edge row"]
   P1_30e["P1.30e row edges in one cruise"]
+  P1_30h["P1.30h edge reader scrubs env values"]
+  P1_30w["P1.30w preflight key allowlist and value scrub"]
   P1_30u["P1.30u preflight C18 edge zones"]
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
@@ -348,6 +352,8 @@ flowchart LR
   P1_29v --> P1_29y
   P1_29v --> P1_29b
   P1_29v --> P1_29u
+  P1_29b --> P1_29c
+  P1_29c --> P1_29l
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
@@ -396,6 +402,8 @@ flowchart LR
   P1_28g --> P1_30u
   P1_30r --> P1_30u
   P1_30r --> P1_30e
+  P1_30u --> P1_30h
+  P1_30u --> P1_30w
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
@@ -8148,7 +8156,7 @@ of one syntax drift (amendment 7).
 
 **Tags:** [SEC] [ALEX] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r (merged, #588) · **Plan:** as P1.30
 
-As built: merged by Alex at 2026-10-12T03:32:09Z as `3bcfd6f` (#592).
+As built: merged by Alex at 2026-10-12T03:32:09Z as `3bcfd6f` (#592). P1.30h and P1.30w depend on it.
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -8194,6 +8202,47 @@ on every real run until P1.29 adds compose.dev.yaml. That is expected, because t
 
 ---
 
+### P1.30h — Edge reader scrubs every env value
+Tags: [SEC]            Depends on: P1.30u (merged, #592)
+Slice 1, issue #601, trusted base (`deployment/edge/caddyfile.ts` and its test), a tightening, kind/fix; book edit
+2026-10-12-p130h-p130w-c18-follow-ups (final 03:48Z), from architecture's B2a in 2026-10-12-c18-follow-ups. Owner:
+Phase 1, after P1.29u; no classifier path and no line from Alex. Independent of P1.30w (SE-6 keeps them apart). Nothing
+depends on it.
+
+**What:** `readEdgeConfig` scrubs every value it was given, over `ENV_NAMES`, from any CaddyfileError message before
+throwing. It keeps no list of names to scrub, and messages keep naming tokens only (P1.28l).
+
+**Red fixtures:** the `"{$PDS_HOST}" { respond 204 }` site with a shape-valid sentinel PDS_HOST, and the same with
+sentinel ACME_EMAIL and PDS_UPSTREAM; the error text contains no sentinel. Sentinels pass the reader's shape checks, and
+the body says why.
+
+---
+
+### P1.30w — Preflight refuses unread keys and scrubs values
+Tags: [SEC]            Depends on: P1.30u (merged, #592)
+Slice 1, issue #602, product (`deployment/preflight/`: `compose-parse.ts`, the C18 check, `checks/types.ts` and their
+tests), a tightening, kind/fix; same book edit, from architecture's B1 and B2b. Owner: Phase 1, after P1.29u, in either
+order with P1.30h. Nothing depends on it.
+
+**What:**
+1. **Exact key allowlist.** `service()` (`compose-parse.ts:159-176`) checks each service's keys against an exact
+   allowlist: the keys it reads (`image`, `env_file`, `environment`, `ports`, `networks`, `network_mode`, `volumes`)
+   and inert keys named one by one, derived from the compose files on main, each cited in the body with one line on
+   why it is inert. Any other key is a ParseError naming the key only; a later key needs a new ruling.
+2. **Read-only sites mount.** C18 requires it, as `:ro` or long-form `read_only: true`; `:rw`, no mode, and long form
+   without `read_only: true` fail.
+3. **Shared scrub helper** in `checks/types.ts`. Every check uses it, so each SecretMap value a check read becomes its
+   key name before `fail()` text leaves the check.
+
+**Red fixtures:** `configs` at `/etc/caddy/Caddyfile`; service `secrets` at the same target;
+`tmpfs: [/etc/caddy/snippets]`; an `entrypoint` override and a `command` override; a `:rw` sites mount and one with no
+mode; shape-valid sentinel values for PDS_HOST, ACME_EMAIL and PDS_UPSTREAM that never appear in any check's output.
+
+**Question, not scope:** whether C18 should also pin the edge service's `image` to the CI-built edge image. If the
+thread sees a gap, it says so under "What I am unsure about", and architecture rules.
+
+---
+
 ### P1.30n — Refuse compose network names in the preflight
 Tags: [SEC]            Depends on: P1.30t (merged, #492)
 As built: merged by Alex at 2026-10-07T21:49:21Z as `ca71670` (#501).
@@ -8222,7 +8271,7 @@ prefixed name, plus one pass case, a project-level `name:` alone; `undeclared_se
 
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
-**Split into thirteen parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
+**Split into fifteen parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
 2026-10-07-p129-postgres-split; 2026-10-07-no-mailpit; architecture's 2026-10-07-p129-migrate-image-and-run-only-images
 with its 13:15Z amendment, 2026-10-07-p129-postgres-image-and-stripped-paths and
 2026-10-07-pds-mail-se7-and-local-verification, which win where they differ; every part is slice 1). Why: nothing calls
@@ -8233,9 +8282,9 @@ with Go 1.24.6 (one CRITICAL, CVE-2025-68121, and 21 HIGH, fixed in Go but in no
 gosu-free image, and the mirror scan must skip only paths our images provably delete; the running-stack tests need
 the whole stack in CI; and the single step was well over the ~550-line split line. The text below this note is the
 whole stack's spec; each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend
-on **P1.29t**, the last part, which implies the first ten; P1.29y, P1.29b and P1.29u (items 11 to 13) are not implied,
-and nothing depends on them. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v, P1.29b, P1.29u, P1.29y,
-P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
+on **P1.29t**, the last part, which implies the first ten; P1.29y, P1.29b, P1.29u, P1.29c and P1.29l (items 11 to
+15) are not implied, and no step outside them depends on them. Order: P1.29w (preferred first) and P1.29k, then
+P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
    `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged,
    and P1.28r, so its image test is `*.image.test.ts` from the start; Phase 1):
@@ -8357,16 +8406,18 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    As built: merged by Alex at 2026-10-12T02:57:23Z as `7a05bd5` (#583).
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v (merged, #583),
    P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
-   `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
+   `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu` (`rm -f`
+   or `rm -rf` on the exact path, neutral, 2026-10-12),
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
    never starts as root has no use for it, and if anything ever starts it as root, the entrypoint's gosu call fails
    instead of running Postgres as root. Postgres (`docker.io/library/postgres`, official) joins `LIBRARY_IMAGES`, the
    lock (`stripped: ["/usr/local/bin/gosu"]`, a new key by name at `images.test.ts:143`) and the mirror list as a
-   runtime entry, at `fc973eb9` (tag 18-trixie, pushed 2026-10-06T07:10Z) under the age-rule exception (it fixes
-   OpenSSL CVE-2026-75804 and CVE-2026-84782 and pcre2 CVE-2026-103111; the body names them with both push times),
-   or newer under the age rule. `tests/support/postgres.ts` reads the lock entry; tests keep running the upstream
-   image as root with gosu, test-only. Runbook line: a bind-mounted data directory must be owned by 999 before first
+   runtime entry, at `74935e72` (pushed 2026-10-07; fc973eb9 went stale) under the age-rule exception, provided the
+   body quotes the fixed HIGH or CRITICAL Trivy lines on both digests (at least OpenSSL CVE-2026-75804 and
+   CVE-2026-84782 and pcre2 CVE-2026-103111 where they appear); otherwise not before 2026-10-14.
+   `tests/support/postgres.ts` reads the lock entry; tests keep running the upstream image as root with gosu,
+   test-only. Runbook line: a bind-mounted data directory must be owned by 999 before first
    start (a named volume takes 999 from the image; one created under the old root start is already 999). The init
    scripts in `deployment/postgres/init/` need no change: the official entrypoint already runs them as postgres.
    Tests: `postgres_image_strips_gosu`, `postgres_image_runs_as_postgres_uid`, the per-Dockerfile `USER` check by
@@ -8385,10 +8436,14 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    is needed, it is added to FINAL_STAGE_COMMANDS, citing the line; anything it keeps goes under "What I am unsure
    about", with the reason. Test: `image_privileges_match_list` covers postgres. From book edit
    2026-10-08-p129f-final-stage-allowlists (00:55Z): it adds the postgres entries to P1.29f's destination-prefix and
-   ENV-key allowlists, each cited.
-6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d, P1.29w,
-   P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f and P1.29m, so no image is composed before every image is
-   scanned):
+   ENV-key allowlists, each cited. The checker's stage count for the postgres kind is exactly 1 (a tightening); the
+   other kinds keep at least 2. The postgres kind's package-database list is `statoverride` only, under amendment 7's
+   test (book edit 2026-10-12-p129d-departures-recorded, from architecture's 2026-10-12-p129d-departures).
+
+   As built: merged by Alex at 2026-10-12T03:46:41Z as `46bedab` (#594).
+6. **P1.29 "Compose the dev stack without the PDS"** (product, security-review; depends on P1.29k, P1.29d (merged,
+   #594), P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f and P1.29m, so no image is composed before
+   every image is scanned):
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate, web and
    edge (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
@@ -8463,7 +8518,11 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     `mirror-scan.test.ts` proves the build-stage invocation carries no `--skip-files` or `--skip-dirs`, and the runtime
     invocation still carries both for each lock-listed path; red on `7a05bd5`, green on the PR. If the CI-bypass
     classifier refuses the mirror.yml edit, the coordinator asks Alex for "yes P1.29b mirror build-stage scans npm".
-    Nothing depends on it.
+    P1.29c depends on it.
+
+    As built: merged by Alex at 2026-10-12T03:47:04Z as `fdf240e` (#599). #599 changed no call on the list at merge,
+    because the node and postgres bases appear only as `stage: runtime` entries; the build-stage goal moves to P1.29c
+    and P1.29l (book edit 2026-10-12-p129c-p129l-build-stage-scan, from amendment 1 of 2026-10-12-p129v-follow-ups).
 13. **P1.29u "Fail closed on stripped paths and RUN separators"** ([SEC], product: `deployment/images/images.test.ts`
     only, under the `/deployment/` security-review line, kind/fix; issue #587; depends on P1.29v (merged, #583); owner
     Phase 1; slice 1; same book edit, from architecture's ruling 2). `STRIPPED_PATH` (`images.test.ts:786`) accepts only
@@ -8472,6 +8531,24 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     stays. Red fixtures: `/usr/.`, `/./usr`, `/usr/../etc`, `/usr//bin`, `/usr/local/`, `/usr` and
     `rm -rf /usr/local/lib/node_modules/npm || true`; each is red on the PR, and the shipped lock stays green. Nothing
     depends on it.
+14. **P1.29c "Lock records which bases build stages use"** ([SEC], product: `deployment/images/bases.lock.json`,
+    `deployment/images/images.test.ts`, a tightening, kind/fix; issue #604; depends on P1.29b (merged, #599); owner
+    Phase 1; slice 1; book edit 2026-10-12-p129c-p129l-build-stage-scan, from architecture's F1 part 1). Each lock entry
+    gets a required boolean `buildStage`: true when any non-final stage of any Dockerfile is built FROM that base. A
+    test derives it through the same `fromImages` and stage reading the kind tests use, and fails if the lock disagrees
+    in either direction or the field is missing. Expected today: node `true`; postgres `false`; caddy runtime `false`
+    unless a build stage uses it; the caddy-builder entry stays `stage: build`. Red fixtures: a lock with node `false`,
+    a lock with postgres `true`, and an entry with no field. P1.29l depends on it.
+15. **P1.29l "Scan build-stage bases whole in the mirror"** ([SEC], check: `.github/workflows/mirror.yml`,
+    `scripts/ci/mirror-scan.test.ts`, a tightening, kind/build; issue #605; depends on P1.29c; owner Phase 2 or the
+    third lane, not Phase 1 (`.github`); slice 1; same book edit, from architecture's F1 part 2, F2 and F3). For every
+    `buildStage: true` entry, mirror.yml runs one extra Trivy scan of the whole base, with no skips and the build
+    threshold (fail on CRITICAL, warn on HIGH); the runtime run is unchanged. F2: the test's fake docker parses both
+    `--flag value` and `--flag=value`, and the test fails on any `TRIVY_*` variable reaching the scan step that the
+    workflow does not set itself; both mutants are red. F3: `mirror.yml:46` says the lock is read for the shape check
+    and the skips, and `:53` says Trivy 0.75.0. If the CI-bypass classifier refuses the edit, the coordinator asks Alex
+    for "yes P1.29l mirror build-stage scan". Done when the test shows node's extra whole-base invocation and none for
+    postgres, both mutants are red, and the full suite is green. Nothing depends on it.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries
