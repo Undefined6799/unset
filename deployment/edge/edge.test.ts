@@ -521,7 +521,8 @@ describe("edge site rules (P1.28f)", () => {
       expect(() => withSites({ "sites/other.caddy": quoted }, env), name).toThrow(
         `quoted top-level token "{$${name}}" is not supported`,
       );
-      for (const extra of [quoted, `{$${name}} {\n\tnot_a_directive\n}\n`]) {
+      // The second fixture's message echoes the value (matcher <value> is not allowed), so a missed scrub shows (F3).
+      for (const extra of [quoted, `other.unset.test {\n\troute {\n\t\t@m {$${name}}\n\t}\n}\n`]) {
         let message = "";
         try {
           withSites({ "sites/other.caddy": extra }, env);
@@ -530,8 +531,26 @@ describe("edge site rules (P1.28f)", () => {
         }
         expect(message, `${name}: ${extra}`).not.toBe("");
         expect(message, `${name}: ${extra}`).not.toContain(sentinel);
+        if (extra !== quoted) expect(message).toContain(`matcher {$${name}} is not allowed`);
       }
     }
+  });
+
+  test("edge_site_file_named_after_host_is_scrubbed", () => {
+    // P1.30g F1: an error from reading the tree itself, before any Caddyfile is parsed, names the enabled file; named
+    // after the host, it would print the host unless readEdgeConfig scrubs its own errors.
+    const env = { ...ENV, PDS_HOST: "sentinelhost.example.test" };
+    const { edgeDir, sitesDir } = edgeTree();
+    symlinkSync(join(edgeDir, "sites", "missing.caddy"), join(sitesDir, `${env.PDS_HOST}.caddy`));
+    expect(() => readEdgeConfig(edgeDir, sitesDir, env, FILES)).toThrow(/^\{\$PDS_HOST\}\.caddy: dangling link$/);
+  });
+
+  test("edge_scrub_replaces_longer_values_first", () => {
+    // P1.30g F2: the host inside the upstream. Replaced shortest-first, the upstream would read {$PDS_HOST}:3000.
+    const env = { ...ENV, PDS_HOST: "pds.sentinel.example.test", PDS_UPSTREAM: "pds.sentinel.example.test:3000" };
+    expect(() =>
+      withSites({ "sites/other.caddy": "other.unset.test {\n\troute {\n\t\t@m {$PDS_UPSTREAM}\n\t}\n}\n" }, env),
+    ).toThrow(/matcher \{\$PDS_UPSTREAM\} is not allowed$/);
   });
 
   test("edge_zones_written_in_place_fail", () => {
@@ -710,7 +729,11 @@ describe("edge site rules (P1.28f)", () => {
   test("edge_messages_never_carry_env_values", () => {
     // Amendment 8, point 5 and amendment 9, point 3: every rule's failure path runs under sentinel values, and a
     // message names a site by its address token, never by a value from env.
-    const env = { ...ENV, ACME_EMAIL: "acme-sentinel@unset.test", PDS_UPSTREAM: "upstream-sentinel:3000" };
+    const env = {
+      PDS_HOST: "host-sentinel.unset.test",
+      ACME_EMAIL: "acme-sentinel@unset.test",
+      PDS_UPSTREAM: "upstream-sentinel:3000",
+    };
     const messages: string[] = [];
     const caught = (run: () => unknown) => {
       try {
@@ -763,7 +786,7 @@ describe("edge site rules (P1.28f)", () => {
     }
     pds(site.replace(at, `${at}\ttls {$ACME_EMAIL}\n`));
     // Errors raised while parsing, before any rule runs (main's pin, restored after verification of #552, item 2).
-    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM", "PDS_HOST"]) {
       caught(() => withSites({ "sites/other.caddy": `"{$${name}}" {\n\trespond 200\n}\n` }, env));
       pds(site.replace("\t\timport pds-ratelimit\n", `\t\timport pds-ratelimit\n\t\t@m {$${name}}\n`));
     }
@@ -771,7 +794,7 @@ describe("edge site rules (P1.28f)", () => {
     extra(`other.unset.test {\n${route}}\n`);
     // A snippet no site imports is read later, by snippet(); its errors are redacted too (verification of #541, F1).
     const unimported = site.replace("\t\timport pds-ratelimit\n", "");
-    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM", "PDS_HOST"]) {
       for (const line of [`{$${name}} on`, `@m {$${name}}`]) {
         const limitsWith = limits.replace("\trate_limit {\n", `\t${line}\n\trate_limit {\n`);
         edit({ "sites/pds.caddy": unimported, "snippets/ratelimit.caddy": limitsWith });
@@ -813,13 +836,14 @@ describe("edge site rules (P1.28f)", () => {
       }
     }
     expect(messages).toContainEqual(expect.stringContaining("an environment placeholder must be a whole word"));
-    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM"]) {
+    for (const name of ["ACME_EMAIL", "PDS_UPSTREAM", "PDS_HOST"]) {
       expect(messages).toContainEqual(expect.stringContaining(`quoted top-level token "{$${name}}" is not supported`));
       expect(messages).toContainEqual(expect.stringContaining(`matcher {$${name}} is not allowed`));
     }
     for (const message of messages) {
       expect(message).not.toContain(env.ACME_EMAIL);
       expect(message).not.toContain(env.PDS_UPSTREAM);
+      expect(message).not.toContain(env.PDS_HOST);
     }
   });
 });
