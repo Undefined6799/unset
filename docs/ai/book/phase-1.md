@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.34f, P1.34p, P1.34w, P1.34s, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -259,6 +259,8 @@ flowchart LR
   P1_34p["P1.34p secret inputs outside the project"]
   P1_34w["P1.34w wrapper argument handling"]
   P1_34s["P1.34s walk the Docker socket path"]
+  P1_11r["P1.11r try every edge test tag"]
+  P1_34e["P1.34e final-stage RUN lines per kind"]
   P1_29l["P1.29l mirror scans build-stage bases whole"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
@@ -473,6 +475,7 @@ flowchart LR
   P1_30a --> P1_29
   P1_30a --> P1_27w
   P1_27w --> P1_29
+  P1_34e --> P1_27o
   P1_27o --> P1_29a
   P1_28 --> P1_29a
   P1_27y --> P1_27n
@@ -7082,6 +7085,11 @@ names the rule, not the path (amendment 7).
 
 Done when every mutant in item 1 is killed, items 2 to 7 are red on the base and green after, and check is green.
 
+As built: merged at 2026-10-12T21:36:35Z as `d34c3ab` (#700, head f8469e7) (merge data read by REST, 21:50Z).
+`resolveChecked` takes `WalkInputs = Pick<Inputs, "lstat" | "readlink" | "statfs" | "uid">` (amendment 9), so
+P1.34s can call it without a full preflight `Inputs`. Item 7's loop test merged without the real hang layout; the
+test-only fix (Phase 2's 632a55a) rides P1.34p as its first, separate commit (amendment 10).
+
 ---
 
 ### P1.27w — Run Compose only through the preflight wrapper
@@ -7133,31 +7141,40 @@ Done when the ruling's tests are red first where they can be, then green, and ch
 As built: merged at 2026-10-12T21:08:32Z as `9a4bdd0` (#711, head a5c5ad7) (merge data read by REST, 21:15Z). It
 carries the 19:58Z amendment, the Name belt documented as a misconfiguration check (`stack.ts:147`). The 21:12Z
 socket-walk amendment arrived after the merge and is not built; it is P1.34s. Argument follow-ups are P1.34w.
+
 ---
 
 ### P1.27o — Edge /data and /config owned by caddy
-Tags: [SEC] trusted            Depends on: —
+Tags: [SEC] trusted            Depends on: P1.34e
 Slice 1, issue #679, trusted base (`deployment/edge/Dockerfile`, kind/feature), lane the third thread, after P1.29 and
-before P1.29a; book edit 2026-10-12-p127o-edge-data-config-owner (17:10Z), from architecture's
-2026-10-12-edge-data-volume-owner. The verifier's ADR 0019 review is the SE-6 review; no line from Alex. P1.29a depends
-on it; P1.29 does not.
+before P1.29a; book edit 2026-10-12-p127o-edge-data-config-owner (17:10Z, amendments 1 21:36Z and 2 21:58Z), from
+architecture's 2026-10-12-edge-data-volume-owner and its Amendments 1 and 2. The verifier's ADR 0019 review is the
+SE-6 review; no line from Alex. P1.29a depends on it; P1.29 does not.
 
-**What:**
-1. The final stage of `deployment/edge/Dockerfile` copies empty directories to `/data/` and `/config/` with
-   `COPY --chown=65532:65532 --chmod=0700`. There is no `RUN` in the final stage.
-2. The edge row of the destination list in `deployment/images/images.test.ts` gains exactly `/data/` and `/config/`,
-   which is neutral under the P1.29d item 4 test.
-3. An outcome test checks owner 65532 and mode 0700 on both paths, and that no other ownership changes.
+**What (amendments 1 and 2: `COPY --chown --chmod` into the existing `/data/` left it alone, and the base leaves
+`/data/caddy` and `/config/caddy` at 1777):**
+1. The final stage of `deployment/edge/Dockerfile` runs exactly two exec-form lines before `USER`:
+   `RUN ["/bin/chown", "-R", "65532:65532", "/data", "/config"]` and
+   `RUN ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"]` (the ruled `go=` form left `/data` at 1700, because
+   the base's sticky bit survived). `deployment/edge/final-stage-runs.json` lists exactly those two lines, which
+   P1.34e's images test reads; the edge image test pins both and refuses any other RUN in the final stage.
+2. (dropped by amendment 1: there is no COPY, so the images.test.ts destination row is unchanged.)
+3. In the image, `/data`, `/config`, `/data/caddy` and `/config/caddy` are 65532:65532, directories 0700, with no
+   sticky or world bit; uid 65533 cannot list `/data`.
 4. P1.28's integration test (`tests/integration/deployment/edge/edge.image.test.ts`) switches `/data` from tmpfs to a
-   named volume and asserts that it is writable.
+   named volume and asserts that it is writable, and that Caddy as 65532 writes its CA under `/data/caddy` on a fresh
+   named volume.
 
-Items 2 to 4 test the trusted Dockerfile and must change with it or CI goes red. If pr-shape's trusted-base isolation
+Runbook line: Docker seeds a named volume only when it is empty, so an edge data volume made before this change keeps
+the old ownership; remove it (`docker volume rm <stack>_edge-data`) and let Caddy re-issue. The PR body says the 17:05Z
+failure is most likely such a volume, unproven.
+
+Items 3 and 4 test the trusted Dockerfile and must change with it or CI goes red. If pr-shape's trusted-base isolation
 refuses them in one PR, the builder does not split the change into a red PR; it reports the refusal to architecture
-and the step book. If BuildKit or the Dockerfile reader refuses `COPY --chmod` or `--chown`, the `RUN chown` fallback
-goes back to architecture first.
+and the step book.
 
-Done when the outcome test is red on main and green after, the named-volume write test passes, the images test
-passes with only the two added destinations, and check is green.
+Done when the outcome test is red on main and green after, the named-volume write test passes, the images test passes
+with the edge's JSON, and check is green.
 
 ---
 
@@ -7239,6 +7256,7 @@ its `rmSync`, and check is green.
 
 
 As built: merged at 2026-10-12T21:07:53Z as `7c6225f` (#706, head d83c2ba) (merge data read by REST, 21:15Z).
+
 ---
 
 ### P1.11f — Keep cleanup errors in Postgres test setup
@@ -7282,13 +7300,35 @@ that half becomes a trusted PR of its own (SE-6). Nothing from Alex. Nothing dep
 Done when, red first, an afterAll whose `stop()` and removal both fail reports both errors, a built test image
 carries the label (inspect), and check is green.
 
+As built: merged at 2026-10-12T21:46:33Z as `6d39468` (#723, head 4e70585) (merge data read by REST, 21:50Z). The
+edge-test cleanup items E1 and E2 (21:27Z amendment) are in `deployment/edge/`, the trusted base, so they are P1.11r.
+
+---
+
+### P1.11r — Try every edge test tag on cleanup
+Tags: trusted            Depends on: —
+Slice 1, issue #720, trusted base (`deployment/edge/{caddyfile,package-manager}.image.test.ts`), kind/fix, lane Phase
+1; book edit 2026-10-12-p111r-edge-tag-cleanup (21:28Z), from the 21:27Z amendment of
+2026-10-12-p111i-test-image-cleanup (the coordinator's post-merge verify of #717, P1.27z). It takes a P1.11 letter,
+the test-helper family. Its own PR: it could not ride P1.11i, which is product (SE-6). Nothing from Alex. Nothing
+depends on it.
+
+**What, each red first:**
+1. E1: the cleanup loop (:106 at dda9079) tries every tag and collects every error, as
+   `deployment/images/package-manager.image.test.ts:422-438` does, instead of throwing out of `built.map` on the first
+   removal killed for running too long.
+2. E2: the removal error (:108) names the tag.
+
+Done when, with an injected removal that fails for the first tag, the second tag is still removed and both errors are
+reported, each naming its tag (red on the base), and check is green.
+
 ---
 
 ### P1.34f — Require the interpolation env flag
 Tags: [SEC]            Depends on: P1.30a
 Slice 1, issue #705, product (`deployment/preflight/` and its tests, plus any npm script or test that calls the
 preflight), kind/fix, lane Phase 1, before P1.34; book edit 2026-10-12-p134f-require-interpolation-env (19:50Z,
-amendments 1 20:05Z and 2 20:28Z), from
+amendments 1 20:14Z and 2 20:28Z), from
 architecture's Amendment 5 of 2026-10-12-p127u-bind-ancestors-and-build-context. #677 (P1.30a) had already passed
 verification, so this is a lettered follow-up; the letter sits on P1.34, the step that must not run without it, and
 P1.34's [ALEX] tag does not carry over. It supersedes the flag and `.env` items that once rode #700 (P1.27u
@@ -7311,10 +7351,10 @@ file at 0666 (each failing C9 on mode) are red first and refused after, and chec
 ### P1.34p — Refuse secret inputs inside the project
 Tags: [SEC]            Depends on: P1.27u
 Slice 1, issue #704, product (`deployment/preflight/` and its tests), kind/fix, lane Phase 2, before P1.34 runs the
-stack on the host; book edit 2026-10-12-p134p-secret-inputs-outside-project (19:48Z, amendment 1 19:55Z), from
-architecture's Amendment 4 of 2026-10-12-p127u-bind-ancestors-and-build-context. P1.34's [ALEX] tag does not carry
-over. P1.29 does not wait for it, since it already keeps live inputs outside the checkout. Nothing from Alex: a
-tightening within his C9 card ("Yes", 16:45:14Z). P1.34 depends on it.
+stack on the host; book edit 2026-10-12-p134p-secret-inputs-outside-project (19:48Z, amendments 1 19:55Z, 2 20:57Z,
+3 21:18Z and 4 22:00Z), from architecture's Amendment 4 of 2026-10-12-p127u-bind-ancestors-and-build-context. P1.34's
+[ALEX] tag does not carry over. P1.29 does not wait for it, since it already keeps live inputs outside the checkout.
+Nothing from Alex: a tightening within his C9 card ("Yes", 16:45:14Z). P1.34 depends on it.
 
 **What:** the preflight refuses any secret input (every `env_file:`, every `secrets.*.file` and the
 `--interpolation-env` file) whose realpath sits inside the Compose project directory, `dirname(files[0])`, using the
@@ -7341,6 +7381,11 @@ first:**
    with `x -> /` fails C18; a link loop fails rather than hangs. It may be the split-off PR if one is needed.
 If the step passes about 400 lines, Phase 2 splits it and the step book gives the second PR a P1.34 letter.
 
+**Amendment 4 (22:00Z):** #700 (P1.27u) merged before its test-only B1 fix, so this PR opens with that fix as its
+own first commit (Phase 2's 632a55a): the loop test uses the real hang layout and is shown hanging on the old code,
+build.ts's comment is reworded, the pitfall line is corrected and the V13.3.2 row is put in order. Test lines do not
+count toward the ~400.
+
 Done when the red-first tests pass as stated and check is green.
 
 ---
@@ -7365,18 +7410,50 @@ Done when each item is red first and green after, and check is green.
 ### P1.34s — Walk the Docker socket path
 Tags: [SEC]            Depends on: P1.27u
 Slice 1, issue #716, product (`deployment/preflight/stack.ts` and its tests), kind/fix, lane the third thread, before
-P1.34 runs the stack; book edit 2026-10-12-p134w-p134s-wrapper-follow-ups (21:20Z). It carries the 21:12Z amendment of
-P1.27w (2026-10-12-p127w-stack-wrapper), which arrived after #711 merged. It calls P1.27u's `resolveChecked`, with no
-inline walk (architecture's Amendment 2 of 2026-10-12-workspace-imports-and-remote-daemon). Nothing from Alex. P1.34
-depends on it.
+P1.34 runs the stack; book edit 2026-10-12-p134w-p134s-wrapper-follow-ups (21:20Z, amendments 1 21:44Z and 2 21:52Z).
+It carries the 21:12Z amendment of P1.27w (2026-10-12-p127w-stack-wrapper), which arrived after #711 merged. It calls
+P1.27u's `resolveChecked`, with no inline walk (architecture's Amendment 2 of
+2026-10-12-workspace-imports-and-remote-daemon). Nothing from Alex. P1.34 depends on it.
 
 **What:** walk `dirname(socket)` with `resolveChecked`, then lstat the socket itself: a socket, not a link, owned by
-root or the deploy uid (`getuid`). The `docker info` Name check stays, described in the code comment and PR body as a
+root or the deploy uid (`getuid`), with nlink 1 (amendment 1, 21:44Z). `resolveChecked` is called unchanged, through
+its narrowed `WalkInputs` parameter (P1.27u amendment 9), and gains no socket option, because sockets stay refused
+everywhere else. The `docker info` Name check stays, described in the code comment and PR body as a
 misconfiguration check, not proof of locality.
+- Runbook line (amendment 1): "Docker Desktop is not supported; use the native Docker Engine on Linux." Desktop's
+  daemon runs in a VM and binds go through its file-sharing layer, so C9's host-side walk would not describe what the
+  container sees. Desktop later is a card for Alex, not an allowance in code.
+- (amendment 2, 21:52Z) #718's verifier nits (P1.34w), each red first where it can be: the flag test bans by prefix
+  (`--env-file*`, `--require*`, `--import*`), not by exact name; the real-process spawn and timeout wiring gets a
+  test (a child that outlives the deadline is killed and reported); on ETIMEDOUT the reason is fixed and names the
+  timeout, and the child is killed with SIGKILL so the wait is bounded; no reason prints `process.execPath` or any
+  other path; the two stale test texts are corrected.
 
-Done when, red first, a socket in sticky `/tmp`, a socket owned by another uid, a link hop through a directory another
-user can write and a `/proc` path each fail; `/var/run -> /run` and `/run/user/<uid>/docker.sock` pass; and check is
-green.
+Done when, red first, a socket in sticky `/tmp`, a socket owned by another uid, a socket with a second hard link, a link
+hop through a directory another user can write and a `/proc` path each fail; `/var/run -> /run` and
+`/run/user/<uid>/docker.sock` pass; and check is green.
+
+---
+
+### P1.34e — Allow the edge's two ownership commands
+Tags: [SEC]            Depends on: —
+Slice 1, issue #721, product (`deployment/images/images.test.ts`), kind/fix, lane the third thread (it owns P1.27o);
+book edit 2026-10-12-p134e-edge-final-stage-commands (21:40Z, amendment 1 21:58Z), from architecture's addendum to
+Amendment 1 and its Amendment 2 of 2026-10-12-edge-data-volume-owner. The letter sits on P1.34, the edge's first host
+run; P1.34's [ALEX] tag does not carry over. It lands before P1.27o, which is trusted, so SE-6 keeps them apart. The PR
+title may read "Read final-stage RUN lines per image kind" (amendment 1). Nothing from Alex: architecture scoped it.
+P1.27o depends on it.
+
+**What (amendment 1):** a kind's extra final-stage RUN lines are read, exactly, from
+`deployment/<kind>/final-stage-runs.json` (exec-form arrays). With no file, a kind keeps `FINAL_STAGE_COMMANDS`
+(`images.test.ts:477`), `{rm, setcap}`, only. The structural rules stay in the test and apply to every listed line:
+final stage only, exec form, no shell, no package manager, no indirection, no globs, no RUN flags (`--mount`,
+`--network`, …), placed before `USER`, exact match. So a JSON cannot admit a shell or an install, and widening what the
+edge runs needs a trusted-base review. P1.34e adds no JSON file itself; P1.27o adds the edge's.
+
+Done when, red first with fixtures only, a fixture kind with a JSON passes its exact listed line; the same command with
+other arguments fails; a listed line in shell form, or naming a shell or package manager, fails; a kind with no JSON
+still allows only `rm` and `setcap`; and check is green.
 
 ---
 
@@ -9770,7 +9847,9 @@ P1.29h, P1.29s, P1.29t.
 9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring and their tests
    below. `dev-seed` creates accounts through the dev PDS and, on `local` only, confirms their email through P1.29h's
-   reader and the real `confirmEmail`; `dev-precheck` travels with it.
+   reader and the real `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one
+   `logging` entry: exactly `{driver: "none"}`, on the seed service only (book edit
+   2026-10-12-p129s-seed-file-location, amendments 2 and 3).
 10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s): `pds_device_row_has_no_client_ip`
     (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
     that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
@@ -9993,11 +10072,12 @@ dev-seed:
 4. For each test account (alice, bob, carol .0x40.space): createAccount with a generated password (crypto
    random, 24 bytes base64url) and the invite code. Handle taken → skip and report "exists".
 5. Print { handle, did, password } as JSON on stdout, which reaches only the host wrapper's pipe: the seed service
-   declares `logging: { driver: "none" }` and runs with `--rm`, so Docker keeps no log of it (P1.30y accepts that
-   `logging` value on the seed service only). The wrapper validates the JSON and writes .seeded.json to the sibling
-   unset-dev-env folder (0600, owned by the deploy user; O_EXCL temp file, fsync, rename), never logging it; the
-   container mounts nothing from unset-dev-env. Logs carry handles and DIDs only, never a password. (P1.29s, book
-   edit 2026-10-12-p129s-seed-file-location, amendments 1 and 2.)
+   declares `logging: { driver: "none" }` and runs with `--rm`, so Docker keeps no log of it (the compose key allowlist
+   accepts that `logging` value on the seed service only, added by P1.29s). The wrapper validates the JSON and writes
+   .seeded.json to the sibling unset-dev-env folder (0600, owned by the deploy user; O_EXCL temp file, fsync, rename),
+   never logging it; the container mounts nothing from unset-dev-env. The wrapper prints the created handles to the
+   operator's terminal and writes nothing about the accounts to any log (SE-7). (P1.29s, book edit
+   2026-10-12-p129s-seed-file-location, amendments 1 to 3.)
 6. Re-run → idempotent (existing accounts skipped).
 ```
 
