@@ -846,8 +846,8 @@ function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
  */
 type ListedRuns = readonly (readonly string[])[];
 const LISTED_RUNS_FILE = "final-stage-runs.json";
-function listedRunsOf(kind: Kind | undefined): ListedRuns {
-  const file = kind === undefined ? undefined : join(DEPLOYMENT, kind, LISTED_RUNS_FILE);
+function listedRunsOf(kind: Kind | undefined, root = DEPLOYMENT): ListedRuns {
+  const file = kind === undefined ? undefined : join(root, kind, LISTED_RUNS_FILE);
   return file !== undefined && existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as ListedRuns) : [];
 }
 
