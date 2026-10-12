@@ -1,12 +1,13 @@
 // P1.30: the strict Compose subset the preflight reads (architecture record 2026-10-07-p130-preflight-location-and-yaml):
 // anything Compose could read differently from us is refused rather than guessed.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
 import { networksOf, ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
+import { loadCompose } from "./index.ts";
 
 describe("compose subset", () => {
   const refused = (yaml: string) => expect(() => parseCompose(yaml, "c.yaml")).toThrow();
@@ -357,6 +358,37 @@ function theirsAsOurs(theirs: Theirs) {
   };
 }
 
+// P1.30z (architecture record 2026-10-12-preflight-project-directory): with several files, every relative path resolves
+// from the first file's directory, never from the file that names it. The second file sits in another directory.
+const FIRST = "name: unset-prod\nservices:\n  edge:\n    image: x\n";
+const SECOND =
+  "services:\n  pds:\n    image: y\n    env_file: [e.env]\n    volumes: [./data:/data]\nsecrets:\n  s:\n    file: ./s\n";
+
+/** The paths loadCompose resolved, in the order the agreement test compares them. */
+function resolvedPaths(files: string[], readText: (path: string) => string | null) {
+  const { compose } = loadCompose(files, readText);
+  const pds = compose.services.find((service) => service.name === "pds");
+  return {
+    binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+    envFiles: pds?.envFiles ?? [],
+    secretFiles: compose.secretFiles,
+  };
+}
+
+describe("compose project directory", () => {
+  test("paths_resolve_from_the_first_file_directory", () => {
+    const texts = new Map([
+      ["/p/a/c.yaml", FIRST],
+      ["/p/b/c.yaml", SECOND],
+    ]);
+    expect(resolvedPaths(["/p/a/c.yaml", "/p/b/c.yaml"], (path) => texts.get(path) ?? null)).toEqual({
+      binds: ["/p/a/data"],
+      envFiles: ["/p/a/e.env"],
+      secretFiles: ["/p/a/s"],
+    });
+  });
+});
+
 describe("compose agreement", () => {
   const dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -377,5 +409,26 @@ describe("compose agreement", () => {
     for (const file of [fixture, ...real]) {
       expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
     }
+  });
+
+  test.runIf(hasCompose || process.env.CI)("project_directory_matches_compose_config", () => {
+    const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
+    mkdirSync(join(dir, "a"));
+    mkdirSync(join(dir, "b"));
+    writeFileSync(first, FIRST);
+    writeFileSync(second, SECOND);
+    writeFileSync(join(dir, "a", "e.env"), "");
+    const json = execFileSync(
+      "docker",
+      ["compose", "-f", first, "-f", second, "config", "--format", "json", "--no-interpolate"],
+      { encoding: "utf8" },
+    );
+    const theirs = theirsAsOurs(JSON.parse(json) as Theirs);
+    const pds = theirs.services.pds;
+    expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
+      binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+      envFiles: pds?.envFiles,
+      secretFiles: theirs.secretFiles,
+    });
   });
 });
