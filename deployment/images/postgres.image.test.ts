@@ -25,7 +25,10 @@ const ROOT_START_MS = 60_000;
 const BUILD_CALL_MS = killBefore(BUILD_MS);
 const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const ROOT_START_CALL_MS = killBefore(ROOT_START_MS);
-const REMOVE_CALL_MS = 35_000;
+// A removal may queue behind CI's image builds like any container call, so it gets the same 60 s (verifier P4 on
+// #690); the hook holds two containers and the image.
+const REMOVE_CALL_MS = 60_000;
+const REMOVE_HOOK_MS = 3 * REMOVE_CALL_MS + 5_000;
 
 describe("postgres image", () => {
   let image = "";
@@ -39,8 +42,7 @@ describe("postgres image", () => {
     image = built.out.trim();
   }, BUILD_MS);
 
-  // Every removal is tried, even after one is killed, and each is killed at REMOVE_CALL_MS so the two containers and
-  // the image fit in the hook's budget; the kills are reported together (P1.27g).
+  // Every removal is tried, even after one is killed, and the kills are reported together (P1.27g).
   afterAll(() => {
     const removals = [
       ...containers.map((name) => ["rm", "-f", "-v", name]),
@@ -55,7 +57,7 @@ describe("postgres image", () => {
       }
     }
     if (failures.length > 0) throw new AggregateError(failures, `${failures.length} removal(s) killed`);
-  }, CONTAINER_MS);
+  }, REMOVE_HOOK_MS);
 
   /** Starts the image detached with no network and a throwaway superuser password; returns the container name. */
   function start(timeoutMs: number, extra: readonly string[] = []): string {

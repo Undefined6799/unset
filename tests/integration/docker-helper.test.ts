@@ -33,11 +33,25 @@ describe("tests/support/docker.ts", () => {
   });
 
   test("call_ignoring_sigterm_is_still_killed", { timeout: TEST_MS }, () => {
-    // The docker CLI forwards SIGTERM to the daemon and waits, so only SIGKILL ends a hung call promptly (N4).
+    // The docker CLI forwards SIGTERM to the daemon and waits, so only SIGKILL ends a hung call promptly (N4). The
+    // shell ignores SIGTERM as its first command and `exec` keeps that for the sleep, so the stand-in is deaf to it
+    // within milliseconds; the 1 s budget leaves no doubt it was listening when the kill came (verifier P10 on #690).
     const started = Date.now();
-    const ignoresTerm = `process.on("SIGTERM", () => {}); setTimeout(() => {}, ${SLEEP_MS})`;
-    expect(() => runOrKill(process.execPath, ["-e", ignoresTerm], { timeoutMs: 300 })).toThrow(/killed after 300 ms/);
+    const ignoresTerm = `trap '' TERM; exec sleep ${SLEEP_MS / 1000}`;
+    expect(() => runOrKill("/bin/sh", ["-c", ignoresTerm], { timeoutMs: 1_000 })).toThrow(/killed after 1000 ms/);
     expect(Date.now() - started).toBeLessThan(TEST_MS);
+  });
+
+  test("async_cleanup_body_is_refused", () => {
+    // An await inside the body would resume after the cleanup had already removed what it uses (verifier P9 on #690).
+    let cleaned = false;
+    const body = async () => "late";
+    expect(() =>
+      withCleanup(body as unknown as () => string, () => {
+        cleaned = true;
+      }),
+    ).toThrow(TypeError);
+    expect(cleaned).toBe(true);
   });
 
   test("finished_call_returns_its_output", () => {
