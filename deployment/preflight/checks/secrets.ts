@@ -14,11 +14,26 @@ import { type Check, fail, type Inputs, type MountedSecret, missing, type Outcom
 export const c9: Check = {
   id: "C9",
   run: (inputs) =>
+    insideProjectProblem(inputs) ??
     mountedProblem(inputs) ??
     bindSourceProblem(inputs) ??
     composeReadProblem(inputs) ??
     pass(`${inputs.secretPaths.length} files, ${inputs.mountedSecrets.length} mounted secrets`),
 };
+
+/**
+ * No env file or file secret lives in the Compose project directory, where the checkout's committed fixtures sit
+ * (P1.34p, architecture Amendment 4 of 2026-10-12-p127u-bind-ancestors-and-build-context): judged by the same
+ * lexical, realpath and (dev, ino) tests as a bind source. The project's `.env` always sits there; P1.34f refuses it.
+ * The reason names no path.
+ */
+function insideProjectProblem(inputs: Inputs): Outcome | null {
+  const dotEnv = join(inputs.projectDir, ".env");
+  const files = [...inputs.secretPaths.filter((path) => path !== dotEnv), ...inputs.mountedSecrets.map((s) => s.path)];
+  if (files.some((path) => reaches(path, inputs.projectDir, inputs)))
+    return fail("an env or secret file is inside the Compose project directory");
+  return null;
+}
 
 /** The files Compose itself reads values from: env files and the `.env`, each walked hop by hop (Amendment 6). */
 function composeReadProblem(inputs: Inputs): Outcome | null {

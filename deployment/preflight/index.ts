@@ -303,6 +303,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   const inputs: Inputs = {
     env,
     root: resolve(deps.root),
+    projectDir: dirname(files[0] as string),
     compose,
     serviceEnv,
     secretPaths: [...new Set(secretPaths)],

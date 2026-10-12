@@ -434,6 +434,35 @@ describe("preflight", () => {
     );
   });
 
+  // P1.34p: no file Compose reads values or secrets from sits inside the project directory, where the checkout's
+  // committed fixtures live; the reason names no path.
+  test("c9_secret_inputs_outside_project", async () => {
+    const inside = "FAIL C9 an env or secret file is inside the Compose project directory";
+    const fixture = { "deployment/edge/edge.test.env": "EDGE_HOST=edge.example.test\n" };
+    const envInside = COMPOSE.replace("../../unset-dev-env/pds.env", "edge/edge.test.env");
+    expect((await check({ compose: envInside, files: fixture })).lines).toContain(inside);
+    // The same file reached through a link that lives outside the project.
+    const viaLink = stack({ files: fixture });
+    symlinkSync(join(viaLink.root, "deployment/edge/edge.test.env"), join(envOf(viaLink.root), "dev.env"));
+    writeFileSync(viaLink.file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"));
+    const linked = await preflight(["--env", "prod", "--compose", viaLink.file], {
+      root: viaLink.root,
+      run: fakeRun().run,
+      ...fakeFs(viaLink.root),
+    });
+    expect(linked.lines).toContain(inside);
+    // A mounted secret inside the project.
+    const secretInside = COMPOSE.replace("../../unset-dev-secrets/db_password", "edge/edge.test.env");
+    expect((await check({ compose: secretInside, files: fixture })).lines).toContain(inside);
+    // A real env file beside the checkout passes.
+    const { root, file } = stack();
+    writeFileSync(join(envOf(root), "dev.env"), readFileSync(join(envOf(root), "pds.env")));
+    chmodSync(join(envOf(root), "dev.env"), 0o600);
+    writeFileSync(file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"));
+    const beside = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+    expect(failed(beside.lines)).toEqual([]);
+  });
+
   // P1.30o: a mounted secret is mode 0400, owned by the one uid that mounts it, in a 0700 directory of the deploy user.
   test("c9_mounted_secret_owner_and_mode", async () => {
     const path = (root: string) => join(secretsOf(root), "db_password");
@@ -553,8 +582,8 @@ describe("preflight", () => {
     // A symlinked secret.
     const { root, file } = stack();
     rmSync(secret(root));
-    writeFileSync(join(root, "deployment/real"), "x\n");
-    symlinkSync(join(root, "deployment/real"), secret(root));
+    writeFileSync(join(dirname(root), "real"), "x\n");
+    symlinkSync(join(dirname(root), "real"), secret(root));
     const linked = await preflight(["--env", "prod", "--compose", file], {
       root,
       run: fakeRun().run,
@@ -895,11 +924,11 @@ describe("preflight", () => {
   test("c9_mounted_secrets_share_one_folder", async () => {
     const second = COMPOSE.replace("    secrets: [db_password]", "    secrets: [db_password, api_key]").replace(
       "    file: ../../unset-dev-secrets/db_password\n",
-      "    file: ../../unset-dev-secrets/db_password\n  api_key:\n    file: other/api_key\n",
+      "    file: ../../unset-dev-secrets/db_password\n  api_key:\n    file: ../../other/api_key\n",
     );
     const { root, file } = stack({ compose: second });
-    mkdirSync(join(root, "deployment/other"), { mode: 0o700 });
-    writeFileSync(join(root, "deployment/other/api_key"), "key\n", { mode: 0o400 });
+    mkdirSync(join(dirname(root), "other"), { mode: 0o700 });
+    writeFileSync(join(dirname(root), "other/api_key"), "key\n", { mode: 0o400 });
     const result = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(result.lines).toContain("FAIL C9 mounted secrets are not all in one directory");
   });

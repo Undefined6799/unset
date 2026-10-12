@@ -23,6 +23,8 @@ export type Inputs = {
   env: Env;
   /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
+  /** The Compose project directory, `dirname(files[0])`, where every relative path in the stack resolves from. */
+  projectDir: string;
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */
   serviceEnv: ReadonlyMap<string, SecretMap>;
