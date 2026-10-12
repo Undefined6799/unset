@@ -24,7 +24,9 @@
     "test": "node scripts/test/run.ts",
     "test:images": "node scripts/test/run.ts --images",
     "budgets": "node scripts/budgets/check.ts",
-    "semgrep:fixtures": "node scripts/lint/semgrep-fixtures.ts run"
+    "semgrep:fixtures": "node scripts/lint/semgrep-fixtures.ts run",
+    "dev:up": "node deployment/preflight/stack.ts up --env dev --compose deployment/compose.dev.yaml --interpolation-env ../unset-dev-env/dev-public.env",
+    "dev:down": "node deployment/preflight/stack.ts down --env dev --compose deployment/compose.dev.yaml --interpolation-env ../unset-dev-env/dev-public.env"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

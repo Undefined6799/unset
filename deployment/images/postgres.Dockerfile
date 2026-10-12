@@ -20,3 +20,7 @@ RUN rm -rf /usr/local/bin/gosu \
   && rm -f /usr/bin/chage /usr/bin/chfn /usr/bin/chsh /usr/bin/expiry /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp \
     /usr/bin/passwd /usr/bin/su /usr/bin/umount /usr/sbin/unix_chkpwd
 USER 999:999
+# Ready once the server accepts connections on its own socket (P1.29; Compose's `depends_on: service_healthy` waits on
+# it). Exec form, with the timings the other images use; pg_isready ships in the base (PostgreSQL 18 docs, pg_isready).
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["pg_isready", "-h", "/var/run/postgresql"]
