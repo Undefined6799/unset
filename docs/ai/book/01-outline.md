@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 41 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q and P0.09r added 2026-10-12; P0.09o folded into P0.09n).
+Depth: **build-ready**. 44 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -57,6 +57,9 @@ Depth: **build-ready**. 41 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09n | Bar trusted tests from product helpers (P0.09o folded in) | [SEC] [ALEX] (typed line: scripts/guards, CODEOWNERS) | P0.09q | `phase-0.md` |
 | P0.09o | ~~Bar trusted code from untrusted packages~~ **Folded** into P0.09n | — | — | `phase-0.md` |
 | P0.09r | Report spawn errors in the git-env test | [ALEX] (typed line: scripts/guards) | P0.09j | `phase-0.md` |
+| P0.09s | Reach domains only through their exports | — | P0.09n | `phase-0.md` |
+| P0.09u | Pin the identity syntax subpath to its file | — | P0.09p | `phase-0.md` |
+| P0.09v | Contain Dockerfiles with the native realpath | [SEC] | — | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -102,6 +105,9 @@ flowchart TD
   P0_09q["P0.09q Trusted code imports trusted"]
   P0_09n["P0.09n Trusted files import only trusted"]
   P0_09r["P0.09r Git-env test reports spawn errors"]
+  P0_09s["P0.09s Domains only through exports"]
+  P0_09u["P0.09u Pin the syntax subpath"]
+  P0_09v["P0.09v Dockerfiles by native realpath"]
   P0_10["P0.10 Secret scanning"]
   P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
@@ -141,6 +147,8 @@ flowchart TD
   P0_09i --> P0_09h
   P0_09j --> P0_09k
   P0_09j --> P0_09r
+  P0_09n --> P0_09s
+  P0_09p --> P0_09u
   P0_09e --> P0_09m
   P0_09i --> P0_09l
   P0_07 --> P0_10
@@ -160,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 236 steps: 212 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 240 steps: 216 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -362,11 +370,15 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11f | Keep cleanup errors in Postgres test setup | — | P1.11c | `phase-1.md` |
 | P1.11i | Restore edge tag removal; label test images | — | P1.27x, P1.27z | `phase-1.md` |
 | P1.11r | Try every edge test tag on cleanup (trusted base) | — | — | `phase-1.md` |
+| P1.11s | Report a failed edge removal; pin afterAll | — | — | `phase-1.md` |
+| P1.11n | Name test helpers apart; keep them out of images | — | P0.09n | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
 | P1.34w | Tighten the wrapper's argument handling | [SEC] | — | `phase-1.md` |
 | P1.34s | Walk the Docker socket path | [SEC] | P1.27u | `phase-1.md` |
 | P1.34e | Allow the edge's two ownership commands | [SEC] | — | `phase-1.md` |
+| P1.34x | Admit only chown and chmod in run lists | [SEC] | P1.34e | `phase-1.md` |
+| P1.34r | Walk, open, then fstat in the env reader | [SEC] | P1.27j | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
@@ -577,6 +589,10 @@ flowchart TD
   P1_34s["P1.34s Walk the Docker socket path"]
   P1_11r["P1.11r Try every edge test tag"]
   P1_34e["P1.34e Final-stage RUN lines per kind"]
+  P1_11s["P1.11s Edge removal failures reported"]
+  P1_11n["P1.11n Test helpers out of images"]
+  P1_34x["P1.34x Run lists admit chown and chmod only"]
+  P1_34r["P1.34r Env reader walks, opens, fstats"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27w["P1.27w Compose only through the wrapper"]
   P1_27o["P1.27o Edge data and config owned by caddy"]
@@ -925,6 +941,8 @@ flowchart TD
   P1_30a --> P1_27w
   P1_27w --> P1_29
   P1_34e --> P1_27o
+  P1_34e --> P1_34x
+  P1_27j --> P1_34r
   P1_27o --> P1_29a
   P1_27y --> P1_27n
   P1_30o --> P1_27a

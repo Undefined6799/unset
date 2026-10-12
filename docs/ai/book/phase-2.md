@@ -110,7 +110,8 @@ and this table is the only place to change.
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
 Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the
-slice exit **P2.13a**, in that order, after the Phase 1 slice-1 steps (`01-outline.md`, "Slice 1"). The rest of this
+slice exit **P2.13a**, in that order, once their own dependencies merge, ahead of the paused Phase 1 hardening steps
+(refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a) is built after slice 2 and the i18n slice (the rest of Phase 1, ending at
 P1.38). Step ids did not change; the file is in build order.
 
@@ -865,6 +866,9 @@ Contents: one migration, on the next free number at open time, containing only:
 Done when (tests): `npm run check` is green, sqlLint passes on honest annotations, and the migration test applies it
   after P2.03x's.
 Size: ~10 source lines
+As built: merged at 2026-10-12T22:24:03Z as `88b79b6` (#637, head 2cea1a3) (merge data read by REST, 22:35Z). It is
+  the repo's first `CREATE INDEX CONCURRENTLY` migration. The coordinator's post-merge verify parked F1 (a failed
+  concurrent build leaves an INVALID index that a rerun skips), F2 and N2 in the refocus order, section 4.
 
 ### P2.04 — OAuth client
 Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x (merged, #579), P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
