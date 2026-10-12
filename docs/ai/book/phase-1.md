@@ -6725,6 +6725,8 @@ Slice 1, issue #664, trusted base (`deployment/edge/`, kind/feature), lane Phase
 
 Done when both files pass a timeout on every docker `spawnSync`, and check is green. Nothing depends on it.
 
+As built: merged at 2026-10-12T21:07:35Z as `6442968` (#686, head 0c83058) (merge data read by REST, 21:15Z).
+
 ---
 
 ### P1.27h — Fix the edge image test kill follow-ups
@@ -7122,6 +7124,10 @@ no line from Alex. P1.29 depends on it; P1.27l uses the same wrapper with `--env
 
 Done when the ruling's tests are red first where they can be, then green, and check is green.
 
+
+As built: merged at 2026-10-12T21:08:32Z as `9a4bdd0` (#711, head a5c5ad7) (merge data read by REST, 21:15Z). It
+carries the 19:58Z amendment, the Name belt documented as a misconfiguration check (`stack.ts:147`). The 21:12Z
+socket-walk amendment arrived after the merge and is not built; it needs a lettered follow-up from the step book.
 ---
 
 ### P1.27o — Edge /data and /config owned by caddy
@@ -7226,6 +7232,8 @@ its product files.
 Done when item 1 is red on `7636024` (the helper did not exist), item 4's SIGTERM mutant fails, neither hook can skip
 its `rmSync`, and check is green.
 
+
+As built: merged at 2026-10-12T21:07:53Z as `7c6225f` (#706, head d83c2ba) (merge data read by REST, 21:15Z).
 ---
 
 ### P1.11f — Keep cleanup errors in Postgres test setup

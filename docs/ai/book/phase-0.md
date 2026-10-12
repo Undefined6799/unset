@@ -2451,8 +2451,8 @@ The fix:
   untrusted because `index.ts` re-exports untrusted modules. The guard resolves `@unset/*` subpaths through the
   package's `exports`; `append.ts` uses the subpath from P0.09q.
 - Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
-- Sequencing: P1.27g (#690), P1.27i (#697) and P1.27x (#702), which edit those helpers, have merged. P1.11c (#706)
-  also edits `tests/support` files and merges before this PR; otherwise its edits to those files move to a trusted PR.
+- Sequencing: P1.27g (#690), P1.27i (#697), P1.27x (#702) and P1.11c (#706), which edit those helpers, have all
+  merged, so nothing has to move. P1.11f and P1.11i, which edit them next, become trusted-class PRs once this lands.
 
 Done when (tests, planted fixtures in the guard's tests):
   - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
