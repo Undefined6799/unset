@@ -420,11 +420,16 @@ function imagePrivilegeProblems(kind: string, file: string): string[] {
 
 describe("image package managers", () => {
   afterAll(() => {
-    // Each tag is removed, even after one removal fails, and the failures are reported together (P1.27x).
+    // Each tag is removed, even after one removal fails, and the failures are reported together (P1.27x). The removals
+    // share one deadline inside the hook's budget: a blocked spawnSync holds vitest's timer, so a full call budget per
+    // tag could run four times past it (Codex on #702).
+    const deadline = Date.now() + CONTAINER_CALL_MS;
     const failures: unknown[] = [];
     for (const tag of built.values()) {
+      const left = deadline - Date.now();
       try {
-        removeTestImage(tag, { timeoutMs: CONTAINER_CALL_MS });
+        if (left <= 0) throw new Error(`no time left to remove ${tag}`);
+        removeTestImage(tag, { timeoutMs: left });
       } catch (error) {
         failures.push(error);
       }
