@@ -21,7 +21,7 @@ export const c21: Check = {
     // A hostname is case-insensitive and may end in the root's dot (RFC 4343 section 2, RFC 1034 section 3.1).
     const name = pdsHostname(inputs).toLowerCase();
     if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space")
-      return pass("skipped: PDS_HOSTNAME names a different host");
+      return pass("skipped: PDS_HOSTNAME is unset or a different host");
     const text = inputs.readText(inputs.retirementReportPath);
     if (text === null) return missing(inputs.retirementReportPath);
     let report: unknown;

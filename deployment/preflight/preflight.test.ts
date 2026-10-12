@@ -289,7 +289,13 @@ describe("preflight", () => {
     chmodSync(join(root, "deployment/secrets/db_password"), 0o644);
     const loose = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
     expect(loose.lines).toContain(
-      `FAIL C9 ${join(root, "deployment/secrets/db_password")} has permissions other than owner read and write`,
+      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
+    );
+    // Too few bits fails the same way as too many (Codex review on #650).
+    chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
+    const tight = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
+    expect(tight.lines).toContain(
+      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
     );
     const other = await check({}, "prod", { uid: 4242 });
     expect(failed(other.lines)).toEqual(["C9"]);
@@ -327,9 +333,9 @@ describe("preflight", () => {
   test("c12_log_enabled_fails", async () => {
     expect(await expectOnly("C12", { pdsEnv: { LOG_ENABLED: "true" } })).toContain("pds-debug-logging.md");
     // The reason names the key, never a value it can take, so the runner's scrub leaves it whole (P1.30j).
-    for (const on of ["on", "off", "1", "yes", "true"]) {
+    for (const on of ["on", "off", "1", "yes", "no", "true"]) {
       expect(await expectOnly("C12", { pdsEnv: { LOG_ENABLED: on } }), on).toBe(
-        "FAIL C12 LOG_ENABLED enables request logging; see docs/human/runbooks/pds-debug-logging.md",
+        "FAIL C12 LOG_ENABLED differs from the required literal; see docs/human/runbooks/pds-debug-logging.md",
       );
     }
     const unset = await check({ pdsEnv: { LOG_ENABLED: null } });
@@ -571,7 +577,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
       expect(await expectOnly("C21", { compose: host(name) })).toMatch(/input missing: .*retirement-check\.json$/);
     }
     expect((await check({ compose: host("pds.0x40.space") })).lines).toContain(
-      "PASS C21 skipped: PDS_HOSTNAME names a different host",
+      "PASS C21 skipped: PDS_HOSTNAME is unset or a different host",
     );
   });
 

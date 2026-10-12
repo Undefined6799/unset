@@ -9,7 +9,7 @@ export const c9: Check = {
       const info = stat(path);
       if (info === null) return missing(path);
       if (!info.isFile() || info.size === 0) return fail(`${path} is empty or not a file`);
-      if ((info.mode & 0o777) !== 0o600) return fail(`${path} has permissions other than owner read and write`);
+      if ((info.mode & 0o777) !== 0o600) return fail(`${path} must have exactly owner read and write permissions`);
       if (info.uid !== uid) return fail(`${path} is not owned by the deploy user`);
     }
     return pass(`${secretPaths.length} files`);
