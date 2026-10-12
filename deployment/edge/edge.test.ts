@@ -926,16 +926,19 @@ describe("local stack files (P1.34c)", () => {
 
   test("local_files_never_in_the_image", () => {
     // COPY and ADD from the build context, in any case and indentation Docker accepts (moby/buildkit
-    // frontend/dockerfile/docs/reference.md, "Format": instructions are not case-sensitive); flags dropped, the last
-    // word is the destination.
+    // frontend/dockerfile/docs/reference.md, "Format": instructions are not case-sensitive), after joining each
+    // backslash continuation and dropping comment lines inside it, as the parser does first (parser.go:168, :329-346).
+    // Flags are dropped, the last word is the destination, and a copy is from a build stage only when one of its words
+    // is the --from flag.
     const sources = (text: string): string[] =>
       text
+        .replaceAll(/\\[ \t]*\r?\n(?:[ \t]*(?:#.*)?\r?\n)*/g, "")
         .split("\n")
-        .filter((line) => /^\s*(COPY|ADD)\s/i.test(line) && !/--from=/i.test(line))
-        .flatMap((line) =>
-          line
-            .trim()
-            .split(/\s+/)
+        .map((line) => line.trim().split(/\s+/))
+        .filter(([keyword]) => /^(COPY|ADD)$/i.test(keyword ?? ""))
+        .filter((words) => !words.some((word) => /^--from=/i.test(word)))
+        .flatMap((words) =>
+          words
             .slice(1)
             .filter((word) => !word.startsWith("--"))
             .slice(0, -1),
@@ -943,6 +946,19 @@ describe("local stack files (P1.34c)", () => {
     expect(sources(dockerfile)).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
     for (const line of ["copy local/ /etc/caddy/local/", "  COPY local/app.caddy /etc/caddy/", "ADD local/ /srv/"]) {
       expect(sources(`${dockerfile}${line}\n`), line).toContain(line.trim().split(/\s+/)[1]);
+    }
+    // Continuations are joined before the keyword is read, as BuildKit does (parser.go:168, :329-346), and a line is
+    // a build-stage copy only when one of its words is the --from flag.
+    for (const text of [
+      "COPY \\\n    local/ /etc/caddy/local/",
+      "COPY --chown=65532:65532 \\\n    local/ /srv/",
+      "COPY Caddyfile \\\n    local/ /etc/caddy/",
+      "CO\\\nPY local/ /srv/",
+      "COPY\\\n local/ /srv/",
+      "COPY \\\n# a comment\n    local/ /srv/",
+      "COPY --exclude=--from=x local/ /srv/",
+    ]) {
+      expect(sources(`${dockerfile}${text}\n`), text).toContain("local/");
     }
     expect(readdirSync(join(EDGE, "local")).sort()).toEqual(["app.caddy", "tls.caddy"]);
   });
