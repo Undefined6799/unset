@@ -46,20 +46,9 @@ const FILES: EdgeFiles = {
   read: (path) => readFileSync(path, "utf8"),
 };
 
-/** P1.34c's two local files, as that step writes them. */
-const LOCAL_TLS = "(tls) {\n\ttls /run/secrets/local_tls_cert /run/secrets/local_tls_key\n}\n";
-const APP_SITE = [
-  "{$APP_HOST} {",
-  "\timport tls",
-  "\timport access-log",
-  "\timport security-headers",
-  "\troute {",
-  "\t\timport pds-ratelimit",
-  "\t\timport upstream {$APP_UPSTREAM}",
-  "\t}",
-  "}",
-  "",
-].join("\n");
+/** P1.34c's two local files, as shipped in local/. */
+const LOCAL_TLS = readFileSync(join(EDGE, "local", "tls.caddy"), "utf8");
+const APP_SITE = readFileSync(join(EDGE, "local", "app.caddy"), "utf8");
 
 const trees: string[] = [];
 afterAll(() => {
