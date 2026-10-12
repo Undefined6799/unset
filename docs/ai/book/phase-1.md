@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11i, P1.34f, P1.34p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.34f, P1.34p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -254,6 +254,7 @@ flowchart LR
   P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_11c["P1.11c keep the setup error on cleanup"]
   P1_11i["P1.11i edge tag removal and test labels"]
+  P1_11f["P1.11f cleanup errors in Postgres setup"]
   P1_34f["P1.34f require the interpolation env flag"]
   P1_34p["P1.34p secret inputs outside the project"]
   P1_29l["P1.29l mirror scans build-stage bases whole"]
@@ -486,6 +487,7 @@ flowchart LR
   P1_27u --> P1_29
   P1_30a --> P1_27j
   P1_27i --> P1_11c
+  P1_11c --> P1_11f
   P1_27x --> P1_11i
   P1_27z --> P1_11i
   P1_30a --> P1_34f
@@ -7197,6 +7199,29 @@ trusted base; if #692 lands first, the step book renames it as a trusted step an
    direct assertion of the spawned `killSignal`, and show the SIGTERM mutant failing.
 
 Done when items 1 and 4 are red on `7636024` and green after, neither hook can skip its `rmSync`, and check is green.
+
+---
+
+### P1.11f — Keep cleanup errors in Postgres test setup
+Tags: —            Depends on: P1.11c
+Slice 1, not urgent, product (`tests/integration/setup/pg.setup.ts`, six integration hook files,
+`tests/support/{docker,postgres}.ts`), kind/fix, lane Phase 1, after P1.11c (#706), which edits the same files; book
+edit 2026-10-12-p111f-postgres-cleanup-follow-ups (20:12Z), from the coordinator's verifier on #706. If it is ready
+before P0.09n (#692) merges, it is one product PR; if #692 merges first, its `tests/support` parts move to a trusted
+PR under a letter the step book gives. Nothing from Alex. Nothing depends on it.
+
+**What, each red first:**
+- F1: `startPostgres` in `pg.setup.ts` runs outside the `try`, so when it fails a killed `remove()` error is dropped
+  and its secrets folder leaks (a failed globalSetup gets no teardown). It moves inside the `try`, and its own failure
+  path keeps the removal error and removes its secrets folder.
+- F2: the hooks in `tests/integration/audit/chain.test.ts` and
+  `tests/integration/postgres/{audit,did-columns,grants,sealed-columns,pool}.test.ts` skip `stopAllPostgres` when an
+  awaited `close()` rejects. `stopAllPostgres` runs whatever `close()` does, and both errors are reported.
+- N3: `messageOf` in `tests/support/docker.ts` never throws (a null-prototype object or a throwing `toString` falls
+  back to a fixed string).
+- N4: `failAfterCleanup` and `cleanUpAll` refuse a thenable cleanup result with a named error.
+
+Done when each item has a test that fails on the base and passes after, and check is green.
 
 ---
 
