@@ -891,3 +891,44 @@ describe("edge image", () => {
     expect(runtime).toMatch(/HEALTHCHECK [\s\S]*http:\/\/127\.0\.0\.1:8081\/health/);
   });
 });
+
+describe("local stack files (P1.34c)", () => {
+  // Architecture record 2026-10-12-refocus-local-signin-rulings, Amendment 1: the local stack serves both hosts with one
+  // dev leaf the deploy user makes from the dev root; nothing in the stack signs. The files live in local/, which the
+  // image never copies, and only the local stack mounts them (P1.34d; C18 under --env local, P1.27l).
+  const local = (file: string): string =>
+    read(join("local", file))
+      .replaceAll(/^\s*#.*$/gm, "")
+      .trim();
+
+  test("local_tls_serves_only_the_dev_leaf", () => {
+    expect(local("tls.caddy")).toBe("(tls) {\n\ttls /run/secrets/local_tls_cert /run/secrets/local_tls_key\n}");
+  });
+
+  test("local_app_site_mirrors_the_pds_site", () => {
+    // TLS, the access log and the security headers as every public host has them; the zones first, then the upstream
+    // snippet, which drops the client's address headers, so web sees only the edge (ADR 0018, invariant 3).
+    expect(local("app.caddy")).toBe(
+      [
+        "{$APP_HOST} {",
+        "\timport tls",
+        "\timport access-log",
+        "\timport security-headers",
+        "\troute {",
+        "\t\timport pds-ratelimit",
+        "\t\timport upstream {$APP_UPSTREAM}",
+        "\t}",
+        "}",
+      ].join("\n"),
+    );
+  });
+
+  test("local_files_never_in_the_image", () => {
+    const sources = dockerfile
+      .split("\n")
+      .filter((line) => /^COPY /.test(line) && !line.includes("--from="))
+      .map((line) => line.split(/\s+/)[1]);
+    expect(sources).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    expect(readdirSync(join(EDGE, "local")).sort()).toEqual(["app.caddy", "tls.caddy"]);
+  });
+});

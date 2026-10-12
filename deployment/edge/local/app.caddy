@@ -1,0 +1,15 @@
+# The local stack only (P1.34c): the app host, served with the dev leaf like the PDS host, so the PDS can fetch the
+# app's client metadata over HTTPS and verify it against the one dev root it trusts (architecture record
+# 2026-10-12-refocus-local-signin-rulings, ruling 1 and Amendment 1). Mounted read-only into sites/enabled by the local
+# stack only (P1.34d; C18 under --env local, P1.27l); never copied into the image. Its name and upstream come from the
+# environment, with no default. Like the PDS site it applies the zones first and drops the client's address before
+# web (snippets/upstream.caddy), so web reads only the edge's socket address. The app sets its own CSP (P1.08).
+{$APP_HOST} {
+	import tls
+	import access-log
+	import security-headers
+	route {
+		import pds-ratelimit
+		import upstream {$APP_UPSTREAM}
+	}
+}
