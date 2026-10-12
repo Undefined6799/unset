@@ -57,8 +57,15 @@ const INIT_COMPLETE = "PostgreSQL init process complete";
 const OWNER_LABEL = "sh.unset.test-owner";
 // One docker call (ps, run -d, logs, exec, port, rm) may queue behind CI's parallel image builds (P1.29z), but never
 // for a minute: it is killed at 60 s, so a hung daemon fails the calling test with a named message instead of
-// blocking the event loop until the job's timeout (P1.27k). The callers' own budgets are 60 s and up.
+// blocking the event loop until scripts/test/run.ts kills the whole run at 600 s (P1.27k). Every caller's budget holds
+// its calls: startPostgres's beforeAll hooks give 120 s, and hooks that end in stopAllPostgres give STOP_ALL_MS.
 const CALL_MS = 60_000;
+/**
+ * The budget for an afterAll hook that ends in stopAllPostgres: one removal per container this file started (most
+ * start one), each killed at CALL_MS, plus room for the hook's own quick cleanup. Vitest's 10 s default is shorter
+ * than a single killed removal (P1.27g).
+ */
+export const STOP_ALL_MS = 2 * CALL_MS;
 
 /** Names of the containers, running or stopped, that this process started and has not removed. */
 export function ownContainers(): string[] {

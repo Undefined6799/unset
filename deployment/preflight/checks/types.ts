@@ -21,7 +21,7 @@ export type Run = (
 
 export type Inputs = {
   env: Env;
-  /** The repository root: the only build context (C26), and where the edge and postgres Dockerfiles live. */
+  /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */

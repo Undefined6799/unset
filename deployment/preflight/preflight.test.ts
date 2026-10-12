@@ -1242,6 +1242,38 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     ]);
   });
 
+  // P1.27n (verifier N2 on #675): one fixture per rule, each refused by that rule alone, so removing any one turns
+  // this red. The others in c26_dockerfile_the_images_workflow_does_not_scan_fails trip several rules at once.
+  test("c26_each_scan_rule_refuses_on_its_own", async () => {
+    const files = {
+      ...DOCKERFILES,
+      // Outside deployment/, an existing regular file with a listable name: only the prefix rule refuses it.
+      "other/web.Dockerfile": "FROM scratch\n",
+      // A folder whose name the Dockerfile rule lists: only the is-a-file rule refuses it.
+      "deployment/images/folder.Dockerfile/x": "FROM scratch\n",
+    };
+    for (const dockerfile of ["other/web.Dockerfile", "deployment/images/folder.Dockerfile"]) {
+      expect(await expectOnly("C26", { compose: webBuilds("..", dockerfile), files }), dockerfile).toBe(
+        "FAIL C26 web builds from a Dockerfile the images workflow does not scan",
+      );
+    }
+  });
+
+  // P1.27n (verifier N5 on #675): list-dockerfiles refuses two Dockerfiles that give one image name, since the scan
+  // matrix would build one and publish the other's name; C26 refuses a build of either.
+  test("c26_image_name_another_dockerfile_takes_fails", async () => {
+    const files = { ...DOCKERFILES, "deployment/images/edge.Dockerfile": "FROM scratch\n" };
+    for (const [context, dockerfile] of [
+      ["..", "deployment/images/edge.Dockerfile"],
+      ["./edge", "Dockerfile"],
+    ]) {
+      expect(
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files }),
+        dockerfile,
+      ).toBe("FAIL C26 web builds an image whose name another Dockerfile also takes");
+    }
+  });
+
   test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
     expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
     for (const [context, dockerfile] of [
@@ -1307,5 +1339,13 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       "FAIL C27 web mounts the socket-directory tmpfs but its image and build name different images",
     );
     expect((await check({ compose: webTmpfs("    tmpfs: [/tmp]\n"), lock: null })).lines).toContain("PASS C27 ok");
+  });
+
+  // P1.27n (verifier N4 on #659): a socket-directory tmpfs with no lock to judge it by fails closed.
+  test("c27_socket_tmpfs_without_a_lock_fails", async () => {
+    const result = await check({ compose: webTmpfs("    tmpfs: [/var/run/postgresql]\n"), lock: null });
+    expect(result.lines.find((l) => l.startsWith("FAIL C27"))).toMatch(
+      /^FAIL C27 input missing: .*images\.lock\.json$/,
+    );
   });
 });
