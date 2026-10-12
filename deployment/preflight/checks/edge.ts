@@ -1,11 +1,14 @@
-// C18's inputs (P1.30u; architecture amendment 7, point 1, and its 23:50Z note, in
-// 2026-10-07-p130s-networks-and-caddyfile-reader): which sites/enabled directory the compose edge service mounts, and
-// the node:fs reads the shared edge reader takes. The reader and the site rules are deployment/edge/caddyfile.ts
-// (P1.28e); C18 reads the Caddyfile and snippets from the repository, which the edge image carries byte for byte.
+// C18, the edge's rate-limit zones (P1.30u; architecture amendment 7, points 1 to 3, and its 23:50Z note, in
+// 2026-10-07-p130s-networks-and-caddyfile-reader): which sites/enabled directory the compose edge service mounts, the
+// node:fs reads the shared edge reader takes, and the reader's verdict. The reader and the site rules are
+// deployment/edge/caddyfile.ts (P1.28e, P1.28f, P1.28l), imported here and nowhere duplicated; C18 reads the Caddyfile
+// and snippets from the repository, which the edge image carries byte for byte (caddyfile.image.test.ts).
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { posix } from "node:path";
+import { CaddyfileError, ENV_NAMES, type EnvName, edgeSiteProblems, readEdgeConfig } from "../../edge/caddyfile.ts";
 import type { Compose, Mount } from "../compose-parse.ts";
-import { fail, missing, type Outcome } from "./types.ts";
+import type { SecretMap } from "../secret-map.ts";
+import { type Check, fail, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
 export const SITES_TARGET = "/etc/caddy/sites/enabled";
@@ -70,3 +73,32 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
   if (EDGE_FILES.list(dir).length === 0) return missing(mount.source);
   return { dir };
 }
+
+/**
+ * C18's verdict: the sites the edge mounts, read with the shipped Caddyfile and snippets and the edge's env, break
+ * none of edgeSiteProblems' rules. The env values go only to the reader, whose messages name a placeholder, never its
+ * value (P1.28l); a reader error is a failure, never a crash.
+ */
+export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | undefined): Outcome {
+  const sites = edgeSitesDir(compose, edgeDir);
+  if (!("dir" in sites)) return sites;
+  if (env === undefined) return missing("the edge service's environment");
+  const values: Partial<Record<EnvName, string>> = {};
+  for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
+    const value = env.use(name, (v) => v);
+    if (value !== undefined) values[name] = value;
+  }
+  let problems: string[];
+  try {
+    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sites.dir, values, EDGE_FILES));
+  } catch (error) {
+    if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
+    throw error;
+  }
+  return problems.length === 0 ? pass() : fail(problems.join("; "));
+}
+
+export const c18: Check = {
+  id: "C18",
+  run: ({ compose, edgeDir, serviceEnv }) => edgeZones(compose, edgeDir, serviceEnv.get("edge")),
+};

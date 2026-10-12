@@ -1,13 +1,14 @@
 // P1.30u: what C18 reads, over real temporary trees through C18's own node:fs adapter (architecture amendment 7 and
 // its 23:50Z note to 2026-10-07-p130s-networks-and-caddyfile-reader; step book 2026-10-07-p128e-edge-config-reader,
 // amendment 1).
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { edgeSiteProblems, readEdgeConfig } from "../../edge/caddyfile.ts";
 import { parseCompose } from "../compose-parse.ts";
-import { EDGE_FILES, edgeSitesDir } from "./edge.ts";
+import { SecretMap } from "../secret-map.ts";
+import { EDGE_FILES, edgeSitesDir, edgeZones } from "./edge.ts";
 
 const EDGE = join(import.meta.dirname, "..", "..", "edge");
 const ENV = { PDS_HOST: "pds.unset.test", PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
@@ -137,5 +138,82 @@ describe("C18 inputs (P1.30u)", () => {
     const dangling = repository();
     symlinkSync(join(dangling.edgeDir, "sites", "gone.caddy"), join(dangling.sitesDir, "gone.caddy"));
     expect(read(dangling.edgeDir, dangling.sitesDir)).toThrow("gone.caddy: dangling link");
+  });
+});
+
+describe("C18 (P1.30u)", () => {
+  const edgeEnv = (env: Record<string, string> = ENV) => new SecretMap(Object.entries(env));
+  /** C18 on `repo`, with its sites mount and the edge's env. */
+  const zones = (repo: ReturnType<typeof repository>, env = edgeEnv()) =>
+    edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, env);
+  /** Replaces the enabled sites with one link to `name` under sites/, holding `text`. */
+  const enable = (repo: ReturnType<typeof repository>, name: string, text: string) => {
+    writeFileSync(join(repo.edgeDir, "sites", name), text);
+    symlinkSync(join(repo.edgeDir, "sites", name), join(repo.sitesDir, name));
+  };
+  const shippedSite = () => readFileSync(join(EDGE, "sites", "pds.caddy"), "utf8");
+
+  test("c18_shipped_config_passes", () => {
+    expect(zones(repository())).toEqual({ pass: true, reason: "ok" });
+  });
+
+  test("c18_missing_edge_ratelimit_fails", () => {
+    const repo = repository();
+    unlinkSync(join(repo.sitesDir, "pds.caddy"));
+    enable(repo, "pds.caddy", shippedSite().replace("\t\timport pds-ratelimit\n", ""));
+    expect(zones(repo)).toMatchObject({ pass: false, reason: expect.stringContaining("rate_limit") });
+  });
+
+  test("c18_forwarded_header_passed_fails", () => {
+    const repo = repository();
+    const upstream = join(repo.edgeDir, "snippets", "upstream.caddy");
+    writeFileSync(upstream, readFileSync(upstream, "utf8").replace("\t\theader_up -X-Real-IP\n", ""));
+    expect(zones(repo)).toMatchObject({ pass: false, reason: expect.stringContaining("X-Real-IP") });
+  });
+
+  test("c18_public_site_without_rate_limit_fails", () => {
+    const repo = repository();
+    enable(repo, "public.caddy", "www.unset.test {\n\trespond 204\n}\n");
+    expect(zones(repo)).toMatchObject({ pass: false, reason: expect.stringContaining("www.unset.test") });
+  });
+
+  test("c18_upstream_proxied_by_two_sites_fails", () => {
+    const repo = repository();
+    const second = shippedSite().replace("{$PDS_HOST} {", "mirror.unset.test {");
+    enable(repo, "second.caddy", second);
+    expect(zones(repo)).toMatchObject({
+      pass: false,
+      reason: expect.stringContaining("upstream proxied by more than one site"),
+    });
+  });
+
+  test("c18_unreadable_config_fails", () => {
+    const repo = repository();
+    const caddyfile = join(repo.edgeDir, "Caddyfile");
+    writeFileSync(caddyfile, `${readFileSync(caddyfile, "utf8")}\nimport snippets/*.caddy\n`);
+    expect(zones(repo)).toMatchObject({
+      pass: false,
+      reason: expect.stringMatching(/^the edge config is unreadable: /),
+    });
+  });
+
+  test("c18_edge_env_values_never_printed", () => {
+    // Each of the edge's env values, the sentinel alone or appended to its good value, fails and is never printed;
+    // an edge service without an env, or without one of the names, fails as unreadable.
+    const sentinel = "c18 sentinel!never printed";
+    for (const name of Object.keys(ENV) as (keyof typeof ENV)[]) {
+      for (const value of [sentinel, `${ENV[name]}${sentinel}`]) {
+        const outcome = zones(repository(), edgeEnv({ ...ENV, [name]: value }));
+        expect(outcome.pass, `${name}=${value}`).toBe(false);
+        expect(outcome.reason).not.toContain(sentinel);
+      }
+      const { [name]: _, ...without } = ENV;
+      expect(zones(repository(), edgeEnv(without)).pass, `without ${name}`).toBe(false);
+    }
+    const repo = repository();
+    expect(edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, undefined)).toEqual({
+      pass: false,
+      reason: "input missing: the edge service's environment",
+    });
   });
 });

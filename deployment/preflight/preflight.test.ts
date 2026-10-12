@@ -1,6 +1,16 @@
 // P1.30, P1.30s and P1.30t: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -21,6 +31,7 @@ const EDGE = `ghcr.io/undefined6799/edge@${digest("a")}`;
 const PDS = `ghcr.io/undefined6799/mirror/pds@${digest("b")}`;
 const WEB = `ghcr.io/undefined6799/web@${digest("d")}`;
 const CANARY = "canary-7f3c-never-printed";
+const EDGE_DIR = join(import.meta.dirname, "..", "edge");
 
 const PDS_ENV: Record<string, string> = {
   PDS_RECOVERY_DID_KEY: RECOVERY_KEY,
@@ -40,6 +51,12 @@ services:
   edge:
     image: ${EDGE}
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
+    volumes:
+      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
+    environment:
+      PDS_HOST: pds.example.test
+      PDS_UPSTREAM: pds:3000
+      ACME_EMAIL: edge@example.test
   pds:
     image: ${PDS}
     env_file: pds.env
@@ -66,6 +83,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C15",
   "C16",
   "C17",
+  "C18",
   "C19",
   "C20",
   "C21",
@@ -106,6 +124,12 @@ function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report, ne
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
   writeFileSync(join(root, "deployment/compose.yaml"), compose);
+  // The shipped edge config, with the PDS site enabled the way an environment enables it (C18).
+  const edge = join(root, "deployment/edge");
+  for (const part of ["Caddyfile", "snippets", "sites"])
+    cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
+  mkdirSync(join(edge, "sites/enabled"));
+  symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
   for (const env of ["dev", "prod"]) {
     if (networks === null) continue;
     const table = typeof networks === "string" ? networks : JSON.stringify(networks);
@@ -241,7 +265,7 @@ describe("preflight", () => {
       expect(await expectOnly("C8", { pdsEnv: { [name]: value } })).toBe(`FAIL C8 ${name} is set in pds`);
     }
     // In any service, not only the PDS.
-    const edgeEnv = COMPOSE.replace("    ports:", "    environment:\n      PDS_RATE_LIMIT_BYPASS_KEY: x\n    ports:");
+    const edgeEnv = COMPOSE.replace("      ACME_EMAIL: edge@example.test", "$&\n      PDS_RATE_LIMIT_BYPASS_KEY: x");
     await expectOnly("C8", { compose: edgeEnv });
   });
 
