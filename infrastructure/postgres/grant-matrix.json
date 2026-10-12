@@ -139,6 +139,20 @@
           "consumed_at": ["SELECT", "INSERT", "UPDATE"]
         }
       }
+    },
+    "app.session": {
+      "web": {
+        "columns": {
+          "id_hash": ["SELECT", "INSERT"],
+          "did": ["SELECT", "INSERT"],
+          "created_at": ["SELECT", "INSERT"],
+          "last_seen_at": ["SELECT", "INSERT", "UPDATE"],
+          "absolute_expires_at": ["SELECT", "INSERT"],
+          "email_confirmed": ["SELECT", "UPDATE"],
+          "email_checked_at": ["SELECT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
     }
   }
 }
