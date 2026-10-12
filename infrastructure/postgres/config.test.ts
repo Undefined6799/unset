@@ -1,6 +1,6 @@
 // P1.11: the Postgres connection settings, read through the migrate CLI schema, and the sslmode mapping. P1.11p: the
 // pool fields and the private CA file. P1.29k: the CLI reads role passwords only from the fixed /run/secrets.
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ConfigError, defineConfig, loadConfig } from "@unset/shared-config";
@@ -94,13 +94,19 @@ describe("pool config", () => {
   });
 
   test("sslrootcert_passed_as_ca", () => {
-    const caFile = join(mkdtempSync(join(tmpdir(), "unset-pg-ca-")), "ca.pem");
-    writeFileSync(caFile, "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----\n");
-    const cfg = loadPool({ PG_HOST: "db.example.org", PG_SSLMODE: "verify-full", PG_SSLROOTCERT: caFile });
-    expect(connectionOf(cfg).ssl).toEqual({ ca: "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----\n" });
-    // A CA file only means something with the checks on.
-    expect(() => loadPool({ PG_SSLROOTCERT: caFile })).toThrow(ConfigError);
-    expect(() => loadPool({ PG_SSLMODE: "verify-full", PG_SSLROOTCERT: "relative/ca.pem" })).toThrow(ConfigError);
+    // The folder is removed whatever the test does; it used to stay behind on every run (N8, P1.11f).
+    const dir = mkdtempSync(join(tmpdir(), "unset-pg-ca-"));
+    try {
+      const caFile = join(dir, "ca.pem");
+      writeFileSync(caFile, "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----\n");
+      const cfg = loadPool({ PG_HOST: "db.example.org", PG_SSLMODE: "verify-full", PG_SSLROOTCERT: caFile });
+      expect(connectionOf(cfg).ssl).toEqual({ ca: "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----\n" });
+      // A CA file only means something with the checks on.
+      expect(() => loadPool({ PG_SSLROOTCERT: caFile })).toThrow(ConfigError);
+      expect(() => loadPool({ PG_SSLMODE: "verify-full", PG_SSLROOTCERT: "relative/ca.pem" })).toThrow(ConfigError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

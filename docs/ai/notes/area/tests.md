@@ -27,6 +27,8 @@ Unit tests sit beside the file they test, not here.
   budget; `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g) and refuses
   an async body (P1.27i). An async setup uses `failAfterCleanup(error, cleanup)` from its catch, and a hook with
   several cleanups uses `cleanUpAll`, so a killed removal never hides the setup error or skips a folder (P1.11c).
+  Both refuse a cleanup that returns a promise, and their combined message never throws on an odd thrown value
+  (P1.11f). A hook that closes pools before stopping uses `stopAllPostgresAfter(close)` (P1.11f).
   Hooks that end in `stopAllPostgres` take `STOP_ALL_MS`, never vitest's 10 s default; a killed `docker rm` there
   now fails the hook, naming the container, instead of passing silently (P1.27i).
 - `support/image-build.ts`: image tests build with `buildTestImage`, which tags each build `unset-test-<hex>`, and

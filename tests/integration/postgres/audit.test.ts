@@ -14,7 +14,7 @@ import {
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
-  stopAllPostgres,
+  stopAllPostgresAfter,
 } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -55,10 +55,7 @@ beforeAll(async () => {
   for (const role of WRITERS) postgres.sql("postgres", `ALTER ROLE ${role} PASSWORD '${passwords[role]}'`);
   as = { web: poolAs("web"), indexer: poolAs("indexer", 8), admin: poolAs("admin") };
 }, 120_000);
-afterAll(async () => {
-  await Promise.all(pools.map((pool) => pool.close()));
-  stopAllPostgres();
-}, STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
 
 function poolAs(role: Writer, max = 1): Pool {
   const pool = createPool({

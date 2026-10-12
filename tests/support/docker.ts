@@ -99,7 +99,7 @@ export function withCleanup<T>(body: () => T, cleanup: () => void): T {
  */
 export function failAfterCleanup(failure: unknown, cleanup: () => void): never {
   try {
-    cleanup();
+    refuseAsync(cleanup(), "failAfterCleanup takes a synchronous cleanup, not a promise");
   } catch (cleanupFailure) {
     throw new AggregateError(
       [failure, cleanupFailure],
@@ -109,14 +109,29 @@ export function failAfterCleanup(failure: unknown, cleanup: () => void): never {
   throw failure;
 }
 
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+/**
+ * A failure's message for a combined report. It never throws: a value with no prototype, or whose toString throws,
+ * reads as a fixed string, so building the report cannot replace the errors it reports (N3, P1.11f).
+ */
+function messageOf(error: unknown): string {
+  try {
+    return error instanceof Error ? error.message : String(error);
+  } catch {
+    return "(unprintable error)";
+  }
+}
+
+/** A returned promise would settle after the caller moved on, and its rejection would be lost (N4, P1.11f). */
+function refuseAsync(result: unknown, message: string): void {
+  if (typeof (result as { then?: unknown } | null)?.then === "function") throw new TypeError(message);
+}
 
 /** Runs every cleanup, even after one throws, then throws one AggregateError listing each failure in order. */
 export function cleanUpAll(...cleanups: (() => void)[]): void {
   const failures: unknown[] = [];
   for (const cleanup of cleanups) {
     try {
-      cleanup();
+      refuseAsync(cleanup(), "cleanUpAll takes synchronous cleanups, not a promise");
     } catch (failure) {
       failures.push(failure);
     }

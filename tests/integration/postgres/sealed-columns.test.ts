@@ -27,7 +27,7 @@ import {
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
-  stopAllPostgres,
+  stopAllPostgresAfter,
 } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -45,10 +45,7 @@ beforeAll(async () => {
   await migrateInto("unset");
   postgres.sql("postgres", `ALTER ROLE web PASSWORD '${webPassword}'`);
 }, 120_000);
-afterAll(async () => {
-  await Promise.all(pools.map((pool) => pool.close()));
-  stopAllPostgres();
-}, STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
 
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
   const pool = createPool({

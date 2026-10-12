@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { docker } from "./docker.ts";
+import { cleanUpAll, docker, failAfterCleanup } from "./docker.ts";
 
 type LockEntry = { ref: string; tag: string; digest: string };
 
@@ -99,24 +99,57 @@ export function stopAllPostgresWithin(removeMs: number): void {
   if (failures.length > 0) throw new AggregateError(failures, failures.map((failure) => failure.message).join("; "));
 }
 
-/** Starts the image detached and waits until initdb finished and the server accepts connections again. */
-export async function startPostgres(options: PostgresOptions, timeoutMs = 90_000): Promise<PostgresContainer> {
-  const name = containerName();
-  dockerOut(["run", "-d", ...runArgs(name, options), POSTGRES_IMAGE]);
+/**
+ * Awaits `close` (an afterAll hook's pool closes), then runs `stop` whatever `close` did, so a rejected close never
+ * leaves the containers running; when both fail, both are reported, the close first (F2, P1.11f).
+ */
+export async function stopAllPostgresAfter(
+  close: () => Promise<unknown>,
+  stop: () => void = stopAllPostgres,
+): Promise<void> {
   try {
+    await close();
+  } catch (failure) {
+    failAfterCleanup(failure, stop);
+  }
+  stop();
+}
+
+/**
+ * Starts the image detached and waits until initdb finished and the server accepts connections again. A start that
+ * fails removes its container and its secrets folder before throwing; a killed removal is reported with the failure,
+ * never dropped, and the name stays for stopAllPostgres (F1, P1.11f). `removeMs` is lowered only by that test.
+ */
+export async function startPostgres(
+  options: PostgresOptions,
+  timeoutMs = 90_000,
+  removeMs = CALL_MS,
+): Promise<PostgresContainer> {
+  const name = containerName();
+  const secrets = secretsDir(options.secrets ?? {});
+  try {
+    dockerOut(["run", "-d", ...runArgs(name, options.initDir, secrets), POSTGRES_IMAGE]);
     await waitUntilServing(name, timeoutMs);
     return container(name, hostPort(name));
   } catch (error) {
-    remove(name);
-    throw error;
+    failAfterCleanup(error, () =>
+      cleanUpAll(
+        () => {
+          const failure = remove(name, removeMs);
+          if (failure !== null) throw failure;
+        },
+        () => removeSecretsDir(secrets),
+      ),
+    );
   }
 }
 
 /** Runs the image in the foreground and reports how initdb ended: for scripts that must fail closed. */
 export function runUntilExit(options: PostgresOptions, timeoutMs = 90_000): InitExit {
   const name = containerName();
+  const secrets = secretsDir(options.secrets ?? {});
   // Its own timeout reports a server still running as `code: null`, so it keeps spawnSync, now with SIGKILL (P1.27k).
-  const result = spawnSync("docker", ["run", ...runArgs(name, options), POSTGRES_IMAGE], {
+  const result = spawnSync("docker", ["run", ...runArgs(name, options.initDir, secrets), POSTGRES_IMAGE], {
     encoding: "utf8",
     timeout: timeoutMs,
     killSignal: "SIGKILL",
@@ -135,7 +168,7 @@ function containerName(): string {
   return name;
 }
 
-function runArgs(name: string, options: PostgresOptions): string[] {
+function runArgs(name: string, initDir: string, secrets: string): string[] {
   return [
     "--rm",
     "--name",
@@ -148,9 +181,9 @@ function runArgs(name: string, options: PostgresOptions): string[] {
     "-e",
     `POSTGRES_PASSWORD=${randomPassword()}`,
     "-v",
-    `${options.initDir}:/docker-entrypoint-initdb.d:ro`,
+    `${initDir}:/docker-entrypoint-initdb.d:ro`,
     "-v",
-    `${secretsDir(options.secrets ?? {})}:/run/secrets:ro`,
+    `${secrets}:/run/secrets:ro`,
   ];
 }
 
@@ -164,6 +197,11 @@ function secretsDir(files: Readonly<Record<string, string>>): string {
     chmodSync(join(dir, file), 0o644);
   }
   return dir;
+}
+
+function removeSecretsDir(dir: string): void {
+  rmSync(dir, { recursive: true, force: true });
+  DIRS.delete(dir);
 }
 
 async function waitUntilServing(name: string, timeoutMs: number): Promise<void> {

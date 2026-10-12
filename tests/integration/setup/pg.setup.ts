@@ -47,11 +47,12 @@ export type TestDatabaseOptions = {
 /** Starts Postgres, migrates the template and clones it per file. Any failure removes the container before throwing. */
 export async function startTestDatabase(options: TestDatabaseOptions): Promise<ProvidedPostgres> {
   const migratorPassword = randomPassword();
-  const postgres = await startPostgres({
-    initDir: join(REPOSITORY, "deployment", "postgres", "init"),
-    secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
-  });
   try {
+    // Inside the try: a failed globalSetup gets no teardown, so a start that fails is cleaned up here (F1, P1.11f).
+    const postgres = await startPostgres({
+      initDir: join(REPOSITORY, "deployment", "postgres", "init"),
+      secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
+    });
     const connection = { host: "127.0.0.1", port: postgres.port, user: "migrator", password: migratorPassword };
     const result = await migrate({
       connection: { ...connection, database: "unset", ssl: false },
