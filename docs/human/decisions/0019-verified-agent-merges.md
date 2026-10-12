@@ -1,6 +1,7 @@
 # 0019 — Verified agent merges
 
-Status: proposed (awaiting Alex's merge). Scope chosen by Alex: "Big things only" on the card "Choose
+Status: accepted on Alex's merge of #607 (2026-10-12 04:23:21Z); agents merge under it only once CLAUDE.md's Merging line names it.
+Scope chosen by Alex: "Big things only" on the card "Choose
 what still needs you once Claude merges its own checked PRs", 2026-10-12 03:27:13Z. Supersedes the merge clause of ADR 0008 ("Alex is the only person
 who merges") and the matching sentence of ADR 0017 ("agents open pull requests and never merge them,
 Alex alone merges"). It also supersedes ADR 0008's clause "the security review of engineering rule
@@ -84,8 +85,8 @@ Guard rails:
 ## Consequences
 Merges no longer wait for Alex. His review moves from every diff to the classes above, the
 verification comments and the pause switch. Agent and human merges look the same in GitHub's audit
-log, so the squash body line is the distinguishing record. CLAUDE.md's Merging line changes in the
-same pull request. Every agent's standing rule "Claude never merges" changes with it, but only for
+log, so the squash body line is the distinguishing record. CLAUDE.md's Merging line changes with
+this decision. Every agent's standing rule "Claude never merges" changes with it, but only for
 the verifier, under these conditions. Revisit with ADR 0008: when a second person joins, a machine
 account becomes acceptable, or before the first production account (plan §8 Phase 5).
 
