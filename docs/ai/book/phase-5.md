@@ -2535,9 +2535,10 @@ Algorithm (a reviewed hypothesis):
      store reaches 80 %. Write `docs/human/capacity.md`.
   6. **Session sweep** (rider, book edit 2026-10-12-p203i-did-index-only; the first load or capacity test that touches
      sessions carries it, here unless an earlier one does): record the sweep duration and `app.session`'s HOT ratio
-     (`n_tup_hot_upd / n_tup_upd` from `pg_stat_user_tables`). A HOT ratio well below ~0.9 → add `fillfactor` before
-     any index. Sweep p99 over 1 s or more than about 2M rows → first split the sweep into two DELETEs with the
-     absolute-expiry arm indexed; a `last_seen_at` index comes only with a measured HOT cost.
+     (`n_tup_hot_upd::float8 / nullif(n_tup_upd, 0)` from `pg_stat_user_tables`). A HOT ratio well below ~0.9 → add
+     `fillfactor` before any index. Sweep p99 over 1 s or more than about 2M rows → first split the sweep into two
+     DELETEs with the absolute-expiry arm indexed; the idle-arm DELETE stays a sequential scan; indexing
+     `last_seen_at` needs the measured HOT cost first.
 
 Edge cases and failures: the quota is too low for the transcode budget → raise it to 3.0 only if `web` p95 holds;
 otherwise record "worker host needed" for Alex. The `egress-web` class reaches its ceiling in production → alert, and

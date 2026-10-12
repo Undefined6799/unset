@@ -51,7 +51,7 @@ Depth: **build-ready**. 36 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09j | Guard fixtures isolate git from the caller's environment | — | P0.09g | `phase-0.md` |
 | P0.09k | Case-collision guard | — | P0.09j | `phase-0.md` |
 | P0.09m | Grant parser classifies one-part schema names (waits for Alex's typed word: a loosening) | [SEC] [ALEX] | P0.09e | `phase-0.md` |
-| P0.09t | Trusted file pattern carries only its own tests (folder patterns unchanged) | [SEC] [ALEX] (typed line: scripts/guards) | P0.09c | `phase-0.md` |
+| P0.09t | Trusted file pattern carries only its own tests (folder patterns unchanged) | [SEC] [ALEX] (typed line: scripts/guards; line asked after P0.16 lands) | P0.09c | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -144,7 +144,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 201 steps: 177 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 204 steps: 180 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -297,8 +297,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30k | Compose reader exact top-level key allowlist and long-form port key set | [SEC] | P1.30w | `phase-1.md` |
 | P1.30m | Preflight runner withholds any reason containing a configured value (one run-wide set); C23 and literal-quoting templates name keys; scrubbed() deleted | [SEC] | P1.30w | `phase-1.md` |
 | P1.30v | Withheld marker never carries a configured value (regression fix to P1.30m) | [SEC] | P1.30m | `phase-1.md` |
+| P1.30j | Preflight reasons name keys not values; P1.30k literal fixtures; stale comments | [SEC] | P1.30k, P1.30m, P1.30v | `phase-1.md` |
+| P1.30z | Resolve compose paths from the project directory | [SEC] | P1.30k | `phase-1.md` |
 | P1.30x | Compose reader: hardening and limit keys (read_only, cap_drop, cap_add, security_opt, user, mem_limit, cpus, pids_limit, restart) | [SEC] | P1.30k | `phase-1.md` |
-| P1.30y | Compose reader: build, tmpfs (and volumes type tmpfs), depends_on, short-form service secrets | [SEC] | P1.30k | `phase-1.md` |
+| P1.30y | Compose reader: build, tmpfs (and volumes type tmpfs), depends_on, short-form service secrets | [SEC] | P1.30k, P1.30z | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -318,10 +320,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29b | Mirror build-stage run scans the whole base (stripped skips on runtime only) | [SEC] | P1.29v | `phase-1.md` |
 | P1.29u | Stripped-path syntax and final-stage RUN separators fail closed | [SEC] | P1.29v | `phase-1.md` |
 | P1.29c | Lock field buildStage, derived from the Dockerfiles and proven by a test | [SEC] | P1.29b | `phase-1.md` |
-| P1.29z | Package-manager image test deterministic (regression fix to P1.29c) | [SEC] | P1.29c | `phase-1.md` |
+| P1.29z | Keep docker out of the kind problems reader test (regression fix to P1.29c) | [SEC] | P1.29c | `phase-1.md` |
+| P1.29o | Give docker-run image tests an explicit budget | — | P1.29z | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
@@ -499,7 +502,8 @@ flowchart TD
   P1_29b["P1.29b Mirror build stage scanned in full"]
   P1_29u["P1.29u Stripped paths and RUN separators fail closed"]
   P1_29c["P1.29c Lock records build-stage bases"]
-  P1_29z["P1.29z Package-manager test deterministic"]
+  P1_29z["P1.29z Docker out of kind reader test"]
+  P1_29o["P1.29o Docker-run test budgets"]
   P1_29l["P1.29l Mirror scans build-stage bases whole"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
@@ -521,6 +525,8 @@ flowchart TD
   P1_30k["P1.30k Compose top-level key allowlist"]
   P1_30m["P1.30m Preflight withholds value reasons"]
   P1_30v["P1.30v Withheld marker carries no value"]
+  P1_30j["P1.30j Preflight wording and fixtures"]
+  P1_30z["P1.30z Compose paths from project dir"]
   P1_30x["P1.30x Compose hardening and limit keys"]
   P1_30y["P1.30y Compose build, tmpfs, depends_on, secrets"]
   P1_30u["P1.30u Preflight C18 edge zones"]
@@ -751,6 +757,7 @@ flowchart TD
   P1_29b --> P1_29c
   P1_29c --> P1_29l
   P1_29c --> P1_29z
+  P1_29z --> P1_29o
   P1_29x --> P1_29r
   P1_29r --> P1_29d
   P1_29r --> P1_29e
@@ -815,8 +822,11 @@ flowchart TD
   P1_30w --> P1_30k
   P1_30w --> P1_30m
   P1_30m --> P1_30v
+  P1_30v --> P1_30j
+  P1_30k --> P1_30j
+  P1_30k --> P1_30z
+  P1_30z --> P1_30y
   P1_30k --> P1_30x
-  P1_30k --> P1_30y
   P1_30x --> P1_29
   P1_30y --> P1_29
   P1_23g --> P1_23h
@@ -1002,7 +1012,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.02 | Tap deployment and repo tracking | [SEC] | P3.01, P3.03, P2.06 | `phase-3.md` |
 | P3.04 | Ingest invariants as tests first | — | P3.03 | `phase-3.md` |
 | P3.05 | Ingest | [SEC] | P3.04, P3.02, P1.31 | `phase-3.md` |
-| P3.06g | Grants for the account-state machine (SE-6) | [SEC] | P3.03, P2.04 | `phase-3.md` |
+| P3.06g | Grants for the account-state machine (SE-6) | [SEC] | P3.03, P2.04s | `phase-3.md` |
 | P3.06 | Account-state machine | [SEC] | P3.06g, P3.05, P2.03 | `phase-3.md` |
 | P3.07g | Grant for `eraseDid` on the audit lane (SE-6) | [SEC] | P3.06g, P1.15a | `phase-3.md` |
 | P3.07k | `eraseDid` SQL and its storage and untrack hooks (split from P3.07, SE-6) | [SEC] | P3.07g, P3.06, P1.13, P1.15a, P2.18 | `phase-3.md` |
