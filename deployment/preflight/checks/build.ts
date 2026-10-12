@@ -4,6 +4,7 @@
 import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { readLock } from "./images.ts";
+import { reachesSecretsFolder } from "./secrets.ts";
 import { type Check, fail, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
@@ -55,13 +56,18 @@ function namesakes(root: string, name: string): number {
  * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context that
  * workflow uses (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any other from
  * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
- * scanned image holds.
+ * scanned image holds. A context that reaches the secrets folder is refused first.
  */
 export const c26: Check = {
   id: "C26",
   run: (inputs) => {
     for (const { name, build } of inputs.compose.services) {
       if (build === null) continue;
+      // The whole context goes to the daemon, whatever .dockerignore says (P1.27u, architecture record
+      // 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder stays out of it.
+      if (reachesSecretsFolder(build.context, inputs)) {
+        return fail(`${name} builds from a context that reaches the secrets folder`);
+      }
       if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
         return fail(`${name} builds from a Dockerfile the images workflow does not scan`);
       }

@@ -75,21 +75,31 @@ function lockedDirectoryProblem(dir: string, { lstat, uid }: Inputs): Outcome | 
  * bind mount whose source, as written or resolved, is the secrets folder, lies inside it or contains it is refused.
  */
 function bindReachingProblem(dir: string, inputs: Inputs): Outcome | null {
-  const { compose, realpath } = inputs;
-  const folders = [dir, realpath(dir) ?? dir];
-  const folderLine = identities(folders[1] as string, inputs);
-  const related = (a: string, b: string) => within(a, b) || within(b, a);
-  for (const service of compose.services) {
+  for (const service of inputs.compose.services) {
     for (const mount of service.mounts) {
       if (mount.type !== "bind" || mount.source === null) continue;
-      const sources = [mount.source, realpath(mount.source) ?? mount.source];
-      const byPath = sources.some((source) => folders.some((folder) => related(source, folder)));
-      if (byPath || sharesIdentity(identities(sources[1] as string, inputs), folderLine)) {
+      if (reaches(mount.source, dir, inputs))
         return fail(`${service.name} binds a path that reaches the secrets folder`);
-      }
     }
   }
   return null;
+}
+
+/**
+ * Whether `path` is a mounted secret's folder, lies inside one or contains one: by path segments, as written and
+ * resolved, and by (dev, ino) for a second name no link explains (Amendment 3). C26 asks it of build contexts too.
+ */
+export function reachesSecretsFolder(path: string, inputs: Inputs): boolean {
+  const dirs = new Set(inputs.mountedSecrets.map((secret) => dirname(secret.path)));
+  return [...dirs].some((dir) => reaches(path, dir, inputs));
+}
+
+function reaches(path: string, dir: string, inputs: Inputs): boolean {
+  const folders = [dir, inputs.realpath(dir) ?? dir];
+  const paths = [path, inputs.realpath(path) ?? path];
+  const related = (a: string, b: string) => within(a, b) || within(b, a);
+  if (paths.some((at) => folders.some((folder) => related(at, folder)))) return true;
+  return sharesIdentity(identities(paths[1] as string, inputs), identities(folders[1] as string, inputs));
 }
 
 /**

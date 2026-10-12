@@ -1420,6 +1420,35 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     }
   });
 
+  // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (b)): a build context is sent to the
+  // daemon whole, so none may hold, be or sit inside the secrets folder. .dockerignore is a file in the context that
+  // any edit can change, so it never counts.
+  test("c26_build_context_reaching_secrets_fails", async () => {
+    const reaches = "FAIL C26 web builds from a context that reaches the secrets folder";
+    const run = async (context: string, dockerfile: string, setUp: (root: string) => void = () => undefined) => {
+      const s = stack({ compose: webBuilds(context, dockerfile), files: DOCKERFILES });
+      setUp(s.root);
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    // The secrets folder inside the checkout, under a root-context build; the .dockerignore does not save it.
+    const inside = (root: string) => {
+      renameSync(secretsOf(root), join(root, "deployment/secrets"));
+      const file = join(root, "deployment/compose.yaml");
+      writeFileSync(file, readFileSync(file, "utf8").replace("../../unset-secrets/", "secrets/"));
+      writeFileSync(join(root, ".dockerignore"), "deployment/secrets\n");
+    };
+    expect((await run("..", "deployment/images/node-app.Dockerfile", inside)).lines).toContain(reaches);
+    expect((await run("../../unset-secrets", "../repo/deployment/images/node-app.Dockerfile")).lines).toContain(
+      reaches,
+    );
+    const within = (root: string) => mkdirSync(join(secretsOf(root), "sub"), { mode: 0o700 });
+    expect(
+      (await run("../../unset-secrets/sub", "../../repo/deployment/images/node-app.Dockerfile", within)).lines,
+    ).toContain(reaches);
+    // The sibling layout passes.
+    expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);
+  });
+
   test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
     expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
     for (const [context, dockerfile] of [
