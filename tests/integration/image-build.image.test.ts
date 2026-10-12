@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { docker, killBefore } from "../support/docker.ts";
+import { docker, killBefore, withCleanup } from "../support/docker.ts";
 import { buildTestImage, removeTestImage } from "../support/image-build.ts";
 
 const TEST_MS = 120_000;
@@ -31,14 +31,19 @@ function context(name: string, dockerfile: string): string {
 describe("buildTestImage", () => {
   test("removing_one_build_keeps_the_other", { timeout: TEST_MS }, () => {
     const file = context("shared", "FROM scratch\nCOPY shared.marker /marker\n");
-    const first = buildTestImage(file, dir, { timeoutMs: CALL_MS });
-    const second = buildTestImage(file, dir, { timeoutMs: CALL_MS });
-    try {
-      removeTestImage(first, { timeoutMs: CALL_MS });
-      expect(docker(["image", "inspect", second], { timeoutMs: CALL_MS }).code).toBe(0);
-    } finally {
-      removeTestImage(second, { timeoutMs: CALL_MS });
-    }
+    // Every tag still standing is removed, even when the second build throws.
+    const tags: string[] = [];
+    withCleanup(
+      () => {
+        tags.push(buildTestImage(file, dir, { timeoutMs: CALL_MS }));
+        tags.push(buildTestImage(file, dir, { timeoutMs: CALL_MS }));
+        removeTestImage(tags.shift() ?? "", { timeoutMs: CALL_MS });
+        expect(docker(["image", "inspect", tags[0] ?? ""], { timeoutMs: CALL_MS }).code).toBe(0);
+      },
+      () => {
+        for (const tag of tags) removeTestImage(tag, { timeoutMs: CALL_MS });
+      },
+    );
   });
 
   test("failed_build_names_the_step_output", { timeout: FAILING_TEST_MS }, () => {

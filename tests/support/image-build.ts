@@ -36,7 +36,7 @@ const FAILED_STEP = "\n------\n > ";
 const MAX_FAILURE = 4_000;
 
 /** From BuildKit's summary of the failing step to the end: the step's last log lines, the excerpt and the error. */
-export function buildFailure(stderr: string): string {
+function buildFailure(stderr: string): string {
   const from = stderr.lastIndexOf(FAILED_STEP);
   const failure = from === -1 ? stderr : stderr.slice(from + 1);
   return failure.length > MAX_FAILURE ? failure.slice(-MAX_FAILURE) : failure;
