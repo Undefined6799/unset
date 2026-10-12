@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28a, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -206,6 +206,7 @@ flowchart LR
   P1_28m["P1.28m root-only dependencies in tests only"]
   P1_28p["P1.28p product never imports tooling"]
   P1_28z["P1.28z tooling image-test anchor pinned"]
+  P1_30c["P1.30c specifier cruise test checkout-independent"]
   P1_28s["P1.28s quoted top-level tokens refused"]
   P1_28i["P1.28i edge image builds in image tests"]
   P1_28j["P1.28j edge image tests drop runIf"]
@@ -7914,6 +7915,41 @@ go red under parallel load too. A timeout bump, retry or skip is not a fix.
 
 Done when `npm run check` is green, the anchor-removal mutant fails a test, and `depcruise_cruised_nonzero` passes well
 inside the default timeout; the PR body gives three isolated timings, each at most about 1 s.
+
+---
+
+### P1.30c — Specifier cruise test independent of checkout
+Tags: [SEC]            Depends on: —
+Slice 1, issue #577, check (scripts/lint, kind/build, test only); book edit
+2026-10-12-p130c-specifier-test-checkout-independent (final 02:20Z), from Phase 2's root cause relayed by the
+coordinator at 02:08Z. Neutral (neither loosens nor tightens a rule); the coordinator clears it, no word from Alex.
+Owner: the third thread, next slot. The tests involved are from P1.28k (#544, PR #549) and P1.28m (#553, PR #555), both
+merged. Nothing depends on it. The id comes from the p130s lineage (the specifier check is p130s amendment 10); the
+P1.28 letters are all used.
+
+**Why:** `cruise_specifiers_reach_the_check` (`scripts/lint/specifiers.test.ts:107-122`) expects 7 refusals. One
+spelling, `/proc/self/cwd/deployment/preflight/compose-parse.ts` (:115), resolves through the process cwd, which is the
+checkout, and not through the fixture root `cruiseSpecs` builds with `tempDir()` (`depcruise-fixture.ts:39-42`). In a
+checkout under `.worktrees/`, the resolved path matches the `exclude` at `.dependency-cruiser.cjs:346`, so depcruise
+drops the edge and the test sees 6. CI's checkout has no such segment, which is why main (8cd927f) is green. The test's
+comment ("Absolute paths here resolve in the fixture") is false for that spelling.
+
+**What:**
+1. In the cruise test, replace the `/proc/self/cwd/...` spelling with
+   `` `/proc/self/root${root}/deployment/preflight/compose-parse.ts` ``. `/proc/self/root` is `/` for the test process,
+   so the spelling still goes through /proc and still resolves, but into the fixture root whatever the cwd is. The
+   unit-table row at :28 stays as a spelling-only case.
+2. Add a guard to `cruiseSpecs`: every spelling meant to resolve must appear as a dependency of `from` in the cruise
+   output, so a spelling the cruise drops for any reason (an exclude, a cwd difference, a resolver change) fails by
+   name rather than as a count of 6.
+3. Correct the comment to match.
+
+**Not changed:** the `exclude` at `.dependency-cruiser.cjs:346`. Narrowing it to `^`-anchored paths would also make the
+test pass, but it changes what the real cruise sees; any change to it is a separate question, and a loosening needs
+Alex's word.
+
+Done when the test is green from a checkout under `.worktrees/` and from a plain checkout; the PR body shows both runs,
+and the item 2 guard fails if item 1 is reverted while running under `.worktrees/`.
 
 ---
 
