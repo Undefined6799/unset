@@ -5,6 +5,7 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./syntax": "./syntax.ts"
   }
 }
