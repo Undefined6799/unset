@@ -33,6 +33,9 @@ test("c26_context_rule_matches_the_images_workflow", () => {
   ]);
   // P1.27n (verifier N1 on #675): the arms set CONTEXT and nothing else does, and the build is given that context.
   // The pattern leaves out the word docker so image-rules.test.ts does not read this text check as an image build.
-  expect(script.match(/\bCONTEXT=/g)).toHaveLength(2);
+  // P1.27w (verifier N-a on #687): CONTEXT appears exactly three times, the two arms and the build line, so no other
+  // assignment form (`CONTEXT+=`, `printf -v CONTEXT`, `read -r CONTEXT`) slips in. A `cd` before the build line
+  // would still pass: a known limit of reading the step as text.
+  expect(script.match(/\bCONTEXT\b/g)).toHaveLength(3);
   expect(script).toMatch(/\bbuildx build [^\n]*\\\n\s*[^\n]*-f "\$DOCKERFILE" "\$CONTEXT"$/);
 });

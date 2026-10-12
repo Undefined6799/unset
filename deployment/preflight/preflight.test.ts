@@ -1253,8 +1253,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   test("c26_each_scan_rule_refuses_on_its_own", async () => {
     const files = {
       ...DOCKERFILES,
-      // Outside deployment/, an existing regular file with a listable name: only the prefix rule refuses it.
+      // Outside deployment/, an existing regular file with a listable name: only the prefix rule refuses it. Its image
+      // name, web, is also given once under deployment/, so the duplicate rule would pass it (verifier N-b on #687).
       "other/web.Dockerfile": "FROM scratch\n",
+      "deployment/images/web.Dockerfile": "FROM scratch\n",
       // A folder whose name the Dockerfile rule lists: only the is-a-file rule refuses it.
       "deployment/images/folder.Dockerfile/x": "FROM scratch\n",
     };
