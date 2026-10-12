@@ -1,0 +1,3 @@
+{
+  "db": { "internal": true, "members": ["postgres", "migrate", "web"] }
+}

@@ -1,7 +1,10 @@
-# The local stack only (P1.27l, P1.27m): replaces snippets/tls.caddy through one read-only mount at
-# /etc/caddy/snippets/tls.caddy, so every site's `import tls` uses Caddy's internal, locally trusted CA instead of
-# Let's Encrypt. Never copied into the image and never mounted by the dev or prod stack. Caddy v2.11.7 tls directive
-# (caddyserver/website src/docs/markdown/caddyfile/directives/tls.md, "internal").
+# The local stack only (P1.27l, P1.27m, P1.34c): replaces snippets/tls.caddy through one read-only mount at
+# /etc/caddy/snippets/tls.caddy, so every site's `import tls` serves the dev leaf certificate instead of asking Let's
+# Encrypt. The deploy user makes the leaf once from the dev root with openssl (docs/human/runbooks/dev-stack-secrets.md,
+# P1.34d); nothing in the stack signs, and the root key never enters a container (architecture record
+# 2026-10-12-refocus-local-signin-rulings, Amendment 1). Both files are Compose secrets mounted into the edge only.
+# Never copied into the image and never mounted by the dev or prod stack. Caddy v2.11.7 tls directive
+# (caddyserver/website src/docs/markdown/caddyfile/directives/tls.md: `tls <cert_file> <key_file>`, both PEM).
 (tls) {
-	tls internal
+	tls /run/secrets/local_tls_cert /run/secrets/local_tls_key
 }

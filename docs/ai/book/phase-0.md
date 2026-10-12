@@ -2359,6 +2359,7 @@ Done when (tests, planted fixtures in the guard's tests):
 
 ### P0.09t — Trusted file pattern carries only its own tests
 Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Paused (refocus 2026-10-12): starts after P2.13a's scenario passes locally.
 Check class (`scripts/guards/trusted-base.ts` and its test), a tightening, kind/build; issue #639; slice 1; book edit
   2026-10-12-p204s-riders-and-p009t, from item 6 of architecture's 2026-10-12-p203-post-merge-follow-ups (found
   verifying #630). Owner: Phase 2 or the third lane, placed by the coordinator (a classifier path; Phase 1 refuses it).
@@ -2415,10 +2416,17 @@ Trusted base (five `shared/http` tests, `infrastructure/audit/append.ts`), kind/
 
 Done when the five tests still assert the same log lines, the audit tests pass unchanged, and check is green.
 
+As built: merged at 2026-10-12T22:24:49Z as `b0d8959` (#729, head c922b8a) (merge data read by REST, 22:35Z). The
+five tests and the shutdown.test.ts child share one trusted helper, `shared/http/capture-logger.ts`, which
+architecture accepted (Amendment 6 of 2026-10-12-workspace-imports-and-remote-daemon, item 1); it ships inert in
+node-app until P1.11n. Its comment at line 4 still says `logError` keeps what shared/log keeps, though shared/log
+also records stack frames outside prod; a later trusted commit corrects it.
+
 ---
 
 ### P0.09n — Bar trusted tests from product helpers
 Tags: [SEC] [ALEX] (typed line: scripts/guards, CODEOWNERS)            Depends on: P0.09q            Plan: rule SE-6
+Paused (refocus 2026-10-12): starts after P2.13a's scenario passes locally.
 Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
   1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
   2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686, with amendments 1
@@ -2460,7 +2468,27 @@ The fix:
   literal specifiers of `import.meta.resolve(…)`, `import(…)`, `require(…)` and `createRequire(…)` are judged
   exactly like static imports, and any non-literal specifier in those forms fails. Belt: any string literal or
   template head starting `@unset/` that is not an already-judged import specifier fails, which catches specifiers
-  passed as text to a child process (`node -e`, `--import`).
+  passed as text to a child process (`node -e`, `--import`). It extends P1.25's pinned list (createRequire, eval,
+  vm) and does not replace it (Amendment 4 of that record; p009n record amendment 9).
+- Amendment 7 (22:08Z, from the coordinator's verify of #724): `domains/identity/package.json` stays untrusted, so
+  the guard judges trusted imports across the whole tree on every PR, not only changed files, and a red fixture
+  repoints `"./syntax"` to another file. dependency-cruiser 18.5.0 ignores `exports` (`exportsFields: []`,
+  `normalize.mjs:35`), so the guard resolves through `exports` itself and never reuses depcruise's results. The
+  syntax subpath is an architecture-ruled exception to DC-2, generalised into P0.09s.
+- Amendment 8 (22:40Z, architecture's Amendment 6 of 2026-10-12-workspace-imports-and-remote-daemon):
+  - F1: only whole-declaration `import type …` and `export type …` are exempt. An inline `import { type X }` is a
+    value import even when every specifier is a type (with verbatimModuleSyntax it becomes `import {} from "y"`
+    and Node loads `y`); a fixture shows Node loading shared/log through it. This corrects amendment 2.
+  - F2: `new URL(<literal>, import.meta.url)` is resolved relative to the file and judged like an import
+    specifier; a non-literal first argument fails.
+  - F3: the `@unset/` belt checks string-literal and template tokens from the parser, never raw text, so comments
+    pass (fixture: capture-logger.ts:2).
+  - F4: both surviving mutants are red fixtures: the helper value-importing `createLogger`, and append.ts
+    importing the `@unset/domains-identity` root.
+  - F5: riders sit inside the boundary. `tests/integration/audit/chain.test.ts:8-9` and the seven files in
+    `tests/integration/postgres` move to the capture logger and the syntax subpath in PR (ii), fixtures in (iii).
+  - The trusted `deployment/postgres/init/00-bootstrap.test.ts` imports `tests/support/` helpers, so the boundary
+    counts `tests/support/` as reaching trusted code (the refocus order, section 4).
 - Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
 - Sequencing: P1.27g (#690), P1.27i (#697), P1.27x (#702) and P1.11c (#706), which edit those helpers, have all
   merged, so nothing has to move. P1.11i (#723) has merged too; P1.11f, which edits them next, becomes a
@@ -2480,6 +2508,7 @@ Done when (tests, planted fixtures in the guard's tests):
 
 ### P0.09r — Report spawn errors in the git-env test
 Tags: [ALEX] (typed line only)            Depends on: P0.09j            Plan: rule SE-6
+Paused (refocus 2026-10-12): starts after P2.13a's scenario passes locally.
 Check class (`scripts/guards/git-env.test.ts`), kind/fix; issue #722; book edit
   2026-10-12-p009r-git-env-test-diagnostics (21:52Z), from the coordinator (21:35Z). Lane: Phase 0 (Phase 1 refuses
   check paths). Its own PR (SE-6).
@@ -2497,6 +2526,64 @@ cause shows up, it gets its own fix.
 
 Done when, red first, an injected spawn that fails (or a child killed by a signal) gives a failure message naming the
 error code or the signal (on main it is empty or `0`), the guard tests pass, and check is green.
+
+---
+
+### P0.09s — Reach domains only through their exports
+Tags: —            Depends on: P0.09n            Plan: rule DC-2
+Check class (`scripts/lint/.dependency-cruiser.cjs`), a tightening, kind/build; issue #730; slice 1; book edit
+  2026-10-12-p009s-p009u-domain-imports-and-syntax-test (22:08Z), from architecture's Amendment 5 of
+  2026-10-12-workspace-imports-and-remote-daemon (the #724 verify). Lane: Phase 0. Its own PR, after P0.09n's PR (iii),
+  because it relies on the subpath export being judged. Nothing from Alex (a tightening); only if the classifier
+  refuses, his typed line is "yes P0.09s scripts/lint DC-2 all importers".
+Paused (refocus 2026-10-12): starts after P2.13a's scenario passes locally.
+
+**What:** `domain-cross-via-index` widens from `from: domains/` to
+`from: ^(apps|interfaces|infrastructure|shared|domains)/`. Allowed targets are `domains/<x>/index.ts` and the files
+named in that domain's package.json `exports`, read at config load and never hard-coded, so a new subpath is a visible
+package.json change in a domain PR. dependency-cruiser 18.5.0 does not resolve through `exports` (`exportsFields: []`,
+`normalize.mjs:35`), so the config computes the allowed files from package.json itself. No deep import exists today (one
+string fixture, `infrastructure/postgres/sqlLint.test.ts:97`).
+
+Done when, red first, an infrastructure file deep-importing a domain file fails, the syntax subpath passes, a
+non-exported subpath fails, and check is green.
+
+---
+
+### P0.09u — Pin the identity syntax subpath to its file
+Tags: —            Depends on: P0.09p            Plan: rule SE-6
+Product (`domains/identity/syntax-export.test.ts`), kind/fix; issue #731; slice 1; book edit
+  2026-10-12-p009s-p009u-domain-imports-and-syntax-test (22:08Z), from item 1 of the coordinator's post-merge verify of
+  #724. Lane: Phase 0. Its own small PR. Nothing from Alex.
+Paused (refocus 2026-10-12): starts after P2.13a's scenario passes locally.
+
+The gap: `syntax-export.test.ts:9-13` still passes if `"./syntax"` points at `./index.ts`, because `index.ts:14`
+re-exports `parseDid`.
+
+**What:** the test asserts that `import.meta.resolve("@unset/domains-identity/syntax")` ends in
+`/domains/identity/syntax.ts`.
+
+Done when, red first, the test fails with the export repointed to `./index.ts`, and check is green.
+
+---
+
+### P0.09v — Contain Dockerfiles with the native realpath
+Tags: [SEC]            Depends on: —            Plan: rule SE-6
+Check class (`scripts/ci/list-dockerfiles.ts` and its test), kind/fix; issue #736; slice 1; book edit
+  2026-10-12-p009v-dockerfile-list-native-realpath (22:30Z), from architecture's Amendment 9 of
+  2026-10-12-p127u-bind-ancestors-and-build-context. Lane: Phase 0. Its own PR (SE-6). Nothing from Alex (a
+  tightening); only if the classifier refuses, his typed line is "yes P0.09v scripts/ci list-dockerfiles native
+  realpath".
+Paused (refocus 2026-10-12): starts after P2.13a's scenario passes locally.
+
+The gap: `list-dockerfiles.ts:71-72` contains each Dockerfile with the JS `realpathSync`, which collapses `x/..` before
+following `x` (the B3 class).
+
+**What:** `fs.realpathSync.native` for both the Dockerfile and `deployment/`, failing closed: any realpath error gives
+the same "path outside deployment/" finding rather than throwing past it or passing.
+
+Done when, red first, a Dockerfile reached through `y -> x/..`, with `x` a link to a folder outside the repo, is
+refused (red on db10ce2), a realpath that throws (a dangling link) is refused, and check is green.
 
 ---
 
