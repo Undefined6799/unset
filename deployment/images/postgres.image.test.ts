@@ -16,6 +16,9 @@ const serving = (logs: string): boolean =>
   logs.includes(INIT_COMPLETE) && logs.lastIndexOf(READY) > logs.indexOf(INIT_COMPLETE);
 
 const docker = (args: readonly string[]) => spawnSync("docker", args, { encoding: "utf8" });
+// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
+// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
+const CONTAINER_MS = 120_000;
 
 describe("postgres image", () => {
   let image = "";
@@ -30,7 +33,7 @@ describe("postgres image", () => {
   afterAll(() => {
     for (const name of containers) spawnSync("docker", ["rm", "-f", "-v", name], { stdio: "ignore" });
     if (image !== "") spawnSync("docker", ["rmi", "-f", image], { stdio: "ignore" });
-  });
+  }, CONTAINER_MS);
 
   /** Starts the image detached with no network and a throwaway superuser password; returns the container name. */
   function start(extra: readonly string[] = []): string {
@@ -52,7 +55,7 @@ describe("postgres image", () => {
     return name;
   }
 
-  test("postgres_image_strips_gosu", () => {
+  test("postgres_image_strips_gosu", { timeout: CONTAINER_MS }, () => {
     const run = docker(["run", "--rm", "--network", "none", "--entrypoint", "sh", image, "-c", "command -v gosu"]);
     expect(run.stdout).toBe("");
     expect(run.status).not.toBe(0);
