@@ -2385,7 +2385,7 @@ Tags: —            Depends on: P0.09c            Plan: rule SE-6
 Product (`domains/identity/package.json` and one test), kind/build; slice 1; book edit
   2026-10-12-p009n-trusted-test-imports, amendment 5 (21:16Z), from architecture's Amendment 2 of
   2026-10-12-workspace-imports-and-remote-daemon (the three-PR split). Lane: Phase 0. PR (i) of P0.09n's three; lands
-  first. Nothing from Alex.
+  first; issue #713. Nothing from Alex.
 
 **What:** `domains/identity/package.json` gains the subpath export `"./syntax": "./syntax.ts"`, so a trusted file can
 import `parseDid` without loading the package root, whose `index.ts` re-exports untrusted modules.
@@ -2393,13 +2393,15 @@ import `parseDid` without loading the package root, whose `index.ts` re-exports 
 Done when a test importing `@unset/domains-identity/syntax` typechecks and gets the same `parseDid` as `syntax.ts`
 (red first: TS2307 and "not exported"), and check is green.
 
+As built: merged at 2026-10-12T21:46:16Z as `beae277` (#724, head 1ce8717) (merge data read by REST, 21:50Z).
+
 ---
 
 ### P0.09q — Trusted code imports only trusted modules
 Tags: trusted            Depends on: P0.09p            Plan: rule SE-6
-Trusted base (four `shared/http` tests, `infrastructure/audit/append.ts`), kind/refactor; slice 1; book edit
-  2026-10-12-p009n-trusted-test-imports, amendment 5 (21:16Z). Lane: Phase 0. PR (ii) of P0.09n's three. Its PR body
-  says it is inert until P0.09n lands. Nothing from Alex.
+Trusted base (five `shared/http` tests, `infrastructure/audit/append.ts`), kind/refactor; issue #714; slice 1; book
+  edit 2026-10-12-p009n-trusted-test-imports, amendments 5 (21:16Z) and 6 (21:48Z). Lane: Phase 0. PR (ii) of
+  P0.09n's three. Its PR body says it is inert until P0.09n lands. Nothing from Alex.
 
 **What:**
 - `shared/http/csp/headers.test.ts`, `shared/http/csrf/coverage.test.ts`, `shared/http/csrf/gate.test.ts` and
@@ -2407,8 +2409,11 @@ Trusted base (four `shared/http` tests, `infrastructure/audit/append.ts`), kind/
   logger typed with `import type { Logger }` (amendment 3). shared/log stays untrusted.
 - `infrastructure/audit/append.ts:5` imports `parseDid` and `type Did` from `@unset/domains-identity/syntax`
   (amendment 4).
+- (amendment 6) `shared/http/shutdown.test.ts:9` resolves `@unset/shared-log` with `import.meta.resolve` and runs
+  `createLogger` in a child process. The child uses a local capture logger instead, written as a trusted helper beside
+  the test.
 
-Done when the four tests still assert the same log lines, the audit tests pass unchanged, and check is green.
+Done when the five tests still assert the same log lines, the audit tests pass unchanged, and check is green.
 
 ---
 
@@ -2417,9 +2422,10 @@ Tags: [SEC] [ALEX] (typed line: scripts/guards, CODEOWNERS)            Depends o
 Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
   1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
   2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686, with amendments 1
-  (19:36Z), 2 (19:58Z, architecture's 2026-10-12-workspace-imports-and-remote-daemon), 3 (21:02Z), 4 (21:12Z) and
-  5 (21:16Z). P0.09o (#707) is folded in (amendment 4). Lane: Phase 0. It is the third of three PRs (amendment 5):
-  P0.09p (product), P0.09q (trusted), then this one, the check class. Each stays in one SE-6 class and is green alone.
+  (19:36Z), 2 (19:58Z, architecture's 2026-10-12-workspace-imports-and-remote-daemon), 3 (21:02Z), 4 (21:12Z),
+  5 (21:16Z) and 6 (21:48Z). P0.09o (#707) is folded in (amendment 4). Lane: Phase 0. It is the third of three PRs
+  (amendment 5): P0.09p (product), P0.09q (trusted), then this one, the check class. Each stays in one SE-6 class and
+  is green alone.
 Waits for: Alex's combined typed line "yes P0.09n scripts/guards CODEOWNERS trusted-base imports shared-config
   shared-errors identity-syntax", on this PR only. If he has already typed P0.09n's earlier line, only "yes P0.09n
   CODEOWNERS shared-config shared-errors identity-syntax trusted" is added. A tightening that widens the trusted
@@ -2450,9 +2456,15 @@ The fix:
   joins it alone (56 lines, no imports; trusted `verify-handle.ts:10` already imports it); the package stays
   untrusted because `index.ts` re-exports untrusted modules. The guard resolves `@unset/*` subpaths through the
   package's `exports`; `append.ts` uses the subpath from P0.09q.
+- Amendment 6 (architecture's Amendment 4 of 2026-10-12-workspace-imports-and-remote-daemon): in trusted files,
+  literal specifiers of `import.meta.resolve(…)`, `import(…)`, `require(…)` and `createRequire(…)` are judged
+  exactly like static imports, and any non-literal specifier in those forms fails. Belt: any string literal or
+  template head starting `@unset/` that is not an already-judged import specifier fails, which catches specifiers
+  passed as text to a child process (`node -e`, `--import`).
 - Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
 - Sequencing: P1.27g (#690), P1.27i (#697), P1.27x (#702) and P1.11c (#706), which edit those helpers, have all
-  merged, so nothing has to move. P1.11f and P1.11i, which edit them next, become trusted-class PRs once this lands.
+  merged, so nothing has to move. P1.11i (#723) has merged too; P1.11f, which edits them next, becomes a
+  trusted-class PR once this lands.
 
 Done when (tests, planted fixtures in the guard's tests):
   - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
@@ -2460,7 +2472,31 @@ Done when (tests, planted fixtures in the guard's tests):
     fails; a mixed clause fails; a type-only import passes.
   - Red (amendment 4): a trusted product file with a value import of an untrusted package fails; an `@unset/*` subpath
     resolves through `exports` to a trusted file and passes; a subpath missing from `exports` fails closed.
+  - Red (amendment 6): one fixture per form: `import.meta.resolve`, dynamic `import()`, `require`,
+    `createRequire(...)(…)`, a non-literal specifier, and a bare `"@unset/x"` string handed to a child.
   - The guard is green on the real tree, and the full suite is green.
+
+---
+
+### P0.09r — Report spawn errors in the git-env test
+Tags: [ALEX] (typed line only)            Depends on: P0.09j            Plan: rule SE-6
+Check class (`scripts/guards/git-env.test.ts`), kind/fix; issue #722; book edit
+  2026-10-12-p009r-git-env-test-diagnostics (21:52Z), from the coordinator (21:35Z). Lane: Phase 0 (Phase 1 refuses
+  check paths). Its own PR (SE-6).
+Waits for: Alex's typed line "yes P0.09r scripts/guards git-env diagnostics", for the harness classifier. Neither a
+  loosening nor a tightening of what the guard checks; it only reports more.
+
+The gap: `fixtures_ignore_hook_git_env` (:54) failed once in the third lane with an empty assertion message, and the
+coordinator's verifier could not reproduce it in 5 runs. The message is `run.stdout + run.stderr`: if the child never
+spawned, both are null (printed as `0`); if it was killed early, both are `""`. `run.error` and `run.signal` are never
+reported, so the failure cannot be diagnosed.
+
+**What:** the assertion message includes `run.error?.code`, `run.signal` and `run.status` beside stdout and stderr, so
+a spawn failure, a kill or a timeout names itself. No retry, no timeout change, no skip: diagnosis only. If a root
+cause shows up, it gets its own fix.
+
+Done when, red first, an injected spawn that fails (or a child killed by a signal) gives a failure message naming the
+error code or the signal (on main it is empty or `0`), the guard tests pass, and check is green.
 
 ---
 
