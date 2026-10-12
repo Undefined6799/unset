@@ -146,6 +146,9 @@ export type WalkProblem = keyof typeof WALK_REASONS;
 /** Linux follows at most 40 links while resolving one path (man7.org path_resolution(7)). */
 const MAX_LINKS = 40;
 
+/** What the walk reads: lstat, readlink and statfs, and the deploy user's uid. */
+export type WalkInputs = Pick<Inputs, "lstat" | "readlink" | "statfs" | "uid">;
+
 /**
  * Resolves `path` from `/` one component at a time, as the kernel and Docker do again at every start, and judges every
  * entry met (architecture, Amendment 6 of 2026-10-12-p127u-bind-ancestors-and-build-context). Each directory entered
@@ -154,7 +157,7 @@ const MAX_LINKS = 40;
  * pushed back onto the path: absolute from `/`, relative from the link's folder, `..` popping. A user who could swap
  * any hop owns a directory or link on this walk. readlink and statfs errors throw, so C9 fails closed.
  */
-export function resolveChecked(path: string, inputs: Inputs): WalkProblem | null {
+export function resolveChecked(path: string, inputs: WalkInputs): WalkProblem | null {
   const pending = components(path);
   let at: string = sep;
   let links = 0;
@@ -176,7 +179,7 @@ export function resolveChecked(path: string, inputs: Inputs): WalkProblem | null
 const stepTo = (at: string, next: string) => (next === "." ? at : next === ".." ? dirname(at) : join(at, next));
 
 /** Puts a link's target back onto the pending components, and returns where the walk continues from. */
-function followLink(link: string, pending: string[], inputs: Inputs): string {
+function followLink(link: string, pending: string[], inputs: WalkInputs): string {
   const target = inputs.readlink(link);
   pending.unshift(...components(target));
   return isAbsolute(target) ? sep : dirname(link);
@@ -194,7 +197,7 @@ function components(path: string): string[] {
 }
 
 /** One entry on the walk; `more` when components remain, so the entry must be a directory to go on through. */
-function entryProblem(at: string, info: Stats, more: boolean, inputs: Inputs): WalkProblem | null {
+function entryProblem(at: string, info: Stats, more: boolean, inputs: WalkInputs): WalkProblem | null {
   if (within(at, "/proc")) return "procfs";
   if (info.uid !== 0 && info.uid !== inputs.uid) return "changeable";
   if (info.isSymbolicLink()) return null;
@@ -206,7 +209,7 @@ function entryProblem(at: string, info: Stats, more: boolean, inputs: Inputs): W
 
 /** PROC_SUPER_MAGIC (linux/magic.h): procfs by filesystem type, so a bind-mounted alias of /proc is known too. */
 const PROC_SUPER_MAGIC = 0x9fa0;
-const onProcfs = (path: string, { statfs }: Inputs) => statfs(path).type === PROC_SUPER_MAGIC;
+const onProcfs = (path: string, { statfs }: WalkInputs) => statfs(path).type === PROC_SUPER_MAGIC;
 
 /**
  * The (dev, ino) of a path and of each directory above it, nearest first; null where nothing exists. A second name
