@@ -281,8 +281,10 @@ describe("workspace references", () => {
   // P1.31d (architecture record 2026-10-12-p131-depcruise-and-lexicon-choices, Amendment 1): the walk follows nested
   // references as tsc -b does, and a nested project counts only inside its parent, composite, without noCheck.
   test("nested_project_red_fixtures", () => {
-    const root = typecheckTree({ "shared/a": {}, "shared/b": {}, "shared/c": {}, "shared/d": {} });
-    // Options: noCheck, and no composite. A file reachable only through a failing project is reported too.
+    const root = typecheckTree({ "shared/a": {}, "shared/b": {}, "shared/c": {}, "shared/d": {}, "shared/e": {} });
+    // Options at any depth (Amendment 2): noCheck, and no composite. A file reached only through a failing project is
+    // reported too.
+    nested(root, "shared/e", { options: { noCheck: true } });
     nested(root, "shared/a", { references: ["./unchecked", "./plain"] });
     nested(root, "shared/a/unchecked", { options: { noCheck: true }, references: ["./inner"] });
     nested(root, "shared/a/unchecked/inner");
@@ -292,9 +294,8 @@ describe("workspace references", () => {
     nested(root, "shared/b/gen", { references: ["..", "./inner"] });
     nested(root, "shared/b/gen/inner", { references: [".."] });
     // Containment: a sibling folder, a path through .., a missing folder, node_modules and a link out.
-    nested(root, "shared/c", {
-      references: ["../outside", "./gen/../../outside", "./missing", "./node_modules/pkg", "./link"],
-    });
+    const outside = ["../outside", "./gen/../../outside", "./link", "./missing", "./node_modules/pkg"];
+    nested(root, "shared/c", { references: outside });
     nested(root, "shared/outside");
     nested(root, "shared/c/node_modules/pkg");
     symlinkSync(join(root, "shared/outside"), join(root, "shared/c/link"), "dir");
@@ -303,18 +304,15 @@ describe("workspace references", () => {
     nested(root, "shared/d", { references: ["./gen", "./gen/inner"] });
     nested(root, "shared/d/gen", { references: ["./inner"] });
     nested(root, "shared/d/gen/inner", { references: ["../../../a"] });
-    const refused = (ref: string) => `shared/c: reference ${ref} is not a project inside shared/c`;
+    const refused = (ref: string): string => `shared/c: reference ${ref} is not a project inside shared/c`;
     expect(untypecheckedFiles(root)).toEqual([
-      "shared/a/plain: a nested project must set composite",
-      "shared/a/unchecked: a nested project may not set noCheck",
+      "shared/a/plain: a project must set composite",
+      "shared/a/unchecked: a project may not set noCheck",
       "shared/b/gen: tsconfig references form a cycle (shared/b -> shared/b/gen -> shared/b/gen/inner -> shared/b/gen)",
       "shared/b: tsconfig references form a cycle (shared/b -> shared/b/gen -> shared/b)",
-      refused("../outside"),
-      refused("./gen/../../outside"),
-      refused("./link"),
-      refused("./missing"),
-      refused("./node_modules/pkg"),
+      ...outside.map(refused),
       "shared/d/gen/inner: reference ../../../a is not a project inside shared/d/gen/inner",
+      "shared/e: a project may not set noCheck",
       "shared/a/plain/a.ts",
       "shared/a/unchecked/a.ts",
       "shared/a/unchecked/inner/a.ts",
@@ -324,6 +322,9 @@ describe("workspace references", () => {
       "shared/b/gen/inner/a.ts",
       "shared/b/index.test.ts",
       "shared/b/index.ts",
+      "shared/e/a.ts",
+      "shared/e/index.test.ts",
+      "shared/e/index.ts",
       "shared/outside/a.ts",
     ]);
   }, 60_000);

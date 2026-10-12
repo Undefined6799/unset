@@ -241,9 +241,10 @@ function listedFiles(root: string, project: string): string[] {
   return (run.stdout ?? "").split("\n").map((file) => relative(root, file.trim()).split(sep).join("/"));
 }
 
-/** Why a nested project's effective options (extends resolved, by `tsc --showConfig`) keep it from checking its
- * files, or null: it must be composite and must not set noCheck (architecture Amendment 1 condition 3). */
-function nestedOptionProblem(root: string, project: string): string | null {
+/** Why a project's effective options (extends resolved, by `tsc --showConfig`) keep it from checking its files, or
+ * null: at every depth it must be composite and must not set noCheck (architecture Amendment 1 condition 3 and
+ * Amendment 2 item 3). */
+function optionProblem(root: string, project: string): string | null {
   const run = spawnSync(TSC, ["-p", join(project, "tsconfig.json"), "--showConfig"], { cwd: root, encoding: "utf8" });
   let options: Record<string, unknown>;
   try {
@@ -251,8 +252,8 @@ function nestedOptionProblem(root: string, project: string): string | null {
   } catch {
     return `${project}: tsc --showConfig gave no readable config`;
   }
-  if (options.composite !== true) return `${project}: a nested project must set composite`;
-  if (options.noCheck === true) return `${project}: a nested project may not set noCheck`;
+  if (options.composite !== true) return `${project}: a project must set composite`;
+  if (options.noCheck === true) return `${project}: a project may not set noCheck`;
   return null;
 }
 
@@ -285,8 +286,8 @@ type Walk = { root: string; tops: Set<string | null>; walked: Set<string>; cover
  * Every file some project in the walk lists, and why any project in it fails. The walk starts at the root
  * `tsconfig.json`'s references and follows each project's own references, as `tsc -b` does (architecture record
  * 2026-10-12-p131-depcruise-and-lexicon-choices, Amendment 1). A root-referenced project's reference to another is
- * left to the root walk. Any other reference names a nested project, which must sit inside its parent and pass the
- * option rules, or its files do not count. A reference back to a project on the current path is a cycle and a
+ * left to the root walk. Any other reference names a nested project, which must sit inside its parent. Every project
+ * must pass the option rules, or its files do not count. A reference back to a project on the current path is a cycle and a
  * finding; a project reached twice by different paths is walked once.
  */
 function typecheckWalk(root: string): Walk {
@@ -307,10 +308,8 @@ function visitProject(walk: Walk, project: string, path: Step[]): void {
   const real = realpath(join(walk.root, project));
   if (walk.walked.has(real ?? project)) return;
   walk.walked.add(real ?? project);
-  if (path.length > 0) {
-    const problem = nestedOptionProblem(walk.root, project);
-    if (problem !== null) return void walk.problems.push(problem);
-  }
+  const problem = optionProblem(walk.root, project);
+  if (problem !== null) return void walk.problems.push(problem);
   for (const file of listedFiles(walk.root, project)) walk.covered.add(file);
   const config = `${project}/tsconfig.json`;
   const refs = existsSync(join(walk.root, config)) ? referencePaths(readJson(walk.root, config)) : [];
