@@ -5,6 +5,8 @@
 // connections through `withDb`, outside any transaction the handler holds (a GET handler's is read-only, P1.07).
 // Like infrastructure/audit, this workspace never imports the driver or infrastructure/postgres (architecture matrix
 // row `infrastructure`): the composition root passes postgres's withClient over the web pool as `withDb`.
+// It moved here from infrastructure/postgres/session/ (P2.03c). The comment in migration 0011 still names the old
+// folder; applied migrations are locked by their checksums (infrastructure/postgres/migrate.ts), so it stays.
 import { createHash, randomBytes } from "node:crypto";
 import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
@@ -37,14 +39,11 @@ export type SessionRequest = {
 };
 /** The request's session, and whether the response must clear the cookie (unknown, malformed or expired). */
 export type SessionRead = { readonly session: Session | null; readonly clearCookie: boolean };
-/** Why every session of a DID ends: the closed list of P2.04's `app.end_sessions_for_did` (P3.06 adds its own). */
-export type EndSessionsReason = "user_signout_all" | "underage" | "auth_dead";
 
 export type SessionStore = {
   create(db: Db, did: string, options?: { readonly replacingCookie?: string }): Promise<CreatedSession>;
   read(request: SessionRequest): Promise<SessionRead>;
   destroy(db: Db, idHash: Buffer): Promise<void>;
-  destroyAllForDid(db: Db, did: string, why: EndSessionsReason): Promise<number>;
   setEmailConfirmed(db: Db, target: Buffer | { readonly did: string }, value: boolean): Promise<void>;
   sweep(db: Db): Promise<number>;
 };
@@ -103,7 +102,11 @@ export function createSessionStore(options: {
     }
   }
 
-  /** One database read per request: the result is kept against the request's key. */
+  /**
+   * One database read per request: the result is kept against the request's key. It is a snapshot taken at the
+   * request's first read, so a handler that calls create or destroy reads no session after it in the same request:
+   * the response carries the change, and the next request reads it.
+   */
   function read(request: SessionRequest): Promise<SessionRead> {
     const known = memo.get(request.key);
     if (known !== undefined) return known;
@@ -152,15 +155,6 @@ export function createSessionStore(options: {
     await db.query("DELETE FROM app.session WHERE id_hash = $1", [idHash]);
   }
 
-  /**
-   * Ends every session of a DID inside the caller's transaction, through P2.04's definer: the one statement that does
-   * this, so no second copy of its SQL exists here. Not callable until P2.04's migration creates the function.
-   */
-  async function destroyAllForDid(db: Db, did: string, why: EndSessionsReason) {
-    const { rows } = await db.query<{ ended: number }>("SELECT app.end_sessions_for_did($1, $2) AS ended", [did, why]);
-    return rows[0]?.ended ?? 0;
-  }
-
   /** P2.11's cache, for one session or for every session of a DID. */
   async function setEmailConfirmed(db: Db, target: Buffer | { readonly did: string }, value: boolean) {
     const set = "UPDATE app.session SET email_confirmed = $2, email_checked_at = now()";
@@ -168,7 +162,7 @@ export function createSessionStore(options: {
     else await db.query(`${set} WHERE did = $1`, [target.did, value]);
   }
 
-  /** Deletes every session past its idle or absolute expiry; the caller runs it hourly under one lock. */
+  /** Deletes every session past its idle or absolute expiry. Idempotent: concurrent runs are safe, so no lock (DA-4). */
   async function sweep(db: Db) {
     const result = await db.query(
       "DELETE FROM app.session WHERE absolute_expires_at < now() OR last_seen_at < now() - make_interval(secs => $1)",
@@ -179,7 +173,7 @@ export function createSessionStore(options: {
     return count;
   }
 
-  return { create, read, destroy, destroyAllForDid, setEmailConfirmed, sweep };
+  return { create, read, destroy, setEmailConfirmed, sweep };
 }
 
 function unavailable(error: unknown): never {

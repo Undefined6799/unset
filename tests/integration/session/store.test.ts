@@ -236,6 +236,17 @@ describe("session store", () => {
     expect((await rowFor(value))?.did).toBe(DID_A);
   });
 
+  test("session.memo_is_a_snapshot", async () => {
+    // A read after a session change in the same request still sees the first read: handlers must not rely on it.
+    const { store } = setup();
+    const value = await insertSession(DID_A);
+    const one = { key: {}, cookieValue: value, deadline: null };
+    const first = await store.read(one);
+    await withClient(web, null, (db) => store.destroy(db, first.session?.idHash as Buffer));
+    expect((await store.read(one)).session?.did).toBe(DID_A);
+    expect((await store.read({ key: {}, cookieValue: value, deadline: null })).session).toBeNull();
+  });
+
   test("session.destroy", async () => {
     const { store, request } = setup();
     const value = await insertSession(DID_A);

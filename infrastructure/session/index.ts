@@ -3,7 +3,6 @@
 export {
   type CreatedSession,
   createSessionStore,
-  type EndSessionsReason,
   type Session,
   type SessionDb,
   type SessionLimits,

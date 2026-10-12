@@ -37,6 +37,8 @@ checked: 2026-10-12
 - The browser session store is not here: it is its own trusted workspace, `infrastructure/session/` (P2.03),
   like `infrastructure/audit/`. It never imports this folder; each interface passes it a `withDb` built from
   `withClient`. Only a SHA-256 of the session id is stored; its real-Postgres tests are `tests/integration/session/`.
+  Migration 0011's comment still names the old `infrastructure/postgres/session/`; applied migrations are
+  checksum-locked, so it stays as written.
 
 **Rules worth knowing.**
 - Each process connects as its own role (web, api, indexer, retention and others), never as a superuser.
