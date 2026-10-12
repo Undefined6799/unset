@@ -35,7 +35,7 @@ export type Service = {
   /** The networks the service joins, by their key in the file. */
   networks: string[];
   networkMode: string | null;
-  /** The service's `volumes`; a bind source is as written, relative to the compose file's directory. */
+  /** The service's `volumes`; a bind source is as written, relative to the project directory (the first file's). */
   mounts: Mount[];
   hardening: Hardening;
 };

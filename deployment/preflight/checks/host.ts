@@ -40,7 +40,7 @@ export const c24: Check = {
   id: "C24",
   network: true,
   run: async (inputs, signal): Promise<Outcome> => {
-    if (pdsHostname(inputs).endsWith(".localhost")) return pass("skipped: PDS_HOSTNAME is an agent's stack");
+    if (pdsHostname(inputs).endsWith(".localhost")) return pass("skipped: PDS_HOSTNAME ends in .localhost");
     const ntp = await inputs.run("timedatectl", ["show", "-p", "NTPSynchronized", "--value"], signal);
     if (ntp.missing === true) return fail("timedatectl is not installed");
     if (ntp.code !== 0) return fail("timedatectl failed");
