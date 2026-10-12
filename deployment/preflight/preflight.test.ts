@@ -861,11 +861,16 @@ describe("preflight C25 (P1.30x)", () => {
     "deployment/edge/Dockerfile": "FROM scratch\n",
     "deployment/images/node-app.Dockerfile": "FROM scratch\n",
   };
-  const built = (service: string, image: string, dockerfile: string, adds = "") =>
-    COMPOSE.replace(
+  // Each Dockerfile from the context the images workflow builds it from (C26): the edge's own folder, else the root.
+  const built = (service: string, image: string, dockerfile: string, adds = "") => {
+    const [context, file] = dockerfile.endsWith("/Dockerfile")
+      ? [`./${dockerfile.slice(0, -"/Dockerfile".length).replace(/^deployment\//, "")}`, "Dockerfile"]
+      : ["..", dockerfile];
+    return COMPOSE.replace(
       `  ${service}:\n    image: ${image}\n`,
-      `  ${service}:\n    image: ${image}\n    build:\n      context: ..\n      dockerfile: ${dockerfile}\n${adds}`,
+      `  ${service}:\n    image: ${image}\n    build:\n      context: ${context}\n      dockerfile: ${file}\n${adds}`,
     );
+  };
   const adds = "    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n";
 
   test("c25_edge_image_built_from_another_dockerfile_fails", async () => {
@@ -899,6 +904,7 @@ describe("preflight C25 (P1.30x)", () => {
 describe("preflight C26 and C27 (P1.30y)", () => {
   const DOCKERFILES = {
     Dockerfile: "FROM scratch\n",
+    "deployment/edge/Dockerfile": "FROM scratch\n",
     "deployment/images/node-app.Dockerfile": "FROM scratch\n",
     "deployment/images/postgres.Dockerfile": "FROM scratch\n",
     "deployment/images/node_modules/x/Dockerfile": "FROM scratch\n",
@@ -910,8 +916,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     );
   const webTmpfs = (yaml: string) => COMPOSE.replace(`    image: ${WEB}\n`, `    image: ${WEB}\n${yaml}`);
 
-  // Architecture record 2026-10-12-p129-compose-service-keys: a context is the repository root, and a Dockerfile is one
-  // the images workflow discovers and scans (scripts/ci/list-dockerfiles.ts, images.test.ts's rule).
+  // Architecture record 2026-10-12-p129-compose-service-keys: a Dockerfile is one the images workflow discovers and
+  // scans (scripts/ci/list-dockerfiles.ts, images.test.ts's rule), built from the context that workflow builds it from:
+  // a file named Dockerfile from its own folder (the edge), any *.Dockerfile from the repository root (images.yml,
+  // scan-image "Build"). Another context builds other files than the scanned image holds.
   test("c26_build_from_the_root_and_a_scanned_dockerfile_passes", async () => {
     const result = await check({
       compose: webBuilds("..", "deployment/images/node-app.Dockerfile"),
@@ -921,11 +929,30 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   });
 
   test("c26_context_other_than_the_root_fails", async () => {
-    for (const context of ["../..", ".", "../deployment"]) {
+    // Each names the scanned node-app Dockerfile, from another context.
+    for (const [context, dockerfile] of [
+      [".", "images/node-app.Dockerfile"],
+      ["../deployment", "images/node-app.Dockerfile"],
+      ["./images", "node-app.Dockerfile"],
+    ]) {
       expect(
-        await expectOnly("C26", { compose: webBuilds(context, "images/node-app.Dockerfile"), files: DOCKERFILES }),
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
         context,
-      ).toBe("FAIL C26 web builds from a context other than the repository root");
+      ).toBe("FAIL C26 web builds from a context other than the images workflow's");
+    }
+  });
+
+  test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
+    expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
+    for (const [context, dockerfile] of [
+      ["..", "deployment/edge/Dockerfile"],
+      ["./edge/sites", "../Dockerfile"],
+      [".", "edge/Dockerfile"],
+    ]) {
+      expect(
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files: DOCKERFILES }),
+        context,
+      ).toBe("FAIL C26 web builds from a context other than the images workflow's");
     }
   });
 

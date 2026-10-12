@@ -447,8 +447,8 @@ services:
   web:
     image: ghcr.io/undefined6799/web@${digest}
     build:
-      context: .
-      dockerfile: deployment/edge/Dockerfile
+      context: ./edge
+      dockerfile: Dockerfile
     tmpfs: ["/tmp:size=16m,noexec,nosuid,nodev"]
     depends_on:
       edge:
