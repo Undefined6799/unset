@@ -8,7 +8,7 @@
 //   parents no other user can change (P1.27a). A uid that collides with a host account then still cannot reach it.
 
 import type { Stats } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute, relative, sep } from "node:path";
 import { type Check, fail, type Inputs, type MountedSecret, missing, type Outcome, pass } from "./types.ts";
 
 export const c9: Check = {
@@ -74,7 +74,7 @@ function lockedDirectoryProblem(dir: string, { lstat, uid }: Inputs): Outcome | 
  */
 function bindReachingProblem(dir: string, { compose, realpath }: Inputs): Outcome | null {
   const folders = [dir, realpath(dir) ?? dir];
-  const related = (a: string, b: string) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+  const related = (a: string, b: string) => within(a, b) || within(b, a);
   for (const service of compose.services) {
     for (const mount of service.mounts) {
       if (mount.type !== "bind" || mount.source === null) continue;
@@ -85,6 +85,12 @@ function bindReachingProblem(dir: string, { compose, realpath }: Inputs): Outcom
     }
   }
   return null;
+}
+
+/** Whether `path` is `folder` or lies under it, by path segments ("/" contains everything; "/a-b" is not in "/a"). */
+function within(path: string, folder: string): boolean {
+  const rest = relative(folder, path);
+  return rest === "" || (rest !== ".." && !rest.startsWith(`..${sep}`) && !isAbsolute(rest));
 }
 
 function secretFileProblem({ path, mountedBy }: MountedSecret, info: Stats | null): Outcome | null {

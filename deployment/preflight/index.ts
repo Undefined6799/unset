@@ -84,11 +84,14 @@ const lstatOrNull = (path: string): Stats | null => {
   }
 };
 
+/** Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. */
 const realpathOrNull = (path: string): string | null => {
   try {
     return realpathSync(path);
-  } catch {
-    return null;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
   }
 };
 

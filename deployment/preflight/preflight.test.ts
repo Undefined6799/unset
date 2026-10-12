@@ -152,6 +152,8 @@ function stack({
   secret("deployment/secrets/db_password", `${CANARY}\n`);
   chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
   chmodSync(join(root, "deployment/secrets"), 0o700);
+  // C9 judges every parent of the secrets folder, so the fixture sets its own modes whatever the umask.
+  chmodSync(join(root, "deployment"), 0o755);
   if (dotEnv !== undefined) secret("deployment/.env", dotEnv);
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
@@ -416,6 +418,11 @@ describe("preflight", () => {
       "FAIL C9 parent 2 of the secrets folder can be changed by another user",
     );
     expect(failed((await run({ [root]: 0 })).lines)).toEqual([]);
+    // The walk reaches "/" itself.
+    const depth = dir.split("/").length - 1;
+    expect((await run({ "/": 4242 })).lines).toContain(
+      `FAIL C9 parent ${depth} of the secrets folder can be changed by another user`,
+    );
     const other = await check({}, "prod", { uid: 4242 });
     expect(other.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/is not owned by the deploy user$/);
   });
@@ -490,7 +497,8 @@ describe("preflight", () => {
   test("c9_bind_mount_reaching_secrets_fails", async () => {
     const binding = (source: string) =>
       COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    volumes:\n      - ${source}:/srv:ro`);
-    for (const source of ["./secrets", "./secrets/db_password", "."]) {
+    // "/" and a ".." chain that Compose resolves to "/" contain every folder (verifier on #689).
+    for (const source of ["./secrets", "./secrets/db_password", ".", "/", "../../../../../../../../../.."]) {
       const result = await check({ compose: binding(source) });
       expect(result.lines.find((l) => l.startsWith("FAIL C9"))).toBe(
         "FAIL C9 pds binds a path that reaches the secrets folder",
@@ -501,6 +509,22 @@ describe("preflight", () => {
     symlinkSync(join(root, "deployment/secrets"), join(root, "deployment/alias"));
     const linked = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(linked.lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
+    const rooted = stack({ compose: binding("./rootlink") });
+    symlinkSync("/", join(rooted.root, "deployment/rootlink"));
+    const toRoot = await preflight(["--env", "prod", "--compose", rooted.file], {
+      root: rooted.root,
+      run: fakeRun().run,
+      ...fakeFs(rooted.root),
+    });
+    expect(toRoot.lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
+    // A source C9 cannot resolve (EACCES, ELOOP) fails the check rather than falling back to the path as written.
+    const denied = () => {
+      throw Object.assign(new Error("denied"), { code: "EACCES" });
+    };
+    const unresolved = await check({ compose: binding("./edge/sites") }, "prod", { realpath: denied });
+    expect(unresolved.lines).toContain("FAIL C9 check error");
+    // A sibling whose name only starts with the folder's name is not inside it.
+    expect(failed((await check({ compose: binding("./secrets-other") })).lines)).toEqual([]);
     expect(failed((await check({ compose: binding("./edge/sites") })).lines)).toEqual([]);
   });
 
