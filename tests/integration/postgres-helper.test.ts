@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { docker } from "../support/docker.ts";
-import { runUntilExit, startPostgres, stopAllPostgres } from "../support/postgres.ts";
+import { runUntilExit, STOP_ALL_MS, startPostgres, stopAllPostgres } from "../support/postgres.ts";
 
 const dirs: string[] = [];
 const names: string[] = [];
@@ -17,7 +17,8 @@ afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 }, 120_000);
 
-// Inspecting is quick; 20 s kills a hung daemon well inside the 30 s leaves_nothing_behind budget (P1.27k).
+// Inspecting is quick; 20 s kills a hung daemon. leaves_nothing_behind holds its removals (STOP_ALL_MS) plus the
+// inspections it makes (P1.27g).
 const INSPECT_MS = 20_000;
 
 /** An init folder the image can read, holding the given scripts (executable). */
@@ -70,7 +71,7 @@ describe("tests/support/postgres.ts", () => {
     expect(result.logs).toContain("init-script-failed");
   });
 
-  test("postgres_helper_leaves_nothing_behind", { timeout: 30_000 }, () => {
+  test("postgres_helper_leaves_nothing_behind", { timeout: STOP_ALL_MS + 4 * INSPECT_MS }, () => {
     stopAllPostgres();
     for (const name of names) {
       expect(docker(["inspect", name], { timeoutMs: INSPECT_MS }).code).not.toBe(0);

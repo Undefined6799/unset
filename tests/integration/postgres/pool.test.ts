@@ -15,7 +15,13 @@ import {
   withClient,
   withTransaction,
 } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 const migratorPassword = randomPassword();
 const database = "pool_test";
@@ -62,7 +68,7 @@ afterAll(async () => {
   }
   await migrator.close();
   stopAllPostgres();
-});
+}, STOP_ALL_MS);
 
 /** A fresh role allowed into this database's public schema, and a pool for it. */
 async function setup(options: { max?: number; connectTimeoutMs?: number; connectionLimit?: number } = {}) {
