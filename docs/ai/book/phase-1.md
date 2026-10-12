@@ -6866,6 +6866,8 @@ P1.27h or stacked on it, whichever merges first. Nothing from Alex. Nothing depe
 
 Done when a grep in the PR body shows no trusted image test removing an image by id or with `-f`, and check is green.
 
+As built: merged at 2026-10-12T21:17:49Z as `dda9079` (#717, head 41d62b2) (merge data read by REST, 21:21Z).
+
 ---
 
 ### P1.27m — Local edge TLS snippet for the local stack
