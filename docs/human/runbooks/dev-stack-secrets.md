@@ -14,7 +14,7 @@ The secrets live in `unset-dev-secrets/`, a folder **beside** your checkout of t
 ~/src/
 ├── unset/                 the repository checkout
 ├── unset-dev-secrets/     the secret files below
-└── unset-dev-env/         dev.env, the stack's interpolation file
+└── unset-dev-env/         dev-public.env, the stack's interpolation file
 ```
 
 Postgres builds from the repository root, so a secrets folder inside the checkout would sit inside a build context,
@@ -31,7 +31,7 @@ root-owned folder, so it needs nothing from you (Amendment 1 of the same record)
 
 `unset-dev-env/` holds the live env files, apart from the secrets so that folder holds only mounted secrets. Make it
 yours with mode 0700, and each file yours, mode 0600, with a single hard link; any symbolic link on the way must also be
-yours or root's (Amendment 6). Start `dev.env` from the template `deployment/env/dev.example.env`, whose values are all
+yours or root's (Amendment 6). Start `dev-public.env` from the template `deployment/env/dev-public.example.env`, whose values are all
 placeholders. No live env file stays in the checkout, even one with nothing secret in it today: it would sit in
 postgres's build context, and the preflight refuses that (Amendments 2 and 3 of the same record).
 

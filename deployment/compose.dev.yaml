@@ -15,7 +15,7 @@
 # from the repository root, and a build context that reaches the secrets folder fails C26 (architecture record
 # 2026-10-12-p127u-bind-ancestors-and-build-context (b); a .dockerignore entry does not count). `file:` paths resolve
 # from this file's folder, so ../../ is the checkout's parent. The interpolation file lives the same way in
-# unset-dev-env/, beside the checkout, and the checkout keeps only its template, deployment/env/dev.example.env
+# unset-dev-env/, beside the checkout, and the checkout keeps only its template, deployment/env/dev-public.example.env
 # (Amendments 2 and 3 of the same record).
 name: unset-dev
 

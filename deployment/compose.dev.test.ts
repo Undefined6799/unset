@@ -166,7 +166,7 @@ describe("compose.dev.yaml (P1.29)", () => {
     for (const name of ["dev:up", "dev:down"]) {
       const file = /--interpolation-env (\S+)/.exec(scripts[name] ?? "")?.[1];
       expect(file, name).toBeDefined();
-      expect(resolve(checkout, file ?? ""), name).toBe(join(envFolder, "dev.env"));
+      expect(resolve(checkout, file ?? ""), name).toBe(join(envFolder, "dev-public.env"));
     }
     for (const s of dev().services) {
       for (const file of s.envFiles) expect(dirname(resolve(DEPLOYMENT, file)), s.name).toBe(envFolder);
