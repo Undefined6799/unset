@@ -23,6 +23,8 @@ export const c9: Check = {
     }
     const mounted = mountedProblem(inputs);
     if (mounted !== null) return mounted;
+    const bound = bindSourceProblem(inputs);
+    if (bound !== null) return bound;
     return pass(`${inputs.secretPaths.length} files, ${inputs.mountedSecrets.length} mounted secrets`);
   },
 };
@@ -88,6 +90,44 @@ function bindReachingProblem(dir: string, inputs: Inputs): Outcome | null {
     }
   }
   return null;
+}
+
+/**
+ * Every bind source, `:ro` included, is judged like the secrets folder's parents (architecture record
+ * 2026-10-12-p127u-bind-ancestors-and-build-context, (a)): a user who can change a directory on its path can swap the
+ * source after the preflight, onto the secrets folder or onto content of their own. It must exist, since Compose
+ * creates a missing one (a dangling link's target too) as root, and never lie under /proc, which resolves in the
+ * preflight's context, not the container's.
+ */
+function bindSourceProblem(inputs: Inputs): Outcome | null {
+  for (const service of inputs.compose.services) {
+    for (const mount of service.mounts) {
+      if (mount.type !== "bind" || mount.source === null) continue;
+      const real = inputs.realpath(mount.source);
+      const why = `${service.name} binds a path`;
+      if ([mount.source, real].some((path) => path !== null && within(path, "/proc")))
+        return fail(`${why} under /proc`);
+      if (real === null) return fail(`${why} that does not exist`);
+      if (!lockedPath(mount.source, inputs, true) || !lockedPath(real, inputs, false)) {
+        return fail(`${why} that another user can change`);
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether only root and the deploy user own `path` and every directory above it, and none has group or other write.
+ * On the path as written a link may stand in for a directory, because its target is judged on the real path, but the
+ * link must be theirs too; its own mode means nothing on Linux.
+ */
+function lockedPath(path: string, { lstat, uid }: Inputs, linksAllowed: boolean): boolean {
+  for (let at = path; ; at = dirname(at)) {
+    const info = lstat(at);
+    if (info === null || (info.uid !== 0 && info.uid !== uid)) return false;
+    if (info.isSymbolicLink() ? !linksAllowed : (info.mode & 0o022) !== 0) return false;
+    if (dirname(at) === at) return true;
+  }
 }
 
 /**

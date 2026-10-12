@@ -164,6 +164,8 @@ function stack({
   for (const part of ["Caddyfile", "snippets", "sites"])
     cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
   mkdirSync(join(edge, "sites/enabled"));
+  // C9 judges every bind source and its parents too (P1.27u), so these get fixed modes whatever the umask.
+  for (const dir of [edge, join(edge, "sites"), join(edge, "sites/enabled")]) chmodSync(dir, 0o755);
   symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
   for (const [name, text] of Object.entries(sites ?? {})) writeFileSync(join(edge, "sites/enabled", name), text);
   for (const env of ["dev", "prod"]) {
@@ -524,8 +526,34 @@ describe("preflight", () => {
     };
     const unresolved = await check({ compose: binding("./edge/sites") }, "prod", { realpath: denied });
     expect(unresolved.lines).toContain("FAIL C9 check error");
+    // A real self-loop with the default realpath: ELOOP must throw, not read as missing (P1.27u).
+    const looped = stack({ compose: binding("./loop") });
+    symlinkSync("loop", join(looped.root, "deployment/loop"));
+    const loop = await preflight(["--env", "prod", "--compose", looped.file], {
+      root: looped.root,
+      run: fakeRun().run,
+      ...fakeFs(looped.root),
+    });
+    expect(loop.lines).toContain("FAIL C9 check error");
+    // A link into the folder whose target does not exist yet: Compose would create it there (P1.27u).
+    const dangling = stack({ compose: binding("./dangle") });
+    symlinkSync("secrets/newdir", join(dangling.root, "deployment/dangle"));
+    const dangle = await preflight(["--env", "prod", "--compose", dangling.file], {
+      root: dangling.root,
+      run: fakeRun().run,
+      ...fakeFs(dangling.root),
+    });
+    expect(dangle.lines).toContain("FAIL C9 pds binds a path that does not exist");
     // A sibling whose name only starts with the folder's name is not inside it.
-    expect(failed((await check({ compose: binding("./secrets-old") })).lines)).toEqual([]);
+    const sibling = stack({ compose: binding("./secrets-old") });
+    mkdirSync(join(sibling.root, "deployment/secrets-old"), { mode: 0o755 });
+    chmodSync(join(sibling.root, "deployment/secrets-old"), 0o755);
+    const old = await preflight(["--env", "prod", "--compose", sibling.file], {
+      root: sibling.root,
+      run: fakeRun().run,
+      ...fakeFs(sibling.root),
+    });
+    expect(failed(old.lines)).toEqual([]);
     // A second name for the folder that no link explains (a host bind mount): matched by (dev, ino), both ways.
     const aliased = stack({ compose: binding("/srv/alias") });
     const folder = join(aliased.root, "deployment/secrets");
@@ -538,7 +566,107 @@ describe("preflight", () => {
       stat: (path) => (path === "/srv/alias" || path.startsWith(dirname(folder)) ? asFolder(path) : null),
     });
     expect(alias.lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
+    // Each layer alone must catch what it owns (P1.27u, the verifier's surviving mutants on #689).
+    const aliasing = async (source: string, names: Record<string, string | null>) => {
+      const s = stack({ compose: binding(source) });
+      const real = join(s.root, "deployment/secrets");
+      const named = Object.fromEntries(
+        Object.entries(names).map(([path, to]) => [
+          path,
+          to === null ? null : to.replace("PARENT", dirname(real)).replace("FOLDER", real),
+        ]),
+      );
+      return preflight(["--env", "prod", "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+        realpath: (path) => path,
+        stat: (path) => {
+          const to = path in named ? named[path] : path;
+          return to === null || to === undefined ? null : statSync(to);
+        },
+      });
+    };
+    const reaches = "FAIL C9 pds binds a path that reaches the secrets folder";
+    // The folder's parent under another name: only the folder's ancestor line holds its identity.
+    expect((await aliasing("/srv/up", { "/srv/up": "PARENT" })).lines).toContain(reaches);
+    // A child, not there yet, under another name for the folder: only the source's ancestor line holds it.
+    expect(
+      (await aliasing("/srv/alias/newdir", { "/srv/alias": "FOLDER", "/srv/alias/newdir": null })).lines,
+    ).toContain(reaches);
+    // Path containment alone, with no identities to compare.
+    for (const source of ["./secrets", "./secrets/db_password", ".", "..", "/"]) {
+      const s = stack({ compose: binding(source) });
+      const blind = await preflight(["--env", "prod", "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+        stat: (path) => (path.endsWith(".env") ? statSync(path) : null),
+      });
+      expect(blind.lines).toContain(reaches);
+    }
     expect(failed((await check({ compose: binding("./edge/sites") })).lines)).toEqual([]);
+  });
+
+  // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (a)): every bind source, read-only
+  // or not, exists and sits where only root and the deploy user can change it, or another user could swap it later.
+  test("c9_bind_source_path_locked", async () => {
+    const binding = (source: string) =>
+      COMPOSE.replace(
+        "    env_file: pds.env",
+        `    env_file: pds.env
+    volumes:
+      - ${source}:/srv:ro`,
+      );
+    const changeable = "FAIL C9 pds binds a path that another user can change";
+    const run = async (
+      source: string,
+      setUp: (deployment: string) => Record<string, number> | undefined,
+      deps: Partial<Deps> = {},
+    ) => {
+      const s = stack({ compose: binding(source) });
+      const deployment = join(s.root, "deployment");
+      mkdirSync(join(deployment, "data/shared"), { recursive: true });
+      for (const dir of ["data", "data/shared"]) chmodSync(join(deployment, dir), 0o755);
+      const uids = setUp(deployment) ?? {};
+      return preflight(["--env", "prod", "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root, WEB_UID, uids),
+        ...deps,
+      });
+    };
+    expect(failed((await run("./data/shared", () => undefined)).lines)).toEqual([]);
+    const otherOwner = await run("./data/shared", (d) => ({ [join(d, "data")]: 2000 }));
+    expect(otherOwner.lines).toContain(changeable);
+    const sticky = await run("./data/shared", (d) => void chmodSync(join(d, "data"), 0o1777));
+    expect(sticky.lines).toContain(changeable);
+    const sourceItself = await run("./data/shared", (d) => void chmodSync(join(d, "data/shared"), 0o775));
+    expect(sourceItself.lines).toContain(changeable);
+    // A link on the path as written is followed through its real path, where a writable folder is caught.
+    const throughLink = await run("./via/inner", (d) => {
+      mkdirSync(join(d, "open/inner"), { recursive: true });
+      chmodSync(join(d, "open"), 0o777);
+      chmodSync(join(d, "open/inner"), 0o755);
+      symlinkSync(join(d, "open"), join(d, "via"));
+    });
+    expect(throughLink.lines).toContain(changeable);
+    // The link itself must be theirs as well.
+    const foreignLink = await run("./via", (d) => {
+      symlinkSync(join(d, "data/shared"), join(d, "via"));
+      return { [join(d, "via")]: 2000 };
+    });
+    expect(foreignLink.lines).toContain(changeable);
+    // A real path that still holds a link (one swapped in after it was resolved) is refused, not followed.
+    const linkedReal = await run("./via", (d) => void symlinkSync(join(d, "data/shared"), join(d, "via")), {
+      realpath: (path) => path,
+    });
+    expect(linkedReal.lines).toContain(changeable);
+    expect((await run("./nowhere", () => undefined)).lines).toContain("FAIL C9 pds binds a path that does not exist");
+    // /proc resolves in the preflight's own context, not the container's.
+    for (const source of ["/proc/self/cwd", "/proc"]) {
+      expect((await run(source, () => undefined)).lines).toContain("FAIL C9 pds binds a path under /proc");
+    }
   });
 
   // P1.30o: every mounted secret shares one locked folder, so one directory check covers them all.
