@@ -7204,7 +7204,7 @@ Done when items 1 and 4 are red on `7636024` and green after, neither hook can s
 
 ### P1.11f — Keep cleanup errors in Postgres test setup
 Tags: —            Depends on: P1.11c
-Slice 1, not urgent, product (`tests/integration/setup/pg.setup.ts`, six integration hook files,
+Slice 1, not urgent, issue #709, product (`tests/integration/setup/pg.setup.ts`, six integration hook files,
 `tests/support/{docker,postgres}.ts`), kind/fix, lane Phase 1, after P1.11c (#706), which edits the same files; book
 edit 2026-10-12-p111f-postgres-cleanup-follow-ups (20:12Z), from the coordinator's verifier on #706. If it is ready
 before P0.09n (#692) merges, it is one product PR; if #692 merges first, its `tests/support` parts move to a trusted
@@ -9243,7 +9243,9 @@ F3.2, F3.4, F3.5). No line from Alex. P1.29, P1.27w, P1.27k (order only) and P1.
 
 **What:**
 1. `--interpolation-env`: exactly one; it replaces `<projectDir>/.env` as the interpolation source. A repeated flag is
-   refused. The flag is required. Without it the preflight refuses (P1.34f). Amendment (17:32Z, architecture's
+   refused. The flag is required. Without it the preflight refuses (P1.34f). Amendment (20:05Z) [SEC]: the path must be
+   absolute and normal, with no trailing `/`; anything else stops with a fixed error that does not echo the path
+   (test first: `interpolation_env_path_must_be_absolute_and_normal`). Amendment (17:32Z, architecture's
    Amendment 3):
    Node v26 reads the `--env-file` family from argv even after the script name and applies that file's
    `NODE_OPTIONS`, so no preflight or wrapper flag starts with `--env-file`, `--require` or `--import` (a unit test
@@ -11307,11 +11309,11 @@ D. Dev PDS fit for the authority
     _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
     No AAAA record unless IPv6 was probed in P1.33.
 10. (Merged into step 11; book edit 2026-10-12-p130a-p130l-compose-inputs-booked.)
-11. Run P1.27w's wrapper with `compose.dev.yaml` and `--interpolation-env ../unset-dev-env/dev-public.env` (from the
-    checkout root, resolved once by the wrapper): it runs the
-    preflight (P1.30, all PASS), stops on any failure, then runs `docker compose … --env-file … up -d` with the same
-    files (services without a profile start by default; there is no "default" profile). The edge obtains certificates
-    (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
+11. Run P1.27w's wrapper with `compose.dev.yaml` and `--interpolation-env <absolute path of unset-dev-env/dev.env>`,
+    the env folder beside the checkout (0700; file 0600, owned by the deploy user). The flag is required (P1.34f
+    amendment 1). It runs the preflight (P1.30, all PASS), stops on any failure, then runs
+    `docker compose … --env-file … up -d` with the same files (services without a profile start by default; there is
+    no "default" profile). The edge obtains certificates (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
 12. Power and recovery: the homelab and router on a UPS; both restart automatically after power loss.
 13. Store the secrets bundle (pds.env with the admin password and the PDS's PLC rotation key, cosign and age
     material excluded) separately encrypted, per secrets-bundle.md.
