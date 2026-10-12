@@ -30,10 +30,12 @@ function repository() {
   symlinkSync(join(edgeDir, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
   return { root, edgeDir, sitesDir };
 }
-/** A compose file whose edge service has `volumes` (already absolute, as loadCompose resolves them). */
-const compose = (volumes: string[] | null) =>
+const DIGEST = `sha256:${"a".repeat(64)}`;
+const EDGE_IMAGE = `ghcr.io/undefined6799/edge@${DIGEST}`;
+/** A compose file whose edge service runs `image` and has `volumes` (already absolute, as loadCompose resolves them). */
+const compose = (volumes: string[] | null, image = EDGE_IMAGE) =>
   parseCompose(
-    `name: unset-dev\nservices:\n  ${volumes === null ? "web" : "edge"}:\n    image: x\n${
+    `name: unset-dev\nservices:\n  ${volumes === null ? "web" : "edge"}:\n    image: ${image}\n${
       volumes === null || volumes.length === 0 ? "" : `    volumes:\n${volumes.map((v) => `      - ${v}\n`).join("")}`
     }`,
     "compose.yaml",
@@ -159,7 +161,7 @@ describe("C18 (P1.30u)", () => {
   const edgeEnv = (env: Record<string, string> = ENV) => new SecretMap(Object.entries(env));
   /** C18 on `repo`, with its sites mount and the edge's env. */
   const zones = (repo: ReturnType<typeof repository>, env = edgeEnv()) =>
-    edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, env);
+    edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, env, EDGE_IMAGE);
   /** Replaces the enabled sites with one link to `name` under sites/, holding `text`. */
   const enable = (repo: ReturnType<typeof repository>, name: string, text: string) => {
     writeFileSync(join(repo.edgeDir, "sites", name), text);
@@ -230,6 +232,29 @@ describe("C18 (P1.30u)", () => {
     }
   });
 
+  // P1.30w (record 2026-10-12-p203-session-workspace-and-c18-image, point 2a and its 04:25Z amendment): C18 vouches
+  // for the repository's Caddyfile, which only the edge image carries, so the edge service must run exactly the lock's
+  // `edge` ref. The names here are fixture data; the lock alone holds the published path.
+  test("c18_edge_image_not_the_lock_edge_ref_fails", () => {
+    const repo = repository();
+    const sites = [sitesFrom(repo.sitesDir)];
+    const notEdge = { pass: false, reason: "the edge service does not run the lock's edge image" };
+    for (const image of [
+      `ghcr.io/undefined6799/web@${DIGEST}`,
+      `ghcr.io/undefined6799/edge@sha256:${"b".repeat(64)}`,
+      `ghcr.io/undefined6799/edge:1.0@${DIGEST}`,
+      "ghcr.io/undefined6799/edge:latest",
+    ]) {
+      expect(edgeZones(compose(sites, image), repo.edgeDir, edgeEnv(), EDGE_IMAGE), image).toEqual(notEdge);
+    }
+    // A lock with no edge entry fails too; the matching ref passes.
+    expect(edgeZones(compose(sites), repo.edgeDir, edgeEnv(), undefined)).toEqual({
+      pass: false,
+      reason: "input missing: the lock's edge entry",
+    });
+    expect(edgeZones(compose(sites), repo.edgeDir, edgeEnv(), EDGE_IMAGE)).toEqual({ pass: true, reason: "ok" });
+  });
+
   test("c18_edge_env_values_never_printed", () => {
     // Each of the edge's env values, the sentinel alone or appended to its good value, fails and is never printed;
     // an edge service without an env, or without one of the names, fails as unreadable.
@@ -244,7 +269,7 @@ describe("C18 (P1.30u)", () => {
       expect(zones(repository(), edgeEnv(without)).pass, `without ${name}`).toBe(false);
     }
     const repo = repository();
-    expect(edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, undefined)).toEqual({
+    expect(edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, undefined, EDGE_IMAGE)).toEqual({
       pass: false,
       reason: "input missing: the edge service's environment",
     });

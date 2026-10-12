@@ -8,6 +8,7 @@ import { posix } from "node:path";
 import { CaddyfileError, ENV_NAMES, type EnvName, edgeSiteProblems, readEdgeConfig } from "../../edge/caddyfile.ts";
 import type { Compose, Mount } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
+import { readLock } from "./images.ts";
 import { type Check, fail, missing, type Outcome, pass, scrubbed } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
@@ -84,11 +85,30 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
  * value (P1.28l); a reader error is a failure, never a crash. Whatever the reader says, the reason leaves with each
  * value turned back into its name (P1.30w).
  */
-export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | undefined): Outcome {
+export function edgeZones(
+  compose: Compose,
+  edgeDir: string,
+  env: SecretMap | undefined,
+  edgeRef: string | undefined,
+): Outcome {
+  const image = edgeImage(compose, edgeRef);
+  if (image !== null) return image;
   const sites = edgeSitesDir(compose, edgeDir);
   if (!("dir" in sites)) return sites;
   if (env === undefined) return missing("the edge service's environment");
   return scrubbed(readZones(edgeDir, sites.dir, env), env, Object.keys(ENV_NAMES));
+}
+
+/**
+ * Why the edge service is not running the lock's `edge` ref exactly, or null when it is. Only the edge image carries
+ * the repository's Caddyfile and snippets, so C18's verdict describes nothing else; the published path lives only in
+ * the lock (P1.30w; record 2026-10-12-p203-session-workspace-and-c18-image, point 2a and its 04:25Z amendment).
+ */
+function edgeImage(compose: Compose, edgeRef: string | undefined): Outcome | null {
+  const edge = compose.services.find((service) => service.name === "edge");
+  if (edge === undefined) return missing("the edge service");
+  if (edgeRef === undefined) return missing("the lock's edge entry");
+  return edge.image === edgeRef ? null : fail("the edge service does not run the lock's edge image");
 }
 
 function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
@@ -109,5 +129,15 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
 
 export const c18: Check = {
   id: "C18",
-  run: ({ compose, edgeDir, serviceEnv }) => edgeZones(compose, edgeDir, serviceEnv.get("edge")),
+  run: (inputs) => {
+    const lock = readLock(inputs);
+    if (lock === null) return missing(inputs.lockPath);
+    const ref = lock.edge?.ref;
+    return edgeZones(
+      inputs.compose,
+      inputs.edgeDir,
+      inputs.serviceEnv.get("edge"),
+      typeof ref === "string" ? ref : undefined,
+    );
+  },
 };
