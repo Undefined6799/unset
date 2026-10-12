@@ -295,11 +295,6 @@ function packageManagers(entries: readonly Entry[]): string[] {
 const PACKAGE_MANAGER =
   /^(?:apk|apk\.static|apk-.+|libapk.*|apt|apt-get|apt-.+|libapt.*|dpkg|dpkg-.+|rpm|yum|dnf|microdnf)$/;
 
-/**
- * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
- * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
- * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
- */
 /** Debian's dpkg database (node and postgres both build on Debian trixie). */
 const DPKG_DATABASE = {
   root: "/var/lib/dpkg",
@@ -307,6 +302,11 @@ const DPKG_DATABASE = {
   index: "status",
   names: /^Package: /m,
 };
+/**
+ * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
+ * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
+ * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
+ */
 const DATABASE_BY_KIND = new Map([
   ["node", DPKG_DATABASE],
   // The official Postgres image also keeps dpkg's statoverride file, one text line (`root ssl-cert 710
