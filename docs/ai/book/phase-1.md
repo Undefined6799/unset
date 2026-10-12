@@ -9708,7 +9708,7 @@ P1.29h, P1.29s, P1.29t.
    `deployment/compose.dev.yaml` with postgres (our image, built locally from `postgres.Dockerfile`, `user` never 0
    or root, tmpfs at `/var/run/postgresql` and `/tmp` with `uid=999,gid=999` for the read-only root), migrate and web
    (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
-   `deployment/env/dev.example.env` (a committed example with no values, copied into `unset-dev-env/`);
+   `deployment/env/dev-public.example.env` (a committed example with no values, copied into `unset-dev-env/`);
    `docs/human/runbooks/dev-stack-secrets.md` (the secrets folder is the deploy-owned 0700 sibling `unset-dev-secrets`
    and env files live in the sibling `unset-dev-env`, both outside the checkout, reached as `../../unset-dev-secrets/`
    and `../../unset-dev-env/`; the runbook says their owners, modes and how to create them, and to clone under
@@ -9905,7 +9905,7 @@ bump. If P1.29t cannot run it, it moves to the preflight.
 **Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27a, P1.27u, P1.27y, P1.27w) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
-`deployment/networks.dev.json`; `deployment/env/dev.example.env`; `docs/human/runbooks/dev-stack-secrets.md`;
+`deployment/networks.dev.json`; `deployment/env/dev-public.example.env`; `docs/human/runbooks/dev-stack-secrets.md`;
 `scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests (each part carries its share, above).
 
 **Size:** ~230 lines of YAML, ~220 script lines, ~250 test lines.
