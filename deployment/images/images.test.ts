@@ -1252,6 +1252,14 @@ describe("base images", () => {
     ] as const) {
       expect(osPackageProblems(`${base}${run}`), run).toEqual([`line ${base.split("\n").length}: ${floor}`]);
     }
+    // The postgres row is wired to the same listed rm (P1.29c; record 2026-10-12-p129d-post-merge-follow-ups, F1): it
+    // passes word for word in a postgres image, and the same three near misses fail there too.
+    const postgresBase = lock.postgres as Base;
+    const postgres = `FROM ${postgresBase.ref}:${postgresBase.tag}@${postgresBase.digest}\n`;
+    expect(osPackageProblems(`${postgres}RUN rm -f ${scripts}`)).toEqual([]);
+    for (const run of [`RUN rm -f ${scripts} /x`, `RUN rm -rf ${scripts}`, "RUN rm -f /var/lib/dpkg/status"]) {
+      expect(osPackageProblems(`${postgres}${run}`), run).toEqual([`line 2: ${floor}`]);
+    }
     // The same two with their glob words off the list as well (P1.29g, item 6): quoted, and in an edge image.
     const quoted = scripts.replace("*.preinst", "'*.preinst'");
     expect(osPackageProblems(`${node}RUN rm -f ${quoted}`)).toEqual([
