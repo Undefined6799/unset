@@ -74,6 +74,20 @@ describe("C18 inputs (P1.30u)", () => {
     });
   });
 
+  // P1.30w (architecture ruling B2b): a writable sites mount lets the running edge change its own sites.
+  test("c18_sites_mount_not_read_only_fails", () => {
+    const { edgeDir, sitesDir } = repository();
+    const notReadOnly = { pass: false, reason: "/etc/caddy/sites/enabled is not mounted read-only" };
+    const long = (readOnly: string) =>
+      `type: bind\n        source: ${sitesDir}\n        target: /etc/caddy/sites/enabled${readOnly}`;
+    for (const volume of [`${sitesDir}:/etc/caddy/sites/enabled:rw`, `${sitesDir}:/etc/caddy/sites/enabled`]) {
+      expect(edgeSitesDir(compose([volume]), edgeDir), volume).toEqual(notReadOnly);
+    }
+    expect(edgeSitesDir(compose([long("")]), edgeDir)).toEqual(notReadOnly);
+    expect(edgeSitesDir(compose([long("\n        read_only: false")]), edgeDir)).toEqual(notReadOnly);
+    expect(edgeSitesDir(compose([long("\n        read_only: true")]), edgeDir)).toEqual({ dir: sitesDir });
+  });
+
   test("c18_sites_symlink_out_of_repo_fails", () => {
     const { root, edgeDir } = repository();
     const outside = join(root, "elsewhere");

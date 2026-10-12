@@ -60,9 +60,13 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
   return sitesSource(mount, edgeDir);
 }
 
-/** The sites mount's source: a bind of a non-empty directory inside the repository's deployment/edge/. */
+/**
+ * The sites mount's source: a read-only bind of a non-empty directory inside the repository's deployment/edge/. A
+ * writable mount would let the running edge change which sites it serves (P1.30w, architecture ruling B2b).
+ */
 function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
   if (mount.type !== "bind" || mount.source === null) return fail(`${SITES_TARGET} is not a bind mount`);
+  if (!mount.readOnly) return fail(`${SITES_TARGET} is not mounted read-only`);
   const dir = EDGE_FILES.realpath(mount.source);
   if (dir === null) return missing(mount.source);
   const root = EDGE_FILES.realpath(edgeDir);
