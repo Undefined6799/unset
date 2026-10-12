@@ -180,3 +180,74 @@ describe("edge reader, local app site (P1.34a)", () => {
     expect(() => read(moved, "local")).toThrow("local/ leaves the edge directory");
   });
 });
+
+/** The same tree read the shipped way: sites/enabled linking only to the shipped PDS site. */
+function shippedOf(tree: { edgeDir: string }) {
+  const sitesDir = join(tree.edgeDir, "sites", "enabled");
+  mkdirSync(sitesDir);
+  symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
+  return { edgeDir: tree.edgeDir, sitesDir };
+}
+
+// P1.34b (record 2026-10-12-p134b-edge-local-follow-ups; findings from the verify of #755 on main, and Amendment 6 of
+// the refocus rulings): every file read from outside local/, the Caddyfile included, is checked, a leaf path is caught
+// however it is spelled, and an entry's containment respects the path separator.
+describe("edge reader, local-only words everywhere else (P1.34b)", () => {
+  const caddyfile = readFileSync(join(EDGE, "Caddyfile"), "utf8");
+
+  test("caddyfile_holds_no_local_only_word", () => {
+    const uses = {
+      "{$APP_HOST}": `${APP_SITE}`,
+      "{$APP_UPSTREAM}": "localhost:9 {\n\treverse_proxy {$APP_UPSTREAM}\n}\n",
+      "/run/secrets/local_tls_cert": "(leaf) {\n\ttls /run/secrets/local_tls_cert /etc/caddy/key.pem\n}\n",
+      "/run/secrets/local_tls_key": "(leaf) {\n\ttls /etc/caddy/cert.pem /run/secrets/local_tls_key\n}\n",
+    };
+    for (const [word, text] of Object.entries(uses)) {
+      const tree = localTree({}, { Caddyfile: `${caddyfile}\n${text}` });
+      expect(() => read(tree, "local"), word).toThrow(`Caddyfile: ${word} is allowed only in local/`);
+      expect(() => read(shippedOf(tree)), word).toThrow(`Caddyfile: ${word} is allowed only in local/`);
+    }
+  });
+
+  test("leaf_paths_are_refused_however_spelled", () => {
+    const pds = readFileSync(join(EDGE, "sites", "pds.caddy"), "utf8");
+    for (const spelling of [
+      "/etc/caddy/cert.pem /run/secrets/local_tls_key",
+      "/run/secrets//local_tls_cert /etc/caddy/key.pem",
+      "/run/./secrets/local_tls_cert /etc/caddy/key.pem",
+      "/run//secrets/local_tls_key /etc/caddy/cert.pem",
+      "/run/secrets/../secrets/local_tls_cert /etc/caddy/key.pem",
+    ]) {
+      const tree = localTree({}, { "sites/pds.caddy": pds.replace("\timport tls\n", `\ttls ${spelling}\n`) });
+      expect(() => read(tree, "local"), spelling).toThrow(/^pds\.caddy: \S*local_tls_\S* is allowed only in local\/$/);
+    }
+  });
+
+  test("app_host_is_a_site_address_only", () => {
+    const site = APP_SITE.replace("\timport tls\n", "\timport tls\n\theader X-App {$APP_HOST}\n");
+    expect(problems(localTree({ "app.caddy": site }))).toContain(
+      "{$APP_HOST}: {$APP_HOST} is outside its position in header",
+    );
+  });
+
+  test("local_tls_must_be_a_regular_file", () => {
+    const tree = localTree();
+    const elsewhere = join(tree.edgeDir, "local", "leaf.caddy");
+    writeFileSync(elsewhere, LOCAL_TLS);
+    rmSync(join(tree.edgeDir, "local", "tls.caddy"));
+    symlinkSync(elsewhere, join(tree.edgeDir, "local", "tls.caddy"));
+    expect(() => read(tree, "local")).toThrow("tls.caddy: not a regular file");
+  });
+
+  test("a_sibling_of_sites_or_local_is_outside_both", () => {
+    // `local-x/` and `sites-x/` start with the bound's name but are other folders (Amendment 6).
+    for (const sibling of ["local-x", "sites-x"]) {
+      const tree = localTree();
+      mkdirSync(join(tree.edgeDir, sibling));
+      writeFileSync(join(tree.edgeDir, sibling, "app.caddy"), APP_SITE);
+      rmSync(join(tree.sitesDir, "app.caddy"));
+      symlinkSync(join(tree.edgeDir, sibling, "app.caddy"), join(tree.sitesDir, "app.caddy"));
+      expect(() => read(tree, "local"), sibling).toThrow("app.caddy: the link leaves sites/ and local/");
+    }
+  });
+});

@@ -425,10 +425,11 @@ const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
  */
 export type EdgeMode = "shipped" | "local";
 /**
- * Words a file may hold only when read from local/: the app site's placeholders and the dev leaf's two secret paths
- * (P1.34c). A prod app site is a later ruling.
+ * What a file may hold only when read from local/: the app site's placeholders and the dev leaf's secrets (P1.34c). A
+ * token containing any of these fails anywhere else, so a leaf path spelled `/run/secrets//local_tls_cert` or through
+ * `..` fails too, with no path normalising to get wrong (P1.34b). A prod app site is a later ruling.
  */
-const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "/run/secrets/local_tls_cert", "/run/secrets/local_tls_key"];
+const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
 
 /**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
@@ -445,7 +446,8 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "/run/secrets/local_tls_ce
  *
  * In the "local" mode (P1.34a), `edgeDir/local/` counts beside sites/ for `sitesDir` and for each site, and
  * `local/tls.caddy` is read in place of `snippets/tls.caddy`, as its mount replaces it. In either mode a file outside
- * local/ holding a LOCAL_ONLY word fails, and APP_HOST and APP_UPSTREAM must differ from the PDS ones.
+ * local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and APP_UPSTREAM must differ from the
+ * PDS ones.
  */
 export function readEdgeConfig(
   edgeDir: string,
@@ -474,9 +476,8 @@ function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFi
   if (!siteBounds.some((bound) => enabled.startsWith(`${bound.path}/`))) {
     throw new CaddyfileError(`the enabled sites directory is not inside ${areas(siteBounds)}`);
   }
-  const lines = files
-    .read(entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false))
-    .split("\n");
+  const caddyfile = entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false);
+  const lines = localOnlyChecked(files, caddyfile, "Caddyfile", local).split("\n");
   for (const line of FILE_IMPORTS) {
     if (lines.filter((l) => l === line).length !== 1) {
       throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
@@ -507,12 +508,12 @@ function distinctAppValues(env: Env): void {
   }
 }
 
-/** The text of the file at `path`, which may hold a LOCAL_ONLY word only when it lies inside local/. */
+/** The text of the file at `path`, which may hold a LOCAL_ONLY part only when it lies inside local/. */
 function localOnlyChecked(files: EdgeFiles, path: string, name: string, local: Bound): string {
   const text = files.read(path);
   if (path.startsWith(`${local.path}/`)) return text;
   for (const line of lex(text)) {
-    const word = line.tokens.find((token) => LOCAL_ONLY.includes(token.text));
+    const word = line.tokens.find((token) => LOCAL_ONLY.some((part) => token.text.includes(part)));
     if (word !== undefined) throw new CaddyfileError(`${name}: ${word.text} is allowed only in local/`);
   }
   return text;
