@@ -94,9 +94,7 @@ describe("image workflows", () => {
   test("image_checks_present", () => {
     const runs = (workflow("images.yml").jobs.images?.steps ?? []).map((step) => step.run ?? "").join("\n");
     expect(runs).toContain("/bin/hadolint --config .github/hadolint.yaml");
-    expect(runs).toMatch(
-      /image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile \.github\/trivyignore\.yaml/,
-    );
+    expect(runs).toMatch(/image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile \/dev\/null/);
     expect(runs).toContain("-o spdx-json");
     expect(runs).toContain('test "$(docker run --rm --entrypoint id "$APP_IMAGE" -u)" = "65532"');
     expect(runs).toContain("{{.State.Health.Status}}");

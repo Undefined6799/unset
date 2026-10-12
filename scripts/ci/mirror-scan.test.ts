@@ -3,7 +3,10 @@
 // fails on HIGH and CRITICAL, an entry without a stage fails, and the loop stops at the first failing image. The
 // test runs mirror.yml's own scan script, under the shell the step declares (P1.28w), with a stand-in `docker` that
 // answers from a findings table, on mirror lists written here (generated, because a real digest is long hex). The
-// shipped-image jobs in images.yml are unchanged and only asserted.
+// shipped-image jobs in images.yml are only asserted.
+//
+// P1.29v: an entry whose lock entry declares `stripped` paths is scanned without them, because every final stage on
+// that base deletes them (stripped_paths_removed_in_every_final_stage) and the shipped image is scanned in full.
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -32,16 +35,32 @@ function actionsShell(shell: string | undefined): string[] {
 // Stands in for `docker run … image --exit-code N --severity S … SOURCE`: it logs the call, and exits N when the
 // findings table ("source severity" lines) holds a finding at one of S's severities for SOURCE, else 0. A
 // "source ERROR" line makes every run for SOURCE fail as Trivy itself would (exit 3), and every call's cache mount is
-// logged.
+// logged. A finding may name the image path it sits at ("source severity path"); it is then dropped the way Trivy
+// v0.75.0 drops it (pkg/fanal/walker/tar.go:66-81, pkg/fanal/utils/utils.go:86-107): a leading "/" is trimmed, a
+// --skip-files path drops that exact file, and a --skip-dirs path drops everything beneath it. Every call's skip
+// flags are logged.
 const FAKE_DOCKER = `#!/bin/bash
-args=("$@"); source="\${args[-1]}"; code=0; severity=""
+args=("$@"); source="\${args[-1]}"; code=0; severity=""; dirs=(); files=()
 for ((i = 0; i < \${#args[@]}; i++)); do
-  case "\${args[i]}" in --exit-code) code="\${args[i+1]}" ;; --severity) severity="\${args[i+1]}" ;; esac
+  case "\${args[i]}" in
+    --exit-code) code="\${args[i+1]}" ;;
+    --severity) severity="\${args[i+1]}" ;;
+    --skip-dirs) dirs+=("\${args[i+1]#/}") ;;
+    --skip-files) files+=("\${args[i+1]#/}") ;;
+  esac
 done
 echo "scan $source $severity" >> "$FAKE_CALLS"
+echo "skip $source dirs=\${dirs[*]} files=\${files[*]}" >> "$FAKE_CALLS"
 for arg in "\${args[@]}"; do [[ "$arg" == *:/root/.cache/trivy ]] && echo "cache $arg" >> "$FAKE_CALLS"; done
-while read -r found level; do
+skipped() {
+  local at="\${1#/}" entry
+  for entry in "\${files[@]}"; do [ "$at" = "$entry" ] && return 0; done
+  for entry in "\${dirs[@]}"; do [[ "$at" == "$entry/"* ]] && return 0; done
+  return 1
+}
+while read -r found level at; do
   [ "$found" = "$source" ] && [ "$level" = ERROR ] && exit 3
+  [ -n "$at" ] && skipped "$at" && continue
   [ "$found" = "$source" ] && [[ ",$severity," == *",$level,"* ]] && exit "$code"
 done < "$FAKE_FINDINGS"
 exit 0
@@ -51,8 +70,9 @@ const digest = (n: number) => `@sha256:${String(n).repeat(64).slice(0, 64)}`;
 const SOURCE = { builder: `docker.io/library/b${digest(1)}`, runtime: `docker.io/library/r${digest(2)}` };
 
 type Entry = { source: string; stage?: string };
-/** Runs the workflow's scan script on `entries` with `findings`, under the shell Actions uses for the step. */
-function scan(entries: Entry[], findings: [string, string][]) {
+type LockEntry = { ref: string; tag: string; digest: string; stripped?: string[] };
+/** Runs the workflow's scan script on `entries` with `findings` and `lock`, under the shell Actions uses for the step. */
+function scan(entries: Entry[], findings: string[][], lock: Record<string, LockEntry> | unknown[] | null = {}) {
   const dir = mkdtempSync(join(tmpdir(), "mirror-scan-"));
   const bin = join(dir, "bin");
   spawnSync("mkdir", [bin]);
@@ -60,12 +80,14 @@ function scan(entries: Entry[], findings: [string, string][]) {
   chmodSync(join(bin, "docker"), 0o755);
   const list = entries.map((entry) => ({ ...entry, mirror: "ghcr.io/example/mirror" }));
   writeFileSync(join(dir, "mirror.list.json"), JSON.stringify(list));
+  if (lock !== null) writeFileSync(join(dir, "bases.lock.json"), JSON.stringify(lock));
   writeFileSync(join(dir, "findings"), findings.map((pair) => `${pair.join(" ")}\n`).join(""));
   writeFileSync(join(dir, "calls"), "");
   writeFileSync(join(dir, "summary"), "");
   const env = {
     PATH: `${bin}:${process.env.PATH}`,
     MIRROR_LIST: join(dir, "mirror.list.json"),
+    BASES_LOCK: join(dir, "bases.lock.json"),
     RUNNER_TEMP: dir,
     GITHUB_STEP_SUMMARY: join(dir, "summary"),
     TRIVY_IMAGE: "trivy",
@@ -78,11 +100,13 @@ function scan(entries: Entry[], findings: [string, string][]) {
   });
   const logged = readFileSync(join(dir, "calls"), "utf8").trim().split("\n").filter(Boolean);
   const calls = logged.filter((line) => line.startsWith("scan "));
+  const skips = logged.filter((line) => line.startsWith("skip ")).map((line) => line.slice("skip ".length));
   const caches = logged.filter((line) => line.startsWith("cache ")).map((line) => line.slice("cache ".length));
   return {
     code: ran.status,
     out: ran.stdout + ran.stderr,
     calls,
+    skips,
     caches,
     summary: readFileSync(env.GITHUB_STEP_SUMMARY, "utf8"),
   };
@@ -149,13 +173,73 @@ describe("mirror scan per stage", () => {
   test("shipped_image_scan_fails_on_high", () => {
     const jobs = workflow("images.yml").jobs;
     for (const [id, ignore] of [
-      ["images", "\\.github/trivyignore\\.yaml"],
+      ["images", "/dev/null"],
       ["edge", "/dev/null"],
     ] as const) {
       const runs = (jobs[id]?.steps ?? []).map((step) => step.run ?? "").join("\n");
       expect(runs, id).toMatch(
         new RegExp(`image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile ${ignore}`),
       );
+    }
+  });
+
+  test("mirror_scan_skips_only_declared_stripped_paths", () => {
+    const npm = "/usr/local/lib/node_modules/npm";
+    const gosu = "/usr/local/bin/gosu";
+    // The lock spells a base as ref, tag and digest; the mirror list joins them as ref:tag@digest.
+    const base = { ref: "docker.io/library/r", tag: "1", digest: `sha256:${"2".repeat(64)}`, stripped: [npm, gosu] };
+    const runtime = `${base.ref}:${base.tag}@${base.digest}`;
+    const lock = { base };
+    const entries = [
+      { source: runtime, stage: "runtime" },
+      { source: SOURCE.builder, stage: "build" },
+    ];
+    // A finding under a declared directory, or at a declared file, is not reported for that entry.
+    const declared = scan(
+      entries,
+      [
+        [runtime, "HIGH", `${npm.slice(1)}/node_modules/undici/package.json`],
+        [runtime, "CRITICAL", gosu.slice(1)],
+      ],
+      lock,
+    );
+    expect(declared.code, declared.out).toBe(0);
+    expect(declared.skips).toContain(
+      `${runtime} dirs=${npm.slice(1)} ${gosu.slice(1)} files=${npm.slice(1)} ${gosu.slice(1)}`,
+    );
+    // An entry the lock declares nothing for is scanned in full, both HIGH runs included.
+    expect(declared.skips.filter((line) => line.startsWith(SOURCE.builder))).toEqual([
+      `${SOURCE.builder} dirs= files=`,
+      `${SOURCE.builder} dirs= files=`,
+    ]);
+    // An undeclared path is still scanned, and so is a sibling that only shares the declared path's prefix.
+    for (const at of [
+      "usr/local/lib/node_modules/corepack/package.json",
+      "usr/local/lib/node_modules/npm-x/package.json",
+    ]) {
+      const kept = scan(entries, [[runtime, "HIGH", at]], lock);
+      expect(kept.code, at).not.toBe(0);
+    }
+    // A declared path skips only on its own entry: the same file in a base that declares nothing still fails.
+    const other = scan(entries, [[SOURCE.builder, "CRITICAL", gosu.slice(1)]], lock);
+    expect(other.code).not.toBe(0);
+    // A build-only entry skips its declared paths in the HIGH report run as well as in the failing run.
+    const builderBase = { ref: "docker.io/library/b", tag: "1", digest: `sha256:${"1".repeat(64)}`, stripped: [npm] };
+    const builder = `${builderBase.ref}:${builderBase.tag}@${builderBase.digest}`;
+    const build = scan([{ source: builder, stage: "build" }], [[builder, "HIGH", `${npm.slice(1)}/package.json`]], {
+      builderBase,
+    });
+    expect(build.code, build.out).toBe(0);
+    expect(build.out).not.toContain("::warning");
+    expect(build.skips).toEqual([
+      `${builder} dirs=${npm.slice(1)} files=${npm.slice(1)}`,
+      `${builder} dirs=${npm.slice(1)} files=${npm.slice(1)}`,
+    ]);
+    // The lock is read, never optional: a missing lock, or one that is not an object, fails before anything is scanned.
+    for (const absent of [null, []]) {
+      const missing = scan(entries, [], absent);
+      expect(missing.code).not.toBe(0);
+      expect(missing.calls).toEqual([]);
     }
   });
 });
