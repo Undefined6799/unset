@@ -96,10 +96,16 @@ const lstatOrNull = (path: string): Stats | null => {
   }
 };
 
-/** Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. */
+/**
+ * Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. It asks the
+ * kernel through realpath(3) ("Synchronous realpath(3)", Node v26.10.0 doc/api/fs.md, fs.realpathSync.native; glibc
+ * build). The JavaScript realpathSync joins each link target with path.resolve(previous, target), which collapses
+ * `x/..` as text before following x, so a link through `x/..` read as a folder the kernel never reaches, and some
+ * such links never resolved at all (verifier B3 on #700).
+ */
 const realpathOrNull = (path: string): string | null => {
   try {
-    return realpathSync(path);
+    return realpathSync.native(path);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") return null;

@@ -245,6 +245,23 @@ function fakeFs(root: string, owner = WEB_UID, uids: Record<string, number> = {}
   };
   return { lstat };
 }
+/** The real stat, or null where there is nothing. */
+const statOrNull = (path: string): Stats | null => {
+  try {
+    return statSync(path);
+  } catch {
+    return null;
+  }
+};
+/** A stat or lstat that reads the test user's own entries as uid 4242 and `rootOwned` as root's, under any uid. */
+const as4242 =
+  (read: Deps["lstat"], rootOwned: string) =>
+  (path: string): Stats | null => {
+    const info = read?.(path) ?? null;
+    if (info === null) return null;
+    const uid = path === rootOwned ? 0 : info.uid === process.getuid?.() ? 4242 : info.uid;
+    return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
+  };
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   const { root, file } = stack(s);
   return preflight(["--env", env, "--compose", file], {
@@ -386,26 +403,10 @@ describe("preflight", () => {
       expect(failed((await run()).lines)).toEqual([]);
       // An env file owned by root, which C9's walk allows, is still not the deploy user's. Whoever runs the test
       // reads as deploy user 4242, so this holds as root and as CI's runner alike.
-      const me = process.getuid?.() ?? -1;
-      const as4242 =
-        <T extends Stats | null>(read: (path: string) => T) =>
-        (path: string): T => {
-          const info = read(path);
-          if (info === null) return info;
-          const uid = path === pdsEnv ? 0 : info.uid === me ? 4242 : info.uid;
-          return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
-        };
-      const statOrNull = (path: string) => {
-        try {
-          return statSync(path);
-        } catch {
-          return null;
-        }
-      };
       const other = await run({
         uid: 4242,
-        lstat: as4242(fakeFs(root).lstat as (path: string) => Stats | null),
-        stat: as4242(statOrNull),
+        lstat: as4242(fakeFs(root).lstat, pdsEnv),
+        stat: as4242(statOrNull, pdsEnv),
       });
       expect(other.lines.filter((l) => l.includes(" C9 "))).toEqual([
         `FAIL C9 ${pdsEnv} is not owned by the deploy user`,
@@ -620,6 +621,42 @@ describe("preflight", () => {
       ...fakeFs(looped.root),
     });
     expect(loop.lines).toContain("FAIL C9 check error");
+    // A link whose target reads `x/..` after another link: the kernel follows x first and then takes its real parent;
+    // Node's JavaScript realpathSync collapses `x/..` as text (path.resolve), so C9 asks realpath(3) (verifier B3).
+    const viaParent = async (x: string, y: string, setUp: (deployment: string) => void = () => undefined) => {
+      const s = stack({ compose: binding("./y") });
+      const deployment = join(s.root, "deployment");
+      symlinkSync(x, join(deployment, "x"));
+      symlinkSync(y, join(deployment, "y"));
+      setUp(deployment);
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    expect((await viaParent("/", "x/..")).lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
+    // An empty decoy where the text says the folder is; the kernel reaches the real one beside the checkout.
+    const decoy = (d: string) => mkdirSync(join(d, "unset-dev-secrets"), { mode: 0o700 });
+    expect((await viaParent("../../unset-dev-env", "x/../unset-dev-secrets", decoy)).lines).toContain(
+      "FAIL C9 pds binds a path that reaches the secrets folder",
+    );
+    // A link the JavaScript resolver chases forever: refused, not hung.
+    const s = stack({ compose: binding("./imgs") });
+    symlinkSync("/", join(s.root, "deployment/x"));
+    symlinkSync("x/../imgs", join(s.root, "deployment/imgs"));
+    const chased = await preflight(["--env", "prod", "--compose", s.file], {
+      root: s.root,
+      run: fakeRun().run,
+      ...fakeFs(s.root),
+    });
+    expect(chased.lines.find((l) => l.startsWith("FAIL C9"))).toBe("FAIL C9 pds binds a path that does not exist");
+    // A link the kernel itself cannot resolve (ELOOP) fails the check.
+    const kernelLoop = stack({ compose: binding("./imgs") });
+    mkdirSync(join(kernelLoop.root, "deployment/sub"));
+    symlinkSync("sub/../imgs", join(kernelLoop.root, "deployment/imgs"));
+    const loops = await preflight(["--env", "prod", "--compose", kernelLoop.file], {
+      root: kernelLoop.root,
+      run: fakeRun().run,
+      ...fakeFs(kernelLoop.root),
+    });
+    expect(loops.lines).toContain("FAIL C9 check error");
     // A link into the folder whose target does not exist yet: Compose would create it there (P1.27u).
     const dangling = stack({ compose: binding("./dangle") });
     symlinkSync("../../unset-dev-secrets/newdir", join(dangling.root, "deployment/dangle"));
@@ -802,6 +839,16 @@ describe("preflight", () => {
       });
       expect(slash.lines).toContain("FAIL C9 pds binds a path that does not exist");
     }
+    // A group-writable file is changeable too, not only a folder.
+    const openFile = await run("./data/f", (d) => {
+      writeFileSync(join(d, "data/f"), "x\n");
+      chmodSync(join(d, "data/f"), 0o664);
+    });
+    expect(openFile.lines).toContain(changeable);
+    // A relative `..` in a link target goes up a folder.
+    expect(failed((await run("./pp", (d) => void symlinkSync("data/shared/../shared", join(d, "pp")))).lines)).toEqual(
+      [],
+    );
     // Neither a socket, a device nor a FIFO is a bind source.
     const fifo = await run("./data/fifo", (d) => void execFileSync("mkfifo", ["-m", "0644", join(d, "data/fifo")]));
     expect(fifo.lines).toContain("FAIL C9 pds binds a path that is not a file or directory");

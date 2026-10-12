@@ -25,3 +25,6 @@ and `HOME`.
 **The rule.** No CLI of ours takes a flag named `--env-file*`, `--require` or `--import`; callers write
 `node <script> -- <args>`; an env file a CLI judges may not hold `NODE_OPTIONS`.
 `deployment/preflight/cli.test.ts` enforces all three for the preflight.
+
+Re-checked at P1.27u (#700), which changed `index.ts` only in how it resolves real paths; the flag parsing
+and the three rules above are unchanged.

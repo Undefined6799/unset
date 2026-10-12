@@ -15,9 +15,10 @@ const NAME = /^[a-z0-9-]+$/;
 const imageName = (path: string): string =>
   basename(path) === "Dockerfile" ? basename(dirname(path)) : basename(path).replace(/\.Dockerfile$/, "");
 
+/** realpath(3), like index.ts's, so a link through `x/..` is judged where the kernel puts it (verifier B3 on #700). */
 const realpathOrNull = (path: string): string | null => {
   try {
-    return realpathSync(path);
+    return realpathSync.native(path);
   } catch {
     return null;
   }
@@ -53,12 +54,6 @@ function namesakes(root: string, name: string): number {
 }
 
 /**
- * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context that
- * workflow uses (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any other from
- * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
- * scanned image holds. A context that reaches the secrets folder is refused first.
- */
-/**
  * The whole context goes to the daemon, whatever .dockerignore says (P1.27u, architecture record
  * 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder and every env file stay out of it. It
  * is walked hop by hop like a bind source (Amendment 6): whoever can swap an entry on it chooses what is sent.
@@ -70,6 +65,12 @@ function contextProblem(context: string, inputs: Inputs): string | null {
   return walked === null ? null : WALK_REASONS[walked];
 }
 
+/**
+ * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context that
+ * workflow uses (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any other from
+ * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
+ * scanned image holds. A context that reaches the secrets folder is refused first.
+ */
 export const c26: Check = {
   id: "C26",
   run: (inputs) => {
