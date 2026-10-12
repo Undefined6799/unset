@@ -384,8 +384,29 @@ describe("preflight", () => {
       }
       chmodSync(pdsEnv, 0o600);
       expect(failed((await run()).lines)).toEqual([]);
-      // Deploy user 4242, whose secrets folder it is: the env file, owned by root, is not theirs.
-      const other = await run({ uid: 4242, ...fakeFs(root, WEB_UID, { [secretsOf(root)]: 4242 }) });
+      // An env file owned by root, which C9's walk allows, is still not the deploy user's. Whoever runs the test
+      // reads as deploy user 4242, so this holds as root and as CI's runner alike.
+      const me = process.getuid?.() ?? -1;
+      const as4242 =
+        <T extends Stats | null>(read: (path: string) => T) =>
+        (path: string): T => {
+          const info = read(path);
+          if (info === null) return info;
+          const uid = path === pdsEnv ? 0 : info.uid === me ? 4242 : info.uid;
+          return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
+        };
+      const statOrNull = (path: string) => {
+        try {
+          return statSync(path);
+        } catch {
+          return null;
+        }
+      };
+      const other = await run({
+        uid: 4242,
+        lstat: as4242(fakeFs(root).lstat as (path: string) => Stats | null),
+        stat: as4242(statOrNull),
+      });
       expect(other.lines.filter((l) => l.includes(" C9 "))).toEqual([
         `FAIL C9 ${pdsEnv} is not owned by the deploy user`,
       ]);
