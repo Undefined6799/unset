@@ -3,6 +3,8 @@
 //
 //   node deployment/preflight/index.ts --env dev|prod --compose <file> [--compose <file>...]
 //
+// The first --compose file's directory is the project directory: every relative path resolves from it.
+//
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
 // malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3 to C5,
 // and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a secret value: env files are
@@ -94,7 +96,10 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
 export function loadCompose(files: string[], readText: (path: string) => string | null) {
   // With several files, every relative path resolves from the first file's directory, never from the file that names
   // it: "Relative paths are resolved based on the first Compose file's parent folder" (compose-spec spec.md, merging
-  // multiple files; architecture record 2026-10-12-preflight-project-directory). Compose v5.3.1 agrees in CI.
+  // multiple files; architecture record 2026-10-12-preflight-project-directory). The agreement test compares this with
+  // `docker compose config`: v5.3.1 locally, and 2.38.2 on CI's ubuntu-24.04 runner (actions/runner-images,
+  // images/ubuntu/toolsets/toolset-2404.json). Both take the first file's directory in compose-go's
+  // ProjectOptions.GetWorkingDir (cli/options.go, the same in v2.7.1 for 2.38.2 and v2.13.0 for v5.3.1).
   const projectDir = dirname(files[0] as string);
   const services: Service[] = [];
   const networks: Network[] = [];

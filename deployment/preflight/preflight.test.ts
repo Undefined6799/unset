@@ -461,6 +461,7 @@ describe("preflight", () => {
       // Compose resolves relative paths from --project-directory when given, which the preflight cannot see (P1.30z).
       ["--env", "prod", "--compose", file, "--project-directory", root],
       ["--env", "prod", "--compose", file, `--project-directory=${root}`],
+      ["--env", "prod", "--compose", file, "--workdir", root],
     ]) {
       expect((await preflight(argv, { root, run: fakeRun().run })).code).toBe(2);
     }
@@ -468,11 +469,15 @@ describe("preflight", () => {
 
   test("no_repository_script_passes_project_directory", () => {
     // Every script that runs `docker compose` gives it the file list the preflight read, and never moves the base
-    // directory (architecture record 2026-10-12-preflight-project-directory, item 3). Docs and tests may name the flag.
-    const flag = ["--project", "directory"].join("-");
+    // directory (architecture record 2026-10-12-preflight-project-directory, item 3). Docs and tests may name the flags.
+    // `--workdir` is Compose's hidden, deprecated alias for the same option (cmd/compose/compose.go in 2.38.2, v5.3.1).
+    const flags = [["--project", "directory"].join("-"), ["--work", "dir"].join("")];
     const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8" }).split("\0");
     const scripts = tracked.filter((path) => path !== "" && !/(^docs\/|\.md$|\.test\.ts$)/.test(path));
-    const offenders = scripts.filter((path) => readFileSync(join(REPO, path), "latin1").includes(flag));
+    const offenders = scripts.filter((path) => {
+      const text = readFileSync(join(REPO, path), "latin1");
+      return flags.some((flag) => text.includes(flag));
+    });
     expect(offenders).toEqual([]);
   });
 
@@ -695,7 +700,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     expect(failed((await check({}, "prod", { run: fakeRun({ chrony: notInstalled }).run })).lines)).toEqual([]);
     const local = fakeRun({ ntp: ok("no\n") });
     expect((await check({ compose: host("pds.localhost") }, "prod", { run: local.run })).lines).toContain(
-      "PASS C24 skipped: PDS_HOSTNAME is an agent's stack",
+      "PASS C24 skipped: PDS_HOSTNAME ends in .localhost",
     );
     expect(local.calls.some(([file]) => file === "timedatectl")).toBe(false);
   });
