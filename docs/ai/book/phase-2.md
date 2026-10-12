@@ -678,9 +678,11 @@ matching P0.03 line in `phase-0.md` in its next carrier after this merges.
 
 ### P2.03x — Add the session table, registry rows and timeouts
 Tags: [SEC]            Depends on: P1.12, P1.15g (migration order)            Plan: §5.3 "Sessions"
-Feature class (issue #402), judged by its grant findings like P1.16's 0006 (book edit 2026-10-07-p203-repath).
+Feature class (issue #402), judged by its grant findings like P1.16's 0006 (book edit 2026-10-07-p203-repath; amended
+  by 2026-10-12-p203x-indexes-move-to-p203i).
 Contents:
-  - `infrastructure/postgres/migrations/0011_app_session.sql`: the `app.session` table and indexes in P2.03's Outputs.
+  - `infrastructure/postgres/migrations/0011_app_session.sql`: the `app.session` table in P2.03's Outputs (its two
+    indexes are P2.03i's).
     `migrate.ts` refuses a gap and 0008–0010 are booked for P1.15m, P1.15d and P1.15g, so it waits for P1.15g; it may
     be built locally on any free number and renumbered at open time.
   - `infrastructure/postgres/grant-matrix.json`: `app.session` for `web`, SELECT, INSERT and UPDATE by column list,
@@ -703,7 +705,7 @@ Why: a shared/log EVENTS entry precedes the PR that logs it (the P1.17e pattern)
 ### P2.03 — Session store and lifecycle
 Tags: [SEC]            Depends on: P2.03q, P2.03x, P2.03e            Plan: §2 rule 7; §5.3 "Sessions"
 Trusted class; never opens before P2.03q merges (book edit 2026-10-07-p203-repath; architecture
-2026-10-07-p203-session-store-trusted).
+2026-10-07-p203-session-store-trusted). P2.03i depends on it.
 Where: `infrastructure/postgres/session/store.ts` with its tests in that folder (following `singleUse/`);
   `interfaces/http/session-cookie.ts` (unchanged path, already trusted) with its test beside it. No domain file:
   domains hold no SQL, and P2.06 composes the store in `interfaces/http`; a type-only `Sessions` contract in
@@ -717,10 +719,11 @@ rotation at login and one call that ends every session of a DID inside the calle
 Inputs: P1.12 roles (P2.03x's migration grants `web` SELECT/INSERT/UPDATE on `app.session` by column list and DELETE as `rowPrivileges`: a registry table, 02-shared-blocks §11; no default privileges); config `SESSION_IDLE_S` (604800),
   `SESSION_ABSOLUTE_S` (2592000), `SESSION_TOUCH_INTERVAL_S` (300).
 Outputs:
-  - Table `app.session(id_hash bytea primary key /* sha256 of the 32-byte id */, did text not null,
+  - Table `app.session(id_hash bytea primary key /* sha256 of the 32-byte id */, did types.did not null,
     created_at timestamptz not null, last_seen_at timestamptz not null, absolute_expires_at timestamptz not null,
     email_confirmed boolean null /* cache, P2.11 */, email_checked_at timestamptz null)`; index `(did)`;
-    index `(absolute_expires_at)`. Registry row: `app.session.did`, `delete_row`. Table, grants and row are P2.03x's.
+    index `(absolute_expires_at)` (added by P2.03i). Registry row: `app.session.did`, `delete_row`. Table, grants and
+    row are P2.03x's.
   - `sessions.create(tx, did, opts: {replacingCookie?: string}) -> {cookieValue: string, expiresAt}`.
   - `sessions.read(ctx) -> Session | null` where `Session = {did, idHash, createdAt, emailConfirmed: boolean | null}`;
     memoised in `ctx.memo` for the request.
@@ -830,8 +833,29 @@ Not in this step: OAuth token storage (P2.04); what happens on login (P2.06) or 
   the email gate logic (P2.11).
 Diagram: see "State diagram: app session lifecycle" at the top of this file.
 
+### P2.03i — Add the session indexes after the store
+Tags: [SEC]            Depends on: P2.03, P2.03x            Plan: §5.3 "Sessions"
+Product class (issue #576), `infrastructure/postgres/migrations/` only (book edit
+  2026-10-12-p203x-indexes-move-to-p203i, from the coordinator's question at 2026-10-08 12:18Z). Owner: Phase 2, the
+  next slot after P2.03 merges. Slice: as P2.03. P2.04 depends on it.
+Why: sqlLint (`infrastructure/postgres/sqlLint.ts:50-86`) requires every CREATE INDEX to carry a `-- query: <file>`
+  naming an existing file that runs the query. The queries for `(did)` and `(absolute_expires_at)` live in
+  `infrastructure/postgres/session/store.ts`, which P2.03 creates, and P2.03x merges before it, so P2.03x can't carry an
+  honest annotation. A trusted P2.03 carrying a migration would widen what trusted PRs may carry, so the indexes move
+  here and every PR class stays unchanged.
+Contents: one migration, on the next free number at open time, containing only:
+  - `CREATE INDEX … ON app.session (did)` with `-- query: infrastructure/postgres/session/store.ts` (end every session
+    of a DID);
+  - `CREATE INDEX … ON app.session (absolute_expires_at)` with the same annotation (`sessions.sweep()`).
+  No grants, no registry change and no other DDL.
+Done when (tests): `npm run check` is green, sqlLint passes on honest annotations, and the migration test applies it
+  after P2.03x's.
+Size: ~10 source lines
+
 ### P2.04 — OAuth client
-Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
+Tags: [SEC]            Depends on: P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i            Plan: §2 rules 3, 6; §3 scopes; §5.3 "OAuth client", "Permission set custody"
+Its migration creates `app.end_sessions_for_did`, which deletes from `app.session` by DID, so it needs the table and the
+  `(did)` index first (book edit 2026-10-12-p203x-indexes-move-to-p203i).
 Decision 34 (slice 1): this step needs P1.31's set JSON and NSID, not the publication. It used to depend on P1.35; it now
   builds in slice 1, before the set is published. Until P1.35, no authorization server can resolve `include:` for the set,
   so every login takes P2.05's tested fallback (`SCOPE_FALLBACK`: the same permissions written out); no scope is added
