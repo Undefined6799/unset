@@ -21,6 +21,8 @@
 //   trusted change in the same PR as the Caddyfile line that needs it.
 // - `readEdgeConfig` (P1.28e) resolves the shipped Caddyfile's two glob imports, and only those, before reading;
 //   `edgeSiteProblems` holds the site rules edge.test.ts and C18 share, so neither keeps a copy.
+// - The "local" mode (P1.34a) reads the local stack's files in local/ as its mounts place them; only C18 under
+//   --env local passes it. APP_HOST, APP_UPSTREAM and the dev leaf's secret paths are accepted only from local/.
 
 /** One directive line with its arguments, its block if it opens one, and the snippet it was imported from. */
 export type Directive = {
@@ -45,10 +47,15 @@ export type Caddyfile = {
 export class CaddyfileError extends Error {}
 
 /** The `{$NAME}` placeholders the edge's files may use, each with the shape its value must have. */
+const HOST = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+const UPSTREAM = /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?:\d{1,5}$/;
 export const ENV_NAMES = {
-  PDS_HOST: /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/,
-  PDS_UPSTREAM: /^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?:\d{1,5}$/,
+  PDS_HOST: HOST,
+  PDS_UPSTREAM: UPSTREAM,
   ACME_EMAIL: /^[A-Za-z0-9._%+-]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$/,
+  // P1.34a: the local app host and its upstream, accepted only in files read from local/ (LOCAL_ONLY).
+  APP_HOST: HOST,
+  APP_UPSTREAM: UPSTREAM,
 } as const;
 export type EnvName = keyof typeof ENV_NAMES;
 
@@ -411,6 +418,19 @@ const FILE_IMPORTS = ["import snippets/*.caddy", "import sites/enabled/*.caddy"]
 const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
 
 /**
+ * How the edge's files are read: "shipped" as the image holds them, or "local" as the local stack's mounts place them
+ * (P1.34a; architecture record 2026-10-12-refocus-local-signin-rulings, Amendment 2). Only C18 under --env local
+ * passes "local" (P1.27l). It is a mode, not a path: it resolves to `edgeDir/local/` here, under the same containment
+ * as sites/.
+ */
+export type EdgeMode = "shipped" | "local";
+/**
+ * Words a file may hold only when read from local/: the app site's placeholders and the dev leaf's two secret paths
+ * (P1.34c). A prod app site is a later ruling.
+ */
+const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "/run/secrets/local_tls_cert", "/run/secrets/local_tls_key"];
+
+/**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
  * 2026-10-07-p130s-networks-and-caddyfile-reader): `edgeDir`'s Caddyfile with `import snippets/*.caddy` replaced by
  * `edgeDir/snippets` and `import sites/enabled/*.caddy` by `sitesDir`, each in byte order (doImport uses
@@ -422,36 +442,80 @@ const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
  * a regular file, or a symlink to one, inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
  * beyond that count, and a file swapped between `kind` and `read`, since this is a build-time reader over a checkout.
  * Any error it throws carries no value from `env` (P1.30h).
+ *
+ * In the "local" mode (P1.34a), `edgeDir/local/` counts beside sites/ for `sitesDir` and for each site, and
+ * `local/tls.caddy` is read in place of `snippets/tls.caddy`, as its mount replaces it. In either mode a file outside
+ * local/ holding a LOCAL_ONLY word fails, and APP_HOST and APP_UPSTREAM must differ from the PDS ones.
  */
-export function readEdgeConfig(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
-  return unechoed(env, () => readEdgeTree(edgeDir, sitesDir, env, files));
+export function readEdgeConfig(
+  edgeDir: string,
+  sitesDir: string,
+  env: Env,
+  files: EdgeFiles,
+  mode: EdgeMode = "shipped",
+): Caddyfile {
+  return unechoed(env, () => readEdgeTree(edgeDir, sitesDir, env, files, mode));
 }
 
 /** `readEdgeConfig` before its errors are scrubbed. */
-function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles): Caddyfile {
+function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles, mode: EdgeMode): Caddyfile {
+  distinctAppValues(env);
   const root = resolved(files, edgeDir, "the edge directory");
-  const sitesRoot = `${root}/sites`;
-  if (resolved(files, sitesRoot, "the sites directory") !== sitesRoot) {
+  const sites: Bound = { path: `${root}/sites`, area: "sites/" };
+  if (resolved(files, sites.path, "the sites directory") !== sites.path) {
     throw new CaddyfileError("sites/ leaves the edge directory");
   }
-  if (!resolved(files, sitesDir, "the enabled sites directory").startsWith(`${sitesRoot}/`)) {
-    throw new CaddyfileError("the enabled sites directory is not inside sites/");
+  const local: Bound = { path: `${root}/local`, area: "local/" };
+  if (mode === "local" && resolved(files, local.path, "the local directory") !== local.path) {
+    throw new CaddyfileError("local/ leaves the edge directory");
+  }
+  const siteBounds = mode === "local" ? [sites, local] : [sites];
+  const enabled = resolved(files, sitesDir, "the enabled sites directory");
+  if (!siteBounds.some((bound) => enabled.startsWith(`${bound.path}/`))) {
+    throw new CaddyfileError(`the enabled sites directory is not inside ${areas(siteBounds)}`);
   }
   const lines = files
-    .read(entry(files, root, "Caddyfile", { path: root, area: "the edge directory" }, false))
+    .read(entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false))
     .split("\n");
   for (const line of FILE_IMPORTS) {
     if (lines.filter((l) => l === line).length !== 1) {
       throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
     }
   }
+  const snippets: Bound = { path: `${root}/snippets`, area: "snippets/" };
+  const read: Reader = (dir, name, bounds, links) => {
+    if (mode === "local" && dir === snippets.path && name === "tls.caddy") {
+      return localOnlyChecked(files, entry(files, local.path, name, [local], false), name, local);
+    }
+    return localOnlyChecked(files, entry(files, dir, name, bounds, links), name, local);
+  };
   const expanded = lines.map((line) => {
-    if (line === FILE_IMPORTS[0])
-      return globbed(files, `${root}/snippets`, { path: `${root}/snippets`, area: "snippets/" }, false, line);
-    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, { path: sitesRoot, area: "sites/" }, true, line);
+    if (line === FILE_IMPORTS[0]) return globbed(files, snippets.path, [snippets], false, line, read);
+    if (line === FILE_IMPORTS[1]) return globbed(files, sitesDir, siteBounds, true, line, read);
     return line;
   });
   return readCaddyfile(expanded.join("\n"), env);
+}
+
+/** The app's host and upstream must not be the PDS's: one host per site, and one site per upstream (P1.34a). */
+function distinctAppValues(env: Env): void {
+  for (const [app, pds] of [
+    ["APP_HOST", "PDS_HOST"],
+    ["APP_UPSTREAM", "PDS_UPSTREAM"],
+  ] as const) {
+    if (env[app] !== undefined && env[app] === env[pds]) throw new CaddyfileError(`{$${app}} equals {$${pds}}`);
+  }
+}
+
+/** The text of the file at `path`, which may hold a LOCAL_ONLY word only when it lies inside local/. */
+function localOnlyChecked(files: EdgeFiles, path: string, name: string, local: Bound): string {
+  const text = files.read(path);
+  if (path.startsWith(`${local.path}/`)) return text;
+  for (const line of lex(text)) {
+    const word = line.tokens.find((token) => LOCAL_ONLY.includes(token.text));
+    if (word !== undefined) throw new CaddyfileError(`${name}: ${word.text} is allowed only in local/`);
+  }
+  return text;
 }
 
 /** An absolute path whose every segment is a name: no empty, `.` or `..` segment and no trailing slash. */
@@ -470,34 +534,38 @@ function resolved(files: EdgeFiles, path: string, what: string): string {
   return real;
 }
 
-/** A directory every entry must resolve inside, and how a message names it. */
+/** A directory an entry may resolve inside, and how a message names it. */
 type Bound = { path: string; area: string };
+/** How `globbed` reads one entry of a directory. */
+type Reader = (dir: string, name: string, bounds: Bound[], links: boolean) => string;
+const areas = (bounds: Bound[]): string => bounds.map((bound) => bound.area).join(" and ");
 
-/** The text of every entry of `dir` in byte order, each checked to resolve inside `bound`. */
-function globbed(files: EdgeFiles, dir: string, bound: Bound, links: boolean, line: string): string {
+/** The text of every entry of `dir` in byte order, each read through `read`, which checks where it resolves. */
+function globbed(files: EdgeFiles, dir: string, bounds: Bound[], links: boolean, line: string, read: Reader): string {
   const names = files.list(dir).sort();
   if (names.length === 0) throw new CaddyfileError(`${line} matches nothing`);
   return names
     .map((name) => {
       if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
-      return files.read(entry(files, dir, name, bound, links));
+      return read(dir, name, bounds, links);
     })
     .join("\n");
 }
 
 /**
- * Where `dir/name` really is: a regular file with one hard link whose resolved path lies inside `bound`. When `links`
- * is true it may also be a symlink to such a file; the link's own place does not matter, only where it leads.
+ * Where `dir/name` really is: a regular file with one hard link whose resolved path lies inside one of `bounds`. When
+ * `links` is true it may also be a symlink to such a file; the link's own place does not matter, only where it leads.
  */
-function entry(files: EdgeFiles, dir: string, name: string, bound: Bound, links: boolean): string {
+function entry(files: EdgeFiles, dir: string, name: string, bounds: Bound[], links: boolean): string {
   const path = `${dir}/${name}`;
   const own = files.kind(path).type;
   if (own !== "file" && !(own === "link" && links)) throw new CaddyfileError(`${name}: not a regular file`);
   if (own === "link" && files.realpath(path) === null) throw new CaddyfileError(`${name}: dangling link`);
   const target = resolved(files, path, name);
-  if (!target.startsWith(`${bound.path}/`)) {
+  if (!bounds.some((bound) => target.startsWith(`${bound.path}/`))) {
+    const area = areas(bounds);
     throw new CaddyfileError(
-      own === "link" ? `${name}: the link leaves ${bound.area}` : `${name}: the file is not inside ${bound.area}`,
+      own === "link" ? `${name}: the link leaves ${area}` : `${name}: the file is not inside ${area}`,
     );
   }
   const real = files.kind(target);
@@ -533,12 +601,11 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
  */
 export function edgeSiteProblems(config: Caddyfile): string[] {
-  const found = [...zoneProblems(config), ...positionProblems(config.global ?? [], "the global options", false)];
+  const found = [...zoneProblems(config), ...positionProblems(config.global ?? [], "the global options", null)];
   const proxied = new Set<string>();
   for (const site of config.sites) {
     found.push(...addressProblems(site), ...siteProblems(site));
-    const pds = site.placeholders.includes("PDS_HOST");
-    found.push(...positionProblems(site.directives, siteName(site), pds));
+    found.push(...positionProblems(site.directives, siteName(site), hostOf(site)));
     const proxies = named(flatten(site.directives), "reverse_proxy");
     const upstreams = new Set(proxies.map(upstreamOf).filter((upstream) => upstream !== null));
     if ([...upstreams].some((upstream) => proxied.has(upstream))) {
@@ -568,7 +635,7 @@ function zoneProblems(config: Caddyfile): string[] {
     throw error;
   }
   const limits = named(directives, "rate_limit");
-  const found = positionProblems(directives, "the zones snippet", false);
+  const found = positionProblems(directives, "the zones snippet", null);
   if (limits.length !== 1) found.push(`the zones snippet holds ${limits.length} rate_limit blocks`);
   const global = named(limits[0]?.block ?? [], "zone").find((zone) => zone.args[0] === "global");
   if (global === undefined) found.push("there is no global zone");
@@ -576,19 +643,26 @@ function zoneProblems(config: Caddyfile): string[] {
   return found;
 }
 
-/** Only `{$PDS_HOST}` may be a site address, alone; a literal address is loopback, on a site with no upstream. */
+/** The host placeholders a site address may be, each alone on its site (APP_HOST from P1.34a, local/ only). */
+const HOSTS: readonly EnvName[] = ["PDS_HOST", "APP_HOST"];
+/** The host placeholder a site is written as, or null when it has none. */
+const hostOf = (site: Site): EnvName | null =>
+  site.placeholders.find((env) => env !== null && HOSTS.includes(env)) ?? null;
+
+/** Only a host placeholder may be a site address, alone; a literal address is loopback, on a site with no upstream. */
 function addressProblems(site: Site): string[] {
   const name = siteName(site);
   const found: string[] = [];
-  const pds = site.placeholders.includes("PDS_HOST");
-  if (pds && site.addresses.length !== 1) found.push(`${name}: {$PDS_HOST} shares its site with another address`);
+  const host = hostOf(site);
+  if (host !== null && site.addresses.length !== 1)
+    found.push(`${name}: {$${host}} shares its site with another address`);
   site.addresses.forEach((address, at) => {
     const env = site.placeholders[at] ?? null;
-    if (env !== null && env !== "PDS_HOST") found.push(`${name}: {$${env}} is not a site address`);
+    if (env !== null && !HOSTS.includes(env)) found.push(`${name}: {$${env}} is not a site address`);
     if (env === null && !LOOPBACK_ADDRESS.test(address)) found.push(`${name}: a literal site address is not loopback`);
   });
-  if (!pds && named(flatten(site.directives), "reverse_proxy").length > 0) {
-    found.push(`${name}: a site other than {$PDS_HOST} has an upstream`);
+  if (host === null && named(flatten(site.directives), "reverse_proxy").length > 0) {
+    found.push(`${name}: a site other than {$PDS_HOST} or {$APP_HOST} has an upstream`);
   }
   return found;
 }
@@ -598,12 +672,14 @@ function addressProblems(site: Site): string[] {
  * 2026-10-07-p130s-networks-and-caddyfile-reader, and the P1.28l record, final 01:55Z, corrected 02:00Z):
  * `{$PDS_UPSTREAM}` as the upstream of a reverse_proxy on the `{$PDS_HOST}` site, `{$ACME_EMAIL}` as the `email` of
  * an `issuer acme` in a `tls` block at the block root (snippets/tls.caddy). `{$PDS_HOST}` is a site address only
- * (addressProblems). Adding a position is a trusted change; widening one loosens.
+ * (addressProblems). Adding a position is a trusted change; widening one loosens. P1.34a mirrors the PDS pair for the
+ * local app site: `{$APP_HOST}` a site address only, `{$APP_UPSTREAM}` the upstream on the `{$APP_HOST}` site.
  */
 const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>> = {
   PDS_HOST: () => false,
-  PDS_UPSTREAM: ({ directive, arg, pds }) =>
-    pds && directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null,
+  PDS_UPSTREAM: (at) => at.host === "PDS_HOST" && isUpstream(at),
+  APP_HOST: () => false,
+  APP_UPSTREAM: (at) => at.host === "APP_HOST" && isUpstream(at),
   ACME_EMAIL: ({ directive, arg, parents }) => {
     // The chain from the block root, so a data block (header, map, fields) that opens a level named tls or issuer
     // cannot hold it (coordinator verification of #552).
@@ -619,17 +695,26 @@ const PLACEHOLDER_POSITIONS: Readonly<Record<EnvName, (at: Position) => boolean>
     );
   },
 };
-type Position = { directive: Directive; arg: number; parents: Directive[]; pds: boolean };
+/** Where a placeholder is: its directive, argument, enclosing directives, and the host of the site it is on. */
+type Position = { directive: Directive; arg: number; parents: Directive[]; host: EnvName | null };
+/** The placeholder is a reverse_proxy's one upstream, its last argument. */
+const isUpstream = ({ directive, arg }: Position): boolean =>
+  directive.name === "reverse_proxy" && arg === directive.args.length - 1 && upstreamOf(directive) !== null;
 
 /** Every placeholder in `directives` (at any depth) that is outside its position, named for `owner`. */
-function positionProblems(directives: Directive[], owner: string, pds: boolean, parents: Directive[] = []): string[] {
+function positionProblems(
+  directives: Directive[],
+  owner: string,
+  host: EnvName | null,
+  parents: Directive[] = [],
+): string[] {
   return directives.flatMap((directive) => [
     ...directive.placeholders.flatMap((env, arg) =>
-      env === null || PLACEHOLDER_POSITIONS[env]({ directive, arg, parents, pds })
+      env === null || PLACEHOLDER_POSITIONS[env]({ directive, arg, parents, host })
         ? []
         : [`${owner}: {$${env}} is outside its position in ${directive.name}`],
     ),
-    ...positionProblems(directive.block ?? [], owner, pds, [...parents, directive]),
+    ...positionProblems(directive.block ?? [], owner, host, [...parents, directive]),
   ]);
 }
 
