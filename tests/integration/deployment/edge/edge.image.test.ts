@@ -5,16 +5,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { docker, killBefore } from "../../../support/docker.ts";
-import {
-  buildEdgeImage,
-  EDGE,
-  type Edge,
-  logsWhen,
-  type ProbeStep,
-  pullProbeImage,
-  startEdge,
-  stopEdgeAndRemoveImage,
-} from "./edge-container.ts";
+import { EDGE, type Edge, logsWhen, type ProbeStep } from "./edge-container.ts";
+import { registerEdgeSuite } from "./edge-suite.ts";
 import { timeoutProblems } from "./timeouts.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
@@ -77,14 +69,9 @@ const FORWARDED = ["x-forwarded-for", "x-real-ip", "forwarded"];
 /** True when the stub saw a request for exactly this raw path since `from`. */
 const reached = (path: string, from: number) => edge.seen.slice(from).some((seen) => seen.rawPath === path);
 
-beforeAll(async () => {
-  pullProbeImage();
-  image = buildEdgeImage();
-  edge = await startEdge(image);
-}, 600_000);
-// A stop and a tag removal, each docker call killed at 60 s, with room to report both.
-const TEARDOWN_MS = 150_000;
-afterAll(() => stopEdgeAndRemoveImage(edge, image), TEARDOWN_MS);
+registerEdgeSuite({ beforeAll, afterAll }, (started) => {
+  ({ edge, image } = started);
+});
 
 describe("edge", () => {
   test("edge_allows_normal_xrpc", async () => {

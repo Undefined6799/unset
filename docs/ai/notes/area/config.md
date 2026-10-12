@@ -10,7 +10,7 @@ importance: normal
 related: ["[[net-guard]]", "[[new-required-config-key-breaks-test-envs]]"]
 replaced_by: null
 tags: [area, config]
-checked: 2026-10-06
+checked: 2026-10-12
 ---
 # config
 
@@ -23,6 +23,8 @@ checked: 2026-10-06
   its rule.
 - `secret.ts`: `Secret` prints as `[secret]` everywhere; the value leaves only through `reveal()`.
 - `netGuard.ts`: the net-guard fields every egress-making entrypoint merges in.
+- `permanent.ts`: values that can never change after first use (the Matrix `server_name`, the permission set NSID),
+  Alex's answers recorded in ADR 0020 and pinned by `permanent.test.ts` (P1.32). They are constants, not config keys.
 
 **How data flows.** Each `interfaces/*/config.ts` merges the fields it needs → `bootOrExit` at startup → typed
 values to the composition root. Never print resolved config or the environment.

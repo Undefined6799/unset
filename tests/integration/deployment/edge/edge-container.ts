@@ -133,6 +133,24 @@ export async function stopEdgeAndRemoveImage(edge: Pick<Edge, "stop"> | undefine
   remove();
 }
 
+/**
+ * Removes the edge container. docker() returns a non-zero code without throwing (tests/support/docker.ts), so the code
+ * is checked here and a refused removal names the container with docker's own message (P1.11s).
+ */
+function removeContainer(name: string, timeoutMs: number): void {
+  const removed = docker(["rm", "-f", name], { timeoutMs });
+  if (removed.code !== 0) throw new Error(`docker rm failed (${name}): ${removed.err.trim()}`);
+}
+
+/**
+ * Removes the edge's /data volume, after its container, which holds it while it exists. Checked like removeContainer:
+ * a volume that stays would seed nothing for the next run but would leak (P1.27o; DC-4).
+ */
+function removeVolume(volume: string, timeoutMs: number): void {
+  const removed = docker(["volume", "rm", "-f", volume], { timeoutMs });
+  if (removed.code !== 0) throw new Error(`docker volume rm failed (${volume}): ${removed.err.trim()}`);
+}
+
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */
 function bridgeGateway(callMs: number): string {
   const inspected = docker(["network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}"], {
@@ -191,13 +209,24 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
   const dataVolume = dataVolumeOf(name);
   const ro = (from: string, to: string) => ["-v", `${from}:${to}:ro`];
   // Defined before the run: a killed `run -d` may still have created the container, and the stub must close (N6).
+  const closeStub = () =>
+    new Promise<void>((resolve, reject) => stub.server.close((error) => (error ? reject(error) : resolve())));
+  // A removal that fails is reported, not dropped, and the stub still closes; when that fails too, the AggregateError
+  // holds both, the removal's first (P1.11s).
   const stop = async () => {
     try {
-      docker(["rm", "-f", name], { timeoutMs: callMs });
-      docker(["volume", "rm", "-f", dataVolume], { timeoutMs: callMs });
-    } finally {
-      await new Promise((resolve) => stub.server.close(resolve));
+      removeContainer(name, callMs);
+      removeVolume(dataVolume, callMs);
+    } catch (failure) {
+      const closeFailure = await closeStub().then(
+        () => null,
+        (error: unknown) => error,
+      );
+      failAfterCleanup(failure, () => {
+        if (closeFailure !== null) throw closeFailure;
+      });
     }
+    await closeStub();
   };
   try {
     const run = docker(

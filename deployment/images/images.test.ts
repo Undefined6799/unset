@@ -4,7 +4,8 @@
 // allowlist: Docker's official library images, each named (interim, until P1.27s mirrors them and flips the host; book edit
 // 2026-10-07-p128-edge-bases-and-ratelimit-adr widened it from Node alone for the edge's Caddy bases) and our GHCR
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
@@ -472,7 +473,8 @@ const PACKAGE_NAME = /^[a-z0-9][a-z0-9+._-]*$/;
  * Amendment 5, layer 2: every command a shipped stage runs, other than a package manager's removal, is one of these,
  * exactly what today's final stages use (rm in images/node-app.Dockerfile and images/migrate.Dockerfile; setcap and
  * rm in edge/Dockerfile). Every shell, interpreter and launcher fails without being named; a new command is added here
- * in a product PR that says so.
+ * in a product PR that says so. The only other final-stage RUNs are a listing kind's exact lines (listedRunsOf), whose
+ * programs come from LISTABLE alone.
  */
 const FINAL_STAGE_COMMANDS = new Set(["rm", "setcap"]);
 /**
@@ -838,26 +840,60 @@ function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
 
 /**
  * P1.34e (record 2026-10-12-p134e-edge-final-stage-commands, Amendment 1; architecture record
- * 2026-10-12-edge-data-volume-owner, Amendment 2): the exact exec-form RUNs a kind's final stage may make beyond its
- * command list, read from `deployment/<kind>/final-stage-runs.json`, so widening what an image runs is reviewed where
- * the image lives (the edge's folder is in the trusted base). A kind with no file lists none. The rules stay here: a
- * listed line counts only in the final stage, before USER, in exec form with no RUN flag, word for word, and only
- * when it passes listedRunProblems.
+ * 2026-10-12-edge-data-volume-owner, Amendments 2 and 4): the exact exec-form RUNs a kind's final stage may make beyond
+ * its command list, read from `deployment/<kind>/final-stage-runs.json`, so widening what an image runs is reviewed
+ * where the image lives (the edge's folder is in the trusted base). Only a kind in LISTING_KINDS has a list; adding a
+ * kind changes this test. The rules stay here: a listed line counts only in the final stage, before USER, in exec form
+ * with no RUN flag, word for word, and only when it passes listedRunProblems.
  */
 type ListedRuns = readonly (readonly string[])[];
 const LISTED_RUNS_FILE = "final-stage-runs.json";
-function listedRunsOf(kind: Kind | undefined): ListedRuns {
-  const file = kind === undefined ? undefined : join(DEPLOYMENT, kind, LISTED_RUNS_FILE);
-  return file !== undefined && existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as ListedRuns) : [];
+const LISTING_KINDS: ReadonlySet<Kind> = new Set<Kind>(["edge"]);
+function listedRunsOf(kind: Kind | undefined, root = DEPLOYMENT): ListedRuns {
+  if (kind === undefined || !LISTING_KINDS.has(kind)) return [];
+  const file = join(root, kind, LISTED_RUNS_FILE);
+  return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as ListedRuns) : [];
 }
 
-/** Programs a listed line may never start: shells, interpreters and launchers, each of which could run anything. */
-const NOT_LISTABLE = new Set([
-  ...["sh", "ash", "bash", "dash", "ksh", "zsh", "busybox", "env", "nohup", "nice", "timeout", "xargs", "find"],
-  ...["su", "sudo", "doas", "runuser", "setpriv", "chroot", "node", "python", "python3", "perl", "ruby"],
-]);
+/** Every list under a folder that is not directly in the folder of a kind allowed one. */
+function listFileProblems(root: string): string[] {
+  return (readdirSync(root, { recursive: true }) as string[])
+    .filter((file) => posix.basename(file) === LISTED_RUNS_FILE)
+    .filter((file) => !(LISTING_KINDS as ReadonlySet<string>).has(posix.dirname(file)))
+    .map((file) => `${file} is not in a folder allowed a list`)
+    .sort();
+}
 
-/** Why listed lines may not be exempt: each is a non-empty string array whose program is an absolute plain path. */
+/** chmod's mode sets no setuid, setgid or sticky bit: octal without 7000 bits, or symbolic clauses that only clear s and t. */
+const SYMBOLIC_MODE_CLAUSE = /^[ugoa]*(?:[-+=][rwxXst]*)+$/;
+function modeTightens(mode: string): boolean {
+  if (/^[0-7]{1,4}$/.test(mode)) return (Number.parseInt(mode, 8) & 0o7000) === 0;
+  return mode.split(",").every((clause) => SYMBOLIC_MODE_CLAUSE.test(clause) && !/[+=][rwxX]*[st]/.test(clause));
+}
+
+/** Amendment 4, 1-2: the programs a list may name, by absolute path, each with the test for its first operand. */
+const LISTABLE = new Map<string, { operand: string; ok: (value: string) => boolean }>([
+  ["/bin/chown", { operand: "owner", ok: (owner) => /^[1-9]\d*:[1-9]\d*$/.test(owner) }],
+  ["/bin/chmod", { operand: "mode", ok: modeTightens }],
+]);
+/** A listed path: absolute, literal (no glob, `$`, quote or backslash), not the root, and already in normal form. */
+const listedPathOk = (path: string): boolean => /^(?:\/[\w.@+-]+)+$/.test(path) && posix.normalize(path) === path;
+
+/** Why one listed line is not a listable program with -R at most, an allowed operand and listed paths. */
+function listedLineProblem([program = "", ...args]: readonly string[]): string | undefined {
+  const rule = LISTABLE.get(program);
+  if (rule === undefined) return `${program} is not a listable program`;
+  const at = args.findIndex((word) => !word.startsWith("-"));
+  const flag = args.slice(0, at === -1 ? args.length : at).find((word) => word !== "-R");
+  if (flag !== undefined) return `${program} option ${flag} is not allowed`;
+  const [operand = "", ...paths] = at === -1 ? [] : args.slice(at);
+  if (!rule.ok(operand)) return `${program} ${rule.operand} ${operand} is not allowed`;
+  if (paths.length === 0) return `${program} names no path`;
+  const path = paths.find((word) => !listedPathOk(word));
+  return path === undefined ? undefined : `${path} is not an absolute, normalised, literal path`;
+}
+
+/** Why listed lines may not be exempt: each is a non-empty string array that passes listedLineProblem. */
 function listedRunProblems(listed: unknown): string[] {
   if (!Array.isArray(listed)) return ["the list is not an array"];
   return listed.flatMap((line, at) => {
@@ -865,17 +901,8 @@ function listedRunProblems(listed: unknown): string[] {
     if (words.length === 0 || !words.every((word) => typeof word === "string")) {
       return [`line ${at}: not a non-empty array of strings`];
     }
-    const [program = "", ...rest] = words as string[];
-    const name = posix.basename(program);
-    const problems: string[] = [];
-    if (!PLAIN_PATH.test(program) || !BARE_NAME.test(name))
-      problems.push(`line ${at}: ${program} is not an absolute path`);
-    if (NOT_LISTABLE.has(name)) problems.push(`line ${at}: ${name} can run anything`);
-    if ([program, ...rest].some((word) => /[$`]/.test(word) || GLOB.test(word))) {
-      problems.push(`line ${at}: a variable, substitution or glob`);
-    }
-    if ([program, ...rest].some((word) => managerNames(word) > 0)) problems.push(`line ${at}: names a package manager`);
-    return problems;
+    const problem = listedLineProblem(words as string[]);
+    return problem === undefined ? [] : [`line ${at}: ${problem}`];
   });
 }
 
@@ -1413,31 +1440,91 @@ describe("base images", () => {
     ] as const) {
       expect(osPackageProblems(dockerfile, listed), dockerfile).toEqual([notBare(line, words, "/bin/chown")]);
     }
-    // A listed line that could run anything, or install, never counts, so a list cannot admit a shell.
-    for (const [line, problem] of [
-      [["/bin/sh", "-c", "chown -R 65532 /data"], "line 0: sh can run anything"],
-      [["/sbin/apk", "add", "curl"], "line 0: names a package manager"],
-      [["/bin/rm", "-f", "/data/*"], "line 0: a variable, substitution or glob"],
-      [["chown", "-R", "65532:65532", "/data"], "line 0: chown is not an absolute path"],
-    ] as const) {
-      expect(listedRunProblems([line]), line.join(" ")).toEqual([problem]);
-      expect(osPackageProblems(`${edge}RUN ${JSON.stringify(line)}`, [line]), line.join(" ")).not.toEqual([]);
-    }
+    // The RUN keyword is checked too: a listed line spelled as another instruction never counts (#728 verify, nit 2).
+    expect(osPackageProblems(`${edge}SHELL ${JSON.stringify(chown)}`, listed)).toEqual([
+      "line 2: SHELL changes what RUN runs",
+    ]);
     expect(listedRunProblems({})).toEqual(["the list is not an array"]);
     expect(listedRunProblems([[]])).toEqual(["line 0: not a non-empty array of strings"]);
   });
 
-  test("every_kind_list_follows_the_rules", () => {
-    // Each kind's file, where there is one, passes the rules, and no such file sits anywhere else under deployment/.
-    for (const kind of ["edge", "node", "postgres"] as const)
-      expect(listedRunProblems(listedRunsOf(kind)), kind).toEqual([]);
-    const files = (readdirSync(DEPLOYMENT, { recursive: true }) as string[]).filter((file) =>
-      file.endsWith(LISTED_RUNS_FILE),
-    );
-    expect(
-      files.every((file) => ["edge", "node", "postgres"].includes(posix.dirname(file))),
-      files.join(", "),
-    ).toBe(true);
+  test("listed_lines_admit_only_chown_and_chmod_that_tighten", () => {
+    // Amendment 4, 1-2 and 4: a list names /bin/chown or /bin/chmod by absolute path, with -R as its only flag, a
+    // numeric non-root owner or a mode that sets no setuid, setgid or sticky bit, and absolute normalised literal paths.
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    for (const line of [
+      ["/bin/chown", "-R", "65532:65532", "/data", "/config"],
+      ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"],
+      ["/bin/chmod", "0700", "/data"],
+      ["/bin/chmod", "g-s,o-t", "/data"],
+    ]) {
+      expect(listedRunProblems([line]), line.join(" ")).toEqual([]);
+    }
+    const notProgram = (program: string) => `${program} is not a listable program`;
+    const mode = (value: string) => `/bin/chmod mode ${value} is not allowed`;
+    const owner = (value: string) => `/bin/chown owner ${value} is not allowed`;
+    const path = (value: string) => `${value} is not an absolute, normalised, literal path`;
+    for (const [line, problem] of [
+      // The #728 verifier's bypasses: launchers and interpreters a basename deny list let through.
+      [["/usr/bin/setsid", "/bin/sh", "-c", "chown -R 0:0 /data"], notProgram("/usr/bin/setsid")],
+      [["/usr/bin/time", "/bin/busybox", "sh", "-c", "id"], notProgram("/usr/bin/time")],
+      [["/usr/bin/awk", 'BEGIN { system("id") }'], notProgram("/usr/bin/awk")],
+      [["/bin/sed", "-n", "1e id", "/etc/hostname"], notProgram("/bin/sed")],
+      [["/usr/bin/setsid", "/bin/sh", "-c", "ap''k add curl"], notProgram("/usr/bin/setsid")],
+      [["/usr/bin/script", "-qc", "id", "/dev/null"], notProgram("/usr/bin/script")],
+      [["/bin/sh", "-c", "chown -R 65532 /data"], notProgram("/bin/sh")],
+      [["/sbin/apk", "add", "curl"], notProgram("/sbin/apk")],
+      [["/usr/sbin/setcap", "cap_sys_admin+ep", "/usr/bin/caddy"], notProgram("/usr/sbin/setcap")],
+      [["chown", "-R", "65532:65532", "/data"], notProgram("chown")],
+      [["/usr/bin/chown", "-R", "65532:65532", "/data"], notProgram("/usr/bin/chown")],
+      // Each argument, even on a listable program.
+      [["/bin/chmod", "4755", "/usr/bin/caddy"], mode("4755")],
+      [["/bin/chmod", "2700", "/data"], mode("2700")],
+      [["/bin/chmod", "1777", "/data"], mode("1777")],
+      [["/bin/chmod", "u+s", "/usr/bin/caddy"], mode("u+s")],
+      [["/bin/chmod", "g=s", "/data"], mode("g=s")],
+      [["/bin/chmod", "o+t", "/data"], mode("o+t")],
+      [["/bin/chmod", "u=rwX,go=,+t", "/data"], mode("u=rwX,go=,+t")],
+      [["/bin/chmod", "g=u", "/data"], mode("g=u")],
+      [["/bin/chown", "-R", "0:0", "/data"], owner("0:0")],
+      [["/bin/chown", "65532:0", "/data"], owner("65532:0")],
+      [["/bin/chown", "65532", "/data"], owner("65532")],
+      [["/bin/chown", "caddy:caddy", "/data"], owner("caddy:caddy")],
+      [["/bin/chown", "-h", "65532:65532", "/data"], "/bin/chown option -h is not allowed"],
+      [["/bin/chown", "--from=0:0", "65532:65532", "/data"], "/bin/chown option --from=0:0 is not allowed"],
+      [["/bin/chown", "-R", "65532:65532"], "/bin/chown names no path"],
+      [["/bin/chown", "-R", "65532:65532", "data"], path("data")],
+      [["/bin/chown", "-R", "65532:65532", "/data/../etc"], path("/data/../etc")],
+      [["/bin/chown", "-R", "65532:65532", "/data/*"], path("/data/*")],
+      [["/bin/chown", "-R", "65532:65532", "/$HOME"], path("/$HOME")],
+      [["/bin/chown", "-R", "65532:65532", "/'data'"], path("/'data'")],
+      [["/bin/chown", "-R", "65532:65532", "/"], path("/")],
+    ] as const) {
+      expect(listedRunProblems([line]), line.join(" ")).toEqual([`line 0: ${problem}`]);
+      expect(osPackageProblems(`${edge}RUN ${JSON.stringify(line)}`, [line]), line.join(" ")).not.toEqual([]);
+    }
+  });
+
+  test("only_listing_kinds_have_a_list", () => {
+    // Amendment 4, 3: only a kind in LISTING_KINDS has a list, read from its own folder, and each list passes the rules,
+    // so a list for any other kind fails and no product-only change can add one (#728 verify, nits 1 and 3).
+    expect(listFileProblems(DEPLOYMENT)).toEqual([]);
+    for (const kind of LISTING_KINDS) expect(listedRunProblems(listedRunsOf(kind)), kind).toEqual([]);
+    const root = mkdtempSync(join(tmpdir(), "listed-runs-"));
+    try {
+      const chown = [["/bin/chown", "-R", "65532:65532", "/data"]];
+      for (const kind of ["edge", "postgres"]) {
+        mkdirSync(join(root, kind));
+        writeFileSync(join(root, kind, LISTED_RUNS_FILE), JSON.stringify(chown));
+      }
+      expect(listedRunsOf("edge", root)).toEqual(chown);
+      expect(listedRunsOf("postgres", root)).toEqual([]);
+      expect(listedRunsOf("node", root)).toEqual([]);
+      expect(listFileProblems(root)).toEqual([`postgres/${LISTED_RUNS_FILE} is not in a folder allowed a list`]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("no_dockerfile_uses_onbuild", () => {
