@@ -23,6 +23,8 @@ export type Inputs = {
   env: Env;
   /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
+  /** The Compose project directory, `dirname(files[0])`, where every relative path in the stack resolves from. */
+  projectDir: string;
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */
   serviceEnv: ReadonlyMap<string, SecretMap>;
@@ -43,6 +45,8 @@ export type Inputs = {
   /** The repository's `deployment/edge`, whose Caddyfile and snippets the edge image carries (C18). */
   edgeDir: string;
   readText: (path: string) => string | null;
+  /** Each env file's `dev:ino` as it was read (P1.34p): C9 fails a file it then finds as another file. */
+  envReads: ReadonlyMap<string, string>;
   stat: (path: string) => Stats | null;
   /** Like `stat`, but a symlink is reported as itself (C9 refuses a link anywhere on a mounted secret's path). */
   lstat: (path: string) => Stats | null;

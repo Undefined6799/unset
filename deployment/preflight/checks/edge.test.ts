@@ -116,6 +116,39 @@ describe("C18 inputs (P1.30u)", () => {
     });
   });
 
+  // P1.34p Amendment 3 (verifier B3 on #700, here for C18): containment asks the kernel's realpath(3). Node's
+  // JavaScript realpathSync collapses `x/..` as text (path.resolve) before following x.
+  test("c18_realpath_is_the_kernels", () => {
+    const { root, edgeDir } = repository();
+    // x leads out of the repository's edge folder; y goes through x and back up. The kernel takes x's real parent,
+    // the folder outside; as text, `x/..` is edgeDir itself, so y read as the real sites folder. (With x -> "/" both
+    // agree, so the decoy needs a relative x, as on #700.)
+    const outside = join(root, "outside");
+    mkdirSync(join(outside, "deep"), { recursive: true });
+    mkdirSync(join(outside, "sites", "enabled"), { recursive: true });
+    writeFileSync(join(outside, "sites", "enabled", "x.caddy"), "");
+    symlinkSync("../../outside/deep", join(edgeDir, "x"));
+    const viaParent = join(edgeDir, "y");
+    symlinkSync("x/../sites/enabled", viaParent);
+    expect(edgeSitesDir(compose([sitesFrom(viaParent)]), edgeDir)).toEqual({
+      pass: false,
+      reason: "/etc/caddy/sites/enabled is not mounted from inside deployment/edge/",
+    });
+    // A link the JavaScript resolver loops on for ever (as text, `x/../en` is en itself) returns, judged where the
+    // kernel puts it: x is d/sub, its real parent d, so d/en.
+    mkdirSync(join(edgeDir, "d", "sub"), { recursive: true });
+    mkdirSync(join(edgeDir, "d", "en"));
+    writeFileSync(join(edgeDir, "d", "en", "x.caddy"), "");
+    symlinkSync("d/sub", join(edgeDir, "dx"));
+    const chased = join(edgeDir, "en");
+    symlinkSync("dx/../en", chased);
+    expect(edgeSitesDir(compose([sitesFrom(chased)]), edgeDir)).toEqual({ dir: join(edgeDir, "d", "en") });
+    // A link loop throws ELOOP, which the runner reports as "check error", rather than hanging or reading as missing.
+    const loop = join(edgeDir, "loop");
+    symlinkSync("loop", loop);
+    expect(() => edgeSitesDir(compose([sitesFrom(loop)]), edgeDir)).toThrow(expect.objectContaining({ code: "ELOOP" }));
+  });
+
   test("c18_input_missing_fails", () => {
     const { edgeDir } = repository();
     expect(edgeSitesDir(compose(null), edgeDir)).toEqual({ pass: false, reason: "input missing: the edge service" });

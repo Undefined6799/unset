@@ -26,9 +26,12 @@ export const EDGE_FILES = {
     const type = stat.isSymbolicLink() ? "link" : stat.isFile() ? "file" : stat.isDirectory() ? "dir" : "other";
     return { type, links: stat.nlink } as const;
   },
+  // realpath(3), never the JavaScript realpathSync, which collapses `x/..` as text before following x (Node v26.10.0
+  // doc/api/fs.md, fs.realpathSync.native; P1.34p Amendment 3, verifier B3 on #700). Only ENOENT reads as missing;
+  // ELOOP and every other error throw, which the runner reports as "check error".
   realpath: (path: string): string | null => {
     try {
-      return realpathSync(path);
+      return realpathSync.native(path);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;

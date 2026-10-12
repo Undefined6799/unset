@@ -17,7 +17,19 @@
 // read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
 // configured value is withheld whole.
 import { execFile } from "node:child_process";
-import { lstatSync, readFileSync, readlinkSync, realpathSync, type Stats, statfsSync, statSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  type Stats,
+  statfsSync,
+  statSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -56,6 +68,8 @@ export type Deps = {
   root: string;
   run: Run;
   readText?: (path: string) => string | null;
+  /** How an env file Compose reads values from is read; `readEnvOrNull` unless a test passes one. */
+  readEnv?: (path: string) => EnvRead | null;
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
   realpath?: (path: string) => string | null;
@@ -114,6 +128,33 @@ const realpathOrNull = (path: string): string | null => {
 };
 
 class CannotRun extends Error {}
+
+/** An env file's text and the `dev:ino` of the file it came from, which C9 matches against what it judges. */
+export type EnvRead = { text: string; id: string };
+
+/**
+ * An env file, read only as a regular file (P1.34p, Amendment 2): its real path is opened with O_NOFOLLOW, so a link
+ * swapped in after realpath(3) fails, and O_NONBLOCK, so a FIFO opens without a writer instead of blocking ("open the
+ * file in nonblocking mode", Node v26.10.0 doc/api/fs.md, File open constants). The descriptor is fstat'ed and read
+ * only if it is a regular file (readFileSync takes a descriptor, the same page). Null only when nothing exists.
+ */
+function readEnvOrNull(path: string): EnvRead | null {
+  let fd: number;
+  try {
+    fd = openSync(realpathSync.native(path), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw new CannotRun(`cannot read ${path}`);
+  }
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile()) throw new CannotRun(`${path} is not a regular file`);
+    return { text: readFileSync(fd, "utf8"), id: `${info.dev}:${info.ino}` };
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /**
  * The accepted flags. None may be one Node reads after the script name (the `--env-file` family), and `--require` and
@@ -253,10 +294,20 @@ function resolveBuild(build: Build, projectDir: string): Build {
   return { context, dockerfile: resolve(context, build.dockerfile) };
 }
 
-function readEnvFile(path: string, readText: (path: string) => string | null): [string, string][] {
-  const text = readText(path);
-  if (text === null) throw new CannotRun(`cannot read ${path}`);
-  return parseEnvFile(text, path);
+/** Reads env files and remembers the `dev:ino` each one was read from. */
+function envReader(readEnv: (path: string) => EnvRead | null) {
+  const ids = new Map<string, string>();
+  const read = (path: string): EnvRead | null => {
+    const result = readEnv(path);
+    if (result !== null) ids.set(path, result.id);
+    return result;
+  };
+  const parse = (path: string): [string, string][] => {
+    const result = read(path);
+    if (result === null) throw new CannotRun(`cannot read ${path}`);
+    return parseEnvFile(result.text, path);
+  };
+  return { ids, read, parse };
 }
 
 /** The checks' inputs, and every value the readers handed out on the way (P1.30m). */
@@ -265,6 +316,7 @@ type Loaded = { inputs: Inputs; configured: ConfiguredValues };
 /** Inputs for the checks; anything that keeps the preflight from judging the stack throws CannotRun or ParseError. */
 function loadInputs(argv: string[], deps: Deps): Loaded {
   const readText = deps.readText ?? readTextOrNull;
+  const envFiles = envReader(deps.readEnv ?? readEnvOrNull);
   const environment = deps.environment ?? process.env;
   const { env, files, envFile } = parseCli(argv);
   refuseWhenSet(composeNames(Object.keys(environment)), environment);
@@ -276,7 +328,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   // WithEnvFiles, v2.7.1 and v2.13.0); a name the file lacks becomes empty, as in Compose.
   const interpolationPath = envFile ?? join(dirname(files[0] as string), ".env");
   const interpolationFile =
-    envFile === null && readText(interpolationPath) === null ? [] : readEnvFile(interpolationPath, readText);
+    envFile === null && envFiles.read(interpolationPath) === null ? [] : envFiles.parse(interpolationPath);
   if (interpolationFile.length > 0) secretPaths.push(interpolationPath);
   // Compose copies the env file's COMPOSE_* keys into its environment when the shell lacks them (cmd/compose/compose.go
   // setEnvWithDotEnv: v5.3.1 :683-719 copies the COMPOSE_* keys, 2.38.2 :677-699 copies every key), and compose-go
@@ -295,7 +347,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   const values = interpolationFile.map(([, value]) => value);
   for (const service of compose.services) {
     secretPaths.push(...service.envFiles);
-    const fromFiles = service.envFiles.flatMap((path) => readEnvFile(path, readText));
+    const fromFiles = service.envFiles.flatMap((path) => envFiles.parse(path));
     const fromCompose = service.environment.map(([key, value]): [string, string] => [key, resolveValue(value)]);
     serviceEnv.set(service.name, new SecretMap([...fromFiles, ...fromCompose]));
     values.push(...[...fromFiles, ...fromCompose].map(([, value]) => value));
@@ -303,9 +355,11 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   const inputs: Inputs = {
     env,
     root: resolve(deps.root),
+    projectDir: dirname(files[0] as string),
     compose,
     serviceEnv,
     secretPaths: [...new Set(secretPaths)],
+    envReads: envFiles.ids,
     mountedSecrets,
     lockPath: join(deps.root, "deployment/images.lock.json"),
     cosignKeyPath: join(deps.root, "deployment/cosign.pub"),
