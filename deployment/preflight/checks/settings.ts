@@ -22,9 +22,7 @@ export const c13: Check = {
 export const c14: Check = {
   id: "C14",
   run: withPds((env) =>
-    !present(env, "PDS_DEV_MODE") || value(env, "PDS_DEV_MODE") === "false"
-      ? pass()
-      : fail("PDS_DEV_MODE is not absent or false"),
+    !present(env, "PDS_DEV_MODE") || value(env, "PDS_DEV_MODE") === "false" ? pass() : fail("PDS_DEV_MODE is enabled"),
   ),
 };
 
@@ -35,10 +33,10 @@ export const c15: Check = {
     const domains = (value(env, "PDS_SERVICE_HANDLE_DOMAINS") ?? "").split(",").filter((d) => d !== "");
     if (domains.length === 0) return fail("PDS_SERVICE_HANDLE_DOMAINS is not set");
     if (domains.some((d) => d === ".0x40.me" || d.endsWith(".0x40.me"))) {
-      return fail("PDS_SERVICE_HANDLE_DOMAINS contains .0x40.me");
+      return fail("PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
     }
     if (stage === "dev" && !(domains.length === 1 && domains[0] === ".0x40.space")) {
-      return fail("PDS_SERVICE_HANDLE_DOMAINS is not .0x40.space in dev");
+      return fail("PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
     return pass();
   }),
@@ -50,7 +48,7 @@ export const c16: Check = {
   run: withPds((env) =>
     value(env, "PDS_EMAIL_DISABLE_CONFIRMATION_LINK") === "true"
       ? pass()
-      : fail("PDS_EMAIL_DISABLE_CONFIRMATION_LINK is not true"),
+      : fail("PDS_EMAIL_DISABLE_CONFIRMATION_LINK does not disable the link"),
   ),
 };
 
@@ -94,7 +92,7 @@ export const c22: Check = {
   id: "C22",
   run: withPds((env, inputs) => {
     const master = videoMasterMax(inputs);
-    if (master === null) return pass("n/a");
+    if (master === null) return pass("skipped: VIDEO_MASTER_MAX_BYTES is unset");
     if (master === "invalid") return fail("VIDEO_MASTER_MAX_BYTES is not an integer");
     const limit = value(env, "PDS_BLOB_UPLOAD_LIMIT") ?? "";
     if (!NON_NEGATIVE_INTEGER.test(limit)) return fail("PDS_BLOB_UPLOAD_LIMIT is not set to an integer");
@@ -107,15 +105,15 @@ export const c22: Check = {
 export const c23: Check = {
   id: "C23",
   run: ({ env: stage, serviceEnv }) => {
-    if (stage !== "prod") return pass("n/a");
+    if (stage !== "prod") return pass("skipped: dev stage");
     let checked = false;
     for (const [service, env] of serviceEnv) {
       if (present(env, "FAKE_FINGERPRINT_LIST")) return fail(`FAKE_FINGERPRINT_LIST is set in ${service}`);
       if (!present(env, "FINGERPRINT_CHECK")) continue;
       if (value(env, "FINGERPRINT_CHECK") !== "arachnid")
-        return fail(`FINGERPRINT_CHECK is not arachnid in ${service}`);
+        return fail(`FINGERPRINT_CHECK in ${service} is not the real fingerprint service`);
       checked = true;
     }
-    return checked ? pass() : fail("no service sets FINGERPRINT_CHECK=arachnid");
+    return checked ? pass() : fail("no service sets FINGERPRINT_CHECK to the real fingerprint service");
   },
 };

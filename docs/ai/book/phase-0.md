@@ -16,9 +16,10 @@ ceremony, and the licence question.
 
 **Phase exit (plan §8 Phase 0, as restated for decisions 40 and 41):** CI passes and blocks a planted secret, a planted
 bare `fetch` and a planted `Domain=` cookie; every action is pinned by SHA; the Actions token is read-only and Actions
-cannot approve PRs; and the main-branch rules (PR only, squash only, agents never merge and never push to `main`, Alex
-alone merges) are written in `CLAUDE.md` and ADR 0009. A GitHub-enforced protected `main` is **not** part of the exit
-while the repository is private on the free plan (decision 41: GitHub refused rulesets; Alex chose "Go without").
+cannot approve PRs; and the main-branch rules (PR only, squash only, agents never push to `main`, author threads never
+merge their PRs, a separate verifier may merge checked PRs) are written in `CLAUDE.md`, ADR 0009 and ADR 0019. A
+GitHub-enforced protected `main` is **not** part of the exit while the repository is private on the free plan (decision
+41: GitHub refused rulesets; Alex chose "Go without").
 P0.14 proves what exists on GitHub itself and marks the two protection checks "waiting until protection exists".
 
 **GitHub Pro (Alex, 2026-10-06 12:44Z; book edit 2026-10-06-github-pro-unblocks).** Alex upgraded the account to GitHub
@@ -33,7 +34,8 @@ decision 40 is unchanged.
 **Decisions 40 and 41 (Alex, 2026-10-04 20:09Z and 20:45Z; ADRs 0008 and 0009).** Agent PRs are opened under Alex's own
 GitHub identity, so GitHub can never count an approval on them: the target ruleset requires a PR and green checks, blocks
 force-push and deletion, applies to admins, with **zero** required approvals and no code-owner review (decision 40).
-P0-A1's separate agent identity is dropped: agents open PRs as Alex and never merge; Alex alone merges. CODEOWNERS stays
+P0-A1's separate agent identity is dropped: agents open PRs as Alex and author threads never merge them; a separate
+verifier may merge checked PRs (ADR 0019, 2026-10-12). CODEOWNERS stays
 for routing and the record. GitHub then refused any ruleset on a private free-plan repository and Alex chose to go without
 (decision 41), so `main` has no ruleset and no branch protection today; the decision-40 ruleset is kept as a one-command
 step (P0.03) to apply the day protection is available, and the launch gate checks it is (L.04).
@@ -101,6 +103,7 @@ flowchart TD
   P010 --> P014
   P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"] --> P015a["P0.15a ADR 0019 accepted [ALEX][SEC]"]
   P015a --> P016["P0.16 Delivery check asserts ADR 0019 [ALEX][SEC]"]
+  P016 --> P016a["P0.16a CLAUDE.md review lines follow ADR 0019 [ALEX]"]
 ```
 
 The Alex halves of P0.11 and P0.13 can start on day one. P0.12's ceremony waits for P0.10's hardware keys. Every
@@ -352,7 +355,7 @@ Algorithm (the runbook Alex follows, as soon as the agent reports P0.02 step 5):
      b. Require a pull request before merging: required approvals **0** and **no** code-owner review (decision 40,
         ADR 0008: agent PRs carry Alex's own identity, and GitHub never lets an author approve their own PR, so a
         required approval would block every agent PR); require conversation resolution before merging. Allowed merge
-        methods: Squash. Alex alone merges, by written rule (`CLAUDE.md`).
+        methods: Squash. A separate verifier may merge checked PRs, by written rule (`CLAUDE.md`, ADR 0019).
      c. Require status checks to pass: "Require branches to be up to date before merging" **off** (architecture
         2026-10-06, reversing P0-A8); add every name in `.github/required-checks.json` as it stands on `main` (today
         check, secrets, audit, actionlint, semgrep and pr-shape; the file is authoritative, and the image scan
@@ -378,8 +381,9 @@ Algorithm (the runbook Alex follows, as soon as the agent reports P0.02 step 5):
 
 Edge cases and failures:
   - Agents open PRs under Alex's own identity (decision 40; P0-A1's separate agent identity is dropped), so no required
-    approval can ever be satisfied on them; the ruleset therefore requires zero approvals. Agents never merge and never
-    push to `main`; Alex alone merges (`CLAUDE.md` Delivery, P0.09; ADR 0009).
+    approval can ever be satisfied on them; the ruleset therefore requires zero approvals. Author threads never merge
+    and agents never push to `main`; a separate verifier may merge checked PRs (`CLAUDE.md` Delivery, P0.09; ADR 0009,
+    ADR 0019).
   - GitHub refuses the ruleset ("Upgrade to GitHub Pro or make this repository public") → record the text; steps 1–4
     wait (decision 41); the Actions settings of step 5 still apply. (The account is on Pro since 2026-10-06, so this
     refusal is not expected again.)
@@ -1340,7 +1344,8 @@ addendum, workflow and change management) plus the engineering-rules Top 15 page
 them. The line budget is **120**, not 80. `engineering-rules.md`'s Top 15 intro now reads: "Of this rules file,
 CLAUDE.md imports this Top 15 page only (alongside the four guideline documents); the full set is read on demand."
 This step logs that as a deviation (in its PR body and in the reconciliation ADR 0007's table). Decision 41 adds to the
-Delivery section: **agents never merge and never push to `main`** (Alex alone merges; ADR 0009).
+Delivery section: **agents never push to `main`, and author threads never merge their PRs** (a separate verifier
+may merge checked PRs; ADR 0009, ADR 0019, as P0.16 asserts).
 
 Outputs:
   - `CLAUDE.md` (≤ 120 lines): keep the bootstrap sections (security, protocol-first, branches, commands), except any
@@ -1361,10 +1366,11 @@ Outputs:
     400 changed source lines, fail above 800 without `large-pr` and a reason), D4 (at most three agent PRs waiting for
     Alex; run `gh pr list --state open` before starting a step; severity-1 and -2 fixes excepted) and D8 (ADR 0001 is an
     append-only decisions log; every new decision gets its own ADR in `docs/human/decisions/`; accepted ADRs are
-    immutable, changed only to mark them superseded), and from decisions 40 and 41: **agents open PRs and never merge;
-    agents never push to `main`; Alex alone merges** (the rule GitHub could not enforce on the free private plan, ADR
-    0009; with GitHub Pro, 2026-10-06, the ruleset enforces PR-only and no direct push once Alex applies it, and the
-    agents-never-merge rule stays written). This step verifies that content, and adds what is missing.
+    immutable, changed only to mark them superseded), and from decisions 40 and 41: **agents open PRs and never push to
+    `main`; author threads never merge them; a separate verifier may merge checked PRs (ADR 0019)** (the rule GitHub
+    could not enforce on the free private plan, ADR 0009; with GitHub Pro, 2026-10-06, the ruleset enforces PR-only and
+    no direct push once Alex applies it, and the author-threads-never-merge rule stays written). This step verifies that
+    content, and adds what is missing.
     Add "Building from the book": the next step is the lowest-numbered step in `docs/ai/book/` whose dependencies are
     merged and that has no open PR; stop at `[ALEX]`, `[STOP]`, `[SPIKE]` exits as the book says; one PR per step,
     titled as in the Delivery section. One line on AI notes (plan §7, Alex 2026-10-04 22:11Z): before touching an area,
@@ -1432,8 +1438,9 @@ Done when (tests): (`scripts/docs/docs.test.ts`)
     it fails); no import of the full `engineering-rules.md`. The Top 15 file has ≤ 25 lines and its numbered rules equal
     the "Top 15" section of `engineering-rules.md`; `CLAUDE.md` names `engineering-rules.md`, states the precedence
     rule, and its Delivery section mentions D1, D2, D3, D4 and D8 (a fixture without the precedence line fails).
-  - claude_md_agents_never_merge (decisions 40 and 41): the Delivery section says agents never merge and never push to
-    `main`, and names ADR 0009; a fixture without either line fails.
+  - claude_md_author_threads_never_merge (decisions 40 and 41; renamed and tightened by P0.16): the Delivery section
+    says author threads never merge and agents never push to `main`, and names ADR 0009 and ADR 0019; a fixture without
+    any of them fails.
   - adr_index_complete: every file in `docs/human/decisions/` has a row in its `README.md` and every row a file; each ADR
     other than 0001 has the headings Context, Decision, Alternatives (at least two), Consequences, Compliance and a
     status (rule DO-1).
@@ -1647,6 +1654,8 @@ Where: new `scripts/guards/commit-msg.ts`, `scripts/guards/pr-size.ts`, `scripts
   `.github/required-checks.json` (appends `pr-shape`); `.github/labels.json` (appends labels); `renovate.json`
   (commit prefix). The grant classifier (`grant-sql.ts`, `grant-json.ts`, `grant-parse.ts` and their tests) is P0.09e's.
 Size: ~565 source lines as built
+Dependents: P0.09f, P0.09t (book edit 2026-10-12-p204s-riders-and-p009t), and the split guard steps P1.04q, P1.04c,
+  P1.06q and P2.01q.
 
 Why here (letter suffix): the plan's Phase 0 CI list gained these three checks with decision 35 (2026-10-04); they need
 the CI workflow (P0.07), the PR template (P0.09) and the label list (P0.09b), so they come after all three.
@@ -2348,6 +2357,59 @@ Done when (tests, planted fixtures in the guard's tests):
 
 ---
 
+### P0.09t — Trusted file pattern carries only its own tests
+Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Check class (`scripts/guards/trusted-base.ts` and its test), a tightening, kind/build; issue #639; slice 1; book edit
+  2026-10-12-p204s-riders-and-p009t, from item 6 of architecture's 2026-10-12-p203-post-merge-follow-ups (found
+  verifying #630). Owner: Phase 2 or the third lane, placed by the coordinator (a classifier path; Phase 1 refuses it).
+Waits for: Alex's typed line "yes P0.09t scripts/guards trusted-base", asked with the other lines after P0.16 lands.
+  The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`. Risk
+  until then is low: the only files that can ride are tests, which change no runtime behaviour.
+Where: `scripts/guards/trusted-base.ts` and its test only.
+
+The gap: a trusted *file* pattern adds its parent folder's name to the folder rule. For example,
+`/interfaces/http/session-cookie.ts` lets any `tests/**/http/**` file ride with a trusted change.
+
+The fix: a trusted file pattern lets only its own test files ride: the same basename with `.test.ts`, either beside it
+or under the mirrored `tests/` path. A trusted *folder* pattern keeps its folder rule.
+
+Done when (tests, planted fixtures in the guard's tests):
+  - Red: a PR touching `interfaces/http/session-cookie.ts` plus `tests/integration/http/unrelated.test.ts` fails.
+  - Green: `interfaces/http/session-cookie.test.ts` beside it; a folder pattern's `tests/**/<folder>/**` file.
+  - Main's history replays green under the check, and the full suite is green.
+
+---
+
+### P0.09n — Bar trusted tests from product helpers
+Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
+  1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
+  2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686. Lane: P0.09t's
+  (Phase 0). It gets its own PR (D3, one step per PR), though the record allowed sharing P0.09t's.
+Waits for: Alex's typed line "yes P0.09n scripts/guards trusted-base imports", asked with the other lines after
+  P0.16a. The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`.
+Where: `scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`.
+
+The gap: depcruise lets any `*.test.ts` import anything, and `deployment/postgres/init/00-bootstrap.test.ts:4` imports
+`tests/support/postgres.ts` (which imports `./docker.ts`). Neither helper is trusted, so a feature-class PR could hollow
+out the bootstrap's fail-closed evidence without touching a trusted file.
+
+The fix:
+- The trusted-base guard resolves the relative imports of every trusted test file and fails on any target outside
+  CODEOWNERS' trusted section. Node built-ins and npm packages are allowed. No depcruise row (it would duplicate the
+  path list and drift).
+- `tests/support/postgres.ts`, `tests/support/docker.ts`, `tests/integration/postgres-helper.test.ts` and
+  `tests/integration/docker-helper.test.ts` join the CODEOWNERS trusted section in the same PR, so the bootstrap test's
+  import stays legal. Cost: a later change to those helpers is a trusted-class PR of its own.
+- Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
+- Sequencing: P1.27g (#690) and P1.27i (#697), which edit those helpers, merged first, so nothing has to move.
+
+Done when (tests, planted fixtures in the guard's tests):
+  - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
+  - The guard is green on the real tree, and the full suite is green.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),
@@ -2905,9 +2967,10 @@ once Alex has applied the ruleset (order: Alex applies it; a thread runs the rea
 P0.10's own items; P0.14 closes and a Phase 0 carrier records it). The drill **never attempts `gh pr merge`** on a
 fault PR, with or without `--admin`: if the ruleset were misconfigured, that attempt would merge a planted secret or a
 bare fetch into `main`. `mergeStateStatus = BLOCKED` plus the ruleset read-back (`ruleset_active`, an empty bypass
-list, `required_checks_set`) proves the same without that risk, and keeps "agents never merge" literal. Under decision
-40 (zero approvals) a green PR is mergeable by design, so drill D's "green but unapproved" steps 6a–6g are dropped;
-what stays is `direct_push_refused` as a ruleset read and `merged_commit_signed` on the next squash merge Alex makes.
+list, `required_checks_set`) proves the same without that risk, and keeps "author threads never merge" literal. Under
+decision 40 (zero approvals) a green PR is mergeable by design, so drill D's "green but unapproved" steps 6a–6g are
+dropped; what stays is `direct_push_refused` as a ruleset read and `merged_commit_signed` on the next squash merge Alex
+makes.
 
 **Decision 41 (editor pass, 2026-10-04 evening).** With no ruleset possible on the private free plan, the drills that
 need protection ("direct push refused", "a green PR without approval cannot merge", and so `BLOCKED`, `--admin`,
@@ -2936,13 +2999,14 @@ Algorithm:
   5. For each of A–C: `gh pr view <n> --json mergeStateStatus,reviewDecision,statusCheckRollup`. Expected: the named check
      failed (`secrets` for A; `check` for B and C, with the guard's `report()` line in the log), and, once the ruleset
      is applied, `mergeStateStatus = BLOCKED`, read only. The agent never attempts `gh pr merge` (GitHub Pro amendment
-     above; agents never merge).
+     above; author threads never merge).
   6. Drill D, now (decision 41): record (a) `gh api repos/Undefined6799/unset/actions/permissions/workflow` →
      `default_workflow_permissions = "read"`, `can_approve_pull_request_reviews = false`; (b) `CLAUDE.md`'s Delivery
-     section says agents never merge and never push to `main` (P0.09's `claude_md_agents_never_merge` passes on
-     `main`); (c) ADR 0009, or the ADR superseding it, is present on `main`; (d) `gh api
-     repos/Undefined6799/unset/rulesets` returns the **one active ruleset** (inverted by the GitHub Pro amendment;
-     before it, "still refuses or is empty"), read back as in P0.03's `ruleset_active`, `ruleset_rules` and
+     section says author threads never merge and agents never push to `main`
+     (`claude_md_author_threads_never_merge`, renamed by P0.16, passes on `main`); (c) ADR 0009, or the ADR superseding
+     it, is present on `main`; (d) `gh api repos/Undefined6799/unset/rulesets` returns the **one active ruleset**
+     (inverted by the GitHub Pro amendment; before it, "still refuses or is empty"), read back as in P0.03's
+     `ruleset_active`, `ruleset_rules` and
      `direct_push_refused`. Then skip to step 7.
      **Dropped (GitHub Pro amendment, 2026-10-06; kept for the record):** the green-but-unapproved drill below is moot
      under decision 40 and attempts merges; it is not run.
@@ -3048,9 +3112,11 @@ Done when Alex merges it with his CLAUDE.md lines on the branch. Main then has 0
 
 ### P0.16 — Delivery check asserts the ADR 0019 merge rule
 Tags: [SEC] [ALEX] (Alex commits CLAUDE.md, merges by hand)            Depends on: P0.15a (merged, #617)            Plan: —
+As built: merged by Alex at 2026-10-12T16:53:13Z as `45bd8ba` (#625, head 8d0665b), with his CLAUDE.md commit; from
+then on a separate verifier may merge checked agent PRs (merge data read by REST, 17:10Z).
 Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15a;
 book edit 2026-10-12-p016-delivery-check-adr-0019 (final 03:40Z), from architecture's ruling in
-2026-10-12-p015-delivery-check-wording (03:35Z). Owner: Phase 2 (amendment 3, 06:50Z). Nothing depends on it.
+2026-10-12-p015-delivery-check-wording (03:35Z). Owner: Phase 2 (amendment 3, 06:50Z). P0.16a depends on it.
 Alex's CLAUDE.md commit (amendment 3): #617 merged without his CLAUDE.md lines, so CLAUDE.md:95-96 on main (`f062c81`)
 still says "Alex alone merges". His commit rides this PR's branch: exactly #612's two-line diff (the Merging line gains
 "ADR 0019"; "agents open PRs and never push to `main`; author threads never merge them. A separate verifier may merge
@@ -3076,6 +3142,30 @@ Delivery section is green with Alex's CLAUDE.md commit on the branch; main's lac
 then (amendment 4, 07:20Z).
 Done when Alex's commit is on the branch, check and the other five required checks are green, the fixtures are red and
 green as above, and Alex merges it by hand.
+
+---
+
+### P0.16a — Align CLAUDE.md's review lines with ADR 0019
+Tags: [ALEX] (typed line "yes P0.16a CLAUDE.md")            Depends on: P0.16 (merged, #625)            Plan: —
+Documentation (CLAUDE.md is `*.md`, so SE-6 treats it as docs), but a CI-bypass classifier path, so it needs Alex's
+typed line, asked with the after-#625 batch; issue #666; slice 1; lane Phase 2 or the third thread (both accept the
+classifier path with his line relayed by id), or Alex commits it himself; book edit
+2026-10-12-p016a-claude-md-adr-0019-wording (16:40Z), from the coordinator's #625 verification. Nothing depends on it.
+Why: after #625, three CLAUDE.md lines still describe Alex as the reviewer of every PR, while ADR 0019
+(`docs/human/decisions/0019-verified-agent-merges.md:22-27, 58-61`) moves merges of checked agent PRs to a separate
+verifier and keeps [ALEX] and [STOP] steps, ADRs, Renovate and external PRs with Alex.
+What (lines as on main `9de70a7`, unchanged by #625; CLAUDE.md stays at 119 lines, and "never merge", "never push to
+`main`", "ADR 0009" and "ADR 0019" all stay):
+1. Line 63, Ship it: "Land via PR; Alex approves every PR." becomes "Land via PR; Delivery's Merging line says who
+   merges."
+2. Line 88: "self-review against it before asking Alex." becomes "self-review against it before hand-off."
+3. Line 89, D4: "at most three agent PRs may wait for Alex at once" becomes "at most three agent PRs may wait for merge
+   at once"; line 90 and D4's limit are unchanged.
+4. Companion edit in the same PR: `docs/human/engineering/engineering-rules.md:360` "self-reviews against the template
+   before asking Alex" becomes "before hand-off".
+Accepted ADRs (0008, 0009, 0017) are not edited; ADR 0019 already supersedes their merge clauses.
+Done when the four lines read as above, `npm run check` is green including the CLAUDE.md docs checks, and the PR body
+shows `grep -n "Alex" CLAUDE.md` with each remaining hit an ADR 0019 class or another legitimate mention.
 
 ---
 
@@ -3447,7 +3537,8 @@ build thread's as-built facts for P0.02–P0.08; the architecture ruling on CLAU
   `renovate/renovate:44.115.13` with `--strict`; Renovate installed on `unset` only; Dependabot security updates off,
   alerts on.
 - P0.09: five imports, Top 15 among them (test); 120-line budget; Top 15 intro wording logged as a deviation; Delivery
-  says agents never merge and never push to `main` (test `claude_md_agents_never_merge`); PR template `AI notes` line;
+  says author threads never merge and agents never push to `main` (test `claude_md_author_threads_never_merge`, as
+  renamed by P0.16); PR template `AI notes` line;
   `security@unset.sh`; ADR rows 0005–0011; the architecture-table "planned: <step id>" convention in the AB-4 test;
   the book copy is the step's last act; the notes table replaced by the plan's one-line `importance: high` rule.
 - P0.09a: retired (plan §7/§8 Phase 0: no old note carried wholesale; `.00` steps port what they need).

@@ -62,13 +62,14 @@ export const c6: Check = {
 export const c7: Check = {
   id: "C7",
   run: withPds((env, { env: stage }) => {
-    if (!equals(env, "PDS_INVITE_REQUIRED", "true")) return fail("PDS_INVITE_REQUIRED is not true");
+    if (!equals(env, "PDS_INVITE_REQUIRED", "true")) return fail("PDS_INVITE_REQUIRED does not require invites");
     if (stage === "dev" && !equals(env, "PDS_CRAWLERS", "")) return fail("PDS_CRAWLERS is not set empty in dev");
     if (!env.use("PDS_ADMIN_PASSWORD", (v) => (v ?? "").length >= 32)) {
       return fail("PDS_ADMIN_PASSWORD is shorter than 32 characters");
     }
     // The PDS sees only the edge's address, so its per-IP limit would be one bucket for everyone; unset fails too.
-    if (!equals(env, "PDS_RATE_LIMITS_ENABLED", "false")) return fail("PDS_RATE_LIMITS_ENABLED is not exactly false");
+    if (!equals(env, "PDS_RATE_LIMITS_ENABLED", "false"))
+      return fail("PDS_RATE_LIMITS_ENABLED does not turn the PDS's own limits off");
     return pass();
   }),
 };
@@ -122,10 +123,10 @@ export const c12: Check = {
   id: "C12",
   run: withPds((env) => {
     if (env.has("LOG_ENABLED") && !equals(env, "LOG_ENABLED", "false")) {
-      return fail("LOG_ENABLED is on; see docs/human/runbooks/pds-debug-logging.md");
+      return fail("LOG_ENABLED differs from the required literal; see docs/human/runbooks/pds-debug-logging.md");
     }
     if (env.has("LOG_LEVEL") && !env.use("LOG_LEVEL", (v) => LOG_LEVELS.has(v ?? ""))) {
-      return fail("LOG_LEVEL is not info, warn, error, fatal or silent");
+      return fail("LOG_LEVEL is not one of the allowed levels");
     }
     return pass();
   }),

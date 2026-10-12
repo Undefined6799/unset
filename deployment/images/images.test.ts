@@ -31,6 +31,8 @@ type Base = {
   digest: string;
   source: "upstream" | "mirror";
   stage: Stage;
+  /** True when a non-final stage of any Dockerfile builds on this base, so a build step runs it (P1.29c). */
+  buildStage: boolean;
   stripped?: string[];
 };
 type Stage = "build" | "runtime";
@@ -108,6 +110,34 @@ function finalFrom(dockerfile: string): string | undefined {
 function lockEntriesOf(image: string, lock: Lock): [string, Base][] {
   const [, ref, tag, digest] = PINNED.exec(image) ?? [];
   return Object.entries(lock).filter(([, b]) => b.ref === ref && b.tag === tag && b.digest === digest);
+}
+
+/**
+ * The lock entries, by name, that a non-final stage builds on: each stage's base followed back through stage names, as
+ * `finalFrom` does, every stage but the last (P1.29c; record 2026-10-12-p129c-p129l-build-stage-scan).
+ */
+function buildStageEntries(dockerfile: string, lock: Lock): string[] {
+  const stageBase = new Map<string, string>();
+  const bases: string[] = [];
+  for (const line of dockerfile.split("\n")) {
+    const match = FROM.exec(line.trim());
+    if (match === null) continue;
+    const [, image = "", stage] = match;
+    const base = stageBase.get(image) ?? image;
+    bases.push(base);
+    if (stage !== undefined) stageBase.set(stage, base);
+  }
+  return bases.slice(0, -1).flatMap((base) => lockEntriesOf(base, lock).map(([name]) => name));
+}
+
+/** Every lock entry whose `buildStage` is missing or disagrees with the Dockerfiles, in either direction. */
+function buildStageProblems(files: Record<string, string>, lock: Lock): string[] {
+  const used = new Set(Object.values(files).flatMap((text) => buildStageEntries(text, lock)));
+  return Object.entries(lock).flatMap(([name, { buildStage }]) => {
+    if (typeof buildStage !== "boolean") return [`lock entry ${name} has no buildStage`];
+    if (buildStage === used.has(name)) return [];
+    return [`lock entry ${name} says buildStage ${buildStage}, but ${buildStage ? "no" : "a"} build stage uses it`];
+  });
 }
 
 /** The runtime lock entry the final stage builds on, by name; undefined for scratch, a build base or no entry. */
@@ -371,18 +401,18 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
 /**
  * The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&`. A RUN joined by
  * anything else (`;`, `||`, `|`, a lone `&`, or a `#` comment, SEPARATOR below) could let a removal fail or vanish
- * unseen, so it is refused and none of its removals count (P1.29u).
+ * unseen, so it is refused, by the line it starts on, and none of its removals count (P1.29u, P1.29c).
  */
-function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused: boolean } {
+function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused: number[] } {
   const all = instructions(dockerfile);
   const finalFromAt = all.findLastIndex((step) => /^FROM\s/i.test(step.text));
   const removed = new Set<string>();
-  let refused = false;
-  for (const { text } of all.slice(finalFromAt + 1)) {
+  const refused: number[] = [];
+  for (const { line, text } of all.slice(finalFromAt + 1)) {
     if (!/^RUN\s/i.test(text)) continue;
     const script = text.replace(/^RUN\s+/i, "");
     if (SEPARATOR.test(script.replaceAll("&&", ""))) {
-      refused = true;
+      refused.push(line);
       continue;
     }
     for (const command of script.split("&&")) {
@@ -838,7 +868,9 @@ function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
       const { removed, refused } = finalStageRemovals(text);
       const kept = stripped.filter((path) => !removed.has(path));
       problems.push(...kept.map((path) => `${file} keeps ${path}, which lock entry ${name} declares stripped`));
-      if (refused) problems.push(`${file}: a final-stage RUN joins commands with something other than &&`);
+      for (const line of refused) {
+        problems.push(`${file}: line ${line}: a final-stage RUN joins commands with something other than &&`);
+      }
     }
   }
   return problems.sort();
@@ -917,13 +949,14 @@ describe("base images", () => {
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
+      buildStage: true,
       stripped: ["/usr/local/lib/node_modules/npm", "/usr/local/lib/node_modules/corepack"],
     });
     // The edge's bases (P1.28): Caddy's builder and runtime images, both Alpine, both by index digest.
     // The builder only builds the edge binary; the runtime image is what ships.
-    for (const [name, tag, stage] of [
-      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build"],
-      ["caddy", /^2\.11\.7-alpine$/, "runtime"],
+    for (const [name, tag, stage, buildStage] of [
+      ["caddy-builder", /^2\.11\.7-builder-alpine$/, "build", true],
+      ["caddy", /^2\.11\.7-alpine$/, "runtime", false],
     ] as const) {
       expect(lock[name], name).toStrictEqual({
         ref: "docker.io/library/caddy",
@@ -931,6 +964,7 @@ describe("base images", () => {
         digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
         source: "upstream",
         stage,
+        buildStage,
       });
     }
     // The postgres image's base (P1.29d): the official Debian trixie image; every image on it deletes gosu.
@@ -940,8 +974,32 @@ describe("base images", () => {
       digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
       source: "upstream",
       stage: "runtime",
+      buildStage: false,
       stripped: ["/usr/local/bin/gosu"],
     });
+  });
+
+  // P1.29c (record 2026-10-12-p129c-p129l-build-stage-scan): the mirror scans a base a build stage runs at the build
+  // threshold (P1.29l), so the lock says which bases those are, and this derives the answer from every Dockerfile.
+  test("lock_build_stage_matches_dockerfiles", () => {
+    const files = Object.fromEntries(dockerfiles.map((file) => [file, read(file)]));
+    expect(buildStageProblems(files, lock)).toEqual([]);
+    const postgres = lock.postgres as Base;
+    expect(buildStageProblems(files, { ...lock, node: { ...NODE, buildStage: false } })).toEqual([
+      "lock entry node says buildStage false, but a build stage uses it",
+    ]);
+    expect(buildStageProblems(files, { ...lock, postgres: { ...postgres, buildStage: true } })).toEqual([
+      "lock entry postgres says buildStage true, but no build stage uses it",
+    ]);
+    const { buildStage: _, ...unmarked } = postgres;
+    expect(buildStageProblems(files, { ...lock, postgres: unmarked as Base })).toEqual([
+      "lock entry postgres has no buildStage",
+    ]);
+    // A stage built on an earlier stage by name counts as that stage's base; the final stage's own base does not.
+    const runtime = lock.caddy as Base;
+    const caddy = `${runtime.ref}:${runtime.tag}@${runtime.digest}`;
+    expect(buildStageEntries(`FROM ${caddy} AS base\nFROM base AS build\nFROM base`, lock)).toEqual(["caddy", "caddy"]);
+    expect(buildStageEntries(`FROM ${pinnedNode} AS deps\nFROM ${caddy}`, lock)).toEqual(["node"]);
   });
 
   test("postgres_test_image_matches_lock", () => {
@@ -1019,9 +1077,14 @@ describe("base images", () => {
       expect(strippedProblems({ ok: removal }, declared), join).toEqual([
         `ok keeps ${corepack}, which lock entry node declares stripped`,
         `ok keeps ${npm}, which lock entry node declares stripped`,
-        "ok: a final-stage RUN joins commands with something other than &&",
+        "ok: line 2: a final-stage RUN joins commands with something other than &&",
       ]);
     }
+    // The message names each refused RUN by its first line, so a long Dockerfile points at it (P1.29c).
+    const later = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\nRUN rm -rf ${npm} \\\n  ${corepack}\nRUN true || true\n`;
+    expect(strippedProblems({ ok: later }, declared)).toEqual([
+      "ok: line 5: a final-stage RUN joins commands with something other than &&",
+    ]);
   });
 
   test("every_dockerfile_has_a_known_kind", () => {
@@ -1244,6 +1307,14 @@ describe("base images", () => {
       [node, "RUN rm -f /var/lib/dpkg/status"],
     ] as const) {
       expect(osPackageProblems(`${base}${run}`), run).toEqual([`line ${base.split("\n").length}: ${floor}`]);
+    }
+    // The postgres row is wired to the same listed rm (P1.29c; record 2026-10-12-p129d-post-merge-follow-ups, F1): it
+    // passes word for word in a postgres image, and the same three near misses fail there too.
+    const postgresBase = lock.postgres as Base;
+    const postgres = `FROM ${postgresBase.ref}:${postgresBase.tag}@${postgresBase.digest}\n`;
+    expect(osPackageProblems(`${postgres}RUN rm -f ${scripts}`)).toEqual([]);
+    for (const run of [`RUN rm -f ${scripts} /x`, `RUN rm -rf ${scripts}`, "RUN rm -f /var/lib/dpkg/status"]) {
+      expect(osPackageProblems(`${postgres}${run}`), run).toEqual([`line 2: ${floor}`]);
     }
     // The same two with their glob words off the list as well (P1.29g, item 6): quoted, and in an edge image.
     const quoted = scripts.replace("*.preinst", "'*.preinst'");

@@ -50,7 +50,7 @@ action, verified by `pds-admin`.
   "throws" in this file means a bug path only.
 - **Shared blocks** (only the security mechanisms that must exist once, README rule 9): `canonicalize` and
   `loadRoster` (`shared/admin-envelope`, P3.16), `checkAttestation` (P3.18a), `mediaUrl` (P3.09),
-  `profileHref` (P3.12; `canonicalActorPath` is its internal helper), `app.end_sessions_for_did` (P2.04; grants P3.06), `confirmRepoStatus` and `reconcile`
+  `profileHref` (P3.12; `canonicalActorPath` is its internal helper), `app.end_sessions_for_did` (P2.04s; grants P3.06), `confirmRepoStatus` and `reconcile`
   (P3.06), `core.erase_did` (P3.07). Everything else stays local until it repeats.
 
 **Reuse verdicts** in every step are **provisional — for reuse review** (README "Salvage rule"); prototype paths
@@ -102,7 +102,8 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P2.01 | `resolveDid(did, {noCache?}) → {doc, pdsEndpoint, atprotoKey} \| null` through `net-guard` |
 | P2.02 | `verifyHandle(did, {fresh?}) → {handle: string \| null, status: "verified" \| "invalid" \| "unresolved", expiresAt}` |
 | P2.03 | session table `app.session` |
-| P2.04 | sealed OAuth token store `app.oauth_session`; `destroyAllForDid` (calls `app.end_sessions_for_did`, created by P2.04's migration) |
+| P2.04 | sealed OAuth token store `app.oauth_session` |
+| P2.04s | `app.end_sessions_for_did` (its migration); `destroyAllForDid`, which calls it |
 | P2.06 | callback creates the session in one transaction (this phase adds one insert there, P3.02) |
 | P2.09 | minimal `pds-admin` (`.mjs`, zero npm dependencies): `POST /v1/invite.issue {payload, kid, sig}`, keys in `/run/secrets/pds_admin_keys.json`, log line `{seq, ts, verb, kid, actorMac, targetMac, jti, outcome, codeMac?, prev, hash}`, `jti.log` lines `jti exp` |
 | P2.18 | object-storage client (draft prefixes) |
@@ -902,7 +903,7 @@ Not in this step: account state (P3.06); handle rules (P3.08); likes (P4.19); la
 Diagram: see "An event from the relay to the index".
 
 ### P3.06g — Grants for the account-state machine (split from P3.06, SE-6)
-Tags: [SEC]            Depends on: P3.03, P2.04            Plan: §5.2 roles; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
+Tags: [SEC]            Depends on: P3.03, P2.04s           Plan: §5.2 roles; §9 trusted base (rule SE-6, as ruled 2026-10-04; plan `f9b48f8`)
 Where: one migration `NNNN_account_state_grants.sql` (grant statements only), `grant-matrix.json` rows,
   `tests/integration/postgres/grants.test.ts` (matrix rows)
 Size: ~15 lines SQL, ~20 test lines
@@ -910,7 +911,8 @@ Size: ~15 lines SQL, ~20 test lines
 Why a separate step (letter suffix): both grants are on objects that already exist, which is trusted base; P0.09c fails
 a PR that mixes them with P3.06's code. The definers P3.06 creates, and their grants, ride with P3.06.
 Goal: the roles P3.06 runs as can reach the existing objects it needs, and nothing more.
-Inputs: `app.end_sessions_for_did` (created by P2.04's migration, EXECUTE to `web` since Phase 2); schema `mod` (P3.03).
+Inputs: `app.end_sessions_for_did` (created by P2.04s's migration, EXECUTE to `web` since Phase 2); schema `mod`
+  (P3.03).
 Outputs: `GRANT EXECUTE ON FUNCTION app.end_sessions_for_did(types.did, text) TO indexer, admin`; `GRANT USAGE ON
   SCHEMA mod TO admin`; the matching matrix rows. Nothing else.
 Algorithm: the two statements, in one migration with only `trusted` statements (P0.09c).
@@ -940,11 +942,11 @@ Outputs (contract):
     a change to inactive applies at once; a change to active, or `deleted`, is only a trigger, confirmed against
     the account's PDS. Identity events never change state through their handle part.
   - Definer `app.end_sessions_for_did(did types.did, why text) RETURNS int` (owned by `migrator`, `SECURITY
-    DEFINER`, `SET search_path = pg_catalog, app`), **created by P2.04's migration** (editor pass, phase-2 editor):
+    DEFINER`, `SET search_path = pg_catalog, app`), **created by P2.04s's migration** (editor pass, phase-2 editor):
     deletes `app.session` rows for the DID; deletes the `app.oauth_session` row **unless** `why = 'deactivated'`
     (allow-list, F17); `why` CHECKed against the closed enum {`deactivated`, `takendown`, `suspended`, `deleted`,
     `unknown`, `mod_suspended`, `mod_end_sessions`, `user_signout_all`, `underage`, `auth_dead`}. `web` already has
-    EXECUTE from Phase 2 (P2.04's `destroyAllForDid` calls it; no duplicated SQL); P3.06g (a grant on an existing
+    EXECUTE from Phase 2 (P2.04s's `destroyAllForDid` calls it; no duplicated SQL); P3.06g (a grant on an existing
     function, SE-6) grants
     EXECUTE to `indexer` and `admin`.
   - Schema `mod` (P3.03 created it with its one table, `mod.account_state`; this step adds functions and views),
@@ -2954,7 +2956,7 @@ legal-hold key question is `P4a-A1`.
   `types.did` scan, so P1.13's registry needs a way to list them (this phase lists them by hand in `erase_did` and
   seeds them in the coverage test); strategy names here follow P1.13 (`delete_row`, `set_null`, `retain`).
 - **P1.30 / P5.02a**: the moderation-mailer preflight check (PI-6).
-- **P2.04**: `destroyAllForDid` calls `app.end_sessions_for_did` (no second copy of the SQL).
+- **P2.04s**: `destroyAllForDid` calls `app.end_sessions_for_did` (no second copy of the SQL).
 - **P2.09**: its route, key file and log format are migrated by P3.16 (expand, then contract); the P2.09 writer
   should know its `/run/secrets/pds_admin_keys.json` is retired in favour of the roster's `service_keys`.
 - **Phase 4 part 1**: "the `P3.16a` verbs" (lines 41, 703, 1326 and the P4.07 deps) should read **P3.16c**; P4.07's
@@ -3034,7 +3036,7 @@ legal-hold key question is `P4a-A1`.
   internal-host exception, and the `roles.json` roster; `PDS_INTERNAL_URL` is gone from `media` and the indexer
   (P3.06, P3.08, P3.09; `pds-admin` keeps it, it is the one allowed bare caller).
 - **Alex labels (resolution 9):** `A1`…`B3` renamed `P3-A1`…`P3-B3` throughout.
-- **P3.06 (phase-2 editor):** `app.end_sessions_for_did` is created by P2.04's migration; P3.06 only grants EXECUTE
+- **P3.06 (phase-2 editor):** `app.end_sessions_for_did` is created by P2.04s's migration; P3.06 only grants EXECUTE
   to `indexer` and `admin`; its `why` enum gains `underage` and `auth_dead`. The P2.09 interface row uses the log
   fields `actorMac`, `targetMac`, `codeMac`. The older note "P2.03 calls `app.end_sessions_for_did`" is superseded.
 - **Rejected, P3.13 (phase-1 part 1 notes):** adding `.0x40.me` as a suffix entry to `web`'s `HTTP_ALLOWED_HOSTS`. The

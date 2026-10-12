@@ -27,4 +27,9 @@ container and no second way (ruling 2026-10-06, P1.11g).
 lint, guards and the unit tests you touched, say in the PR that the Postgres tests ran only in CI, and let CI's
 `check` job prove them. Any second mechanism stops and asks.
 
+**Hung daemon.** Every docker call the helper makes is killed at 60 s (`tests/support/docker.ts`, P1.27k), so a
+stuck daemon fails the test with a message naming the call instead of blocking until `scripts/test/run.ts` kills
+the whole run at 600 s. Hooks that end in `stopAllPostgres` take `STOP_ALL_MS` (P1.27g), and that hook fails
+naming the container when its `docker rm` is killed, so a leaked container is reported, not hidden (P1.27i).
+
 **Repair.** Nothing to repair; it is a property of the environment.

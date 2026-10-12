@@ -1,12 +1,22 @@
 // P1.30: the strict Compose subset the preflight reads (architecture record 2026-10-07-p130-preflight-location-and-yaml):
 // anything Compose could read differently from us is refused rather than guessed.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
-import { networksOf, ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
+import { docker } from "../../tests/support/docker.ts";
+import { fail, pass } from "./checks/types.ts";
+import {
+  interpolatedNames,
+  networksOf,
+  ParseError,
+  parseCompose,
+  parseEnvFile,
+  refuseAliasesByOption,
+} from "./compose-parse.ts";
+import { loadCompose, preflight } from "./index.ts";
 
 describe("compose subset", () => {
   const refused = (yaml: string) => expect(() => parseCompose(yaml, "c.yaml")).toThrow();
@@ -48,7 +58,7 @@ describe("compose subset", () => {
       refused(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`);
     }
     // P1.30w (record 2026-10-12-c18-follow-ups, ruling N7): through the keys the parser reads, the $ refusal itself
-    // answers; `user` and `privileged` above now stop at the key allowlist first.
+    // answers; `privileged` above still stops at the key allowlist first (`user` is read from P1.30x).
     const dollar = (field: string) => () =>
       parseCompose(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`, "c.yaml");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
@@ -58,11 +68,11 @@ describe("compose subset", () => {
       ["env_file: ${F}", "env_file"],
       ['volumes: ["${V}:/data"]', "volumes"],
       ["network_mode: ${N}", "network_mode"],
+      ["user: ${U}", "user"],
     ];
     for (const [field, key] of throughAllowedKeys) {
       expect(dollar(field), field).toThrow(new ParseError(`c.yaml:4: $ in ${key}`));
     }
-    expect(dollar("user: ${U}")).toThrow(new ParseError("c.yaml:4: service key user"));
     expect(dollar("privileged: ${P}")).toThrow(new ParseError("c.yaml:4: service key privileged"));
     refused(`${base}    environment:\n      \${K}: v\n`);
     refused(`${base}    environment:\n      A: pre\${B}\n`);
@@ -85,7 +95,8 @@ describe("compose subset", () => {
   // short `SOURCE:TARGET[:ro|rw]` with a path source starting /, ./ or ../ or a plain volume name, or long syntax with
   // only type (bind, volume, tmpfs), source, target and read_only. Compose-spec 05-services.md "volumes".
   test("volumes_read_in_the_subset", () => {
-    const mounts = (lines: string) => parseCompose(`${base}    volumes:\n${lines}`, "c.yaml").services[0]?.mounts;
+    const mounts = (lines: string) =>
+      parseCompose(`${base}    volumes:\n${lines}volumes:\n  data: {}\n`, "c.yaml").services[0]?.mounts;
     expect(mounts("      - ./sites:/etc/caddy/sites/enabled:ro\n      - data:/data\n      - /cache\n")).toEqual([
       { type: "bind", source: "./sites", target: "/etc/caddy/sites/enabled", readOnly: true },
       { type: "volume", source: "data", target: "/data", readOnly: false },
@@ -119,15 +130,7 @@ describe("compose subset", () => {
   test("service_keys_outside_the_allowlist_are_refused", () => {
     const caddyfile = "/etc/caddy/Caddyfile";
     for (const [key, yaml] of [
-      [
-        "configs",
-        `    configs:\n      - source: edge\n        target: ${caddyfile}\nconfigs:\n  edge:\n    file: ./x\n`,
-      ],
-      [
-        "secrets",
-        `    secrets:\n      - source: edge\n        target: ${caddyfile}\nsecrets:\n  edge:\n    file: ./x\n`,
-      ],
-      ["tmpfs", "    tmpfs: [/etc/caddy/snippets]\n"],
+      ["configs", `    configs:\n      - source: edge\n        target: ${caddyfile}\n`],
       ["entrypoint", '    entrypoint: ["caddy", "run", "--config", "/tmp/never-printed"]\n'],
       ["command", "    command: caddy run --config /tmp/never-printed\n"],
     ]) {
@@ -136,7 +139,334 @@ describe("compose subset", () => {
       );
     }
   });
+  // P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 2 in 2026-10-12-batch33-codex-rulings):
+  // each hardening and limit key is read in one shape, and a value the ruling does not allow is refused by key name.
+  test("hardening_keys_read_in_the_subset", () => {
+    const hardened = parseCompose(
+      `${base}    read_only: true\n    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n` +
+        `    security_opt: [no-new-privileges:true]\n    user: "65532:65532"\n    mem_limit: 512m\n` +
+        `    cpus: 0.5\n    pids_limit: 128\n    restart: unless-stopped\n`,
+      "c.yaml",
+    );
+    expect(hardened.services[0]?.hardening).toEqual({
+      readOnly: true,
+      capDrop: ["ALL"],
+      capAdd: ["NET_BIND_SERVICE"],
+      securityOpt: ["no-new-privileges:true"],
+      user: "65532:65532",
+      memLimit: "512m",
+      cpus: 0.5,
+      pidsLimit: 128,
+      restart: "unless-stopped",
+    });
+    expect(
+      parseCompose(`${base}    user: "999"\n    cpus: "1.5"\n    mem_limit: 1g\n`, "c.yaml").services[0]?.hardening,
+    ).toMatchObject({ user: "999", cpus: 1.5, memLimit: "1g" });
+    // Codex 4249566407: `2.0` is a positive number as written, not an ambiguous one (phase-4.md plans `cpus: 2.0`).
+    expect(parseCompose(`${base}    cpus: 2.0\n`, "c.yaml").services[0]?.hardening.cpus).toBe(2);
+    // P1.27n (verifier N3 on #675): the 0.01 floor is inclusive, and a fraction under 0.5 is a limit too.
+    expect(parseCompose(`${base}    cpus: 0.01\n`, "c.yaml").services[0]?.hardening.cpus).toBe(0.01);
+    expect(parseCompose(`${base}    cpus: 0.25\n`, "c.yaml").services[0]?.hardening.cpus).toBe(0.25);
+    expect(parseCompose(base, "c.yaml").services[0]?.hardening).toEqual({
+      readOnly: null,
+      capDrop: [],
+      capAdd: [],
+      securityOpt: [],
+      user: null,
+      memLimit: null,
+      cpus: null,
+      pidsLimit: null,
+      restart: null,
+    });
+  });
+  test("hardening_values_outside_the_ruling_are_refused", () => {
+    const drop = "    cap_drop: [ALL]\n";
+    for (const [yaml, why] of [
+      ["    cap_drop: [NET_RAW]\n", "cap_drop is not [ALL]"],
+      ["    cap_drop: [ALL, NET_RAW]\n", "cap_drop is not [ALL]"],
+      ["    cap_drop: ALL\n", "cap_drop is not a list"],
+      [`    cap_add: [SYS_ADMIN]\n${drop}`, "cap_add is not [NET_BIND_SERVICE]"],
+      ["    cap_add: [NET_BIND_SERVICE]\n", "cap_add without cap_drop [ALL]"],
+      ["    security_opt: [seccomp:unconfined]\n", "security_opt is not [no-new-privileges:true]"],
+      [
+        '    security_opt: ["no-new-privileges:true", "label:disable"]\n',
+        "security_opt is not [no-new-privileges:true]",
+      ],
+      ["    user: root\n", "user is not a non-zero UID[:GID] string"],
+      ['    user: "0:0"\n', "user is not a non-zero UID[:GID] string"],
+      ['    user: "1000:0"\n', "user is not a non-zero UID[:GID] string"],
+      ["    user: 0\n", "user is not a non-zero UID[:GID] string"],
+      ["    user: 65532\n", "user is not a non-zero UID[:GID] string"],
+      ["    pids_limit: -1\n", "pids_limit is not an integer from 1 to 4096"],
+      ["    pids_limit: 0\n", "pids_limit is not an integer from 1 to 4096"],
+      ["    pids_limit: 4097\n", "pids_limit is not an integer from 1 to 4096"],
+      ['    pids_limit: "128"\n', "pids_limit is not an integer from 1 to 4096"],
+      ['    read_only: "true"\n', "read_only is not true or false"],
+      ["    read_only: True\n", "read_only is ambiguous"],
+      ["    mem_limit: 536870912\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 0m\n", "mem_limit is not a size in m or g"],
+      ["    cpus: 0\n", "cpus is not a positive number"],
+      ["    cpus: -1\n", "cpus is not a positive number"],
+      // Amendment 6 of 2026-10-12-p204s-p130x-p130y-booked: decimal forms only, so no exponent and no Infinity.
+      ["    cpus: 1e1\n", "cpus is not a positive number"],
+      ['    cpus: "1e1"\n', "cpus is not a positive number"],
+      [`    cpus: ${"1".padEnd(311, "0")}\n`, "cpus is not a positive number"],
+      [`    cpus: "${"1".padEnd(311, "0")}"\n`, "cpus is not a positive number"],
+      [`    cpus: ${"1".padEnd(311, "0")}.5\n`, "cpus is not a positive number"],
+      // Compose sends int64(cpus * 1e9) NanoCPUs, cpus a float32 (docker/compose v2.38.2 and v5.6.0
+      // pkg/compose/create.go:621 and :758; compose-go v2.7.1 and v2.16.1 types/types.go CPUS float32), and the engine
+      // reads 0 as no limit (moby v28.5.1 daemon/daemon_unix.go:505), so a tiny cpus is no limit at all; 0.01 is the
+      // smallest the engine's own error message names.
+      ["    cpus: 0.009\n", "cpus is below 0.01"],
+      ["    cpus: 0.0000000001\n", "cpus is below 0.01"],
+      ['    cpus: "0.0000000001"\n', "cpus is below 0.01"],
+      ["    cap_drop: []\n", "cap_drop is not [ALL]"],
+      ["    mem_limit: 512k\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 512M\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1t\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1b\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1gb\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 1G\n", "mem_limit is not a size in m or g"],
+      ["    restart: sometimes\n", "restart is not no, on-failure, unless-stopped or always"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    expect(() => parseCompose(`${base}    user: \${UID}\n`, "c.yaml")).toThrow(new ParseError("c.yaml:5: $ in user"));
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    for (const [yaml, key] of [
+      ['    read_only: "${RO}"\n', "read_only"],
+      ['    cap_drop: ["${C}"]\n', "cap_drop"],
+      ['    cap_add: ["${C}"]\n', "cap_add"],
+      ['    security_opt: ["${S}"]\n', "security_opt"],
+      ["    mem_limit: ${M}\n", "mem_limit"],
+      ["    cpus: ${C}\n", "cpus"],
+      ["    pids_limit: ${P}\n", "pids_limit"],
+      ["    restart: ${R}\n", "restart"],
+    ] as [string, string][]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: $ in ${key}`));
+    }
+    for (const limit of [1, 4096]) {
+      expect(parseCompose(`${base}    pids_limit: ${limit}\n`, "c.yaml").services[0]?.hardening.pidsLimit).toBe(limit);
+    }
+  });
+  // P1.30y (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 4 in 2026-10-12-batch33-codex-rulings;
+  // step book record 2026-10-12-late-codex-640-644): the B1 risk keys, each in one shape. `build` is kept as written
+  // (C26 resolves and judges it), a tmpfs target is /tmp or /var/run/postgresql (C27 keeps the second to postgres),
+  // and a service secret is a declared name whose target Compose fixes at /run/secrets/<name>.
+  const b1 = (service: string, secrets = "secrets:\n  db_password:\n    file: ./x\n") =>
+    `${base}${service}  pds:\n    image: y\n${secrets}`;
+  test("build_tmpfs_depends_on_and_secrets_read_in_the_subset", () => {
+    const [edge, pds] = parseCompose(
+      b1(
+        "    build:\n      context: ..\n      dockerfile: deployment/edge/Dockerfile\n" +
+          '    tmpfs: [/tmp, "/var/run/postgresql:uid=999,gid=999,mode=0755,size=16m,noexec,nosuid,nodev"]\n' +
+          "    depends_on:\n      pds:\n        condition: service_healthy\n    secrets: [db_password]\n",
+      ),
+      "c.yaml",
+    ).services;
+    expect(edge).toMatchObject({
+      build: { context: "..", dockerfile: "deployment/edge/Dockerfile" },
+      tmpfs: [
+        { target: "/tmp", options: null },
+        { target: "/var/run/postgresql", options: "uid=999,gid=999,mode=0755,size=16m,noexec,nosuid,nodev" },
+      ],
+      dependsOn: [{ service: "pds", condition: "service_healthy" }],
+      secrets: ["db_password"],
+    });
+    expect(pds).toMatchObject({ build: null, tmpfs: [], dependsOn: [], secrets: [] });
+    const short = parseCompose(b1("    depends_on: [pds]\n"), "c.yaml").services[0];
+    expect(short?.dependsOn).toEqual([{ service: "pds", condition: "service_started" }]);
+    expect(parseCompose(b1(""), "c.yaml").secretFiles).toEqual(["./x"]);
+  });
+  test("b1_values_outside_the_ruling_are_refused", () => {
+    for (const [yaml, why] of [
+      ["    build: .\n", "build is not {context, dockerfile}"],
+      [
+        "    build: {context: .., dockerfile: deployment/images/node-app.Dockerfile, target: deps}\n",
+        "build key target",
+      ],
+      ["    build: {context: ..}\n", "build is not {context, dockerfile}"],
+      // Every other build key changes what is built, so each is refused by name (compose-spec build.md).
+      ...[
+        "additional_contexts",
+        "args",
+        "cache_from",
+        "cache_to",
+        "dockerfile_inline",
+        "entitlements",
+        "extra_hosts",
+        "isolation",
+        "labels",
+        "network",
+        "no_cache",
+        "platforms",
+        "privileged",
+        "pull",
+        "secrets",
+        "shm_size",
+        "ssh",
+        "tags",
+        "ulimits",
+      ].map((key) => [
+        `    build: {context: .., dockerfile: deployment/images/node-app.Dockerfile, ${key}: x}\n`,
+        `build key ${key}`,
+      ]),
+      // compose-go passes URL and git contexts through unresolved, so only a local path is read (#652 verification).
+      [
+        "    build: {context: https://github.com/x/y.git, dockerfile: Dockerfile}\n",
+        "build context is not a local path",
+      ],
+      ['    build: {context: "git@github.com:x/y.git", dockerfile: Dockerfile}\n', "build context is not a local path"],
+      ["    build: {context: github.com/x/y, dockerfile: Dockerfile}\n", "build context is not a local path"],
+      ['    build: {context: "..#main", dockerfile: Dockerfile}\n', "build context is not a local path"],
+      // Architecture's compose-inputs ruling (step book record 2026-10-12-p130a-p130l-compose-inputs-booked): no `~`.
+      ["    build: {context: ~/unset, dockerfile: Dockerfile}\n", "build context is not a local path"],
+      ["    build: {context: .., dockerfile: ~/x.Dockerfile}\n", "build dockerfile starts with ~"],
+      ["    tmpfs: [/etc/caddy/snippets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
+      ["    tmpfs: [/run/secrets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
+      ["    tmpfs: /tmp\n", "tmpfs is not a list"],
+      ['    tmpfs: ["/tmp:exec"]\n', "tmpfs option is refused"],
+      ['    tmpfs: ["/tmp:size=1g,suid"]\n', "tmpfs option is refused"],
+      ["    volumes: [{type: tmpfs, target: /etc/caddy}]\n", "volume tmpfs target is not /tmp or /var/run/postgresql"],
+      ["    depends_on: {ghost: {condition: service_healthy}}\n", "depends_on names a service not in this file"],
+      ["    depends_on: [ghost]\n", "depends_on names a service not in this file"],
+      ["    depends_on: {pds: {condition: service_healthy, required: false}}\n", "depends_on key required"],
+      ["    depends_on: {pds: {condition: service_healthy, restart: true}}\n", "depends_on key restart"],
+      [
+        "    depends_on: {pds: {condition: sometimes}}\n",
+        "depends_on condition is not service_started, service_healthy or service_completed_successfully",
+      ],
+      ["    depends_on: pds\n", "depends_on is not a list or mapping"],
+      ["    secrets: [{source: db_password, target: /etc/caddy/Caddyfile}]\n", "secrets long form is refused"],
+      ["    secrets: [../x]\n", "secret name is refused"],
+      ["    secrets: [other]\n", "secret is not declared"],
+      ["    secrets: db_password\n", "secrets is not a list"],
+    ] as [string, string][]) {
+      expect(() => parseCompose(b1(yaml), "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    for (const [yaml, key] of [
+      ['    build: {context: .., dockerfile: "${D}"}\n', "build"],
+      ['    build: {context: "${C}", dockerfile: Dockerfile}\n', "build"],
+      ['    tmpfs: ["${T}"]\n', "tmpfs"],
+      ['    depends_on: ["${S}"]\n', "depends_on"],
+      ['    secrets: ["${S}"]\n', "secrets"],
+    ] as [string, string][]) {
+      expect(() => parseCompose(b1(yaml), "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: $ in ${key}`));
+    }
+  });
+  test("top_level_secret_is_exactly_a_file", () => {
+    const top = (secret: string) => () => parseCompose(`${base}secrets:\n  db_password: ${secret}\n`, "c.yaml");
+    for (const secret of ["{}", "{file: 3}", "never-printed", "{file: [x]}"]) {
+      expect(top(secret), secret).toThrow(new ParseError("c.yaml:6: secret db_password is not exactly {file}"));
+    }
+    for (const [secret, key] of [
+      ["{file: x, external: true}", "external"],
+      ["{environment: X}", "environment"],
+      ["{content: y}", "content"],
+      ["{file: x, name: other}", "name"],
+    ] as [string, string][]) {
+      expect(top(secret), secret).toThrow(new ParseError(`c.yaml:6: secret db_password: ${key} is refused`));
+    }
+  });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
+  // P1.30k (step book record 2026-10-12-p130k-compose-top-level-allowlist): the top level holds only the keys the
+  // parser reads, a named volume is declared by name alone, and a long-form port holds only what port() reads.
+  test("top_level_keys_outside_the_allowlist_are_refused", () => {
+    for (const [key, yaml] of [
+      ["configs", "configs:\n  edge:\n    file: ./never-printed\n"],
+      ["x-shared", "x-shared:\n  a: 1\n"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:5: top-level key ${key}`),
+      );
+    }
+  });
+  test("include_keeps_its_own_refusal", () => {
+    expect(() => parseCompose(`${base}include: [never-printed.yaml]\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:5: include"),
+    );
+  });
+  test("named_volume_settings_are_refused", () => {
+    const bind =
+      "volumes:\n  data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
+    expect(() => parseCompose(`${base}${bind}`, "c.yaml")).toThrow(new ParseError("c.yaml:7: volume data: driver"));
+    // Each refused key fails on its own: a device mapping with no driver, and an external volume (P1.30j).
+    const device = "volumes:\n  data:\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
+    expect(() => parseCompose(`${base}${device}`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: volume data: driver_opts"),
+    );
+    expect(() => parseCompose(`${base}volumes:\n  data:\n    external: true\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: volume data: external"),
+    );
+    for (const key of ["driver_opts", "external", "name", "labels"]) {
+      expect(() => parseCompose(`${base}volumes:\n  data:\n    ${key}: x\n`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:7: volume data: ${key}`),
+      );
+    }
+    expect(() => parseCompose(`${base}volumes:\n  data: never-printed\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:6: volume data is not a mapping"),
+    );
+    expect(() => parseCompose(`${base}volumes:\n  data:\n  logs: {}\n`, "c.yaml")).not.toThrow();
+    expect(() => parseCompose(`${base}volumes:\n  ../x: {}\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:6: volume name ../x is refused"),
+    );
+  });
+  test("undeclared_named_volume_is_refused", () => {
+    for (const mount of ["data:/data", "{type: volume, source: data, target: /data}"]) {
+      expect(() => parseCompose(`${base}    volumes: [${mount}]\n`, "c.yaml"), mount).toThrow(
+        new ParseError("c.yaml:5: volume data is not declared"),
+      );
+      expect(() => parseCompose(`${base}    volumes: [${mount}]\nvolumes:\n  data: {}\n`, "c.yaml")).not.toThrow();
+    }
+    // An anonymous volume and a bind need no declaration.
+    expect(() => parseCompose(`${base}    volumes: [/cache, ./x:/x]\n`, "c.yaml")).not.toThrow();
+  });
+  test("long_form_port_keys_outside_the_set_are_refused", () => {
+    for (const key of ["protocol", "mode", "name", "app_protocol"]) {
+      expect(() => parseCompose(`${base}    ports:\n      - target: 80\n        ${key}: x\n`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:7: port key ${key}`),
+      );
+    }
+  });
+  // P1.30a, ruling F2: Compose expands a leading `~` from $HOME (compose-go paths/home.go) and interpolates any `$`, so a
+  // path the preflight would resolve one way and Compose another is refused in every path field, naming the field.
+  test("path_fields_refuse_home_and_dollar", () => {
+    const at = (yaml: string) => () => parseCompose(yaml, "c.yaml");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    for (const path of ["~/e.env", "~", "./${D}/e.env"]) {
+      const why = path.includes("$") ? "$ in env_file" : "env_file: a leading ~ or a $ is refused";
+      expect(at(`${base}    env_file: ["${path}"]\n`), path).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    for (const path of ["~/s", "$HOME/s", "./${D}/s"]) {
+      expect(at(`${base}secrets:\n  s:\n    file: "${path}"\n`), path).toThrow(
+        new ParseError("c.yaml:7: secret file: a leading ~ or a $ is refused"),
+      );
+    }
+    for (const path of ["~/d", "~"]) {
+      expect(
+        at(`${base}    volumes:\n      - type: bind\n        source: "${path}"\n        target: /d\n`),
+        path,
+      ).toThrow(new ParseError("c.yaml:7: volume source: a leading ~ or a $ is refused"));
+      expect(at(`${base}    volumes: ["${path}:/d"]\n`), path).toThrow(
+        new ParseError("c.yaml:5: volume source: a leading ~ or a $ is refused"),
+      );
+    }
+    // A `$` in a bind source, long or short, is already refused with the rest of `volumes` (P1.30w).
+    expect(at(`${base}    volumes:\n      - type: bind\n        source: $D\n        target: /d\n`)).toThrow(
+      new ParseError("c.yaml:7: $ in volumes"),
+    );
+    // A `~` that does not lead is an ordinary path character, as in Compose.
+    expect(at(`${base}    env_file: [./a~b.env]\n    volumes: ["./a~b:/d"]\n`)).not.toThrow();
+  });
+  test("interpolated_names_are_listed", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    const yaml = `${base}    environment:\n      A: \${A}\n      B: $$B\n  \${K}:\n    healthcheck: [$C, "\${D:-$E}"]\n`;
+    expect(interpolatedNames(yaml, "c.yaml").sort()).toEqual(["A", "C", "D", "E", "K"]);
+    expect(interpolatedNames(base, "c.yaml")).toEqual([]);
+  });
 });
 
 describe("env file subset", () => {
@@ -156,11 +486,21 @@ describe("env file subset", () => {
 const digest = `sha256:${"a".repeat(64)}`;
 // Every field the parser reads, so the comparison covers its whole view: a whole-reference and a `$$` value, env
 // files and file secrets (the files exist, as Compose requires), and networks in both service forms beside a service
-// on the implicit default network (P1.30t).
+// on the implicit default network (P1.30t), every hardening and limit key in each scalar form it accepts (P1.30x), and
+// build, tmpfs, both depends_on forms and a short-form service secret (P1.30y).
 const STACK = `name: unset-prod
 services:
   edge:
     image: ghcr.io/undefined6799/edge@${digest}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    user: "65532:65532"
+    mem_limit: 256m
+    cpus: 2.0
+    pids_limit: 128
+    restart: unless-stopped
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     networks:
       front:
@@ -183,8 +523,22 @@ services:
         published: "3000"
         host_ip: 127.0.0.1
     networks: [inner]
+    depends_on: [edge]
+    secrets: [pds_admin]
   web:
     image: ghcr.io/undefined6799/web@${digest}
+    build:
+      context: ./edge
+      dockerfile: Dockerfile
+    tmpfs: ["/tmp:size=16m,noexec,nosuid,nodev"]
+    depends_on:
+      edge:
+        condition: service_healthy
+    read_only: false
+    user: "65532"
+    mem_limit: 1g
+    cpus: "1.5"
+    restart: "no"
 networks:
   front: {}
   inner:
@@ -197,15 +551,26 @@ secrets:
     file: ./pds-admin.secret
 `;
 
+// `docker compose config` reads files and never the daemon, so a call takes well under a second; it is killed at
+// 10 s, so a hung CLI fails the test naming the call instead of blocking the event loop until scripts/test/run.ts
+// kills the whole run at 600 s (P1.27k, P1.27g). The tests that call it give 60 s, room for several compose files.
+const COMPOSE_CALL_MS = 10_000;
+const COMPOSE_TEST_MS = 60_000;
+
 /** Whether `docker compose` runs here; CI must have it (the architecture record's anti-drift test runs there). */
-const hasCompose = (() => {
-  try {
-    execFileSync("docker", ["compose", "version"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-})();
+const hasCompose = docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
+
+/** `docker compose version --short`, recorded by each agreement test (ruling F4: CI's Compose is accepted, not pinned). */
+const composeVersion = (): string =>
+  docker(["compose", "version", "--short"], { timeoutMs: COMPOSE_CALL_MS }).out.trim();
+
+/** The only variables the wrapper passes to Compose (ruling F3.3), from this process where set. */
+function allowlisted(): Record<string, string> {
+  const names = ["PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
+  return Object.fromEntries(
+    names.flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]]])),
+  );
+}
 
 const ROOT = join(import.meta.dirname, "..", "..");
 /** Every compose file in the repository (P1.29 adds compose.dev.yaml, P5.03 the production one). */
@@ -227,6 +592,19 @@ type Theirs = {
       networks?: Record<string, unknown>;
       network_mode?: string;
       volumes?: { type: string; source?: string; target: string; read_only?: boolean }[];
+      read_only?: boolean;
+      cap_drop?: string[];
+      cap_add?: string[];
+      security_opt?: string[];
+      user?: string;
+      mem_limit?: string;
+      cpus?: number | string;
+      pids_limit?: number;
+      restart?: string;
+      build?: { context: string; dockerfile: string };
+      tmpfs?: string[];
+      depends_on?: Record<string, { condition: string; required: boolean }>;
+      secrets?: { source: string; target: string }[];
     }
   >;
   networks?: Record<string, { internal?: boolean }>;
@@ -235,10 +613,16 @@ type Theirs = {
 
 /** Compose's reading of `file` (never the preflight's: only this test runs Compose), with nothing interpolated. */
 function composeConfig(file: string): Theirs {
-  const json = execFileSync("docker", ["compose", "-f", file, "config", "--format", "json", "--no-interpolate"], {
-    encoding: "utf8",
+  return composeJson(["-f", file]);
+}
+
+/** `docker compose <files> config` as JSON, nothing interpolated; a failure throws Compose's own message. */
+function composeJson(files: readonly string[]): Theirs {
+  const ran = docker(["compose", ...files, "config", "--format", "json", "--no-interpolate"], {
+    timeoutMs: COMPOSE_CALL_MS,
   });
-  return JSON.parse(json) as Theirs;
+  if (ran.code !== 0) throw new Error(`docker compose config failed: ${ran.err.slice(-2000)}`);
+  return JSON.parse(ran.out) as Theirs;
 }
 
 /** The parser's whole view of `file`, in Compose's terms: paths resolved beside the file, values as written. */
@@ -261,6 +645,19 @@ function oursAsCompose(file: string) {
           ports: service.ports,
           networks: [...service.networks].sort(),
           networkMode: service.networkMode,
+          hardening: service.hardening,
+          // One file here, so its directory is the project directory Compose resolves a context from.
+          build:
+            service.build === null
+              ? null
+              : { ...service.build, context: resolve(dirname(file), service.build.context) },
+          tmpfs: service.tmpfs.map((entry) =>
+            entry.options === null ? entry.target : `${entry.target}:${entry.options}`,
+          ),
+          dependsOn: Object.fromEntries(
+            service.dependsOn.map((d) => [d.service, { condition: d.condition, required: true }]),
+          ),
+          secrets: service.secrets.map((name) => ({ source: name, target: `/run/secrets/${name}` })),
           mounts: service.mounts.map((m) => ({
             ...m,
             source: m.type === "bind" && m.source !== null ? resolve(dirname(file), m.source) : m.source,
@@ -290,6 +687,21 @@ function theirsAsOurs(theirs: Theirs) {
           })),
           networks: Object.keys(service.networks ?? {}).sort(),
           networkMode: service.network_mode ?? null,
+          hardening: {
+            readOnly: service.read_only ?? null,
+            capDrop: service.cap_drop ?? [],
+            capAdd: service.cap_add ?? [],
+            securityOpt: service.security_opt ?? [],
+            user: service.user ?? null,
+            memLimit: service.mem_limit ?? null,
+            cpus: service.cpus === undefined ? null : Number(service.cpus),
+            pidsLimit: service.pids_limit ?? null,
+            restart: service.restart ?? null,
+          },
+          build: service.build ?? null,
+          tmpfs: service.tmpfs ?? [],
+          dependsOn: service.depends_on ?? {},
+          secrets: service.secrets ?? [],
           mounts: (service.volumes ?? []).map((v) => ({
             type: v.type,
             source: v.source ?? null,
@@ -308,6 +720,42 @@ function theirsAsOurs(theirs: Theirs) {
   };
 }
 
+// P1.30z (architecture record 2026-10-12-preflight-project-directory): with several files, every relative path resolves
+// from the first file's directory, never from the file that names it. The second file sits in another directory.
+const FIRST = "name: unset-prod\nservices:\n  edge:\n    image: x\n";
+const SECOND =
+  "services:\n  pds:\n    image: y\n    env_file: [e.env]\n    volumes: [./data:/data]\n" +
+  "    build: {context: ./ctx, dockerfile: x.Dockerfile}\nsecrets:\n  s:\n    file: ./s\n";
+
+/** The paths loadCompose resolved, in the order the agreement test compares them. */
+function resolvedPaths(files: string[], readText: (path: string) => string | null) {
+  const { compose } = loadCompose(files, readText);
+  const pds = compose.services.find((service) => service.name === "pds");
+  return {
+    binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+    envFiles: pds?.envFiles ?? [],
+    secretFiles: compose.secretFiles,
+    build: pds?.build ?? null,
+  };
+}
+
+describe("compose project directory", () => {
+  test("paths_resolve_from_the_first_file_directory", () => {
+    const texts = new Map([
+      ["/p/a/c.yaml", FIRST],
+      ["/p/b/c.yaml", SECOND],
+    ]);
+    expect(resolvedPaths(["/p/a/c.yaml", "/p/b/c.yaml"], (path) => texts.get(path) ?? null)).toEqual({
+      binds: ["/p/a/data"],
+      envFiles: ["/p/a/e.env"],
+      secretFiles: ["/p/a/s"],
+      // P1.30y: the context from the project directory, the Dockerfile from the context (compose-spec build.md).
+      // A context other than ".", so a Dockerfile resolved from the project directory (/p/a/x.Dockerfile) would differ.
+      build: { context: "/p/a/ctx", dockerfile: "/p/a/ctx/x.Dockerfile" },
+    });
+  });
+});
+
 describe("compose agreement", () => {
   const dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -315,18 +763,109 @@ describe("compose agreement", () => {
   // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
   // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
   // with its internal flag) against Compose's, for the fixture and every compose*.yaml in the repository.
-  test.runIf(hasCompose || process.env.CI)("preflight_matches_compose_config", async ({ annotate }) => {
-    const fixture = join(dir, "compose.yaml");
-    writeFileSync(fixture, STACK);
-    writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
-    writeFileSync(join(dir, "pds-admin.secret"), "");
-    const real = repositoryFiles();
-    if (real.length === 0)
-      await annotate(
-        "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
-      );
-    for (const file of [fixture, ...real]) {
-      expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
-    }
-  });
+  test.runIf(hasCompose || process.env.CI)(
+    "preflight_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      await annotate(`docker compose version ${composeVersion()}`);
+      const fixture = join(dir, "compose.yaml");
+      writeFileSync(fixture, STACK);
+      writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
+      writeFileSync(join(dir, "pds-admin.secret"), "");
+      const real = repositoryFiles();
+      if (real.length === 0)
+        await annotate(
+          "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
+        );
+      for (const file of [fixture, ...real]) {
+        expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
+      }
+    },
+  );
+
+  // P1.30a (ruling 2026-10-12-preflight-compose-inputs, F3.5): with and without the env file flag, the preflight interpolates
+  // from the file Compose does, on a fixture whose .env and env file disagree; a shell value, which Compose would prefer,
+  // makes the preflight refuse to run. Compose runs with only the wrapper's allowlist (F3.3) plus the one name tried.
+  test.runIf(hasCompose || process.env.CI)(
+    "env_file_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      await annotate(`docker compose version ${composeVersion()}`);
+      const inputs = join(dir, "inputs");
+      mkdirSync(inputs);
+      const file = join(inputs, "compose.yaml");
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+      writeFileSync(file, "name: unset-prod\nservices:\n  pds:\n    image: x\n    environment:\n      HOST: ${HOST}\n");
+      writeFileSync(join(inputs, ".env"), "HOST=dot.example.test\n");
+      const flag = join(inputs, "flag.env");
+      writeFileSync(flag, "HOST=flag.example.test\n");
+      const compose = (args: string[], shell: Record<string, string> = {}) =>
+        execFileSync("docker", ["compose", "-f", file, ...args], {
+          encoding: "utf8",
+          env: { ...allowlisted(), ...shell },
+          timeout: COMPOSE_CALL_MS,
+          killSignal: "SIGKILL",
+        });
+      const theirHost = (extra: string[], shell?: Record<string, string>) =>
+        (JSON.parse(compose([...extra, "config", "--format", "json"], shell)) as Theirs).services.pds?.environment
+          ?.HOST;
+      const ours = (extra: string[], environment: Record<string, string>, want: string | null | undefined) =>
+        preflight(["--env", "prod", "--compose", file, ...extra], {
+          root: dir,
+          run: async () => ({ code: 0, stdout: "", stderr: "" }),
+          environment,
+          checks: [
+            { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
+          ],
+        });
+      // Compose's --env-file is the preflight's --interpolation-env (ruling Amendment 3).
+      const flagPairs: [theirs: string[], ours: string[]][] = [
+        [[], []],
+        [
+          ["--env-file", flag],
+          ["--interpolation-env", flag],
+        ],
+      ];
+      for (const [extra, ourExtra] of flagPairs) {
+        const theirs = theirHost(extra);
+        expect(theirs, extra.join(" ")).toBe(extra.length === 0 ? "dot.example.test" : "flag.example.test");
+        expect(await ours(ourExtra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+        expect(compose([...extra, "config", "--environment"]).split("\n"), extra.join(" ")).toContain(`HOST=${theirs}`);
+      }
+      // Uninterpolated, Compose shows the reference the parser read; the interpolated value above came from the file.
+      const raw = JSON.parse(compose(["config", "--format", "json", "--no-interpolate"])) as Theirs;
+      expect(raw.services.pds?.environment?.HOST).toBe(oursAsCompose(file).services.pds?.environment.HOST);
+      const shell = { HOST: "shell.example.test" };
+      expect(theirHost(["--env-file", flag], shell)).toBe("shell.example.test");
+      expect(await ours(["--interpolation-env", flag], shell, "shell.example.test")).toEqual({
+        code: 2,
+        lines: ["ERROR HOST is set in the environment"],
+      });
+    },
+  );
+
+  test.runIf(hasCompose || process.env.CI)(
+    "project_directory_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      await annotate(`docker compose version ${composeVersion()}`);
+      const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
+      mkdirSync(join(dir, "a"));
+      mkdirSync(join(dir, "b"));
+      writeFileSync(first, FIRST);
+      writeFileSync(second, SECOND);
+      writeFileSync(join(dir, "a", "e.env"), "");
+      const theirs = theirsAsOurs(composeJson(["-f", first, "-f", second]));
+      const pds = theirs.services.pds;
+      expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
+        binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+        envFiles: pds?.envFiles,
+        secretFiles: theirs.secretFiles,
+        build: pds?.build && {
+          context: pds.build.context,
+          dockerfile: resolve(pds.build.context, pds.build.dockerfile),
+        },
+      });
+    },
+  );
 });

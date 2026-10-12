@@ -4,9 +4,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { docker, killBefore } from "../../../support/docker.ts";
 import {
   buildEdgeImage,
-  docker,
   EDGE,
   type Edge,
   logsWhen,
@@ -17,6 +17,11 @@ import {
 import { timeoutProblems } from "./timeouts.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
+// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
+// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
+const CONTAINER_MS = 120_000;
+// A `docker run` inside one of those tests is killed before the test's own budget, naming the call (P1.27k).
+const RUN_CALL_MS = killBefore(CONTAINER_MS);
 const ADMIN_NSIDS = [
   "com.atproto.admin.getAccountInfo",
   "com.atproto.temp.checkSignupQueue",
@@ -76,9 +81,11 @@ beforeAll(async () => {
   image = buildEdgeImage();
   edge = await startEdge(image);
 }, 600_000);
+// The image's tag stays: until P1.27z, the trusted edge tests hold the same image by id, so removing what may be its
+// last tag could delete it under them (P1.27x record, amendment 2).
 afterAll(async () => {
   await edge?.stop();
-});
+}, CONTAINER_MS);
 
 describe("edge", () => {
   test("edge_allows_normal_xrpc", async () => {
@@ -179,32 +186,37 @@ describe("edge", () => {
     expect(response.headers.via).toBeUndefined();
   });
 
-  test("edge_admin_api_off", () => {
+  test("edge_admin_api_off", { timeout: CONTAINER_MS }, () => {
     expect(edge.exec(["wget", "-q", "-T", "2", "-O", "-", "http://127.0.0.1:2019/config/"]).code).not.toBe(0);
     expect(edge.exec(["wget", "-q", "-T", "2", "-O", "-", "http://localhost:2019/config/"]).code).not.toBe(0);
   });
 
-  test("edge_image_plugins_exact", () => {
-    const modules = docker(["run", "--rm", "--entrypoint", "caddy", image, "list-modules", "--skip-standard"]);
+  test("edge_image_plugins_exact", { timeout: CONTAINER_MS }, () => {
+    const modules = docker(["run", "--rm", "--entrypoint", "caddy", image, "list-modules", "--skip-standard"], {
+      timeoutMs: RUN_CALL_MS,
+    });
     expect(modules.code).toBe(0);
     expect(modules.out.split("\n").filter((line) => /^\S+\.\S+$/.test(line.trim()))).toEqual([
       "http.handlers.rate_limit",
     ]);
   });
 
-  test("edge_caddyfile_validates", () => {
+  test("edge_caddyfile_validates", { timeout: CONTAINER_MS }, () => {
     // The built image with its own files (production tls.caddy included) and the PDS site enabled.
-    const validate = docker([
-      ...["run", "--rm", "--read-only", "--entrypoint", "caddy"],
-      ...["-e", "ACME_EMAIL=edge@unset.test", "-e", "PDS_HOST=pds.unset.test", "-e", "PDS_UPSTREAM=127.0.0.1:9"],
-      ...["-v", `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`],
-      ...[image, "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
-    ]);
+    const validate = docker(
+      [
+        ...["run", "--rm", "--read-only", "--entrypoint", "caddy"],
+        ...["-e", "ACME_EMAIL=edge@unset.test", "-e", "PDS_HOST=pds.unset.test", "-e", "PDS_UPSTREAM=127.0.0.1:9"],
+        ...["-v", `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`],
+        ...[image, "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
+      ],
+      { timeoutMs: RUN_CALL_MS },
+    );
     expect(validate.code, validate.err).toBe(0);
     expect(validate.out).toContain("Valid configuration");
   });
 
-  test("edge_timeout_above_every_deadline", () => {
+  test("edge_timeout_above_every_deadline", { timeout: CONTAINER_MS }, () => {
     const adapted = edge.exec(["caddy", "adapt", "--config", "/etc/caddy/Caddyfile"]);
     expect(adapted.code, adapted.out).toBe(0);
     const config = JSON.parse(adapted.out.slice(adapted.out.indexOf("{")));
@@ -230,7 +242,7 @@ describe("edge", () => {
     expect(timeoutProblems(config, limits, manifests, maxDeadline)).toEqual([]);
   });
 
-  test("edge_all_logs_have_no_ip_path_or_query", async () => {
+  test("edge_all_logs_have_no_ip_path_or_query", { timeout: CONTAINER_MS }, async () => {
     const canary = `c${Date.now().toString(36)}q`;
     for (const path of [
       `/join?code=${canary}`,
@@ -251,7 +263,7 @@ describe("edge", () => {
     for (const path of new Set(sentPaths)) expect(all, path).not.toContain(path.split("?")[0]);
   });
 
-  test("edge_access_log_route_class", () => {
+  test("edge_access_log_route_class", { timeout: CONTAINER_MS }, () => {
     const lines = edge
       .logs()
       .stdout.split("\n")
@@ -267,7 +279,7 @@ describe("edge", () => {
     expect(classes).toContain("other");
   });
 
-  test("edge_logs_no_client_address", async () => {
+  test("edge_logs_no_client_address", { timeout: CONTAINER_MS }, async () => {
     const spoofed = { "x-forwarded-for": "203.0.113.9" };
     const [, , , adminApi, health] = await probe("127.0.0.2", [
       { kind: "https", path: "/xrpc/com.atproto.server.createSession", count: 31, headers: spoofed },
@@ -287,14 +299,15 @@ describe("edge", () => {
     expect(stderr).toContain('"status":502');
     expect(stdout).toContain('"status":429');
     for (const address of ["127.0.0.2", "203.0.113.9"]) expect(`${stdout}\n${stderr}`).not.toContain(address);
-    // The probe image is pulled in beforeAll and every new probe connection has a 1 s connect deadline. The test took
-    // at most 581 ms over six local runs (P1.28b PR); 10 s leaves room for a shared CI runner.
-  }, 10_000);
+    // The probe image is pulled in beforeAll and every new probe connection has a 1 s connect deadline; the test took
+    // at most 581 ms over six local runs (P1.28b PR). Its probe is a `docker run` and its log reads are docker calls,
+    // each queued on the one daemon like any other container call, so it gets the same CONTAINER_MS (P1.27k).
+  });
 
   // One test per zone (architecture's values, limits.json): from its own loopback address, every request below the
   // limit passes and the next one gets 429 with Retry-After (the guard against caddy-ratelimit #94). The long-window
   // twins (session_day, firehose_hour) share their matcher with the short zone, checked in deployment/edge.
-  test("edge_rate_limit_auth_zone", async () => {
+  test("edge_rate_limit_auth_zone", { timeout: CONTAINER_MS }, async () => {
     const signIn = "/@atproto/oauth-provider/~api/sign-in";
     await expectZone("127.0.0.6", signIn, "oauth_signin", "POST");
     // Another client address has its own bucket.
@@ -302,43 +315,43 @@ describe("edge", () => {
     expect(other?.statuses).toEqual([200]);
   });
 
-  test("edge_session_zone", async () => {
+  test("edge_session_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.8", "/xrpc/com.atproto.server.createSession", "session", "POST");
   });
 
-  test("edge_oauth_token_zone", async () => {
+  test("edge_oauth_token_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.9", "/oauth/token", "oauth_token", "POST");
   });
 
-  test("edge_signup_zone", async () => {
+  test("edge_signup_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.10", "/xrpc/com.atproto.server.createAccount", "signup", "POST");
   });
 
-  test("edge_reset_zone", async () => {
+  test("edge_reset_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.11", "/xrpc/com.atproto.server.requestPasswordReset", "reset", "POST");
   });
 
-  test("edge_sync_zone", async () => {
+  test("edge_sync_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.3", "/xrpc/com.atproto.sync.getLatestCommit?did=did:plc:abc", "sync");
   });
 
-  test("edge_blob_read_zone", async () => {
+  test("edge_blob_read_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.12", "/xrpc/com.atproto.sync.getBlob?did=did:plc:abc&cid=bafyabc", "blob_read");
   });
 
-  test("edge_blob_upload_zone", async () => {
+  test("edge_blob_upload_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.13", "/xrpc/com.atproto.repo.uploadBlob", "blob_upload", "POST");
   });
 
-  test("edge_firehose_zone", async () => {
+  test("edge_firehose_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.4", "/xrpc/com.atproto.sync.subscribeRepos", "firehose");
   });
 
-  test("edge_identity_zone", async () => {
+  test("edge_identity_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.5", "/xrpc/com.atproto.identity.resolveHandle?handle=alice.test", "identity");
   });
 
-  test("edge_global_zone", async () => {
+  test("edge_global_zone", { timeout: CONTAINER_MS }, async () => {
     await expectZone("127.0.0.14", "/xrpc/com.atproto.repo.describeRepo?repo=did:plc:abc", "global");
   });
 });

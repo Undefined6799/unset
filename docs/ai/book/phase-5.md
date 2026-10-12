@@ -1054,7 +1054,10 @@ Diagram: "Backup and restore flow" above.
 
 ### P5.06 — Secret inventory and rotation runbook
 Tags: [SEC] [ALEX]            Depends on: P5.02            Plan: §2 rule 24, §8 Phase 5, §11 Q2a, admin design §6.6; vault `deploy-secret-lifecycle-inventory`, `launch-day-secret-rotation`
-Where: `deployment/secrets/inventory.json`, `deployment/secrets/inventory.test.ts`, `deployment/runbooks/secret-rotation.md`
+Where: `deployment/secret-inventory/inventory.json`, `deployment/secret-inventory/inventory.test.ts`,
+`deployment/runbooks/secret-rotation.md`
+(renamed from `deployment/secrets/` by book edit 2026-10-12-p127u-c9-bind-reach-gaps: the files hold no secret values,
+and the stack's secrets folder lives outside the checkout)
 Size: ~120 source lines, ~250 runbook lines, ~150 test lines
 
 Goal: keep one list of every secret the stack uses, saying where it lives, how it is backed up and how it is rotated,
@@ -2533,6 +2536,12 @@ Algorithm (a reviewed hypothesis):
   4. **Memory:** the sum of `mem_limit` plus chat's 4 GB must stay ≤ 90 % of RAM; otherwise a resize is a P5.13 blocker.
   5. **Storage:** project the growth at about 75 MB per video for 100, 1,000 and 10,000 users, giving the month each
      store reaches 80 %. Write `docs/human/capacity.md`.
+  6. **Session sweep** (rider, book edit 2026-10-12-p203i-did-index-only; the first load or capacity test that touches
+     sessions carries it, here unless an earlier one does): record the sweep duration and `app.session`'s HOT ratio
+     (`n_tup_hot_upd::float8 / nullif(n_tup_upd, 0)` from `pg_stat_user_tables`). A HOT ratio well below ~0.9 → add
+     `fillfactor` before any index. Sweep p99 over 1 s or more than about 2M rows → first split the sweep into two
+     DELETEs with the absolute-expiry arm indexed; the idle-arm DELETE stays a sequential scan; indexing
+     `last_seen_at` needs the measured HOT cost first.
 
 Edge cases and failures: the quota is too low for the transcode budget → raise it to 3.0 only if `web` p95 holds;
 otherwise record "worker host needed" for Alex. The `egress-web` class reaches its ceiling in production → alert, and

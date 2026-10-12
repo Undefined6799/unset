@@ -6,8 +6,6 @@ const REDACTED = "[redacted]";
 
 export class SecretMap {
   readonly #values: ReadonlyMap<string, string>;
-  /** The names `use` has read since `forgetReads`, so the runner can scrub their values from a reason (P1.30w). */
-  readonly #read = new Set<string>();
 
   constructor(values: Iterable<readonly [string, string]>) {
     this.#values = new Map(values);
@@ -23,30 +21,37 @@ export class SecretMap {
 
   /** Runs `fn` on the value, or on undefined when the name is absent; only `fn`'s answer leaves the map. */
   use<T>(name: string, fn: (value: string | undefined) => T): T {
-    this.#read.add(name);
     return fn(this.#values.get(name));
   }
 
-  forgetReads(): void {
-    this.#read.clear();
+  toString(): string {
+    return REDACTED;
   }
 
-  /** `text` with every non-empty value `use` has read replaced by its name, longest value first. */
-  scrubReads(text: string): string {
-    const read = this.#readValues().sort(([a], [b]) => b.length - a.length);
-    return read.reduce((out, [value, name]) => out.replaceAll(value, name), text);
+  toJSON(): string {
+    return REDACTED;
   }
 
-  /** Whether `text` still holds a non-empty value `use` has read. */
-  holdsRead(text: string): boolean {
-    return this.#readValues().some(([value]) => text.includes(value));
+  [inspect.custom](): string {
+    return REDACTED;
+  }
+}
+
+/**
+ * Every non-empty value the readers handed out in one run: env files (the `.env` included) and compose `environment`
+ * values (P1.30m; architecture, end of record 2026-10-12-c18-follow-ups). The runner asks only whether a reason holds
+ * one; the values never leave, and the set prints as `[redacted]` like a SecretMap.
+ */
+export class ConfiguredValues {
+  readonly #values: ReadonlySet<string>;
+
+  constructor(values: Iterable<string>) {
+    this.#values = new Set([...values].filter((value) => value !== ""));
   }
 
-  #readValues(): [string, string][] {
-    return [...this.#read].flatMap((name) => {
-      const value = this.#values.get(name);
-      return value === undefined || value === "" ? [] : [[value, name] as [string, string]];
-    });
+  occurIn(text: string): boolean {
+    for (const value of this.#values) if (text.includes(value)) return true;
+    return false;
   }
 
   toString(): string {

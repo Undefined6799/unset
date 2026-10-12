@@ -6,12 +6,12 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterAll, describe, expect, inject, test } from "vitest";
 import { createPool, withClient } from "../../../infrastructure/postgres/index.ts";
-import { ownContainers, stopAllPostgres } from "../../support/postgres.ts";
+import { ownContainers, STOP_ALL_MS, stopAllPostgres } from "../../support/postgres.ts";
 import { startTestDatabase } from "./pg.setup.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 // Only matters if teardown_after_failure fails: it never leaves a container running past this file.
-afterAll(stopAllPostgres);
+afterAll(stopAllPostgres, STOP_ALL_MS);
 
 const provided = inject("postgres");
 const database = provided.databases[relative(REPOSITORY, import.meta.filename)] ?? "";

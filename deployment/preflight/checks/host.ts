@@ -20,7 +20,8 @@ export const c21: Check = {
   run: (inputs) => {
     // A hostname is case-insensitive and may end in the root's dot (RFC 4343 section 2, RFC 1034 section 3.1).
     const name = pdsHostname(inputs).toLowerCase();
-    if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space") return pass("n/a");
+    if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space")
+      return pass("skipped: PDS_HOSTNAME is unset or a different host");
     const text = inputs.readText(inputs.retirementReportPath);
     if (text === null) return missing(inputs.retirementReportPath);
     let report: unknown;
@@ -30,7 +31,7 @@ export const c21: Check = {
       return fail("retirement report is unreadable");
     }
     const complete = (report as { retirement_part_a_complete?: unknown } | null)?.retirement_part_a_complete;
-    return complete === true ? pass() : fail("retirement_part_a_complete is not true");
+    return complete === true ? pass() : fail("the retirement report does not mark part A complete");
   },
 };
 
@@ -39,7 +40,7 @@ export const c24: Check = {
   id: "C24",
   network: true,
   run: async (inputs, signal): Promise<Outcome> => {
-    if (pdsHostname(inputs).endsWith(".localhost")) return pass("n/a");
+    if (pdsHostname(inputs).endsWith(".localhost")) return pass("skipped: PDS_HOSTNAME ends in .localhost");
     const ntp = await inputs.run("timedatectl", ["show", "-p", "NTPSynchronized", "--value"], signal);
     if (ntp.missing === true) return fail("timedatectl is not installed");
     if (ntp.code !== 0) return fail("timedatectl failed");
@@ -49,6 +50,6 @@ export const c24: Check = {
     if (chrony.code !== 0) return fail("chronyc tracking failed");
     const offset = SYSTEM_TIME.exec(chrony.stdout)?.[1];
     if (offset === undefined) return fail("chronyc tracking output is unreadable");
-    return Number(offset) <= MAX_OFFSET_SECONDS ? pass() : fail("the host clock is more than 1 s off NTP time");
+    return Number(offset) <= MAX_OFFSET_SECONDS ? pass() : fail("the host clock is more than one second off NTP time");
   },
 };

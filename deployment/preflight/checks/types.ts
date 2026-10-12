@@ -5,6 +5,8 @@ import type { Compose, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 
 export type Env = "dev" | "prod";
+/** A file secret bind-mounted into containers, with the `user` of each service that mounts it (null when unset). */
+export type MountedSecret = { path: string; mountedBy: { service: string; user: string | null }[] };
 export type VerifyResult = { ok: true } | { ok: false; failures: string[] };
 /** Runs the verify-images CLI on a lock; production calls it by fixed path and arguments, tests pass a fake. */
 export type Verifier = (lockPath: string, signal: AbortSignal) => Promise<VerifyResult>;
@@ -19,11 +21,15 @@ export type Run = (
 
 export type Inputs = {
   env: Env;
+  /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
+  root: string;
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */
   serviceEnv: ReadonlyMap<string, SecretMap>;
-  /** Absolute paths of every env file and secret file the compose files name. */
+  /** Absolute paths of every file Compose itself reads for values: env files and the project's `.env`. */
   secretPaths: string[];
+  /** Every top-level file secret, by absolute path, with the services that mount it (P1.30o). */
+  mountedSecrets: MountedSecret[];
   lockPath: string;
   cosignKeyPath: string;
   verify: Verifier;
@@ -38,6 +44,10 @@ export type Inputs = {
   edgeDir: string;
   readText: (path: string) => string | null;
   stat: (path: string) => Stats | null;
+  /** Like `stat`, but a symlink is reported as itself (C9 refuses a link anywhere on a mounted secret's path). */
+  lstat: (path: string) => Stats | null;
+  /** The path with every link resolved, null when it does not exist, throwing on any other error (C9 fails closed). */
+  realpath: (path: string) => string | null;
   uid: number;
 };
 
@@ -50,8 +60,24 @@ export type Check = {
 
 export const pass = (reason = "ok"): Outcome => ({ pass: true, reason });
 export const fail = (reason: string): Outcome => ({ pass: false, reason });
-export const missing = (path: string): Outcome => fail(`input missing: ${path}`);
+/** The prefix of every missing-input reason; the runner keeps it when it withholds the rest (P1.30m). */
+export const MISSING = "input missing: ";
+export const missing = (path: string): Outcome => fail(`${MISSING}${path}`);
 
 export function serviceNamed(inputs: Inputs, name: string): Service | undefined {
   return inputs.compose.services.find((service) => service.name === name);
+}
+
+/**
+ * Whether a service runs one image, judged by every identity it gives (Codex ruling 3, batch 33): its image against
+ * the lock's `ref`, and its build's resolved Dockerfile against `dockerfile`. A service whose two disagree is
+ * "mismatch", so neither one alone can make it pass.
+ */
+export function runsImage(service: Service, ref: unknown, dockerfile: string): "yes" | "no" | "mismatch" {
+  const views = [
+    service.image === null ? null : service.image === ref,
+    service.build === null ? null : service.build.dockerfile === dockerfile,
+  ];
+  if (views.includes(true) && views.includes(false)) return "mismatch";
+  return views.includes(true) ? "yes" : "no";
 }

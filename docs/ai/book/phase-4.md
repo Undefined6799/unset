@@ -3429,10 +3429,12 @@ Inputs: DID-column registry (P1.13); `eraseDid` pattern (P3.07, SECURITY DEFINER
 Outputs:
 - Checked-in `EXPORT_POLICY: Record<schema.table, {mode: 'include'} | {mode: 'redact', columns: string[], when?:
   RowPredicate, replaceWith?: string, reason} | {mode: 'exclude', reason}>`. `EXPORT_POLICY` and the `didColumns()`
-  walk are catalogued in `02-shared-blocks.md` next to `eraseDid` (R10; the editor adds the entry). Defaults: sessions → redact `sid_hash`; OAuth token stores → exclude ("sealed
-  credentials; listing them would export secrets"); `app.private_interaction` where the user is the **target** → redact
-  `actor_did` (the actor was promised anonymity, P4.17a cell); reports **about** the user → redact `reporter_did` and
-  `note`; reports **by** the user → include; moderation decisions about the user → include (plan §6); legal holds and
+  walk are catalogued in `02-shared-blocks.md` next to `eraseDid` (R10; the editor adds the entry). Defaults:
+  sessions → exclude `id_hash` ("the hash that looks up a live session cookie; exporting it would export a
+  credential"); OAuth token stores → exclude ("sealed credentials; listing them would export secrets");
+  `app.private_interaction` where the user is the **target** → redact `actor_did` (the actor was promised
+  anonymity, P4.17a cell); reports **about** the user → redact `reporter_did` and `note`; reports **by** the user →
+  include; moderation decisions about the user → include (plan §6); legal holds and
   sealed transmission data (`legal_hold`, `legal_hold_transmission`) → exclude ("legal preservation; disclosure could
   tip off", C-16); `video_upload` → include, except that a row in `matched_hold` shows its state as `unavailable`
   (the same generic copy the member sees, so the export does not tip off); `review_decision` and `appeal` → include
@@ -3490,7 +3492,7 @@ Done when (tests):
   - `export_includes_own_rows`: seeded user with drafts, saved feeds, private likes, ledger rows → all present.
   - `export_lists_draft_images`: two draft images → both listed from `draftMedia.listForExport`, none of another DID's.
   - `export_redacts_actor_for_target`: user B's private like on A's post → A's export has the row without B's DID; B's export has it with A's post URI.
-  - `export_excludes_tokens_and_holds`: no sealed token bytes or hold rows in output; exclusion reasons present.
+  - `export_excludes_tokens_and_holds`: no sealed token bytes, session id hashes (`app.session.id_hash`), OAuth state or token material, or hold rows in output; exclusion reasons present.
   - `export_matched_hold_shown_unavailable`: a `matched_hold` upload appears with state `unavailable` and no other hold detail.
   - `export_moderation_history_included`: decisions and appeals present; a human `decided_by` is redacted.
   - `export_reports_about_user_redacted`.

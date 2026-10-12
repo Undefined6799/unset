@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 35 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a and P0.16 added 2026-10-12).
+Depth: **build-ready**. 38 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a and P0.09n added 2026-10-12).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -51,6 +51,8 @@ Depth: **build-ready**. 35 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09j | Guard fixtures isolate git from the caller's environment | — | P0.09g | `phase-0.md` |
 | P0.09k | Case-collision guard | — | P0.09j | `phase-0.md` |
 | P0.09m | Grant parser classifies one-part schema names (waits for Alex's typed word: a loosening) | [SEC] [ALEX] | P0.09e | `phase-0.md` |
+| P0.09t | Trusted file pattern carries only its own tests (folder patterns unchanged) | [SEC] [ALEX] (typed line: scripts/guards; line asked after P0.16 lands) | P0.09c | `phase-0.md` |
+| P0.09n | Bar trusted tests from product helpers | [SEC] [ALEX] (typed line: scripts/guards) | P0.09c | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -62,6 +64,7 @@ Depth: **build-ready**. 35 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.15 | Verified agent merges: ADR 0019, CLAUDE.md Merging line, README row, 0001 log entry | [SEC] [ALEX] (Alex merges by hand) | — | `phase-0.md` |
 | P0.15a | Mark ADR 0019 accepted: status, README rows, "changes with this decision", Alex's CLAUDE.md lines | [SEC] [ALEX] (Alex pastes CLAUDE.md, merges by hand) | P0.15 | `phase-0.md` |
 | P0.16 | Delivery check asserts ADR 0019's merge rule ("author threads never merge", "ADR 0019") | [SEC] [ALEX] (Alex commits CLAUDE.md, merges by hand) | P0.15a | `phase-0.md` |
+| P0.16a | Align CLAUDE.md's review lines with ADR 0019 | [ALEX] (typed line: CLAUDE.md) | P0.16 | `phase-0.md` |
 
 ```mermaid
 flowchart TD
@@ -90,6 +93,8 @@ flowchart TD
   P0_09j["P0.09j Fixture git ignores hook env"]
   P0_09k["P0.09k Case-collision guard"]
   P0_09m["P0.09m One-part schema names"]
+  P0_09t["P0.09t Trusted file pattern tests only"]
+  P0_09n["P0.09n Trusted tests import only trusted"]
   P0_10["P0.10 Secret scanning"]
   P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
@@ -100,6 +105,7 @@ flowchart TD
   P0_15["P0.15 Verified agent merges"]
   P0_15a["P0.15a ADR 0019 accepted"]
   P0_16["P0.16 Delivery check asserts ADR 0019"]
+  P0_16a["P0.16a CLAUDE.md review lines follow ADR 0019"]
   P0_01 --> P0_02
   P0_02 --> P0_03
   P0_03 --> P0_04
@@ -117,6 +123,8 @@ flowchart TD
   P0_09b --> P0_09c
   P0_06 --> P0_09d
   P0_09c --> P0_09f
+  P0_09c --> P0_09t
+  P0_09c --> P0_09n
   P0_09f --> P0_09g
   P0_13 --> P0_09g
   P0_09g --> P0_09i
@@ -137,11 +145,12 @@ flowchart TD
   P0_10 --> P0_14
   P0_15 --> P0_15a
   P0_15a --> P0_16
+  P0_16 --> P0_16a
 ```
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 196 steps: 173 from `phase-1.md`, 23 from `phase-2.md` (including the
+Depth: **build-ready**. 227 steps: 203 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -153,6 +162,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.01 | Workspace skeleton | — | P0.05 | `phase-1.md` |
 | P1.01s | Semgrep custom rules: computed imports and floating promises (parallel-safe) | [SEC] | P1.01, P0.07 | `phase-1.md` |
 | P1.01q | References test robust under the full suite (check step; 20 s per-test timeout) | — | — | `phase-1.md` |
+| P1.01g | CI test failures name the failing test (check step) | — | — | `phase-1.md` |
 | P1.02 | Typed config loader per entrypoint | [SEC] | P1.01 | `phase-1.md` |
 | P1.03 | Error model, error-code catalog, structured logger with a field allowlist | — | P1.02 | `phase-1.md` |
 | P1.03w | Fixed-word string fields in `shared/log` (SE-7 ruling) | [SEC] | P1.03 | `phase-1.md` |
@@ -293,6 +303,15 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30w | Compose reader exact key allowlist, C18 read-only sites mount and edge image pin, shared check value scrub | [SEC] | P1.30u | `phase-1.md` |
 | P1.30k | Compose reader exact top-level key allowlist and long-form port key set | [SEC] | P1.30w | `phase-1.md` |
 | P1.30m | Preflight runner withholds any reason containing a configured value (one run-wide set); C23 and literal-quoting templates name keys; scrubbed() deleted | [SEC] | P1.30w | `phase-1.md` |
+| P1.30v | Withheld marker never carries a configured value (regression fix to P1.30m) | [SEC] | P1.30m | `phase-1.md` |
+| P1.30j | Name keys in preflight reasons, not values (P1.30k literal fixtures; stale comments) | [SEC] | P1.30k, P1.30m, P1.30v | `phase-1.md` |
+| P1.30z | Resolve compose paths from the project directory | [SEC] | P1.30k | `phase-1.md` |
+| P1.30d | Correct project-directory notes and flag test | — | P1.30z, P1.30j | `phase-1.md` |
+| P1.30a | Preflight reads Compose's interpolation inputs | [SEC] | P1.30z, P1.30d | `phase-1.md` |
+| P1.30o | C9 judges mounted secrets by uid in a locked dir | [SEC] [ALEX] (card answered 16:45:14Z) | P1.30x | `phase-1.md` |
+| P1.30l | Pin the Compose version in CI (check step) | [SEC] [ALEX] (typed line, after P0.16 lands) | P1.30a, P0.16 | `phase-1.md` |
+| P1.30x | Compose reader: hardening and limit keys (read_only, cap_drop, cap_add, security_opt, user, mem_limit, cpus, pids_limit, restart) | [SEC] | P1.30k | `phase-1.md` |
+| P1.30y | Compose reader: build, tmpfs (and volumes type tmpfs), depends_on, short-form service secrets | [SEC] | P1.30k, P1.30z | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -312,10 +331,30 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29b | Mirror build-stage run scans the whole base (stripped skips on runtime only) | [SEC] | P1.29v | `phase-1.md` |
 | P1.29u | Stripped-path syntax and final-stage RUN separators fail closed | [SEC] | P1.29v | `phase-1.md` |
 | P1.29c | Lock field buildStage, derived from the Dockerfiles and proven by a test | [SEC] | P1.29b | `phase-1.md` |
+| P1.29z | Keep docker out of the kind problems reader test (regression fix to P1.29c) | [SEC] | P1.29c | `phase-1.md` |
+| P1.29o | Give docker-run image tests an explicit budget | — | P1.29z | `phase-1.md` |
+| P1.27e | Give edge image test hooks an explicit budget (trusted base) | — | P1.29z | `phase-1.md` |
+| P1.27k | Kill hung docker calls in image tests | — | P1.29o | `phase-1.md` |
+| P1.27t | Kill hung docker calls in edge image tests (trusted base) | — | P1.27k, P1.27e | `phase-1.md` |
+| P1.27h | Fix the edge image test kill follow-ups (trusted base) | — | P1.27t | `phase-1.md` |
+| P1.27g | Fix the docker kill timeout follow-ups | — | P1.27k | `phase-1.md` |
+| P1.27i | Fix the docker test cleanup follow-ups | — | P1.27g | `phase-1.md` |
+| P1.27x | Tag each test image build uniquely | — | P1.27i | `phase-1.md` |
+| P1.27z | Tag each edge test image build uniquely (trusted base) | — | P1.27x, P1.27t | `phase-1.md` |
+| P1.27y | Build contexts match the scanned image context | [SEC] | P1.30y | `phase-1.md` |
+| P1.27f | ~~Give the C26 symlink test a C9-valid fixture~~ **Superseded** by P1.27g (#684 closed unmerged) | — | P1.27y, P1.30o | `phase-1.md` |
+| P1.27a | Refuse sticky writable ancestors in C9 | [SEC] | P1.30o | `phase-1.md` |
+| P1.27u | Close the C9 bind reach gaps | [SEC] | P1.27a | `phase-1.md` |
+| P1.27w | Run Compose only through the preflight wrapper | [SEC] | P1.30a, P1.30z | `phase-1.md` |
+| P1.27n | Close the P1.27y verifier test gaps | [SEC] | P1.27y | `phase-1.md` |
+| P1.27j | Tidy preflight comments and the tilde check | — | P1.30a | `phase-1.md` |
+| P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
+| P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
-| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
-| P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
+| P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27y, P1.27a, P1.27u, P1.27w | `phase-1.md` |
+| P1.27o | Edge /data and /config owned by caddy (trusted base) | [SEC] | — | `phase-1.md` |
+| P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
 | P1.29t | Running dev stack tests: no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s | `phase-1.md` |
@@ -335,15 +374,16 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
 | P2.03c | CODEOWNERS: session trusted path /infrastructure/postgres/session/ → /infrastructure/session/ | [SEC] | — | `phase-2.md` |
 | P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e, P2.03c | `phase-2.md` |
-| P2.03i | Session indexes (did, absolute_expires_at), annotated with store.ts | [SEC] | P2.03, P2.03x | `phase-2.md` |
+| P2.03i | Session index (did), annotated with store.ts | [SEC] | P2.03, P2.03x | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i | `phase-2.md` |
+| P2.04s | Session prelude for OAuth: destroyAllForDid, EndSessionsReason, has_token_set probe (trusted, split from P2.04) | [SEC] | P2.03, P2.04 | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
-| P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16 | `phase-2.md` |
-| P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04 | `phase-2.md` |
-| P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06 | `phase-2.md` |
+| P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
+| P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
+| P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06, P2.04s | `phase-2.md` |
 | P2.11 | Email-verify gate | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
-| P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15 | `phase-2.md` |
+| P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m | `phase-2.md` |
 
@@ -351,6 +391,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 flowchart TD
   P1_01["P1.01 Workspace skeleton"]
   P1_01q["P1.01q References test timeout"]
+  P1_01g["P1.01g CI names failing test"]
   P1_02["P1.02 Typed config loader per entrypoint"]
   P1_03["P1.03 Error model"]
   P1_04["P1.04 HTTP server skeleton per"]
@@ -491,10 +532,30 @@ flowchart TD
   P1_29b["P1.29b Mirror build stage scanned in full"]
   P1_29u["P1.29u Stripped paths and RUN separators fail closed"]
   P1_29c["P1.29c Lock records build-stage bases"]
+  P1_29z["P1.29z Docker out of kind reader test"]
+  P1_29o["P1.29o Docker-run test budgets"]
+  P1_27e["P1.27e Edge image hook budgets"]
+  P1_27k["P1.27k Kill hung docker calls"]
+  P1_27t["P1.27t Kill hung edge docker calls"]
+  P1_27g["P1.27g Docker kill timeout follow-ups"]
+  P1_27h["P1.27h Edge image test kill follow-ups"]
+  P1_27i["P1.27i Docker test cleanup follow-ups"]
+  P1_27x["P1.27x Unique test image tags"]
+  P1_27z["P1.27z Unique edge test image tags"]
+  P1_27m["P1.27m Local edge TLS snippet"]
+  P1_27l["P1.27l Local stacks pass C2-C5 unsigned"]
+  P1_27y["P1.27y Build contexts match scan"]
+  P1_27f["P1.27f C26 test gets a C9-valid fixture"]
+  P1_27n["P1.27n P1.27y verifier test gaps"]
+  P1_27u["P1.27u C9 bind reach gaps"]
+  P1_27j["P1.27j Preflight comment and tilde tidy"]
+  P1_27a["P1.27a C9 refuses sticky ancestors"]
+  P1_27w["P1.27w Compose only through the wrapper"]
+  P1_27o["P1.27o Edge data and config owned by caddy"]
   P1_29l["P1.29l Mirror scans build-stage bases whole"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
-  P1_29a["P1.29a PDS in the dev stack"]
+  P1_29a["P1.29a PDS and edge in the dev stack"]
   P1_29h["P1.29h Local email-token reader"]
   P1_29s["P1.29s Dev seed and precheck"]
   P1_29t["P1.29t Running-stack tests"]
@@ -511,6 +572,15 @@ flowchart TD
   P1_30w["P1.30w Preflight key allowlist and value scrub"]
   P1_30k["P1.30k Compose top-level key allowlist"]
   P1_30m["P1.30m Preflight withholds value reasons"]
+  P1_30v["P1.30v Withheld marker carries no value"]
+  P1_30j["P1.30j Keys not values in reasons"]
+  P1_30z["P1.30z Compose paths from project dir"]
+  P1_30d["P1.30d Project-directory notes and flag test"]
+  P1_30a["P1.30a Compose interpolation inputs"]
+  P1_30l["P1.30l Pin Compose in CI"]
+  P1_30o["P1.30o C9 mounted secrets by uid"]
+  P1_30x["P1.30x Compose hardening and limit keys"]
+  P1_30y["P1.30y Compose build, tmpfs, depends_on, secrets"]
   P1_30u["P1.30u Preflight C18 edge zones"]
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
@@ -529,8 +599,9 @@ flowchart TD
   P2_03e["P2.03e session log events"]
   P2_03c["P2.03c session workspace trusted path"]
   P2_03["P2.03 Session store and lifecycle"]
-  P2_03i["P2.03i session indexes"]
+  P2_03i["P2.03i session index"]
   P2_04["P2.04 OAuth client"]
+  P2_04s["P2.04s Session prelude for OAuth"]
   P2_05["P2.05 Login"]
   P2_06["P2.06 Callback"]
   P2_07["P2.07 Resilience"]
@@ -657,7 +728,7 @@ flowchart TD
   P1_28x --> P1_28
   P1_27 --> P1_28
   P1_11p --> P1_29
-  P1_28 --> P1_29
+  P1_28 --> P1_29a
   P1_28 --> P1_28b
   P1_28b --> P1_28h
   P1_28h --> P1_28s
@@ -694,6 +765,12 @@ flowchart TD
   P2_03i --> P2_04
   P2_03x --> P2_04
   P2_04 --> P2_05
+  P2_03 --> P2_04s
+  P2_04 --> P2_04s
+  P2_04s --> P2_06
+  P2_04s --> P2_07
+  P2_04s --> P2_08
+  P2_04s --> P2_12
   P1_09 --> P2_05
   P2_05 --> P2_06
   P2_03 --> P2_06
@@ -731,6 +808,13 @@ flowchart TD
   P1_29v --> P1_29u
   P1_29b --> P1_29c
   P1_29c --> P1_29l
+  P1_29c --> P1_29z
+  P1_29z --> P1_29o
+  P1_29z --> P1_27e
+  P1_29o --> P1_27k
+  P1_27k --> P1_27t
+  P1_27k --> P1_27g
+  P1_27e --> P1_27t
   P1_29x --> P1_29r
   P1_29r --> P1_29d
   P1_29r --> P1_29e
@@ -794,6 +878,41 @@ flowchart TD
   P1_30h --> P1_30g
   P1_30w --> P1_30k
   P1_30w --> P1_30m
+  P1_30m --> P1_30v
+  P1_30v --> P1_30j
+  P1_30k --> P1_30j
+  P1_30k --> P1_30z
+  P1_30z --> P1_30y
+  P1_30z --> P1_30d
+  P1_30j --> P1_30d
+  P1_30d --> P1_30a
+  P1_30a --> P1_30l
+  P1_30x --> P1_30o
+  P1_30o --> P1_29
+  P1_30y --> P1_27y
+  P1_27y --> P1_29
+  P1_29 --> P1_27l
+  P1_27m --> P1_27l
+  P1_30a --> P1_29
+  P1_30a --> P1_27w
+  P1_27w --> P1_29
+  P1_27o --> P1_29a
+  P1_27y --> P1_27n
+  P1_30o --> P1_27a
+  P1_27a --> P1_29
+  P1_27y --> P1_27f
+  P1_30o --> P1_27f
+  P1_27t --> P1_27h
+  P1_27g --> P1_27i
+  P1_27i --> P1_27x
+  P1_27x --> P1_27z
+  P1_27t --> P1_27z
+  P1_27a --> P1_27u
+  P1_27u --> P1_29
+  P1_30a --> P1_27j
+  P1_30k --> P1_30x
+  P1_30x --> P1_29
+  P1_30y --> P1_29
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
@@ -977,7 +1096,7 @@ Depth: **detail by risk; P3.00 refines** (contract parts in full, algorithms a r
 | P3.02 | Tap deployment and repo tracking | [SEC] | P3.01, P3.03, P2.06 | `phase-3.md` |
 | P3.04 | Ingest invariants as tests first | — | P3.03 | `phase-3.md` |
 | P3.05 | Ingest | [SEC] | P3.04, P3.02, P1.31 | `phase-3.md` |
-| P3.06g | Grants for the account-state machine (SE-6) | [SEC] | P3.03, P2.04 | `phase-3.md` |
+| P3.06g | Grants for the account-state machine (SE-6) | [SEC] | P3.03, P2.04s | `phase-3.md` |
 | P3.06 | Account-state machine | [SEC] | P3.06g, P3.05, P2.03 | `phase-3.md` |
 | P3.07g | Grant for `eraseDid` on the audit lane (SE-6) | [SEC] | P3.06g, P1.15a | `phase-3.md` |
 | P3.07k | `eraseDid` SQL and its storage and untrack hooks (split from P3.07, SE-6) | [SEC] | P3.07g, P3.06, P1.13, P1.15a, P2.18 | `phase-3.md` |
@@ -1593,14 +1712,16 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
 Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-slips, item 4 and amendment 1):
 
-- **P0.16:** his own commit of the two CLAUDE.md lines on the PR's branch (exact diff and subject in its body), then
-  he merges it by hand (amendments 3 and 4 of 2026-10-12-p016-delivery-check-adr-0019).
+- **P0.16a:** a typed line, "yes P0.16a CLAUDE.md", for the classifier path (book edit
+  2026-10-12-p016a-claude-md-adr-0019-wording). P0.16 merged at 2026-10-12T16:53:13Z as `45bd8ba` (#625).
+- **P0.09t:** a typed line, "yes P0.09t scripts/guards trusted-base", for the classifier path.
+- **P0.09n (#692):** a typed line, "yes P0.09n scripts/guards trusted-base imports", for the classifier path.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
 - **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
 - **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).
@@ -1610,6 +1731,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   signing: key or keyless" chooses keyless, the signing-key item lapses; the environment, the reviewer and GATE_IF stay.
 - **P1.29a (#442):** his card answer "Allow pinned" (2026-10-07T13:00:19Z), already given and quoted in the body.
 - **P1.29y:** a typed line, "yes P1.29y images.yml".
+- **P1.30l (#657):** a typed line, "yes P1.30l images.yml/ci.yml compose pin".
 - **P4.10 (#261):** the decision to enable the classifier; it stays off in v1 (answer 30b).
 
 ## Editor pass (2026-10-03, answers 31-53)

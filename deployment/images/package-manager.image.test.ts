@@ -22,9 +22,19 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { docker, killBefore, withCleanup } from "../../tests/support/docker.ts";
+import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const REPO = join(DEPLOYMENT, "..");
+// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
+// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
+const CONTAINER_MS = 120_000;
+// Each docker call is killed just under the smallest budget of a test that makes it, so a hung daemon fails that test
+// with a named message before scripts/test/run.ts kills the whole run at 600 s (P1.27k): a build under
+// privileges_fixture_image's 300 s, and a create, export or removal under CONTAINER_MS.
+const BUILD_CALL_MS = killBefore(300_000);
+const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8"));
 const lock = json("bases.lock.json") as Record<string, { ref: string; tag: string; digest: string }>;
 /** The same lock-entry-to-kind map images.test.ts reads, so every kind it knows is built and checked here. */
@@ -59,23 +69,17 @@ function kindOf(dockerfile: string): string | undefined {
 /** The images/ Dockerfiles build from the repository root; any other builds from its own folder. */
 const contextOf = (file: string): string => (file.startsWith("images/") ? REPO : join(DEPLOYMENT, dirname(file)));
 
-function docker(args: readonly string[]): { code: number; out: string; err: string } {
-  const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-  return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
-}
-
 /**
- * Builds a Dockerfile with its context once per run; the image id. A failed build fails the test, so no kind passes
+ * Builds a Dockerfile with its context once per run; its tag. A failed build fails the test, so no kind passes
  * unbuilt.
  */
 function build(dockerfile: string, context: string): string {
   const key = `${dockerfile}\0${context}`;
   const cached = built.get(key);
   if (cached !== undefined) return cached;
-  const result = docker(["build", "-q", "-f", dockerfile, context]);
-  if (result.code !== 0) throw new Error(`${dockerfile} build failed: ${result.err.slice(-2000)}`);
-  built.set(key, result.out.trim());
-  return result.out.trim();
+  const tag = buildTestImage(dockerfile, context, { timeoutMs: BUILD_CALL_MS });
+  built.set(key, tag);
+  return tag;
 }
 
 /**
@@ -263,19 +267,26 @@ function readTar(tar: string): Filesystem {
 
 /** Exports an image's filesystem from a container that never starts, and hands it to `use`. */
 function inspect<T>(image: string, use: (filesystem: Filesystem) => T): T {
-  const created = docker(["create", image]);
+  const created = docker(["create", image], { timeoutMs: CONTAINER_CALL_MS });
   if (created.code !== 0) throw new Error(`docker create failed: ${created.err.slice(-2000)}`);
   const container = created.out.trim();
   const dir = mkdtempSync(join(tmpdir(), "image-fs-"));
   const tar = join(dir, "fs.tar");
-  try {
-    const exported = docker(["export", "-o", tar, container]);
-    if (exported.code !== 0) throw new Error(`docker export failed: ${exported.err.slice(-2000)}`);
-    return use(readTar(tar));
-  } finally {
-    docker(["rm", "-f", container]);
-    rmSync(dir, { recursive: true, force: true });
-  }
+  return withCleanup(
+    () => {
+      const exported = docker(["export", "-o", tar, container], { timeoutMs: CONTAINER_CALL_MS });
+      if (exported.code !== 0) throw new Error(`docker export failed: ${exported.err.slice(-2000)}`);
+      return use(readTar(tar));
+    },
+    () => {
+      // The folder goes even when the removal is killed; a killed removal then joins the body's failure.
+      try {
+        docker(["rm", "-f", container], { timeoutMs: CONTAINER_CALL_MS });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 }
 
 /**
@@ -295,11 +306,6 @@ function packageManagers(entries: readonly Entry[]): string[] {
 const PACKAGE_MANAGER =
   /^(?:apk|apk\.static|apk-.+|libapk.*|apt|apt-get|apt-.+|libapt.*|dpkg|dpkg-.+|rpm|yum|dnf|microdnf)$/;
 
-/**
- * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
- * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
- * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
- */
 /** Debian's dpkg database (node and postgres both build on Debian trixie). */
 const DPKG_DATABASE = {
   root: "/var/lib/dpkg",
@@ -307,6 +313,11 @@ const DPKG_DATABASE = {
   index: "status",
   names: /^Package: /m,
 };
+/**
+ * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
+ * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
+ * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
+ */
 const DATABASE_BY_KIND = new Map([
   ["node", DPKG_DATABASE],
   // The official Postgres image also keeps dpkg's statoverride file, one text line (`root ssl-cert 710
@@ -409,8 +420,22 @@ function imagePrivilegeProblems(kind: string, file: string): string[] {
 
 describe("image package managers", () => {
   afterAll(() => {
-    for (const image of new Set(built.values())) docker(["rmi", "-f", image]);
-  });
+    // Each tag is removed, even after one removal fails, and the failures are reported together (P1.27x). The removals
+    // share one deadline inside the hook's budget: a blocked spawnSync holds vitest's timer, so a full call budget per
+    // tag could run four times past it (Codex on #702).
+    const deadline = Date.now() + CONTAINER_CALL_MS;
+    const failures: unknown[] = [];
+    for (const tag of built.values()) {
+      const left = deadline - Date.now();
+      try {
+        if (left <= 0) throw new Error(`no time left to remove ${tag}`);
+        removeTestImage(tag, { timeoutMs: left });
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} image removal(s) failed`);
+  }, CONTAINER_MS);
 
   /** A listing as tar prints it, from [mode, quoted name, verbose suffix] rows: `-tv` lines and `-tf` names. */
   const tarListing = (rows: readonly (readonly [string, string, string?])[]): [string, string] => [
@@ -570,15 +595,12 @@ describe("image package managers", () => {
     expect(
       kindProblems("node", ["a", "b"], (file) => (file === "b" ? ["/usr/bin/apt is a package manager"] : [])),
     ).toEqual(["b: /usr/bin/apt is a package manager"]);
-    // A Dockerfile that fails to build is a finding, not a skip.
-    const dir = mkdtempSync(join(tmpdir(), "image-broken-"));
-    try {
-      writeFileSync(join(dir, "Dockerfile"), "FROM scratch\nRUN false\n");
-      const problems = kindProblems("node", [join(dir, "Dockerfile")], (file) => [build(file, dir)]);
-      expect(problems).toEqual([expect.stringContaining("build failed")]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // A Dockerfile that fails to build is a finding, not a skip. The check throws as `build` does on a failed build;
+    // a real build here waited behind the image tests' builds past the 5 s default (P1.29z).
+    const failedBuild = (file: string): string[] => {
+      throw new Error(`${file} build failed: exit code 1`);
+    };
+    expect(kindProblems("node", ["c"], failedBuild)).toEqual(["c: c build failed: exit code 1"]);
   });
 
   test("every_dockerfile_builds_a_known_kind", () => {

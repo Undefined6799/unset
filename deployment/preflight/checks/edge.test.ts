@@ -33,11 +33,12 @@ function repository() {
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const EDGE_IMAGE = `ghcr.io/undefined6799/edge@${DIGEST}`;
 /** A compose file whose edge service runs `image` and has `volumes` (already absolute, as loadCompose resolves them). */
+// The named volumes the fixtures mount are declared, as the compose reader requires (P1.30k).
 const compose = (volumes: string[] | null, image = EDGE_IMAGE) =>
   parseCompose(
     `name: unset-dev\nservices:\n  ${volumes === null ? "web" : "edge"}:\n    image: ${image}\n${
       volumes === null || volumes.length === 0 ? "" : `    volumes:\n${volumes.map((v) => `      - ${v}\n`).join("")}`
-    }`,
+    }volumes:\n  config: {}\n  sites: {}\n`,
     "compose.yaml",
   );
 const sitesFrom = (source: string) => `${source}:/etc/caddy/sites/enabled:ro`;
@@ -54,7 +55,11 @@ describe("C18 inputs (P1.30u)", () => {
     const { edgeDir, sitesDir } = repository();
     const over = compose([sitesFrom(sitesDir), `${edgeDir}/Caddyfile:/etc/caddy/Caddyfile:ro`]);
     expect(edgeSitesDir(over, edgeDir)).toEqual({ pass: false, reason: "the edge mounts over /etc/caddy/Caddyfile" });
-    const snippets = compose([sitesFrom(sitesDir), "type: tmpfs\n        target: /etc/caddy/snippets"]);
+    // A tmpfs there is refused by the parser first (P1.30y's tmpfs targets); C18 still answers for a volume.
+    expect(() => compose([sitesFrom(sitesDir), "type: tmpfs\n        target: /etc/caddy/snippets"])).toThrow(
+      /volume tmpfs target is not \/tmp or \/var\/run\/postgresql/,
+    );
+    const snippets = compose([sitesFrom(sitesDir), "config:/etc/caddy/snippets"]);
     expect(edgeSitesDir(snippets, edgeDir)).toEqual({
       pass: false,
       reason: "the edge mounts over /etc/caddy/snippets",
@@ -214,7 +219,8 @@ describe("C18 (P1.30u)", () => {
   });
 
   // P1.30w (architecture ruling B2b): values the reader accepts, placed where its messages would quote them, still
-  // never leave C18: the check turns each edge env value it read back into its name.
+  // never leave C18: the edge reader scrubs every env value from its own messages (P1.30h). The runner then withholds
+  // any reason that still holds one (P1.30m; preflight.test.ts c18_sentinel_withheld_end_to_end).
   test("c18_shape_valid_env_values_never_printed", () => {
     const sentinels = {
       PDS_HOST: "sentinelhost.example.test",

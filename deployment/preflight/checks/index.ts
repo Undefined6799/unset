@@ -1,4 +1,7 @@
-// The checks, in the order they run (P1.30: C1 to C12; P1.30s: C13 to C24 but C17 and C18; P1.30t: C17; P1.30u: C18).
+// The checks, in the order they run (P1.30: C1 to C12; P1.30s: C13 to C24 but C17 and C18; P1.30t: C17; P1.30u: C18;
+// P1.30x: C25; P1.30y: C26 and C27).
+import { c26, c27 } from "./build.ts";
+import { c25 } from "./capabilities.ts";
 import { c18 } from "./edge.ts";
 import { c21, c24 } from "./host.ts";
 import { c2, c3, c4, c5 } from "./images.ts";
@@ -34,4 +37,7 @@ export const CHECKS: readonly Check[] = [
   c22,
   c23,
   c24,
+  c25,
+  c26,
+  c27,
 ];

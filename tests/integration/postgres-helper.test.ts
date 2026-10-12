@@ -1,20 +1,25 @@
 // The one Postgres test helper (tests/support/postgres.ts, ruling 2026-10-06): it keeps the container on loopback,
 // unprivileged and read-only, reports a failed init script, and leaves nothing behind.
-import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { runUntilExit, startPostgres, stopAllPostgres } from "../support/postgres.ts";
+import { docker } from "../support/docker.ts";
+import { runUntilExit, STOP_ALL_MS, startPostgres, stopAllPostgres } from "../support/postgres.ts";
 
 const dirs: string[] = [];
 const names: string[] = [];
 const volumes: string[] = [];
 
+// Removal is one docker call per container, each killed at the helper's 60 s (P1.27k); the hook's budget holds two.
 afterAll(() => {
   stopAllPostgres();
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
-});
+}, 120_000);
+
+// Inspecting is quick; 20 s kills a hung daemon. leaves_nothing_behind holds its removals (STOP_ALL_MS) plus the
+// inspections it makes (P1.27g).
+const INSPECT_MS = 20_000;
 
 /** An init folder the image can read, holding the given scripts (executable). */
 function initDir(scripts: Record<string, string>): string {
@@ -29,7 +34,7 @@ function initDir(scripts: Record<string, string>): string {
 }
 
 const inspect = (name: string, format: string) =>
-  spawnSync("docker", ["inspect", "-f", format, name], { encoding: "utf8" }).stdout.trim();
+  docker(["inspect", "-f", format, name], { timeoutMs: INSPECT_MS }).out.trim();
 
 describe("tests/support/postgres.ts", () => {
   test("postgres_helper_is_hardened", { timeout: 120_000 }, async () => {
@@ -66,13 +71,13 @@ describe("tests/support/postgres.ts", () => {
     expect(result.logs).toContain("init-script-failed");
   });
 
-  test("postgres_helper_leaves_nothing_behind", { timeout: 30_000 }, () => {
+  test("postgres_helper_leaves_nothing_behind", { timeout: STOP_ALL_MS + 4 * INSPECT_MS }, () => {
     stopAllPostgres();
     for (const name of names) {
-      expect(spawnSync("docker", ["inspect", name], { stdio: "ignore" }).status).not.toBe(0);
+      expect(docker(["inspect", name], { timeoutMs: INSPECT_MS }).code).not.toBe(0);
     }
     for (const volume of volumes) {
-      expect(spawnSync("docker", ["volume", "inspect", volume], { stdio: "ignore" }).status).not.toBe(0);
+      expect(docker(["volume", "inspect", volume], { timeoutMs: INSPECT_MS }).code).not.toBe(0);
     }
   });
 });

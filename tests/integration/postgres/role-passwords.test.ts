@@ -3,7 +3,6 @@
 // setting web's here must never reach the shared integration cluster other test files log in to. P1.29k: the migrate
 // service's run (`migrateThenSyncPasswords`, what `unset-migrate` calls with /run/secrets) against the same container:
 // migrations first, then the role passwords, and no password when they fail.
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +17,7 @@ import {
   syncRolePasswords,
   withClient,
 } from "../../../infrastructure/postgres/index.ts";
+import { docker } from "../../support/docker.ts";
 import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -107,10 +107,11 @@ describe("role passwords on postgres", () => {
     });
     if (!migrated.ok) throw new Error(`migration failed: ${migrated.reason}`);
   }, 120_000);
+  // One container removal, killed at the helper's 60 s (P1.27k), inside this budget.
   afterAll(() => {
     stopAllPostgres();
     rmSync(secretsDir, { recursive: true, force: true });
-  });
+  }, 120_000);
 
   test("password_sync", async () => {
     const first = newPasswords("web", "api", "indexer");
@@ -179,9 +180,10 @@ describe("role passwords on postgres", () => {
     for (const role of ["web", "api", "indexer"]) expect(await login(role, before[role] ?? "")).toBe("ok");
   });
 
-  test("password_never_logged", () => {
-    const logs = spawnSync("docker", ["logs", postgres.name], { encoding: "utf8" });
-    const text = `${logs.stdout}${logs.stderr}${JSON.stringify(results)}${serviceLog.join("")}`;
+  // docker logs is killed at 60 s (P1.27k), inside the test's 120 s budget.
+  test("password_never_logged", { timeout: 120_000 }, () => {
+    const logs = docker(["logs", postgres.name], { timeoutMs: 60_000 });
+    const text = `${logs.out}${logs.err}${JSON.stringify(results)}${serviceLog.join("")}`;
     expect(used.length).toBeGreaterThan(0);
     expect(used.filter((password) => text.includes(password))).toEqual([]);
   });
