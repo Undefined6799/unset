@@ -214,7 +214,8 @@ describe("C18 (P1.30u)", () => {
   });
 
   // P1.30w (architecture ruling B2b): values the reader accepts, placed where its messages would quote them, still
-  // never leave C18: the check turns each edge env value it read back into its name.
+  // never leave C18: the edge reader scrubs every env value from its own messages (P1.30h). The runner then withholds
+  // any reason that still holds one (P1.30m; preflight.test.ts c18_sentinel_withheld_end_to_end).
   test("c18_shape_valid_env_values_never_printed", () => {
     const sentinels = {
       PDS_HOST: "sentinelhost.example.test",
