@@ -6817,6 +6817,7 @@ Done when P2 and P9 are red on the base and green after, and check is green.
 
 ### P1.27x — Tag each test image build uniquely
 Tags: —            Depends on: P1.27i (merged, #697)
+As built: merged at 2026-10-12T20:42:36Z as `87fcd53` (#702, head 7fb875a) (merge data read by REST, 20:44Z).
 Slice 1, issue #698, product (`deployment/images/{migrate,package-manager,postgres}.image.test.ts`,
 `tests/integration/deployment/edge/{edge-container,edge.image.test}.ts`), kind/fix, lane Phase 1, ahead of other Phase 1
 work; book edit 2026-10-12-p127x-p127z-image-tag-race (19:15Z), from Phase 1's finding on #686
@@ -9240,6 +9241,7 @@ Done when the `--workdir` case is red on main and green after, and check is gree
 
 ### P1.30a — Preflight reads Compose's interpolation inputs
 Tags: [SEC]            Depends on: P1.30z (merged, #652), P1.30d (same argument parsing)
+As built: merged at 2026-10-12T20:41:45Z as `1c1689a` (#677, head 7f34fd2) (merge data read by REST, 20:44Z).
 Slice 1, issue #656, product (`deployment/preflight/` and its tests), lane Phase 1; book edit
 2026-10-12-p130a-p130l-compose-inputs-booked (16:15Z), from architecture's 2026-10-12-preflight-compose-inputs (F2,
 F3.2, F3.4, F3.5). No line from Alex. P1.29, P1.27w, P1.27k (order only) and P1.30l depend on it.
