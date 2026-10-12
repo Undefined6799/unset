@@ -15,7 +15,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0005](0005-atproto-spaces-destination.md) | Atproto Spaces is the destination for private data (decision 38) | Accepted 2026-10-04 |
 | [0006](0006-private-likes-shown-to-target.md) | Private likes, comments and follows are shown to their target (decision 39) | Accepted 2026-10-04 |
 | [0007](0007-bootstrap-reconciliation.md) | Bootstrap reconciliation: which Phase 0 step changes each bootstrap file | Proposed (awaiting Alex) |
-| [0008](0008-ruleset-without-required-approvals.md) | Main-branch ruleset without required approvals (decision 40) | Accepted 2026-10-04 |
+| [0008](0008-ruleset-without-required-approvals.md) | Main-branch ruleset without required approvals (decision 40) | Accepted 2026-10-04; merge clause superseded by 0019 |
 | [0009](0009-no-branch-protection-on-free-private-repo.md) | No branch protection while the repository is private on the free plan (decision 41) | Superseded by 0017 |
 | [0010](0010-opaque-chat-ids.md) | Opaque chat ids close the key-query membership leak (decision 42) | Accepted 2026-10-04 |
 | [0011](0011-no-orchestrator-until-measured-need.md) | No orchestrator until a measured need beyond one host (rule AB-3) | Accepted 2026-10-04 |
@@ -26,3 +26,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |
 | [0017](0017-main-ruleset-applied.md) | Main ruleset applied; supersedes 0009 | Accepted 2026-10-06 |
 | [0018](0018-edge-rate-limit-plugin.md) | Edge rate limiting with caddy-ratelimit, in memory only (P1.28) | Proposed (awaiting Alex) |
+| [0019](0019-verified-agent-merges.md) | Verified agent merges: a verifier session merges checked agent PRs (P0.15) | Proposed (awaiting Alex) |

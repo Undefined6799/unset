@@ -414,3 +414,12 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   copied byte for byte, checked against the sheet's ICONS data (bundle sha256 in shared/ui/sheet/source.json).
 - **Decision 41 superseded (2026-10-06):** Alex applied the decision 40 ruleset on `main` after the GitHub Pro
   upgrade (12:44Z) and making the repository public (22:06Z); read back 22:35Z. ADR 0017 supersedes ADR 0009.
+- **Verified agent merges (Alex, 2026-10-12 03:25:26Z request, 03:27:13Z "Big things only" and 03:30:26Z "Let Claude
+  merge" on the coordinator's cards, 03:43:19Z "yes P0.15 ADR 0019, decisions README, 0001 log, CLAUDE.md"; own
+  record: [0019](0019-verified-agent-merges.md)):** a verifier session, never the author thread, may squash-merge a
+  Claude thread's pull request when it is SHA-pinned to the reviewed head, the six required checks are green,
+  `mergeable_state` is clean, main has no red required check and the verification is posted on the pull request. On
+  CODEOWNERS paths that review is the SE-6 security review. Alex still merges loosenings, new ADRs, [ALEX] and [STOP]
+  steps, Renovate and external pull requests, and pauses all agent merges with "stop merging". It supersedes the merge
+  clauses of ADR 0008 and ADR 0017 without editing them; agent merges start only once ADR 0019 is on `main`. Step
+  P0.15.
