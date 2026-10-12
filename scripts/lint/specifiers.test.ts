@@ -101,18 +101,29 @@ async function cruiseSpecs(from: string, spellings: (root: string) => string[]):
   }
   const { output } = await cruise(["."], { ...config.options, baseDir: root, outputType: "json" });
   const result: ICruiseResult = JSON.parse(String(output));
+  // A path spelling has a target in the fixture, so the cruise must keep its edge: one dropped for any reason (an
+  // exclude, the process cwd, a resolver change) fails here by name, not as a short count below.
+  const kept = result.modules.find((module) => module.source === from)?.dependencies ?? [];
+  for (const spec of specs.filter((spec) => /^[./]/.test(spec))) {
+    expect(
+      kept.some((dependency) => dependency.module === spec && !dependency.couldNotResolve),
+      spec,
+    ).toBe(true);
+  }
   return specifierViolations(result, { ...PACKAGES, root: new Set(), workspaces: new Map() });
 }
 
 test("cruise_specifiers_reach_the_check", async () => {
   // dependency-cruiser rewrites `resolved` for a path that resolves, and moves node: to `protocol`; the check must
-  // still see the spelling. Absolute paths here resolve in the fixture, so only the specifier can refuse them.
+  // still see the spelling. Absolute paths here resolve in the fixture, so only the specifier can refuse them. The
+  // /proc spelling goes through /proc/self/root, which is `/` for this process, so it reaches the fixture whatever the
+  // cwd is; through /proc/self/cwd it reached the checkout instead, and under .worktrees/ the exclude dropped it.
   const from = "deployment/edge/a.test.ts";
   const refused = await cruiseSpecs(from, (root) => [
     "FILE:///deployment/preflight/compose-parse.ts",
     "file:///deployment/preflight/compose-parse.ts",
     "data:text/javascript,export const x = 1;",
-    "/proc/self/cwd/deployment/preflight/compose-parse.ts",
+    `/proc/self/root${root}/deployment/preflight/compose-parse.ts`,
     `${root}/deployment/preflight/compose-parse.ts`,
     "fs",
     "node:not-a-builtin",
