@@ -6982,7 +6982,8 @@ check is green. The verifier's later gaps on #689 are P1.27u.
 ### P1.27u — Close the C9 bind reach gaps
 Tags: [SEC]            Depends on: P1.27a (merged, #689)
 Slice 1, issue #695, product (`deployment/preflight/checks/` and its tests), kind/fix, lane Phase 2 (the C9 owner),
-before P1.29 lays out the secrets folder; book edit 2026-10-12-p127u-c9-bind-reach-gaps (18:47Z, amendment 1 18:55Z),
+before P1.29 lays out the secrets folder; book edit 2026-10-12-p127u-c9-bind-reach-gaps (18:47Z, amendments 18:55Z
+and 19:30Z),
 from the coordinator's verifier on #689 at c6aa877, and architecture's ruling
 2026-10-12-p127u-bind-ancestors-and-build-context for item 4. Nothing from Alex: every item tightens within his C9 card
 ("Yes", 16:45:14Z). P1.29 depends on it.
@@ -7001,6 +7002,8 @@ from the coordinator's verifier on #689 at c6aa877, and architecture's ruling
      A missing source fails. Named volumes are out of scope. Fixtures: a `:ro` bind under a uid-2000 ancestor, a bind
      under a 0777 sticky ancestor, an as-written path crossing a writable link folder (all fail), and a clean
      deploy-owned path (passes).
+   - (a, amendment 2, 19:30Z) The bind source itself is owned by root or the deploy user, with no group or other
+     write, like its ancestors. Fixtures: a uid-999 bind source fails; a named volume passes.
    - (b) C26 refuses a build context whose realpath equals, contains or sits inside the secrets folder, using the
      two-way test plus the `(dev, ino)` match; `.dockerignore` never counts. Fixtures: a root context with the secrets
      folder inside the checkout, a context equal to it and one inside it (all fail), a sibling layout (passes), and a
@@ -9440,7 +9443,9 @@ P1.29h, P1.29s, P1.29t.
    (built locally; their bases are locked and `images.yml` scans what they produce; publishing waits for P1.27s);
    `deployment/env/dev.example.env`; `docs/human/runbooks/dev-stack-secrets.md` (the secrets folder is the
    deploy-owned 0700 sibling `unset-dev-secrets`, outside the checkout, reached as `../../unset-dev-secrets/`; the
-   runbook says its owner, its modes and how to create it; P1.27u); `deployment/networks.dev.json` with only
+   runbook says its owner, its modes and how to create it; P1.27u); writable service state is always a named volume,
+   never a bind: postgres data is a named volume, and any bind kept points at deploy-owned, read-only content (P1.27u
+   amendment 2); `deployment/networks.dev.json` with only
    `db {internal: true, members: [postgres, migrate, web]}`. No edge and no TLS override: the edge moves to P1.29a
    (book edit 2026-10-12-p129-edge-moves-to-p129a, from architecture's 2026-10-12-p129-tls-override-and-edge-sites,
    item 2), and the homelab `dev` env uses the image's own snippet; the `tls internal` mount belongs to P1.27l and
