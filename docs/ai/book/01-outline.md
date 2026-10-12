@@ -250,8 +250,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28c | Remove the edge Dockerfile's syntax directive | [SEC], trusted | P1.28u | `phase-1.md` |
 | P1.28t | Dockerfile reader: ADD refused, case-insensitive mount keys and flags, syntax and escape refused, list as floor | [SEC] | P1.28c | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
-| P1.28a | Bump the edge builder digest; lock and mirror list ride with that FROM change | [SEC] | P1.28, P1.28x | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
+| P1.28a | Bump the edge builder digest; lock and mirror list ride with that FROM change | [SEC] [ALEX] | P1.28, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
 | P1.28i | Edge image builds move to *.image.test.ts (caddyfile, edge integration) | [SEC], trusted | P1.28h | `phase-1.md` |
