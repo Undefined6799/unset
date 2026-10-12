@@ -193,8 +193,11 @@ function addedManifests(head: string, manifests: readonly RawChange[]): Map<stri
 
 const EDGE_BUMP_TEXTS = [EDGE_DOCKERFILE, "deployment/images/bases.lock.json", "deployment/mirror.list.json"] as const;
 
+/** The bump object, or null. Not undefined: DocFacts.edgeBaseBump is optional, and exactOptionalPropertyTypes rejects an explicit undefined. */
+type EdgeBump = NonNullable<DocFacts["edgeBaseBump"]>;
+
 /** Base and head text of the edge Dockerfile and the pins that may ride with a digest bump (P1.28a). */
-function edgeBaseBump(base: string, head: string, changed: readonly RawChange[]): DocFacts["edgeBaseBump"] {
+function edgeBaseBump(base: string, head: string, changed: readonly RawChange[]): EdgeBump | null {
   if (!changed.some((c) => c.path === EDGE_DOCKERFILE && c.status !== "D")) return null;
   const dockerfile = { base: fileAt(base, EDGE_DOCKERFILE) ?? "", head: fileAt(head, EDGE_DOCKERFILE) ?? "" };
   const replacements = edgeFromReplacements(dockerfile.base, dockerfile.head);

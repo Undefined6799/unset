@@ -477,7 +477,9 @@ describe("trusted base (SE-6)", () => {
     });
     const checks = ["/scripts/guards/"];
     const withGuard = ["scripts/guards/trusted-base.ts", "docs/ai/book/phase-1.md", ...paths];
-    const guardDocs: DocFacts = { ...docsFor(withGuard), edgeBaseBump: docs.edgeBaseBump };
+    const bump = docs.edgeBaseBump ?? null;
+    if (bump === null) throw new Error("edge digest bump was not recognized");
+    const guardDocs: DocFacts = { ...docsFor(withGuard), edgeBaseBump: bump };
     expect(checkTrustedBaseIsolation(withGuard, edgePatterns, { parsedPaths, findings: [], docs: guardDocs })).toEqual({
       ok: true,
       touched: true,
