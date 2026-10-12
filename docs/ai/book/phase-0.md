@@ -99,7 +99,8 @@ flowchart TD
   P007 --> P014["P0.14 exit drill [ALEX tail]"]
   P008 --> P014
   P010 --> P014
-  P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"] --> P016["P0.16 Delivery check asserts ADR 0019 [SEC]"]
+  P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"] --> P015a["P0.15a ADR 0019 accepted [ALEX][SEC]"]
+  P015a --> P016["P0.16 Delivery check asserts ADR 0019 [SEC]"]
 ```
 
 The Alex halves of P0.11 and P0.13 can start on day one. P0.12's ceremony waits for P0.10's hardware keys. Every
@@ -2995,12 +2996,14 @@ Diagram: none.
 
 ### P0.15 — Verified agent merges (ADR 0019)
 Tags: [SEC] [ALEX] (Alex merges by hand)            Depends on: —            Plan: —
+As built: merged by Alex at 2026-10-12T04:23:21Z as `5b269ac` (#607), before the status line and the CLAUDE.md lines;
+P0.15a completes it (book edit 2026-10-12-p015a-adr-0019-accepted).
 Docs class, kind/docs; issue #595; slice 1, a governance step rather than a build step; book edit
 2026-10-12-p015-verified-agent-merges (final 03:32Z), from architecture's message at 03:28Z. Scope: Alex's message at
 2026-10-12T03:25:26Z, his "Big things only" tap (03:27:13Z) on the card "Choose what still needs you once Claude merges
 its own checked PRs", and his "Let Claude merge" tap (03:30:26Z), which dropped the protected-paths exception.
 Owner: the third lane or Phase 2, whichever frees first after P1.17r (#590); not Phase 1, because the CLAUDE.md
-classifier refuses there. P0.16 depends on it. After it lands the coordinator updates its memory and hand-off rules,
+classifier refuses there. P0.15a depends on it. After it lands the coordinator updates its memory and hand-off rules,
 which is not a book step.
 Where:
   - `docs/human/decisions/0019-verified-agent-merges.md` (new): architecture's draft
@@ -3015,19 +3018,50 @@ Done when Alex merges it by hand. No agent merge happens under ADR 0019 before t
 
 ---
 
+### P0.15a — Mark ADR 0019 accepted
+Tags: [SEC] [ALEX] (Alex pastes CLAUDE.md, merges by hand)            Depends on: P0.15 (merged, #607)            Plan: —
+Docs class, kind/docs; issue #614; slice 1, right after P0.15; book edit 2026-10-12-p015a-adr-0019-accepted (final
+04:29Z), from the coordinator at 04:27Z. Owner: Phase 2. P0.16 depends on it.
+Why: Alex merged #607 at 04:23:21Z at head `63e0c69`, before the status-line fix and before his CLAUDE.md paste. On main
+ADR 0019 still reads "Status: proposed (awaiting Alex's merge)", its README row reads "Proposed (awaiting Alex)", and
+CLAUDE.md is unchanged, so **agents still never merge**: ADR 0019 is not in force until this step lands. 0019:87-88 says
+CLAUDE.md changes "in the same pull request", which is now false.
+What (architecture's agreed lines):
+  - 0019's Status line becomes accepted on merge, with a provenance tail naming #607 and this PR.
+  - The README rows: 0019 Accepted; 0008 and 0017 marked "merge clause superseded by 0019". The 0008 and 0017 files
+    are not edited (adr_immutable).
+  - 0019:87-88's "same pull request" sentence becomes "changes with this decision".
+  - One paragraph appended at the end of `docs/human/decisions/0001-phase-0-defaults.md`, word for word from
+    architecture's Note 2 item 4 (2026-10-12-adr-0019-verified-agent-merges-draft.md:163). ADR 0001 is append-only, so
+    only the end of the file changes (amendment 1, 04:53Z).
+  - Alex's two CLAUDE.md lines (the Merging line, whose text the P0.15 record carries) go on the branch. He pastes them,
+    because the classifier refuses CLAUDE.md for agents.
+Editing 0019 is allowed: it is still proposed on main, the adr_immutable guard covers accepted ADRs, and this PR is
+what accepts it.
+Done when Alex merges it with his CLAUDE.md lines on the branch. Main then has 0019 accepted, and CLAUDE.md names ADR
+0019. No agent merges under ADR 0019 before this is on main.
+
+---
+
 ### P0.16 — Delivery check asserts the ADR 0019 merge rule
-Tags: [SEC]            Depends on: P0.15            Plan: —
-Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15;
+Tags: [SEC]            Depends on: P0.15 (merged, #607), P0.15a            Plan: —
+Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15a;
 book edit 2026-10-12-p016-delivery-check-adr-0019 (final 03:40Z), from architecture's ruling in
 2026-10-12-p015-delivery-check-wording (03:35Z). No line from Alex: scripts/docs is an SE-6 check path but not a
-classifier path, so any lane may take it, Phase 1 included. It starts after P0.15 merges. Nothing depends on it.
+classifier path, so any lane may take it, Phase 1 included. It starts after P0.15a merges, because its check asserts
+the CLAUDE.md text that only lands there. Nothing depends on it.
 What: `deliveryProblems` (`scripts/docs/docs.ts:76-87`) requires `author threads never merge` instead of the bare
 `never merge`, and adds a requirement for `ADR 0019`; it keeps ``never push to `main` `` and the ADR 0009 citation; its
 message becomes "Delivery does not say author threads never merge their PRs"; its doc comment cites ADR 0019. The
 wording follows P0.15's final CLAUDE.md Delivery text (book edit 2026-10-12-p016-delivery-check-adr-0019, amendment 1,
 03:56Z).
+The existing test moves with the check (amendment 2, 04:22Z): `claude_md_agents_never_merge`
+(`scripts/docs/docs.test.ts:63-71`) asserts the old message by removing "never merge them", so it would go red. It is
+renamed `claude_md_author_threads_never_merge`, removes "author threads never merge" from CLAUDE.md and expects
+"Delivery does not say author threads never merge their PRs". A new case removes "ADR 0019" and expects the ADR 0019
+message. The `never push to` and `ADR 0009` cases are unchanged. The test asserts more, not less.
 Red fixtures: a Delivery section without "author threads never merge", and one without "ADR 0019". Each is red, and main's
-Delivery section (after P0.15) is green.
+Delivery section (after P0.15a) is green.
 Done when the fixtures are red and green as above, and the full suite is green.
 
 ---

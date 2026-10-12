@@ -703,16 +703,33 @@ Done when (tests): `logger_session_events`.
 Why: a shared/log EVENTS entry precedes the PR that logs it (the P1.17e pattern). P2.03x logs nothing and is
   unchanged.
 
+### P2.03c — Move the session trusted path to its workspace
+Tags: [SEC]            Depends on: —            Plan: SE-6 (trusted base)
+Check class (`.github/CODEOWNERS` only), neutral, kind/build; issue #610; book edit 2026-10-12-p203c-session-workspace,
+  from architecture's rulings in 2026-10-12-p203-session-workspace-and-c18-image. Owner: Phase 2, right before P2.03.
+  Slice: 1. P2.03 depends on it.
+What: in CODEOWNERS' trusted-base section, `/infrastructure/postgres/session/` (:111) becomes
+  `/infrastructure/session/`. Neutral: no file exists under the old path on main, and the new path covers the same
+  code plus its entry point. Nothing else changes, including :23 and :112 for `session-cookie.ts`.
+Classifier: if the harness refuses the `.github` edit, the coordinator asks Alex for "yes P2.03c CODEOWNERS session
+  path".
+
 ### P2.03 — Session store and lifecycle
-Tags: [SEC]            Depends on: P2.03q, P2.03x, P2.03e            Plan: §2 rule 7; §5.3 "Sessions"
-Trusted class; never opens before P2.03q merges (book edit 2026-10-07-p203-repath; architecture
-2026-10-07-p203-session-store-trusted). P2.03i depends on it.
-Where: `infrastructure/postgres/session/store.ts` with its tests in that folder (following `singleUse/`);
-  `interfaces/http/session-cookie.ts` (unchanged path, already trusted) with its test beside it. No domain file:
+Tags: [SEC]            Depends on: P2.03q, P2.03x, P2.03e, P2.03c            Plan: §2 rule 7; §5.3 "Sessions"
+Trusted class; never opens before P2.03q and P2.03c merge (book edits 2026-10-07-p203-repath and
+2026-10-12-p203c-session-workspace; architecture 2026-10-07-p203-session-store-trusted, amended on placement by
+2026-10-12-p203-session-workspace-and-c18-image). P2.03i depends on it.
+Where: a new workspace `infrastructure/session/` (`index.ts`, `package.json`, `tsconfig.json`, and `store.ts` with its
+  siblings), all trusted, following `infrastructure/audit/`'s precedent; its real-Postgres tests in
+  `tests/integration/session/`, importing `infrastructure/session/index.ts`. The store reaches the pool and
+  transactions through `infrastructure/postgres/index.ts` (DC-2), which a trusted PR may not touch, so the store can't
+  live inside `infrastructure/postgres/`. The hub note is `docs/ai/notes/area/session.md`, or a link from the postgres
+  note, whichever the notes guard asks for. `interfaces/http/session-cookie.ts` (unchanged path, already trusted) with
+  its test beside it, unchanged. No domain file:
   domains hold no SQL, and P2.06 composes the store in `interfaces/http`; a type-only `Sessions` contract in
   `domains/identity/contract.ts` is added by P2.06 only if it needs one. The migration, registry rows and timeouts
   are P2.03x's.
-Size: ~170 source lines, ~260 test lines
+Size: ~170 source lines, ~260 test lines, plus the workspace scaffold
 
 Goal: Durable browser sessions that map a random cookie to a DID, with server-checked idle and absolute timeouts,
 rotation at login and one call that ends every session of a DID inside the caller's transaction.
@@ -841,11 +858,11 @@ Product class (issue #576), `infrastructure/postgres/migrations/` only (book edi
   next slot after P2.03 merges. Slice: as P2.03. P2.04 depends on it.
 Why: sqlLint (`infrastructure/postgres/sqlLint.ts:50-86`) requires every CREATE INDEX to carry a `-- query: <file>`
   naming an existing file that runs the query. The queries for `(did)` and `(absolute_expires_at)` live in
-  `infrastructure/postgres/session/store.ts`, which P2.03 creates, and P2.03x merges before it, so P2.03x can't carry an
-  honest annotation. A trusted P2.03 carrying a migration would widen what trusted PRs may carry, so the indexes move
-  here and every PR class stays unchanged.
+  `infrastructure/session/store.ts` (path per book edit 2026-10-12-p203c-session-workspace), which P2.03 creates, and
+  P2.03x merges before it, so P2.03x can't carry an honest annotation. A trusted P2.03 carrying a migration would
+  widen what trusted PRs may carry, so the indexes move here and every PR class stays unchanged.
 Contents: one migration, on the next free number at open time, containing only:
-  - `CREATE INDEX … ON app.session (did)` with `-- query: infrastructure/postgres/session/store.ts` (end every session
+  - `CREATE INDEX … ON app.session (did)` with `-- query: infrastructure/session/store.ts` (end every session
     of a DID);
   - `CREATE INDEX … ON app.session (absolute_expires_at)` with the same annotation (`sessions.sweep()`).
   No grants, no registry change and no other DDL.
