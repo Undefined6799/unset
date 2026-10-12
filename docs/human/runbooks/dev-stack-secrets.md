@@ -24,14 +24,16 @@ image layer.
 
 The preflight also checks each bind-mounted path (such as `deployment/postgres/init`) and every folder above it and
 above each secret file: each must be owned by root or by you, and writable by no group and no other user. Keep the
-checkout and `unset-dev-secrets/` under your own home directory, not under `/tmp` or a shared folder. Database data is
-a named volume (`pgdata`), which Docker keeps under its own root-owned folder, so it needs nothing from you (Amendment 1
-of the same record).
+checkout and `unset-dev-secrets/` under your own home directory, not under `/tmp` or a shared folder. A checkout that
+others can write to fails every bind inside it, so clone under `umask 022`, or run `chmod -R go-w` on an existing
+checkout (Amendment 6 of the same record). Database data is a named volume (`pgdata`), which Docker keeps under its own
+root-owned folder, so it needs nothing from you (Amendment 1 of the same record).
 
 `unset-dev-env/` holds the live env files, apart from the secrets so that folder holds only mounted secrets. Make it
-yours with mode 0700 and each file 0600, and start `dev.env` from the template `deployment/env/dev.example.env`, whose
-values are all placeholders. No live env file stays in the checkout, even one with nothing secret in it today: it would
-sit in postgres's build context, and the preflight refuses that (Amendments 2 and 3 of the same record).
+yours with mode 0700, and each file yours, mode 0600, with a single hard link; any symbolic link on the way must also be
+yours or root's (Amendment 6). Start `dev.env` from the template `deployment/env/dev.example.env`, whose values are all
+placeholders. No live env file stays in the checkout, even one with nothing secret in it today: it would sit in
+postgres's build context, and the preflight refuses that (Amendments 2 and 3 of the same record).
 
 ## Layout (architecture record 2026-10-12-c9-secret-file-owner)
 
