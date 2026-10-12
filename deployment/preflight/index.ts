@@ -183,7 +183,21 @@ function manifestKind(deps: Deps): ManifestKind {
 
 /** One check, failing closed: a throw is a failure, and a network check that outlasts its timeout fails. */
 async function runCheck(check: Check, inputs: Inputs, timeoutMs: number): Promise<Outcome> {
-  return settle(check, inputs, timeoutMs);
+  const envs = [...inputs.serviceEnv.values()];
+  for (const env of envs) env.forgetReads();
+  return withoutValues(await settle(check, inputs, timeoutMs), envs);
+}
+
+const WITHHELD = "the reason is withheld: it would print a value";
+
+/**
+ * `outcome` with every value the check read from a SecretMap turned back into its name, so no reason prints one
+ * whatever text a check built it from (P1.30w; record 2026-10-12-c18-follow-ups, ruling N1). A reason that would still
+ * hold a value, because naming one wrote out another, is withheld whole.
+ */
+function withoutValues(outcome: Outcome, envs: SecretMap[]): Outcome {
+  const reason = envs.reduce((text, env) => env.scrubReads(text), outcome.reason);
+  return { pass: outcome.pass, reason: envs.some((env) => env.holdsRead(reason)) ? WITHHELD : reason };
 }
 
 /** The check's outcome, a timeout for a network check past its deadline, or a failure for a throw. */

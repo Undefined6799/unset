@@ -9,7 +9,7 @@ import { CaddyfileError, ENV_NAMES, type EnvName, edgeSiteProblems, readEdgeConf
 import type { Compose, Mount } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { readLock } from "./images.ts";
-import { type Check, fail, missing, type Outcome, pass, scrubbed } from "./types.ts";
+import { type Check, fail, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
 export const SITES_TARGET = "/etc/caddy/sites/enabled";
@@ -82,8 +82,8 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
 /**
  * C18's verdict: the sites the edge mounts, read with the shipped Caddyfile and snippets and the edge's env, break
  * none of edgeSiteProblems' rules. The env values go only to the reader, whose messages name a placeholder, never its
- * value (P1.28l); a reader error is a failure, never a crash. Whatever the reader says, the reason leaves with each
- * value turned back into its name (P1.30w).
+ * value (P1.28l); a reader error is a failure, never a crash. The runner turns any value that still reaches the
+ * reason back into its name (P1.30w).
  */
 export function edgeZones(
   compose: Compose,
@@ -96,7 +96,7 @@ export function edgeZones(
   const sites = edgeSitesDir(compose, edgeDir);
   if (!("dir" in sites)) return sites;
   if (env === undefined) return missing("the edge service's environment");
-  return scrubbed(readZones(edgeDir, sites.dir, env), env, Object.keys(ENV_NAMES));
+  return readZones(edgeDir, sites.dir, env);
 }
 
 /**
