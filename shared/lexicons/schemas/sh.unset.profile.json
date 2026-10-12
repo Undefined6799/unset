@@ -1,0 +1,163 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.profile",
+  "description": "An unset.sh profile: the public page at unset.sh/@handle. One per account.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "literal:self",
+      "description": "The account's unset.sh profile. Absent means the account has no published unset.sh profile.",
+      "record": {
+        "type": "object",
+        "required": ["displayName", "createdAt"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxGraphemes": 64,
+            "maxLength": 640,
+            "description": "Name shown at the top of the profile."
+          },
+          "headline": {
+            "type": "string",
+            "maxGraphemes": 120,
+            "maxLength": 1200,
+            "description": "One line under the name."
+          },
+          "bio": {
+            "type": "string",
+            "maxGraphemes": 600,
+            "maxLength": 6000,
+            "description": "About text: paragraphs, bold, italic and http(s) links (a small markdown subset), never HTML."
+          },
+          "location": {
+            "type": "string",
+            "maxGraphemes": 100,
+            "maxLength": 1000,
+            "description": "Free-text place, as the member writes it."
+          },
+          "website": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2000,
+            "description": "The member's website: an http or https URL."
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "description": "Contact address the member chose to show. Present only when they switched show-email on."
+          },
+          "avatar": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg", "image/webp"],
+            "maxSize": 1000000,
+            "description": "Square profile picture."
+          },
+          "coverImage": {
+            "type": "blob",
+            "accept": ["image/png", "image/jpeg", "image/webp"],
+            "maxSize": 2000000,
+            "description": "Wide header image (3:1)."
+          },
+          "availability": {
+            "type": "ref",
+            "ref": "#availability"
+          },
+          "stats": {
+            "type": "array",
+            "maxLength": 12,
+            "items": {
+              "type": "ref",
+              "ref": "#stat"
+            },
+            "description": "Short label and value pairs, in display order."
+          },
+          "cta": {
+            "type": "ref",
+            "ref": "#cta"
+          },
+          "listed": {
+            "type": "boolean",
+            "description": "True: listed in the unset.sh directory. Absent or false: not listed; the page is still public at its URL."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the profile was first published."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the profile was last published."
+          }
+        }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "description": "What the member is open to, such as work or collaborations.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxGraphemes": 140,
+          "maxLength": 1400,
+          "description": "Short status line."
+        },
+        "detail": {
+          "type": "string",
+          "maxGraphemes": 300,
+          "maxLength": 3000,
+          "description": "Longer explanation."
+        }
+      }
+    },
+    "stat": {
+      "type": "object",
+      "required": ["label", "value"],
+      "description": "One label and value pair.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxGraphemes": 40,
+          "maxLength": 400,
+          "description": "What the number or word describes."
+        },
+        "value": {
+          "type": "string",
+          "maxGraphemes": 40,
+          "maxLength": 400,
+          "description": "The number or word."
+        }
+      }
+    },
+    "cta": {
+      "type": "object",
+      "description": "A call to action box with one link button.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxGraphemes": 120,
+          "maxLength": 1200,
+          "description": "Box heading."
+        },
+        "body": {
+          "type": "string",
+          "maxGraphemes": 400,
+          "maxLength": 4000,
+          "description": "Box text."
+        },
+        "label": {
+          "type": "string",
+          "maxGraphemes": 80,
+          "maxLength": 800,
+          "description": "Button text."
+        },
+        "href": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "Button link: an http or https URL."
+        }
+      }
+    }
+  }
+}

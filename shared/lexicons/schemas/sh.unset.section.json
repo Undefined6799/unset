@@ -1,0 +1,126 @@
+{
+  "lexicon": 1,
+  "id": "sh.unset.section",
+  "description": "One section of an unset.sh profile page, such as links or projects.",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "description": "A profile section. Sections render in ascending position.",
+      "record": {
+        "type": "object",
+        "required": ["type", "title", "position", "createdAt"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "maxLength": 32,
+            "knownValues": ["social", "links", "projects", "writing", "text", "cta"],
+            "description": "Section kind: decides which item fields apply and how it renders. An unknown value renders as links."
+          },
+          "title": {
+            "type": "string",
+            "maxGraphemes": 80,
+            "maxLength": 800,
+            "description": "Section heading."
+          },
+          "summary": {
+            "type": "string",
+            "maxGraphemes": 400,
+            "maxLength": 4000,
+            "description": "Text under the heading."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 49,
+            "description": "Order on the page, from 0, contiguous across the account's sections."
+          },
+          "items": {
+            "type": "array",
+            "maxLength": 50,
+            "items": {
+              "type": "ref",
+              "ref": "#item"
+            },
+            "description": "Entries, in display order."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the section was first published."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the section was last published."
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "description": "One entry in a section. Which fields apply depends on the section type; the editor enforces per-type requirements, the schema stays open.",
+      "properties": {
+        "tag": {
+          "type": "string",
+          "maxGraphemes": 40,
+          "maxLength": 400,
+          "description": "Small label above the title."
+        },
+        "title": {
+          "type": "string",
+          "maxGraphemes": 120,
+          "maxLength": 1200,
+          "description": "Entry title."
+        },
+        "summary": {
+          "type": "string",
+          "maxGraphemes": 400,
+          "maxLength": 4000,
+          "description": "Entry text."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2000,
+          "description": "Entry link: an http or https URL."
+        },
+        "platform": {
+          "type": "string",
+          "maxLength": 32,
+          "knownValues": [
+            "bluesky",
+            "github",
+            "x",
+            "linkedin",
+            "instagram",
+            "youtube",
+            "twitch",
+            "mastodon",
+            "email",
+            "rss",
+            "website"
+          ],
+          "description": "Social platform (social sections)."
+        },
+        "handle": {
+          "type": "string",
+          "maxGraphemes": 100,
+          "maxLength": 1000,
+          "description": "Account name on the platform (social sections)."
+        },
+        "date": {
+          "type": "string",
+          "format": "datetime",
+          "description": "Publication date (writing sections)."
+        },
+        "label": {
+          "type": "string",
+          "maxGraphemes": 80,
+          "maxLength": 800,
+          "description": "Button text (cta sections)."
+        }
+      }
+    }
+  }
+}
