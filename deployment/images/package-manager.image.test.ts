@@ -570,15 +570,12 @@ describe("image package managers", () => {
     expect(
       kindProblems("node", ["a", "b"], (file) => (file === "b" ? ["/usr/bin/apt is a package manager"] : [])),
     ).toEqual(["b: /usr/bin/apt is a package manager"]);
-    // A Dockerfile that fails to build is a finding, not a skip.
-    const dir = mkdtempSync(join(tmpdir(), "image-broken-"));
-    try {
-      writeFileSync(join(dir, "Dockerfile"), "FROM scratch\nRUN false\n");
-      const problems = kindProblems("node", [join(dir, "Dockerfile")], (file) => [build(file, dir)]);
-      expect(problems).toEqual([expect.stringContaining("build failed")]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // A Dockerfile that fails to build is a finding, not a skip. The check throws as `build` does on a failed build;
+    // a real build here waited behind the image tests' builds past the 5 s default (P1.29z).
+    const failedBuild = (file: string): string[] => {
+      throw new Error(`${file} build failed: exit code 1`);
+    };
+    expect(kindProblems("node", ["c"], failedBuild)).toEqual(["c: c build failed: exit code 1"]);
   });
 
   test("every_dockerfile_builds_a_known_kind", () => {
