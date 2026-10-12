@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28a, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -226,6 +226,7 @@ flowchart LR
   P1_29g["P1.29g image reader hardening"]
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
+  P1_29y["P1.29y old image jobs folded into the matrix ALEX"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
   P1_29a["P1.29a PDS in the dev stack ALEX"]
@@ -337,6 +338,8 @@ flowchart LR
   P1_29x --> P1_28y
   P1_28w --> P1_29v
   P1_29v --> P1_29d
+  P1_29w --> P1_29y
+  P1_29v --> P1_29y
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
@@ -4927,6 +4930,31 @@ Done when (tests): `ssr_class_equals_client_selector`, `scoped_name_deterministi
   pr-shape classes it as product.
 Diagram: none.
 
+### P1.23g — Isolate guard test fixtures from global git config
+Tags: [SEC] [ALEX]            Depends on: —            Plan: SE-6 (check paths)
+Check class (scripts/guards test files and git-env.ts), kind/build; issue #582; slice 1 (book edit
+2026-10-12-p123g-guard-fixture-git-isolation, from the coordinator's lead at 02:25Z on Cursor's #573 notes; it is the
+root cause of the `job_reads_git_safely` local timeout reported at 02:21Z). Owner: Phase 2 or the third lane (not Phase
+1: scripts/guards), with Alex's typed line, for example "yes P1.23g scripts/guards tests". Neutral: no rule changes; it
+needs his line only because of the CI-bypass classifier on scripts/guards. Nothing depends on it.
+Why: a container's global git config can set `commit.gpgsign=true`, `gpg.format=ssh` and `gpg.ssh.program`, so every
+  commit is signed by an external program. `withoutGitEnv()` (`scripts/guards/git-env.ts:8-10`) strips `GIT_*` variables
+  but not the global config, so the throwaway repositories in guard tests inherit it and every fixture commit runs the
+  signer (job_reads_git_safely makes 4 commits; pr-size, notes and git-env tests commit as well). The cost depends on
+  the signer and the machine, not the test, and signing throwaway fixture commits with a developer's or agent's key is
+  wrong in itself.
+Where:
+  - Add one helper, `fixtureGitEnv()`, in `scripts/guards/git-env.ts`: `withoutGitEnv()` plus
+    `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and a fixed author and committer.
+  - Every guard test that creates a throwaway repository uses it (change-shape-wiring, pr-size, notes and git-env tests;
+    the PR lists them by grep).
+  - The guards themselves are unchanged: they do not commit, and in CI they read the real checkout.
+Test: `fixture_git_ignores_global_config`. With `HOME` pointed at a temp dir whose .gitconfig sets `commit.gpgsign=true`
+  and a `gpg.program` that exits 1, a fixture commit still succeeds; without the helper, the same commit fails.
+Done when that test is green, the four suites are green, and the PR body gives job_reads_git_safely's isolated time
+  before and after, both measured in this kind of container.
+Diagram: none.
+
 ---
 
 ### P1.24 — UI kit, part 1: the "is it on the sheet?" gate and the static and form components
@@ -6435,11 +6463,13 @@ book; it does not split itself.
 ---
 
 ### P1.27r — Make `scan` a required check (split from P1.27q; deferred until after launch)
-Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, P1.29w and `scan` green on main, Alex's typed words in the
-  building thread allowing the guard-file edit            Plan: §7 (CI); rule SE-6
+Tags: [SEC] [ALEX]            Depends on: P1.27q, L.06, P1.29w and the Images workflow's aggregate job `scan`
+  (images.yml), not the Mirror workflow's `scan` (mirror.yml), green on main, Alex's typed words in the building thread
+  allowing the guard-file edit            Plan: §7 (CI); rule SE-6
 Amended by P1.29w (book edit 2026-10-07-p129-postgres-split, 19:15Z): the required check is the aggregate job `scan`
   in place of `images`, never the per-image `scan-image (<name>)` names, which change as images come and go. Alex's
-  ruleset setting adds `scan` with source GitHub Actions, as P0.03 does for the other checks.
+  ruleset setting adds `scan` with source GitHub Actions, as P0.03 does for the other checks. The required-check setting
+  names it by workflow and job (book edit 2026-10-12-p128a-p129w-as-built).
 Where: check paths only, kind/build: `"scan"` in `.github/required-checks.json`, the matching line in
   `scripts/guards/workflow-pins.test.ts`, and the `scan` entry in `scripts/docs/change-shape-config.test.ts`. Nothing
   else rides with it.
@@ -6769,9 +6799,15 @@ the bump procedure. Nothing is ignored pre-emptively, and the shipped edge image
 
 ### P1.28a — Bump the edge builder digest
 
-**Tags:** [SEC] · **Depends on:** P1.28, P1.28x · **Class:** trusted base (`deployment/edge/Dockerfile`) plus the pins
-the bump procedure requires in the same PR · Alex, 2026-10-12, "fix em" books this step (the hand bump has no id of
-its own, and P1.27b is already the npm ignore)
+**Tags:** [SEC] [ALEX] · **Depends on:** P1.28, P1.28x · **Class:** trusted base (`deployment/edge/Dockerfile`), the
+lock and mirror pins, and check paths (`scripts/guards/trusted-base.ts`, `change-shape.ts`, `change-shape.test.ts`) — a
+mixed PR the parent guard refused · Alex, 2026-10-12, "fix em" books this step (the hand bump has no id of its own, and
+P1.27b is already the npm ignore); the coordinator found that quote nowhere else, so it is **unverified** (book edit
+2026-10-12-p128a-p129w-as-built)
+
+As built: merged by Alex as `041edbf` (#572), a Cursor Agent PR. Verified by the coordinator 2026-10-12: the container
+rules pass, and digest `aa705b1e` (pushed 10-08) is consistent across FROM, lock and mirror. The shipped edge image
+scans clean. Departures below.
 
 **Why:** the builder index `80331d37…7c26` compiles Caddy with Go 1.27.1. The edge scan fails on four fixed HIGH
 findings in `usr/bin/caddy`: stdlib CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031, and `golang.org/x/net` v0.59.0
@@ -6782,7 +6818,26 @@ It is under 7 days old; item 1 of the bump procedure allows that when the body n
 **What:** the builder digest in the edge Dockerfile `FROM`, `deployment/images/bases.lock.json` and
 `deployment/mirror.list.json`. The trusted-base check lets those two files, and a test fixture that only substitutes
 the same digest, ride with that `FROM` change. No other product path rides. The check that recognizes the bump may
-share the PR; any other check path may not. The runtime Alpine digest stays.
+share the PR; any other check path may not. The runtime Alpine digest stays. As built, the edge Dockerfile also adds
+`--replace golang.org/x/net=...@v0.60.0` (`deployment/edge/Dockerfile:22`).
+
+**Departures (as built, #572; book edit 2026-10-12-p128a-p129w-as-built):**
+1. **SE-6 loosened in `scripts/guards/trusted-base.ts` (high).** An edge trusted-base PR with one changed FROM digest
+   may now also carry bases.lock.json and mirror.list.json (digest swap); any `*.test.ts` or `*/fixtures/*` file
+   anywhere (:214-216); trusted-base.ts, change-shape.ts and change-shape.test.ts with no content condition (:326-327);
+   and other Dockerfile lines (change-shape.test.ts:439 adds `RUN echo kept` and it still counts as a bump; :186-188,
+   229-246, 337-347). The parent guard refused all of this (:218-221, :232-235) and rejected the same shape on 142a62b
+   (job 114481150879). The coordinator has a card with Alex: narrow (recommended) or keep; the narrowing step is
+   reserved and held until he answers.
+2. **No record, and an invented id (medium).** The bump procedure says a hand bump takes no step id; #572 nevertheless
+   booked P1.28a, amended bump item 2 and changed the SE-6 rules text
+   (`docs/human/engineering/engineering-rules.md:246`). Its Tags lacked [ALEX] and its Class did not name the check
+   paths it touched; both are fixed above.
+3. **The code allows more than the rules bullet says (medium).** The `golang.org/x/net` override above is not in What as
+   booked. It was about 3.4 days old, and the under-7-days exception is written for image digests, so its use for a Go
+   module is recorded as a departure, not as a precedent.
+4. **Bump item 3 (Trivy on the new digest) was not shown in the PR (low).** The coordinator's post-merge scan stands in
+   for it.
 
 ---
 
@@ -7920,6 +7975,9 @@ inside the default timeout; the PR body gives three isolated timings, each at mo
 
 ### P1.30c — Specifier cruise test independent of checkout
 Tags: [SEC]            Depends on: —
+As built: merged by Alex at 2026-10-12T02:47:56Z as `fb58af9` (#580). The five non-path refusals are pinned by count,
+not by name; a later edit to this test names all seven (book edit 2026-10-12-p130c-specifier-test-checkout-independent,
+amendment 1).
 Slice 1, issue #577, check (scripts/lint, kind/build, test only); book edit
 2026-10-12-p130c-specifier-test-checkout-independent (final 02:20Z), from Phase 2's root cause relayed by the
 coordinator at 02:08Z. Neutral (neither loosens nor tightens a rule); the coordinator clears it, no word from Alex.
@@ -8130,31 +8188,46 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    - **Triggers:** `images.yml` has no `paths:` filter today (`images.yml:7`) and keeps none.
 
    Tests (replacing `every_dockerfile_has_scan_job`): `list_dockerfiles_matches_images_discovery` (the script's set
-   against a live walk of `deployment/`; today exactly {edge, node-app}, the name being the Dockerfile's stem) and
+   against a live walk of `deployment/`; at merge, {edge, migrate, node-app}, the name being the Dockerfile's stem) and
    `list_dockerfiles_refuses_bad_entries` (an empty tree, a bad name and a path outside `deployment/` fail; a
    Dockerfile-named file under `node_modules` is ignored). Alex's typed line "yes P1.29w every shipped image" covers
    this design (asked 18:57Z); line: "yes P1.29w every shipped image" (Alex, 2026-10-11). Order: it lands before P1.29k and P1.29d, so each new image is scanned
    from its first PR and neither edits `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not
    waiting on Alex's line; discovery picks a merged migrate image up when P1.29w lands). A check step pinning the
-   exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
-   check becomes `scan`.
+      exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
+   check becomes the Images workflow's aggregate job `scan` (images.yml), not the Mirror workflow's `scan` (mirror.yml).
+
+   As built: merged by Alex as `94c0f03` (#571), a Cursor Agent PR, on Alex's line 'yes P1.29w every shipped image'
+   (2026-10-11). Verified by the coordinator 2026-10-12: matches the ruling, with no loosening. All three Dockerfiles
+   are scanned, and migrate's scan is new (a tightening). scan-image pins Trivy 0.74.0, which is behind the other jobs'
+   0.75.0. Renovate's `_IMAGE:` regex manager covers it.
 4. **P1.29v "Skip stripped files in the mirror scan"** ([ALEX] [SEC], check: `.github/workflows/mirror.yml`,
-   `.github/trivyignore.yaml`, the mirror-scan test, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x
-   and P1.28w, which both touch `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list
-   from the lock and passes `--skip-files` for exactly those paths, on that entry only; the three npm entries leave
-   `trivyignore.yaml`; the `"node-app"` entry leaves `IGNOREFILES` and the test pins the map as empty; the test proves a
-   declared path is skipped and an undeclared one still scanned. A loosening (the base scan examines fewer files),
-   answered on Alex's card:
+   `.github/workflows/images.yml` (its `--ignorefile`), `.github/trivyignore.yaml`, the mirror-scan test with its
+   `images.yml` pin, `scripts/ci/list-dockerfiles.ts` and its test; depends on P1.29x and P1.28w, which both touch
+   `mirror.yml`, and P1.29w; Phase 2): `mirror.yml` reads each entry's `stripped` list from the lock and passes each of
+   exactly those paths as both `--skip-dirs` and `--skip-files` (Trivy v0.75.0 skips directories only through
+   `--skip-dirs`), on that entry only; the three npm entries leave `trivyignore.yaml`; the `"node-app"` entry leaves
+   `IGNOREFILES` and the test pins the map as empty; the mirror-scan test proves that a declared directory skips its
+   contents, a declared file is skipped, and an undeclared sibling path is still scanned. The older `images` job stops
+   reading `.github/trivyignore.yaml`: its `--ignorefile` (`images.yml:81`) becomes `/dev/null` and the pin at
+   `mirror-scan.test.ts:152` follows, a tightening the coordinator cleared (book edit
+   2026-10-12-p129v-skip-dirs-and-images-ignorefile), so shipped images are scanned in full. If the CI-bypass classifier
+   refuses `images.yml` under Alex's line, which names only mirror.yml, the PR leaves images.yml unchanged and says so,
+   and the coordinator chooses between asking Alex and a separate step. A loosening (the base scan examines fewer
+   files), answered on Alex's card:
    - Question: "Let the mirror scan skip files our own images delete, like gosu and npm?"
    - Answer: "Skip stripped files"
    - Tapped: 2026-10-07T18:56:42Z (consequence line: "The mirror scan skips only listed files we delete. A test proves
      each is gone, and shipped images are scanned in full.")
 
-   It still needs his typed line naming the change and branch (asked: "yes P1.29v mirror.yml"); line: (pending). A new
-   stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
-   ship) are rejected.
-5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v, P1.28r, P1.28n,
-   P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
+   His typed line naming the change and branch is received (asked: "yes P1.29v mirror.yml"); line: "yes P1.29v
+   mirror.yml" (Alex, 2026-10-12T02:13:47Z; book edit 2026-10-12-p129v-skip-dirs-and-images-ignorefile, amendment 1). A
+   new stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
+   ship) are rejected. P1.29d and P1.29y depend on it.
+
+   As built: merged by Alex at 2026-10-12T02:57:23Z as `7a05bd5` (#583).
+5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v (merged, #583),
+   P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f and P1.29m; Phase 1):
    `deployment/images/postgres.Dockerfile`: one stage, FROM the locked digest, `RUN rm -f /usr/local/bin/gosu`,
    `USER 999:999` (the image's own postgres uid and gid, numeric so the non-root check reads it; its data directories
    are already 999), the official `docker-entrypoint.sh` unchanged. gosu exists only to drop root, so a server that
@@ -8233,6 +8306,24 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
     that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
     measures it, and it needs Alex's typed line.
+11. **P1.29y "Fold the old image jobs into the scan matrix"** ([SEC] [ALEX], check: `.github/workflows/images.yml`,
+    `scripts/ci/list-dockerfiles.ts`, `image-workflows.test.ts`, `mirror-scan.test.ts`, kind/build; issue #581; depends
+    on P1.29w (merged, #571) and P1.29v (merged, #583), which also edits images.yml; owner Phase 2 or the third lane,
+    not Phase 1 (`.github`); slice 1; book edit 2026-10-12-p129y-fold-old-image-jobs, from the coordinator's #571
+    verification relayed at 02:25Z). The old `images` job (node-app) and `edge` job still build and scan node-app and
+    edge a second time, at Trivy 0.75.0 while scan-image uses 0.74.0, and they carry checks the matrix lacks: hadolint,
+    SBOM, runs as 65532, and the health checks (image-workflows.test.ts:69-103, mirror-scan.test.ts:149-160). migrate
+    gets none of those checks, only the scan. Each check the old jobs run moves into `scan-image`, per discovered image,
+    and both old jobs are deleted:
+    - Per-image values (expected uid, health command) come from one exact map in list-dockerfiles.ts, beside
+      IGNOREFILES. An image missing from the map fails discovery, so a new image cannot arrive unchecked.
+    - Every check that ran for node-app or edge before still runs for it; migrate gains them, which is a tightening.
+    - The pins in image-workflows.test.ts and mirror-scan.test.ts move to the matrix job.
+    [ALEX] because it deletes workflow jobs: even with every check preserved, the CI-bypass classifier needs his typed
+    line, for example "yes P1.29y images.yml". The PR shows, check by check, the old job line and the matrix line that
+    replaces it; a check that cannot be carried stops the PR rather than being dropped. Done when, on the PR, every
+    check the old jobs ran shows per image in the matrix, `scan` aggregates them, the old jobs are gone, and the full
+    suite is green. Nothing depends on it.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries

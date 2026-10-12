@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 178 steps: 156 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 180 steps: 158 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -213,6 +213,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.23v | CSS Modules check config: Vitest scoped names, TOOLING widened to app Vite configs | [SEC] [ALEX] | P1.23f | `phase-1.md` |
 | P1.23w | Allow the render-entry subpath import (one depcruise row; check step) | [SEC] [ALEX] | P1.23v | `phase-1.md` |
 | P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v, P1.23w | `phase-1.md` |
+| P1.23g | Guard test fixtures isolated from global git config (no signing, no system config) | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.24i | Icons and inventory (split from P1.24) | [SEC] | P1.22, P1.23r | `phase-1.md` |
 | P1.24h | `safeHref` (trusted base, split from P1.24) | [SEC] | P1.22 | `phase-1.md` |
 | P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
@@ -250,8 +251,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28c | Remove the edge Dockerfile's syntax directive | [SEC], trusted | P1.28u | `phase-1.md` |
 | P1.28t | Dockerfile reader: ADD refused, case-insensitive mount keys and flags, syntax and escape refused, list as floor | [SEC] | P1.28c | `phase-1.md` |
 | P1.28x | Edge pins: caddy bases in bases.lock, mirror list, images test (feature; merged as built, #391) | [SEC] | P1.27 | `phase-1.md` |
-| P1.28a | Bump the edge builder digest; lock and mirror list ride with that FROM change | [SEC] | P1.28, P1.28x | `phase-1.md` |
 | P1.28 | Edge (Caddy) (trusted) | [SEC] | P1.27, P1.28q, P1.28x | `phase-1.md` |
+| P1.28a | Bump the edge builder digest; lock and mirror list ride with that FROM change | [SEC] [ALEX] | P1.28, P1.28x | `phase-1.md` |
 | P1.28b | Edge leftovers: negative zone test, documentation addresses, ADR 0018 accepted, deterministic log test | [SEC] | P1.28 | `phase-1.md` |
 | P1.28h | Caddyfile reader for edge checks | [SEC], trusted | P1.28b | `phase-1.md` |
 | P1.28i | Edge image builds move to *.image.test.ts (caddyfile, edge integration) | [SEC], trusted | P1.28h | `phase-1.md` |
@@ -289,6 +290,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29j | Image tests: fixtures for the --chmod octal bound, readTar agreement throws, glob reverse containment | [SEC] | P1.29p | `phase-1.md` |
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
+| P1.29y | Fold the old images/edge jobs (hadolint, SBOM, uid, health) into the discovered scan matrix | [SEC] [ALEX] | P1.29w, P1.29v | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
@@ -392,6 +394,7 @@ flowchart TD
   P1_23v["P1.23v CSS Modules check config"]
   P1_23w["P1.23w Render-entry import row"]
   P1_23c["P1.23c CSS Modules glue"]
+  P1_23g["P1.23g Guard fixtures isolated from global git"]
   P1_24i["P1.24i Icons and inventory"]
   P1_24h["P1.24h safeHref"]
   P1_24q["P1.24q UI inventory guard"]
@@ -459,6 +462,7 @@ flowchart TD
   P1_29g["P1.29g Image reader hardening"]
   P1_29w["P1.29w Discover and scan every image"]
   P1_29v["P1.29v Mirror scan skips stripped"]
+  P1_29y["P1.29y Old image jobs folded into the matrix"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
   P1_29a["P1.29a PDS in the dev stack"]
@@ -681,6 +685,8 @@ flowchart TD
   P1_29w --> P1_29v
   P1_29w --> P1_29
   P1_29x --> P1_29v
+  P1_29w --> P1_29y
+  P1_29v --> P1_29y
   P1_29x --> P1_29r
   P1_29r --> P1_29d
   P1_29r --> P1_29e
