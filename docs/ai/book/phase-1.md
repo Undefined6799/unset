@@ -56,8 +56,8 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -163,6 +163,7 @@ flowchart LR
   P1_22["P1.22 base styles, theme, locale"]
   P1_23["P1.23 island runtime"]
   P1_23d["P1.23d props fuzz test bounded"]
+  P1_23g["P1.23g guard fixtures isolated from global git"]
   P1_24["P1.24 UI kit: gate + primitives"]
   P1_24a["P1.24a UI kit: zero-JS blocks"]
   P1_24k["P1.24k UI kit: chrome, no-JS"]
@@ -227,6 +228,8 @@ flowchart LR
   P1_29w["P1.29w discover and scan every image ALEX"]
   P1_29v["P1.29v mirror scan skips stripped ALEX"]
   P1_29y["P1.29y old image jobs folded into the matrix ALEX"]
+  P1_29b["P1.29b mirror build stage scanned in full"]
+  P1_29u["P1.29u stripped paths and RUN separators fail closed"]
   P1_29d["P1.29d gosu-free Postgres image"]
   P1_29["P1.29 compose.dev.yaml, no PDS"]
   P1_29a["P1.29a PDS in the dev stack ALEX"]
@@ -238,6 +241,7 @@ flowchart LR
   P1_30["P1.30 deploy preflight core"]
   P1_30s["P1.30s preflight C13–C24 but C17, C18"]
   P1_30t["P1.30t preflight C17 networks"]
+  P1_30r["P1.30r preflight-to-edge row"]
   P1_30u["P1.30u preflight C18 edge zones"]
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
@@ -340,6 +344,8 @@ flowchart LR
   P1_29v --> P1_29d
   P1_29w --> P1_29y
   P1_29v --> P1_29y
+  P1_29v --> P1_29b
+  P1_29v --> P1_29u
   P1_29d --> P1_29
   P1_28 -.-> P1_29
   P1_30t --> P1_29
@@ -386,6 +392,7 @@ flowchart LR
   P1_28f --> P1_28l
   P1_28l --> P1_30u
   P1_28g --> P1_30u
+  P1_30r --> P1_30u
   P1_28g --> P1_28k
   P1_28k --> P1_28m
   P1_28m --> P1_28p
@@ -3515,7 +3522,7 @@ Edge cases and failures:
   - Pool exhaustion under a burst of logins → `lock.pool_exhausted` → the login fails with 503 `service.unavailable`
     (fail closed, retryable), not a double refresh.
 
-Done when (tests): (real Postgres; two separate pools simulate two replicas)
+Done when (tests): (real Postgres; two separate pools simulate two replicas; timing made start-driven by P1.17r)
   - serialises_same_key: replica A holds key `did:plc:aaa…` for 300 ms; replica B's call on the same key starts after
     A's `fn` ends (timestamps recorded in `fn`).
   - parallel_different_keys: keys X and Y run concurrently (overlapping timestamps).
@@ -3535,6 +3542,37 @@ Reuse: prototype `/home/claude/0x40/app/src/lib/crm/migrate.ts:70` (`pg_advisory
 Provisional — for reuse review.
 Not in this step: wiring into the OAuth client (P2.04); `docker-rollout` (P5.03).
 Diagram: none.
+
+---
+
+### P1.17r — Lock tests wait for the holder to start
+Tags: —            Depends on: P1.17 (merged)
+Slice 1, issue #590, product, test-only (`tests/integration/postgres/lock.test.ts`), kind/fix; book edit
+2026-10-12-p117r-lock-test-start-race (final 03:20Z), from the third lane's root cause relayed by the coordinator at
+03:14Z. Regression class, so it takes the front of the next free lane (Phase 1 or the third lane, as the coordinator
+assigns). Not on an SE-6 check path or a classifier path; no line from Alex. Nothing depends on it.
+
+**Why:** `serialises_same_key` (:78-86) starts holder A (300 ms), sleeps a fixed 50 ms (:82), starts B and asserts B
+started after A ended (:85). On a cold Postgres, A's pool connect takes longer than 50 ms, so B can take the lock first
+(observed once: a 313 ms inversion). The lock is not at fault. `wait_timeout` (:102), `wait_longer_than_role_timeout`
+(:117) and `pool_exhausted` (:182) make the same fixed-sleep assumption, and `parallel_different_keys` (:88-96) asserts
+overlap with no barrier.
+
+**What:**
+- `hold()` gains a `started` promise, resolved inside `fn` when `times.start` is set.
+- Each test that does `await sleep(N)` to mean "the first holder holds it" awaits `first.started` instead:
+  serialises_same_key, wait_timeout, wait_longer_than_role_timeout and pool_exhausted (its `busy` fn resolves a started
+  promise).
+- parallel_different_keys makes each holder wait inside `fn` until both have started (a barrier), so overlap holds by
+  construction.
+- No timeout bump, retry or skip. The 300 ms, 2000 ms and 6000 ms holds and every assertion bound stay; `sleep` stays
+  only inside `fn` bodies and `lock_lost_logged`'s fn.
+
+**Red evidence:** the PR shows the race reproduced before the fix by delaying A's connect (for example a pool wrapper
+whose `connect` waits 200 ms), with serialises_same_key red, and green with the fix. The wrapper stays in the test as
+`slow_connect_still_serialises`.
+
+Done when the lock suite is green on a cold Postgres and with the slow-connect wrapper, and the full suite is green.
 
 ---
 
@@ -8011,6 +8049,28 @@ and the item 2 guard fails if item 1 is reverted while running under `.worktrees
 
 ---
 
+### P1.30r — Allow preflight to import the edge reader
+Tags: [SEC] [ALEX]     Depends on: —
+Slice 1, issue #584, check (`scripts/lint/.dependency-cruiser.cjs` and its depcruise test), kind/build; book edit
+2026-10-12-p130r-preflight-edge-depcruise-row (final 03:00Z), split from P1.30u because SE-6 refuses a PR that mixes
+check and product paths, and C18's import fails depcruise until this row is on main. Owner: Phase 2. P1.30u depends on
+it.
+
+**Authority:** Alex's "Allow import" card tap (2026-10-12T02:16:16Z) and his typed "yes ok" (2026-10-12T02:17:33Z). The
+PR body quotes both.
+
+**What:** exactly one allowed row, from `^deployment/preflight/` to `^deployment/edge/caddyfile\.ts$`, and nothing else.
+The edge still may not import preflight (P1.28g), other `deployment/` files still import nothing, and no other edge file
+becomes importable.
+
+**Test:** a depcruise fixture test. Green: a preflight file importing `deployment/edge/caddyfile.ts`. Red: a preflight
+file importing any other edge file, such as another `deployment/edge/*.ts` module; an edge file importing preflight; a
+non-preflight `deployment/` file importing `caddyfile.ts`.
+
+Done when the fixtures are green, and the full suite is green on main's rules plus the one row.
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
@@ -8019,7 +8079,7 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l · **Plan:** as P1.30
+**Tags:** [SEC] [ALEX] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -8033,12 +8093,11 @@ It passes its compose mount source as `sitesDir`, and the reader itself refuses 
 Its rules include at most one site per upstream (P1.28f). (Book edit 2026-10-08-p128f-p128g-edge-reader-follow-ups,
 00:40Z.)
 
-**The import fork:** the depcruise matrix needs a row that lets `deployment/preflight` import
-`deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
-a loosening and needs Alex's typed line (for example "yes P1.30u preflight imports edge reader"); the coordinator asks
-him before C18 is built. If he declines, C18 runs the reader as a CLI by fixed path, the same as verify-images, and no
-lint row is added. The PR body says which path it took and quotes his line. The EdgeFiles injection removes the reader's
-own need for `node:fs`, not the preflight's import.
+**The import row is P1.30r** (book edit 2026-10-12-p130r-preflight-edge-depcruise-row). It lets `deployment/preflight`
+import `deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`, on Alex's "Allow import" tap
+(2026-10-12T02:16:16Z) and typed "yes ok" (02:17:33Z), which satisfy the line "yes P1.30u preflight imports edge
+reader". This step is product only (`deployment/preflight`, compose, the edge site mount) and touches no check path. The
+EdgeFiles injection removes the reader's own need for `node:fs`, not the preflight's import.
 
 **Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
 a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so
@@ -8094,7 +8153,7 @@ prefixed name, plus one pass case, a project-level `name:` alone; `undeclared_se
 
 ### P1.29 — Development stack (`compose.dev.yaml`)
 
-**Split into ten parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
+**Split into thirteen parts** (book edits 2026-10-07-p129-split, amended 12:50Z by 2026-10-07-p130s-split-and-p128h;
 2026-10-07-p129-postgres-split; 2026-10-07-no-mailpit; architecture's 2026-10-07-p129-migrate-image-and-run-only-images
 with its 13:15Z amendment, 2026-10-07-p129-postgres-image-and-stripped-paths and
 2026-10-07-pds-mail-se7-and-local-verification, which win where they differ; every part is slice 1). Why: nothing calls
@@ -8105,7 +8164,8 @@ with Go 1.24.6 (one CRITICAL, CVE-2025-68121, and 21 HIGH, fixed in Go but in no
 gosu-free image, and the mirror scan must skip only paths our images provably delete; the running-stack tests need
 the whole stack in CI; and the single step was well over the ~550-line split line. The text below this note is the
 whole stack's spec; each part carries its share. Steps that depended on P1.29 (P2.13a, P1.34, P2.09, P3.01) depend
-on **P1.29t**, the last part, which implies the rest. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v,
+on **P1.29t**, the last part, which implies the first ten; P1.29y, P1.29b and P1.29u (items 11 to 13) are not implied,
+and nothing depends on them. Order: P1.29w (preferred first) and P1.29k, then P1.29x, P1.29v, P1.29b, P1.29u, P1.29y,
 P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
 1. **P1.29k "Add the migrate image and wire syncRolePasswords"** (product, security-review: `/deployment/` and
    `infrastructure/postgres/`, not `/infrastructure/postgres/session/`; depends on P1.27, P1.12p, P1.12x, all merged,
@@ -8194,7 +8254,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    this design (asked 18:57Z); line: "yes P1.29w every shipped image" (Alex, 2026-10-11). Order: it lands before P1.29k and P1.29d, so each new image is scanned
    from its first PR and neither edits `.github/`. That is preferred, not a dependency for P1.29k (Phase 1, not
    waiting on Alex's line; discovery picks a merged migrate image up when P1.29w lands). A check step pinning the
-      exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
+   exact image set after each new image is optional, at the coordinator's call. It also amends P1.27r: the required
    check becomes the Images workflow's aggregate job `scan` (images.yml), not the Mirror workflow's `scan` (mirror.yml).
 
    As built: merged by Alex as `94c0f03` (#571), a Cursor Agent PR, on Alex's line 'yes P1.29w every shipped image'
@@ -8223,7 +8283,7 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
    His typed line naming the change and branch is received (asked: "yes P1.29v mirror.yml"); line: "yes P1.29v
    mirror.yml" (Alex, 2026-10-12T02:13:47Z; book edit 2026-10-12-p129v-skip-dirs-and-images-ignorefile, amendment 1). A
    new stage kind (it would still fail on gosu's CRITICAL) and dropping the base scan (no early warning on what we do
-   ship) are rejected. P1.29d and P1.29y depend on it.
+   ship) are rejected. P1.29d, P1.29y, P1.29b and P1.29u depend on it.
 
    As built: merged by Alex at 2026-10-12T02:57:23Z as `7a05bd5` (#583).
 5. **P1.29d "Ship our own gosu-free Postgres image"** (feature, security-review; depends on P1.29v (merged, #583),
@@ -8314,7 +8374,8 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     edge a second time, at Trivy 0.75.0 while scan-image uses 0.74.0, and they carry checks the matrix lacks: hadolint,
     SBOM, runs as 65532, and the health checks (image-workflows.test.ts:69-103, mirror-scan.test.ts:149-160). migrate
     gets none of those checks, only the scan. Each check the old jobs run moves into `scan-image`, per discovered image,
-    and both old jobs are deleted:
+    and both old jobs are deleted, and the `images.yml:74` Trivy comment is corrected to 0.75.0 (book edit
+    2026-10-12-p129b-p129u-p129v-follow-ups):
     - Per-image values (expected uid, health command) come from one exact map in list-dockerfiles.ts, beside
       IGNOREFILES. An image missing from the map fails discovery, so a new image cannot arrive unchecked.
     - Every check that ran for node-app or edge before still runs for it; migrate gains them, which is a tightening.
@@ -8324,6 +8385,24 @@ P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t.
     replaces it; a check that cannot be carried stops the PR rather than being dropped. Done when, on the PR, every
     check the old jobs ran shows per image in the matrix, `scan` aggregates them, the old jobs are gone, and the full
     suite is green. Nothing depends on it.
+12. **P1.29b "Scan build stages in full, no stripped skips"** ([SEC], check: `.github/workflows/mirror.yml`,
+    `scripts/ci/mirror-scan.test.ts`, a tightening, kind/build; issue #586; depends on P1.29v (merged, #583); owner
+    Phase 2 or the third lane, not Phase 1 (`.github`); slice 1; book edit 2026-10-12-p129b-p129u-p129v-follow-ups, from
+    architecture's ruling 1 in 2026-10-12-p129v-follow-ups). The lock's `stripped` list becomes `--skip-files` and
+    `--skip-dirs` only on the runtime-stage run. The build-stage run scans the whole base and keeps its threshold: fail
+    on CRITICAL, warn on HIGH (P1.28v, P1.28w). The three npm trivyignore entries are not restored. Test:
+    `mirror-scan.test.ts` proves the build-stage invocation carries no `--skip-files` or `--skip-dirs`, and the runtime
+    invocation still carries both for each lock-listed path; red on `7a05bd5`, green on the PR. If the CI-bypass
+    classifier refuses the mirror.yml edit, the coordinator asks Alex for "yes P1.29b mirror build-stage scans npm".
+    Nothing depends on it.
+13. **P1.29u "Fail closed on stripped paths and RUN separators"** ([SEC], product: `deployment/images/images.test.ts`
+    only, under the `/deployment/` security-review line, kind/fix; issue #587; depends on P1.29v (merged, #583); owner
+    Phase 1; slice 1; same book edit, from architecture's ruling 2). `STRIPPED_PATH` (`images.test.ts:786`) accepts only
+    a normalised absolute path with at least three segments. `finalStageRemovals` (`images.test.ts:369-381`) refuses any
+    final-stage RUN containing `||`, `;`, `|` or a lone `&` instead of splitting on it. The `toStrictEqual` pin at :891
+    stays. Red fixtures: `/usr/.`, `/./usr`, `/usr/../etc`, `/usr//bin`, `/usr/local/`, `/usr` and
+    `rm -rf /usr/local/lib/node_modules/npm || true`; each is red on the PR, and the shipped lock stays green. Nothing
+    depends on it.
 
 **Resolver check in the image (architecture 00:13Z, reworded 01:35Z; book edits
 2026-10-06-p127-base-by-digest-book-text and 2026-10-07-p127d-node-debian-slim):** P1.29t carries

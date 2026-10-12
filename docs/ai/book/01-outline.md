@@ -133,7 +133,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 180 steps: 158 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 184 steps: 162 from `phase-1.md`, 22 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -197,6 +197,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.16 | Durable single-use nonce and ticket store | [SEC] | P1.16g, P1.12t, P1.12, P1.13 | `phase-1.md` |
 | P1.17e | Log prelude: `lock.hold_exceeded`, `lock.lost` (prelude to P1.17) | — | P1.03 | `phase-1.md` |
 | P1.17 | Per-DID Postgres advisory lock helper (the OAuth client's `requestLock`) | — | P1.11p, P1.17e | `phase-1.md` |
+| P1.17r | Lock integration tests wait for the holder to start, not a fixed sleep | — | P1.17 | `phase-1.md` |
 | P1.18 | `net-guard` core: classify addresses, resolve once, pin the connection | [SEC] | P1.02 | `phase-1.md` |
 | P1.18a | `net-guard` requests: policies, no redirects, size, time and decompression caps | [SEC] | P1.18 | `phase-1.md` |
 | P1.20 | Framework-glue spike | [SPIKE] | P1.04, P1.10 | `phase-1.md` |
@@ -274,7 +275,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.28p | depcruise: product code never imports the tooling set (tests, check scripts, fixtures, vectors) | [SEC] | P1.28m | `phase-1.md` |
 | P1.28z | Tooling set image-test anchor; depcruise_cruised_nonzero cruises fixed real files, not the whole repo | [SEC] | P1.28p | `phase-1.md` |
 | P1.30c | Specifier cruise test: /proc/self/root spelling and a per-spelling presence guard | [SEC] | — | `phase-1.md` |
-| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l | `phase-1.md` |
+| P1.30r | Depcruise row: deployment/preflight may import deployment/edge/caddyfile.ts only | [SEC] [ALEX] | — | `phase-1.md` |
+| P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] [ALEX] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -291,6 +293,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29w | images.yml discovers and scans every image; aggregate "scan" job | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.29v | Mirror scan skips declared stripped paths; npm ignores removed | [SEC] [ALEX] | P1.29x, P1.28w, P1.29w | `phase-1.md` |
 | P1.29y | Fold the old images/edge jobs (hadolint, SBOM, uid, health) into the discovered scan matrix | [SEC] [ALEX] | P1.29w, P1.29v | `phase-1.md` |
+| P1.29b | Mirror build-stage run scans the whole base (stripped skips on runtime only) | [SEC] | P1.29v | `phase-1.md` |
+| P1.29u | Stripped-path syntax and final-stage RUN separators fail closed | [SEC] | P1.29v | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web, edge | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.28, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29a | PDS vendor image and service in the dev stack | [ALEX] [SEC] | P1.29 | `phase-1.md` |
@@ -380,6 +384,7 @@ flowchart TD
   P1_16["P1.16 Durable single-use nonce and"]
   P1_17e["P1.17e Lock log events"]
   P1_17["P1.17 Per-DID Postgres advisory lock"]
+  P1_17r["P1.17r Lock tests wait for the holder"]
   P1_18["P1.18 net-guard core"]
   P1_18a["P1.18a net-guard requests"]
   P1_20["P1.20 Framework-glue spike"]
@@ -463,6 +468,8 @@ flowchart TD
   P1_29w["P1.29w Discover and scan every image"]
   P1_29v["P1.29v Mirror scan skips stripped"]
   P1_29y["P1.29y Old image jobs folded into the matrix"]
+  P1_29b["P1.29b Mirror build stage scanned in full"]
+  P1_29u["P1.29u Stripped paths and RUN separators fail closed"]
   P1_29d["P1.29d Gosu-free Postgres image"]
   P1_29["P1.29 Development stack, no PDS"]
   P1_29a["P1.29a PDS in the dev stack"]
@@ -474,6 +481,7 @@ flowchart TD
   P1_30["P1.30 Deploy preflight core"]
   P1_30s["P1.30s Preflight C13–C24 but C17, C18"]
   P1_30t["P1.30t Preflight C17 networks"]
+  P1_30r["P1.30r preflight-to-edge row"]
   P1_30u["P1.30u Preflight C18 edge zones"]
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
@@ -649,6 +657,7 @@ flowchart TD
   P1_14 --> P2_04
   P1_14d --> P2_04
   P1_17 --> P2_04
+  P1_17 --> P1_17r
   P1_31 --> P2_04
   P2_01 --> P2_04
   P2_03i --> P2_04
@@ -687,6 +696,8 @@ flowchart TD
   P1_29x --> P1_29v
   P1_29w --> P1_29y
   P1_29v --> P1_29y
+  P1_29v --> P1_29b
+  P1_29v --> P1_29u
   P1_29x --> P1_29r
   P1_29r --> P1_29d
   P1_29r --> P1_29e
@@ -742,6 +753,7 @@ flowchart TD
   P1_28f --> P1_28l
   P1_28l --> P1_30u
   P1_28g --> P1_30u
+  P1_30r --> P1_30u
   P1_28g --> P1_28k
   P1_28k --> P1_28m
   P1_28m --> P1_28p
