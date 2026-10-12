@@ -2384,7 +2384,8 @@ Done when (tests, planted fixtures in the guard's tests):
 Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
 Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
   1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
-  2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686. Lane: P0.09t's
+  2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686, with amendments 1
+  (19:36Z) and 2 (19:58Z, architecture's 2026-10-12-workspace-imports-and-remote-daemon). Lane: P0.09t's
   (Phase 0). It gets its own PR (D3, one step per PR), though the record allowed sharing P0.09t's.
 Waits for: Alex's typed line "yes P0.09n scripts/guards trusted-base imports", asked with the other lines after
   P0.16a. The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`.
@@ -2401,11 +2402,49 @@ The fix:
 - `tests/support/postgres.ts`, `tests/support/docker.ts`, `tests/integration/postgres-helper.test.ts` and
   `tests/integration/docker-helper.test.ts` join the CODEOWNERS trusted section in the same PR, so the bootstrap test's
   import stays legal. Cost: a later change to those helpers is a trusted-class PR of its own.
+- Amendment 1: `tests/support/image-build.ts` (from P1.27x) and its test join the trusted section too. The builder
+  lists every `tests/support` file a trusted test imports on main at build time and makes each one trusted, or the
+  guard fails.
+- Amendment 2: the guard resolves `@unset/*` specifiers through the workspace map (each package.json `name` to its
+  folder) before the npm exemption and applies the trusted-file rule to the resolved path; an unresolvable `@unset/*`
+  name fails closed. `import type { X }` and type-only `import { type X }` clauses are exempt; a mixed clause counts
+  as a value import. `shared/http/csrf/gate.test.ts` drops its runtime import of `@unset/shared-log` for a local
+  capture logger typed with `import type { Logger }`; shared/log stays untrusted. Trusted product files are P0.09o.
 - Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
-- Sequencing: P1.27g (#690) and P1.27i (#697), which edit those helpers, merged first, so nothing has to move.
+- Sequencing: P1.27g (#690) and P1.27i (#697), which edit those helpers, merged first. P1.27x (#702) and P1.11c
+  (#706) also edit `tests/support` files and must merge before #692; if #692 lands first, their edits to those files
+  move to a trusted PR.
 
 Done when (tests, planted fixtures in the guard's tests):
   - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
+  - Red (amendment 2): a value import of an untrusted `@unset/*` package fails; an unresolvable `@unset/*` name
+    fails; a mixed clause fails; a type-only import passes.
+  - The guard is green on the real tree, and the full suite is green.
+
+---
+
+### P0.09o — Bar trusted code from untrusted packages
+Tags: [SEC] [ALEX] (typed line: CODEOWNERS, scripts/guards)            Depends on: P0.09n            Plan: rule SE-6
+Check class and trusted base (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build;
+  issue #707; slice 1; book edit 2026-10-12-p009o-trusted-product-imports (19:58Z), from the wider finding in
+  architecture's 2026-10-12-workspace-imports-and-remote-daemon, part 1 (Codex [SEC] on #701). Lane: Phase 0, after
+  P0.09n.
+Waits for: Alex's typed line "yes P0.09o CODEOWNERS shared-config shared-errors trusted". It is a tightening, but it
+  widens the trusted section, so later changes to shared/config and shared/errors become trusted-class PRs.
+Where: `scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`.
+
+The gap: trusted product files import untrusted workspace packages at runtime, so an untrusted change can change
+trusted behaviour. `shared/http/config.ts:3` and `shared/http/csp/sources.ts:3` import `@unset/shared-config` (which
+decides the CSRF allowed origins), and `shared/http/errors.ts:4` and `shared/http/server.ts:9` import
+`@unset/shared-errors`.
+
+The fix:
+- P0.09n's boundary extends from trusted tests to every trusted file: a value import, relative or `@unset/*`, must
+  resolve to a trusted file. Built-ins and npm packages are allowed; type-only imports stay exempt.
+- `shared/config` and `shared/errors` move into CODEOWNERS' trusted section.
+
+Done when (tests, planted fixtures in the guard's tests):
+  - Red: a trusted product file making a value import of an untrusted package fails on the base and passes after.
   - The guard is green on the real tree, and the full suite is green.
 
 ---

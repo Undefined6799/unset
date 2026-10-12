@@ -25,8 +25,10 @@ Unit tests sit beside the file they test, not here.
   interrupted by vitest's test timeout, so without this a hung daemon held the event loop until `scripts/test/run.ts`
   killed the whole run at 600 s, naming nothing. `killBefore(budget)` sets a call's timeout 5 s under the test's
   budget; `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g) and refuses
-  an async body (P1.27i). Hooks that end in `stopAllPostgres` take `STOP_ALL_MS`, never vitest's 10 s default; a
-  killed `docker rm` there now fails the hook, naming the container, instead of passing silently (P1.27i).
+  an async body (P1.27i). An async setup uses `failAfterCleanup(error, cleanup)` from its catch, and a hook with
+  several cleanups uses `cleanUpAll`, so a killed removal never hides the setup error or skips a folder (P1.11c).
+  Hooks that end in `stopAllPostgres` take `STOP_ALL_MS`, never vitest's 10 s default; a killed `docker rm` there
+  now fails the hook, naming the container, instead of passing silently (P1.27i).
 - `support/image-build.ts`: image tests build with `buildTestImage`, which tags each build `unset-test-<hex>`, and
   clean up with `removeTestImage`, which removes only that tag, never with `-f` or by id (P1.27x). Two builds of one
   Dockerfile and context share an image id on CI's classic image store, so `rmi -f <id>` removed it under another

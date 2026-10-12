@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 38 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a and P0.09n added 2026-10-12).
+Depth: **build-ready**. 39 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n and P0.09o added 2026-10-12).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -53,6 +53,7 @@ Depth: **build-ready**. 38 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09m | Grant parser classifies one-part schema names (waits for Alex's typed word: a loosening) | [SEC] [ALEX] | P0.09e | `phase-0.md` |
 | P0.09t | Trusted file pattern carries only its own tests (folder patterns unchanged) | [SEC] [ALEX] (typed line: scripts/guards; line asked after P0.16 lands) | P0.09c | `phase-0.md` |
 | P0.09n | Bar trusted tests from product helpers | [SEC] [ALEX] (typed line: scripts/guards) | P0.09c | `phase-0.md` |
+| P0.09o | Bar trusted code from untrusted packages | [SEC] [ALEX] (typed line: CODEOWNERS, scripts/guards) | P0.09n | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -95,6 +96,7 @@ flowchart TD
   P0_09m["P0.09m One-part schema names"]
   P0_09t["P0.09t Trusted file pattern tests only"]
   P0_09n["P0.09n Trusted tests import only trusted"]
+  P0_09o["P0.09o Trusted code imports only trusted"]
   P0_10["P0.10 Secret scanning"]
   P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
@@ -125,6 +127,7 @@ flowchart TD
   P0_09c --> P0_09f
   P0_09c --> P0_09t
   P0_09c --> P0_09n
+  P0_09n --> P0_09o
   P0_09f --> P0_09g
   P0_13 --> P0_09g
   P0_09g --> P0_09i
@@ -150,7 +153,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 227 steps: 203 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 232 steps: 208 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -348,6 +351,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27w | Run Compose only through the preflight wrapper | [SEC] | P1.30a, P1.30z | `phase-1.md` |
 | P1.27n | Close the P1.27y verifier test gaps | [SEC] | P1.27y | `phase-1.md` |
 | P1.27j | Tidy preflight comments and the tilde check | — | P1.30a | `phase-1.md` |
+| P1.11c | Keep the setup error when cleanup fails | — | P1.27i | `phase-1.md` |
+| P1.11f | Keep cleanup errors in Postgres test setup | — | P1.11c | `phase-1.md` |
+| P1.11i | Restore edge tag removal; label test images | — | P1.27x, P1.27z | `phase-1.md` |
+| P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
+| P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
@@ -549,6 +557,11 @@ flowchart TD
   P1_27n["P1.27n P1.27y verifier test gaps"]
   P1_27u["P1.27u C9 bind reach gaps"]
   P1_27j["P1.27j Preflight comment and tilde tidy"]
+  P1_11c["P1.11c Keep the setup error on cleanup"]
+  P1_11i["P1.11i Edge tag removal and test labels"]
+  P1_11f["P1.11f Cleanup errors in Postgres setup"]
+  P1_34f["P1.34f Require the interpolation env flag"]
+  P1_34p["P1.34p Secret inputs outside the project"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27w["P1.27w Compose only through the wrapper"]
   P1_27o["P1.27o Edge data and config owned by caddy"]
@@ -910,6 +923,14 @@ flowchart TD
   P1_27a --> P1_27u
   P1_27u --> P1_29
   P1_30a --> P1_27j
+  P1_27i --> P1_11c
+  P1_11c --> P1_11f
+  P1_27x --> P1_11i
+  P1_27z --> P1_11i
+  P1_30a --> P1_34f
+  P1_27u --> P1_34p
+  P1_34f --> P1_34
+  P1_34p --> P1_34
   P1_30k --> P1_30x
   P1_30x --> P1_29
   P1_30y --> P1_29
@@ -989,7 +1010,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t, P1.34f, P1.34p | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
@@ -1712,7 +1733,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09o, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1722,6 +1743,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   2026-10-12-p016a-claude-md-adr-0019-wording). P0.16 merged at 2026-10-12T16:53:13Z as `45bd8ba` (#625).
 - **P0.09t:** a typed line, "yes P0.09t scripts/guards trusted-base", for the classifier path.
 - **P0.09n (#692):** a typed line, "yes P0.09n scripts/guards trusted-base imports", for the classifier path.
+- **P0.09o (#707):** a typed line, "yes P0.09o CODEOWNERS shared-config shared-errors trusted".
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
 - **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
 - **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).
