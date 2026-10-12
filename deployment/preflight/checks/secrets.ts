@@ -53,6 +53,9 @@ function composeReadFileProblem(path: string, inputs: Inputs): Outcome | null {
   if (walked === "kind" || !info.isFile() || info.size === 0) return fail(`${path} is empty or not a file`);
   // A second name, inside the checkout for instance, would carry the values past C26's path test (Amendment 6).
   if (info.nlink !== 1) return fail(`${path} has more than one hard link`);
+  // The values came from the file the reader opened; a swap since then means C9 would judge another file (P1.34p).
+  if (inputs.envReads.get(path) !== `${info.dev}:${info.ino}`)
+    return fail(`${path} changed after the preflight read it`);
   if ((info.mode & 0o777) !== 0o600) return fail(`${path} must have exactly owner read and write permissions`);
   if (info.uid !== inputs.uid) return fail(`${path} is not owned by the deploy user`);
   return null;
@@ -84,7 +87,8 @@ function lockedDirectoryProblem(dir: string, inputs: Inputs): Outcome | null {
   if (!info.isDirectory() || (info.mode & 0o7777) !== 0o700 || info.uid !== inputs.uid) {
     return fail(`${dir} must be a directory with mode 0700 owned by the deploy user`);
   }
-  if (onProcfs(dir, inputs)) return fail("the secrets folder is on procfs");
+  const foreign = foreignFilesystem(dir, inputs);
+  if (foreign !== null) return fail(`the secrets folder is on ${FILESYSTEM_NAMES[foreign]}`);
   return ancestorProblem(dir, inputs);
 }
 
@@ -93,7 +97,8 @@ function ancestorProblem(dir: string, inputs: Inputs): Outcome | null {
   let level = 1;
   for (let parent = dirname(dir); ; parent = dirname(parent), level++) {
     const above = inputs.lstat(parent);
-    if (above?.isDirectory() === true && onProcfs(parent, inputs)) return fail("the secrets folder is on procfs");
+    const foreign = above?.isDirectory() === true ? foreignFilesystem(parent, inputs) : null;
+    if (foreign !== null) return fail(`the secrets folder is on ${FILESYSTEM_NAMES[foreign]}`);
     if (above === null || !above.isDirectory())
       return fail(`parent ${level} of the secrets folder is a link or not a directory`);
     const othersOwn = above.uid !== 0 && above.uid !== inputs.uid;
@@ -118,6 +123,17 @@ export function holdsEnvFile(path: string, inputs: Inputs): boolean {
   return inputs.secretPaths.some((file) => reaches(path, file, inputs));
 }
 
+/**
+ * Whether `path` reaches an env file, or the folder of one other than the project's own `.env` (P1.34p, Amendment 2):
+ * is it, lies inside it or contains it, by the same tests. insideProjectProblem has already refused env files inside
+ * the project directory, so these folders lie outside it.
+ */
+function reachesEnvInput(path: string, inputs: Inputs): boolean {
+  const dotEnv = join(inputs.projectDir, ".env");
+  const folders = new Set(inputs.secretPaths.filter((file) => file !== dotEnv).map((file) => dirname(file)));
+  return holdsEnvFile(path, inputs) || [...folders].some((folder) => reaches(path, folder, inputs));
+}
+
 function reaches(path: string, dir: string, inputs: Inputs): boolean {
   const folders = [dir, inputs.realpath(dir) ?? dir];
   const paths = [path, inputs.realpath(path) ?? path];
@@ -137,15 +153,21 @@ function bindSourceProblem(inputs: Inputs): Outcome | null {
   for (const service of inputs.compose.services) {
     for (const mount of service.mounts) {
       if (mount.type !== "bind" || mount.source === null) continue;
-      // Secrets reach containers only through `secrets:` (architecture, Amendment 2 of
-      // 2026-10-12-c9-secret-file-owner): a source that is the secrets folder, lies inside it or contains it fails.
-      if (reachesSecretsFolder(mount.source, inputs))
-        return fail(`${service.name} binds a path that reaches the secrets folder`);
-      const walked = resolveChecked(mount.source, inputs);
-      if (walked !== null) return fail(`${service.name} binds a path ${WALK_REASONS[walked]}`);
+      const reason = bindReason(mount.source, inputs);
+      if (reason !== null) return fail(`${service.name} binds a path ${reason}`);
     }
   }
   return null;
+}
+
+/** Why one bind source fails, completing "<service> binds a path ...", or null. */
+function bindReason(source: string, inputs: Inputs): string | null {
+  // Secrets reach containers only through `secrets:` (architecture, Amendment 2 of
+  // 2026-10-12-c9-secret-file-owner): a source that is the secrets folder, lies inside it or contains it fails.
+  if (reachesSecretsFolder(source, inputs)) return "that reaches the secrets folder";
+  if (reachesEnvInput(source, inputs)) return "that reaches an env file or the env folder";
+  const walked = resolveChecked(source, inputs);
+  return walked === null ? null : WALK_REASONS[walked];
 }
 
 /** Why a walk failed, completing "<service> binds a path ..." or "<service> builds from a context ...". */
@@ -155,6 +177,7 @@ export const WALK_REASONS = {
   changeable: "that another user can change",
   loop: "through too many links",
   kind: "that is not a file or directory",
+  fuse: "through a FUSE file system",
 } as const;
 export type WalkProblem = keyof typeof WALK_REASONS;
 
@@ -219,12 +242,20 @@ function entryProblem(at: string, info: Stats, more: boolean, inputs: WalkInputs
   if (more && !info.isDirectory()) return "missing";
   if (!info.isDirectory() && !info.isFile()) return "kind";
   if ((info.mode & 0o022) !== 0) return "changeable";
-  return onProcfs(at, inputs) ? "procfs" : null;
+  return foreignFilesystem(at, inputs);
 }
 
-/** PROC_SUPER_MAGIC (linux/magic.h): procfs by filesystem type, so a bind-mounted alias of /proc is known too. */
-const PROC_SUPER_MAGIC = 0x9fa0;
-const onProcfs = (path: string, { statfs }: WalkInputs) => statfs(path).type === PROC_SUPER_MAGIC;
+/**
+ * The file systems C9 refuses, by statfs type (linux/magic.h): procfs (PROC_SUPER_MAGIC), so a bind-mounted alias of
+ * /proc is known too, and FUSE (FUSE_SUPER_MAGIC), whose contents its user-space daemon decides on every read (P1.34p,
+ * Amendment 2).
+ */
+const FOREIGN_FILESYSTEMS = new Map<number, "procfs" | "fuse">([
+  [0x9fa0, "procfs"],
+  [0x65735546, "fuse"],
+]);
+const FILESYSTEM_NAMES = { procfs: "procfs", fuse: "FUSE" } as const;
+const foreignFilesystem = (path: string, { statfs }: WalkInputs) => FOREIGN_FILESYSTEMS.get(statfs(path).type) ?? null;
 
 /**
  * The (dev, ino) of a path and of each directory above it, nearest first; null where nothing exists. A second name

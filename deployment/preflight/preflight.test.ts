@@ -463,6 +463,76 @@ describe("preflight", () => {
     expect(failed(beside.lines)).toEqual([]);
   });
 
+  // P1.34p Amendment 2, item 1: a bind may not reach the env folder or any file Compose reads values from.
+  test("c9_bind_reaching_env_inputs_fails", async () => {
+    const reach = "FAIL C9 edge binds a path that reaches an env file or the env folder";
+    const bind = (source: string) =>
+      COMPOSE.replace("./edge/sites/enabled:/etc/caddy/sites/enabled:ro", `${source}:/srv/x:ro`);
+    for (const source of ["../../unset-dev-env", "../../unset-dev-env/pds.env"]) {
+      expect((await check({ compose: bind(source) })).lines, source).toContain(reach);
+    }
+    // Through a link that lives inside the project: judged where it resolves.
+    const { root, file } = stack({ compose: bind("./envlink") });
+    symlinkSync(envOf(root), join(root, "deployment/envlink"));
+    const linked = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+    expect(linked.lines).toContain(reach);
+    // The project directory holds a non-empty .env, so binding it reaches that file.
+    expect((await check({ compose: bind("."), dotEnv: "HOST_NAME=pds.example.test\n" })).lines).toContain(reach);
+    // Another file in the env folder: no env file is under it, but it lies inside the env folder.
+    const other = stack({ compose: bind("../../unset-dev-env/notes") });
+    writeFileSync(join(envOf(other.root), "notes"), "not read by Compose\n");
+    const inFolder = await preflight(["--env", "prod", "--compose", other.file], {
+      root: other.root,
+      run: fakeRun().run,
+      ...fakeFs(other.root),
+    });
+    expect(inFolder.lines).toContain(reach);
+  });
+
+  // P1.34p Amendment 2, item 2: an env file is read only as a regular file, and only as the file C9 then judges.
+  test("c9_env_file_read_safely", { timeout: 10_000 }, async () => {
+    const { root, file } = stack();
+    const pdsEnv = join(envOf(root), "pds.env");
+    rmSync(pdsEnv);
+    execFileSync("mkfifo", ["-m", "600", pdsEnv]);
+    // A FIFO with no writer would block a plain read for ever; the preflight stops instead.
+    const fifo = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+    expect(fifo).toEqual({ code: 2, lines: [`ERROR ${pdsEnv} is not a regular file`] });
+    // A file swapped after it was read: C9 sees another (dev, ino) than the one the values came from.
+    const swapped = stack();
+    const swappedEnv = join(envOf(swapped.root), "pds.env");
+    const readEnv = (path: string) => (path === swappedEnv ? { text: readFileSync(path, "utf8"), id: "0:0" } : null);
+    const result = await preflight(["--env", "prod", "--compose", swapped.file], {
+      root: swapped.root,
+      run: fakeRun().run,
+      ...fakeFs(swapped.root),
+      readEnv,
+    });
+    expect(result.lines).toContain(`FAIL C9 ${swappedEnv} changed after the preflight read it`);
+  });
+
+  // P1.34p Amendment 2, item 3: FUSE (FUSE_SUPER_MAGIC, linux/magic.h) is refused beside procfs.
+  test("c9_fuse_refused", async () => {
+    const FUSE = 0x65735546;
+    const { root, file } = stack();
+    const onFuse = (where: string) =>
+      preflight(["--env", "prod", "--compose", file], {
+        root,
+        run: fakeRun().run,
+        ...fakeFs(root),
+        statfs: (path) => ({ type: path === where ? FUSE : 0xef53 }),
+      });
+    for (const where of [secretsOf(root), dirname(secretsOf(root))]) {
+      expect((await onFuse(where)).lines, where).toContain("FAIL C9 the secrets folder is on FUSE");
+    }
+    expect((await onFuse(envOf(root))).lines).toContain(
+      `FAIL C9 ${join(envOf(root), "pds.env")} lies on a path through a FUSE file system`,
+    );
+    expect((await onFuse(join(root, "deployment/edge/sites/enabled"))).lines).toContain(
+      "FAIL C9 edge binds a path through a FUSE file system",
+    );
+  });
+
   // P1.30o: a mounted secret is mode 0400, owned by the one uid that mounts it, in a 0700 directory of the deploy user.
   test("c9_mounted_secret_owner_and_mode", async () => {
     const path = (root: string) => join(secretsOf(root), "db_password");
@@ -1817,8 +1887,9 @@ describe("compose inputs (P1.30a)", () => {
     id: "CP",
     run: (inputs) => (inputs.serviceEnv.get("pds")?.use("PDS_HOSTNAME", (v) => v === want) ? pass() : fail("other")),
   });
+  // Beside the checkout, as the stack's env files are (P1.34p: never inside the Compose project directory).
   function envFile(root: string, name: string, text: string, mode = 0o600): string {
-    const path = join(root, "deployment", name);
+    const path = join(envOf(root), name);
     writeFileSync(path, text);
     chmodSync(path, mode);
     return path;
@@ -1850,6 +1921,25 @@ describe("compose inputs (P1.30a)", () => {
     });
     expect(failed(result.lines)).toEqual(["C9"]);
     expect(result.lines).toContain(`FAIL C9 ${flag} must have exactly owner read and write permissions`);
+  });
+
+  test("interpolation_env_inside_project_fails", async () => {
+    const { root, file } = stack({ compose: REF });
+    const inside = join(root, "deployment/flag.env");
+    writeFileSync(inside, "HOST_NAME=pds.example.test\n");
+    chmodSync(inside, 0o600);
+    const run = (flag: string) =>
+      preflight(argv(file, "--interpolation-env", flag), {
+        root,
+        run: fakeRun().run,
+        environment: {},
+        ...fakeFs(root),
+      });
+    expect((await run(inside)).lines).toContain(
+      "FAIL C9 an env or secret file is inside the Compose project directory",
+    );
+    const beside = envFile(root, "flag.env", "HOST_NAME=pds.example.test\n");
+    expect(failed((await run(beside)).lines)).not.toContain("C9");
   });
 
   test("interpolation_env_refusals_cannot_run", async () => {
