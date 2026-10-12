@@ -67,7 +67,14 @@ export type Hardening = {
 export type Mount = { type: "bind" | "volume" | "tmpfs"; source: string | null; target: string; readOnly: boolean };
 /** A top-level network: only `internal`, a `bridge` driver and `name` are read; anything else is refused. */
 export type Network = { name: string; internal: boolean };
-export type Compose = { name: string | null; services: Service[]; networks: Network[]; secretFiles: string[] };
+export type Compose = {
+  name: string | null;
+  services: Service[];
+  networks: Network[];
+  secretFiles: string[];
+  /** Each top-level secret's file, by name: what a service's `secrets` entry mounts (P1.30o). */
+  secretFileByName: ReadonlyMap<string, string>;
+};
 
 export class ParseError extends Error {}
 
@@ -158,6 +165,7 @@ export function parseCompose(text: string, file: string): Compose {
     services: servicesNode.items.map((pair) => service(r, r.text(pair.key, "service name"), pair.value, scope)),
     networks: networks(r, root.get("networks", true)),
     secretFiles: [...secrets.values()],
+    secretFileByName: secrets,
   };
 }
 
