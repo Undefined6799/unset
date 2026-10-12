@@ -4,6 +4,7 @@
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { docker, killBefore, withCleanup } from "../../tests/support/docker.ts";
+import { buildTestImage, removeTestImage } from "../../tests/support/image-build.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const MIGRATE_DOCKERFILE = join(DEPLOYMENT, "images/migrate.Dockerfile");
@@ -18,17 +19,13 @@ describe("migrate image", () => {
   test(
     "migrate_image_boots_to_config_check",
     () => {
-      const built = docker(["build", "-q", "-f", MIGRATE_DOCKERFILE, join(DEPLOYMENT, "..")], {
-        timeoutMs: BUILD_CALL_MS,
-      });
-      expect(built.code, built.err.slice(-2000)).toBe(0);
-      const image = built.out.trim();
+      const image = buildTestImage(MIGRATE_DOCKERFILE, join(DEPLOYMENT, ".."), { timeoutMs: BUILD_CALL_MS });
       withCleanup(
         () => {
           const run = docker(["run", "--rm", "--read-only", "--network", "none", image], { timeoutMs: CALL_MS });
           expect(run.code, run.err.slice(-2000)).toBe(78);
         },
-        () => docker(["rmi", "-f", image], { timeoutMs: CALL_MS }),
+        () => removeTestImage(image, { timeoutMs: CALL_MS }),
       );
     },
     TEST_MS,
