@@ -55,7 +55,7 @@ and this table is the only place to change.
 | P1.22 theme/locale | cookies `theme`, `locale`; form POSTs to switch. The locale half is P1.22b (i18n slice); slice 1 is English. |
 | P1.24 UI kit | `Button`, `LinkButton`, `Field`, `TextInput`, `TextArea`, `Checkbox`, `FileInput`, `Notice`, `Form`, `Card`, `Avatar`, `Icon`, `CopyField` (if not on the sheet, P2 steps that need it stop for Alex — see each step). |
 | P1.25 shell | `AppShell`, `ErrorPage(code)`, legal page route slots `/legal/terms`, `/legal/privacy`. |
-| P1.31 lexicons | `validateRecord(nsid, value) -> {ok: true, value} \| {ok: false, path, message}`; `LIMITS.profile.*`, `LIMITS.section.*`; NSID constants; `PERMISSION_SET_NSID`; the permission-set JSON (for the scope-equality test); vendored `app.bsky.actor.profile` validator. |
+| P1.31 lexicons | `validateRecord(nsid, value) -> {ok: true, value} \| {ok: false, path, message}`; `LIMITS.profile.*`, `LIMITS.section.*`; NSID constants; its own `sh.unset.authApp`, cross-pinned by P1.31c (#760) to `PERMISSION_SET_NSID` in shared/config, which P2.04 imports; the permission-set JSON (for the scope-equality test); vendored `app.bsky.actor.profile` validator. |
 | P1.34/P1.35 PDS | No production PDS before Phase 5 (decision 20; P1.34 only registers `unset.ac`). Phase 2 runs entirely against the dev PDS `0x40.space`, made fit to be an authority by P1.35: invite-only, `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me` (dev `.0x40.space`), permission set published and resolvable. |
 | P1.37 legal 1 | Arachnid Shield application status; Cybertip report-and-preserve runbook (`docs/human/runbooks/cybertip.md`); incident-response page. |
 
@@ -903,7 +903,8 @@ Postgres, whose refreshes are serialised by an advisory lock across replicas, wh
 Inputs: `@atproto/oauth-client-node` pinned exactly (≥0.5.8; use the newest 0.5.x at build time with
   `minimumReleaseAge` satisfied), `@atproto/jwk-jose` pinned exactly, `@atproto/oauth-scopes` pinned exactly; P1.14 seal;
   P1.17 lock; P1.18 `guardedFetch` with the `atproto` policy (public, our PDS as its internal host); P2.01 adapters; P2.03 `sessions`;
-  P1.31 `PERMISSION_SET_NSID` and the set's JSON.
+  `PERMISSION_SET_NSID` from `shared/config` (the permanent constant, P1.32; P1.31's lexicon copy is cross-pinned to it
+  by P1.31c, #760) and P1.31's set JSON.
   Config: `PUBLIC_URL` (`https://unset.sh`), `OAUTH_CLIENT_KEYS` (secret; JSON array of ES256 private JWKs, each with a
   unique `kid`; ≥1 required), `OAUTH_ACTIVE_KID` (must be one of them), `PDS_ISSUER` (dev and test track `https://0x40.space`; there is no production
   PDS before Phase 5 — decision 20, outline P1.34 — so no step in this phase names its host; copy derives it from
@@ -2693,10 +2694,11 @@ root. **Moved to Phase 5** (P5.07b, "Real fingerprint check"):
     client goes through net-guard;
   - the C-16 transmission buffer for images (P4.03's module), destroyed in the same request when the check is clear;
   - the legal hold at a match through the one P4.07 design: P4.07's **one** `legal_hold` table (with a subject kind for
-    images), objects encrypted to the legal-hold public key with P1.14a's `sealTo("legal_hold", plaintext, context)`, the clock on
-    `pds-admin` (one year after notification, P3.16c's `preserve.*` verbs), sealed-record export only, never media. This
-    step creates **no** hold table and no second hold design (phase-4-part2 E23 is settled this way). P1.14a therefore
-    has to exist before P5.07b, not before this one;
+    images), objects encrypted to the legal-hold public key with P1.14a's `sealTo("legal_hold", plaintext, context)`,
+    the clock on `pds-admin` (one year after notification once the amended regime is in force; 21 days before it (per
+    case, fixed at notification); P3.16c's `preserve.*` verbs), sealed-record export only, never media. This step
+    creates **no** hold table and no second hold design (phase-4-part2 E23 is settled this way). P1.14a therefore has to
+    exist before P5.07b, not before this one;
   - the production origin pin (`https://shield.projectarachnid.ca`) and the `provider_access_lost` flag.
 
 Inputs: P2.16b `pdqDihedral`; P1.02 config (`UNSET_ENV`); P1.12 roles; P1.15 audit (P1.15 does **not** seed `fingerprint.matched`: this step's migration `0207_app_upload_flags.sql` inserts
@@ -4255,12 +4257,13 @@ coordinator's to route. Round 2 status is given per item.
   pre-step revokes the OAuth grant (best effort); the erasure screen says that records already published in a foreign
   repo stay there. P4.26's export includes draft images through `draftMedia.listForExport(did)`.
 - **E26 — New Phase 5 step (P5.07b, "Real fingerprint check")**, from Alex's 02:58Z decision: the Arachnid
-  Shield API spike (the former P2.16a, with the round-1 review's spike spec and verified SDK facts), our own ~60-line client
-  through net-guard (PDQ hashes only; no media-free exact lookup exists), the production origin pin, the
+  Shield API spike (the former P2.16a, with the round-1 review's spike spec and verified SDK facts), our own ~60-line
+  client through net-guard (PDQ hashes only; no media-free exact lookup exists), the production origin pin, the
   `provider_access_lost` flag, the transmission buffer for images (P4.03's design, destroyed in the same request when
   clear), and the legal hold at a match through P4.07's shared entry point (one table with a subject kind, objects
-  encrypted to the legal-hold public key, expiry one year after notification on `pds-admin`'s clock, sealed-record export
-  only, never media). It depends on P1.14a, P3.16c and P2.16, and it replaces `fakeFingerprintCheck` in production config.
+  encrypted to the legal-hold public key, expiry one year after notification once the amended regime is in force; 21
+  days before it (per case, fixed at notification), on `pds-admin`'s clock, sealed-record export only, never media). It
+  depends on P1.14a, P3.16c and P2.16, and it replaces `fakeFingerprintCheck` in production config.
 - **E27 — Launch-gate item (new).** Before launch, every image stored during the test period is scanned with the real
   check: every live `draft_media` variant (rows with `checked_by` in `fake` or `no_hashable` are re-hashed from the stored
   `_publish` variant, since originals are never kept) and every image blob we published to a repo during the test track.

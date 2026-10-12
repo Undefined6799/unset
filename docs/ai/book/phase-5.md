@@ -248,7 +248,7 @@ flowchart LR
   PGB & SQL & PAS & APD --> JOB
   JOB -->|class key, no retention rights| B1[(bucket backups: default lock N days<br/>noncurrent versions expire 1 day)]
   AUD --> B2[(bucket audit: default lock 2 years)]
-  HOLD --> B3[(bucket holds: default lock 365 days)]
+  HOLD --> B3[(bucket holds: no default lock;<br/>per-object retain-until (case))]
   SEC -->|escrow recipient| B4[(bucket escrow: default lock N days)]
   BLOB --> MJ --> MIRB[(mirror bucket; deleted objects kept N days)]
   JOB -->|ops.report| FR
@@ -818,15 +818,19 @@ Algorithm, one run of class C:
   5. **Encrypt.** Write `manifest.json`. Run `tar` to a file, not a pipe (prototype `backup.sh:59-60`), and check its exit.
      Run `age -r <recipient>…`, check its exit, and check the output is non-empty.
   6. **Upload** with that bucket's host key, plus the header `x-amz-checksum-sha256`.
-     - No retention header is sent: the object takes the bucket's default retention (round 1 F7).
+     - Backups and audit: no retention header is sent; the object takes the bucket's default retention (round 1 F7).
+     - Holds: the upload sends an explicit compliance-mode retain-until equal to the case's preserve-until (book edit
+       2026-10-12-p504-holds-bucket-lock, item 2).
      - Upload timeout 30 minutes; 2 retries with backoff; then fail with `upload_failed`.
      - Before any upload, `retainUntilCap(class)` is computed and checked against the bucket's default retention:
-       backups N + 1 days; audit at most the class period + 1 day; holds at most the hold's `expiresAt` + 1 day. A bucket
-       whose default exceeds its cap blocks the upload with `retention_cap` (round 1 F19: a wrong lock cannot be undone).
+       backups N + 1 days; audit at most the class period + 1 day; holds exactly the case's preserve-until. A bucket
+       whose default exceeds its cap, or a holds bucket with any default retention, blocks the upload with
+       `retention_cap` (round 1 F19: a wrong lock cannot be undone).
   7. **Verify.** `HEAD` the object and require all of these, or fail with `verify_failed`:
      - the stored SHA-256 checksum (not the ETag) equals the local hash;
      - the size matches;
-     - `GetObjectRetention` returns mode `COMPLIANCE`, with retain-until ≤ the cap.
+     - `GetObjectRetention` returns mode `COMPLIANCE`, with retain-until ≤ the cap; for holds, retain-until equal to
+       the case's preserve-until.
   8. Upload the sidecar. Delete scratch. Report `ok`. Release the lock.
   9. **On any failure:** delete scratch, report `ok: false` with the code, write an `alert.send("immediate", "backup", …)`
      outbox row, and exit non-zero.
@@ -846,8 +850,24 @@ Mirror run (P5-A4 decides its immutability; round 1 F18):
 Hold class: scan `legal-hold/` for hold IDs not yet in `holds`. For each one:
 - copy every object;
 - verify it against P4.07's manifest; on mismatch → fail with `hold_manifest_mismatch` and raise an immediate alert;
-- the holds bucket default (365 days) applies. A hold that needs longer is extended by an owner with the offline admin
-  key (P4.07 runbook).
+- the case's preserve-until applies (architecture's ruling, book edit 2026-10-12-p504-holds-bucket-lock, which
+  replaces the old 365-day bucket default; law citations [lawyer to confirm]):
+  1. **No default lock on the holds bucket.** The write path refuses an object without an explicit retain-until; where
+     the store supports the condition, the bucket policy also denies a PutObject without object-lock retention
+     headers, and otherwise the writer's own test proves the refusal.
+  2. **Retain-until** equals the case's preserve-until (P3.16c rule 1, P4.07k), fixed at notification by the regime in
+     force, in compliance mode. It is computed once from the case record, never by hand, and fails closed to 21 days.
+  3. **A judicial order** is an S3 legal hold on the case's objects, set and later cleared by an owner with the offline
+     admin key and recorded with the order reference (audit: case id and timestamp only). It never extends the date,
+     because a compliance date cannot be undone.
+  4. **Destruction is a job.** Lock expiry deletes nothing. The job deletes each object as soon as feasible after its
+     retain-until when no legal hold is on it (s. 4(2)), with any document made only for the preservation, and audits
+     it.
+  5. **Tests:** a today's-regime case gets exactly notification plus 21 days and cannot be locked past day 21; a
+     missing or bad switch gives 21; an object without retention is refused; a holds bucket with a default lock
+     refuses with `retention_cap`; a 21-day case uploads and verifies; the destruction job is refused before the date,
+     succeeds after it and is refused while a legal hold is on; a regime switch leaves existing objects' dates
+     unchanged.
 
 Freshness, inside (hourly):
 - For each class, read the newest report.
@@ -2282,7 +2302,7 @@ Not in this step: email reveal (P3.20, exists).
 Diagram: none.
 
 ### P5.09 — Retention jobs for every class in plan §6
-Tags: [SEC]            Depends on: P5.04, P5.07            Plan: §6 Retention, Measurement; §5.8 (365-day hold, drafts 30 days); admin design §7.1 (redactable side tables), §7.4 (cases auto-close 90 days), §8.1 (weekly "nothing older than its retention")
+Tags: [SEC]            Depends on: P5.04, P5.07            Plan: §6 Retention, Measurement; §5.8 (per-case hold, by the regime in force at notification; drafts 30 days); admin design §7.1 (redactable side tables), §7.4 (cases auto-close 90 days), §8.1 (weekly "nothing older than its retention")
 Where: `domains/privacy/retention/` (the registry and pure selectors), run as scheduled jobs of `interfaces/jobs`
 (P4.25's process, under the `retention` role; R5-01: jobs and retention are one process); `retention` DB role grants;
 `deployment/ozone/retention.sql`
@@ -2601,7 +2621,7 @@ The legal content stays in full detail; the drafting order is a hypothesis.
   - erasure under a legal hold.
 
 **Alex's checklist:**
-  - [ ] Name the Law 25 privacy officer and the public contact address.
+  - [ ] Publish the Law 25 privacy officer's role title and contact address.
   - [ ] Book one hour with a Canadian privacy lawyer. Send the questions and the RoPA a week before.
   - [ ] The questions:
         1. C-16: is the per-upload sealed buffer (videos, and images since P5.07b) the "collection" the Act
@@ -2642,8 +2662,8 @@ Edge cases and failures:
 
 Done when (tests): `ropa_retention_matches_registry`, `notice_retention_matches_registry`,
 `ropa_lists_every_processor_and_egress_host`, `ropa_rows_have_lawful_basis`, `notice_en_fr_same_sections`,
-`privacy_officer_named`, `notice_states_erasure_under_hold`, `pds_privacy_url_resolves`; evidence: the lawyer-hour file
-with answers and linked issues, and Alex's approval in the PR.
+`privacy_officer_published`, `notice_states_erasure_under_hold`, `pds_privacy_url_resolves`;
+evidence: the lawyer-hour file with answers and linked issues, and Alex's approval in the PR.
 Reuse: prototype `docs/compliance/` RoPA → LESSON only (provisional, for reuse review).
 Not in this step: per-country rules (later); an EU representative (not needed while the invite-country rule holds).
 Diagram: none.

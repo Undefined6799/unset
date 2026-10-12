@@ -385,7 +385,7 @@ sequenceDiagram
   O->>DB: owner runs the offline export CLI with their own legal_hold_reader login over the tailnet (audited) → ciphertext bundle
   O->>O: owner decrypts on own device with the hardware-key identity (runbook)
   O->>CT: owner files the report per the P1.37 runbook (hashes, classification, transmission data)
-  AD->>PA: preserve.notify {holdId, notifiedAt} (signed) → expiry = notifiedAt + 365 d
+  AD->>PA: preserve.notify {holdId, notifiedAt} (signed) → expiry = preserveUntil (regime at notification; 21 d today)
   PA-->>AD: receipt
   Note over PA,H: At expiry: retention job reads preserve.listExpired, deletes H objects and the sealed row, then preserve.close
 ```
@@ -1026,14 +1026,15 @@ Threats: the legal-hold seal path.
   - I Plaintext of held material on any server → no decrypt code (P1.14a `no_decrypt_in_servers`), ciphertext-only
     export (P4.07 `legal-hold-export-in-no-image`).
 Done when (tests): P4.07's tests for `onMatch` and the CLI that need no database (P4.00 lists them);
-  `legal-hold-export-in-no-image`.
+  `legal-hold-export-in-no-image`; `notify-today-regime-sets-21-days` (book edit 2026-10-12-batch-46-hold-lines, H-5):
+  a notification under today's regime gives exactly 21 days, and a bad switch value fails closed to 21.
 Reuse: none. Not in this step: the migration, definers, callers, admin screen and expiry job (P4.07). Diagram: none.
 
 ---
 
 ### P4.07 — Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view
-Tags: [SEC] [MOD]            Depends on: P4.07k, P4.07g, P4.06, P3.16 and P3.16c (the preserve verbs), P4.03, P3.20, P1.14a, P3.07            Plan: §5.8 "Abuse-material law (decision 9)", "Fingerprints", decision 21 (the buffer); §6 retention ("one year after notification … transmission data sealed with the hold and destroyed with it"); admin design §6.6, §7, §8.1; plan-issues 4
-Where: (`domains/moderation/legal-hold/*`, the one hold entry point `onMatch` shared with P5.07b for images, and `interfaces/legal-hold-export/` are **P4.07k**, trusted base, SE-6; this step wires them) `interfaces/review/egress/on-match.ts` (the video caller); `interfaces/review/compute/preserve-copy.ts`; `apps/admin/screens/legal-hold.ts` (owner-only case view from hold metadata, notify); definer functions `keep_transmission_for_match`, `move_transmission_to_hold`, `destroy_transmission`, `close_expired_hold`, `core.list_holds`, `core.export_sealed_record` (the body of `core.is_held`, declared by P3.07, is **P4.07h**: replacing an existing function is trusted base, SE-6); the `legal_hold.media_key` row in `infrastructure/postgres/sealed-columns.json`; (the owners' human login roles in `roles.json` are P4.07g); migration for `legal_hold`, `legal_hold_transmission` (the `uploads_frozen` flag is P2.16's column on `app.account`; the `preserve.*` verbs are built by P3.16c); the hold-expiry job under the `retention` role; runbook update `docs/human/runbooks/cybertip-report-and-preserve.md` (from P1.37) with the offline decryption procedure
+Tags: [SEC] [MOD]            Depends on: P4.07k, P4.07g, P4.06, P3.16 and P3.16c (the preserve verbs), P4.03, P3.20, P1.14a, P3.07            Plan: §5.8 "Abuse-material law (decision 9)", "Fingerprints", decision 21 (the buffer); §6 retention (the abuse-material preservation row as #758 restated it: 21 days after notification today, one year once C-16's amendments commence, per case and fixed at notification; transmission data sealed with the hold and destroyed with it); admin design §6.6, §7, §8.1; plan-issues 4
+Where: (`domains/moderation/legal-hold/*`, the one hold entry point `onMatch` shared with P5.07b for images, and `interfaces/legal-hold-export/` are **P4.07k**, trusted base, SE-6; this step wires them) `interfaces/review/egress/on-match.ts` (the video caller); `interfaces/review/compute/preserve-copy.ts`; `apps/admin/screens/legal-hold.ts` (owner-only case view from hold metadata, notify); definer functions `keep_transmission_for_match`, `move_transmission_to_hold`, `destroy_transmission`, `close_expired_hold`, `core.list_holds`, `core.export_sealed_record` (the body of `core.is_held`, declared by P3.07, is **P4.07h**: replacing an existing function is trusted base, SE-6); the `legal_hold.media_key` row in `infrastructure/postgres/sealed-columns.json`; (the owners' human login roles in `roles.json` are P4.07g); migration for `legal_hold`, `legal_hold_transmission` (the `uploads_frozen` flag is P2.16's column on `app.account`; the `preserve.*` verbs are built by P3.16c); the hold-expiry job under the `retention` role; runbook update `docs/human/legal/cybertip-runbook.md` (from P1.37) with the offline decryption procedure
 Size: ~330 source lines (egress ~100, compute ~110, admin ~70, expiry ~50), ~420 test lines
 
 **Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
@@ -1044,7 +1045,7 @@ council (SI/SOR number and in-force date); a missing or unparsable value fails c
 shorter hold. A judicial preservation order is an explicit per-case extension recorded with its reference. Destruction
 (item 10) is an audited event, case id and timestamp only (SE-7), covering the data and any document made only for the
 preservation. Tests add: `hold-21-day-path`, `hold-one-year-path`, `regime-switch-leaves-running-hold`,
-`judicial-order-extends-hold`, `regime-config-bad-fails-closed`. "One year" below is the post-commencement path.
+`judicial-order-extends-hold`, `regime-config-bad-fails-closed` (and P4.07k's `notify-today-regime-sets-21-days`). "One year" below is the post-commencement path.
 
 **Goal:** when any fingerprint matches, stop the upload, preserve the upload and its transmission data in an encrypted legal hold that no moderator can browse and that runs on `pds-admin`'s clock for one year after notification, and give an owner exactly what the Cybertip.ca report needs, decrypted only on the owner's own device. The same entry point runs the **suspected-abuse emergency path** (Alex 16:39Z, answer 30c) when a local check or a person suspects child sexual abuse material that no fingerprint matched (see "Suspected abuse material" below).
 
@@ -1057,7 +1058,7 @@ preservation. Tests add: `hold-21-day-path`, `hold-one-year-path`, `regime-switc
 - Handler `preserve_copy(job)` in **compute**: seals the upload (for a suspected item: the item's parts, below) while copying it to `legal-hold/<holdId>/`, writes and verifies a manifest, then deletes the drafts prefix. Held media of any size is **one object**, sealed with P1.14a's streaming form: `sealToStream("legal_hold", source, sealContext("app.legal_hold.media_key", subjectRef), maxBytes = the upload cap)`, written as `legal-hold/<holdId>/media.age`. The column `app.legal_hold.media_key` (the object's key) is registered in `sealed-columns.json` as a `sealToStream` object column with row key `subject_ref`, as P1.14 requires, so the context exists before the hold id does (P5.07b seals images in `web` under the same context). The manifest keeps only what is still needed: the object key, the ciphertext size and sha256 (store and backup verification, P5.04), the plaintext size and sha256 (the owner's check after decrypting), the context string, the recipient id, the PDQ values and the provider ref. No chunking of our own and no second encryption mechanism exist: age's own STREAM format chunks and authenticates the object (lead decision 2026-10-03).
 - `pds-admin` verbs used (built by **P3.16c**, summarised here for this step's tests; zero-dependency, same envelope format):
   - `preserve.create {holdRef (random 128-bit), kind: report | analyst, subject_did}` (no `createdBy` argument: `created_by` comes from the verified service key) accepted **only** with the `review_egress` service key (`PDS_PRESERVE_KEY`, in the roster's `service_keys`, as `web`'s key is accepted for `invite.issue` only) or an owner envelope; idempotent on `holdRef`; returns a receipt `{holdId, createdAt}` from `pds-admin`'s clock; log entry; immediate owner alert. `subject_did` lets `pds-admin`'s reaper and held deletes refuse that DID (P3 B3).
-  - `preserve.notify {holdId, notifiedAt}` owner envelope only; sets `expiresAt = notifiedAt + 365 d`; refuses a second notify; receipt.
+  - `preserve.notify {holdId, notifiedAt}` owner envelope only; sets `expiresAt = preserveUntil`, by the regime in force at notification (21 days today; book edit 2026-10-12-batch-46-hold-lines, H-5); refuses a second notify; receipt.
   - `preserve.listExpired {}` → `[holdId]` whose `expiresAt ≤ now(pds-admin clock)` and not closed; the `retention` service key (roster `service_keys`; read-only verb).
   - `preserve.close {holdId}` → only for an expired hold; `retention` service key; receipt.
   - No verb shortens, cancels or releases a hold early; a legal order that changes the period is a break-glass runbook entry with two owners (admin design §6.6).
@@ -1130,12 +1131,16 @@ organisation (C3P) under the Mandatory Reporting Act.
    immediately through `alert.notify`, never only in the daily digest and never suppressed by the alert caps (a
    request to P3.16d/P3.20c, see Notes). Payload: the class and the panel link only (no DID, no handle, no reason
    code, no hashes, no text).
-4. **A report case that needs a person**: reason `csam_suspected`, owner-only, `kind = report`; the case cannot
-   close until an owner records the Cybertip.ca filing (`preserve.notify`) or an owner records, with a reason, that
-   the item is not reportable (the hold then follows the analyst path and expires 365 days after creation,
-   provisional, lawyer hour). Until the lawyer hour fixes the legal deadline, the case re-alerts in the
-   `csam_emergency` class every 4 hours until one of those is recorded. The runbook
-   (`docs/human/runbooks/cybertip-report-and-preserve.md`, P1.37, section "Suspected, not matched") says: file the
+4. **A report case that needs a person**: reason `csam_suspected`, owner-only, `kind = report`; the case cannot close
+   until an owner records the Cybertip.ca filing (`preserve.notify`) or an owner records, with a reason, that the item
+   is not reportable (a positive finding with a reason code; any uncertainty takes the notification path). The hold then
+   follows the analyst path: 30 days from the finding, for second review and appeal, uploads frozen; at expiry the bytes
+   are destroyed and only the finding, reason code, timestamps and a repeat-match hash remain, under ordinary retention;
+   a reversal moves the case to the notification path with its own preserve-until (book edit
+   2026-10-13-p407-analyst-hold-length; a default pending the lawyer hour [lawyer to confirm]). Until the lawyer hour
+   fixes the legal deadline, the case re-alerts in the `csam_emergency` class every 4 hours until one of those is
+   recorded. The runbook
+   (`docs/human/legal/cybertip-runbook.md`, P1.37, section 2, "Which duty applies") says: file the
    Cybertip.ca report within the deadline; **if a child appears to be in imminent danger, also call the police
    directly (911 or the local police) at once**.
 5. **Freeze uploads** for the DID that posted the item (`app.account.uploads_frozen`, P2.16's flag; reversible
@@ -1161,8 +1166,8 @@ organisation (C3P) under the Mandatory Reporting Act.
 1. Owner opens the case in `admin` (owner role required, else 403): case facts and hold metadata only.
 2. On their own device, the owner runs `legal-hold-export <holdId>` with their own `lh_<owner>` login over the tailnet: `core.export_sealed_record` writes the audit row (`pii.transmission_export`, the owner's DID as actor) and returns the ciphertext; the CLI writes the bundle. `admin` is not involved, holds no `legal_hold_reader` membership and cannot export or decrypt. Any failure (no tailnet, no mapping, certificate refused) → no bundle (fail closed).
 3. On their own device, the owner decrypts per the runbook (`docs/human/runbooks/open-sealed.md` from P1.14a). Decryption needs one of the two hardware keys in hand (P0-A4, answered by Alex 2026-10-03 11:45Z): the owner opens the K2 identity file from its USB copy with `age-plugin-yubikey` (PIN and touch) straight into the `age -d -i` call (process substitution; the opened identity is never written to disk), so the bundle is decrypted with the standard `age` CLI; there is no paper or passphrase copy of K2. The export CLI itself still decrypts nothing. Then the owner checks (P1.14a runbook: check the context of the record and of the media object's header line, and compare the media with the manifest's plaintext sha256), files the Cybertip.ca report (hashes, classification, provider ref, DID, handle, upload time, transmission data; never media from our side: C3P requests preserved data through the runbook if needed), and destroys the local plaintext afterwards.
-4. The owner records the notification: `preserve.notify {holdId, notifiedAt}` (signed) → `expiresAt = notifiedAt + 365 d`, mirrored to `legal_hold.notified_at`.
-5. A `report` hold with no notification after 24 h → immediate alert, then daily digest; an `analyst` hold follows the runbook's analyst path and, if the analyst finds nothing, expires 365 days after creation (provisional, lawyer hour).
+4. The owner records the notification: `preserve.notify {holdId, notifiedAt}` (signed) → `expiresAt = preserveUntil` (the regime in force at notification; 21 days today), mirrored to `legal_hold.notified_at`.
+5. A `report` hold with no notification after 24 h → immediate alert, then daily digest; an `analyst` hold follows the runbook's analyst path and expires 30 days after the "not reportable" finding, its bytes destroyed and its hash kept (book edit 2026-10-13-p407-analyst-hold-length; a default pending the lawyer hour [lawyer to confirm]).
 
 **Edge cases and failures:**
 - No moderator view: there is no route, signed URL purpose or media-proxy prefix for `legal-hold/*`; `media` refuses any key outside `drafts/` (signed) and `media/` (indexed); a test enumerates `admin` routes and fails if one reads `legal-hold/`.
@@ -1222,7 +1227,7 @@ organisation (C3P) under the Mandatory Reporting Act.
 - `suspected-audit-row`: exactly one `csam.suspected` audit row (reviewer DID as actor when a person decided; the service key when automated); no subject DID in the row.
 - `suspected-case-realerts`: no notification recorded after 4 h → a second `csam_emergency` alert; recording `preserve.notify` stops it.
 - `suspected-not-viewable`: after the flag, P4.12 play, unblur and item routes for the item → 404/409; no signed URL can be minted for it.
-- `suspected-not-reportable-path`: an owner records "not reportable" with a reason → hold `kind = analyst`, expiry 365 days after creation, uploads stay frozen until an owner unfreezes them with a reason.
+- `suspected-not-reportable-path`: an owner records "not reportable" with a reason code → hold `kind = analyst`, expiry 30 days after the finding, uploads frozen for those 30 days (book edit 2026-10-13-p407-analyst-hold-length; a default pending the lawyer hour [lawyer to confirm]). The ruling's tests: the hold expires at day 30 and the bytes go; the hash remains; a reversal moves the case to the notification path with its own date; an "uncertain" entry cannot be saved as not reportable.
 
 **Reuse:** prototype — none (it never matched or preserved anything; `app/src/lib/post-report.ts:20-23` logged reports to stdout → REJECT as the anti-pattern). Libraries: the public-key seal is P1.14a's `sealTo` and `sealToStream` (one way to do it; `age-encryption`/typage pinned there); the `age` CLI on the owner's offline machine (P0.12). Provisional — for reuse review.
 
@@ -3683,12 +3688,18 @@ Plan gaps, outline errors and contradictions found while writing P4.01–P4.15, 
 (`reviews/r1-phase-4-part1.md`). Nothing here was changed in the outline, README, plan or plan-issues.
 
 **Decisions and security design needing review**
-1. **C-16 buffer (Alex decision 21; the transmission-data capture follows P4.03's "Preservation regime").** Encrypted to the legal-hold public key at upload (P4.03), kept for up to 7 days and moved unchanged into the hold on a match (P4.07), destroyed at once on no match (P4.06) and at the hard check deadline otherwise (P4.03 sweeper). Other steps must carry: (a) **P2.16 image uploads need the same buffer** (profile pictures, banners, any image pipeline) with the same tests; (b) P5.04 backups exclude `transmission_buffer` data (UNLOGGED here, so also absent from WAL and replicas) and keep `legal_hold_transmission` and `legal-hold/*` beyond pruning; (c) the "no IP written" CI check (P0.06 / admin design §8.1) allow-lists exactly these two tables.
+1. **C-16 buffer (Alex decision 21; the transmission-data capture follows P4.03's "Preservation regime").** Encrypted to
+   the legal-hold public key at upload (P4.03), kept for up to 7 days and moved unchanged into the hold on a match
+   (P4.07), destroyed at once on no match (P4.06) and at the hard check deadline otherwise (P4.03 sweeper). Other steps
+   must carry: (a) **P2.16 image uploads need the same buffer** (profile pictures, banners, any image pipeline) with the
+   same tests; (b) P5.04 backups exclude `transmission_buffer` data (UNLOGGED here, so also absent from WAL and
+   replicas) and keep `legal_hold_transmission` and `legal-hold/*` beyond pruning; (c) the "no IP written" CI check
+   (P0.06 / admin design §8.1) allow-lists exactly these two tables.
 2. **Public-key seal** `seal.encryptTo(pubKeyId)` goes into the one seal module as **P1.14a** (catalogued in `02-shared-blocks.md`); the legal-hold key pair joins the P0.12 ceremony (inventory row K2, opened only with one of the two hardware keys; P0-A4 answered).
 3. **Where the legal-hold private key lives is Alex question P4a-A1.** P4.07 is built with the recommended default: no server holds it; `admin` only exports the sealed record; the owner decrypts offline. The online-decrypt path is not built. Settled by Alex (2026-10-03, answers 1 and 31).
 4. **`P3.16c` preserve verbs** (create, notify, listExpired, close): `pds-admin` accepts `review_egress`'s `PDS_PRESERVE_KEY` for `preserve.create` only (as `web`'s key for `invite.issue`), the `retention` key for listExpired/close, owners for notify. Specified in P4.07.
 5. **Egress network (plan issue):** `review_egress` reaches the outside hosts through the hostname-allow-list forward proxy (a P1.18 change) **and** internal `pds-admin` `preserve.create` only. It reads no media except `frames-cleared/*` (review F1). *[Superseded 2026-10-03 by answer 30b: one outside host (Arachnid Shield), no media at all; see the editor pass below.]*
-6. **Lawyer hour (P5.12 list):** preservation clock (expiry `notifiedAt + 365 d`; analyst holds 365 days after creation); the report-vs-analyst table, including whether an **exact** `harmful-abusive-material` match is reportable; tipping off (generic "unavailable" copy, no in-app appeal for `matched_hold`, no automatic takedown); Cybertip.ca submission stays manual by an owner (no API assumed).
+6. **Lawyer hour (P5.12 list):** preservation clock (expiry: the case's preserve-until, fixed at notification by the regime in force (21 days today; 365 after commencement); analyst hold 30 days after the finding (bytes destroyed, hash kept): confirm the length, and that keeping a match hash is lawful [lawyer to confirm]); the report-vs-analyst table, including whether an **exact** `harmful-abusive-material` match is reportable; tipping off (generic "unavailable" copy, no in-app appeal for `matched_hold`, no automatic takedown); Cybertip.ca submission stays manual by an owner (no API assumed).
 7. **Roles and cross-role writes:** new roles `review`, `review_egress`; definer functions and narrow grants for `web`→`review_job` (cancel only), `review`→`web_job` (insert only), `admin`→`review_job` (`unblur_frame`, `manual_match` only), `retention`→`close_expired_hold`; the audit role→action map needs `review.*` actions. All belong in P1.12's grant matrix.
 
 **Contradictions or gaps in the plan text**

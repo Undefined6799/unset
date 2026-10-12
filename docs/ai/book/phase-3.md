@@ -2278,6 +2278,8 @@ Done when (tests):
   - `preserve-notify-sets-365-days`; `preserve-notify-twice-409`; `preserve-notify-never-shortens`;
     `preserve-notify-future-or-before-create-400`; `analyst-hold-expires-365-days-after-create`;
     `preserve-create-createdby-from-key` (a `createdBy` in `args` → 400 `bad_args`).
+  - The 21-day path (the "Preservation regime" above; book edit 2026-10-12-csam-preservation-book-lines) gets its own
+    tests in the step that builds it: `preserve-notify-sets-21-days`, `regime-recorded-at-notification`.
   - `legal-hold-did-blocks-reaper-and-execute`.
   - `preserve-state-rebuilt-from-log`.
   - `retention-key-list-and-close-only`.
@@ -2971,7 +2973,8 @@ legal-hold key question is `P4a-A1`.
   `Where` drops `apps/pds-admin/verbs/preserve.ts`; `preserve.create` gains `subject_did` (P3-B3); the review
   `review_egress` and `retention` keys are added to the roster's `service_keys` (P3.16 key model).
 - **Glossary**: separate a **delete hold** (`hold.*`, 7 days, P3.16a, code name `DeleteHold`) from a **legal hold**
-  (`preserve.*`, 365 days after notification, P3.16c/P4.07, code name `LegalHold`).
+  (`preserve.*`, one year after notification once the amended regime is in force; 21 days before it (per case, fixed at
+  notification); P3.16c/P4.07, code name `LegalHold`).
 - **`02-shared-blocks.md`**: add `packages/admin-shared` (`canonicalize`, `loadRoster`), `checkAttestation`
   (P3.18a), `mediaUrl` (P3.09), `canonicalActorPath` (P3.12), `app.end_sessions_for_did`, `confirmRepoStatus`,
   `reconcile` (P3.06), `core.erase_did`, `core.is_erased` (P3.07).
@@ -3026,9 +3029,10 @@ legal-hold key question is `P4a-A1`.
 - **P3.16 (phase-1 part 2 note 17):** `LEXICON_AUTHORITY_DID`; every verb (and the reaper and break-glass) refuses it
   with 403 `target_protected`.
 - **P3.16c (resolution 3; must match P4.07):** the four `preserve.*` verbs stay here. `created_by` comes from the
-  verified key, so P4.07's `createdBy` argument should be dropped (phase-4 editor); `subject_did` stays (P3-B3);
-  analyst holds expire 365 days after creation, report holds 365 days after notification, notify never shortens;
-  P5.07b's image path uses the same verb with its own service key if it is not `review_egress`.
+  verified key, so P4.07's `createdBy` argument should be dropped (phase-4 editor); `subject_did` stays (P3-B3); analyst
+  holds expire 365 days after creation, report holds 365 days after notification once the amended regime is in force and
+  21 days before it (per case, fixed at notification), notify never shortens; P5.07b's image path uses the same verb
+  with its own service key if it is not `review_egress`.
 - **P3.22 (phase-1 notes; phase-5 notes):** `auditor` reads `audit.chain`, `audit.segment`, `audit.redaction_log`
   only; daily `verifyChain(…, "links")`, weekly owner `"full"`; `audit.verify_macs` dropped (body-MAC checks are
   weekly); `audit.list_jtis` definer for the `jti` matcher; monthly `audit.seal_segment` (as `retention`), heads in the

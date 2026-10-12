@@ -24,4 +24,4 @@ test track have rows.
 | Admin action log | Make every admin action accountable | The acting admin's private tailnet address, staff only, never a user's (decision 29) | Legitimate interests (GDPR Art. 6(1)(f)) | 2 years | None | open | `step:P1.15` |
 | Local automated review | Check public posts before they go live | Post media and text, processed in the no-network container; scores kept | Legitimate interests (GDPR Art. 6(1)(f)) | Scores only, with the draft | None (Alex answer 30b) | open | `doc:docs/human/compliance/ai-system-record.md` |
 | Aggregate metrics | Measure the service without per-user analytics | None: rounded service-wide counts, never joined to a DID | No personal data | 13 months | None | open | `step:P5.09` |
-| Controller contact | Name who answers privacy requests | The privacy officer's name and contact address | Legal obligation (Quebec Law 25) | While the role is held | None | open | `step:P2.15` |
+| Controller contact | Name who answers privacy requests | The privacy officer's role title and contact address (who holds it is kept outside the repo) | Legal obligation (Quebec Law 25) | While the role is held | None | open | `step:P2.15` |
