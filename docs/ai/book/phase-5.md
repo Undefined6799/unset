@@ -1054,7 +1054,10 @@ Diagram: "Backup and restore flow" above.
 
 ### P5.06 — Secret inventory and rotation runbook
 Tags: [SEC] [ALEX]            Depends on: P5.02            Plan: §2 rule 24, §8 Phase 5, §11 Q2a, admin design §6.6; vault `deploy-secret-lifecycle-inventory`, `launch-day-secret-rotation`
-Where: `deployment/secrets/inventory.json`, `deployment/secrets/inventory.test.ts`, `deployment/runbooks/secret-rotation.md`
+Where: `deployment/secret-inventory/inventory.json`, `deployment/secret-inventory/inventory.test.ts`,
+`deployment/runbooks/secret-rotation.md`
+(renamed from `deployment/secrets/` by book edit 2026-10-12-p127u-c9-bind-reach-gaps: the files hold no secret values,
+and the stack's secrets folder lives outside the checkout)
 Size: ~120 source lines, ~250 runbook lines, ~150 test lines
 
 Goal: keep one list of every secret the stack uses, saying where it lives, how it is backed up and how it is rotated,

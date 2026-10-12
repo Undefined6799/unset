@@ -352,5 +352,7 @@ Every step is designed so its code follows these rules, and its tests or CI guar
   needed" (template line above; it applies to every step whether or not its text repeats it); each `P<n>.00` refine
   step (and L.00) includes a notes tidy pass. The vault and its guard are P0.09d; P0.09a (bulk carry) is retired.
 - Decisions 40 and 41: there is no GitHub-enforced protection on `main` while the repository is private on the free
-  plan; agents never merge and never push to `main`; Alex alone merges (`CLAUDE.md`, ADR 0009). Wherever a step says
-  "Alex's approval merges" or "the ruleset blocks", read "Alex merges" and "waiting until protection exists".
+  plan; author threads never merge and never push to `main`; a separate verifier may merge checked PRs, and ADR 0019
+  lists what stays Alex's (`CLAUDE.md`, ADR 0017, ADR 0019). Wherever a step says "Alex's approval merges" or "the
+  ruleset blocks", read "the verifier may merge (Alex for what ADR 0019 keeps his)" and "waiting until protection
+  exists".
