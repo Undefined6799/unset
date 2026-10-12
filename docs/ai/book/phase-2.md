@@ -1088,9 +1088,9 @@ Diagram: see "Sequence: login and callback".
 ### P2.04s — Session prelude for OAuth
 Tags: [SEC]            Depends on: P2.03, P2.04            Plan: §5.3 "Sessions", "OAuth client"
 Trusted base, kind/feature (00-README.md:272-273); book edit 2026-10-12-p204s-p130x-p130y-booked, from architecture's
-  2026-10-12-p204-trusted-prelude-split (14:25Z), which answered Codex's finding on #631. Owner: Phase 2. Slice: 1.
-  P2.06, P2.07, P2.08 and P2.12 depend on it: until it merges, a deleted token set does not end a browser session,
-  which is harmless only while nothing creates sessions from OAuth or calls the wrapper.
+  2026-10-12-p204-trusted-prelude-split (14:25Z), which answered Codex's finding on #631. Owner: Phase 1 (refocus order,
+  order.md section 3). Slice: 1. P2.06, P2.07, P2.08 and P2.12 depend on it: until it merges, a deleted token set does
+  not end a browser session, which is harmless only while nothing creates sessions from OAuth or calls the wrapper.
 Where: `infrastructure/session/`, one migration after `0202_app_oauth.sql` holding only the definer, and their tests
   (trusted base, CODEOWNERS:111), with the tests in `tests/integration/session/`. Split from P2.04 because a PR may
   not mix trusted-base and feature paths (`checkTrustedBaseIsolation`, `scripts/guards/trusted-base.ts`). The
@@ -1822,12 +1822,12 @@ Content checklist (each item must appear; the test scans for a marker comment pe
   are reviewed automatically before they go live, with a human appeal (wording ready for Phase 4, marked "when posting
   opens"); (T5) acceptable use summary and reporting; (T6) we may suspend or remove; statements of reasons and appeal;
   (T7) chat rules apply to the unset.sh client only (marked "when chat opens"); (T8) contact.
-  Privacy: (P1) controller and the named privacy officer (Law 25); (P2) what we hold: account DID, session records,
-  drafts, invites, sealed OAuth tokens, onboarding timestamps; never your password; (P3) no IP addresses or browser
-  details stored, except decision 21's brief retention: the connection data of each upload is kept, encrypted so that
-  we cannot read it, for at most minutes while the check runs, destroyed at once when it is clear, and kept with a legal
-  hold only when the upload matches known abuse material (marked "from Phase 5" until the real check lands);
-  rate limiting uses a short-lived in-memory hash of the address, never written; (P4) processors and transfers:
+  Privacy: (P1) controller and the privacy officer's title and contact (Law 25 s. 3.1); (P2) what we hold: account DID,
+  session records, drafts, invites, sealed OAuth tokens, onboarding timestamps; never your password; (P3) no IP
+  addresses or browser details stored, except decision 21's brief retention: the connection data of each upload is kept,
+  encrypted so that we cannot read it, for at most minutes while the check runs, destroyed at once when it is clear, and
+  kept with a legal hold only when the upload matches known abuse material (marked "from Phase 5" until the real check
+  lands); rate limiting uses a short-lived in-memory hash of the address, never written; (P4) processors and transfers:
   Canadian Centre for Child Protection (fingerprints only), hosting provider (named in Phase 5); automated review of
   posts and comments submitted for publication runs on our own servers and sends nothing to another company (Alex
   answer 30b, "when posting opens"; no Anthropic line); (P5) retention table from
@@ -1844,8 +1844,10 @@ Algorithm:
      substituted at render time through the escaping template (never string-concatenated into HTML).
   2. `security.txt` route builds the text from config; `Expires` must be ≤ 365 days ahead (boot check).
   3. Alex's approval of the wording is the PR approval; the PR description lists items T1–T8, P1–P8 with line references.
-  [ALEX] inputs this step stops for before merging: the privacy officer's name and contact (Law 25; fable 06 Q5) and the
-  support email address. Recommendation: Alex as privacy officer, a role address (for example `privacy@unset.sh`) as contact.
+  [ALEX] inputs this step stops for before merging: the privacy officer's **role title** and a dedicated contact
+  address (for example "Privacy Officer, privacy@unset.sh"; Law 25; fable 06 Q5), with no personal name, and the
+  support email address. Who holds the role is recorded outside the repo, in Alex's own records. Architecture's
+  reading (not legal advice), to be confirmed in the lawyer hour (ruling 3 of 2026-10-12-refocus-local-signin-rulings).
 
 Edge cases and failures:
   - A missing translation → the P1.19 catalog check fails the build (legal pages included in the check through a key per section).

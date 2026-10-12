@@ -2226,9 +2226,17 @@ Tags: [SEC] [MOD]            Depends on: P3.16a            Plan: §5.2 processes
 Where: `interfaces/pds-admin/legal-holds.ts`, `verbs.ts` (four rows)
 Size: ~150 source lines, ~250 test lines
 
-Goal: give Phase 4 the four `preserve.*` verbs on `pds-admin`'s clock, so a 365-day legal hold can be created by
-the review egress step, recorded as notified by an owner, listed when expired and closed only after expiry, with
-no verb that shortens or cancels it, and with the held account protected from the reaper and the held delete.
+**Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 4): two regimes until C-16's reporting amendments
+commence. Until then: written notice to police (s. 3), 21 days of offline preservation (s. 4(1), SOR/2011-292 s. 12),
+then destruction of what is not kept in the ordinary course (s. 4(2)), unless a judicial order requires otherwise. After
+commencement: one year after notification. `preserve.create` and `preserve.notify` store the regime in force at
+notification and the preserve-until date it fixes; a later regime change never shortens or extends a running hold. The
+365-day figures below are the post-commencement path.
+
+Goal: give Phase 4 the four `preserve.*` verbs on `pds-admin`'s clock, so a legal hold (per-case length, above) can be
+created by the review egress step, recorded as notified by an owner, listed when expired and closed only after expiry,
+with no verb that shortens or cancels it, and with the held account protected from the reaper and the held delete.
 
 Inputs: P3.16 pipeline, key model and log; P3.16d receipts and alerts; P3.16a and P3.16b refusal hooks.
 Outputs (contract):
@@ -2983,8 +2991,8 @@ legal-hold key question is `P4a-A1`.
   builds delete holds only; rename goes to P5.08.
 - AD §6.4 relies on an owner "signing script" verifying attestation offline; the plan names only
   `@simplewebauthn/server` in `admin`. P3.18a adds the `verify-enrolment` CLI with the same `checkAttestation`.
-- AD §8.1 still states 21-day abuse-material preservation; the plan (C-16) says one year. P3.16c implements the
-  plan.
+- AD §8.1 states 21-day abuse-material preservation; the plan (C-16) says one year. Resolved as both regimes, per
+  case at notification (P3.16c's "Preservation regime"; book edit 2026-10-12-csam-preservation-book-lines item 4).
 - AD §6.6 says GDPR holds deactivate the account; the PDS lets the user undo an admin deactivation
   (`activateAccount.ts:32-35`), so P3.16a uses takedown (P3-A4).
 - AD §5.1's same-site argument for `admin.int.unset.sh` must note that `SameSite=Strict` cookies are sent on

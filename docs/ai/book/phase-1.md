@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34a, P1.27l, P1.29a, P1.34c, P1.34d, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.27l, P1.29a, P1.34d, P1.29h, P1.29s, P1.29t, P1.32, P1.32a, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -300,6 +300,7 @@ flowchart LR
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
   P1_32["P1.32 permanent choices STOP"]
+  P1_32a["P1.32a ADR 0020 answered only"]
   P1_33["P1.33 server baseline ALEX"]
   P1_33a["P1.33a retire 0x40 prototype (L.01 A) ALEX STOP"]
   P1_34["P1.34 unset.ac + dev PDS fit for authority ALEX"]
@@ -442,6 +443,7 @@ flowchart LR
   P1_32 -.-> P1_31
   P1_28 --> P1_33
   P1_32 --> P1_33
+  P1_32 --> P1_32a
   P1_30 --> P1_34
   P1_30 --> P1_30s
   P1_30s --> P1_34
@@ -6935,7 +6937,8 @@ question, the option and the time. P1.27l depends on it.
 
 **What:** one file, `deployment/edge/local/tls.caddy`, outside `snippets/`, so the Dockerfile's `COPY snippets/` never
 ships it and the edge reader's `snippets/*.caddy` glob never reads it. Its content is the `(tls)` snippet with
-`tls internal` as its only directive, plus a comment header like every other snippet, not the bare line: the mount
+`tls internal` as its only directive, plus a comment header like every other snippet, not the bare line (as built;
+P1.34c replaces it with the local tls snippet serving the dev leaf, architecture's option B): the mount
 replaces `/etc/caddy/snippets/tls.caddy`, which every site imports as `import tls`, and a bare `tls internal` at top
 level is a keyless server block Caddy refuses (departure 1 of 2026-10-12-p127m-departures; `caddy adapt` on the locally
 built edge image, Caddy 2.11.7, shows the issuer change from `acme` to `internal` with the file mounted). Only P1.27l's
@@ -6951,7 +6954,8 @@ Tags: [SEC] [ALEX]            Depends on: P1.30y (merged, #659), P1.30a, P1.29 (
 Slice 1, issue #671, product (`deployment/preflight/`, its tests, the local compose file and the `local:up` script),
 lane Phase 2, after P1.30o; book edit 2026-10-12-p127l-p127m-local-unsigned-path, from architecture's
 2026-10-12-p129-local-build-preflight (item 2). Alex's card as for P1.27m ("Yes, local only", 16:44:52Z). It replaces
-the pending record 2026-10-12-pending-local-unsigned-path. Nothing depends on it.
+the pending record 2026-10-12-pending-local-unsigned-path. P1.34d (#742) depends on it; P1.34a (#749) lands
+before it.
 
 **Why:** C2 fails a build-only service (no `image:`), and C3 to C5 fail until P1.27s, so no machine can run the Slice 1
 stack before Alex sets up signing. Under `--env local` a local build is the checked-out source, with no registry hop
@@ -7080,7 +7084,7 @@ check is green. The verifier's later gaps on #689 are P1.27u.
 Tags: [SEC]            Depends on: P1.27a (merged, #689)
 Slice 1, issue #695, product (`deployment/preflight/checks/` and its tests), kind/fix, lane Phase 2 (the C9 owner),
 before P1.29 lays out the secrets folder; book edit 2026-10-12-p127u-c9-bind-reach-gaps (18:47Z, amendments 1
-18:55Z to 8 20:57Z, then 9 21:44Z and 10 22:00Z as built), from the coordinator's verifier on #689 at c6aa877, and
+18:55Z to 8 20:57Z; 9 and 10 are on its As built line), from the coordinator's verifier on #689 at c6aa877, and
 architecture's ruling
 2026-10-12-p127u-bind-ancestors-and-build-context for item 4. Nothing from Alex: every item tightens within his C9 card
 ("Yes", 16:45:14Z). P1.29 depends on it.
@@ -7277,8 +7281,8 @@ Done when the existing preflight tests pass untouched, no line in the touched fi
 green.
 
 As built: merged at 2026-10-12T22:24:20Z as `e8491f2` (#712, head bbc6586) (merge data read by REST, 22:35Z). The
-coordinator's verifier passed it at bbc6586. It moved input loading to `deployment/preflight/inputs.ts`; N-B rode
-P1.11f, and P1.34f was built stacked on it.
+coordinator's verifier passed it at bbc6586. It moved input loading to `deployment/preflight/inputs.ts`; N-B (#712
+verify) rode P1.11f, and P1.34f was built stacked on it.
 
 ---
 
@@ -7342,7 +7346,11 @@ Done when each item has a test that fails on the base and passes after, and chec
 
 As built: merged at 2026-10-12T22:25:48Z as `1ab3fe8` (#733, head 58c68fe) (merge data read by REST, 22:35Z; book
 edit 2026-10-12-p111f-postgres-cleanup-follow-ups, amendment 2). The coordinator's post-merge verify found no
-blocker; its six nits and the unbooked N-B are parked in the refocus order, section 4, until hardening resumes.
+blocker. Its six nits are parked in the refocus order, section 4, until hardening resumes: (1) `messageOf` trusts
+`error.message`, so a null-prototype message throws over every error; (2) a `{ then() {} }` thenable case is missing;
+(3) N9 in `pg.setup.test.ts` is unpinned; (4) `docker.ts` and `postgres.ts` skip the async refusal on the success
+path; (5) the `postgres.ts` docstring on `secretsDir` is wrong; (6) N-B (#733 verify), unbooked:
+`deployment/preflight/stack.test.ts` calls `spawnSync("docker", …)` with no kill timeout.
 
 ---
 
@@ -7389,7 +7397,8 @@ reported, each naming its tag (red on the base), and check is green.
 
 As built: merged at 2026-10-12T21:54:32Z as `f92af7d` (#725, head d1195a2) (merge data read by REST, 22:35Z). The
 loop lives in `deployment/edge/image-cleanup.ts` (`removeEveryTag`) with `image-cleanup.test.ts`. The hook
-closures throw only on Docker's success path; a later trusted step pins the throw on a non-zero exit.
+closures throw only on Docker's success path; parked (refocus order, section 4): a later trusted step pins the throw
+on a non-zero exit.
 
 ---
 
@@ -7397,8 +7406,7 @@ closures throw only on Docker's success path; a later trusted step pins the thro
 Tags: —            Depends on: —
 Slice 1, issue #734, product (`tests/integration/deployment/edge/`, which CODEOWNERS does not anchor), kind/fix, lane
 Phase 1; book edit 2026-10-12-p111s-edge-stop-reports-failures (22:16Z), from the coordinator's post-merge verify of
-#723 (P1.11i). It finishes on its open PR (#737) under the refocus's open-PR rule. Nothing from Alex. Nothing depends
-on it.
+#723 (P1.11i). Nothing from Alex. Nothing depends on it.
 
 **What, each red first:**
 1. `edge-container.ts` `stop()` checks the code `docker rm -f` returns (`tests/support/docker.ts` does not throw) and,
@@ -7413,7 +7421,10 @@ red on the revert, and check is green.
 As verified (PR #737, with nits, at 000bc41; book edit 2026-10-12-batch-44-refocus, amendment 1): the afterAll pin
 is an image test, not a plain test, because `scripts/test/image-rules.test.ts:22-28` classes anything reaching
 `removeTestImage` as an image build. The PR says so under "What I am unsure about"; its nits are parked in the refocus
-order, section 4. The As built line follows its merge.
+order, section 4.
+
+As built: merged as `f092db4` (#737, head 000bc41). Departure: the afterAll pin is an image test
+(`scripts/test/image-rules.test.ts:22-28`), as above; its nits are parked in the refocus order, section 4.
 
 ---
 
@@ -7605,7 +7616,8 @@ Done when, red first, each of the verifier's bypasses (`setsid /bin/sh -c`, `tim
 `1e`, `ap''k add`), a listed `setcap`, `chmod 4755`, `chmod u+s`, `chown 0:0`, a postgres JSON and a relative path
 fail, and check is green.
 
-As built: merged at 2026-10-12T22:56:55Z as `4389fec` (#739, head 41bad5c) (merge data read by REST, 23:02Z).
+As built: merged at 2026-10-12T22:56:55Z as `4389fec` (#739, head 41bad5c) (merge data read by REST, 23:02Z). Its
+test-row nits are parked in the refocus order, section 4.
 
 ---
 
@@ -7686,7 +7698,7 @@ tests pass, and check is green.
 
 ### P1.34a — Let the edge reader accept the local app site
 Tags: [SEC] trusted            Depends on: —
-Slice 1, issue to come, trusted base (`deployment/edge/` only: the reader and its tests, about 250 lines, one PR),
+Slice 1, issue #749, trusted base (`deployment/edge/` only: the reader and its tests, about 250 lines, one PR),
 kind/feature, lane the third thread; book edit 2026-10-12-p134a-edge-reader-local-app-site (23:18Z), from
 architecture's Amendments 2 and 3 of 2026-10-12-refocus-local-signin-rulings. It lands before P1.27l, which only passes
 the opt-in and lists `app.caddy`; until then C18 under `--env local` refuses `app.caddy`, which is expected. Not
@@ -10051,10 +10063,11 @@ P1.29h, P1.29s, P1.29t.
    read-only content (P1.27u amendments 2 and 6); `deployment/networks.dev.json` with only
    `db {internal: true, members: [postgres, migrate, web]}`. No edge and no TLS override: the edge moves to P1.29a
    (book edit 2026-10-12-p129-edge-moves-to-p129a, from architecture's 2026-10-12-p129-tls-override-and-edge-sites,
-   item 2), and the homelab `dev` env uses the image's own snippet; the `tls internal` mount belongs to P1.27l and
-   P1.27m. The `dev:up` and `dev:down` npm scripts call P1.27w's wrapper; the wrapper itself is P1.27w's (the old
-   wrapper rider is superseded, architecture's 2026-10-12-stack-wrapper-location). Tests: the static compose and env
-   tests below that do not name the PDS or the edge;
+   item 2), and the homelab `dev` env uses the image's own snippet; the local tls snippet (P1.34c serves the dev leaf;
+   architecture's option B) belongs to P1.27l and P1.27m. The `dev:up` and `dev:down` npm scripts call P1.27w's wrapper;
+   the wrapper itself is P1.27w's (the old wrapper rider is superseded, architecture's
+   2026-10-12-stack-wrapper-location). Tests: the static compose and env tests below that do not name the PDS or the
+   edge;
    `compose_images_match_lock` (every `image:` in `deployment/` compose files is a lock entry or one of web, edge,
    migrate and postgres, with no exception); `compose_postgres_never_root`; `compose_postgres_tmpfs_for_socket`;
    `compose_dev_networks_match_table` (its `db` side), which imports P1.30t's exported comparison; and
@@ -10836,7 +10849,7 @@ files only (note at the end of the p129e-p129n-p129p record), so no follow-up is
 
 **Tags:** [STOP] [PERMANENT] · **Depends on:** — · **Plan:** §11 Q1, §5.3, §5.7, admin design §4; decision 20
 
-**Status:** Q1, Q2 and Q4 answered 2026-10-03 (above); Q3 waits on Alex's card; build now with Q3 pending (refocus
+**Status:** Q1, Q2 and Q4 answered 2026-10-03 (below); Q3 waits on Alex's card; build now with Q3 pending (refocus
 2026-10-12).
 
 **Where:** `docs/human/decisions/permanent-choices.md` (the question, filled with Alex's answers);
@@ -10882,7 +10895,30 @@ start (Q1 → Phase 6; Q2 → P1.33; Q3 → admin phase; Q4 → P1.31/P1.35).
 
 **Not in this step:** implementing any of the four.
 
-As built: merged at 2026-10-12T22:57:03Z as `3020144` (#743, head b8fd243) (merge data read by REST, 23:02Z).
+As built: merged at 2026-10-12T22:57:03Z as `3020144` (#743, head b8fd243) (merge data read by REST, 23:02Z), before
+its fix round landed: main has ADR 0020 "Proposed (awaiting Alex)" with a Q3 "Pending" row. Book edit
+2026-10-12-p132-permanent-choices-build, amendments 1 and 2:
+- **Q3 gets its own ADR.** Alex's answer goes in a new ADR at the next free number, citing ADR 0020, never a row
+  edit of an accepted 0020. The same follow-up adds `ADMIN_RP_ID` to `permanent.ts` and pins it.
+- **Phase 6 collision, parked for P6.00 refine:** `phase-6.md` plans a config key `MATRIX_SERVER_NAME`, the name of
+  this step's constant. Default: Phase 6 reads the constant; a permanent value is not also configurable.
+
+---
+
+### P1.32a — Keep ADR 0020 to the answered questions
+Tags: —            Depends on: P1.32 (merged, #743)
+Slice 1, issue #752, product (`docs/human/decisions/`, `shared/config/`), kind/fix, lane Phase 1; book edit
+2026-10-12-p132-permanent-choices-build, amendment 2. On the sign-in path, not paused. It carries #743's fix round.
+Alex: his merge of this PR accepts ADR 0020 (his three answers date from 2026-10-03); nothing else.
+
+**What:**
+1. Take Q3 out of ADR 0020; Q3 gets its own ADR when Alex answers.
+2. Pin the exact answer times, the `permanent.ts` export list and its "PERMANENT" header in tests.
+3. Set 0020's status to "Accepted on Alex's merge of #<this PR>".
+
+Done when, red first, a test fails if ADR 0020 names Q3 or `admin.int`; `permanent_constants_pinned` pins each
+value and its answer time (2026-10-03: Q1 11:50Z, Q2 11:52Z, Q4 11:47Z); a test pins `permanent.ts`'s export list
+and its "PERMANENT" header; check is green; and 0020's status line names this PR.
 
 ---
 
@@ -10908,9 +10944,12 @@ latest patch at start); the vendored `app.bsky` schemas the records reference.
 - Schemas with flat NSIDs `sh.unset.<name>` (no deeper segments), so one `_lexicon.unset.sh` TXT covers them all
   (lexicon resolution is non-recursive per authority).
 - A `permission-set` lexicon, NSID `sh.unset.authApp` (P1.32 Q4, settled: answered by Alex 2026-10-03 11:47Z), listing the
-  collections (`repo:`) and RPCs (`rpc:`) the app needs. Rules verified in `@atproto/oauth-scopes`
-  (`include-scope.ts:80-160`): a set may grant only `repo:` and `rpc:` under its own group prefix `sh.unset.`;
-  its `rpc:` entries use `inheritAud`, never a fixed `aud`. A build check enforces both.
+  collections (`repo:`) and RPCs (`rpc:`) the app needs. The package declares `sh.unset.authApp` itself, because
+  `shared/lexicons` may not import `shared/config` (the leaf rule in `scripts/lint/.dependency-cruiser.cjs`). A test in
+  `shared/config/`, importing `@unset/shared-lexicons`, pins it equal to `PERMISSION_SET_NSID` in
+  `shared/config/permanent.ts` (book edit 2026-10-12-p132-permanent-choices-build, amendment 1). Rules verified in
+  `@atproto/oauth-scopes` (`include-scope.ts:80-160`): a set may grant only `repo:` and `rpc:` under its own group
+  prefix `sh.unset.`; its `rpc:` entries use `inheritAud`, never a fixed `aud`. A build check enforces both.
 - The set's **consent text**: `title`, `title:lang`, `detail`, `detail:lang` (`lex-document/src/lexicon-document.ts:620-627`)
   appear on every user's consent screen at every authorization server. EN and FR text are written here
   (invariant 8), kept in the catalogs' review flow, and approved by Alex together with the schema fields in this

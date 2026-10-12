@@ -168,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 245 steps: 221 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 246 steps: 222 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -395,6 +395,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
 | P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
+| P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
 | P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.36 | Compliance skeletons (pulled forward from slice 2, Alex 23:08Z; test in `scripts/docs/`, check class) | — | P0.07 | `phase-1.md` |
@@ -638,6 +639,7 @@ flowchart TD
   P1_30u["P1.30u Preflight C18 edge zones"]
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
+  P1_32a["P1.32a ADR 0020 answered only"]
   P1_31["P1.31 Lexicons package"]
   P1_37["P1.37 Legal paperwork"]
   P1_36["P1.36 Compliance skeletons"]
@@ -802,6 +804,7 @@ flowchart TD
   P1_30p --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
+  P1_32 --> P1_32a
   P1_18 --> P2_01
   P2_01 --> P2_02
   P1_12 --> P2_03x

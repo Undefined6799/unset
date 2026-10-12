@@ -589,6 +589,11 @@ Size: ~250 source lines, ~300 test lines
 
 **Goal:** accept one video upload per request into the private draft store, enforcing size, container sniffing, the 2 GB quota and the 10-per-day cap, and seal the uploader's transmission data, encrypted to the legal-hold public key, into a short-lived buffer that is destroyed unless a fingerprint match moves it into a legal hold (Alex decision 21).
 
+**Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 7): under today's regime the transmission buffer keeps
+nothing beyond ordinary-course retention; data copied into the seal for a case runs on the s. 4(1)/(2) clock like the
+rest. The one-year transmission-data capture applies only after the regime switch (P4.07).
+
 **Inputs:** P2.18 draft store, quota hooks and `upload_day_count(did, day, kind)`; P2.16 `uploadsEnabled(did)`; P1.05 `clientAddress`; P1.06 `RateLimiter`; P1.07 CSRF; P1.14a `sealTo` and P1.14 `sealContext`; P2.03 sessions; config keys `VIDEO_UPLOAD_MAX_BYTES`, `VIDEO_DAILY_CAP`, `CHECK_DEADLINE_MINUTES`, `LEGAL_HOLD_RECIPIENTS`.
 
 **Outputs:**
@@ -1001,6 +1006,11 @@ Tags: [SEC] [MOD]            Depends on: P4.07g, P4.06, P3.16c, P1.14a          
 Where: `domains/moderation/legal-hold/*`, `interfaces/legal-hold-export/` + their tests
 Size: hypothesis, P4.00 sets it (~150 source lines, ~200 test lines)
 
+**Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 6): this step owns the regime config (the reviewed
+switch, failing closed to the in-force regime) and the per-case record fields: regime, preserve-until date, and any
+judicial-order extension with its reference.
+
 Why a separate step (letter suffix): both folders are trusted base; P4.07 used to build them in the same PR as the
 review callers, the admin screen and the migration, which P0.09c's isolation check refuses.
 Goal: the one hold entry point and the ciphertext-only export exist and are tested before anything calls them.
@@ -1021,10 +1031,20 @@ Reuse: none. Not in this step: the migration, definers, callers, admin screen an
 
 ---
 
-### P4.07 — Match path: block, sealed 365-day legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view
+### P4.07 — Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view
 Tags: [SEC] [MOD]            Depends on: P4.07k, P4.07g, P4.06, P3.16 and P3.16c (the preserve verbs), P4.03, P3.20, P1.14a, P3.07            Plan: §5.8 "Abuse-material law (decision 9)", "Fingerprints", decision 21 (the buffer); §6 retention ("one year after notification … transmission data sealed with the hold and destroyed with it"); admin design §6.6, §7, §8.1; plan-issues 4
 Where: (`domains/moderation/legal-hold/*`, the one hold entry point `onMatch` shared with P5.07b for images, and `interfaces/legal-hold-export/` are **P4.07k**, trusted base, SE-6; this step wires them) `interfaces/review/egress/on-match.ts` (the video caller); `interfaces/review/compute/preserve-copy.ts`; `apps/admin/screens/legal-hold.ts` (owner-only case view from hold metadata, notify); definer functions `keep_transmission_for_match`, `move_transmission_to_hold`, `destroy_transmission`, `close_expired_hold`, `core.list_holds`, `core.export_sealed_record` (the body of `core.is_held`, declared by P3.07, is **P4.07h**: replacing an existing function is trusted base, SE-6); the `legal_hold.media_key` row in `infrastructure/postgres/sealed-columns.json`; (the owners' human login roles in `roles.json` are P4.07g); migration for `legal_hold`, `legal_hold_transmission` (the `uploads_frozen` flag is P2.16's column on `app.account`; the `preserve.*` verbs are built by P3.16c); the hold-expiry job under the `retention` role; runbook update `docs/human/runbooks/cybertip-report-and-preserve.md` (from P1.37) with the offline decryption procedure
 Size: ~330 source lines (egress ~100, compute ~110, admin ~70, expiry ~50), ~420 test lines
+
+**Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 5): the hold length is per case, fixed by the regime
+in force at notification: until C-16's reporting amendments commence, 21 days offline (s. 4(1), SOR/2011-292 s. 12),
+then destruction (s. 4(2)); after, one year. The regime switches only by a reviewed config change citing the order in
+council (SI/SOR number and in-force date); a missing or unparsable value fails closed to the in-force regime, the
+shorter hold. A judicial preservation order is an explicit per-case extension recorded with its reference. Destruction
+(item 10) is an audited event, case id and timestamp only (SE-7), covering the data and any document made only for the
+preservation. Tests add: `hold-21-day-path`, `hold-one-year-path`, `regime-switch-leaves-running-hold`,
+`judicial-order-extends-hold`, `regime-config-bad-fails-closed`. "One year" below is the post-commencement path.
 
 **Goal:** when any fingerprint matches, stop the upload, preserve the upload and its transmission data in an encrypted legal hold that no moderator can browse and that runs on `pds-admin`'s clock for one year after notification, and give an owner exactly what the Cybertip.ca report needs, decrypted only on the owner's own device. The same entry point runs the **suspected-abuse emergency path** (Alex 16:39Z, answer 30c) when a local check or a person suspects child sexual abuse material that no fingerprint matched (see "Suspected abuse material" below).
 
@@ -1099,7 +1119,7 @@ organisation (C3P) under the Mandatory Reporting Act.
 2. **Seal it under the legal hold** through `onMatch({subjectKind: 'suspected', …})` in `review_egress` (the
    `manual_match` job; compute and `admin` only enqueue it): transaction A and `preserve.create` exactly as the video
    path, hold `kind = report`, `legal_hold.subject_kind = 'suspected'` with `item_kind`; the C-16 preservation clock
-   applies unchanged (`pds-admin`, one year after notification). `preserve_copy` then seals the item's parts as one
+   applies unchanged (`pds-admin`, the per-case regime above). `preserve_copy` then seals the item's parts as one
    deterministic, uncompressed tar stream through the same `sealToStream` call into `legal-hold/<holdId>/media.age`:
    video → the upload; `bsky_post` → its stored images and its text; comment → its text; image (P4.21a, P5.07b) →
    the bytes; chat evidence → the reporter-supplied evidence P6.15 holds. After the copy verifies, the plaintext
@@ -3663,7 +3683,7 @@ Plan gaps, outline errors and contradictions found while writing P4.01–P4.15, 
 (`reviews/r1-phase-4-part1.md`). Nothing here was changed in the outline, README, plan or plan-issues.
 
 **Decisions and security design needing review**
-1. **C-16 buffer (Alex decision 21).** Encrypted to the legal-hold public key at upload (P4.03), kept for up to 7 days and moved unchanged into the hold on a match (P4.07), destroyed at once on no match (P4.06) and at the hard check deadline otherwise (P4.03 sweeper). Other steps must carry: (a) **P2.16 image uploads need the same buffer** (profile pictures, banners, any image pipeline) with the same tests; (b) P5.04 backups exclude `transmission_buffer` data (UNLOGGED here, so also absent from WAL and replicas) and keep `legal_hold_transmission` and `legal-hold/*` beyond pruning; (c) the "no IP written" CI check (P0.06 / admin design §8.1) allow-lists exactly these two tables.
+1. **C-16 buffer (Alex decision 21; the transmission-data capture follows P4.03's "Preservation regime").** Encrypted to the legal-hold public key at upload (P4.03), kept for up to 7 days and moved unchanged into the hold on a match (P4.07), destroyed at once on no match (P4.06) and at the hard check deadline otherwise (P4.03 sweeper). Other steps must carry: (a) **P2.16 image uploads need the same buffer** (profile pictures, banners, any image pipeline) with the same tests; (b) P5.04 backups exclude `transmission_buffer` data (UNLOGGED here, so also absent from WAL and replicas) and keep `legal_hold_transmission` and `legal-hold/*` beyond pruning; (c) the "no IP written" CI check (P0.06 / admin design §8.1) allow-lists exactly these two tables.
 2. **Public-key seal** `seal.encryptTo(pubKeyId)` goes into the one seal module as **P1.14a** (catalogued in `02-shared-blocks.md`); the legal-hold key pair joins the P0.12 ceremony (inventory row K2, opened only with one of the two hardware keys; P0-A4 answered).
 3. **Where the legal-hold private key lives is Alex question P4a-A1.** P4.07 is built with the recommended default: no server holds it; `admin` only exports the sealed record; the owner decrypts offline. The online-decrypt path is not built. Settled by Alex (2026-10-03, answers 1 and 31).
 4. **`P3.16c` preserve verbs** (create, notify, listExpired, close): `pds-admin` accepts `review_egress`'s `PDS_PRESERVE_KEY` for `preserve.create` only (as `web`'s key for `invite.issue`), the `retention` key for listExpired/close, owners for notify. Specified in P4.07.
@@ -4029,7 +4049,8 @@ P4.21 stop), **P4b-E14** (default tabs), **P4b-E18** (metric rounding), **P4b-E1
   later answers (30, 30b), which supersede the plan text.
 - **Answer 30c (suspected CSAM, Alex 16:39Z):** **P4.07** gains "Suspected abuse material: the emergency path": block
   at once and never send anywhere; seal under the legal hold through `onMatch` with `subjectKind = 'suspected'` (and
-  `item_kind`), C-16 clock unchanged; an immediate `csam_emergency` alert (P3.20c's highest class, never digest-only,
+  `item_kind`), the per-case preservation regime unchanged (P4.07); an immediate `csam_emergency` alert (P3.20c's
+  highest class, never digest-only,
   never capped); a report case that a person must close by filing with Cybertip.ca, re-alerting every 4 h until the
   lawyer hour fixes the deadline; the runbook line "if a child appears to be in imminent danger, call the police
   (911 or local) as well"; freeze the poster's uploads, never the reporter; audit `csam.suspected`. Callers: P4.11

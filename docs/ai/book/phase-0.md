@@ -2419,8 +2419,9 @@ Done when the five tests still assert the same log lines, the audit tests pass u
 As built: merged at 2026-10-12T22:24:49Z as `b0d8959` (#729, head c922b8a) (merge data read by REST, 22:35Z). The
 five tests and the shutdown.test.ts child share one trusted helper, `shared/http/capture-logger.ts`, which
 architecture accepted (Amendment 6 of 2026-10-12-workspace-imports-and-remote-daemon, item 1); it ships inert in
-node-app until P1.11n. Its comment at line 4 still says `logError` keeps what shared/log keeps, though shared/log
-also records stack frames outside prod; a later trusted commit corrects it.
+node-app until P1.11n. Its comment at line 4 says `logError` keeps what shared/log keeps: true for
+`shared/log/logger.ts:151,282`, but not for stack frames, which shared/log also records outside prod. The fix is
+parked in the refocus order, section 4.
 
 ---
 
@@ -2491,8 +2492,7 @@ The fix:
     counts `tests/support/` as reaching trusted code (the refocus order, section 4).
 - Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
 - Sequencing: P1.27g (#690), P1.27i (#697), P1.27x (#702) and P1.11c (#706), which edit those helpers, have all
-  merged, so nothing has to move. P1.11i (#723) has merged too; P1.11f, which edits them next, becomes a
-  trusted-class PR once this lands.
+  merged, so nothing has to move. P1.11i (#723) and P1.11f (#733, 1ab3fe8) have merged too.
 
 Done when (tests, planted fixtures in the guard's tests):
   - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
@@ -2551,7 +2551,7 @@ non-exported subpath fails, and check is green.
 ---
 
 ### P0.09u — Pin the identity syntax subpath to its file
-Tags: —            Depends on: P0.09p            Plan: rule SE-6
+Tags: —            Depends on: P0.09p (merged, #724)            Plan: rule DC-2
 Product (`domains/identity/syntax-export.test.ts`), kind/fix; issue #731; slice 1; book edit
   2026-10-12-p009s-p009u-domain-imports-and-syntax-test (22:08Z), from item 1 of the coordinator's post-merge verify of
   #724. Lane: Phase 0. Its own small PR. Nothing from Alex.
