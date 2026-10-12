@@ -1,6 +1,6 @@
 // tests/support/docker.ts (P1.27k, P1.27g): a call that outlives its budget is killed with SIGKILL and named, instead
 // of blocking the event loop until the run's own limit. The stand-ins sleep; no docker is needed.
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -34,11 +34,16 @@ describe("tests/support/docker.ts", () => {
 
   test("call_ignoring_sigterm_is_still_killed", { timeout: TEST_MS }, () => {
     // The docker CLI forwards SIGTERM to the daemon and waits, so only SIGKILL ends a hung call promptly (N4). The
-    // shell ignores SIGTERM as its first command and `exec` keeps that for the sleep, so the stand-in is deaf to it
-    // within milliseconds; the 1 s budget leaves no doubt it was listening when the kill came (verifier P10 on #690).
+    // stand-in ignores SIGTERM, then writes a marker; `exec` keeps the ignore for the sleep. A stand-in descheduled
+    // before the trap would die of SIGTERM too, so the marker must exist: without it the run proves nothing and fails
+    // (Codex on #701, P1.11c). With the trap in place a SIGTERM kill leaves the sleep running past the test budget.
     const started = Date.now();
-    const ignoresTerm = `trap '' TERM; exec sleep ${SLEEP_MS / 1000}`;
-    expect(() => runOrKill("/bin/sh", ["-c", ignoresTerm], { timeoutMs: 1_000 })).toThrow(/killed after 1000 ms/);
+    const marker = join(dir, "trapped");
+    const ignoresTerm = `trap '' TERM; : > "$1"; exec sleep ${SLEEP_MS / 1000}`;
+    expect(() => runOrKill("/bin/sh", ["-c", ignoresTerm, "sh", marker], { timeoutMs: 1_000 })).toThrow(
+      /killed after 1000 ms/,
+    );
+    expect(existsSync(marker), "the stand-in was killed before it ignored SIGTERM").toBe(true);
     expect(Date.now() - started).toBeLessThan(TEST_MS);
   });
 
