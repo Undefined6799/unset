@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 
 const SERVER = new URL("./server.ts", import.meta.url).href;
 const ROUTES = new URL("./routes.ts", import.meta.url).href;
-const LOG = import.meta.resolve("@unset/shared-log");
+const LOG = new URL("./capture-logger.ts", import.meta.url).href;
 
 /** A port nothing listens on, so the child's public origin can name it (the host check strips only that port). */
 const freePort = () =>
@@ -25,7 +25,7 @@ async function serve(
   const code = `
     import { createServer } from ${JSON.stringify(SERVER)};
     import { defineRoute } from ${JSON.stringify(ROUTES)};
-    import { createLogger } from ${JSON.stringify(LOG)};
+    import { captureLogger } from ${JSON.stringify(LOG)};
     const route = (path, handler) => defineRoute({ method: "GET", path, group: "app", rateLimit: "p", session: "none", handler });
     const server = createServer({
       config: { UNSET_ENV: "test", UNSET_SERVICE: "http", UNSET_COMMIT: "${"c".repeat(40)}", LISTEN_PORT: ${free},
@@ -39,7 +39,7 @@ async function serve(
         route("/never", () => new Promise(() => {})),
       ],
       policies: { default: [{ capacity: 100, refillPerSec: 10, scope: "ip" }], p: [{ capacity: 100, refillPerSec: 10, scope: "ip" }] },
-      log: createLogger({ service: "http", commit: "${"c".repeat(40)}", env: "test", write: () => {} }),
+      log: captureLogger(),
     });
     const port = await server.listen();
     process.stdout.write(port + "\\n");
