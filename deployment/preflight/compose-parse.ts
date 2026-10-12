@@ -304,8 +304,17 @@ function build(r: Reader, node: unknown): Build | null {
   const context = node.get("context", true);
   const dockerfile = node.get("dockerfile", true);
   if (context === undefined || dockerfile === undefined) return r.fail(node, "build is not {context, dockerfile}");
-  return { context: r.text(context, "build context"), dockerfile: r.text(dockerfile, "build dockerfile") };
+  const contextText = r.text(context, "build context");
+  if (!LOCAL_CONTEXT.test(contextText)) r.fail(context, "build context is not a local path");
+  return { context: contextText, dockerfile: r.text(dockerfile, "build dockerfile") };
 }
+
+/**
+ * A context written as a path (`.`, `..`, or starting `./`, `../` or `/`) with no `:` or `#`: compose-go passes a URL
+ * or git context (`https://…`, `git@…:…`, `github.com/…`, a `#ref` fragment) through unresolved, so it is refused, not
+ * resolved.
+ */
+const LOCAL_CONTEXT = /^(?:\.\.?|\.\.?\/[^:#]*|\/[^:#]*)$/;
 
 /** The only tmpfs targets, in either form; a later one needs a ruling. C27 keeps the socket directory to postgres. */
 export const TMPFS_TARGETS = ["/tmp", "/var/run/postgresql"];

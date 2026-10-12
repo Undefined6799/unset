@@ -268,6 +268,14 @@ describe("compose subset", () => {
         "build key target",
       ],
       ["    build: {context: ..}\n", "build is not {context, dockerfile}"],
+      // compose-go passes URL and git contexts through unresolved, so only a local path is read (#652 verification).
+      [
+        "    build: {context: https://github.com/x/y.git, dockerfile: Dockerfile}\n",
+        "build context is not a local path",
+      ],
+      ['    build: {context: "git@github.com:x/y.git", dockerfile: Dockerfile}\n', "build context is not a local path"],
+      ["    build: {context: github.com/x/y, dockerfile: Dockerfile}\n", "build context is not a local path"],
+      ['    build: {context: "..#main", dockerfile: Dockerfile}\n', "build context is not a local path"],
       ["    tmpfs: [/etc/caddy/snippets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: [/run/secrets]\n", "tmpfs target is not /tmp or /var/run/postgresql"],
       ["    tmpfs: /tmp\n", "tmpfs is not a list"],
