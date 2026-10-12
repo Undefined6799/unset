@@ -102,7 +102,7 @@ export function stopAllPostgresWithin(removeMs: number): void {
 /** Starts the image detached and waits until initdb finished and the server accepts connections again. */
 export async function startPostgres(options: PostgresOptions, timeoutMs = 90_000): Promise<PostgresContainer> {
   const name = containerName();
-  dockerOut(["run", "-d", ...runArgs(name, options), POSTGRES_IMAGE]);
+  dockerOut(["run", "-d", ...runArgs(name, options.initDir, secretsDir(options.secrets ?? {})), POSTGRES_IMAGE]);
   try {
     await waitUntilServing(name, timeoutMs);
     return container(name, hostPort(name));
@@ -115,8 +115,9 @@ export async function startPostgres(options: PostgresOptions, timeoutMs = 90_000
 /** Runs the image in the foreground and reports how initdb ended: for scripts that must fail closed. */
 export function runUntilExit(options: PostgresOptions, timeoutMs = 90_000): InitExit {
   const name = containerName();
+  const secrets = secretsDir(options.secrets ?? {});
   // Its own timeout reports a server still running as `code: null`, so it keeps spawnSync, now with SIGKILL (P1.27k).
-  const result = spawnSync("docker", ["run", ...runArgs(name, options), POSTGRES_IMAGE], {
+  const result = spawnSync("docker", ["run", ...runArgs(name, options.initDir, secrets), POSTGRES_IMAGE], {
     encoding: "utf8",
     timeout: timeoutMs,
     killSignal: "SIGKILL",
@@ -135,7 +136,7 @@ function containerName(): string {
   return name;
 }
 
-function runArgs(name: string, options: PostgresOptions): string[] {
+function runArgs(name: string, initDir: string, secrets: string): string[] {
   return [
     "--rm",
     "--name",
@@ -148,9 +149,9 @@ function runArgs(name: string, options: PostgresOptions): string[] {
     "-e",
     `POSTGRES_PASSWORD=${randomPassword()}`,
     "-v",
-    `${options.initDir}:/docker-entrypoint-initdb.d:ro`,
+    `${initDir}:/docker-entrypoint-initdb.d:ro`,
     "-v",
-    `${secretsDir(options.secrets ?? {})}:/run/secrets:ro`,
+    `${secrets}:/run/secrets:ro`,
   ];
 }
 
