@@ -10,7 +10,13 @@ import { join } from "node:path";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createPool, didColumns, migrate, type Pool, withClient } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 
 type Row = { strategy: string; class?: string; reason?: string };
 type Registry = Record<string, Row>;
@@ -40,7 +46,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.close()));
   stopAllPostgres();
-});
+}, STOP_ALL_MS);
 
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
   const pool = createPool({
