@@ -291,7 +291,15 @@ describe("preflight", () => {
     const { root, file } = stack();
     chmodSync(join(root, "deployment/secrets/db_password"), 0o644);
     const loose = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
-    expect(loose.lines).toContain(`FAIL C9 ${join(root, "deployment/secrets/db_password")} is not mode 0600`);
+    expect(loose.lines).toContain(
+      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
+    );
+    // Too few bits fails the same way as too many (Codex review on #650).
+    chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
+    const tight = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
+    expect(tight.lines).toContain(
+      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
+    );
     const other = await check({}, "prod", { uid: 4242 });
     expect(failed(other.lines)).toEqual(["C9"]);
     const absent = await check({ compose: COMPOSE.replace("secrets/db_password", "secrets/absent") });
@@ -327,6 +335,12 @@ describe("preflight", () => {
 
   test("c12_log_enabled_fails", async () => {
     expect(await expectOnly("C12", { pdsEnv: { LOG_ENABLED: "true" } })).toContain("pds-debug-logging.md");
+    // The reason names the key, never a value it can take, so the runner's scrub leaves it whole (P1.30j).
+    for (const on of ["on", "off", "1", "yes", "no", "true"]) {
+      expect(await expectOnly("C12", { pdsEnv: { LOG_ENABLED: on } }), on).toBe(
+        "FAIL C12 LOG_ENABLED differs from the required literal; see docs/human/runbooks/pds-debug-logging.md",
+      );
+    }
     const unset = await check({ pdsEnv: { LOG_ENABLED: null } });
     expect(failed(unset.lines)).toEqual([]);
   });
@@ -582,7 +596,9 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     for (const name of ["0X40.space", "0x40.SPACE", "0x40.space."]) {
       expect(await expectOnly("C21", { compose: host(name) })).toMatch(/input missing: .*retirement-check\.json$/);
     }
-    expect((await check({ compose: host("pds.0x40.space") })).lines).toContain("PASS C21 n/a");
+    expect((await check({ compose: host("pds.0x40.space") })).lines).toContain(
+      "PASS C21 skipped: PDS_HOSTNAME is unset or a different host",
+    );
   });
 
   test("c15_subdomain_entry_refused", async () => {
@@ -645,7 +661,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     expect(failed((await check({ compose: master, pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: "2000000000" } })).lines)).toEqual(
       [],
     );
-    expect((await check()).lines).toContain("PASS C22 n/a");
+    expect((await check()).lines).toContain("PASS C22 skipped: VIDEO_MASTER_MAX_BYTES is unset");
   });
 
   test("c23_prod_fake_fingerprint_fails", async () => {
@@ -663,7 +679,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
       { compose: DEV.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake"), pdsEnv: DEV_ENV },
       "dev",
     );
-    expect(dev.lines).toContain("PASS C23 n/a");
+    expect(dev.lines).toContain("PASS C23 skipped: dev stage");
   });
 
   test("c24_clock_unsynchronised_fails", async () => {
@@ -675,7 +691,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     expect(failed((await check({}, "prod", { run: fakeRun({ chrony: notInstalled }).run })).lines)).toEqual([]);
     const local = fakeRun({ ntp: ok("no\n") });
     expect((await check({ compose: host("pds.localhost") }, "prod", { run: local.run })).lines).toContain(
-      "PASS C24 n/a",
+      "PASS C24 skipped: PDS_HOSTNAME is an agent's stack",
     );
     expect(local.calls.some(([file]) => file === "timedatectl")).toBe(false);
   });

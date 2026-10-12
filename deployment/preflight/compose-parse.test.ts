@@ -157,6 +157,14 @@ describe("compose subset", () => {
     const bind =
       "volumes:\n  data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
     expect(() => parseCompose(`${base}${bind}`, "c.yaml")).toThrow(new ParseError("c.yaml:7: volume data: driver"));
+    // Each refused key fails on its own: a device mapping with no driver, and an external volume (P1.30j).
+    const device = "volumes:\n  data:\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
+    expect(() => parseCompose(`${base}${device}`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: volume data: driver_opts"),
+    );
+    expect(() => parseCompose(`${base}volumes:\n  data:\n    external: true\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: volume data: external"),
+    );
     for (const key of ["driver_opts", "external", "name", "labels"]) {
       expect(() => parseCompose(`${base}volumes:\n  data:\n    ${key}: x\n`, "c.yaml"), key).toThrow(
         new ParseError(`c.yaml:7: volume data: ${key}`),
