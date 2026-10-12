@@ -10,6 +10,7 @@ import { join, relative } from "node:path";
 import { createLogger } from "@unset/shared-log";
 import type { TestProject } from "vitest/node";
 import { createPool, migrate, type PoolClient, withClient } from "../../../infrastructure/postgres/index.ts";
+import { failAfterCleanup } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
@@ -67,8 +68,8 @@ export async function startTestDatabase(options: TestDatabaseOptions): Promise<P
     const roles = await asMigrator(connection, (client) => prepareRoles(client, Object.values(databases)));
     return { host: connection.host, port: connection.port, roles, databases };
   } catch (error) {
-    stopAllPostgres();
-    throw error;
+    // A killed removal is reported with the setup error, never in its place (P1.11c).
+    failAfterCleanup(error, stopAllPostgres);
   }
 }
 

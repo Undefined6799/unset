@@ -15,7 +15,9 @@ export type Call = {
 
 const MARGIN_MS = 5_000;
 
-/** A call's kill budget inside a test or hook of `budgetMs`: just under it, so the kill fires first and names the call. */
+/**
+ * A call's kill budget inside a test or hook of `budgetMs`: just under it, so the kill fires first and names the call.
+ */
 export function killBefore(budgetMs: number): number {
   if (!(budgetMs > MARGIN_MS)) throw new RangeError(`a budget of ${budgetMs} ms leaves no time for the call`);
   return budgetMs - MARGIN_MS;
@@ -108,3 +110,16 @@ export function failAfterCleanup(failure: unknown, cleanup: () => void): never {
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** Runs every cleanup, even after one throws, then throws one AggregateError listing each failure in order. */
+export function cleanUpAll(...cleanups: (() => void)[]): void {
+  const failures: unknown[] = [];
+  for (const cleanup of cleanups) {
+    try {
+      cleanup();
+    } catch (failure) {
+      failures.push(failure);
+    }
+  }
+  if (failures.length > 0) throw new AggregateError(failures, failures.map(messageOf).join("; "));
+}

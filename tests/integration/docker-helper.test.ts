@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { killBefore, runOrKill, withCleanup } from "../support/docker.ts";
+import { cleanUpAll, failAfterCleanup, killBefore, runOrKill, withCleanup } from "../support/docker.ts";
 
 // The stand-ins sleep 10 s; the kill fires at 300 ms, well inside this test's budget.
 const SLEEP_MS = 10_000;
@@ -52,6 +52,47 @@ describe("tests/support/docker.ts", () => {
       }),
     ).toThrow(TypeError);
     expect(cleaned).toBe(true);
+  });
+
+  test("setup_error_survives_a_failing_cleanup", async () => {
+    // pg.setup.ts's async setup: a killed removal in the cleanup must not replace why the setup failed (verifier B2
+    // on #697, P1.11c).
+    const setup = new Error("test template migration failed: sql_error");
+    const failed = await (async () => {
+      try {
+        throw setup;
+      } catch (error) {
+        failAfterCleanup(error, () => {
+          throw new Error("docker rm killed after 60000 ms (unset-test-pg-x)");
+        });
+      }
+    })().catch((error: unknown) => error);
+    expect(failed).toBeInstanceOf(AggregateError);
+    expect((failed as AggregateError).errors[0]).toBe(setup);
+    expect((failed as AggregateError).message).toMatch(/^test template migration failed: sql_error \(cleanup also/);
+    // A cleanup that passes rethrows the setup error itself.
+    expect(() => failAfterCleanup(setup, () => undefined)).toThrow(setup);
+  });
+
+  test("every_cleanup_runs_and_every_failure_is_reported", () => {
+    // A hook's folder removal still runs after stopAllPostgres throws (P1.11c).
+    const ran: string[] = [];
+    const cleanups = [
+      () => {
+        ran.push("containers");
+        throw new Error("docker rm killed");
+      },
+      () => {
+        ran.push("folders");
+      },
+      () => {
+        ran.push("secrets");
+        throw new Error("EBUSY");
+      },
+    ];
+    expect(() => cleanUpAll(...cleanups)).toThrow("docker rm killed; EBUSY");
+    expect(ran).toEqual(["containers", "folders", "secrets"]);
+    expect(() => cleanUpAll(() => undefined)).not.toThrow();
   });
 
   test("finished_call_returns_its_output", () => {
