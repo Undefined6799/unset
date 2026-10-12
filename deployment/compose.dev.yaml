@@ -10,6 +10,11 @@
 # `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
 # capability, cannot gain privileges, runs as its image's non-root user on a read-only root, and has memory, CPU and
 # process limits; a Node service's heap cap is at most 75 % of its memory limit (findings F-32).
+#
+# The secret files live in unset-dev-secrets/, a sibling of the repository checkout, never inside it: postgres builds
+# from the repository root, and a build context that reaches the secrets folder fails C26 (architecture record
+# 2026-10-12-p127u-bind-ancestors-and-build-context (b); a .dockerignore entry does not count). `file:` paths resolve
+# from this file's folder, so ../../ is the checkout's parent.
 name: unset-dev
 
 services:
@@ -59,7 +64,7 @@ services:
       NODE_OPTIONS: --max-old-space-size=192
     # The migrator's own password and the role passwords syncRolePasswords sets (infrastructure/postgres/roles.json
     # passwordFrom), nothing else. Its copy of the migrator password is its own file: each mounted secret is owned by
-    # the one uid that reads it, and postgres (999) reads the bootstrap copy (secrets/README.md).
+    # the one uid that reads it, and postgres (999) reads the bootstrap copy (docs/human/runbooks/dev-stack-secrets.md).
     secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password]
     depends_on:
       postgres:
@@ -110,16 +115,16 @@ volumes:
 
 secrets:
   pg_superuser_password:
-    file: ./secrets/pg_superuser_password
+    file: ../../unset-dev-secrets/pg_superuser_password
   pg_migrator_password:
-    file: ./secrets/pg_migrator_password
+    file: ../../unset-dev-secrets/pg_migrator_password
   pg_tap_password:
-    file: ./secrets/pg_tap_password
+    file: ../../unset-dev-secrets/pg_tap_password
   migrate_pg_password:
-    file: ./secrets/migrate_pg_password
+    file: ../../unset-dev-secrets/migrate_pg_password
   pg_web_password:
-    file: ./secrets/pg_web_password
+    file: ../../unset-dev-secrets/pg_web_password
   pg_api_password:
-    file: ./secrets/pg_api_password
+    file: ../../unset-dev-secrets/pg_api_password
   pg_indexer_password:
-    file: ./secrets/pg_indexer_password
+    file: ../../unset-dev-secrets/pg_indexer_password

@@ -2,7 +2,7 @@
 // running stack is P1.29t's; Compose's own reading of this file is compared in compose-parse.test.ts
 // (preflight_matches_compose_config walks every compose*.yaml).
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
 import { type Compose, parseCompose, type Service } from "./preflight/compose-parse.ts";
@@ -142,6 +142,15 @@ describe("compose.dev.yaml (P1.29)", () => {
     }
     for (const [name, users] of readers) expect([...users], name).toHaveLength(1);
     expect(compose.secretFiles).toHaveLength(readers.size);
+  });
+
+  test("compose_dev_secrets_live_beside_the_checkout", () => {
+    // Architecture record 2026-10-12-p127u-bind-ancestors-and-build-context (b): postgres builds from the repository
+    // root, so a secrets folder inside the checkout sits in a build context. `file:` resolves from this file's folder.
+    const checkout = resolve(DEPLOYMENT, "..");
+    const folders = new Set(dev().secretFiles.map((file) => dirname(resolve(DEPLOYMENT, file))));
+    expect([...folders]).toEqual([join(dirname(checkout), "unset-dev-secrets")]);
+    for (const folder of folders) expect(relative(checkout, folder).startsWith(".."), folder).toBe(true);
   });
 
   test("dev_down_never_removes_volumes", () => {
