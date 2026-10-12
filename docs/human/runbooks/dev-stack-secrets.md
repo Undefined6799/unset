@@ -83,6 +83,10 @@ and the preflight fails closed.
 
 ## Starting and stopping
 
+Docker Desktop is not supported; use the native Docker Engine on Linux. The wrapper talks only to a Docker socket on
+this machine and refuses a daemon that names another host, which Docker Desktop's VM does (architecture record
+2026-10-12-workspace-imports-and-remote-daemon, Amendment 3).
+
 Only through the wrapper, which runs the preflight first with the same files (P1.27w):
 
 ```sh
