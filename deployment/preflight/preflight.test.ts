@@ -1089,6 +1089,21 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     }
   });
 
+  // P1.27n (verifier N5 on #675): list-dockerfiles refuses two Dockerfiles that give one image name, since the scan
+  // matrix would build one and publish the other's name; C26 refuses a build of either.
+  test("c26_image_name_another_dockerfile_takes_fails", async () => {
+    const files = { ...DOCKERFILES, "deployment/images/edge.Dockerfile": "FROM scratch\n" };
+    for (const [context, dockerfile] of [
+      ["..", "deployment/images/edge.Dockerfile"],
+      ["./edge", "Dockerfile"],
+    ]) {
+      expect(
+        await expectOnly("C26", { compose: webBuilds(context as string, dockerfile as string), files }),
+        dockerfile,
+      ).toBe("FAIL C26 web builds an image whose name another Dockerfile also takes");
+    }
+  });
+
   test("c26_edge_dockerfile_builds_from_its_own_folder", async () => {
     expect(failed((await check({ compose: webBuilds("./edge", "Dockerfile"), files: DOCKERFILES })).lines)).toEqual([]);
     for (const [context, dockerfile] of [

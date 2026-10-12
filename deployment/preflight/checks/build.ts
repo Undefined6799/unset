@@ -1,7 +1,7 @@
 // C26 and C27 (P1.30y; architecture record 2026-10-12-p129-compose-service-keys): a build uses a Dockerfile the images
 // workflow scans, from the context it builds that Dockerfile from, and the postgres socket directory is a tmpfs only on
 // the postgres image.
-import { realpathSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { readLock } from "./images.ts";
 import { type Check, fail, missing, pass, runsImage } from "./types.ts";
@@ -42,6 +42,16 @@ function scanned(root: string, dockerfile: string, isFile: boolean): boolean {
 }
 
 /**
+ * How many Dockerfiles under deployment/ give this image name, by list-dockerfiles.ts's discovery and duplicate rule
+ * (readdirSync recursive, Node v26.10.0 fs docs, as that script cites). Two would share one scan-matrix entry.
+ */
+function namesakes(root: string, name: string): number {
+  return readdirSync(join(root, "deployment"), { recursive: true, encoding: "utf8" })
+    .map((entry) => `deployment/${entry.split(sep).join("/")}`)
+    .filter((path) => DOCKERFILE.test(path) && !path.includes("node_modules") && imageName(path) === name).length;
+}
+
+/**
  * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context that
  * workflow uses (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any other from
  * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
@@ -54,6 +64,10 @@ export const c26: Check = {
       if (build === null) continue;
       if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
         return fail(`${name} builds from a Dockerfile the images workflow does not scan`);
+      }
+      const path = relative(inputs.root, build.dockerfile).split(sep).join("/");
+      if (namesakes(inputs.root, imageName(path)) !== 1) {
+        return fail(`${name} builds an image whose name another Dockerfile also takes`);
       }
       const context = basename(build.dockerfile) === "Dockerfile" ? dirname(build.dockerfile) : inputs.root;
       if (build.context !== context) return fail(`${name} builds from a context other than the images workflow's`);
