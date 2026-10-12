@@ -3432,8 +3432,9 @@ Outputs:
   walk are catalogued in `02-shared-blocks.md` next to `eraseDid` (R10; the editor adds the entry). Defaults:
   sessions → exclude `id_hash` ("the hash that looks up a live session cookie; exporting it would export a
   credential"); OAuth token stores → exclude ("sealed credentials; listing them would export secrets");
-  `app.private_interaction` where the user is the **target** → redact `actor_did` (the actor was promised anonymity, P4.17a cell); reports **about** the user → redact `reporter_did` and
-  `note`; reports **by** the user → include; moderation decisions about the user → include (plan §6); legal holds and
+  `app.private_interaction` where the user is the **target** → redact `actor_did` (the actor was promised
+  anonymity, P4.17a cell); reports **about** the user → redact `reporter_did` and `note`; reports **by** the user →
+  include; moderation decisions about the user → include (plan §6); legal holds and
   sealed transmission data (`legal_hold`, `legal_hold_transmission`) → exclude ("legal preservation; disclosure could
   tip off", C-16); `video_upload` → include, except that a row in `matched_hold` shows its state as `unavailable`
   (the same generic copy the member sees, so the export does not tip off); `review_decision` and `appeal` → include

@@ -24,8 +24,9 @@ Unit tests sit beside the file they test, not here.
   the call with SIGKILL at its timeout and throws a message naming it (P1.27k). A blocked `spawnSync` cannot be
   interrupted by vitest's test timeout, so without this a hung daemon held the event loop until `scripts/test/run.ts`
   killed the whole run at 600 s, naming nothing. `killBefore(budget)` sets a call's timeout 5 s under the test's
-  budget; `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g). Hooks that end
-  in `stopAllPostgres` take `STOP_ALL_MS`, never vitest's 10 s default.
+  budget; `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g) and refuses
+  an async body (P1.27i). Hooks that end in `stopAllPostgres` take `STOP_ALL_MS`, never vitest's 10 s default; a
+  killed `docker rm` there now fails the hook, naming the container, instead of passing silently (P1.27i).
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
