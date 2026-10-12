@@ -8,10 +8,12 @@ import {
   CHILD_ENV_NAMES,
   childEnv,
   DEFAULT_DOCKER_HOST,
+  DOCKER_INFO_DEADLINE_MS,
   localDockerHost,
   plan as planStack,
   type Runner,
   run,
+  StackError,
   UsageError,
 } from "./stack.ts";
 
@@ -19,9 +21,9 @@ import {
 const SOCKET = (): boolean => true;
 const plan = (argv: string[], from: Readonly<Record<string, string | undefined>>) => planStack(argv, from, SOCKET);
 const HOST = "devbox";
-const runner = (spawn: Runner["spawn"], daemon = `Debian GNU/Linux 13 (trixie)|${HOST}`): Runner => ({
-  spawn,
-  capture: () => ({ status: 0, stdout: `${daemon}\n` }),
+const runner = (spawn: (file: string) => number | null, daemon = `Debian GNU/Linux 13 (trixie)|${HOST}`): Runner => ({
+  spawn: (file) => ({ status: spawn(file), signal: null }),
+  capture: () => ({ status: 0, signal: null, stdout: `${daemon}\n` }),
   hostname: HOST,
 });
 
@@ -266,7 +268,7 @@ describe("stack wrapper (P1.27w)", () => {
 
   test("a_daemon_on_another_machine_is_refused", () => {
     const ran: string[] = [];
-    const record: Runner["spawn"] = (file) => {
+    const record = (file: string): number => {
       ran.push(file);
       return 0;
     };
@@ -277,7 +279,7 @@ describe("stack wrapper (P1.27w)", () => {
     }
     expect(ran).toEqual([]);
     // A daemon that does not answer stops the run before anything starts.
-    expect(run(plan(UP, {}), { ...runner(record), capture: () => ({ status: 1, stdout: "" }) })).toBe(1);
+    expect(run(plan(UP, {}), { ...runner(record), capture: () => ({ status: 1, signal: null, stdout: "" }) })).toBe(1);
     expect(ran).toEqual([]);
     // The question goes through the children's own environment.
     let asked: Record<string, string> = {};
@@ -285,7 +287,7 @@ describe("stack wrapper (P1.27w)", () => {
       ...runner(record),
       capture: (_file, _args, env) => {
         asked = env;
-        return { status: 0, stdout: `x|${HOST}` };
+        return { status: 0, signal: null, stdout: `x|${HOST}` };
       },
     });
     expect(asked.DOCKER_HOST).toBe("unix:///run/user/1000/docker.sock");
@@ -311,4 +313,62 @@ describe("stack wrapper (P1.27w)", () => {
       }
     },
   );
+
+  test("a_leading_double_dash_is_the_documented_call", () => {
+    // Pitfall note node-reads-env-file-after-script and compose-inputs Amendment 3: callers write `node <script> -- <args>`,
+    // so the wrapper strips one leading `--`, as the preflight does (index.ts), and refuses a second.
+    expect(plan(["--", ...UP], {})).toEqual(plan(UP, {}));
+    expect(plan(["--", ...DOWN], {})).toEqual(plan(DOWN, {}));
+    expect(() => plan(["--", "--", ...UP], {})).toThrow(UsageError);
+    expect(() => plan([...UP, "--"], {})).toThrow(UsageError);
+  });
+
+  test("the_wrapper_takes_no_flag_node_also_reads", () => {
+    // Amendment 3 item 2: no --env-file*, --require or --import, so a caller's `node stack.ts …` never hands Node one.
+    // Each is added to an otherwise valid command, so only the flag itself can be why it is refused.
+    for (const flag of [
+      ["--env-file", "x.env"],
+      ["--env-file=x.env"],
+      ["--env-file-if-exists", "x.env"],
+      ["--require", "x.cjs"],
+      ["-r", "x.cjs"],
+      ["--import", "x.mjs"],
+      ["--experimental-loader", "x.mjs"],
+    ]) {
+      expect(() => plan([...UP, ...flag], {}), flag.join(" ")).toThrow(/^usage: /);
+    }
+  });
+
+  test("a_child_that_cannot_start_or_is_killed_names_why", () => {
+    // DC-4: spawnSync reports a missing program as .error and a kill as .signal, with status null; neither is silent.
+    const missing: Runner = {
+      ...runner(() => 0),
+      spawn: () => ({ status: null, signal: null, error: new Error("ENOENT") }),
+    };
+    expect(() => run(plan(UP, {}), missing)).toThrow(new StackError(`${process.execPath} could not be started`));
+    const killed: Runner = { ...runner(() => 0), spawn: () => ({ status: null, signal: "SIGKILL" }) };
+    expect(() => run(plan(DOWN, {}), killed)).toThrow(new StackError("docker was stopped by SIGKILL"));
+    const noDocker: Runner = {
+      ...runner(() => 0),
+      capture: () => ({ status: null, signal: null, stdout: "", error: new Error("ENOENT") }),
+    };
+    expect(() => run(plan(UP, {}), noDocker)).toThrow(new StackError("docker could not be started"));
+  });
+
+  test("docker_info_has_a_deadline", () => {
+    // RE-1: the daemon question is bounded; a timed-out spawnSync kills the child and reports a signal.
+    expect(DOCKER_INFO_DEADLINE_MS).toBeGreaterThan(0);
+    expect(DOCKER_INFO_DEADLINE_MS).toBeLessThanOrEqual(30_000);
+    let deadline: number | undefined;
+    run(plan(UP, {}), {
+      ...runner(() => 0),
+      capture: (_file, _args, _env, timeoutMs) => {
+        deadline = timeoutMs;
+        return { status: 0, signal: null, stdout: `x|${HOST}` };
+      },
+    });
+    expect(deadline).toBe(DOCKER_INFO_DEADLINE_MS);
+    const slow: Runner = { ...runner(() => 0), capture: () => ({ status: null, signal: "SIGTERM", stdout: "" }) };
+    expect(() => run(plan(UP, {}), slow)).toThrow(new StackError("docker was stopped by SIGTERM"));
+  });
 });

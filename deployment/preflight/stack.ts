@@ -29,16 +29,25 @@ export const DEFAULT_DOCKER_HOST = "unix:///var/run/docker.sock";
 const PREFLIGHT = resolve(import.meta.dirname, "index.ts");
 
 export type Command = { file: string; args: string[] };
+/** What spawnSync reports about a finished child: a missing program is `error`, a kill is `signal`. */
+export type Exit = { status: number | null; signal: NodeJS.Signals | null; error?: Error };
 /** How `run` starts a command and asks the daemon its name; the one double in the tests. */
 export type Runner = {
-  spawn: (file: string, args: string[], env: Record<string, string>) => number | null;
-  capture: (file: string, args: string[], env: Record<string, string>) => { status: number | null; stdout: string };
+  spawn: (file: string, args: string[], env: Record<string, string>) => Exit;
+  capture: (file: string, args: string[], env: Record<string, string>, timeoutMs: number) => Exit & { stdout: string };
   hostname: string;
 };
+
+/** How long `docker info` may take before the wrapper gives up on the daemon (RE-1). */
+export const DOCKER_INFO_DEADLINE_MS = 10_000;
 export type Plan = { env: Record<string, string>; commands: Command[] };
 type Options = { action: "up" | "down"; env: string; files: string[]; envFile: string };
 
+const USAGE = "usage: up|down --env dev --compose <file> [--compose <file>...] --interpolation-env <file>";
+
 export class UsageError extends Error {}
+/** A child that could not start or was killed: a fixed reason naming the program, never its arguments (DC-4). */
+export class StackError extends Error {}
 
 /**
  * The caller's DOCKER_HOST, or the local default, if it names a socket on this machine: `unix://` and an absolute path
@@ -77,10 +86,14 @@ export function childEnv(
 }
 
 function parse(argv: string[]): Options {
+  // One leading `--` is how callers keep Node off the arguments (pitfall node-reads-env-file-after-script); any other
+  // `--` would end parseArgs' options early, so it is refused, as the preflight does (index.ts).
+  const args = argv[0] === "--" ? argv.slice(1) : argv;
+  if (args.includes("--")) throw new UsageError(USAGE);
   let parsed: ReturnType<typeof parseArgs>;
   try {
     parsed = parseArgs({
-      args: argv,
+      args,
       options: {
         env: { type: "string" },
         compose: { type: "string", multiple: true },
@@ -90,7 +103,7 @@ function parse(argv: string[]): Options {
       allowPositionals: true,
     });
   } catch {
-    throw new UsageError("usage: up|down --env dev --compose <file> [--compose <file>...] --interpolation-env <file>");
+    throw new UsageError(USAGE);
   }
   const { values, positionals } = parsed;
   const [action, ...rest] = positionals;
@@ -147,8 +160,10 @@ export function plan(
  * operator misconfiguration, not an attacker defence (record (2), belt). A daemon that does not answer stops the run.
  */
 function refuseRemoteDaemon(env: Record<string, string>, runner: Runner): number {
-  const info = runner.capture("docker", ["info", "--format", "{{.OperatingSystem}}|{{.Name}}"], env);
-  if (info.status !== 0) return info.status ?? 1;
+  const args = ["info", "--format", "{{.OperatingSystem}}|{{.Name}}"];
+  const info = runner.capture("docker", args, env, DOCKER_INFO_DEADLINE_MS);
+  const status = exitCode("docker", info);
+  if (status !== 0) return status;
   const name = info.stdout.trim().split("|").at(-1);
   if (name !== runner.hostname) throw new UsageError("the Docker daemon is not on this machine");
   return 0;
@@ -162,29 +177,38 @@ export function run({ env, commands }: Plan, runner: Runner): number {
   const daemon = refuseRemoteDaemon(env, runner);
   if (daemon !== 0) return daemon;
   for (const { file, args } of commands) {
-    const code = runner.spawn(file, args, env);
-    if (code !== 0) return code ?? 1;
+    const code = exitCode(file, runner.spawn(file, args, env));
+    if (code !== 0) return code;
   }
   return 0;
+}
+
+/** The child's exit status, or a fixed reason when it never ran or was killed (spawnSync leaves status null then). */
+function exitCode(file: string, { status, signal, error }: Exit): number {
+  if (error !== undefined && signal === null) throw new StackError(`${file} could not be started`);
+  if (signal !== null) throw new StackError(`${file} was stopped by ${signal}`);
+  return status ?? 1;
 }
 
 if (import.meta.main) {
   try {
     process.exitCode = run(plan(process.argv.slice(2), process.env), {
-      spawn: (file, args, env) => spawnSync(file, args, { env, stdio: "inherit", shell: false }).status,
-      capture: (file, args, env) => {
+      spawn: (file, args, env) => spawnSync(file, args, { env, stdio: "inherit", shell: false }),
+      capture: (file, args, env, timeoutMs) => {
         const result = spawnSync(file, args, {
           env,
           stdio: ["ignore", "pipe", "inherit"],
           encoding: "utf8",
           shell: false,
+          timeout: timeoutMs,
         });
-        return { status: result.status, stdout: result.stdout ?? "" };
+        const exit = { status: result.status, signal: result.signal, stdout: result.stdout ?? "" };
+        return result.error === undefined ? exit : { ...exit, error: result.error };
       },
       hostname: hostname(),
     });
   } catch (error) {
-    if (!(error instanceof UsageError)) throw error;
+    if (!(error instanceof UsageError || error instanceof StackError)) throw error;
     process.stderr.write(`stack: ${error.message}\n`);
     process.exitCode = 2;
   }
