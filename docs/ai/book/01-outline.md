@@ -168,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 242 steps: 218 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 245 steps: 221 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -274,9 +274,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25l | Budget check: every island keeps its own lazy chunk | check | P1.25h | `phase-1.md` |
 | P1.25s | jsx-free test: contains-floor, eval/Function/vm loaders, named type imports only | [SEC] | P1.25r | `phase-1.md` |
 | P1.25o | CODEOWNERS, lint edges and budget for shared/islands | check [ALEX] | P1.25h | `phase-1.md` |
-| P1.25i | Island runtime moves to the shared/islands workspace | trusted | P1.25o | `phase-1.md` |
-| P1.25u | CODEOWNERS drops the island runtime's old paths | check | P1.25i | `phase-1.md` |
-| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25i | `phase-1.md` |
+| P1.25i | Island runtime copied to the shared/islands workspace, with a parity test | trusted | P1.25o | `phase-1.md` |
+| P1.25p | Point island importers at shared/islands | — | P1.25i | `phase-1.md` |
+| P1.25e | Delete the old trusted island runtime files | trusted | P1.25p | `phase-1.md` |
+| P1.25u | CODEOWNERS drops the island runtime's old paths | check | P1.25e | `phase-1.md` |
+| P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25p | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -379,10 +381,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34e | Allow the edge's two ownership commands | [SEC] | — | `phase-1.md` |
 | P1.34x | Admit only chown and chmod in run lists | [SEC] | P1.34e | `phase-1.md` |
 | P1.34r | Walk, open, then fstat in the env reader | [SEC] | P1.27j | `phase-1.md` |
-| P1.34c | Add the local app site and dev CA to the edge (trusted base) | [SEC] | — | `phase-1.md` |
+| P1.34c | Serve the local app site with a dev leaf (trusted base) | [SEC] | — | `phase-1.md` |
+| P1.34a | Let the edge reader accept the local app site (trusted base) | [SEC] | — | `phase-1.md` |
 | P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
-| P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m | `phase-1.md` |
+| P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
 | P1.29d | Our own gosu-free Postgres image, locked and mirrored | [SEC] | P1.29v, P1.28r, P1.28n, P1.29r, P1.29e, P1.29n, P1.29p, P1.29f, P1.29m | `phase-1.md` |
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27y, P1.27a, P1.27u, P1.27w | `phase-1.md` |
@@ -516,7 +519,9 @@ flowchart TD
   P1_25s["P1.25s jsx-free second regression"]
   P1_25l["P1.25l Islands keep lazy chunks"]
   P1_25o["P1.25o Own shared/islands"]
-  P1_25i["P1.25i Island runtime to shared/islands"]
+  P1_25i["P1.25i Island runtime copied to shared/islands"]
+  P1_25p["P1.25p Importers point at shared/islands"]
+  P1_25e["P1.25e Old trusted runtime deleted"]
   P1_25u["P1.25u Drop old island owner paths"]
   P1_25["P1.25 App shell and error pages"]
   P1_26["P1.26 Accessibility and browser test"]
@@ -595,7 +600,8 @@ flowchart TD
   P1_11n["P1.11n Test helpers out of images"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
-  P1_34c["P1.34c Local app site and dev CA"]
+  P1_34c["P1.34c Local app site with a dev leaf"]
+  P1_34a["P1.34a Edge reader accepts local app site"]
   P1_34d["P1.34d PDS trusts one dev root"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27w["P1.27w Compose only through the wrapper"]
@@ -758,8 +764,10 @@ flowchart TD
   P1_25h --> P1_25l
   P1_25h --> P1_25o
   P1_25o --> P1_25i
-  P1_25i --> P1_25u
-  P1_25i --> P1_25
+  P1_25i --> P1_25p
+  P1_25p --> P1_25e
+  P1_25e --> P1_25u
+  P1_25p --> P1_25
   P1_24c --> P1_26
   P1_25 --> P1_26
   P1_04 --> P1_27
@@ -905,6 +913,7 @@ flowchart TD
   P1_34c --> P1_34d
   P1_29a --> P1_34d
   P1_27l --> P1_34d
+  P1_34a --> P1_27l
   P1_34d --> P1_29t
   P1_29t --> P2_13a
   P1_30 --> P2_13a
