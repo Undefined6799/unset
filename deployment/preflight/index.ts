@@ -142,17 +142,21 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
 }
 
 /**
- * The one --interpolation-env file, absolute from the working directory as Compose makes its --env-file
- * (cmd/compose/compose.go, `filepath.Abs`, in 2.38.2 and at :516-527 in v5.3.1). Several are refused rather than merged
- * in Compose's order, and a leading `~` or a `$` is refused as in a compose path field: v5.3.1 expands `~` there and
- * 2.38.2 does not (ruling F2, F3.2).
+ * The one --interpolation-env file. Compose makes its --env-file absolute against $PWD (cmd/compose/compose.go,
+ * `filepath.Abs`, in 2.38.2 and at :516-527 in v5.3.1) while Node resolves against the physical cwd, so only an
+ * absolute, normal path names one file to both, as for --compose (P1.27a Amendment 3). Several are refused rather
+ * than merged in Compose's order, and a leading `~` or a `$` is refused as in a compose path field: v5.3.1 expands
+ * `~` there and 2.38.2 does not (ruling F2, F3.2).
  */
 function envFileOf(given: string[] | undefined): string | null {
   if (given === undefined) return null;
   const [file, second] = given as [string, string?];
   if (second !== undefined) throw new CannotRun("--interpolation-env may be given once");
   if (isHomeOrInterpolated(file)) throw new CannotRun("--interpolation-env: a leading ~ or a $ is refused");
-  return resolve(file);
+  if (!(isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
+    throw new CannotRun("--interpolation-env must be an absolute, normalised path");
+  }
+  return file;
 }
 
 /**

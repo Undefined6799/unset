@@ -1417,6 +1417,28 @@ describe("compose inputs (P1.30a)", () => {
     );
   });
 
+  // As for --compose (P1.27a Amendment 3): Compose resolves a relative --env-file against $PWD, Node against the
+  // physical cwd, so the two could read different files. Only an absolute, normal path names one file to both.
+  test("interpolation_env_path_must_be_absolute_and_normal", async () => {
+    const { root, file } = stack();
+    const flag = envFile(root, "flag.env", "");
+    const dir = dirname(flag);
+    for (const path of [
+      relative(process.cwd(), flag),
+      `${dir}/../deployment/flag.env`,
+      `${dir}/./flag.env`,
+      `${flag}/`,
+    ]) {
+      expect(
+        await preflight(argv(file, "--interpolation-env", path), { root, run: fakeRun().run, environment: {} }),
+        path,
+      ).toEqual({
+        code: 2,
+        lines: ["ERROR --interpolation-env must be an absolute, normalised path"],
+      });
+    }
+  });
+
   test("compose_variables_in_the_environment_cannot_run", async () => {
     // The ruling's names; all but COMPOSE_PROJECT_DIR change which files Compose reads (compose-go consts.go v2.13.0;
     // compose cmd/compose/compose.go v5.3.1). No pinned source reads COMPOSE_PROJECT_DIR; the prefix covers it anyway.
