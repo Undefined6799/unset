@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -238,6 +238,7 @@ flowchart LR
   P1_30["P1.30 deploy preflight core"]
   P1_30s["P1.30s preflight C13–C24 but C17, C18"]
   P1_30t["P1.30t preflight C17 networks"]
+  P1_30r["P1.30r preflight-to-edge row"]
   P1_30u["P1.30u preflight C18 edge zones"]
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
@@ -386,6 +387,7 @@ flowchart LR
   P1_28f --> P1_28l
   P1_28l --> P1_30u
   P1_28g --> P1_30u
+  P1_30r --> P1_30u
   P1_28g --> P1_28k
   P1_28k --> P1_28m
   P1_28m --> P1_28p
@@ -8011,6 +8013,28 @@ and the item 2 guard fails if item 1 is reverted while running under `.worktrees
 
 ---
 
+### P1.30r — Allow preflight to import the edge reader
+Tags: [SEC] [ALEX]     Depends on: —
+Slice 1, issue #584, check (`scripts/lint/.dependency-cruiser.cjs` and its depcruise test), kind/build; book edit
+2026-10-12-p130r-preflight-edge-depcruise-row (final 03:00Z), split from P1.30u because SE-6 refuses a PR that mixes
+check and product paths, and C18's import fails depcruise until this row is on main. Owner: Phase 2. P1.30u depends on
+it.
+
+**Authority:** Alex's "Allow import" card tap (2026-10-12T02:16:16Z) and his typed "yes ok" (2026-10-12T02:17:33Z). The
+PR body quotes both.
+
+**What:** exactly one allowed row, from `^deployment/preflight/` to `^deployment/edge/caddyfile\.ts$`, and nothing else.
+The edge still may not import preflight (P1.28g), other `deployment/` files still import nothing, and no other edge file
+becomes importable.
+
+**Test:** a depcruise fixture test. Green: a preflight file importing `deployment/edge/caddyfile.ts`. Red: a preflight
+file importing any other edge file, such as another `deployment/edge/*.ts` module; an edge file importing preflight; a
+non-preflight `deployment/` file importing `caddyfile.ts`.
+
+Done when the fixtures are green, and the full suite is green on main's rules plus the one row.
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
@@ -8019,7 +8043,7 @@ in `deployment/preflight/`, every member one direct call, and `edgeSiteProblems(
 `deployment/edge/caddyfile.ts` (P1.28e). A second reader in `deployment/preflight/` stays refused, because two parsers
 of one syntax drift (amendment 7).
 
-**Tags:** [SEC] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l · **Plan:** as P1.30
+**Tags:** [SEC] [ALEX] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r · **Plan:** as P1.30
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -8033,12 +8057,11 @@ It passes its compose mount source as `sitesDir`, and the reader itself refuses 
 Its rules include at most one site per upstream (P1.28f). (Book edit 2026-10-08-p128f-p128g-edge-reader-follow-ups,
 00:40Z.)
 
-**The import fork:** the depcruise matrix needs a row that lets `deployment/preflight` import
-`deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`. That row is a `scripts/lint` allowance, so it is
-a loosening and needs Alex's typed line (for example "yes P1.30u preflight imports edge reader"); the coordinator asks
-him before C18 is built. If he declines, C18 runs the reader as a CLI by fixed path, the same as verify-images, and no
-lint row is added. The PR body says which path it took and quotes his line. The EdgeFiles injection removes the reader's
-own need for `node:fs`, not the preflight's import.
+**The import row is P1.30r** (book edit 2026-10-12-p130r-preflight-edge-depcruise-row). It lets `deployment/preflight`
+import `deployment/edge/caddyfile.ts` and nothing else in `deployment/edge/`, on Alex's "Allow import" tap
+(2026-10-12T02:16:16Z) and typed "yes ok" (02:17:33Z), which satisfy the line "yes P1.30u preflight imports edge
+reader". This step is product only (`deployment/preflight`, compose, the edge site mount) and touches no check path. The
+EdgeFiles injection removes the reader's own need for `node:fs`, not the preflight's import.
 
 **Riders** (book edits 2026-10-07-p130s-as-built and 2026-10-07-no-mailpit; Phase 2 touches the preflight next):
 a. C21 lower-cases the hostname and strips one trailing dot before comparing (`host.ts:23` compares exactly, so

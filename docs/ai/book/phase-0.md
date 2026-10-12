@@ -1369,7 +1369,8 @@ Outputs:
     read its `importance: high` notes in `docs/ai/notes/`, and capture durable learnings there (P0.09d builds the vault
     and its guard); no hand-made notes table. The 120-line budget counts `CLAUDE.md` itself; the imported top-15 page
     (about 20 lines) is checked separately (≤ 25 lines).
-  - `AGENTS.md`: unchanged pointer to `CLAUDE.md`.
+  - `AGENTS.md`: the pointer to `CLAUDE.md`, plus Cursor Cloud Agent notes (#573; book edit
+    2026-10-12-p009-agents-md-cloud-notes).
   - `SECURITY.md`: scope lists every entrypoint of plan §7 (`web`, `api`, `indexer`, `media`, `review`, `admin`,
     `pds-admin`, `chat-admin`) plus the PDS, Tap and Matrix as upstream; reporting channel: an email address Alex
     chose, **`security@unset.sh`** (real mail exists behind it, P0.11; GitHub private vulnerability reporting is not
