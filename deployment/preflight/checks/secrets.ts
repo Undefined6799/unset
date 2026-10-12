@@ -168,9 +168,12 @@ export function resolveChecked(path: string, inputs: Inputs): WalkProblem | null
     }
     const next = pending.shift();
     if (next === undefined) return null;
-    at = next === ".." ? dirname(at) : join(at, next);
+    at = stepTo(at, next);
   }
 }
+
+/** The entry a component names from `at`: `.` stays, `..` pops ("/.." is "/"), any other name goes in. */
+const stepTo = (at: string, next: string) => (next === "." ? at : next === ".." ? dirname(at) : join(at, next));
 
 /** Puts a link's target back onto the pending components, and returns where the walk continues from. */
 function followLink(link: string, pending: string[], inputs: Inputs): string {
@@ -179,7 +182,16 @@ function followLink(link: string, pending: string[], inputs: Inputs): string {
   return isAbsolute(target) ? sep : dirname(link);
 }
 
-const components = (path: string) => path.split(sep).filter((part) => part !== "" && part !== ".");
+/**
+ * A path's components, without empty and `.` ones. A trailing `/` or `/.` asks for a folder (path_resolution(7), "if a
+ * pathname ends in a '/', that forces resolution of the preceding component as in Step 2"), so it stays as one final
+ * `.`, which keeps the walk where it is and so needs a directory to go on through.
+ */
+function components(path: string): string[] {
+  const parts = path.split(sep).filter((part) => part !== "" && part !== ".");
+  const folder = parts.length > 0 && (path.endsWith(sep) || path.endsWith(`${sep}.`));
+  return folder ? [...parts, "."] : parts;
+}
 
 /** One entry on the walk; `more` when components remain, so the entry must be a directory to go on through. */
 function entryProblem(at: string, info: Stats, more: boolean, inputs: Inputs): WalkProblem | null {

@@ -794,6 +794,14 @@ describe("preflight", () => {
       symlinkSync("data/f/..", join(d, "up"));
     });
     expect(throughFile.lines).toContain("FAIL C9 pds binds a path that does not exist");
+    // A trailing `/` or `/.` on a link target asks for a folder too (Codex on this PR).
+    for (const target of ["data/f/", "data/f/."]) {
+      const slash = await run("./up", (d) => {
+        writeFileSync(join(d, "data/f"), "x\n");
+        symlinkSync(target, join(d, "up"));
+      });
+      expect(slash.lines).toContain("FAIL C9 pds binds a path that does not exist");
+    }
     // Neither a socket, a device nor a FIFO is a bind source.
     const fifo = await run("./data/fifo", (d) => void execFileSync("mkfifo", ["-m", "0644", join(d, "data/fifo")]));
     expect(fifo.lines).toContain("FAIL C9 pds binds a path that is not a file or directory");
