@@ -3,6 +3,7 @@
 export type { LoadOptions, Problem, Reason } from "./load.ts";
 export { bootOrExit, ConfigError, describeConfig, loadConfig } from "./load.ts";
 export { netGuardFields } from "./netGuard.ts";
+export { MATRIX_SERVER_NAME, PERMISSION_SET_NSID } from "./permanent.ts";
 export type { Config, Field, Fields, Kind, Rule, Schema } from "./schema.ts";
 export {
   bool,
