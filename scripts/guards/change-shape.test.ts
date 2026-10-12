@@ -10,6 +10,9 @@ import {
   checkPathsMixed,
   checkTrustedBaseIsolation,
   type DocFacts,
+  digestSwapOnly,
+  EDGE_DOCKERFILE,
+  edgeFromReplacements,
   readTrustedBase,
   unionTrustedBase,
 } from "./trusted-base.ts";
@@ -424,6 +427,70 @@ describe("trusted base (SE-6)", () => {
       ok: false,
       outside: ["tests/integration/profile.test.ts"],
     });
+  });
+
+  // P1.28a. The bump procedure puts the lock and the mirror list in the same PR as the FROM line. They ride only
+  // for a digest substitution on deployment/edge/Dockerfile, and the check that recognizes that may share the PR.
+  test("edge_digest_bump_carries_only_its_pins", () => {
+    const oldDigest = "a".repeat(64);
+    const newDigest = "b".repeat(64);
+    const image = "docker.io/library/caddy:2.11.7-builder-alpine";
+    const before = `FROM ${image}@sha256:${oldDigest} AS build\n`;
+    const after = `FROM ${image}@sha256:${newDigest} AS build\nRUN echo kept\n`;
+    const replacements = edgeFromReplacements(before, after);
+    expect(replacements).toEqual(new Map([[oldDigest, newDigest]]));
+    expect(
+      edgeFromReplacements(before, `FROM docker.io/library/caddy:2.11.8@sha256:${newDigest} AS build\n`),
+    ).toBeNull();
+    expect(digestSwapOnly(`"digest": "sha256:${oldDigest}"\n`, `note\n`, replacements ?? new Map())).toBe(false);
+    const lock = (digest: string) => `{"digest":"sha256:${digest}"}\n`;
+    const texts = new Map([
+      ["deployment/images/bases.lock.json", { base: lock(oldDigest), head: lock(newDigest) }],
+      ["deployment/mirror.list.json", { base: lock(oldDigest), head: lock(newDigest) }],
+    ]);
+    const paths = [EDGE_DOCKERFILE, "deployment/images/bases.lock.json", "deployment/mirror.list.json"];
+    const docs: DocFacts = { ...docsFor(paths), edgeBaseBump: { replacements: replacements ?? new Map(), texts } };
+    const edgePatterns = [...patterns, "/deployment/edge/"];
+    expect(checkTrustedBaseIsolation(paths, edgePatterns, { parsedPaths, findings: [], docs })).toEqual({
+      ok: true,
+      touched: true,
+    });
+    const dirty = new Map(texts);
+    dirty.set("deployment/images/bases.lock.json", { base: lock(oldDigest), head: `${lock(newDigest)}extra\n` });
+    const dirtyDocs: DocFacts = {
+      ...docs,
+      edgeBaseBump: { replacements: docs.edgeBaseBump?.replacements ?? new Map(), texts: dirty },
+    };
+    expect(checkTrustedBaseIsolation(paths, edgePatterns, { parsedPaths, findings: [], docs: dirtyDocs })).toEqual({
+      ok: false,
+      outside: ["deployment/images/bases.lock.json"],
+    });
+    expect(
+      checkTrustedBaseIsolation([...paths, "apps/web/a.ts"], edgePatterns, {
+        parsedPaths,
+        findings: [],
+        docs: docsFor([...paths, "apps/web/a.ts"]),
+      }),
+    ).toEqual({
+      ok: false,
+      outside: ["deployment/images/bases.lock.json", "deployment/mirror.list.json", "apps/web/a.ts"],
+    });
+    const checks = ["/scripts/guards/"];
+    const withGuard = ["scripts/guards/trusted-base.ts", "docs/ai/book/phase-1.md", ...paths];
+    const guardDocs: DocFacts = { ...docsFor(withGuard), edgeBaseBump: docs.edgeBaseBump };
+    expect(checkTrustedBaseIsolation(withGuard, edgePatterns, { parsedPaths, findings: [], docs: guardDocs })).toEqual({
+      ok: true,
+      touched: true,
+    });
+    expect(checkPathsMixed(withGuard, checks, guardDocs)).toEqual([]);
+    expect(
+      checkTrustedBaseIsolation([...withGuard, "scripts/ci/list-dockerfiles.ts"], edgePatterns, {
+        parsedPaths,
+        findings: [],
+        docs: guardDocs,
+      }),
+    ).toEqual({ ok: false, outside: ["scripts/ci/list-dockerfiles.ts"] });
+    expect(checkPathsMixed(["scripts/ci/list-dockerfiles.ts", ...paths], ["/scripts/ci/"], docs)).toEqual(paths);
   });
 });
 
