@@ -42,6 +42,8 @@ describe("startEdge", () => {
     }
     const logged = readFileSync(calls, "utf8").split("\n");
     expect(logged.some((line) => /^rm -f unset-edge-\d+-\d+$/.test(line))).toBe(true);
+    // So is the container's fresh /data volume (P1.27o).
+    expect(logged.some((line) => /^volume rm -f unset-edge-\d+-\d+-data$/.test(line))).toBe(true);
     // The stub upstream is closed too: the port the run named for it refuses connections (verifier P3 on #690).
     const upstream = /PDS_UPSTREAM=127\.0\.0\.1:(\d+)/.exec(logged.join("\n"))?.[1];
     expect(upstream).toBeDefined();

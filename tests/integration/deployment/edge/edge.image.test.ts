@@ -185,6 +185,56 @@ describe("edge", () => {
     expect(response.headers.via).toBeUndefined();
   });
 
+  test("edge_data_and_config_owned_by_caddy", { timeout: CONTAINER_MS }, () => {
+    // P1.27o (record 2026-10-12-edge-data-volume-owner, amendment 1): in the image, /data and /config and the base's
+    // caddy directories in them are caddy's at 0700, with no sticky or world bit anywhere under them.
+    const inImage = (entrypoint: string, ...args: string[]) =>
+      docker(["run", "--rm", "--network", "none", "--entrypoint", entrypoint, image, ...args], {
+        timeoutMs: RUN_CALL_MS,
+      });
+    const owned = inImage("stat", "-c", "%u:%g %a %n", "/data", "/config", "/data/caddy", "/config/caddy");
+    expect(owned.out.trim().split("\n")).toEqual(
+      ["/data", "/config", "/data/caddy", "/config/caddy"].map((path) => `65532:65532 700 ${path}`),
+    );
+    const loose = ["(", "!", "-user", "65532", "-o", "!", "-group", "65532", "-o", "-perm", "-1000", "-o", "-perm"];
+    expect(inImage("find", "/data", "/config", ...loose, "-o+w", ")").out.trim()).toBe("");
+    // Ownership changes nowhere else: outside those two trees only the base's /etc/shadow is not root:root.
+    const elsewhere = [
+      "!",
+      "-path",
+      "/data",
+      "!",
+      "-path",
+      "/data/*",
+      "!",
+      "-path",
+      "/config",
+      "!",
+      "-path",
+      "/config/*",
+    ];
+    const others = inImage("find", "/", "-xdev", "(", "!", "-user", "0", "-o", "!", "-group", "0", ")", ...elsewhere);
+    expect(others.out.trim().split("\n")).toEqual(["/etc/shadow"]);
+  });
+
+  test("edge_data_volume_is_caddys_alone", { timeout: CONTAINER_MS }, () => {
+    // The edge runs on a fresh named volume at /data (startEdge), seeded from the image: caddy wrote its CA there, and
+    // another uid cannot even list it (P1.27o).
+    expect(edge.exec(["stat", "-c", "%u:%g %a", "/data"]).out.trim()).toBe("65532:65532 700");
+    expect(edge.exec(["test", "-s", "/data/caddy/pki/authorities/local/root.crt"]).code).toBe(0);
+    const other = docker(
+      ["run", "--rm", "--network", "none", "--user", "65533:65533", "-v", `${edge.dataVolume}:/data:ro`].concat([
+        "--entrypoint",
+        "ls",
+        image,
+        "/data",
+      ]),
+      { timeoutMs: RUN_CALL_MS },
+    );
+    expect(other.code).not.toBe(0);
+    expect(other.err).toContain("Permission denied");
+  });
+
   test("edge_admin_api_off", { timeout: CONTAINER_MS }, () => {
     expect(edge.exec(["wget", "-q", "-T", "2", "-O", "-", "http://127.0.0.1:2019/config/"]).code).not.toBe(0);
     expect(edge.exec(["wget", "-q", "-T", "2", "-O", "-", "http://localhost:2019/config/"]).code).not.toBe(0);

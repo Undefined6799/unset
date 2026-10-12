@@ -33,6 +33,25 @@ const lock = JSON.parse(readFileSync(join(EDGE, "..", "images", "bases.lock.json
   { ref: string; tag: string; digest: string; source: string }
 >;
 
+/** The final stage's instructions before USER, each with its continuation lines joined by newlines. */
+const runsBeforeUser = (text: string): string[] => {
+  const runtime = text.split(/^FROM .*$/m).at(-1) ?? "";
+  const instructions: string[] = [];
+  for (const line of runtime.slice(0, runtime.indexOf("\nUSER ")).split("\n")) {
+    if (line === "" || line.startsWith("#")) continue;
+    if (/^\s/.test(line)) instructions.push(`${instructions.pop() ?? ""}\n${line}`);
+    else instructions.push(line);
+  }
+  return instructions.filter((instruction) => instruction.startsWith("RUN "));
+};
+/** The setcap line as P1.28o wrote it; Amendment 3 keeps it unchanged. */
+const SETCAP_RUN = [
+  "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\",
+  "    && apk del --no-network curl libcap \\",
+  "    && rm -rf /usr/share/caddy /etc/caddy \\",
+  "    && apk del --no-network apk-tools",
+].join("\n");
+
 /** The image each FROM names, stage names left out. */
 const froms = (text: string): string[] =>
   [...text.matchAll(/^FROM\s+(\S+)(?:\s+AS\s+\S+)?\s*$/gim)].map((m) => m[1] ?? "");
@@ -880,6 +899,34 @@ describe("edge image", () => {
       dockerfile.replace("--output", "--with github.com/example/other \\\n      --output"),
     ]) {
       expect(pinProblems(fixture), fixture).not.toEqual([]);
+    }
+  });
+
+  test("edge_final_stage_runs_are_the_ruled_three_in_order", () => {
+    // Book edit 2026-10-12-edge-data-volume-owner, Amendment 3: exactly three RUNs before USER, the setcap line
+    // unchanged, then the two exec-form lines final-stage-runs.json lists, in its order.
+    const listed = JSON.parse(read("final-stage-runs.json")) as string[][];
+    const ruled = (text: string): boolean => {
+      const [setcap, ...exec] = runsBeforeUser(text);
+      return (
+        setcap === SETCAP_RUN &&
+        exec.length === listed.length &&
+        exec.every((run, at) => JSON.stringify(JSON.parse(run.slice("RUN ".length))) === JSON.stringify(listed[at]))
+      );
+    };
+    expect(listed).toHaveLength(2);
+    expect(ruled(dockerfile)).toBe(true);
+    const chown = 'RUN ["/bin/chown", "-R", "65532:65532", "/data", "/config"]\n';
+    const chmod = 'RUN ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"]\n';
+    for (const fixture of [
+      dockerfile.replace(chown, ""),
+      dockerfile.replace(chown, "").replace(chmod, `${chmod}${chown}`),
+      dockerfile.replace(chmod, `${chmod}RUN ["/bin/true"]\n`),
+      dockerfile.replace("rm -rf /usr/share/caddy /etc/caddy", "rm -rf /usr/share/caddy"),
+      dockerfile.replace("COPY Caddyfile", 'RUN ["/bin/true"]\nCOPY Caddyfile'),
+    ]) {
+      expect(fixture).not.toBe(dockerfile);
+      expect(ruled(fixture), fixture).toBe(false);
     }
   });
 

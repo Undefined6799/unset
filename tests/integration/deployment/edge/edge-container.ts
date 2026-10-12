@@ -50,6 +50,8 @@ export interface ProbeResult {
 
 export interface Edge {
   readonly image: string;
+  /** The fresh named volume at /data, seeded from the image as a deployment's would be (P1.27o). */
+  readonly dataVolume: string;
   /** Every request the stub upstream received, in order. */
   readonly seen: Seen[];
   /** Sends `path` exactly as written (no normalising) to the PDS host over TLS from the test process. */
@@ -186,11 +188,13 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
   const gateway = bridgeGateway(callMs);
   const stub = await startStub(gateway, seen);
   const name = `unset-edge-${process.pid}-${Date.now()}`;
+  const dataVolume = dataVolumeOf(name);
   const ro = (from: string, to: string) => ["-v", `${from}:${to}:ro`];
   // Defined before the run: a killed `run -d` may still have created the container, and the stub must close (N6).
   const stop = async () => {
     try {
       docker(["rm", "-f", name], { timeoutMs: callMs });
+      docker(["volume", "rm", "-f", dataVolume], { timeoutMs: callMs });
     } finally {
       await new Promise((resolve) => stub.server.close(resolve));
     }
@@ -207,8 +211,10 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
         "--read-only",
         "--tmpfs",
         "/tmp",
-        "--tmpfs",
-        "/data:uid=65532,gid=65532",
+        // A fresh named volume, not tmpfs: Docker seeds it from the image's /data, owner and mode included, as on a
+        // deployed edge, so a root-owned /data in the image fails here (P1.27o).
+        "-v",
+        `${dataVolume}:/data`,
         "--tmpfs",
         "/config:uid=65532,gid=65532",
         "--add-host",
@@ -239,6 +245,9 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
   }
 }
 
+/** The edge container's /data volume, named after the container; stop removes both. */
+const dataVolumeOf = (name: string): string => `${name}-data`;
+
 /** The internal CA's root, so the test client verifies the edge's certificate instead of skipping verification. */
 async function readRootCa(name: string): Promise<string> {
   const deadline = Date.now() + 15_000;
@@ -261,6 +270,7 @@ function edgeHandle(
   const tls = { host: "127.0.0.1", port, servername: PDS_HOST, ca };
   return {
     image,
+    dataVolume: dataVolumeOf(name),
     seen,
     send: (path, headers = {}) =>
       new Promise((resolve, reject) => {

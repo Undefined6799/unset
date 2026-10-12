@@ -38,6 +38,13 @@ RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY snippets/ /etc/caddy/snippets/
 COPY sites/pds.caddy /etc/caddy/sites/pds.caddy
+# Caddy keeps its ACME account and certificate keys under /data and its autosave under /config; the base leaves both
+# root-owned with world-writable caddy directories inside. A fresh named volume copies the image's owner and mode, so
+# both trees go to caddy at 0700, the base's sticky bit cleared too (P1.27o; book edit
+# 2026-10-12-edge-data-volume-owner, amendments 1 and 2). Exec form, no shell; the images test admits exactly these
+# two lines because final-stage-runs.json lists them.
+RUN ["/bin/chown", "-R", "65532:65532", "/data", "/config"]
+RUN ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"]
 USER 65532:65532
 WORKDIR /etc/caddy
 EXPOSE 80 443
