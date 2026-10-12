@@ -8,7 +8,7 @@ import { posix } from "node:path";
 import { CaddyfileError, ENV_NAMES, type EnvName, edgeSiteProblems, readEdgeConfig } from "../../edge/caddyfile.ts";
 import type { Compose, Mount } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
-import { type Check, fail, missing, type Outcome, pass } from "./types.ts";
+import { type Check, fail, missing, type Outcome, pass, scrubbed } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
 export const SITES_TARGET = "/etc/caddy/sites/enabled";
@@ -81,12 +81,17 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
 /**
  * C18's verdict: the sites the edge mounts, read with the shipped Caddyfile and snippets and the edge's env, break
  * none of edgeSiteProblems' rules. The env values go only to the reader, whose messages name a placeholder, never its
- * value (P1.28l); a reader error is a failure, never a crash.
+ * value (P1.28l); a reader error is a failure, never a crash. Whatever the reader says, the reason leaves with each
+ * value turned back into its name (P1.30w).
  */
 export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | undefined): Outcome {
   const sites = edgeSitesDir(compose, edgeDir);
   if (!("dir" in sites)) return sites;
   if (env === undefined) return missing("the edge service's environment");
+  return scrubbed(readZones(edgeDir, sites.dir, env), env, Object.keys(ENV_NAMES));
+}
+
+function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
   const values: Partial<Record<EnvName, string>> = {};
   for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
     const value = env.use(name, (v) => v);
@@ -94,7 +99,7 @@ export function edgeZones(compose: Compose, edgeDir: string, env: SecretMap | un
   }
   let problems: string[];
   try {
-    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sites.dir, values, EDGE_FILES));
+    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES));
   } catch (error) {
     if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
     throw error;

@@ -52,6 +52,21 @@ export const pass = (reason = "ok"): Outcome => ({ pass: true, reason });
 export const fail = (reason: string): Outcome => ({ pass: false, reason });
 export const missing = (path: string): Outcome => fail(`input missing: ${path}`);
 
+/**
+ * `outcome` with every non-empty value `env` holds under `names` replaced by its name, longest value first, for a
+ * check whose reason carries text that saw those values (P1.30w, architecture ruling B2b). A reason that still holds
+ * one of the values afterwards is withheld whole. The values stay inside `env.use`.
+ */
+export function scrubbed(outcome: Outcome, env: SecretMap, names: readonly string[]): Outcome {
+  const length = (name: string) => env.use(name, (v) => v?.length ?? 0);
+  let reason = outcome.reason;
+  for (const name of [...names].sort((a, b) => length(b) - length(a))) {
+    reason = env.use(name, (v) => (v === undefined || v === "" ? reason : reason.replaceAll(v, name)));
+  }
+  const leaks = names.some((name) => env.use(name, (v) => v !== undefined && v !== "" && reason.includes(v)));
+  return { pass: outcome.pass, reason: leaks ? "the reason is withheld: it would print a value" : reason };
+}
+
 export function serviceNamed(inputs: Inputs, name: string): Service | undefined {
   return inputs.compose.services.find((service) => service.name === name);
 }

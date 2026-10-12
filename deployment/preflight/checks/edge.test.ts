@@ -211,6 +211,25 @@ describe("C18 (P1.30u)", () => {
     });
   });
 
+  // P1.30w (architecture ruling B2b): values the reader accepts, placed where its messages would quote them, still
+  // never leave C18: the check turns each edge env value it read back into its name.
+  test("c18_shape_valid_env_values_never_printed", () => {
+    const sentinels = {
+      PDS_HOST: "sentinelhost.example.test",
+      PDS_UPSTREAM: "sentinelupstream.example.test:3000",
+      ACME_EMAIL: "sentinel@sentinelmail.example.test",
+    };
+    for (const name of Object.keys(sentinels) as (keyof typeof sentinels)[]) {
+      for (const site of [`"{$${name}}" {\n\trespond 204\n}\n`, `{$${name}} {\n\tnot_a_directive\n}\n`]) {
+        const repo = repository();
+        enable(repo, "probe.caddy", site);
+        const outcome = zones(repo, edgeEnv(sentinels));
+        expect(outcome.pass, `${name}: ${site}`).toBe(false);
+        for (const value of Object.values(sentinels)) expect(outcome.reason, site).not.toContain(value);
+      }
+    }
+  });
+
   test("c18_edge_env_values_never_printed", () => {
     // Each of the edge's env values, the sentinel alone or appended to its good value, fails and is never printed;
     // an edge service without an env, or without one of the names, fails as unreadable.
