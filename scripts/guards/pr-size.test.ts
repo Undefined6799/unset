@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { withoutGitEnv } from "./git-env.ts";
+import { fixtureGitEnv } from "./git-env.ts";
 import { measurePrSize, NUMSTAT_ARGS, numstatLines } from "./pr-size.ts";
 
 const temps: string[] = [];
@@ -19,9 +19,9 @@ function countAfter(base: Record<string, string>, change: (dir: string) => void)
   const dir = mkdtempSync(join(tmpdir(), "pr-size-"));
   temps.push(dir);
   const git = (...args: string[]) =>
-    execFileSync("git", ["-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args], {
+    execFileSync("git", ["-C", dir, ...args], {
       encoding: "utf8",
-      env: withoutGitEnv(),
+      env: fixtureGitEnv(),
     });
   const put = (path: string, text: string) => {
     mkdirSync(dirname(join(dir, path)), { recursive: true });

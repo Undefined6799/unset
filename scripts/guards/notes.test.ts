@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type Finding, report } from "./files.ts";
-import { withoutGitEnv } from "./git-env.ts";
+import { fixtureGitEnv } from "./git-env.ts";
 import { buildIndex, changedPaths, checkNotes, loadNotes, parseNote, VAULT } from "./notes.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -188,10 +188,10 @@ describe("code moved", () => {
   test("notes_code_moved_sees_both_sides_of_a_move", () => {
     const root = vault();
     const git = (...args: string[]) =>
-      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args], {
+      execFileSync("git", args, {
         cwd: root,
         encoding: "utf8",
-        env: withoutGitEnv(),
+        env: fixtureGitEnv(),
       });
     git("init", "-q", "-b", "main");
     git("add", "-A");

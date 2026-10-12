@@ -12,7 +12,7 @@ import * as cookieDomain from "./cookie-domain.ts";
 import * as cssLayers from "./css-layers.ts";
 import * as egress from "./egress.ts";
 import type { Finding } from "./files.ts";
-import { withoutGitEnv } from "./git-env.ts";
+import { fixtureGitEnv } from "./git-env.ts";
 import * as inlineStyle from "./inline-style.ts";
 import * as innerHtml from "./inner-html.ts";
 import * as ipColumns from "./ip-columns.ts";
@@ -323,7 +323,7 @@ describe("composition-root", () => {
 function indexedRepo(paths: string[]): string {
   const root = tempRepo({});
   const git = (args: string[], input?: string) =>
-    execFileSync("git", ["-C", root, ...args], { env: withoutGitEnv(), encoding: "utf8", input }).trim();
+    execFileSync("git", ["-C", root, ...args], { env: fixtureGitEnv(), encoding: "utf8", input }).trim();
   git(["init", "-q"]);
   const blob = git(["hash-object", "-w", "--stdin"], "");
   git(["update-index", "-z", "--index-info"], paths.map((p) => `100644 ${blob}\t${p}\0`).join(""));

@@ -8,3 +8,21 @@
 export function withoutGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith("GIT_")));
 }
+
+// P1.23g: a throwaway repository must not read the caller's ~/.gitconfig or /etc/gitconfig either. A global
+// `commit.gpgsign` made every fixture commit run an external signer, slow enough to time tests out and signing
+// throwaway commits with a real key. GIT_CONFIG_GLOBAL and GIT_CONFIG_NOSYSTEM (git(1) "Environment Variables",
+// git v2.43.0) replace and skip those files; the fixed identity stands in for the user.* they no longer supply.
+
+/** `withoutGitEnv(env)` that reads no global or system git config and commits as a fixed identity. */
+export function fixtureGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...withoutGitEnv(env),
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_AUTHOR_NAME: "fixture",
+    GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+    GIT_COMMITTER_NAME: "fixture",
+    GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+  };
+}
