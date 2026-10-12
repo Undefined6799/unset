@@ -91,7 +91,8 @@ export const CLI_OPTIONS = {
   "interpolation-env": { type: "string", multiple: true },
 } as const;
 const USAGE =
-  "usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...] [--interpolation-env <absolute file>]";
+  "usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...] " +
+  "[--interpolation-env <absolute file>]";
 
 function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
   // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any
@@ -161,7 +162,9 @@ export function loadCompose(files: string[], readText: (path: string) => string 
   // `docker compose config`: v5.3.1 locally, and 2.38.2 on CI's ubuntu-24.04 runner (actions/runner-images,
   // images/ubuntu/toolsets/toolset-2404.json). Both take the first file's directory in compose-go's
   // ProjectOptions.GetWorkingDir (cli/options.go, the same in v2.7.1 for 2.38.2 and v2.13.0 for v5.3.1). compose-go's
-  // template/ package did change between those versions (#677 verifier N5); P1.30l's revisit trigger watches for it.
+  // template/ package (interpolation) did change between those versions (ddb94f1 "fix: avoid eager default
+  // interpolation", aa1ee1a "fix extraction of variables"; git log v2.7.1..v2.13.0 -- template/); P1.30l's revisit
+  // trigger watches for such changes.
   const projectDir = dirname(files[0] as string);
   const services: Service[] = [];
   const networks: Network[] = [];
