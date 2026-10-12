@@ -12,7 +12,13 @@ import { join } from "node:path";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createPool, migrate, type Pool, withClient } from "../../../infrastructure/postgres/index.ts";
-import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
+import {
+  type PostgresContainer,
+  randomPassword,
+  STOP_ALL_MS,
+  startPostgres,
+  stopAllPostgres,
+} from "../../support/postgres.ts";
 import {
   classViolations,
   defaultTableViolations,
@@ -49,7 +55,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.close()));
   stopAllPostgres();
-});
+}, STOP_ALL_MS);
 
 /** A pool on `database` as `user`; migrator unless named. */
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
+import { docker } from "../../tests/support/docker.ts";
 import { networksOf, ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
 import { loadCompose } from "./index.ts";
 
@@ -502,15 +503,14 @@ secrets:
     file: ./pds-admin.secret
 `;
 
+// `docker compose config` reads files and never the daemon, so a call takes well under a second; it is killed at
+// 10 s, so a hung CLI fails the test naming the call instead of blocking the event loop until scripts/test/run.ts
+// kills the whole run at 600 s (P1.27k, P1.27g). The tests that call it give 60 s, room for several compose files.
+const COMPOSE_CALL_MS = 10_000;
+const COMPOSE_TEST_MS = 60_000;
+
 /** Whether `docker compose` runs here; CI must have it (the architecture record's anti-drift test runs there). */
-const hasCompose = (() => {
-  try {
-    execFileSync("docker", ["compose", "version"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-})();
+const hasCompose = docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
 
 const ROOT = join(import.meta.dirname, "..", "..");
 /** Every compose file in the repository (P1.29 adds compose.dev.yaml, P5.03 the production one). */
@@ -553,10 +553,16 @@ type Theirs = {
 
 /** Compose's reading of `file` (never the preflight's: only this test runs Compose), with nothing interpolated. */
 function composeConfig(file: string): Theirs {
-  const json = execFileSync("docker", ["compose", "-f", file, "config", "--format", "json", "--no-interpolate"], {
-    encoding: "utf8",
+  return composeJson(["-f", file]);
+}
+
+/** `docker compose <files> config` as JSON, nothing interpolated; a failure throws Compose's own message. */
+function composeJson(files: readonly string[]): Theirs {
+  const ran = docker(["compose", ...files, "config", "--format", "json", "--no-interpolate"], {
+    timeoutMs: COMPOSE_CALL_MS,
   });
-  return JSON.parse(json) as Theirs;
+  if (ran.code !== 0) throw new Error(`docker compose config failed: ${ran.err.slice(-2000)}`);
+  return JSON.parse(ran.out) as Theirs;
 }
 
 /** The parser's whole view of `file`, in Compose's terms: paths resolved beside the file, values as written. */
@@ -697,40 +703,46 @@ describe("compose agreement", () => {
   // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
   // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
   // with its internal flag) against Compose's, for the fixture and every compose*.yaml in the repository.
-  test.runIf(hasCompose || process.env.CI)("preflight_matches_compose_config", async ({ annotate }) => {
-    const fixture = join(dir, "compose.yaml");
-    writeFileSync(fixture, STACK);
-    writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
-    writeFileSync(join(dir, "pds-admin.secret"), "");
-    const real = repositoryFiles();
-    if (real.length === 0)
-      await annotate(
-        "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
-      );
-    for (const file of [fixture, ...real]) {
-      expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
-    }
-  });
+  test.runIf(hasCompose || process.env.CI)(
+    "preflight_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    async ({ annotate }) => {
+      const fixture = join(dir, "compose.yaml");
+      writeFileSync(fixture, STACK);
+      writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
+      writeFileSync(join(dir, "pds-admin.secret"), "");
+      const real = repositoryFiles();
+      if (real.length === 0)
+        await annotate(
+          "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
+        );
+      for (const file of [fixture, ...real]) {
+        expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
+      }
+    },
+  );
 
-  test.runIf(hasCompose || process.env.CI)("project_directory_matches_compose_config", () => {
-    const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
-    mkdirSync(join(dir, "a"));
-    mkdirSync(join(dir, "b"));
-    writeFileSync(first, FIRST);
-    writeFileSync(second, SECOND);
-    writeFileSync(join(dir, "a", "e.env"), "");
-    const json = execFileSync(
-      "docker",
-      ["compose", "-f", first, "-f", second, "config", "--format", "json", "--no-interpolate"],
-      { encoding: "utf8" },
-    );
-    const theirs = theirsAsOurs(JSON.parse(json) as Theirs);
-    const pds = theirs.services.pds;
-    expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
-      binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
-      envFiles: pds?.envFiles,
-      secretFiles: theirs.secretFiles,
-      build: pds?.build && { context: pds.build.context, dockerfile: resolve(pds.build.context, pds.build.dockerfile) },
-    });
-  });
+  test.runIf(hasCompose || process.env.CI)(
+    "project_directory_matches_compose_config",
+    { timeout: COMPOSE_TEST_MS },
+    () => {
+      const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
+      mkdirSync(join(dir, "a"));
+      mkdirSync(join(dir, "b"));
+      writeFileSync(first, FIRST);
+      writeFileSync(second, SECOND);
+      writeFileSync(join(dir, "a", "e.env"), "");
+      const theirs = theirsAsOurs(composeJson(["-f", first, "-f", second]));
+      const pds = theirs.services.pds;
+      expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
+        binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+        envFiles: pds?.envFiles,
+        secretFiles: theirs.secretFiles,
+        build: pds?.build && {
+          context: pds.build.context,
+          dockerfile: resolve(pds.build.context, pds.build.dockerfile),
+        },
+      });
+    },
+  );
 });
