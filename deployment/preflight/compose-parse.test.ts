@@ -97,6 +97,28 @@ describe("compose subset", () => {
     }
     refused(`${base}    volumes_from: [other]\n`);
   });
+  // P1.30w (architecture ruling B1): a key the preflight never reads could change what runs while every check passes,
+  // so each service holds only the keys it reads, and a refusal names the key alone, never its value.
+  test("service_keys_outside_the_allowlist_are_refused", () => {
+    const caddyfile = "/etc/caddy/Caddyfile";
+    for (const [key, yaml] of [
+      [
+        "configs",
+        `    configs:\n      - source: edge\n        target: ${caddyfile}\nconfigs:\n  edge:\n    file: ./x\n`,
+      ],
+      [
+        "secrets",
+        `    secrets:\n      - source: edge\n        target: ${caddyfile}\nsecrets:\n  edge:\n    file: ./x\n`,
+      ],
+      ["tmpfs", "    tmpfs: [/etc/caddy/snippets]\n"],
+      ["entrypoint", '    entrypoint: ["caddy", "run", "--config", "/tmp/never-printed"]\n'],
+      ["command", "    command: caddy run --config /tmp/never-printed\n"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:5: service key ${key}`),
+      );
+    }
+  });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
 });
 
