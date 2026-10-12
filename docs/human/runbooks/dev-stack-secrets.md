@@ -56,8 +56,9 @@ keeps every other host account out:
 | `pg_api_password` | `65532:65532` | migrate | the `api` role's password |
 | `pg_indexer_password` | `65532:65532` | migrate | the `indexer` role's password |
 
-The dev seed (P1.29s) also writes `.seeded.json` here, mode `0600` and owned by you: the seeded test accounts'
-handles, DIDs and passwords. Nothing in a container reads it.
+Nothing else goes in this folder: the preflight fails any file here that is not a mounted secret. The dev seed
+(P1.29s) writes `.seeded.json`, the seeded test accounts' handles, DIDs and passwords, to `unset-dev-env/` instead,
+mode `0600` and owned by you (Amendment 7 of the bind-ancestors record). Nothing in a container reads it.
 
 Each password is at least 16 bytes (`PG_PASSWORD` and the role files are read as `secretFile({ minBytes: 16 })`).
 
