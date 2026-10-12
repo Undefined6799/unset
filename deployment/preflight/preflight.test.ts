@@ -717,7 +717,12 @@ describe("preflight", () => {
     const { root, file } = stack();
     const refused = { code: 2, lines: ["ERROR --compose must be an absolute, normalised path"] };
     const dir = dirname(file);
-    for (const path of [relative(process.cwd(), file), `${dir}/../deployment/compose.yaml`, `${dir}/./compose.yaml`]) {
+    for (const path of [
+      relative(process.cwd(), file),
+      `${dir}/../deployment/compose.yaml`,
+      `${dir}/./compose.yaml`,
+      `${file}/`,
+    ]) {
       expect(
         await preflight(["--env", "prod", "--compose", path], { root, run: fakeRun().run, ...fakeFs(root) }),
       ).toEqual(refused);

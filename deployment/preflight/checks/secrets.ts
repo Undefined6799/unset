@@ -91,8 +91,9 @@ function bindReachingProblem(dir: string, inputs: Inputs): Outcome | null {
 }
 
 /**
- * The (dev, ino) of a path and of each directory above it, nearest first; null where nothing exists. A second name for the secrets folder that no
- * link explains (a host bind mount) has other path segments but the same identity (architecture, Amendment 3).
+ * The (dev, ino) of a path and of each directory above it, nearest first; null where nothing exists. A second name
+ * for the secrets folder that no link explains (a host bind mount) has other path segments but the same identity
+ * (architecture, Amendment 3).
  */
 function identities(path: string, { stat }: Inputs): (string | null)[] {
   const line: (string | null)[] = [];

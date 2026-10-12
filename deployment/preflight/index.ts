@@ -114,7 +114,8 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
   // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
   // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
   // 2026-10-12-c9-secret-file-owner). Only an absolute, normal path means the same to both; it is walked as written.
-  if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file)) {
+  // normalize keeps a trailing slash, which names no file, so that is refused here too rather than echoed on read.
+  if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
     throw new CannotRun("--compose must be an absolute, normalised path");
   }
   return { env: values.env, files: values.compose };
