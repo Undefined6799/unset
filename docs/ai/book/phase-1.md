@@ -56,7 +56,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28a, P1.28, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
@@ -6189,7 +6189,8 @@ managers for the lock files. The repeatable procedure:
    to a first pin and to a variant switch (step book 02:03Z): the cooling-off period guards against a bad or
    compromised push, and that risk is the same for a first pin.
 2. Change the one digest in four places in one PR: the `FROM` lines, `bases.lock.json`, `mirror.list.json`, and any
-   test fixture that pins it.
+   test fixture that pins it. When the `FROM` line is in `deployment/edge/Dockerfile`, those companion files ride with
+   that trusted-base change only as P1.28a describes: a digest substitution, nothing else.
 3. The PR body shows Trivy on the new digest: zero HIGH or CRITICAL findings with a fixed version, against the old
    digest's list.
 4. Run `base_digest_matches_lock`, `runtime_base_is_debian_slim` and the images test locally.
@@ -6762,6 +6763,25 @@ no reason for an ignore entry. If Alex declines the card: per-CVE trivyignore en
 builder's xcaddy path if Trivy allows it, with the shortest expiry that covers the next Go point release reaching the
 upstream builder and never more than 90 days; otherwise the scan stays red until a fixed builder index is re-pinned by
 the bump procedure. Nothing is ignored pre-emptively, and the shipped edge image's own scan stays at fail-on-HIGH.
+
+---
+
+### P1.28a — Bump the edge builder digest
+
+**Tags:** [SEC] · **Depends on:** P1.28, P1.28x · **Class:** trusted base (`deployment/edge/Dockerfile`) plus the pins
+the bump procedure requires in the same PR · Alex, 2026-10-12, "fix em" books this step (the hand bump has no id of
+its own, and P1.27b is already the npm ignore)
+
+**Why:** the builder index `80331d37…7c26` compiles Caddy with Go 1.27.1. The edge scan fails on four fixed HIGH
+findings in `usr/bin/caddy`: stdlib CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031, and `golang.org/x/net` v0.59.0
+CVE-2026-78669. The same tag's index `aa705b1e…7674` (Docker Hub 2026-10-08T20:53:10Z) sets `GOLANG_VERSION=1.27.2`.
+It is under 7 days old; item 1 of the bump procedure allows that when the body names these CVEs. Caddy v2.11.7
+`go.mod` still requires `golang.org/x/net` v0.59.0, so the build replaces it with v0.60.0.
+
+**What:** the builder digest in the edge Dockerfile `FROM`, `deployment/images/bases.lock.json` and
+`deployment/mirror.list.json`. The trusted-base check lets those two files, and a test fixture that only substitutes
+the same digest, ride with that `FROM` change. No other product path rides. The check that recognizes the bump may
+share the PR; any other check path may not. The runtime Alpine digest stays.
 
 ---
 

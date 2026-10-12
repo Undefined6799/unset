@@ -13,6 +13,8 @@ import {
   checkPathsMixed,
   checkTrustedBaseIsolation,
   type DocFacts,
+  EDGE_DOCKERFILE,
+  edgeFromReplacements,
   readTrustedBase,
   type TrustedBase,
   unionTrustedBase,
@@ -189,6 +191,30 @@ function addedManifests(head: string, manifests: readonly RawChange[]): Map<stri
   return new Map(manifests.filter((c) => c.status === "A").map((c) => [c.path, nameOf(c.path)]));
 }
 
+const EDGE_BUMP_TEXTS = [EDGE_DOCKERFILE, "deployment/images/bases.lock.json", "deployment/mirror.list.json"] as const;
+
+/** The bump object, or null. Not undefined: DocFacts.edgeBaseBump is optional, and exactOptionalPropertyTypes rejects an explicit undefined. */
+type EdgeBump = NonNullable<DocFacts["edgeBaseBump"]>;
+
+/** Base and head text of the edge Dockerfile and the pins that may ride with a digest bump (P1.28a). */
+function edgeBaseBump(base: string, head: string, changed: readonly RawChange[]): EdgeBump | null {
+  if (!changed.some((c) => c.path === EDGE_DOCKERFILE && c.status !== "D")) return null;
+  const dockerfile = { base: fileAt(base, EDGE_DOCKERFILE) ?? "", head: fileAt(head, EDGE_DOCKERFILE) ?? "" };
+  const replacements = edgeFromReplacements(dockerfile.base, dockerfile.head);
+  if (replacements === null) return null;
+  const texts = new Map<string, { base: string; head: string }>();
+  for (const path of changed.map((c) => c.path)) {
+    if (
+      !(EDGE_BUMP_TEXTS as readonly string[]).includes(path) &&
+      !path.endsWith(".test.ts") &&
+      !path.includes("/fixtures/")
+    )
+      continue;
+    texts.set(path, { base: fileAt(base, path) ?? "", head: fileAt(head, path) ?? "" });
+  }
+  return { replacements, texts };
+}
+
 function docFacts(base: string, head: string, changed: readonly RawChange[]): DocFacts {
   const regular = changed.filter((c) => c.mode === "100644").map((c) => c.path);
   const packageManifests = changed.filter((c) => /^[^/]+\/[^/]+\/package\.json$/.test(c.path));
@@ -200,6 +226,7 @@ function docFacts(base: string, head: string, changed: readonly RawChange[]): Do
     lockfiles: bothSides(base, head, changed, "package-lock.json"),
     addedManifests: addedManifests(head, packageManifests),
     rootTsconfig: bothSides(base, head, changed, "tsconfig.json"),
+    edgeBaseBump: edgeBaseBump(base, head, changed),
   };
 }
 

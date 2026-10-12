@@ -23,6 +23,14 @@ export type DocFacts = {
   lockfiles: { base: unknown; head: unknown } | null;
   addedManifests?: ReadonlyMap<string, string>;
   rootTsconfig?: { base: unknown; head: unknown } | null;
+  /**
+   * Set when `deployment/edge/Dockerfile` changes a pinned `FROM` digest and keeps the image reference
+   * (P1.28a). Absent means no such bump, so the lock and the mirror list do not ride.
+   */
+  edgeBaseBump?: {
+    replacements: ReadonlyMap<string, string>;
+    texts: ReadonlyMap<string, { base: string; head: string }>;
+  } | null;
 };
 
 const HEADING = "# trusted base (SE-6)";
@@ -141,6 +149,102 @@ function kindOf(
 /** Human documentation and the AI working notes (the step book among them) hold no code. */
 const isDocs = (path: string): boolean => path.startsWith("docs/human/") || path.startsWith("docs/ai/");
 
+/**
+ * The edge image's base pins (bump procedure, docs/ai/book/phase-1.md, "Bumping a pinned base digest", item 2;
+ * P1.28a). `deployment/edge/Dockerfile` is trusted base, and that procedure puts `bases.lock.json` and
+ * `mirror.list.json` in the same pull request as the `FROM` line. They ride only when a `FROM` keeps its image
+ * reference and changes its `sha256`, and the companion file changes by substituting that digest and nothing else.
+ * A test fixture that already pinned the digest may do the same substitution. No other product path rides.
+ */
+export const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
+const EDGE_BUMP_PINS = ["deployment/images/bases.lock.json", "deployment/mirror.list.json"] as const;
+/** The check files that teach this exception. Any other check path keeps the product files out of the pull request. */
+const EDGE_BUMP_CHECKS = new Set([
+  "scripts/guards/trusted-base.ts",
+  "scripts/guards/change-shape.ts",
+  "scripts/guards/change-shape.test.ts",
+]);
+
+const FROM_LINE = /^FROM\s+(?:--\S+\s+)*(\S+?)(?:@sha256:([0-9a-f]{64}))?(?:\s+AS\s+\S+)?\s*$/i;
+
+/** Pinned `FROM` image references and their digests. A line without a digest is not a pin. */
+function fromDigests(text: string): Map<string, string> | null {
+  const found = new Map<string, string>();
+  for (const line of text.split("\n")) {
+    const match = FROM_LINE.exec(line);
+    if (match === null) continue;
+    const ref = match[1];
+    const digest = match[2];
+    if (ref === undefined || digest === undefined) return null;
+    if (found.has(ref)) return null;
+    found.set(ref, digest);
+  }
+  return found;
+}
+
+/**
+ * The digest substitutions in an edge Dockerfile, or null when a `FROM` image reference was added, removed, or left
+ * unpinned. Other lines in the file may change: the file is trusted base either way.
+ */
+export function edgeFromReplacements(base: string, head: string): Map<string, string> | null {
+  const before = fromDigests(base);
+  const after = fromDigests(head);
+  if (before === null || after === null || before.size !== after.size) return null;
+  const replacements = new Map<string, string>();
+  for (const [ref, oldDigest] of before) {
+    const newDigest = after.get(ref);
+    if (newDigest === undefined) return null;
+    if (newDigest !== oldDigest) replacements.set(oldDigest, newDigest);
+  }
+  for (const ref of after.keys()) if (!before.has(ref)) return null;
+  return replacements.size > 0 ? replacements : null;
+}
+
+/** True when `head` is `base` with each old digest hex replaced by its new hex and nothing else changed. */
+export function digestSwapOnly(base: string, head: string, replacements: ReadonlyMap<string, string>): boolean {
+  if (replacements.size === 0 || base === head) return false;
+  let next = base;
+  for (const [oldDigest, newDigest] of replacements) {
+    if (oldDigest === newDigest || !next.includes(oldDigest)) return false;
+    next = next.replaceAll(oldDigest, newDigest);
+  }
+  return next === head;
+}
+
+function pinFixture(path: string): boolean {
+  return path.endsWith(".test.ts") || path.includes("/fixtures/");
+}
+
+/** A product file the bump procedure names, changed only by the Dockerfile's digest substitution. */
+function edgeBumpCompanion(path: string, docs: DocFacts): boolean {
+  const bump = docs.edgeBaseBump;
+  if (bump === undefined || bump === null) return false;
+  const named = (EDGE_BUMP_PINS as readonly string[]).includes(path) || pinFixture(path);
+  if (!named || path === EDGE_DOCKERFILE) return false;
+  const texts = bump.texts.get(path);
+  if (texts === undefined) return false;
+  return digestSwapOnly(texts.base, texts.head, bump.replacements);
+}
+
+/**
+ * The guard that recognizes an edge digest bump may share the pull request with that bump, because CI runs this
+ * copy of the check (SE-6). Any other check path, or any other product path, and the exemption does not apply.
+ */
+function edgeBumpSharesPullRequest(
+  changedPaths: readonly string[],
+  checks: readonly string[],
+  docs: DocFacts,
+): boolean {
+  const bump = docs.edgeBaseBump;
+  if (bump === undefined || bump === null || !changedPaths.includes(EDGE_DOCKERFILE)) return false;
+  const checkPaths = changedPaths.filter((path) => checks.some((pattern) => matchesPattern(path, pattern)));
+  if (checkPaths.length === 0 || checkPaths.some((path) => !EDGE_BUMP_CHECKS.has(path))) return false;
+  const product = changedPaths.filter(
+    (path) => PRODUCT.some((dir) => path.startsWith(dir)) && !isDocumentation(path, docs),
+  );
+  return product.every((path) => path === EDGE_DOCKERFILE || edgeBumpCompanion(path, docs));
+}
+
 /** A test of a trusted-base file, or documentation of one; either may ride with it. */
 function ridesAlong(path: string, patterns: readonly string[], folders: ReadonlySet<string>, docs: DocFacts) {
   const stem = /^(.*)\.test\.ts$/.exec(path)?.[1];
@@ -218,7 +322,9 @@ export function checkTrustedBaseIsolation(
   const rides = (path: string): boolean =>
     (path === LOCKFILE && strays?.length === 0) ||
     newReferences(path) ||
-    ridesAlong(path, trustedPatterns, folders, parsed.docs);
+    ridesAlong(path, trustedPatterns, folders, parsed.docs) ||
+    edgeBumpCompanion(path, parsed.docs) ||
+    (parsed.docs.edgeBaseBump != null && EDGE_BUMP_CHECKS.has(path));
   const outside = [
     ...mixed.map((k) => `${k.path} (mixed_grant_change)`),
     ...kinds
@@ -231,7 +337,13 @@ export function checkTrustedBaseIsolation(
 /** The product paths of a PR that also changes a check path; empty when the PR keeps them apart. */
 export function checkPathsMixed(changedPaths: readonly string[], checks: readonly string[], docs: DocFacts): string[] {
   if (!changedPaths.some((path) => checks.some((pattern) => matchesPattern(path, pattern)))) return [];
-  return changedPaths.filter((path) => PRODUCT.some((dir) => path.startsWith(dir)) && !isDocumentation(path, docs));
+  const product = changedPaths.filter(
+    (path) => PRODUCT.some((dir) => path.startsWith(dir)) && !isDocumentation(path, docs),
+  );
+  // The exception's own files may land with the bump they recognize. CI runs this copy of the check, so the
+  // procedure's one pull request cannot meet a check that only exists on main (SE-6; bump procedure item 2, P1.28a).
+  if (!edgeBumpSharesPullRequest(changedPaths, checks, docs)) return product;
+  return product.filter((path) => path !== EDGE_DOCKERFILE && !edgeBumpCompanion(path, docs));
 }
 
 /** Both CODEOWNERS sections merged, base and head: a PR cannot leave a list by editing it. */
