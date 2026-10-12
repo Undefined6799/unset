@@ -656,6 +656,15 @@ describe("preflight", () => {
     expect(failed((await run("./data/shared", () => undefined)).lines)).toEqual([]);
     const otherOwner = await run("./data/shared", (d) => ({ [join(d, "data")]: 2000 }));
     expect(otherOwner.lines).toContain(changeable);
+    // A service's own data folder (uid 999, often an unrelated host account) is refused as a bind source; the same
+    // mount as a named volume passes (architecture, Amendment 1 of the record above).
+    const serviceOwned = await run("./data/shared", (d) => ({ [join(d, "data/shared")]: 999 }));
+    expect(serviceOwned.lines).toContain(changeable);
+    const volume = COMPOSE.replace(
+      "    env_file: pds.env",
+      "    env_file: pds.env\n    volumes:\n      - pgdata:/srv",
+    ).concat("volumes:\n  pgdata: {}\n");
+    expect(failed((await check({ compose: volume })).lines)).toEqual([]);
     const sticky = await run("./data/shared", (d) => void chmodSync(join(d, "data"), 0o1777));
     expect(sticky.lines).toContain(changeable);
     const sourceItself = await run("./data/shared", (d) => void chmodSync(join(d, "data/shared"), 0o775));
