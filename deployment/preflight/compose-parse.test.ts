@@ -47,6 +47,23 @@ describe("compose subset", () => {
     for (const field of ["image: ${IMG}", "user: ${U}", 'ports: ["${P}:80"]', "env_file: ${F}", "privileged: ${P}"]) {
       refused(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`);
     }
+    // P1.30w (record 2026-10-12-c18-follow-ups, ruling N7): through the keys the parser reads, the $ refusal itself
+    // answers; `user` and `privileged` above now stop at the key allowlist first.
+    const dollar = (field: string) => () =>
+      parseCompose(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`, "c.yaml");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    const throughAllowedKeys: [string, string][] = [
+      ["image: ${IMG}", "image"],
+      ['ports: ["${P}:80"]', "ports"],
+      ["env_file: ${F}", "env_file"],
+      ['volumes: ["${V}:/data"]', "volumes"],
+      ["network_mode: ${N}", "network_mode"],
+    ];
+    for (const [field, key] of throughAllowedKeys) {
+      expect(dollar(field), field).toThrow(new ParseError(`c.yaml:4: $ in ${key}`));
+    }
+    expect(dollar("user: ${U}")).toThrow(new ParseError("c.yaml:4: service key user"));
+    expect(dollar("privileged: ${P}")).toThrow(new ParseError("c.yaml:4: service key privileged"));
     refused(`${base}    environment:\n      \${K}: v\n`);
     refused(`${base}    environment:\n      A: pre\${B}\n`);
     refused(`${base}    environment:\n      A:\n`);
