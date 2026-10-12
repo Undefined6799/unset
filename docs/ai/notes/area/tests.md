@@ -33,6 +33,8 @@ Unit tests sit beside the file they test, not here.
   clean up with `removeTestImage`, which removes only that tag, never with `-f` or by id (P1.27x). Two builds of one
   Dockerfile and context share an image id on CI's classic image store, so `rmi -f <id>` removed it under another
   test. A failed build's message keeps BuildKit's summary of the failing step (plain progress, not `-q`).
+  Every test image carries `sh.unset.test-owner=<pid>`, the test containers' label, so a leaked tag can be found with
+  a label filter (P1.11i).
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.

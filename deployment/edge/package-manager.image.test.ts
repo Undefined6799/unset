@@ -15,6 +15,7 @@ import { randomBytes, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { removeEveryTag } from "./image-cleanup.ts";
 
 const EDGE = import.meta.dirname;
 const CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
@@ -102,10 +103,12 @@ function failedStep(stderr: string): string {
 
 describe("edge image package manager", () => {
   afterAll(() => {
-    // The tag only, never -f: an image another edge test built from the same context stays (P1.27z).
-    const failed = built.map((tag) => docker(["rmi", tag], CALL_MS)).filter((removed) => removed.code !== 0);
-    if (failed.length > 0)
-      throw new Error(`docker rmi failed: ${failed.map((removed) => removed.err.trim()).join("; ")}`);
+    // The tag only, never -f: an image another edge test built from the same context stays (P1.27z). Every tag is
+    // tried, even after a removal fails or is killed (P1.11r).
+    removeEveryTag(built, (tag) => {
+      const removed = docker(["rmi", tag], CALL_MS);
+      if (removed.code !== 0) throw new Error(removed.err.trim().slice(-500));
+    });
   }, CONTAINER_MS);
 
   test("edge_image_has_no_apk", () => {
