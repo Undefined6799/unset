@@ -2380,6 +2380,36 @@ Done when (tests, planted fixtures in the guard's tests):
 
 ---
 
+### P0.09n — Bar trusted tests from product helpers
+Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Check class (`scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`), a tightening, kind/build; issue #692; slice
+  1, not urgent; book edit 2026-10-12-p009n-trusted-test-imports (17:58Z), from architecture's ruling
+  2026-10-12-trusted-tests-import-boundary (17:55Z) on N5 of the coordinator's verifier on #686. Lane: P0.09t's
+  (Phase 0). It gets its own PR (D3, one step per PR), though the record allowed sharing P0.09t's.
+Waits for: Alex's typed line "yes P0.09n scripts/guards trusted-base imports", asked with the other lines after
+  P0.16a. The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`.
+Where: `scripts/guards/trusted-base.ts` and its test, `CODEOWNERS`.
+
+The gap: depcruise lets any `*.test.ts` import anything, and `deployment/postgres/init/00-bootstrap.test.ts:4` imports
+`tests/support/postgres.ts` (which imports `./docker.ts`). Neither helper is trusted, so a feature-class PR could hollow
+out the bootstrap's fail-closed evidence without touching a trusted file.
+
+The fix:
+- The trusted-base guard resolves the relative imports of every trusted test file and fails on any target outside
+  CODEOWNERS' trusted section. Node built-ins and npm packages are allowed. No depcruise row (it would duplicate the
+  path list and drift).
+- `tests/support/postgres.ts`, `tests/support/docker.ts`, `tests/integration/postgres-helper.test.ts` and
+  `tests/integration/docker-helper.test.ts` join the CODEOWNERS trusted section in the same PR, so the bootstrap test's
+  import stays legal. Cost: a later change to those helpers is a trusted-class PR of its own.
+- Until it lands, the verifier treats any diff to `tests/support/postgres.ts` or `docker.ts` as an SE-6 review.
+- Sequencing: P1.27g (#690) and P1.27i (#697), which edit those helpers, merged first, so nothing has to move.
+
+Done when (tests, planted fixtures in the guard's tests):
+  - Red: a trusted test importing a non-trusted `tests/support` file fails on the base and passes after the fix.
+  - The guard is green on the real tree, and the full suite is green.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),
