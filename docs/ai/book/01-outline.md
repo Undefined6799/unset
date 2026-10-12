@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 34 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15 and P0.16 added 2026-10-12).
+Depth: **build-ready**. 35 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a and P0.16 added 2026-10-12).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -60,7 +60,8 @@ Depth: **build-ready**. 34 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
 | P0.14 | Phase 0 exit: planted faults are blocked; protection drills run once the ruleset is applied (GitHub Pro, 2026-10-06; no merge attempts) | [ALEX] (tail: applies the ruleset) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
 | P0.15 | Verified agent merges: ADR 0019, CLAUDE.md Merging line, README row, 0001 log entry | [SEC] [ALEX] (Alex merges by hand) | — | `phase-0.md` |
-| P0.16 | Delivery check asserts ADR 0019's merge rule ("author threads never merge", "ADR 0019") | [SEC] | P0.15 | `phase-0.md` |
+| P0.15a | Mark ADR 0019 accepted: status, README rows, "changes with this decision", Alex's CLAUDE.md lines | [SEC] [ALEX] (Alex pastes CLAUDE.md, merges by hand) | P0.15 | `phase-0.md` |
+| P0.16 | Delivery check asserts ADR 0019's merge rule ("author threads never merge", "ADR 0019") | [SEC] | P0.15a | `phase-0.md` |
 
 ```mermaid
 flowchart TD
@@ -97,6 +98,7 @@ flowchart TD
   P0_13a["P0.13a Licence check speed"]
   P0_14["P0.14 Phase 0 exit"]
   P0_15["P0.15 Verified agent merges"]
+  P0_15a["P0.15a ADR 0019 accepted"]
   P0_16["P0.16 Delivery check asserts ADR 0019"]
   P0_01 --> P0_02
   P0_02 --> P0_03
@@ -133,12 +135,13 @@ flowchart TD
   P0_13 --> P0_13a
   P0_08 --> P0_14
   P0_10 --> P0_14
-  P0_15 --> P0_16
+  P0_15 --> P0_15a
+  P0_15a --> P0_16
 ```
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 190 steps: 168 from `phase-1.md`, 22 from `phase-2.md` (including the
+Depth: **build-ready**. 193 steps: 170 from `phase-1.md`, 23 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -283,9 +286,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.30c | Specifier cruise test: /proc/self/root spelling and a per-spelling presence guard | [SEC] | — | `phase-1.md` |
 | P1.30r | Depcruise row: deployment/preflight may import deployment/edge/caddyfile.ts only | [SEC] [ALEX] | — | `phase-1.md` |
 | P1.30e | depcruise_allowed_edges cruises all row edges once (collision and coverage guarded; per-edge fallback for messages) | [SEC] | P1.30r | `phase-1.md` |
+| P1.30f | depcruise row coverage matches resolved path and import kind; (from, spec) unique across rows | [SEC] | P1.30e | `phase-1.md` |
 | P1.30u | Deploy preflight C18: edge rate-limit zones through the shared edge reader | [SEC] [ALEX] | P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r | `phase-1.md` |
 | P1.30h | Edge reader scrubs every given env value from its errors (over ENV_NAMES) | [SEC] | P1.30u | `phase-1.md` |
-| P1.30w | Compose reader exact key allowlist, C18 read-only sites mount, shared check value scrub | [SEC] | P1.30u | `phase-1.md` |
+| P1.30w | Compose reader exact key allowlist, C18 read-only sites mount and edge image pin, shared check value scrub | [SEC] | P1.30u | `phase-1.md` |
 | P1.30n | Preflight refuses top-level network names; undefined-network refusal in networkTableProblems | [SEC] | P1.30t | `phase-1.md` |
 | P1.29k | Migrate image (separate Dockerfile) and syncRolePasswords wiring | [SEC] | P1.27, P1.12p, P1.12x, P1.28r | `phase-1.md` |
 | P1.29x | Stripped paths declared; every image has a known kind; final stages may only remove packages | [SEC] | P1.29k | `phase-1.md` |
@@ -326,7 +330,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
 | P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
 | P2.03e | Add the session store log events (EVENTS prelude) | — | — | `phase-2.md` |
-| P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e | `phase-2.md` |
+| P2.03c | CODEOWNERS: session trusted path /infrastructure/postgres/session/ → /infrastructure/session/ | [SEC] | — | `phase-2.md` |
+| P2.03 | Session store and lifecycle (trusted) | [SEC] | P2.03q, P2.03x, P2.03e, P2.03c | `phase-2.md` |
 | P2.03i | Session indexes (did, absolute_expires_at), annotated with store.ts | [SEC] | P2.03, P2.03x | `phase-2.md` |
 | P2.04 | OAuth client | [SEC] | P1.14, P1.14d, P1.17, P1.31, P2.01, P2.03x, P2.03i | `phase-2.md` |
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
@@ -497,6 +502,7 @@ flowchart TD
   P1_30t["P1.30t Preflight C17 networks"]
   P1_30r["P1.30r preflight-to-edge row"]
   P1_30e["P1.30e row edges in one cruise"]
+  P1_30f["P1.30f row coverage by resolved path and kind"]
   P1_30h["P1.30h Edge reader scrubs env values"]
   P1_30w["P1.30w Preflight key allowlist and value scrub"]
   P1_30u["P1.30u Preflight C18 edge zones"]
@@ -515,6 +521,7 @@ flowchart TD
   P2_03q["P2.03q session store trusted path"]
   P2_03x["P2.03x session table and timeouts"]
   P2_03e["P2.03e session log events"]
+  P2_03c["P2.03c session workspace trusted path"]
   P2_03["P2.03 Session store and lifecycle"]
   P2_03i["P2.03i session indexes"]
   P2_04["P2.04 OAuth client"]
@@ -669,6 +676,7 @@ flowchart TD
   P2_03q --> P2_03
   P2_03x --> P2_03
   P2_03e --> P2_03
+  P2_03c --> P2_03
   P2_03 --> P2_03i
   P2_03x --> P2_03i
   P1_14 --> P2_04
@@ -774,6 +782,7 @@ flowchart TD
   P1_28g --> P1_30u
   P1_30r --> P1_30u
   P1_30r --> P1_30e
+  P1_30e --> P1_30f
   P1_30u --> P1_30h
   P1_30u --> P1_30w
   P1_23g --> P1_23h
@@ -1575,9 +1584,23 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.08, P0.09b, P0.09c, P0.10, P0.11, P0.12, P0.14, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.15, P4.22a, P5.01, P5.05, P5.06, P5.02a, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.08, P0.09b, P0.09c, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P1.23h, P1.25o, P1.27r, P1.27s, P1.29a, P1.29y, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.05, P5.06, P5.02a, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
+
+Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-slips, item 4 and amendment 1):
+
+- **P0.15a:** he pastes the two CLAUDE.md lines on the PR's branch and merges it by hand (book edit
+  2026-10-12-p015a-adr-0019-accepted).
+- **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
+- **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
+- **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).
+- **P1.27r (#347):** his typed words allowing the guard-file edit, then his ruleset setting adding `scan`; deferred
+  until after launch.
+- **P1.27s (#184):** his typed approval of the guard change, and the `signing` environment and key.
+- **P1.29a (#442):** his card answer "Allow pinned" (2026-10-07T13:00:19Z), already given and quoted in the body.
+- **P1.29y:** a typed line, "yes P1.29y images.yml".
+- **P4.10 (#261):** the decision to enable the classifier; it stays off in v1 (answer 30b).
 
 ## Editor pass (2026-10-03, answers 31-53)
 

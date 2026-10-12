@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30w, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30w, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -246,6 +246,7 @@ flowchart LR
   P1_30t["P1.30t preflight C17 networks"]
   P1_30r["P1.30r preflight-to-edge row"]
   P1_30e["P1.30e row edges in one cruise"]
+  P1_30f["P1.30f row coverage by resolved path and kind"]
   P1_30h["P1.30h edge reader scrubs env values"]
   P1_30w["P1.30w preflight key allowlist and value scrub"]
   P1_30u["P1.30u preflight C18 edge zones"]
@@ -402,6 +403,7 @@ flowchart LR
   P1_28g --> P1_30u
   P1_30r --> P1_30u
   P1_30r --> P1_30e
+  P1_30e --> P1_30f
   P1_30u --> P1_30h
   P1_30u --> P1_30w
   P1_23g --> P1_23h
@@ -8120,10 +8122,11 @@ Done when the fixtures are green, and the full suite is green on main's rules pl
 
 ### P1.30e — Cruise all row edges in one pass
 Tags: [SEC]            Depends on: P1.30r (merged, #588)
+As built: merged by Alex at 2026-10-12T04:14:27Z as `87f7b6e` (#606).
 Slice 1, issue #600, check (`scripts/lint/depcruise.test.ts`, and `depcruise-fixture.ts` if it needs a multi-edge
 writer), kind/build; book edit 2026-10-12-p130e-depcruise-row-edges-one-cruise (final 03:45Z), from the third lane's
 finding relayed by the coordinator at 03:41Z. Neutral: no rule or assertion changes. Regression class, so it goes first
-in the third lane; scripts/lint is not a classifier path, and it needs no line from Alex. Nothing depends on it.
+in the third lane; scripts/lint is not a classifier path, and it needs no line from Alex. P1.30f depends on it.
 
 **Why:** `depcruise.test.ts:401-403` passes every ROW_FIXTURES edge to `expectPass`, and `expectPass` (:25-27) runs one
 dependency-cruiser cruise per edge, one after another. With #588's extra row edge the test takes 2.8–3.2 s alone and
@@ -8146,6 +8149,35 @@ the full suite is green.
 
 ---
 
+### P1.30f — Match row edges by resolved path and kind
+Tags: [SEC]            Depends on: P1.30e (merged, #606)
+Slice 1, issue #611, check (`scripts/lint/depcruise.test.ts`), a tightening, kind/build; book edit
+2026-10-12-p130f-depcruise-coverage-exact (final 04:16Z), from the coordinator's verification of #606 relayed at
+04:14Z. Owner: any lane (scripts/lint is not a classifier path); it needs no line from Alex. Low priority: if another
+scripts/lint step opens first, it may carry this one instead, citing the record.
+
+**Why:**
+- **N3.** P1.30e asked the coverage check to match "from → resolved". `cruised()` (depcruise.test.ts:42-45 on #606)
+  matches the raw specifier plus `couldNotResolve`, not the resolved path, and not the import kind.
+- **N4.** When one file imports the same specifier both statically and dynamically, dependency-cruiser 18.5.0 keeps
+  only the first (extract-dependencies.mjs:126-131 and :166-169, array-util.mjs:28-40,
+  swc/dependency-visitor.mjs:231-235). A future static row edge beside an existing dynamic one would be dropped in the
+  combined cruise while `cruised()` still matched it. No such pair exists today.
+
+**What:**
+1. `cruised()` matches each row edge on `from`, the **resolved** path (or the expected `couldNotResolve` for
+   bare-package rows, as now), and the import kind (`dynamic` against static, from dependency-cruiser's
+   `dependencyTypes` or `dynamic` flag at 18.5.0).
+2. The test asserts that `(from, spec)` pairs are unique across all ROW_FIXTURES rows, whatever their kind, so the
+   static-and-dynamic collapse can't arise in the combined fixture. A duplicate fails setup and names both rows.
+
+**Red fixtures:** a row whose resolved target differs from the one the fixture wrote; a dynamic row checked as static;
+two rows with the same `(from, spec)`. Each is red, and main's rows are green.
+
+Done when the reds are red, and the full suite is green.
+
+---
+
 ### P1.30u — Check the edge's rate-limit zones
 
 Split from P1.30s (book edit 2026-10-07-p130s-split-and-p128h; updated by book edit 2026-10-07-p128e-edge-config-reader,
@@ -8156,7 +8188,8 @@ of one syntax drift (amendment 7).
 
 **Tags:** [SEC] [ALEX] · **Depends on:** P1.30, P1.28h, P1.28e, P1.28f, P1.28g, P1.28l, P1.30r (merged, #588) · **Plan:** as P1.30
 
-As built: merged by Alex at 2026-10-12T03:32:09Z as `3bcfd6f` (#592). P1.30h and P1.30w depend on it.
+As built: merged by Alex at 2026-10-12T03:32:09Z as `3bcfd6f` (#592). P1.30h, P1.30w, P2.13a, P1.34, P2.26a and P5.03
+depend on it.
 
 **Where:** `deployment/preflight/checks/` (C18); fixtures; tests.
 
@@ -8204,6 +8237,7 @@ on every real run until P1.29 adds compose.dev.yaml. That is expected, because t
 
 ### P1.30h — Edge reader scrubs every env value
 Tags: [SEC]            Depends on: P1.30u (merged, #592)
+As built: merged by Alex at 2026-10-12T04:23:45Z as `f6c4785` (#609).
 Slice 1, issue #601, trusted base (`deployment/edge/caddyfile.ts` and its test), a tightening, kind/fix; book edit
 2026-10-12-p130h-p130w-c18-follow-ups (final 03:48Z), from architecture's B2a in 2026-10-12-c18-follow-ups. Owner:
 Phase 1, after P1.29u; no classifier path and no line from Alex. Independent of P1.30w (SE-6 keeps them apart). Nothing
@@ -8225,10 +8259,10 @@ tests), a tightening, kind/fix; same book edit, from architecture's B1 and B2b. 
 order with P1.30h. Nothing depends on it.
 
 **What:**
-1. **Exact key allowlist.** `service()` (`compose-parse.ts:159-176`) checks each service's keys against an exact
-   allowlist: the keys it reads (`image`, `env_file`, `environment`, `ports`, `networks`, `network_mode`, `volumes`)
-   and inert keys named one by one, derived from the compose files on main, each cited in the body with one line on
-   why it is inert. Any other key is a ParseError naming the key only; a later key needs a new ruling.
+1. **Exact key allowlist.** `service()` (`compose-parse.ts:159-176`) checks each service's keys against an
+   allowlist of exactly the seven keys it reads (`image`, `env_file`, `environment`, `ports`, `networks`,
+   `network_mode`, `volumes`). Any other key is a ParseError naming the key only. Later keys come one at a time, each
+   with a ruling, in the step that first needs it (book edit 2026-10-12-p203c-session-workspace).
 2. **Read-only sites mount.** C18 requires it, as `:ro` or long-form `read_only: true`; `:rw`, no mode, and long form
    without `read_only: true` fail.
 3. **Shared scrub helper** in `checks/types.ts`. Every check uses it, so each SecretMap value a check read becomes its
@@ -8238,8 +8272,16 @@ order with P1.30h. Nothing depends on it.
 `tmpfs: [/etc/caddy/snippets]`; an `entrypoint` override and a `command` override; a `:rw` sites mount and one with no
 mode; shape-valid sentinel values for PDS_HOST, ACME_EMAIL and PDS_UPSTREAM that never appear in any check's output.
 
-**Question, not scope:** whether C18 should also pin the edge service's `image` to the CI-built edge image. If the
-thread sees a gap, it says so under "What I am unsure about", and architecture rules.
+**Rider: C18 pins the edge image** (book edit 2026-10-12-p203c-session-workspace, amendment 1, from architecture's
+04:25Z amendment in 2026-10-12-p203-session-workspace-and-c18-image). C18 holds no repository constant. The edge
+service's `image` must equal exactly, in repository and digest, the `ref` of the `edge` entry in
+`deployment/images.lock.json`, the deploy contract C2 already reads (`preflight/index.ts:148`). A missing lock, or a
+lock with no `edge` entry, fails C18; the repository path lives only in the lock, which P1.27s writes. If the image
+comes through an env value, C18 reads it through the SecretMap and never prints it. Tests use a fixture lock, and any
+name in it is fixture data. Red fixtures: a different repository from the fixture lock; a different digest; a tag with
+no digest; a missing lock; a lock with no `edge` entry. If P1.30w passes about 550 source lines with the rider, the
+rider becomes its own step right after P1.30w, reserved as P1.30i "C18 pins the edge image by digest"; the PR body says
+which.
 
 ---
 
@@ -8533,26 +8575,31 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     and P1.29l (book edit 2026-10-12-p129c-p129l-build-stage-scan, from amendment 1 of 2026-10-12-p129v-follow-ups).
 13. **P1.29u "Fail closed on stripped paths and RUN separators"** ([SEC], product: `deployment/images/images.test.ts`
     only, under the `/deployment/` security-review line, kind/fix; issue #587; depends on P1.29v (merged, #583); owner
-    Phase 1; slice 1; same book edit, from architecture's ruling 2). `STRIPPED_PATH` (`images.test.ts:786`) accepts only
-    a normalised absolute path with at least three segments. `finalStageRemovals` (`images.test.ts:369-381`) refuses any
-    final-stage RUN containing `||`, `;`, `|` or a lone `&` instead of splitting on it. The `toStrictEqual` pin at :891
-    stays. Red fixtures: `/usr/.`, `/./usr`, `/usr/../etc`, `/usr//bin`, `/usr/local/`, `/usr` and
-    `rm -rf /usr/local/lib/node_modules/npm || true`; each is red on the PR, and the shipped lock stays green. Nothing
-    depends on it.
+    Phase 1; slice 1; same book edit, from architecture's ruling 2). `strippedPathOk` (`images.test.ts:808` at
+    `a75b395`) accepts only a normalised absolute path with at least three segments. `finalStageRemovals`
+    (`images.test.ts:376`) refuses any final-stage RUN containing `||`, `;`, `|` or a lone `&` instead of splitting on
+    it. The `toStrictEqual` pins at :914, :928 and :937 stay. Red fixtures: `/usr/.`, `/./usr`, `/usr/../etc`,
+    `/usr//bin`, `/usr/local/`, `/usr` and `rm -rf /usr/local/lib/node_modules/npm || true`; each is red on the PR, and
+    the shipped lock stays green. Nothing depends on it.
 
-    As built: merged by Alex at 2026-10-12T04:01:24Z as `a75b395` (#603).
+    As built: merged by Alex at 2026-10-12T04:01:24Z as `a75b395` (#603). It also refuses `#` as a RUN separator; the
+    body disclosed this, and it matches P1.29f's SEPARATOR, so no record is needed (amendment 1 of book edit
+    2026-10-12-p129c-p129l-build-stage-scan).
 14. **P1.29c "Lock records which bases build stages use"** ([SEC], product: `deployment/images/bases.lock.json`,
-    `deployment/images/images.test.ts`, a tightening, kind/fix; issue #604; depends on P1.29b (merged, #599); owner
-    Phase 1; slice 1; book edit 2026-10-12-p129c-p129l-build-stage-scan, from architecture's F1 part 1). Each lock entry
-    gets a required boolean `buildStage`: true when any non-final stage of any Dockerfile is built FROM that base. A
-    test derives it through the same `fromImages` and stage reading the kind tests use, and fails if the lock disagrees
-    in either direction or the field is missing. Expected today: node `true`; postgres `false`; caddy runtime `false`
-    unless a build stage uses it; the caddy-builder entry stays `stage: build`. Red fixtures: a lock with node `false`,
-    a lock with postgres `true`, and an entry with no field. Riders (book edit 2026-10-12-p129d-post-merge-follow-ups):
-    F1, the three postgres red fixtures for the allowed package-manager rm commands that P1.29d asked for and did not
-    add, mirroring node's (`images.test.ts:1196-1202`), so the postgres row is proven wired to `DPKG_SCRIPTS_RM`; and
-    the nit, moving the long doc comment at `package-manager.image.test.ts:298-303` back above the map it describes.
-    P1.29l depends on it.
+    `deployment/images/images.test.ts`, `deployment/images/package-manager.image.test.ts` for the doc-comment rider, a
+    tightening, kind/fix; issue #604; depends on P1.29b (merged, #599); owner Phase 1; slice 1; book edit
+    2026-10-12-p129c-p129l-build-stage-scan, from architecture's F1 part 1). Each lock entry gets a required boolean
+    `buildStage`: true when any non-final stage of any Dockerfile is built FROM that base. A test derives it through the
+    same `fromImages` and stage reading the kind tests use, and fails if the lock disagrees in either direction or the
+    field is missing. Expected today: node `true`; postgres `false`; caddy runtime `false` unless a build stage uses it;
+    the caddy-builder entry stays `stage: build`. Red fixtures: a lock with node `false`, a lock with postgres `true`,
+    and an entry with no field. Riders (book edit 2026-10-12-p129d-post-merge-follow-ups): F1, the three postgres red
+    fixtures for the allowed package-manager rm commands that P1.29d asked for and did not add, mirroring node's
+    (`images.test.ts:1240-1247` on main at `f6c4785`), so the postgres row is proven wired to `DPKG_SCRIPTS_RM`; and the
+    nit, moving the long doc comment at `package-manager.image.test.ts:298-303` back above the map it describes. Rider
+    (amendment 1 of book edit 2026-10-12-p129c-p129l-build-stage-scan): the refusal message at `images.test.ts:841`
+    names the refused RUN line as well as the file, taking it from `instructions()`; a red fixture asserts the line
+    appears. P1.29l depends on it.
 15. **P1.29l "Scan build-stage bases whole in the mirror"** ([SEC], check: `.github/workflows/mirror.yml`,
     `scripts/ci/mirror-scan.test.ts`, a tightening, kind/build; issue #605; depends on P1.29c; owner Phase 2 or the
     third lane, not Phase 1 (`.github`); slice 1; same book edit, from architecture's F1 part 2, F2 and F3). For every
@@ -8560,7 +8607,8 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     threshold (fail on CRITICAL, warn on HIGH); the runtime run is unchanged. F2: the test's fake docker parses both
     `--flag value` and `--flag=value`, and the test fails on any `TRIVY_*` variable reaching the scan step that the
     workflow does not set itself; both mutants are red. F3: `mirror.yml:46` says the lock is read for the shape check
-    and the skips, and `:53` says Trivy 0.75.0. F2 (book edit 2026-10-12-p129d-post-merge-follow-ups): the scan loop
+    and the skips, and `:53` says Trivy 0.75.0; the comment at `:63` names `strippedPathOk` instead of `STRIPPED_PATH`
+    (amendment 1 of the same book edit). F2 (book edit 2026-10-12-p129d-post-merge-follow-ups): the scan loop
     runs every entry even after a failure, records each failure, and fails the job at the end naming every failed entry
     by source, and the summary lists each entry with its result; on main (run 38201096441) the mirror stops at the caddy
     runtime entry before postgres, the last entry, so postgres has never had a mirror scan. Its test: with the fake
