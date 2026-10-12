@@ -73,16 +73,21 @@ export function claudeMdProblems(text: string): string[] {
   return [...found, ...deliveryProblems(text), ...uiProblems(text)];
 }
 
-/** Delivery names D1, D2, D3, D4 and D8, and says agents never merge or push to `main` (decisions 40, 41; ADR 0009). */
+/**
+ * Delivery names D1, D2, D3, D4 and D8, says agents never push to `main` (decision 40; ADR 0009, superseded by ADR
+ * 0017) and that author threads never merge their own PRs, naming ADR 0019 for who may.
+ */
 function deliveryProblems(text: string): string[] {
   const delivery = section(text, "Delivery");
   const flat = delivery.replace(/\s+/g, " ");
   const found = ["D1", "D2", "D3", "D4", "D8"]
     .filter((d) => !new RegExp(`\\b${d}\\b`).test(delivery))
     .map((d) => `Delivery does not mention ${d}`);
-  if (!/never merge/.test(flat)) found.push("Delivery does not say agents never merge");
+  if (!/author threads never merge/.test(flat))
+    found.push("Delivery does not say author threads never merge their PRs");
   if (!/never push to `main`/.test(flat)) found.push("Delivery does not say agents never push to `main`");
   if (!/ADR 0009/.test(flat)) found.push("Delivery does not name ADR 0009");
+  if (!/ADR 0019/.test(flat)) found.push("Delivery does not name ADR 0019");
   return found;
 }
 

@@ -60,10 +60,11 @@ describe("CLAUDE.md", () => {
     ]);
   });
 
-  test("claude_md_agents_never_merge", () => {
-    expect(claudeMdProblems(claudeMd.replace("never merge them", "merge them"))).toEqual([
-      "Delivery does not say agents never merge",
+  test("claude_md_author_threads_never_merge", () => {
+    expect(claudeMdProblems(claudeMd.replace("author threads never merge", "author threads merge"))).toEqual([
+      "Delivery does not say author threads never merge their PRs",
     ]);
+    expect(claudeMdProblems(claudeMd.replaceAll("ADR 0019", "ADR 0018"))).toEqual(["Delivery does not name ADR 0019"]);
     expect(claudeMdProblems(claudeMd.replace("never push to\n  `main`", "push to `main`"))).toEqual([
       "Delivery does not say agents never push to `main`",
     ]);
