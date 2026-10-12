@@ -37,6 +37,22 @@ export type Service = {
   networkMode: string | null;
   /** The service's `volumes`; a bind source is as written, relative to the compose file's directory. */
   mounts: Mount[];
+  hardening: Hardening;
+};
+/**
+ * The hardening and limit keys (P1.30x), each null or empty when the service leaves it out. Values are as written: a
+ * dev contract that they be present and sized lives in that environment's compose tests, not here.
+ */
+export type Hardening = {
+  readOnly: boolean | null;
+  capDrop: string[];
+  capAdd: string[];
+  securityOpt: string[];
+  user: string | null;
+  memLimit: string | null;
+  cpus: string | null;
+  pidsLimit: number | null;
+  restart: string | null;
 };
 /** One entry of a service's `volumes` (compose-spec 05-services.md "volumes"), in the strict subset. */
 export type Mount = { type: "bind" | "volume" | "tmpfs"; source: string | null; target: string; readOnly: boolean };
@@ -52,8 +68,13 @@ const NO_INTERPOLATION = [
   "image",
   "privileged",
   "cap_add",
+  "cap_drop",
   "security_opt",
   "user",
+  "mem_limit",
+  "cpus",
+  "pids_limit",
+  "restart",
   "network_mode",
   "pid",
   "ipc",
@@ -194,8 +215,27 @@ export function refuseAliasesByOption(doc: Document, file: string): void {
  * The only service keys accepted: the ones `service` reads (P1.30w, architecture ruling B1). A key it never reads
  * could change what runs while every check passes (`configs`, `secrets` or `tmpfs` over /etc/caddy, `entrypoint`,
  * `command`, `extends`, or `volumes_from` bringing another service's mounts), so any other key is refused by name.
+ * Later keys come one at a time, each with a ruling, in the step that first needs it: P1.30x added the hardening and
+ * limit keys (architecture record 2026-10-12-p129-compose-service-keys).
  */
-const SERVICE_KEYS = new Set(["image", "env_file", "environment", "ports", "networks", "network_mode", "volumes"]);
+const SERVICE_KEYS = new Set([
+  "image",
+  "env_file",
+  "environment",
+  "ports",
+  "networks",
+  "network_mode",
+  "volumes",
+  "read_only",
+  "cap_drop",
+  "cap_add",
+  "security_opt",
+  "user",
+  "mem_limit",
+  "cpus",
+  "pids_limit",
+  "restart",
+]);
 
 function service(r: Reader, name: string, spec: unknown, volumes: ReadonlySet<string>): Service {
   if (!isMap(spec)) return r.fail(spec, `service ${name} is not a mapping`);
@@ -214,7 +254,73 @@ function service(r: Reader, name: string, spec: unknown, volumes: ReadonlySet<st
     networks: serviceNetworks(r, spec.get("networks", true), spec.has("network_mode"), name),
     networkMode: spec.has("network_mode") ? r.text(spec.get("network_mode", true), "network_mode") : null,
     mounts: r.list(spec.get("volumes", true), "volumes").map((n) => declared(r, mount(r, n), n, volumes)),
+    hardening: hardening(r, spec),
   };
+}
+
+/** A numeric UID or UID:GID, neither 0: a name resolves inside the image, where the preflight cannot see it. */
+const USER = /^[1-9][0-9]*(?::[1-9][0-9]*)?$/;
+const MEM_LIMIT = /^[1-9][0-9]*[mg]$/;
+const CPUS = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
+/** The pid space is the host's whatever its size, and no service needs more (Codex ruling 2, batch 33). */
+const PIDS_MAX = 4096;
+const RESTART = ["no", "on-failure", "unless-stopped", "always"];
+
+/**
+ * The hardening and limit keys, each in one shape (architecture record 2026-10-12-p129-compose-service-keys). The
+ * capability and option lists must be exactly the safe value, so a partial drop or an unconfined profile is refused,
+ * never read; cap_add's "only on the edge image" half needs the lock, so C25 checks it.
+ */
+function hardening(r: Reader, spec: YAMLMap): Hardening {
+  const node = (key: string) => spec.get(key, true);
+  const scalar = (key: string, ok: (text: string) => boolean, why: string): string | null => {
+    if (!spec.has(key)) return null;
+    const text = r.text(node(key), key);
+    return ok(text) ? text : r.fail(node(key), `${key} ${why}`);
+  };
+  const capDrop = exactList(r, node("cap_drop"), "cap_drop", "ALL");
+  const capAdd = exactList(r, node("cap_add"), "cap_add", "NET_BIND_SERVICE");
+  if (capAdd.length > 0 && capDrop.length === 0) r.fail(node("cap_add"), "cap_add without cap_drop [ALL]");
+  return {
+    readOnly: readOnlyFlag(r, node("read_only")),
+    capDrop,
+    capAdd,
+    securityOpt: exactList(r, node("security_opt"), "security_opt", "no-new-privileges:true"),
+    // Compose takes `user` only as a string ("services.x.user must be a string", Compose v5.6.0).
+    user: scalar("user", (t) => USER.test(t) && isString(node("user")), "is not a non-zero UID[:GID] string"),
+    memLimit: scalar("mem_limit", (t) => MEM_LIMIT.test(t), "is not a size in m or g"),
+    cpus: scalar("cpus", (t) => CPUS.test(t) && Number(t) > 0, "is not a positive number"),
+    pidsLimit: pidsLimit(r, node("pids_limit")),
+    restart: scalar("restart", (t) => RESTART.includes(t), "is not no, on-failure, unless-stopped or always"),
+  };
+}
+
+const isString = (node: unknown): boolean => isScalar(node) && typeof node.value === "string";
+
+/** A positive integer up to PIDS_MAX; 0 and -1 would mean no limit at all. */
+function pidsLimit(r: Reader, node: unknown): number | null {
+  if (node === undefined) return null;
+  const value = isScalar(node) ? node.value : null;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > PIDS_MAX) {
+    return r.fail(node, "pids_limit is not an integer from 1 to 4096");
+  }
+  r.text(node, "pids_limit");
+  return value;
+}
+
+/** A list that is absent or exactly `[only]`. */
+function exactList(r: Reader, node: unknown, key: string, only: string): string[] {
+  if (node === undefined) return [];
+  if (!isSeq(node)) return r.fail(node, `${key} is not a list`);
+  const items = node.items.map((item) => r.text(item, key));
+  return items.length === 1 && items[0] === only ? items : r.fail(node, `${key} is not [${only}]`);
+}
+
+function readOnlyFlag(r: Reader, node: unknown): boolean | null {
+  if (node === undefined) return null;
+  if (!isScalar(node) || typeof node.value !== "boolean") return r.fail(node, "read_only is not true or false");
+  r.text(node, "read_only");
+  return node.value;
 }
 
 /** A bind source as Compose tells it from a volume name: absolute, or starting `.` or `..` (05-services.md). */
