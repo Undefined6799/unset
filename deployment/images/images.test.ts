@@ -4,7 +4,7 @@
 // allowlist: Docker's official library images, each named (interim, until P1.27s mirrors them and flips the host; book edit
 // 2026-10-07-p128-edge-bases-and-ratelimit-adr widened it from Node alone for the edge's Caddy bases) and our GHCR
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
@@ -817,18 +817,76 @@ function apkKeptProblems(dockerfile: string): string[] {
 }
 
 /** Every way the shipped stages install OS packages (amendment 3); build stages may, being scanned and never shipped. */
-function osPackageProblems(dockerfile: string): string[] {
+function osPackageProblems(dockerfile: string, listed?: ListedRuns): string[] {
   try {
     const kind = kindOf(dockerfile, lock);
     const all = instructions(dockerfile);
     const finalFrom = all.findLast(({ text }) => FROM.test(text))?.line ?? 0;
-    return shippedInstructions(all).flatMap(({ line, text }) =>
-      shippedInstructionProblems(text, kind, line > finalFrom).map((problem) => `line ${line}: ${problem}`),
-    );
+    const user = all.find(({ line, text }) => line > finalFrom && /^USER\s/i.test(text))?.line ?? Infinity;
+    const exact = (line: number, text: string) =>
+      line > finalFrom && line < user && isListedRun(text, listed ?? listedRunsOf(kind));
+    return shippedInstructions(all)
+      .filter(({ line, text }) => !exact(line, text))
+      .flatMap(({ line, text }) =>
+        shippedInstructionProblems(text, kind, line > finalFrom).map((problem) => `line ${line}: ${problem}`),
+      );
   } catch (error) {
     if (!(error instanceof Unparsed)) throw error;
     return [`line ${error.line}: ${error.message}`];
   }
+}
+
+/**
+ * P1.34e (record 2026-10-12-p134e-edge-final-stage-commands, Amendment 1; architecture record
+ * 2026-10-12-edge-data-volume-owner, Amendment 2): the exact exec-form RUNs a kind's final stage may make beyond its
+ * command list, read from `deployment/<kind>/final-stage-runs.json`, so widening what an image runs is reviewed where
+ * the image lives (the edge's folder is in the trusted base). A kind with no file lists none. The rules stay here: a
+ * listed line counts only in the final stage, before USER, in exec form with no RUN flag, word for word, and only
+ * when it passes listedRunProblems.
+ */
+type ListedRuns = readonly (readonly string[])[];
+const LISTED_RUNS_FILE = "final-stage-runs.json";
+function listedRunsOf(kind: Kind | undefined): ListedRuns {
+  const file = kind === undefined ? undefined : join(DEPLOYMENT, kind, LISTED_RUNS_FILE);
+  return file !== undefined && existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as ListedRuns) : [];
+}
+
+/** Programs a listed line may never start: shells, interpreters and launchers, each of which could run anything. */
+const NOT_LISTABLE = new Set([
+  ...["sh", "ash", "bash", "dash", "ksh", "zsh", "busybox", "env", "nohup", "nice", "timeout", "xargs", "find"],
+  ...["su", "sudo", "doas", "runuser", "setpriv", "chroot", "node", "python", "python3", "perl", "ruby"],
+]);
+
+/** Why listed lines may not be exempt: each is a non-empty string array whose program is an absolute plain path. */
+function listedRunProblems(listed: unknown): string[] {
+  if (!Array.isArray(listed)) return ["the list is not an array"];
+  return listed.flatMap((line, at) => {
+    const words: unknown[] = Array.isArray(line) ? line : [];
+    if (words.length === 0 || !words.every((word) => typeof word === "string")) {
+      return [`line ${at}: not a non-empty array of strings`];
+    }
+    const [program = "", ...rest] = words as string[];
+    const name = posix.basename(program);
+    const problems: string[] = [];
+    if (!PLAIN_PATH.test(program) || !BARE_NAME.test(name))
+      problems.push(`line ${at}: ${program} is not an absolute path`);
+    if (NOT_LISTABLE.has(name)) problems.push(`line ${at}: ${name} can run anything`);
+    if ([program, ...rest].some((word) => /[$`]/.test(word) || GLOB.test(word))) {
+      problems.push(`line ${at}: a variable, substitution or glob`);
+    }
+    if ([program, ...rest].some((word) => managerNames(word) > 0)) problems.push(`line ${at}: names a package manager`);
+    return problems;
+  });
+}
+
+/** Whether an instruction is a flagless exec-form RUN that is, word for word, a listed line that passes the rules. */
+function isListedRun(instruction: string, listed: ListedRuns): boolean {
+  const [, word = "", args = ""] = INSTRUCTION.exec(instruction) ?? [];
+  const { flags, rest } = splitFlags(args);
+  if (word.toUpperCase() !== "RUN" || flags.length > 0) return false;
+  // Shell form is no JSON array, so execCommand gives undefined and nothing matches.
+  const exec = execCommand(rest);
+  return listed.some((line) => isDeepStrictEqual(line, exec) && listedRunProblems([line]).length === 0);
 }
 
 /** Three or more literal segments under the root (P1.29u), so a stripped path never names `/usr` or `/usr/local`. */
@@ -1331,6 +1389,55 @@ describe("base images", () => {
       `line 2: rm -f ${scripts}: /var/lib/dpkg/info/*.preinst is a glob not on the node list`,
       `line 2: ${floor}`,
     ]);
+  });
+
+  test("listed_final_stage_runs_are_exact", () => {
+    // P1.34e: a kind's listed line passes exactly, and only as listed; a kind with no list keeps rm and setcap only.
+    const caddy = lock.caddy as Base;
+    const edge = `FROM ${caddy.ref}:${caddy.tag}@${caddy.digest}\n`;
+    const chown = ["/bin/chown", "-R", "65532:65532", "/data", "/config"];
+    const listed = [chown];
+    const run = `RUN ${JSON.stringify(chown)}`;
+    const shown = chown.join(" ");
+    const notBare = (line: number, words: string, word: string) =>
+      `line ${line}: ${words}: ${word} is not a bare command name`;
+    expect(osPackageProblems(`${edge}${run}\nUSER 65532:65532`, listed)).toEqual([]);
+    expect(osPackageProblems(`${edge}${run}`, [])).toEqual([notBare(2, shown, "/bin/chown")]);
+    for (const [dockerfile, line, words] of [
+      // Other arguments, shell form, a RUN flag, after USER, and a stage the final one builds on.
+      [`${edge}RUN ["/bin/chown", "-R", "0:0", "/data", "/config"]`, 2, "/bin/chown -R 0:0 /data /config"],
+      [`${edge}RUN ${shown}`, 2, shown],
+      [`${edge}RUN --network=none ${JSON.stringify(chown)}`, 2, shown],
+      [`${edge}USER 65532:65532\n${run}`, 3, shown],
+      [`${edge.replace("\n", " AS base\n")}${run}\nFROM base`, 2, shown],
+    ] as const) {
+      expect(osPackageProblems(dockerfile, listed), dockerfile).toEqual([notBare(line, words, "/bin/chown")]);
+    }
+    // A listed line that could run anything, or install, never counts, so a list cannot admit a shell.
+    for (const [line, problem] of [
+      [["/bin/sh", "-c", "chown -R 65532 /data"], "line 0: sh can run anything"],
+      [["/sbin/apk", "add", "curl"], "line 0: names a package manager"],
+      [["/bin/rm", "-f", "/data/*"], "line 0: a variable, substitution or glob"],
+      [["chown", "-R", "65532:65532", "/data"], "line 0: chown is not an absolute path"],
+    ] as const) {
+      expect(listedRunProblems([line]), line.join(" ")).toEqual([problem]);
+      expect(osPackageProblems(`${edge}RUN ${JSON.stringify(line)}`, [line]), line.join(" ")).not.toEqual([]);
+    }
+    expect(listedRunProblems({})).toEqual(["the list is not an array"]);
+    expect(listedRunProblems([[]])).toEqual(["line 0: not a non-empty array of strings"]);
+  });
+
+  test("every_kind_list_follows_the_rules", () => {
+    // Each kind's file, where there is one, passes the rules, and no such file sits anywhere else under deployment/.
+    for (const kind of ["edge", "node", "postgres"] as const)
+      expect(listedRunProblems(listedRunsOf(kind)), kind).toEqual([]);
+    const files = (readdirSync(DEPLOYMENT, { recursive: true }) as string[]).filter((file) =>
+      file.endsWith(LISTED_RUNS_FILE),
+    );
+    expect(
+      files.every((file) => ["edge", "node", "postgres"].includes(posix.dirname(file))),
+      files.join(", "),
+    ).toBe(true);
   });
 
   test("no_dockerfile_uses_onbuild", () => {
