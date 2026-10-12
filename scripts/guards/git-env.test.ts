@@ -2,11 +2,11 @@
 // GIT_WORK_TREE and the like to hooks "so that Git commands run by the hook can correctly locate the repository"
 // (githooks(5), git v2.43.0 Documentation/githooks.txt:30-35), and the pre-commit hook runs these tests.
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vitest";
-import { withoutGitEnv } from "./git-env.ts";
+import { fixtureGitEnv, withoutGitEnv } from "./git-env.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const temps: string[] = [];
@@ -24,10 +24,31 @@ const fixtureRepoTests = (): string[] =>
 test("fixture_helper_strips_git_env", () => {
   const env = { PATH: "/bin", GIT_DIR: "/r/.git", GIT_INDEX_FILE: "/r/.git/index", GIT_WORK_TREE: "/r", HOME: "/h" };
   expect(withoutGitEnv(env)).toEqual({ PATH: "/bin", HOME: "/h" });
-  // Every test file that makes a throwaway repository strips the caller's GIT_* variables.
+  // Every test file that makes a throwaway repository strips the caller's GIT_* variables and git config (P1.23g).
   expect(fixtureRepoTests().length).toBeGreaterThan(0);
-  for (const file of fixtureRepoTests())
-    expect(readFileSync(join(ROOT, file), "utf8"), file).toContain("withoutGitEnv");
+  for (const file of fixtureRepoTests()) {
+    const text = readFileSync(join(ROOT, file), "utf8");
+    expect(text, file).toContain("fixtureGitEnv");
+    expect(text, file).not.toMatch(/withoutGitEnv\(\)/);
+  }
+});
+
+test("fixture_git_ignores_global_config", () => {
+  // P1.23g: a developer's or agent's ~/.gitconfig that signs every commit, here with a signer that always fails.
+  const home = mkdtempSync(join(tmpdir(), "fixture-home-"));
+  const repo = mkdtempSync(join(tmpdir(), "fixture-repo-"));
+  temps.push(home, repo);
+  writeFileSync(join(home, ".gitconfig"), "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n");
+  const commit = (env: NodeJS.ProcessEnv) =>
+    spawnSync("git", ["-C", repo, "commit", "-q", "--allow-empty", "-m", "fixture"], { env, encoding: "utf8" });
+  execFileSync("git", ["-C", repo, "init", "-q", "-b", "main"], { env: fixtureGitEnv() });
+  const caller = { ...process.env, HOME: home };
+  // Without the helper the global config signs the same commit, and the signer fails it; with it, no config is read.
+  const identity = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t" };
+  const signed = commit({ ...withoutGitEnv(caller), ...identity, GIT_COMMITTER_EMAIL: "t@example.invalid" });
+  expect(signed.stderr).toMatch(/gpg failed to sign/);
+  const run = commit(fixtureGitEnv(caller));
+  expect(run.status, run.stderr).toBe(0);
 });
 
 test("fixtures_ignore_hook_git_env", { timeout: 60_000 }, () => {
@@ -35,8 +56,8 @@ test("fixtures_ignore_hook_git_env", { timeout: 60_000 }, () => {
   const real = mkdtempSync(join(tmpdir(), "hook-real-"));
   temps.push(real);
   const git = (...args: string[]) =>
-    execFileSync("git", ["-C", real, "-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args], {
-      env: withoutGitEnv(),
+    execFileSync("git", ["-C", real, ...args], {
+      env: fixtureGitEnv(),
       encoding: "utf8",
     }).trim();
   git("init", "-q", "-b", "mine");

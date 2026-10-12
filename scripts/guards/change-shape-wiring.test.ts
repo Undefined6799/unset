@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { withoutGitEnv } from "./git-env.ts";
+import { fixtureGitEnv } from "./git-env.ts";
 import { code, jobs } from "./workflows.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -64,14 +64,12 @@ describe("wiring", () => {
     const dir = mkdtempSync(join(tmpdir(), "pr-shape-"));
     temps.push(dir);
     const sh = (...args: string[]) =>
-      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: withoutGitEnv() }).trim();
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: fixtureGitEnv() }).trim();
     const put = (path: string, text: string) => {
       execFileSync("mkdir", ["-p", join(dir, path, "..")]);
       writeFileSync(join(dir, path), text);
     };
     sh("init", "-q", "-b", "main");
-    sh("config", "user.email", "test@example.org");
-    sh("config", "user.name", "test");
     const withoutChecks = read(".github/CODEOWNERS").replace(/^# checks:.*\n/m, "");
     put(".github/CODEOWNERS", withoutChecks);
     put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
@@ -84,7 +82,7 @@ describe("wiring", () => {
     sh("add", "-A");
     sh("commit", "-q", "-m", "P1.07 Change the gate");
     const env = {
-      ...withoutGitEnv(),
+      ...fixtureGitEnv(),
       PR_TITLE: "P1.07 Change the gate",
       PR_BODY: read(".github/pull_request_template.md"),
       PR_LABELS: '["kind/fix"]',
@@ -144,15 +142,13 @@ describe("wiring", () => {
     const dir = mkdtempSync(join(tmpdir(), "pr-shape-lock-"));
     temps.push(dir);
     const sh = (...args: string[]) =>
-      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: withoutGitEnv() }).trim();
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: fixtureGitEnv() }).trim();
     const put = (path: string, text: string) => {
       execFileSync("mkdir", ["-p", join(dir, path, "..")]);
       writeFileSync(join(dir, path), text);
     };
     const manifest = (fields: object) => `${JSON.stringify({ name: "@unset/shared-http", ...fields }, null, 2)}\n`;
     sh("init", "-q", "-b", "main");
-    sh("config", "user.email", "test@example.org");
-    sh("config", "user.name", "test");
     put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
     put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
     put("shared/http/package.json", manifest({ dependencies: { a: "1.0.0" } }));
@@ -177,7 +173,7 @@ describe("wiring", () => {
         return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
           cwd: dir,
           env: {
-            ...withoutGitEnv(),
+            ...fixtureGitEnv(),
             PR_TITLE: "P1.04k Add the server kit",
             PR_BODY: read(".github/pull_request_template.md"),
             PR_LABELS: '["kind/build"]',
@@ -204,7 +200,7 @@ describe("wiring", () => {
     const dir = mkdtempSync(join(tmpdir(), "pr-shape-born-"));
     temps.push(dir);
     const sh = (...args: string[]) =>
-      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: withoutGitEnv() }).trim();
+      execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", env: fixtureGitEnv() }).trim();
     const put = (path: string, text: string) => {
       execFileSync("mkdir", ["-p", join(dir, path, "..")]);
       writeFileSync(join(dir, path), text);
@@ -218,8 +214,6 @@ describe("wiring", () => {
         packages: { "": { name: "unset.sh" }, "node_modules/a": { version: "1.0.0" }, ...extra },
       });
     sh("init", "-q", "-b", "main");
-    sh("config", "user.email", "test@example.org");
-    sh("config", "user.name", "test");
     put(".github/CODEOWNERS", read(".github/CODEOWNERS"));
     put(".github/pull_request_template.md", read(".github/pull_request_template.md"));
     put("tsconfig.json", tsconfig(["shared/http"]));
@@ -246,7 +240,7 @@ describe("wiring", () => {
         return execFileSync("node", [join(ROOT, "scripts/guards/change-shape.ts")], {
           cwd: dir,
           env: {
-            ...withoutGitEnv(),
+            ...fixtureGitEnv(),
             PR_TITLE: "P1.14 Add the seal package",
             PR_BODY: read(".github/pull_request_template.md"),
             PR_LABELS: '["kind/feature"]',
