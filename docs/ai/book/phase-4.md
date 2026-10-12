@@ -3490,7 +3490,7 @@ Done when (tests):
   - `export_includes_own_rows`: seeded user with drafts, saved feeds, private likes, ledger rows → all present.
   - `export_lists_draft_images`: two draft images → both listed from `draftMedia.listForExport`, none of another DID's.
   - `export_redacts_actor_for_target`: user B's private like on A's post → A's export has the row without B's DID; B's export has it with A's post URI.
-  - `export_excludes_tokens_and_holds`: no sealed token bytes or hold rows in output; exclusion reasons present.
+  - `export_excludes_tokens_and_holds`: no sealed token bytes, session id hashes (`app.session.id_hash`), OAuth state or token material, or hold rows in output; exclusion reasons present.
   - `export_matched_hold_shown_unavailable`: a `matched_hold` upload appears with state `unavailable` and no other hold detail.
   - `export_moderation_history_included`: decisions and appeals present; a human `decided_by` is redacted.
   - `export_reports_about_user_redacted`.

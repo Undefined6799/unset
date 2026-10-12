@@ -5,6 +5,7 @@
     "digest": "sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33",
     "source": "upstream",
     "stage": "runtime",
+    "buildStage": true,
     "stripped": ["/usr/local/lib/node_modules/npm", "/usr/local/lib/node_modules/corepack"]
   },
   "caddy-builder": {
@@ -12,14 +13,16 @@
     "tag": "2.11.7-builder-alpine",
     "digest": "sha256:aa705b1e8e4bce41a7a30de934c1e00f6821667c1d1206424465065c92cb7674",
     "source": "upstream",
-    "stage": "build"
+    "stage": "build",
+    "buildStage": true
   },
   "caddy": {
     "ref": "docker.io/library/caddy",
     "tag": "2.11.7-alpine",
     "digest": "sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f",
     "source": "upstream",
-    "stage": "runtime"
+    "stage": "runtime",
+    "buildStage": false
   },
   "postgres": {
     "ref": "docker.io/library/postgres",
@@ -27,6 +30,7 @@
     "digest": "sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
     "source": "upstream",
     "stage": "runtime",
+    "buildStage": false,
     "stripped": ["/usr/local/bin/gosu"]
   }
 }

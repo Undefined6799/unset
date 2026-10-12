@@ -38,10 +38,39 @@ async function expectFail(rule: string | null, ...edges: Edge[]): Promise<void> 
   }
 }
 
-/** The cruise holds the edge as written, resolved unless the fixture left it unresolved on purpose. */
+/** Where the fixture's edge must resolve: its target file, the core module, the stub package, or itself if unresolved. */
+function resolvedPath(e: Edge): string {
+  if (e.unresolved) return e.spec;
+  if (e.spec.startsWith("node:")) return e.spec.slice("node:".length);
+  return target(e) ?? `node_modules/${e.spec}/index.js`;
+}
+
+/** The cruise holds the edge as written: same spelling, resolved path and import kind (P1.30f). */
 function cruised(result: ICruiseResult, e: Edge): boolean {
   const deps = result.modules.find((m) => m.source === e.from)?.dependencies ?? [];
-  return deps.some((d) => (d.protocol ?? "") + d.module === e.spec && d.couldNotResolve === (e.unresolved ?? false));
+  return deps.some(
+    (d) =>
+      (d.protocol ?? "") + d.module === e.spec &&
+      d.resolved === resolvedPath(e) &&
+      d.couldNotResolve === (e.unresolved ?? false) &&
+      d.dynamic === (e.kind === "dynamic") &&
+      d.dependencyTypes.includes("type-only") === (e.kind === "type"),
+  );
+}
+
+/**
+ * `from → spec` pairs that occur more than once across rows, with the rows they occur in. One cruise keeps only the
+ * first import of a specifier per file, so a second (say dynamic beside static) would never be checked.
+ */
+function duplicatePairs(rows: Record<string, Edge[]>): string[] {
+  const seen = new Map<string, string[]>();
+  for (const [row, edges] of Object.entries(rows)) {
+    for (const e of edges) {
+      const key = `${e.from} → ${e.spec}`;
+      seen.set(key, [...(seen.get(key) ?? []), row]);
+    }
+  }
+  return [...seen].filter(([, where]) => where.length > 1).map(([key, where]) => `${key}: ${where.join(", ")}`);
 }
 
 const FAKE = "infrastructure/arachnid/fingerprint-check.fake.ts";
@@ -411,6 +440,7 @@ describe("allowlist matrix", () => {
   test("depcruise_allowed_edges", async () => {
     // One cruise over every row edge (P1.30e): one per edge took about 3 s and timed out under full-suite load.
     const edges = Object.values(ROW_FIXTURES).flat();
+    expect(duplicatePairs(ROW_FIXTURES).join("\n"), "a from → spec pair in two rows").toBe("");
     // A target that is also an importing file would mix two edges' contents in one file.
     const importers = new Set(edges.map((e) => e.from));
     expect(edges.map(target).filter((file) => file !== undefined && importers.has(file))).toEqual([]);
@@ -418,6 +448,24 @@ describe("allowlist matrix", () => {
     for (const e of edges) expect(cruised(result, e), `${e.from} → ${e.spec} was not cruised`).toBe(true);
     if (outcome(result).exitCode !== 0 || outcome(result).rules.length > 0) await expectPass(...edges);
     expect(outcome(result), "edges that pass alone fail together").toEqual({ exitCode: 0, rules: [] });
+  });
+
+  test("row_coverage_is_exact", async () => {
+    const local = edge("apps/web/a.ts", "./b.ts");
+    const dynamic = edge("interfaces/http/compose.ts", "../x/fake.ts", "dynamic");
+    const result = await cruiseResult([local, dynamic], RULES);
+    expect([cruised(result, local), cruised(result, dynamic)]).toEqual([true, true]);
+    // A row whose resolved target is not the file the fixture wrote.
+    const moved = structuredClone(result);
+    for (const m of moved.modules) for (const d of m.dependencies) d.resolved = `${d.resolved}.elsewhere`;
+    expect(cruised(moved, local)).toBe(false);
+    // A dynamic row checked as static, and a static row as type-only.
+    expect(cruised(result, edge(dynamic.from, dynamic.spec))).toBe(false);
+    expect(cruised(result, edge(local.from, local.spec, "type"))).toBe(false);
+    // The same (from, spec) in two rows: dependency-cruiser keeps only the first, so the pair must be unique.
+    expect(duplicatePairs({ one: [local], two: [edge(local.from, local.spec, "dynamic")] })).toEqual([
+      "apps/web/a.ts → ./b.ts: one, two",
+    ]);
   });
 
   test("depcruise_unlisted_edge_fails", async () => {

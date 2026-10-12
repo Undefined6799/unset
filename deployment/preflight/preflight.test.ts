@@ -1,5 +1,7 @@
 // P1.30, P1.30s and P1.30t: the deploy preflight against fixture stacks written to a temporary directory (git keeps no file modes, and
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
+
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
@@ -14,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { type Check, fail, pass } from "./checks/types.ts";
+import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
 import { type Deps, preflight, type Run } from "./index.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -32,6 +34,7 @@ const PDS = `ghcr.io/undefined6799/mirror/pds@${digest("b")}`;
 const WEB = `ghcr.io/undefined6799/web@${digest("d")}`;
 const CANARY = "canary-7f3c-never-printed";
 const EDGE_DIR = join(import.meta.dirname, "..", "edge");
+const REPO = join(import.meta.dirname, "..", "..");
 
 const PDS_ENV: Record<string, string> = {
   PDS_RECOVERY_DID_KEY: RECOVERY_KEY,
@@ -50,6 +53,8 @@ const COMPOSE = `name: unset-prod
 services:
   edge:
     image: ${EDGE}
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     volumes:
       - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
@@ -90,6 +95,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C22",
   "C23",
   "C24",
+  "C25",
 ]);
 
 type Stack = {
@@ -100,6 +106,8 @@ type Stack = {
   report?: string;
   /** The network table, written as both networks.dev.json and networks.prod.json: an object, raw text, or none. */
   networks?: object | string | null;
+  /** Extra enabled edge sites, by file name. */
+  sites?: Record<string, string>;
 };
 /** The all-good stack's table: every service on Compose's implicit default network. */
 const TABLE = { default: { internal: false, members: ["edge", "pds", "web"] } };
@@ -109,7 +117,7 @@ afterAll(() => {
 });
 
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
-function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report, networks = TABLE }: Stack = {}) {
+function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report, networks = TABLE, sites }: Stack = {}) {
   const root = mkdtempSync(join(tmpdir(), "preflight-"));
   dirs.push(root);
   mkdirSync(join(root, "deployment/secrets"), { recursive: true });
@@ -130,6 +138,7 @@ function stack({ compose = COMPOSE, pdsEnv = {}, lock = LOCK, dotEnv, report, ne
     cpSync(join(EDGE_DIR, part), join(edge, part), { recursive: true });
   mkdirSync(join(edge, "sites/enabled"));
   symlinkSync(join(edge, "sites/pds.caddy"), join(edge, "sites/enabled/pds.caddy"));
+  for (const [name, text] of Object.entries(sites ?? {})) writeFileSync(join(edge, "sites/enabled", name), text);
   for (const env of ["dev", "prod"]) {
     if (networks === null) continue;
     const table = typeof networks === "string" ? networks : JSON.stringify(networks);
@@ -191,14 +200,14 @@ describe("preflight", () => {
   });
 
   test("c2_image_not_ours_or_unlocked_fails", async () => {
-    // Not the lock's edge ref, so C18 fails too (P1.30w).
+    // Not the lock's edge ref, so C18 fails too (P1.30w), and C25, because the edge adds a capability (P1.30x).
     for (const image of [
       `docker.io/library/caddy@${digest("a")}`,
       "ghcr.io/undefined6799/edge:latest",
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
       const result = await check({ compose: COMPOSE.replace(EDGE, image) });
-      expect(failed(result.lines), image).toEqual(["C2", "C18"]);
+      expect(failed(result.lines), image).toEqual(["C2", "C18", "C25"]);
       expect(result.code, image).toBe(1);
     }
   });
@@ -206,12 +215,13 @@ describe("preflight", () => {
   test("missing_input_fails_check_not_run", async () => {
     const result = await check({ lock: null });
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
-    // C18 reads the lock's edge ref (P1.30w), so it fails closed with the lock too, and without the edge entry alone.
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18"]);
+    // C18 reads the lock's edge ref (P1.30w), and C25 does for the edge's cap_add (P1.30x), so both fail closed with
+    // the lock too, and without the edge entry alone.
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18", "C25"]);
     expect(result.code).toBe(1);
     const { edge: _, ...noEdge } = LOCK;
     const unlisted = (await check({ lock: noEdge })).lines;
-    expect(failed(unlisted)).toEqual(["C2", "C18"]);
+    expect(failed(unlisted)).toEqual(["C2", "C18", "C25"]);
     expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
@@ -262,7 +272,7 @@ describe("preflight", () => {
 
   test("c7_pds_rate_limits_unset_fails", async () => {
     expect(await expectOnly("C7", { pdsEnv: { PDS_RATE_LIMITS_ENABLED: null } })).toBe(
-      "FAIL C7 PDS_RATE_LIMITS_ENABLED is not exactly false",
+      "FAIL C7 PDS_RATE_LIMITS_ENABLED does not turn the PDS's own limits off",
     );
   });
 
@@ -285,7 +295,15 @@ describe("preflight", () => {
     const { root, file } = stack();
     chmodSync(join(root, "deployment/secrets/db_password"), 0o644);
     const loose = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
-    expect(loose.lines).toContain(`FAIL C9 ${join(root, "deployment/secrets/db_password")} is not mode 0600`);
+    expect(loose.lines).toContain(
+      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
+    );
+    // Too few bits fails the same way as too many (Codex review on #650).
+    chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
+    const tight = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
+    expect(tight.lines).toContain(
+      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
+    );
     const other = await check({}, "prod", { uid: 4242 });
     expect(failed(other.lines)).toEqual(["C9"]);
     const absent = await check({ compose: COMPOSE.replace("secrets/db_password", "secrets/absent") });
@@ -321,6 +339,12 @@ describe("preflight", () => {
 
   test("c12_log_enabled_fails", async () => {
     expect(await expectOnly("C12", { pdsEnv: { LOG_ENABLED: "true" } })).toContain("pds-debug-logging.md");
+    // The reason names the key, never a value it can take, so the runner's scrub leaves it whole (P1.30j).
+    for (const on of ["on", "off", "1", "yes", "no", "true"]) {
+      expect(await expectOnly("C12", { pdsEnv: { LOG_ENABLED: on } }), on).toBe(
+        "FAIL C12 LOG_ENABLED differs from the required literal; see docs/human/runbooks/pds-debug-logging.md",
+      );
+    }
     const unset = await check({ pdsEnv: { LOG_ENABLED: null } });
     expect(failed(unset.lines)).toEqual([]);
   });
@@ -329,7 +353,7 @@ describe("preflight", () => {
     // LOG_LEVEL is absent or one of five levels; debug and trace log personal data even with logging off for requests.
     for (const level of ["debug", "trace", "INFO", ""]) {
       expect(await expectOnly("C12", { pdsEnv: { LOG_LEVEL: level } })).toBe(
-        "FAIL C12 LOG_LEVEL is not info, warn, error, fatal or silent",
+        "FAIL C12 LOG_LEVEL is not one of the allowed levels",
       );
     }
     for (const level of ["info", "warn", "error", "fatal", "silent"]) {
@@ -358,35 +382,73 @@ describe("preflight", () => {
     for (const { lines } of outputs) expect(lines.join("\n")).not.toContain(CANARY);
   });
 
-  // P1.30w (record 2026-10-12-c18-follow-ups, rulings N1 and N2): the runner turns every value a check read back into
-  // its name before the line is printed, so no check has to remember to; a reason that would still print one is
-  // withheld whole.
-  test("runner_scrubs_values_a_check_read", async () => {
-    const quoting: Check = {
+  // P1.30m (record 2026-10-12-p130m-preflight-withhold; architecture, end of 2026-10-12-c18-follow-ups): replacing a
+  // value inside a reason leaked across maps, against fixed text and through the template, so the runner withholds a
+  // whole reason that holds any value the run read, and prints no part of it.
+  const WITHHELD = "reason withheld (it contained a configured value)";
+  test("runner_withholds_a_reason_holding_any_configured_value", async () => {
+    const quote = (text: (inputs: Inputs) => string, outcome = fail): Check => ({
       id: "CX",
-      run: ({ serviceEnv }) => fail(`host ${serviceEnv.get("pds")?.use("PDS_HOSTNAME", (v) => v) ?? ""} is wrong`),
-    };
-    expect(await check({}, "prod", { checks: [quoting] })).toEqual({
-      code: 1,
-      lines: ["FAIL CX host PDS_HOSTNAME is wrong"],
+      run: (inputs) => outcome(text(inputs)),
     });
-    const passing: Check = {
-      id: "CX",
-      run: ({ serviceEnv }) => pass(serviceEnv.get("web")?.use("FINGERPRINT_CHECK", (v) => v)),
-    };
-    expect((await check({}, "prod", { checks: [passing] })).lines).toEqual(["PASS CX FINGERPRINT_CHECK"]);
-    // Naming one value can write out another (here HOST's name is UPSTREAM's value): the reason is withheld.
-    const compose = COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", "      HOST: h\n      UPSTREAM: HOST");
-    const both: Check = {
-      id: "CX",
-      run: ({ serviceEnv }) => {
-        const env = serviceEnv.get("pds");
-        return fail(`${env?.use("HOST", (v) => v)} ${env?.use("UPSTREAM", () => "") ?? ""}`.trim());
+    const read = (inputs: Inputs, service: string, name: string) =>
+      inputs.serviceEnv.get(service)?.use(name, (v) => v) ?? "";
+    // Two maps whose values overlap (N-A): naming the shorter one used to leave the longer one's tail.
+    const overlap = COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", "      A: shared-value").replace(
+      "      FINGERPRINT_CHECK: arachnid",
+      "      FINGERPRINT_CHECK: arachnid\n      B: shared-value-tail",
+    );
+    const both = quote((i) => `${read(i, "pds", "A")} ${read(i, "web", "B")}`);
+    expect((await check({ compose: overlap }, "prod", { checks: [both] })).lines).toEqual([`FAIL CX ${WITHHELD}`]);
+    // A value one check read and kept, printed by a later check (N-D), and an `.env` value no service names.
+    let kept = "";
+    const keep: Check = {
+      id: "CK",
+      run: (i) => {
+        kept = read(i, "pds", "PDS_HOSTNAME");
+        return pass();
       },
     };
-    expect((await check({ compose }, "prod", { checks: [both] })).lines).toEqual([
-      "FAIL CX the reason is withheld: it would print a value",
+    const later = quote(() => `host ${kept} is wrong`);
+    expect((await check({}, "prod", { checks: [keep, later] })).lines).toEqual(["PASS CK ok", `FAIL CX ${WITHHELD}`]);
+    const dotEnvOnly = quote(() => "token dotenv-only-value");
+    expect((await check({ dotEnv: "TOKEN=dotenv-only-value\n" }, "prod", { checks: [dotEnvOnly] })).lines).toEqual([
+      `FAIL CX ${WITHHELD}`,
     ]);
+    // A missing input and a passing reason are withheld the same way; the verdicts and the exit code stand.
+    const absent = quote((i) => read(i, "pds", "PDS_HOSTNAME"), missing);
+    expect(await check({}, "prod", { checks: [absent] })).toEqual({
+      code: 1,
+      lines: [`FAIL CX input missing: ${WITHHELD}`],
+    });
+    const passing = quote((i) => read(i, "web", "FINGERPRINT_CHECK"), pass);
+    expect(await check({}, "prod", { checks: [passing] })).toEqual({ code: 0, lines: [`PASS CX ${WITHHELD}`] });
+    // A configured value inside the replacement text itself (Codex review on #627): the reason is left empty.
+    const marked = { dotEnv: "TOKEN=dotenv-only-value\nMARK=withheld\nWORD=missing\n" };
+    expect((await check(marked, "prod", { checks: [dotEnvOnly] })).lines).toEqual(["FAIL CX "]);
+    const absentMarked = quote(() => "dotenv-only-value", missing);
+    expect(await check(marked, "prod", { checks: [absentMarked] })).toEqual({ code: 1, lines: ["FAIL CX "] });
+    expect(await check(marked, "prod", { checks: [dotEnvOnly] })).toEqual({ code: 1, lines: ["FAIL CX "] });
+    // A value only the missing-input prefix holds empties that reason too (P1.30z rider).
+    const prefixOnly = { dotEnv: "TOKEN=dotenv-only-value\nWORD=input\n" };
+    expect(await check(prefixOnly, "prod", { checks: [absentMarked] })).toEqual({ code: 1, lines: ["FAIL CX "] });
+  });
+
+  test("password_probe_is_withheld_whole", async () => {
+    // N-C: a password equal to a word of C7's own text used to come back as that text with the word renamed.
+    const result = await check({ pdsEnv: { PDS_ADMIN_PASSWORD: "short" } });
+    expect(result.code).toBe(1);
+    expect(result.lines.filter((l) => l.startsWith("FAIL"))).toEqual([`FAIL C7 ${WITHHELD}`]);
+    expect(result.lines.join("\n")).not.toContain("PDS_ADMIN_PASSWORD");
+  });
+
+  test("c18_sentinel_withheld_end_to_end", async () => {
+    // The edge reader's own scrub (P1.30h) is the first layer; the runner withholds whatever still holds a value.
+    const sentinel = "sentinelhost.example.test";
+    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`);
+    const result = await check({ compose, sites: { "probe.caddy": '"{$PDS_HOST}" {\n\trespond 204\n}\n' } });
+    expect(failed(result.lines)).toContain("C18");
+    expect(result.lines.join("\n")).not.toContain(sentinel);
   });
 
   test("preflight_no_skip_flag", async () => {
@@ -396,9 +458,22 @@ describe("preflight", () => {
       ["--env", "prod", "--compose", file, "C3"],
       ["--env", "staging", "--compose", file],
       ["--env", "prod"],
+      // Compose resolves relative paths from --project-directory when given, which the preflight cannot see (P1.30z).
+      ["--env", "prod", "--compose", file, "--project-directory", root],
+      ["--env", "prod", "--compose", file, `--project-directory=${root}`],
     ]) {
       expect((await preflight(argv, { root, run: fakeRun().run })).code).toBe(2);
     }
+  });
+
+  test("no_repository_script_passes_project_directory", () => {
+    // Every script that runs `docker compose` gives it the file list the preflight read, and never moves the base
+    // directory (architecture record 2026-10-12-preflight-project-directory, item 3). Docs and tests may name the flag.
+    const flag = ["--project", "directory"].join("-");
+    const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: REPO, encoding: "utf8" }).split("\0");
+    const scripts = tracked.filter((path) => path !== "" && !/(^docs\/|\.md$|\.test\.ts$)/.test(path));
+    const offenders = scripts.filter((path) => readFileSync(join(REPO, path), "latin1").includes(flag));
+    expect(offenders).toEqual([]);
   });
 
   test("preflight_check_throws_fails_closed", async () => {
@@ -426,6 +501,21 @@ describe("preflight", () => {
     expect(result.lines[0]).toMatch(/^ERROR cannot read .*absent\.env$/);
     const loose = await check({ pdsEnv: { PDS_HOSTNAME: '"quoted"' } });
     expect(loose.code).toBe(2);
+  });
+
+  test("volume_declared_in_another_compose_file_cannot_run", async () => {
+    // Each file declares the named volumes it mounts (architecture, 2026-10-12): Compose would merge the files, the
+    // preflight refuses, and the same empty declaration in both files is fine.
+    const files: Record<string, string> = {
+      "/s/a.yaml": "name: unset-prod\nservices:\n  edge:\n    image: x\nvolumes:\n  data: {}\n",
+      "/s/b.yaml": "services:\n  pds:\n    image: x\n    volumes: [data:/data]\n",
+    };
+    const readText = (path: string) => files[path] ?? null;
+    const argv = ["--env", "prod", "--compose", "/s/a.yaml", "--compose", "/s/b.yaml"];
+    const split = await preflight(argv, { root: "/s", run: fakeRun().run, readText });
+    expect(split).toEqual({ code: 2, lines: ["ERROR /s/b.yaml:4: volume data is not declared"] });
+    files["/s/b.yaml"] += "volumes:\n  data: {}\n";
+    expect((await preflight(argv, { root: "/s", run: fakeRun().run, readText })).lines[0]).not.toMatch(/^ERROR/);
   });
 });
 
@@ -510,7 +600,9 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     for (const name of ["0X40.space", "0x40.SPACE", "0x40.space."]) {
       expect(await expectOnly("C21", { compose: host(name) })).toMatch(/input missing: .*retirement-check\.json$/);
     }
-    expect((await check({ compose: host("pds.0x40.space") })).lines).toContain("PASS C21 n/a");
+    expect((await check({ compose: host("pds.0x40.space") })).lines).toContain(
+      "PASS C21 skipped: PDS_HOSTNAME is unset or a different host",
+    );
   });
 
   test("c15_subdomain_entry_refused", async () => {
@@ -529,7 +621,9 @@ describe("preflight C13 to C24 (P1.30s)", () => {
 
   test("c23_no_service_sets_fingerprint_check", async () => {
     const compose = COMPOSE.replace("    environment:\n      FINGERPRINT_CHECK: arachnid\n", "");
-    expect(await expectOnly("C23", { compose })).toBe("FAIL C23 no service sets FINGERPRINT_CHECK=arachnid");
+    expect(await expectOnly("C23", { compose })).toBe(
+      "FAIL C23 no service sets FINGERPRINT_CHECK to the real fingerprint service",
+    );
   });
 
   test("c24_time_tool_exit_nonzero_fails", async () => {
@@ -571,11 +665,14 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     expect(failed((await check({ compose: master, pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: "2000000000" } })).lines)).toEqual(
       [],
     );
-    expect((await check()).lines).toContain("PASS C22 n/a");
+    expect((await check()).lines).toContain("PASS C22 skipped: VIDEO_MASTER_MAX_BYTES is unset");
   });
 
   test("c23_prod_fake_fingerprint_fails", async () => {
-    await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake") });
+    // C23 names the key and the service, never a value it could hold, so its reason prints in full (P1.30m).
+    expect(
+      await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake") }),
+    ).toBe("FAIL C23 FINGERPRINT_CHECK in web is not the real fingerprint service");
     await expectOnly("C23", { compose: COMPOSE.replace("FINGERPRINT_CHECK: arachnid", "FAKE_FINGERPRINT_LIST: x") });
     const both = COMPOSE.replace(
       "FINGERPRINT_CHECK: arachnid",
@@ -586,7 +683,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
       { compose: DEV.replace("FINGERPRINT_CHECK: arachnid", "FINGERPRINT_CHECK: fake"), pdsEnv: DEV_ENV },
       "dev",
     );
-    expect(dev.lines).toContain("PASS C23 n/a");
+    expect(dev.lines).toContain("PASS C23 skipped: dev stage");
   });
 
   test("c24_clock_unsynchronised_fails", async () => {
@@ -598,7 +695,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     expect(failed((await check({}, "prod", { run: fakeRun({ chrony: notInstalled }).run })).lines)).toEqual([]);
     const local = fakeRun({ ntp: ok("no\n") });
     expect((await check({ compose: host("pds.localhost") }, "prod", { run: local.run })).lines).toContain(
-      "PASS C24 n/a",
+      "PASS C24 skipped: PDS_HOSTNAME is an agent's stack",
     );
     expect(local.calls.some(([file]) => file === "timedatectl")).toBe(false);
   });
@@ -708,5 +805,47 @@ describe("preflight C17 (P1.30t)", () => {
     expect(await expectOnly("C17", { networks: null })).toMatch(/^FAIL C17 input missing: .*networks\.prod\.json$/);
     const dev = await check({ compose: DEV, pdsEnv: DEV_ENV, networks: null }, "dev");
     expect(dev.lines.find((l) => l.startsWith("FAIL C17"))).toMatch(/networks\.dev\.json$/);
+  });
+});
+
+// P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 3 in 2026-10-12-batch33-codex-rulings):
+// the parser allows cap_add only as [NET_BIND_SERVICE] beside cap_drop [ALL]; C25 allows it only where the service runs
+// the lock's edge image, which needs the lock the parser never reads.
+describe("preflight C25 (P1.30x)", () => {
+  const webAdds = COMPOSE.replace(
+    `    image: ${WEB}\n`,
+    `    image: ${WEB}\n    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n`,
+  );
+
+  test("c25_cap_add_only_on_the_edge_image", async () => {
+    expect(await expectOnly("C25", { compose: webAdds })).toBe(
+      "FAIL C25 web adds a capability but does not run the lock's edge image",
+    );
+  });
+
+  test("c25_needs_the_lock_only_when_a_service_adds_a_capability", async () => {
+    // With no lock, C2 to C5 and C18 report it; C25 does too, because the edge adds a capability.
+    const result = await check({ lock: null });
+    expect(result.lines.find((l) => l.startsWith("FAIL C25"))).toMatch(
+      /^FAIL C25 input missing: .*images\.lock\.json$/,
+    );
+    const noAdd = COMPOSE.replace("    cap_add: [NET_BIND_SERVICE]\n", "");
+    expect((await check({ compose: noAdd, lock: null })).lines).toContain("PASS C25 ok");
+  });
+
+  // Codex ruling 3's mismatched pair, the edge ref with another Dockerfile: until P1.30y reads `build` and requires both
+  // to name the edge, the key itself is refused, so the pair cannot pass.
+  test("c25_edge_image_built_from_another_dockerfile_cannot_pass", async () => {
+    const build = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+    const result = await check({ compose: COMPOSE.replace(`    image: ${EDGE}\n`, `    image: ${EDGE}\n${build}`) });
+    expect(result.code).toBe(2);
+    expect(result.lines).toEqual([expect.stringMatching(/^ERROR .*compose\.yaml:5: service key build$/)]);
+  });
+
+  test("c25_lock_without_an_edge_entry_fails", async () => {
+    const { edge: _edge, ...noEdge } = LOCK;
+    expect((await check({ lock: noEdge })).lines).toContain(
+      "FAIL C25 edge adds a capability but does not run the lock's edge image",
+    );
   });
 });

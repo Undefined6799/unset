@@ -6,7 +6,7 @@ import { type Check, fail, pass } from "./types.ts";
  * compose-overlay-must-pin-project-name). */
 export const c1: Check = {
   id: "C1",
-  run: ({ compose, env }) => (compose.name === `unset-${env}` ? pass() : fail(`name is not unset-${env}`)),
+  run: ({ compose, env }) => (compose.name === `unset-${env}` ? pass() : fail("the project name does not match --env")),
 };
 
 const WEB_PORTS = [80, 443];
@@ -25,8 +25,8 @@ export const c10: Check = {
     for (const { name, ports } of compose.services) {
       for (const port of ports) {
         if (name === "edge" && isWebPort(port)) continue;
-        if (name !== "edge" && couldBeWebPort(port.published)) return fail(`${name} may publish 80 or 443`);
-        if (port.hostIp !== "127.0.0.1") return fail(`${name} publishes ${port.target} beyond 127.0.0.1`);
+        if (name !== "edge" && couldBeWebPort(port.published)) return fail(`${name} may publish a web port`);
+        if (port.hostIp !== "127.0.0.1") return fail(`${name} publishes a port beyond loopback`);
       }
     }
     return pass();

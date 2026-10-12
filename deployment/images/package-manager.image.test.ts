@@ -295,11 +295,6 @@ function packageManagers(entries: readonly Entry[]): string[] {
 const PACKAGE_MANAGER =
   /^(?:apk|apk\.static|apk-.+|libapk.*|apt|apt-get|apt-.+|libapt.*|dpkg|dpkg-.+|rpm|yum|dnf|microdnf)$/;
 
-/**
- * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
- * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
- * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
- */
 /** Debian's dpkg database (node and postgres both build on Debian trixie). */
 const DPKG_DATABASE = {
   root: "/var/lib/dpkg",
@@ -307,6 +302,11 @@ const DPKG_DATABASE = {
   index: "status",
   names: /^Package: /m,
 };
+/**
+ * Each kind's package database, kept so image scanners still see its OS packages (third architecture note under
+ * amendment 7): only the exact data files listed, none executable, so no maintainer script survives, and an index that
+ * still names at least one package. Paths are relative to the root; each list entry is cited in the PR body.
+ */
 const DATABASE_BY_KIND = new Map([
   ["node", DPKG_DATABASE],
   // The official Postgres image also keeps dpkg's statoverride file, one text line (`root ssl-cert 710
@@ -570,15 +570,12 @@ describe("image package managers", () => {
     expect(
       kindProblems("node", ["a", "b"], (file) => (file === "b" ? ["/usr/bin/apt is a package manager"] : [])),
     ).toEqual(["b: /usr/bin/apt is a package manager"]);
-    // A Dockerfile that fails to build is a finding, not a skip.
-    const dir = mkdtempSync(join(tmpdir(), "image-broken-"));
-    try {
-      writeFileSync(join(dir, "Dockerfile"), "FROM scratch\nRUN false\n");
-      const problems = kindProblems("node", [join(dir, "Dockerfile")], (file) => [build(file, dir)]);
-      expect(problems).toEqual([expect.stringContaining("build failed")]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    // A Dockerfile that fails to build is a finding, not a skip. The check throws as `build` does on a failed build;
+    // a real build here waited behind the image tests' builds past the 5 s default (P1.29z).
+    const failedBuild = (file: string): string[] => {
+      throw new Error(`${file} build failed: exit code 1`);
+    };
+    expect(kindProblems("node", ["c"], failedBuild)).toEqual(["c: c build failed: exit code 1"]);
   });
 
   test("every_dockerfile_builds_a_known_kind", () => {

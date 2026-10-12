@@ -100,7 +100,7 @@ flowchart TD
   P008 --> P014
   P010 --> P014
   P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"] --> P015a["P0.15a ADR 0019 accepted [ALEX][SEC]"]
-  P015a --> P016["P0.16 Delivery check asserts ADR 0019 [SEC]"]
+  P015a --> P016["P0.16 Delivery check asserts ADR 0019 [ALEX][SEC]"]
 ```
 
 The Alex halves of P0.11 and P0.13 can start on day one. P0.12's ceremony waits for P0.10's hardware keys. Every
@@ -310,8 +310,8 @@ Outputs:
     check (rule SE-6). It is the **last** section of the file and runs from its heading to the end of the file with no
     blank line inside (P0.09c's parser reads it that way; a line after it or a blank line inside it fails). Its
     patterns, one per SE-6 entry: CSRF gate and session `/shared/http/`,
-    `/infrastructure/postgres/session/` (moved by P2.03q, #403), `/interfaces/http/session-cookie.ts`; `verifyHandle`
-    `/domains/identity/verify-handle.ts`; `net-guard` `/infrastructure/net-guard/`; serialiser
+    `/infrastructure/session/` (moved by P2.03q, #403, then P2.03c, #613), `/interfaces/http/session-cookie.ts`;
+    `verifyHandle` `/domains/identity/verify-handle.ts`; `net-guard` `/infrastructure/net-guard/`; serialiser
     `/shared/ui/islands/props.ts`, `/shared/ui/src/islands/readProps.ts`; `safeHref` `/shared/ui/safe-href.ts`; seal
     `/infrastructure/seal/`; CSP builder (inside `/shared/http/`); media sandbox headers `/interfaces/media/headers.ts`
     (P3.09 keeps them in that one file); roles and grants on objects that already exist: the role roster
@@ -1647,6 +1647,8 @@ Where: new `scripts/guards/commit-msg.ts`, `scripts/guards/pr-size.ts`, `scripts
   `.github/required-checks.json` (appends `pr-shape`); `.github/labels.json` (appends labels); `renovate.json`
   (commit prefix). The grant classifier (`grant-sql.ts`, `grant-json.ts`, `grant-parse.ts` and their tests) is P0.09e's.
 Size: ~565 source lines as built
+Dependents: P0.09f, P0.09t (book edit 2026-10-12-p204s-riders-and-p009t), and the split guard steps P1.04q, P1.04c,
+  P1.06q and P2.01q.
 
 Why here (letter suffix): the plan's Phase 0 CI list gained these three checks with decision 35 (2026-10-04); they need
 the CI workflow (P0.07), the PR template (P0.09) and the label list (P0.09b), so they come after all three.
@@ -2348,6 +2350,29 @@ Done when (tests, planted fixtures in the guard's tests):
 
 ---
 
+### P0.09t — Trusted file pattern carries only its own tests
+Tags: [SEC] [ALEX] (typed line: scripts/guards)            Depends on: P0.09c            Plan: rule SE-6
+Check class (`scripts/guards/trusted-base.ts` and its test), a tightening, kind/build; issue #639; slice 1; book edit
+  2026-10-12-p204s-riders-and-p009t, from item 6 of architecture's 2026-10-12-p203-post-merge-follow-ups (found
+  verifying #630). Owner: Phase 2 or the third lane, placed by the coordinator (a classifier path; Phase 1 refuses it).
+Waits for: Alex's typed line "yes P0.09t scripts/guards trusted-base", asked with the other lines after P0.16 lands.
+  The substance needs no ruling (a tightening); the line is for the harness classifier on `scripts/guards/`. Risk
+  until then is low: the only files that can ride are tests, which change no runtime behaviour.
+Where: `scripts/guards/trusted-base.ts` and its test only.
+
+The gap: a trusted *file* pattern adds its parent folder's name to the folder rule. For example,
+`/interfaces/http/session-cookie.ts` lets any `tests/**/http/**` file ride with a trusted change.
+
+The fix: a trusted file pattern lets only its own test files ride: the same basename with `.test.ts`, either beside it
+or under the mirrored `tests/` path. A trusted *folder* pattern keeps its folder rule.
+
+Done when (tests, planted fixtures in the guard's tests):
+  - Red: a PR touching `interfaces/http/session-cookie.ts` plus `tests/integration/http/unrelated.test.ts` fails.
+  - Green: `interfaces/http/session-cookie.test.ts` beside it; a folder pattern's `tests/**/<folder>/**` file.
+  - Main's history replays green under the check, and the full suite is green.
+
+---
+
 ### P0.09d — AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z)
 Tags: — (parallel-safe: touches only `scripts/guards/` and `docs/ai/`)            Depends on: P0.06            Plan: §7 "AI notes" (Alex, 2026-10-04 22:11Z), §8 Phase 0 ("Start `docs/ai/` as the AI notes vault"); `unset-plan/ai-notes/template.md` ("Keeping it maintained")
 Where: new `docs/ai/README.md` (the approved template and its rules), `docs/ai/INDEX.md` (generated),
@@ -3020,6 +3045,9 @@ Done when Alex merges it by hand. No agent merge happens under ADR 0019 before t
 
 ### P0.15a — Mark ADR 0019 accepted
 Tags: [SEC] [ALEX] (Alex pastes CLAUDE.md, merges by hand)            Depends on: P0.15 (merged, #607)            Plan: —
+As built: merged by Alex at 2026-10-12T06:45:02Z as `56a186f` (#617), without his CLAUDE.md lines, so ADR 0019 reads
+accepted but its condition is unmet; P0.16 carries his CLAUDE.md commit (book edit
+2026-10-12-p016-delivery-check-adr-0019, amendment 3).
 Docs class, kind/docs; issue #614; slice 1, right after P0.15; book edit 2026-10-12-p015a-adr-0019-accepted (final
 04:29Z), from the coordinator at 04:27Z. Owner: Phase 2. P0.16 depends on it.
 Why: Alex merged #607 at 04:23:21Z at head `63e0c69`, before the status-line fix and before his CLAUDE.md paste. On main
@@ -3044,12 +3072,20 @@ Done when Alex merges it with his CLAUDE.md lines on the branch. Main then has 0
 ---
 
 ### P0.16 — Delivery check asserts the ADR 0019 merge rule
-Tags: [SEC]            Depends on: P0.15 (merged, #607), P0.15a            Plan: —
+Tags: [SEC] [ALEX] (Alex commits CLAUDE.md, merges by hand)            Depends on: P0.15a (merged, #617)            Plan: —
 Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15a;
 book edit 2026-10-12-p016-delivery-check-adr-0019 (final 03:40Z), from architecture's ruling in
-2026-10-12-p015-delivery-check-wording (03:35Z). No line from Alex: scripts/docs is an SE-6 check path but not a
-classifier path, so any lane may take it, Phase 1 included. It starts after P0.15a merges, because its check asserts
-the CLAUDE.md text that only lands there. Nothing depends on it.
+2026-10-12-p015-delivery-check-wording (03:35Z). Owner: Phase 2 (amendment 3, 06:50Z). Nothing depends on it.
+Alex's CLAUDE.md commit (amendment 3): #617 merged without his CLAUDE.md lines, so CLAUDE.md:95-96 on main (`f062c81`)
+still says "Alex alone merges". His commit rides this PR's branch: exactly #612's two-line diff (the Merging line gains
+"ADR 0019"; "agents open PRs and never push to `main`; author threads never merge them. A separate verifier may merge
+checked PRs; ADR 0019 says what stays Alex's."), subject `P0.16 CLAUDE.md Merging line names ADR 0019`. CLAUDE.md stays
+at 119 lines. Phase 2 never edits CLAUDE.md itself (classifier). CLAUDE.md is `*.md`, which `trusted-base.ts:114-119`
+counts as documentation, so the PR stays one check-class PR under SE-6.
+Opened ready, red on purpose: Phase 2 opens it out of draft (ci.yml skips drafts) with check red, because main's
+CLAUDE.md lacks both phrases. This departs from the hand-off rule: it is handed off on Alex's commit, not on green, and
+the body gives him the exact diff and subject. It counts as one of the three waiting PRs. It is never verifier-merged;
+Alex merges it by hand, because ADR 0019 does not apply until it lands.
 What: `deliveryProblems` (`scripts/docs/docs.ts:76-87`) requires `author threads never merge` instead of the bare
 `never merge`, and adds a requirement for `ADR 0019`; it keeps ``never push to `main` `` and the ADR 0009 citation; its
 message becomes "Delivery does not say author threads never merge their PRs"; its doc comment cites ADR 0019. The
@@ -3060,9 +3096,11 @@ The existing test moves with the check (amendment 2, 04:22Z): `claude_md_agents_
 renamed `claude_md_author_threads_never_merge`, removes "author threads never merge" from CLAUDE.md and expects
 "Delivery does not say author threads never merge their PRs". A new case removes "ADR 0019" and expects the ADR 0019
 message. The `never push to` and `ADR 0009` cases are unchanged. The test asserts more, not less.
-Red fixtures: a Delivery section without "author threads never merge", and one without "ADR 0019". Each is red, and main's
-Delivery section (after P0.15a) is green.
-Done when the fixtures are red and green as above, and the full suite is green.
+Red fixtures: a Delivery section without "author threads never merge", and one without "ADR 0019". Each is red, and the
+Delivery section is green with Alex's CLAUDE.md commit on the branch; main's lacks both phrases, so it is red until
+then (amendment 4, 07:20Z).
+Done when Alex's commit is on the branch, check and the other five required checks are green, the fixtures are red and
+green as above, and Alex merges it by hand.
 
 ---
 

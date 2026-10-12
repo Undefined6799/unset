@@ -82,8 +82,8 @@ function sitesSource(mount: Mount, edgeDir: string): { dir: string } | Outcome {
 /**
  * C18's verdict: the sites the edge mounts, read with the shipped Caddyfile and snippets and the edge's env, break
  * none of edgeSiteProblems' rules. The env values go only to the reader, whose messages name a placeholder, never its
- * value (P1.28l); a reader error is a failure, never a crash. The runner turns any value that still reaches the
- * reason back into its name (P1.30w).
+ * value (P1.28l); a reader error is a failure, never a crash. The runner withholds a reason that still holds any
+ * configured value and prints a fixed marker instead (P1.30m, P1.30v).
  */
 export function edgeZones(
   compose: Compose,

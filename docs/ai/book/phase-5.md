@@ -2533,6 +2533,11 @@ Algorithm (a reviewed hypothesis):
   4. **Memory:** the sum of `mem_limit` plus chat's 4 GB must stay ≤ 90 % of RAM; otherwise a resize is a P5.13 blocker.
   5. **Storage:** project the growth at about 75 MB per video for 100, 1,000 and 10,000 users, giving the month each
      store reaches 80 %. Write `docs/human/capacity.md`.
+  6. **Session sweep** (rider, book edit 2026-10-12-p203i-did-index-only; the first load or capacity test that touches
+     sessions carries it, here unless an earlier one does): record the sweep duration and `app.session`'s HOT ratio
+     (`n_tup_hot_upd / n_tup_upd` from `pg_stat_user_tables`). A HOT ratio well below ~0.9 → add `fillfactor` before
+     any index. Sweep p99 over 1 s or more than about 2M rows → first split the sweep into two DELETEs with the
+     absolute-expiry arm indexed; a `last_seen_at` index comes only with a measured HOT cost.
 
 Edge cases and failures: the quota is too low for the transcode budget → raise it to 3.0 only if `web` p95 holds;
 otherwise record "worker host needed" for Alex. The `egress-web` class reaches its ceiling in production → alert, and

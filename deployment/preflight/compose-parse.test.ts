@@ -1,12 +1,13 @@
 // P1.30: the strict Compose subset the preflight reads (architecture record 2026-10-07-p130-preflight-location-and-yaml):
 // anything Compose could read differently from us is refused rather than guessed.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
 import { networksOf, ParseError, parseCompose, parseEnvFile, refuseAliasesByOption } from "./compose-parse.ts";
+import { loadCompose } from "./index.ts";
 
 describe("compose subset", () => {
   const refused = (yaml: string) => expect(() => parseCompose(yaml, "c.yaml")).toThrow();
@@ -48,7 +49,7 @@ describe("compose subset", () => {
       refused(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`);
     }
     // P1.30w (record 2026-10-12-c18-follow-ups, ruling N7): through the keys the parser reads, the $ refusal itself
-    // answers; `user` and `privileged` above now stop at the key allowlist first.
+    // answers; `privileged` above still stops at the key allowlist first (`user` is read from P1.30x).
     const dollar = (field: string) => () =>
       parseCompose(`name: unset-prod\nservices:\n  edge:\n    ${field}\n`, "c.yaml");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
@@ -58,11 +59,11 @@ describe("compose subset", () => {
       ["env_file: ${F}", "env_file"],
       ['volumes: ["${V}:/data"]', "volumes"],
       ["network_mode: ${N}", "network_mode"],
+      ["user: ${U}", "user"],
     ];
     for (const [field, key] of throughAllowedKeys) {
       expect(dollar(field), field).toThrow(new ParseError(`c.yaml:4: $ in ${key}`));
     }
-    expect(dollar("user: ${U}")).toThrow(new ParseError("c.yaml:4: service key user"));
     expect(dollar("privileged: ${P}")).toThrow(new ParseError("c.yaml:4: service key privileged"));
     refused(`${base}    environment:\n      \${K}: v\n`);
     refused(`${base}    environment:\n      A: pre\${B}\n`);
@@ -85,7 +86,8 @@ describe("compose subset", () => {
   // short `SOURCE:TARGET[:ro|rw]` with a path source starting /, ./ or ../ or a plain volume name, or long syntax with
   // only type (bind, volume, tmpfs), source, target and read_only. Compose-spec 05-services.md "volumes".
   test("volumes_read_in_the_subset", () => {
-    const mounts = (lines: string) => parseCompose(`${base}    volumes:\n${lines}`, "c.yaml").services[0]?.mounts;
+    const mounts = (lines: string) =>
+      parseCompose(`${base}    volumes:\n${lines}volumes:\n  data: {}\n`, "c.yaml").services[0]?.mounts;
     expect(mounts("      - ./sites:/etc/caddy/sites/enabled:ro\n      - data:/data\n      - /cache\n")).toEqual([
       { type: "bind", source: "./sites", target: "/etc/caddy/sites/enabled", readOnly: true },
       { type: "volume", source: "data", target: "/data", readOnly: false },
@@ -119,10 +121,7 @@ describe("compose subset", () => {
   test("service_keys_outside_the_allowlist_are_refused", () => {
     const caddyfile = "/etc/caddy/Caddyfile";
     for (const [key, yaml] of [
-      [
-        "configs",
-        `    configs:\n      - source: edge\n        target: ${caddyfile}\nconfigs:\n  edge:\n    file: ./x\n`,
-      ],
+      ["configs", `    configs:\n      - source: edge\n        target: ${caddyfile}\n`],
       [
         "secrets",
         `    secrets:\n      - source: edge\n        target: ${caddyfile}\nsecrets:\n  edge:\n    file: ./x\n`,
@@ -136,7 +135,138 @@ describe("compose subset", () => {
       );
     }
   });
+  // P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 2 in 2026-10-12-batch33-codex-rulings):
+  // each hardening and limit key is read in one shape, and a value the ruling does not allow is refused by key name.
+  test("hardening_keys_read_in_the_subset", () => {
+    const hardened = parseCompose(
+      `${base}    read_only: true\n    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n` +
+        `    security_opt: [no-new-privileges:true]\n    user: "65532:65532"\n    mem_limit: 512m\n` +
+        `    cpus: 0.5\n    pids_limit: 128\n    restart: unless-stopped\n`,
+      "c.yaml",
+    );
+    expect(hardened.services[0]?.hardening).toEqual({
+      readOnly: true,
+      capDrop: ["ALL"],
+      capAdd: ["NET_BIND_SERVICE"],
+      securityOpt: ["no-new-privileges:true"],
+      user: "65532:65532",
+      memLimit: "512m",
+      cpus: 0.5,
+      pidsLimit: 128,
+      restart: "unless-stopped",
+    });
+    expect(
+      parseCompose(`${base}    user: "999"\n    cpus: "1.5"\n    mem_limit: 1g\n`, "c.yaml").services[0]?.hardening,
+    ).toMatchObject({ user: "999", cpus: 1.5, memLimit: "1g" });
+    // Codex 4249566407: `2.0` is a positive number as written, not an ambiguous one (phase-4.md plans `cpus: 2.0`).
+    expect(parseCompose(`${base}    cpus: 2.0\n`, "c.yaml").services[0]?.hardening.cpus).toBe(2);
+    expect(parseCompose(base, "c.yaml").services[0]?.hardening).toEqual({
+      readOnly: null,
+      capDrop: [],
+      capAdd: [],
+      securityOpt: [],
+      user: null,
+      memLimit: null,
+      cpus: null,
+      pidsLimit: null,
+      restart: null,
+    });
+  });
+  test("hardening_values_outside_the_ruling_are_refused", () => {
+    const drop = "    cap_drop: [ALL]\n";
+    for (const [yaml, why] of [
+      ["    cap_drop: [NET_RAW]\n", "cap_drop is not [ALL]"],
+      ["    cap_drop: [ALL, NET_RAW]\n", "cap_drop is not [ALL]"],
+      ["    cap_drop: ALL\n", "cap_drop is not a list"],
+      [`    cap_add: [SYS_ADMIN]\n${drop}`, "cap_add is not [NET_BIND_SERVICE]"],
+      ["    cap_add: [NET_BIND_SERVICE]\n", "cap_add without cap_drop [ALL]"],
+      ["    security_opt: [seccomp:unconfined]\n", "security_opt is not [no-new-privileges:true]"],
+      [
+        '    security_opt: ["no-new-privileges:true", "label:disable"]\n',
+        "security_opt is not [no-new-privileges:true]",
+      ],
+      ["    user: root\n", "user is not a non-zero UID[:GID] string"],
+      ['    user: "0:0"\n', "user is not a non-zero UID[:GID] string"],
+      ['    user: "1000:0"\n', "user is not a non-zero UID[:GID] string"],
+      ["    user: 0\n", "user is not a non-zero UID[:GID] string"],
+      ["    user: 65532\n", "user is not a non-zero UID[:GID] string"],
+      ["    pids_limit: -1\n", "pids_limit is not an integer from 1 to 4096"],
+      ["    pids_limit: 0\n", "pids_limit is not an integer from 1 to 4096"],
+      ["    pids_limit: 4097\n", "pids_limit is not an integer from 1 to 4096"],
+      ['    pids_limit: "128"\n', "pids_limit is not an integer from 1 to 4096"],
+      ['    read_only: "true"\n', "read_only is not true or false"],
+      ["    read_only: True\n", "read_only is ambiguous"],
+      ["    mem_limit: 536870912\n", "mem_limit is not a size in m or g"],
+      ["    mem_limit: 0m\n", "mem_limit is not a size in m or g"],
+      ["    cpus: 0\n", "cpus is not a positive number"],
+      ["    cpus: -1\n", "cpus is not a positive number"],
+      ["    restart: sometimes\n", "restart is not no, on-failure, unless-stopped or always"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    expect(() => parseCompose(`${base}    user: \${UID}\n`, "c.yaml")).toThrow(new ParseError("c.yaml:5: $ in user"));
+  });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
+  // P1.30k (step book record 2026-10-12-p130k-compose-top-level-allowlist): the top level holds only the keys the
+  // parser reads, a named volume is declared by name alone, and a long-form port holds only what port() reads.
+  test("top_level_keys_outside_the_allowlist_are_refused", () => {
+    for (const [key, yaml] of [
+      ["configs", "configs:\n  edge:\n    file: ./never-printed\n"],
+      ["x-shared", "x-shared:\n  a: 1\n"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:5: top-level key ${key}`),
+      );
+    }
+  });
+  test("include_keeps_its_own_refusal", () => {
+    expect(() => parseCompose(`${base}include: [never-printed.yaml]\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:5: include"),
+    );
+  });
+  test("named_volume_settings_are_refused", () => {
+    const bind =
+      "volumes:\n  data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
+    expect(() => parseCompose(`${base}${bind}`, "c.yaml")).toThrow(new ParseError("c.yaml:7: volume data: driver"));
+    // Each refused key fails on its own: a device mapping with no driver, and an external volume (P1.30j).
+    const device = "volumes:\n  data:\n    driver_opts:\n      type: none\n      o: bind\n      device: /etc\n";
+    expect(() => parseCompose(`${base}${device}`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: volume data: driver_opts"),
+    );
+    expect(() => parseCompose(`${base}volumes:\n  data:\n    external: true\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: volume data: external"),
+    );
+    for (const key of ["driver_opts", "external", "name", "labels"]) {
+      expect(() => parseCompose(`${base}volumes:\n  data:\n    ${key}: x\n`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:7: volume data: ${key}`),
+      );
+    }
+    expect(() => parseCompose(`${base}volumes:\n  data: never-printed\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:6: volume data is not a mapping"),
+    );
+    expect(() => parseCompose(`${base}volumes:\n  data:\n  logs: {}\n`, "c.yaml")).not.toThrow();
+    expect(() => parseCompose(`${base}volumes:\n  ../x: {}\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:6: volume name ../x is refused"),
+    );
+  });
+  test("undeclared_named_volume_is_refused", () => {
+    for (const mount of ["data:/data", "{type: volume, source: data, target: /data}"]) {
+      expect(() => parseCompose(`${base}    volumes: [${mount}]\n`, "c.yaml"), mount).toThrow(
+        new ParseError("c.yaml:5: volume data is not declared"),
+      );
+      expect(() => parseCompose(`${base}    volumes: [${mount}]\nvolumes:\n  data: {}\n`, "c.yaml")).not.toThrow();
+    }
+    // An anonymous volume and a bind need no declaration.
+    expect(() => parseCompose(`${base}    volumes: [/cache, ./x:/x]\n`, "c.yaml")).not.toThrow();
+  });
+  test("long_form_port_keys_outside_the_set_are_refused", () => {
+    for (const key of ["protocol", "mode", "name", "app_protocol"]) {
+      expect(() => parseCompose(`${base}    ports:\n      - target: 80\n        ${key}: x\n`, "c.yaml"), key).toThrow(
+        new ParseError(`c.yaml:7: port key ${key}`),
+      );
+    }
+  });
 });
 
 describe("env file subset", () => {
@@ -156,11 +286,20 @@ describe("env file subset", () => {
 const digest = `sha256:${"a".repeat(64)}`;
 // Every field the parser reads, so the comparison covers its whole view: a whole-reference and a `$$` value, env
 // files and file secrets (the files exist, as Compose requires), and networks in both service forms beside a service
-// on the implicit default network (P1.30t).
+// on the implicit default network (P1.30t), and every hardening and limit key in each scalar form it accepts (P1.30x).
 const STACK = `name: unset-prod
 services:
   edge:
     image: ghcr.io/undefined6799/edge@${digest}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    user: "65532:65532"
+    mem_limit: 256m
+    cpus: 2.0
+    pids_limit: 128
+    restart: unless-stopped
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     networks:
       front:
@@ -185,6 +324,11 @@ services:
     networks: [inner]
   web:
     image: ghcr.io/undefined6799/web@${digest}
+    read_only: false
+    user: "65532"
+    mem_limit: 1g
+    cpus: "1.5"
+    restart: "no"
 networks:
   front: {}
   inner:
@@ -227,6 +371,15 @@ type Theirs = {
       networks?: Record<string, unknown>;
       network_mode?: string;
       volumes?: { type: string; source?: string; target: string; read_only?: boolean }[];
+      read_only?: boolean;
+      cap_drop?: string[];
+      cap_add?: string[];
+      security_opt?: string[];
+      user?: string;
+      mem_limit?: string;
+      cpus?: number | string;
+      pids_limit?: number;
+      restart?: string;
     }
   >;
   networks?: Record<string, { internal?: boolean }>;
@@ -261,6 +414,7 @@ function oursAsCompose(file: string) {
           ports: service.ports,
           networks: [...service.networks].sort(),
           networkMode: service.networkMode,
+          hardening: service.hardening,
           mounts: service.mounts.map((m) => ({
             ...m,
             source: m.type === "bind" && m.source !== null ? resolve(dirname(file), m.source) : m.source,
@@ -290,6 +444,17 @@ function theirsAsOurs(theirs: Theirs) {
           })),
           networks: Object.keys(service.networks ?? {}).sort(),
           networkMode: service.network_mode ?? null,
+          hardening: {
+            readOnly: service.read_only ?? null,
+            capDrop: service.cap_drop ?? [],
+            capAdd: service.cap_add ?? [],
+            securityOpt: service.security_opt ?? [],
+            user: service.user ?? null,
+            memLimit: service.mem_limit ?? null,
+            cpus: service.cpus === undefined ? null : Number(service.cpus),
+            pidsLimit: service.pids_limit ?? null,
+            restart: service.restart ?? null,
+          },
           mounts: (service.volumes ?? []).map((v) => ({
             type: v.type,
             source: v.source ?? null,
@@ -307,6 +472,37 @@ function theirsAsOurs(theirs: Theirs) {
       .sort(),
   };
 }
+
+// P1.30z (architecture record 2026-10-12-preflight-project-directory): with several files, every relative path resolves
+// from the first file's directory, never from the file that names it. The second file sits in another directory.
+const FIRST = "name: unset-prod\nservices:\n  edge:\n    image: x\n";
+const SECOND =
+  "services:\n  pds:\n    image: y\n    env_file: [e.env]\n    volumes: [./data:/data]\nsecrets:\n  s:\n    file: ./s\n";
+
+/** The paths loadCompose resolved, in the order the agreement test compares them. */
+function resolvedPaths(files: string[], readText: (path: string) => string | null) {
+  const { compose } = loadCompose(files, readText);
+  const pds = compose.services.find((service) => service.name === "pds");
+  return {
+    binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+    envFiles: pds?.envFiles ?? [],
+    secretFiles: compose.secretFiles,
+  };
+}
+
+describe("compose project directory", () => {
+  test("paths_resolve_from_the_first_file_directory", () => {
+    const texts = new Map([
+      ["/p/a/c.yaml", FIRST],
+      ["/p/b/c.yaml", SECOND],
+    ]);
+    expect(resolvedPaths(["/p/a/c.yaml", "/p/b/c.yaml"], (path) => texts.get(path) ?? null)).toEqual({
+      binds: ["/p/a/data"],
+      envFiles: ["/p/a/e.env"],
+      secretFiles: ["/p/a/s"],
+    });
+  });
+});
 
 describe("compose agreement", () => {
   const dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
@@ -328,5 +524,26 @@ describe("compose agreement", () => {
     for (const file of [fixture, ...real]) {
       expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
     }
+  });
+
+  test.runIf(hasCompose || process.env.CI)("project_directory_matches_compose_config", () => {
+    const [first, second] = [join(dir, "a", "c.yaml"), join(dir, "b", "c.yaml")];
+    mkdirSync(join(dir, "a"));
+    mkdirSync(join(dir, "b"));
+    writeFileSync(first, FIRST);
+    writeFileSync(second, SECOND);
+    writeFileSync(join(dir, "a", "e.env"), "");
+    const json = execFileSync(
+      "docker",
+      ["compose", "-f", first, "-f", second, "config", "--format", "json", "--no-interpolate"],
+      { encoding: "utf8" },
+    );
+    const theirs = theirsAsOurs(JSON.parse(json) as Theirs);
+    const pds = theirs.services.pds;
+    expect(resolvedPaths([first, second], (path) => readFileSync(path, "utf8"))).toEqual({
+      binds: (pds?.mounts ?? []).flatMap((m) => (m.type === "bind" && m.source !== null ? [m.source] : [])),
+      envFiles: pds?.envFiles,
+      secretFiles: theirs.secretFiles,
+    });
   });
 });
