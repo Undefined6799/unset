@@ -10,8 +10,8 @@ import { request } from "node:https"; // guard-allow: egress local edge test onl
 import { connect as tcpConnect } from "node:net"; // guard-allow: egress local edge test only
 import { join } from "node:path";
 import { connect as tlsConnect } from "node:tls"; // guard-allow: egress local edge test only
-import { docker, killBefore, subcommand } from "../../../support/docker.ts";
-import { buildTestImage } from "../../../support/image-build.ts";
+import { docker, failAfterCleanup, killBefore, subcommand } from "../../../support/docker.ts";
+import { buildTestImage, removeTestImage } from "../../../support/image-build.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..", "..");
 export const EDGE = join(REPOSITORY, "deployment", "edge");
@@ -112,6 +112,23 @@ function dockerAsync(args: readonly string[], timeoutMs: number): Promise<{ code
 /** Builds deployment/edge/Dockerfile under its own tag (P1.27x) and returns the tag; removeTestImage removes it. */
 export function buildEdgeImage(): string {
   return buildTestImage(join(EDGE, "Dockerfile"), EDGE, { timeoutMs: BUILD_MS });
+}
+
+/**
+ * Stops the edge, then removes the image tag the suite built, even when the stop failed; when both fail, one
+ * AggregateError holds both, the stop's first (P1.11i). Only the tag goes, never -f: since P1.27z the trusted edge
+ * tests build and remove tags of their own, so removing this one deletes nothing they hold.
+ */
+export async function stopEdgeAndRemoveImage(edge: Pick<Edge, "stop"> | undefined, image: string | undefined) {
+  const remove = () => {
+    if (image !== undefined) removeTestImage(image, { timeoutMs: CALL_MS });
+  };
+  try {
+    await edge?.stop();
+  } catch (failure) {
+    failAfterCleanup(failure, remove);
+  }
+  remove();
 }
 
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */
