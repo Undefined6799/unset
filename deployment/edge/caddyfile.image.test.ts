@@ -26,6 +26,9 @@ import { type Caddyfile, type EdgeFiles, readEdgeConfig } from "./caddyfile.ts";
 const EDGE = import.meta.dirname;
 const PDS_HOST = "pds.unset.test";
 const built: string[] = [];
+// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
+// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
+const CONTAINER_MS = 120_000;
 
 function docker(args: readonly string[]): { code: number; out: string; err: string } {
   const result = spawnSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -65,7 +68,7 @@ describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
   afterAll(() => {
     for (const image of built) docker(["rmi", "-f", image]);
-  });
+  }, CONTAINER_MS);
 
   test("caddyfile_reader_matches_caddy_adapt", () => {
     const image = buildEdgeImage();
