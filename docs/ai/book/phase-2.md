@@ -760,9 +760,9 @@ Outputs:
     `SECURITY DEFINER`, `SET search_path = pg_catalog, app`; deletes the DID's `app.session` rows; deletes its
     `app.oauth_session` row unless `why = 'deactivated'`; `why` CHECKed against one closed enum shared with P3.06:
     Phase 2 uses `user_signout_all` (P2.08), `underage` (P2.12) and `auth_dead` (P2.07); P3.06 uses the account-state
-    and moderation values. EXECUTE to `web` here; P3.06 grants it to `indexer` and `admin`. Because the function also deletes the token
-    set, a caller that must revoke the grant at the authorization server calls `client.revoke` **before** it. P2.04s
-    adds `sessions.destroyAllForDid(tx, did, why: EndSessionsReason)` as its thin wrapper.
+    and moderation values. EXECUTE to `web` here; P3.06 grants it to `indexer` and `admin`. Because the function also
+    deletes the token set, a caller that must revoke the grant at the authorization server calls `client.revoke`
+    **before** it. P2.04s adds `sessions.destroyAllForDid(tx, did, why: EndSessionsReason)` as its thin wrapper.
   - `sessions.setEmailConfirmed(tx, idHash | {did}, value: boolean) -> void`.
   - `sessionCookie.set(ctx, value, maxAgeS)`, `sessionCookie.clear(ctx)`: `__Host-sid`, HttpOnly, Secure, SameSite=Lax, Path=/.
   - `sessions.sweep() -> number` (deletes rows past idle or absolute expiry), run hourly; idempotent, so no lock (DA-4).
