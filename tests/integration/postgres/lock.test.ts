@@ -56,22 +56,33 @@ const codeOf = (promise: Promise<unknown>) =>
     (error: unknown) => (error instanceof LockError ? error.code : String(error)),
   );
 
-/** Holds `key` on `lock` for `ms`, recording when `fn` started and ended. */
-function hold(lock: LockPool, key: string, ms: number, options?: { waitMs?: number }) {
+/**
+ * Holds `key` on `lock` for `ms`, recording when `fn` started and ended. `started` resolves once `fn` holds the lock,
+ * so a test waits for that rather than for a fixed delay, which a slow client acquisition outlasts (P1.17r). A `gate`
+ * keeps `fn` from starting its `ms` until the gate opens.
+ */
+function hold(lock: LockPool, key: string, ms: number, options: { waitMs?: number; gate?: Promise<void> } = {}) {
+  const { gate, ...lockOptions } = options;
   const times = { start: 0, end: 0 };
+  let markStarted = (): void => undefined;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
   const done = withAdvisoryLock(
     lock,
     LockNamespace.oauth,
     key,
     async () => {
       times.start = Date.now();
+      markStarted();
+      await gate;
       await sleep(ms);
       times.end = Date.now();
       return "held";
     },
-    options,
+    lockOptions,
   );
-  return { times, done };
+  return { times, started, done };
 }
 
 describe("advisory lock", () => {
@@ -79,17 +90,38 @@ describe("advisory lock", () => {
     const a = replica();
     const b = replica();
     const first = hold(a.lock, DID, 300);
-    await sleep(50);
+    await first.started;
     const second = hold(b.lock, DID, 10);
     expect(await Promise.all([first.done, second.done])).toEqual(["held", "held"]);
+    expect(second.times.start).toBeGreaterThanOrEqual(first.times.end);
+  });
+
+  test("slow_connect_still_serialises", async () => {
+    // The first replica's only client is busy for 200 ms, so its lock call waits that long for a connection: the cold
+    // connect that once let the second holder in first while the test slept a fixed 50 ms.
+    const a = replica({ max: 1 });
+    const b = replica();
+    const busy = hold(a.lock, "did:plc:zzzzzzzzzzzzzzzzzzzzzzzz", 200);
+    await busy.started;
+    const first = hold(a.lock, DID, 300);
+    await first.started;
+    const second = hold(b.lock, DID, 10);
+    expect(await Promise.all([busy.done, first.done, second.done])).toEqual(["held", "held", "held"]);
     expect(second.times.start).toBeGreaterThanOrEqual(first.times.end);
   });
 
   test("parallel_different_keys", async () => {
     const a = replica();
     const b = replica();
-    const x = hold(a.lock, "did:plc:xxxxxxxxxxxxxxxxxxxxxxxx", 300);
-    const y = hold(b.lock, "did:plc:yyyyyyyyyyyyyyyyyyyyyyyy", 300);
+    // Neither starts its 300 ms until both hold their locks, so a slow connect on one cannot leave them apart.
+    let open = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const x = hold(a.lock, "did:plc:xxxxxxxxxxxxxxxxxxxxxxxx", 300, { gate });
+    const y = hold(b.lock, "did:plc:yyyyyyyyyyyyyyyyyyyyyyyy", 300, { gate });
+    await Promise.all([x.started, y.started]);
+    open();
     await Promise.all([x.done, y.done]);
     expect(y.times.start).toBeLessThan(x.times.end);
     expect(x.times.start).toBeLessThan(y.times.end);
@@ -99,7 +131,7 @@ describe("advisory lock", () => {
     const a = replica();
     const b = replica();
     const first = hold(a.lock, DID, 2000);
-    await sleep(100);
+    await first.started;
     const started = Date.now();
     expect(await codeOf(hold(b.lock, DID, 10, { waitMs: 200 }).done)).toBe("lock.timeout");
     const waited = Date.now() - started;
@@ -114,7 +146,7 @@ describe("advisory lock", () => {
     const a = replica();
     const b = replica();
     const first = hold(a.lock, DID, 6000);
-    await sleep(100);
+    await first.started;
     const started = Date.now();
     expect(await codeOf(hold(b.lock, DID, 10, { waitMs: 5000 }).done)).toBe("lock.timeout");
     const waited = Date.now() - started;
@@ -178,8 +210,21 @@ describe("advisory lock", () => {
   test("pool_exhausted", async () => {
     const { lock } = replica({ max: 1 });
     let finish = (): void => undefined;
-    const busy = withAdvisoryLock(lock, LockNamespace.oauth, "first", () => new Promise<void>((r) => (finish = r)));
-    await sleep(100);
+    let holding = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      holding = resolve;
+    });
+    const busy = withAdvisoryLock(
+      lock,
+      LockNamespace.oauth,
+      "first",
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+          holding();
+        }),
+    );
+    await held;
     const started = Date.now();
     expect(await codeOf(withAdvisoryLock(lock, LockNamespace.oauth, "second", async () => 1))).toBe(
       "lock.pool_exhausted",
