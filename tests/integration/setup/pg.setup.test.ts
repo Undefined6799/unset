@@ -1,11 +1,12 @@
 // P1.11t, P1.12t: the integration setup's TE-2 conditions. A test file gets the process roles (web, api, indexer, retention),
 // never migrator or the superuser, and its own database; a setup that fails after starting the container leaves no
 // container behind.
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { delimiter, join, relative } from "node:path";
 import { afterAll, describe, expect, inject, test } from "vitest";
 import { createPool, withClient } from "../../../infrastructure/postgres/index.ts";
+import { failAfterCleanup } from "../../support/docker.ts";
 import { ownContainers, STOP_ALL_MS, stopAllPostgres } from "../../support/postgres.ts";
 import { startTestDatabase } from "./pg.setup.ts";
 
@@ -33,15 +34,22 @@ async function asRole(role: { user: string; password: string }, sql: string): Pr
   }
 }
 
-/** Runs `body` on a migrations folder whose one migration fails, then removes the folder whatever happened. */
+/**
+ * Runs `body` on a migrations folder whose one migration fails, then removes the folder whatever happened. A failing
+ * removal is added to the body's failure, never put in its place (N9, P1.11f).
+ */
 async function withBrokenMigrations<T>(body: (migrationsDir: string) => Promise<T>): Promise<T> {
   const migrationsDir = mkdtempSync(join(tmpdir(), "unset-broken-migrations-"));
+  const removeDir = () => rmSync(migrationsDir, { recursive: true, force: true });
+  let result: T;
   try {
     writeFileSync(join(migrationsDir, "0001_broken.sql"), "-- phase: expand\nCREATE TABLE (;\n");
-    return await body(migrationsDir);
-  } finally {
-    rmSync(migrationsDir, { recursive: true, force: true });
+    result = await body(migrationsDir);
+  } catch (failure) {
+    failAfterCleanup(failure, removeDir);
   }
+  removeDir();
+  return result;
 }
 
 describe("integration postgres setup", () => {
@@ -75,6 +83,29 @@ describe("integration postgres setup", () => {
     });
     expect(ownContainers()).toEqual([]);
   }, 120_000);
+
+  test("failed_start_runs_the_teardown", async () => {
+    // startPostgres ran before the try, so a start that failed skipped the teardown, and a failed globalSetup gets none
+    // of its own (F1, P1.11f). A stand-in docker refuses `run`; it leaves nothing to remove.
+    const standIn = mkdtempSync(join(tmpdir(), "unset-refusing-docker-"));
+    writeFileSync(join(standIn, "docker"), "#!/bin/sh\necho 'no space left on device' >&2\nexit 125\n");
+    chmodSync(join(standIn, "docker"), 0o755);
+    const path = process.env.PATH;
+    let stopped = 0;
+    const failed = await withBrokenMigrations(async (migrationsDir) => {
+      process.env.PATH = `${standIn}${delimiter}${path}`;
+      try {
+        return await startTestDatabase({ migrationsDir, files: [], stop: () => (stopped += 1) }).catch(
+          (error: unknown) => error,
+        );
+      } finally {
+        process.env.PATH = path;
+        rmSync(standIn, { recursive: true, force: true });
+      }
+    });
+    expect((failed as Error).message).toBe("docker run failed: no space left on device");
+    expect(stopped).toBe(1);
+  });
 
   test("failing_teardown_keeps_the_setup_error", async () => {
     // pg.setup.ts's catch reports a failed removal with the setup error, never in its place (P1.11c, N1 on #706).

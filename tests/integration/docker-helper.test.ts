@@ -100,6 +100,58 @@ describe("tests/support/docker.ts", () => {
     expect(() => cleanUpAll(() => undefined)).not.toThrow();
   });
 
+  test("unprintable_failure_keeps_every_error", () => {
+    // A thrown value with no prototype, or a throwing toString, made the message builder throw, and its TypeError
+    // replaced every error it was reporting (N3, P1.11f).
+    const bare = Object.create(null) as object;
+    const hostile = {
+      toString() {
+        throw new Error("toString threw");
+      },
+    };
+    for (const odd of [bare, hostile]) {
+      const failed = (() => {
+        try {
+          cleanUpAll(
+            () => {
+              throw odd;
+            },
+            () => {
+              throw new Error("EBUSY");
+            },
+          );
+        } catch (error) {
+          return error;
+        }
+      })();
+      expect(failed).toBeInstanceOf(AggregateError);
+      expect((failed as AggregateError).errors).toEqual([odd, new Error("EBUSY")]);
+      expect((failed as AggregateError).message).toBe("(unprintable error); EBUSY");
+      expect(() =>
+        failAfterCleanup(new Error("setup"), () => {
+          throw odd;
+        }),
+      ).toThrow("setup (cleanup also failed: (unprintable error))");
+    }
+  });
+
+  test("async_cleanup_is_refused", () => {
+    // A cleanup that returns a promise would run after the caller moved on, and its rejection would be lost (N4).
+    const late = (() => Promise.resolve()) as unknown as () => void;
+    expect(() => cleanUpAll(late)).toThrow("cleanUpAll takes synchronous cleanups, not a promise");
+    const failed = (() => {
+      try {
+        failAfterCleanup(new Error("setup"), late);
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(failed).toBeInstanceOf(AggregateError);
+    expect((failed as AggregateError).message).toBe(
+      "setup (cleanup also failed: failAfterCleanup takes a synchronous cleanup, not a promise)",
+    );
+  });
+
   test("finished_call_returns_its_output", () => {
     const ran = runOrKill(process.execPath, ["-e", "process.stdout.write('out'); process.exit(3)"], {
       timeoutMs: 5_000,

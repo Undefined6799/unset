@@ -17,7 +17,7 @@ import {
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
-  stopAllPostgres,
+  stopAllPostgresAfter,
 } from "../../support/postgres.ts";
 import {
   classViolations,
@@ -52,10 +52,7 @@ beforeAll(async () => {
   });
   await migrated("unset");
 }, 120_000);
-afterAll(async () => {
-  await Promise.all(pools.map((pool) => pool.close()));
-  stopAllPostgres();
-}, STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
 
 /** A pool on `database` as `user`; migrator unless named. */
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {

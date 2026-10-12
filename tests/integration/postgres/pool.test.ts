@@ -20,7 +20,7 @@ import {
   randomPassword,
   STOP_ALL_MS,
   startPostgres,
-  stopAllPostgres,
+  stopAllPostgresAfter,
 } from "../../support/postgres.ts";
 
 const migratorPassword = randomPassword();
@@ -58,7 +58,10 @@ beforeAll(async () => {
   };
   migrator = poolOf(connection, { max: 1 });
 }, 120_000);
-afterAll(async () => {
+afterAll(() => stopAllPostgresAfter(closePools), STOP_ALL_MS);
+
+/** Closes every pool, dropping what the tests created as migrator first. */
+async function closePools(): Promise<void> {
   await Promise.all(pools.filter((pool) => pool !== migrator).map((pool) => pool.close()));
   await withClient(migrator, null, (client) => client.query("DROP TABLE IF EXISTS tx_rows"));
   for (const role of roles) {
@@ -67,8 +70,7 @@ afterAll(async () => {
     );
   }
   await migrator.close();
-  stopAllPostgres();
-}, STOP_ALL_MS);
+}
 
 /** A fresh role allowed into this database's public schema, and a pool for it. */
 async function setup(options: { max?: number; connectTimeoutMs?: number; connectionLimit?: number } = {}) {

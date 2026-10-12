@@ -32,6 +32,9 @@ stuck daemon fails the test with a message naming the call instead of blocking u
 the whole run at 600 s. Hooks that end in `stopAllPostgres` take `STOP_ALL_MS` (P1.27g), and that hook fails
 naming the container when its `docker rm` is killed, so a leaked container is reported, not hidden (P1.27i). When the
 shared setup (`tests/integration/setup/pg.setup.ts`) fails and its cleanup is killed too, both errors are reported,
-the setup's first (P1.11c).
+the setup's first (P1.11c). The setup starts Postgres inside that same `try`, since a failed globalSetup gets no
+teardown; a start that fails removes its own container and secrets folder and reports a killed removal with its
+failure; and a hook that closes pools first uses `stopAllPostgresAfter(close)`, so a rejected close still stops
+the containers (P1.11f).
 
 **Repair.** Nothing to repair; it is a property of the environment.
