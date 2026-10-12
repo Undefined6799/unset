@@ -1325,6 +1325,11 @@ subject kind; P1.30 preflight addition.
 Size: spike ~1 day plus ~40 lines of types; client ~80 source lines; wiring and match path ~180 source lines;
 ~380 test lines
 
+**Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 8): the image transmission buffer and image legal hold
+follow P4.03's and P4.07's regime notes: per-case length at notification, the buffer keeps nothing beyond
+ordinary-course retention until the switch.
+
 Goal: replace the fake check with the real Arachnid Shield check for every image and video, seal each image upload's
 transmission data into the short-lived buffer, and send an image match into P4.07's one legal-hold design. Production
 refuses to start without the real check.
@@ -2045,6 +2050,10 @@ Tags: [SEC] [MOD]            Depends on: P5.08            Plan: §6 (`eraseDid`,
 Where: `interfaces/admin/cases/gdpr/`; the hold verbs in `interfaces/pds-admin` (P3.16); `dsar.export` (P4.26)
 Size: ~260 source lines, ~280 test lines
 
+**Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 9): a held row or object is kept for its case's
+preserve-until date (21 days, or 365 after commencement, fixed at notification; P4.07), then erased.
+
 Goal: turn access and erasure requests into tracked cases, due in one month, with identity checked by a code sent by
 email. Erasure completes even if no firehose event arrives, and erases everything except material under an open legal
 hold.
@@ -2311,7 +2320,7 @@ Outputs:
 | `reports.app` | reports in the app table (drafts, chat, notices) | case closed | 6 months | retention |
 | `reports.ozone` | Ozone report text, reporter DIDs, notes | case closed | 6 months | ozone (`retention.sql` under `ozone_retention`) |
 | `breach.record` | `security_incident` cases | determined | 24 months | retention |
-| `abuse.preservation` | C-16 hold, with its transmission data | notified | 365 days | pds-admin (P4.07) |
+| `abuse.preservation` | C-16 hold, with its transmission data | notified | 21 days, or 365 after commencement (per case, at notification) | pds-admin (P4.07) |
 | `abuse.transmission_buffer` | per-upload sealed buffer, video and image | created | review deadline (image: 10 minutes) | review (P4.07, P5.07b); never backed up |
 | `fingerprint.requests` | `fingerprint_request` rows (hashes only) | created | 1 hour | retention (P5.07b) |
 | `drafts` | drafts and draft media, except drafts with an open appeal | last change | 30 days | retention (P4.25) |
