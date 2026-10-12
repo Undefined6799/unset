@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.34f, P1.34p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11i, P1.34f, P1.34p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.27l, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -253,6 +253,7 @@ flowchart LR
   P1_27u["P1.27u C9 bind reach gaps"]
   P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_11c["P1.11c keep the setup error on cleanup"]
+  P1_11i["P1.11i edge tag removal and test labels"]
   P1_34f["P1.34f require the interpolation env flag"]
   P1_34p["P1.34p secret inputs outside the project"]
   P1_29l["P1.29l mirror scans build-stage bases whole"]
@@ -485,6 +486,8 @@ flowchart LR
   P1_27u --> P1_29
   P1_30a --> P1_27j
   P1_27i --> P1_11c
+  P1_27x --> P1_11i
+  P1_27z --> P1_11i
   P1_30a --> P1_34f
   P1_27u --> P1_34p
   P1_34f --> P1_34
@@ -7197,6 +7200,26 @@ Done when items 1 and 4 are red on `7636024` and green after, neither hook can s
 
 ---
 
+### P1.11i — Restore edge tag removal; label test images
+Tags: —            Depends on: P1.27x, P1.27z
+Slice 1, issue #708, product (`tests/integration/deployment/edge/edge.image.test.ts`, `tests/support/image-build.ts`
+and its test), kind/fix, lane Phase 1; book edit 2026-10-12-p111i-test-image-cleanup (20:04Z), from P1.27x's
+amendment 2 (the verifier on #702: race direction 2 and N7). It takes a P1.11 letter, the test-helper family. It
+must not land before #699 (P1.27z), or race direction 2 returns. If P0.09n has made `image-build.ts` trusted by then,
+that half becomes a trusted PR of its own (SE-6). Nothing from Alex. Nothing depends on it.
+
+**What:**
+1. `edge.image.test.ts`'s afterAll removes its own tag again with `removeTestImage`, separate from `stop()`, so
+   neither error replaces the other.
+2. `buildTestImage` adds `--label sh.unset.test-owner=<value>` to every test image, matching the edge containers'
+   label, so a leaked tag can be found by label. A sweep script is optional; if built, it removes only labelled images
+   and never runs `prune`.
+
+Done when, red first, an afterAll whose `stop()` and removal both fail reports both errors, a built test image
+carries the label (inspect), and check is green.
+
+---
+
 ### P1.34f — Require the interpolation env flag
 Tags: [SEC]            Depends on: P1.30a
 Slice 1, issue #705, product (`deployment/preflight/` and its tests, plus any npm script or test that calls the
@@ -9847,9 +9870,10 @@ dev-seed:
    (The seed container joins the edge network for this one call; it is a profile service that exits.)
 4. For each test account (alice, bob, carol .0x40.space): createAccount with a generated password (crypto
    random, 24 bytes base64url) and the invite code. Handle taken → skip and report "exists".
-5. Write .seeded.json { handle, did, password } with mode 0600, owned by the deploy user, in unset-dev-env/ (the
-   secrets folder holds only 0400 mounted secrets; C9 gets no exemption); print handles
-   and DIDs only; never print passwords.
+5. Print { handle, did, password } as JSON on stdout. The host wrapper validates it and writes .seeded.json to the
+   sibling unset-dev-env folder (0600, owned by the deploy user; O_EXCL temp file, fsync, rename), never logging
+   it; the container mounts nothing from unset-dev-env. Print handles and DIDs only to the log; never print
+   passwords there. (P1.29s, book edit 2026-10-12-p129s-seed-file-location, amendment 1.)
 6. Re-run → idempotent (existing accounts skipped).
 ```
 
@@ -9899,6 +9923,9 @@ dev-seed:
 - `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
 - `seed_never_prints_password`: run against a stub PDS; stdout and stderr contain no generated password.
 - `seed_file_mode_0600`.
+- P1.29s (book edit 2026-10-12-p129s-seed-file-location), red first: the seed service declares no volume from
+  unset-dev-env; malformed stdout writes nothing; an existing temp file makes O_EXCL fail closed; the written file
+  is 0600.
 - `precheck_refuses_unknown_pds_did`: stub `describeServer` answering a foreign DID → refuses.
 - `dev_down_never_removes_volumes`: the npm script contains no `-v`/`--volumes`.
 - C26 passes on the root-context postgres build (P1.27u amendment 1).

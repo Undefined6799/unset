@@ -153,7 +153,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 230 steps: 206 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 231 steps: 207 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -352,6 +352,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27n | Close the P1.27y verifier test gaps | [SEC] | P1.27y | `phase-1.md` |
 | P1.27j | Tidy preflight comments and the tilde check | — | P1.30a | `phase-1.md` |
 | P1.11c | Keep the setup error when cleanup fails | — | P1.27i | `phase-1.md` |
+| P1.11i | Restore edge tag removal; label test images | — | P1.27x, P1.27z | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
@@ -556,6 +557,7 @@ flowchart TD
   P1_27u["P1.27u C9 bind reach gaps"]
   P1_27j["P1.27j Preflight comment and tilde tidy"]
   P1_11c["P1.11c Keep the setup error on cleanup"]
+  P1_11i["P1.11i Edge tag removal and test labels"]
   P1_34f["P1.34f Require the interpolation env flag"]
   P1_34p["P1.34p Secret inputs outside the project"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
@@ -920,6 +922,8 @@ flowchart TD
   P1_27u --> P1_29
   P1_30a --> P1_27j
   P1_27i --> P1_11c
+  P1_27x --> P1_11i
+  P1_27z --> P1_11i
   P1_30a --> P1_34f
   P1_27u --> P1_34p
   P1_34f --> P1_34
