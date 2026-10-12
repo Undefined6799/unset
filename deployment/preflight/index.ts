@@ -207,12 +207,13 @@ const WITHHELD = "reason withheld (it contained a configured value)";
 /**
  * `outcome`, or, when its reason holds any value the run read, the same verdict with the reason withheld whole
  * (P1.30m). Replacing a value with its name leaked across maps, against a check's fixed text and through the template,
- * so nothing is printed in part, and there is no flag to see the reason.
+ * so nothing is printed in part, and there is no flag to see the reason. A value inside the replacement text itself
+ * leaves the reason empty.
  */
 function withheldIfValued(outcome: Outcome, configured: ConfiguredValues): Outcome {
   if (!configured.occurIn(outcome.reason)) return outcome;
   const reason = outcome.reason.startsWith(MISSING) ? `${MISSING}${WITHHELD}` : WITHHELD;
-  return { pass: outcome.pass, reason };
+  return { pass: outcome.pass, reason: configured.occurIn(reason) ? "" : reason };
 }
 
 /** The check's outcome, a timeout for a network check past its deadline, or a failure for a throw. */
