@@ -25,6 +25,9 @@ import { afterAll, describe, expect, test } from "vitest";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const REPO = join(DEPLOYMENT, "..");
+// A container start, exec or removal waits on the one docker daemon, behind CI's parallel image builds, so it gets
+// the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
+const CONTAINER_MS = 120_000;
 const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8"));
 const lock = json("bases.lock.json") as Record<string, { ref: string; tag: string; digest: string }>;
 /** The same lock-entry-to-kind map images.test.ts reads, so every kind it knows is built and checked here. */
@@ -410,7 +413,7 @@ function imagePrivilegeProblems(kind: string, file: string): string[] {
 describe("image package managers", () => {
   afterAll(() => {
     for (const image of new Set(built.values())) docker(["rmi", "-f", image]);
-  });
+  }, CONTAINER_MS);
 
   /** A listing as tar prints it, from [mode, quoted name, verbose suffix] rows: `-tv` lines and `-tf` names. */
   const tarListing = (rows: readonly (readonly [string, string, string?])[]): [string, string] => [
