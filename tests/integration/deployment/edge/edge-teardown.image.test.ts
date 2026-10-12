@@ -2,12 +2,47 @@
 // the other. An image test because it reaches the build helper (scripts/test/image-rules.test.ts); the removal runs
 // against the real daemon with a tag no build made, so it fails the way a real one would.
 import { randomBytes } from "node:crypto";
-import { describe, expect, test } from "vitest";
-import { type Edge, stopEdgeAndRemoveImage } from "./edge-container.ts";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import { afterAll, describe, expect, test } from "vitest";
+import { type Edge, startEdge, stopEdgeAndRemoveImage } from "./edge-container.ts";
 import { registerEdgeSuite } from "./edge-suite.ts";
 
 // One `docker rmi`, killed at the edge helper's 60 s call budget.
 const TEST_MS = 120_000;
+
+// A stand-in docker that answers a start the way a healthy edge would and refuses the removal, so stop() meets a
+// `docker rm -f` that exits non-zero (P1.11s). The stub upstream listens on the loopback "gateway" it reports.
+const standIn = mkdtempSync(join(tmpdir(), "edge-stop-"));
+writeFileSync(
+  join(standIn, "docker"),
+  [
+    "#!/bin/sh",
+    'case "$1" in',
+    "  network) echo 127.0.0.1 ;;",
+    "  run) echo stand-in ;;",
+    "  inspect) echo healthy ;;",
+    "  port) echo 127.0.0.1:44300 ;;",
+    "  exec) echo '-----BEGIN CERTIFICATE-----' ;;",
+    "  rm) echo 'Error response from daemon: removal refused' >&2; exit 1 ;;",
+    "esac",
+    "",
+  ].join("\n"),
+);
+chmodSync(join(standIn, "docker"), 0o755);
+afterAll(() => rmSync(standIn, { recursive: true, force: true }));
+
+/** Runs `fn` with the stand-in docker first on PATH. */
+async function onStandIn<T>(fn: () => Promise<T>): Promise<T> {
+  const path = process.env.PATH;
+  process.env.PATH = `${standIn}${delimiter}${path}`;
+  try {
+    return await fn();
+  } finally {
+    process.env.PATH = path;
+  }
+}
 
 describe("edge teardown", () => {
   test("stop_and_removal_failures_are_both_reported", { timeout: TEST_MS }, async () => {
@@ -29,6 +64,21 @@ describe("edge teardown", () => {
     const edge = { stop: async () => void stops++ };
     await expect(stopEdgeAndRemoveImage(edge, absent)).rejects.toThrow(`docker rmi failed (${absent})`);
     expect(stops).toBe(1);
+  });
+
+  test("failed_removal_fails_the_stop", { timeout: TEST_MS }, async () => {
+    // docker() returns a non-zero code without throwing, so a refused `docker rm -f` used to pass silently (P1.11s).
+    const edge = await onStandIn(() => startEdge("unset-test-stand-in"));
+    const failed = await onStandIn(() => edge.stop()).catch((error: unknown) => error);
+    expect((failed as Error).message).toMatch(
+      /^docker rm failed \(unset-edge-\d+-\d+\): Error response from daemon: removal refused$/,
+    );
+    // A second stop meets the refusal again and a stub that is already closed: both are reported, the removal first.
+    const twice = await onStandIn(() => edge.stop()).catch((error: unknown) => error);
+    expect(twice).toBeInstanceOf(AggregateError);
+    const [removal, close] = (twice as AggregateError).errors as Error[];
+    expect(removal?.message).toMatch(/^docker rm failed/);
+    expect((close as NodeJS.ErrnoException | undefined)?.code).toBe("ERR_SERVER_NOT_RUNNING");
   });
 
   test("suite_after_all_stops_and_removes_the_tag", { timeout: TEST_MS }, async () => {
