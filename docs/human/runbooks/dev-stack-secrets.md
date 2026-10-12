@@ -21,9 +21,11 @@ and the preflight refuses that (architecture record 2026-10-12-p127u-bind-ancest
 `.dockerignore` entry does not make it safe: the file can change, and a later `COPY . .` would bake the secrets into an
 image layer.
 
-The preflight also checks every folder above each secret file and each bind-mounted path (such as
-`deployment/postgres/init`): each must be owned by root or by you, and writable by no group and no other user. Keep the
-checkout and `unset-dev-secrets/` under your own home directory, not under `/tmp` or a shared folder.
+The preflight also checks each bind-mounted path (such as `deployment/postgres/init`) and every folder above it and
+above each secret file: each must be owned by root or by you, and writable by no group and no other user. Keep the
+checkout and `unset-dev-secrets/` under your own home directory, not under `/tmp` or a shared folder. Database data is
+a named volume (`pgdata`), which Docker keeps under its own root-owned folder, so it needs nothing from you (Amendment 1
+of the same record).
 
 ## Layout (architecture record 2026-10-12-c9-secret-file-owner)
 

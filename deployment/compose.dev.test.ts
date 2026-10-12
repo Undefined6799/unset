@@ -153,6 +153,21 @@ describe("compose.dev.yaml (P1.29)", () => {
     for (const folder of folders) expect(relative(checkout, folder).startsWith(".."), folder).toBe(true);
   });
 
+  test("compose_dev_binds_are_read_only_and_state_is_a_named_volume", () => {
+    // Architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, Amendment 1: writable service state is a
+    // named volume under Docker's root-owned data root, never a bind; a bind kept is deploy-owned, read-only content.
+    // The postgres:18 image's VOLUME is /var/lib/postgresql, PGDATA beneath it (docker-library/postgres
+    // 18/trixie/Dockerfile:189-192).
+    const compose = dev();
+    for (const s of compose.services) {
+      for (const m of s.mounts.filter((mount) => mount.type === "bind"))
+        expect(m.readOnly, `${s.name} ${m.target}`).toBe(true);
+    }
+    expect(service(compose, "postgres").mounts).toContainEqual(
+      expect.objectContaining({ type: "volume", source: "pgdata", target: "/var/lib/postgresql" }),
+    );
+  });
+
   test("dev_down_never_removes_volumes", () => {
     const scripts = (
       JSON.parse(readFileSync(join(DEPLOYMENT, "..", "package.json"), "utf8")) as {
