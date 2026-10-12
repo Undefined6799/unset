@@ -5009,7 +5009,7 @@ Diagram: none.
 ---
 
 ### P1.23h — Seal fixture git from the caller's home
-Tags: [SEC]            Depends on: P1.23g (merged, #589)
+Tags: [SEC] [ALEX]            Depends on: P1.23g (merged, #589)
 Check class (`scripts/guards/git-env.ts` and its tests, `scripts/ci/secrets-fixtures.ts`, the presence rule's test), a
 tightening, kind/build; issue #596; slice 1; book edit 2026-10-12-p123h-fixture-git-follow-ups (final 03:38Z), from the
 coordinator's check of #589 relayed at 03:30Z. Owner: the third lane after P1.17r (#590), or Phase 2 if that frees
@@ -8531,6 +8531,8 @@ P1.29x, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.29y, P1.29d, P1.29, P1.29a, P
     stays. Red fixtures: `/usr/.`, `/./usr`, `/usr/../etc`, `/usr//bin`, `/usr/local/`, `/usr` and
     `rm -rf /usr/local/lib/node_modules/npm || true`; each is red on the PR, and the shipped lock stays green. Nothing
     depends on it.
+
+    As built: merged by Alex at 2026-10-12T04:01:24Z as `a75b395` (#603).
 14. **P1.29c "Lock records which bases build stages use"** ([SEC], product: `deployment/images/bases.lock.json`,
     `deployment/images/images.test.ts`, a tightening, kind/fix; issue #604; depends on P1.29b (merged, #599); owner
     Phase 1; slice 1; book edit 2026-10-12-p129c-p129l-build-stage-scan, from architecture's F1 part 1). Each lock entry

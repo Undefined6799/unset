@@ -220,7 +220,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.23w | Allow the render-entry subpath import (one depcruise row; check step) | [SEC] [ALEX] | P1.23v | `phase-1.md` |
 | P1.23c | CSS Modules server-render glue (gap-fill for P1.23) | — | P1.23, P1.23r, P1.23v, P1.23w | `phase-1.md` |
 | P1.23g | Guard test fixtures isolated from global git config (no signing, no system config) | [SEC] [ALEX] | — | `phase-1.md` |
-| P1.23h | Fixture git sealed from the caller's home (excludes, attributes, system), secrets-fixtures moved, presence rule per call | [SEC] | P1.23g | `phase-1.md` |
+| P1.23h | Fixture git sealed from the caller's home (excludes, attributes, system), secrets-fixtures moved, presence rule per call | [SEC] [ALEX] | P1.23g | `phase-1.md` |
 | P1.24i | Icons and inventory (split from P1.24) | [SEC] | P1.22, P1.23r | `phase-1.md` |
 | P1.24h | `safeHref` (trusted base, split from P1.24) | [SEC] | P1.22 | `phase-1.md` |
 | P1.24q | UI inventory guard (check part of P1.24; SE-6 `q`) | — | P1.24i | `phase-1.md` |
