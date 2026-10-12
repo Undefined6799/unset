@@ -44,7 +44,7 @@ export type Inputs = {
   edgeDir: string;
   readText: (path: string) => string | null;
   stat: (path: string) => Stats | null;
-  /** Like `stat`, but a symlink is reported as itself (C9 refuses a linked secret or secrets directory). */
+  /** Like `stat`, but a symlink is reported as itself (C9 refuses a link anywhere on a mounted secret's path). */
   lstat: (path: string) => Stats | null;
   uid: number;
 };

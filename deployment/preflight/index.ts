@@ -135,8 +135,10 @@ export function loadCompose(files: string[], readText: (path: string) => string 
       const build = service.build === null ? null : resolveBuild(service.build, projectDir);
       services.push({ ...service, mounts, envFiles, build });
     }
-    // A service names secrets declared in its own file (compose-parse Scope), so each name resolves within the file.
+    // compose-parse refuses a service secret its own file does not declare, and a name declared in two files is
+    // refused here (Compose would merge it, last file winning), so each name resolves within its own file (P1.27a).
     for (const [secret, path] of compose.secretFileByName) {
+      if (secretFileByName.has(secret)) throw new CannotRun(`secret ${secret} is defined twice`);
       const users = compose.services
         .filter((service) => service.secrets.includes(secret))
         .map((service) => ({ service: service.name, user: service.hardening.user }));

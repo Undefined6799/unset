@@ -4,8 +4,8 @@
 // - File secrets bind-mounted into containers keep the host file's owner and mode ("The `uid`, `gid`, and `mode`
 //   attributes are not implemented in Docker Compose when the source of the secret is a `file`", compose-spec
 //   05-services.md, secrets). So each is mode 0400 and owned by the numeric `user` uid of the services that mount it,
-//   inside one directory that only the deploy user can reach: mode 0700, its own, under parents no other user can
-//   change. A uid that collides with a host account then still cannot reach the file.
+//   inside one directory that only the deploy user can reach: mode 0700, its own, reached through no link, under
+//   parents no other user can change (P1.27a). A uid that collides with a host account then still cannot reach it.
 
 import type { Stats } from "node:fs";
 import { dirname } from "node:path";
@@ -42,34 +42,36 @@ function mountedProblem(inputs: Inputs): Outcome | null {
   return null;
 }
 
-/** The secrets directory is the deploy user's, mode 0700, and no other user can change any directory above it. */
-function lockedDirectoryProblem(dir: string, { lstat, stat, uid }: Inputs): Outcome | null {
+/**
+ * The secrets folder is the deploy user's, mode 0700, and is judged where it really is: no component of its path is a
+ * link (Docker resolves a bind source again at every start), and no user but root and the deploy user can change any
+ * directory above it, sticky or not (OpenSSH safe_path, misc.c; CERT FIO15-C). Ancestors are named by position.
+ */
+function lockedDirectoryProblem(dir: string, { lstat, uid }: Inputs): Outcome | null {
   const info = lstat(dir);
   if (info === null) return missing(dir);
   if (!info.isDirectory() || (info.mode & 0o7777) !== 0o700 || info.uid !== uid) {
     return fail(`${dir} must be a directory with mode 0700 owned by the deploy user`);
   }
-  for (let parent = dirname(dir); ; parent = dirname(parent)) {
-    const above = stat(parent);
-    if (above === null) return missing(parent);
-    if (changeableByOthers(above, uid)) return fail(`${parent} can be changed by another user`);
+  let level = 1;
+  for (let parent = dirname(dir); ; parent = dirname(parent), level++) {
+    const above = lstat(parent);
+    if (above === null || !above.isDirectory())
+      return fail(`parent ${level} of the secrets folder is a link or not a directory`);
+    const othersOwn = above.uid !== 0 && above.uid !== uid;
+    if (othersOwn || (above.mode & 0o022) !== 0) {
+      return fail(`parent ${level} of the secrets folder can be changed by another user`);
+    }
     if (dirname(parent) === parent) return null;
   }
-}
-
-/**
- * Whether a user other than root and the deploy user could rename or replace an entry in this directory: they own it,
- * or it is group or world writable without the sticky bit, which keeps others from renaming what they do not own.
- */
-function changeableByOthers(info: Stats, deployUid: number): boolean {
-  if (info.uid !== 0 && info.uid !== deployUid) return true;
-  return (info.mode & 0o022) !== 0 && (info.mode & 0o1000) === 0;
 }
 
 function secretFileProblem({ path, mountedBy }: MountedSecret, info: Stats | null): Outcome | null {
   if (info === null) return missing(path);
   if (info.isSymbolicLink() || !info.isFile() || info.size === 0) return fail(`${path} is empty, a link or not a file`);
   if ((info.mode & 0o7777) !== 0o400) return fail(`${path} must have mode 0400`);
+  // A second name outside the locked folder would reach the same file (Postfix safe_open.c refuses st_nlink != 1).
+  if (info.nlink !== 1) return fail(`${path} has more than one hard link`);
   if (mountedBy.length === 0) return fail(`${path} is declared but no service mounts it`);
   const unset = mountedBy.find((reader) => reader.user === null);
   if (unset !== undefined) return fail(`${unset.service} mounts ${path} but sets no user`);
