@@ -598,8 +598,9 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * proxy a given upstream (P1.28f; amendment 8, point 4), so each upstream sits behind one site's rules. Zone state is
  * shared across sites by zone name: caddy-ratelimit at the pinned 5625512f24f6 keeps each zone's limiters in one
  * process-wide pool keyed by its name (ratelimit.go:92-96, handler.go:385). So every site importing pds-ratelimit
- * spends the same per-client budgets; the local app site does, which Amendment 2 of the refocus rulings accepts for
- * local only, and a prod app site gets its own zone (Amendment 5, F3).
+ * spends the same per-client budgets; the local app site does, which Amendment 2 of
+ * unset-plan/book-edits/2026-10-12-refocus-local-signin-rulings.md accepts for local only, and a prod app site gets its
+ * own zone (Amendment 5, F3).
  *
  * Each env placeholder sits only in its position in PLACEHOLDER_POSITIONS, every upstream is a placeholder, and a
  * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
