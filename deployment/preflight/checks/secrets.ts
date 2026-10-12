@@ -35,6 +35,8 @@ function mountedProblem(inputs: Inputs): Outcome | null {
   if (dir === undefined) return null;
   const locked = lockedDirectoryProblem(dir, inputs);
   if (locked !== null) return locked;
+  const bound = bindReachingProblem(dir, inputs);
+  if (bound !== null) return bound;
   for (const secret of mountedSecrets) {
     const problem = secretFileProblem(secret, inputs.lstat(secret.path));
     if (problem !== null) return problem;
@@ -64,6 +66,25 @@ function lockedDirectoryProblem(dir: string, { lstat, uid }: Inputs): Outcome | 
     }
     if (dirname(parent) === parent) return null;
   }
+}
+
+/**
+ * Secrets reach containers only through `secrets:` (architecture, Amendment 2 of 2026-10-12-c9-secret-file-owner): a
+ * bind mount whose source, as written or resolved, is the secrets folder, lies inside it or contains it is refused.
+ */
+function bindReachingProblem(dir: string, { compose, realpath }: Inputs): Outcome | null {
+  const folders = [dir, realpath(dir) ?? dir];
+  const related = (a: string, b: string) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+  for (const service of compose.services) {
+    for (const mount of service.mounts) {
+      if (mount.type !== "bind" || mount.source === null) continue;
+      const sources = [mount.source, realpath(mount.source) ?? mount.source];
+      if (sources.some((source) => folders.some((folder) => related(source, folder)))) {
+        return fail(`${service.name} binds a path that reaches the secrets folder`);
+      }
+    }
+  }
+  return null;
 }
 
 function secretFileProblem({ path, mountedBy }: MountedSecret, info: Stats | null): Outcome | null {

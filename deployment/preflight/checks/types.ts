@@ -46,6 +46,8 @@ export type Inputs = {
   stat: (path: string) => Stats | null;
   /** Like `stat`, but a symlink is reported as itself (C9 refuses a link anywhere on a mounted secret's path). */
   lstat: (path: string) => Stats | null;
+  /** The path with every link resolved, or null when it does not exist (C9 follows bind sources to their target). */
+  realpath: (path: string) => string | null;
   uid: number;
 };
 

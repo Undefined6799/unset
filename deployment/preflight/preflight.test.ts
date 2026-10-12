@@ -485,6 +485,25 @@ describe("preflight", () => {
     expect(twice.lines).toContain(`FAIL C9 ${secret(hard.root)} has more than one hard link`);
   });
 
+  // P1.27a (architecture, Amendment 2): secrets reach containers only through `secrets:`. A bind mount whose real
+  // source is the secrets folder, lies inside it, or contains it would hand the files over with no owner check.
+  test("c9_bind_mount_reaching_secrets_fails", async () => {
+    const binding = (source: string) =>
+      COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    volumes:\n      - ${source}:/srv:ro`);
+    for (const source of ["./secrets", "./secrets/db_password", "."]) {
+      const result = await check({ compose: binding(source) });
+      expect(result.lines.find((l) => l.startsWith("FAIL C9"))).toBe(
+        "FAIL C9 pds binds a path that reaches the secrets folder",
+      );
+    }
+    // A link elsewhere in the project that resolves into the folder.
+    const { root, file } = stack({ compose: binding("./alias") });
+    symlinkSync(join(root, "deployment/secrets"), join(root, "deployment/alias"));
+    const linked = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+    expect(linked.lines).toContain("FAIL C9 pds binds a path that reaches the secrets folder");
+    expect(failed((await check({ compose: binding("./edge/sites") })).lines)).toEqual([]);
+  });
+
   // P1.30o: every mounted secret shares one locked folder, so one directory check covers them all.
   test("c9_mounted_secrets_share_one_folder", async () => {
     const second = COMPOSE.replace("    secrets: [db_password]", "    secrets: [db_password, api_key]").replace(

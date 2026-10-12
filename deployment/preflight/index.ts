@@ -11,7 +11,7 @@
 // read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
 // configured value is withheld whole.
 import { execFile } from "node:child_process";
-import { lstatSync, readFileSync, type Stats, statSync } from "node:fs";
+import { lstatSync, readFileSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -50,6 +50,7 @@ export type Deps = {
   readText?: (path: string) => string | null;
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
+  realpath?: (path: string) => string | null;
   uid?: number;
   checks?: readonly Check[];
   timeoutMs?: number;
@@ -78,6 +79,14 @@ const statOrNull = (path: string): Stats | null => {
 const lstatOrNull = (path: string): Stats | null => {
   try {
     return lstatSync(path);
+  } catch {
+    return null;
+  }
+};
+
+const realpathOrNull = (path: string): string | null => {
+  try {
+    return realpathSync(path);
   } catch {
     return null;
   }
@@ -216,6 +225,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
     readText,
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
+    realpath: deps.realpath ?? realpathOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };
   return { inputs, configured: new ConfiguredValues(values) };
