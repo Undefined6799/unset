@@ -7,15 +7,16 @@
 // The first --compose file's directory is the project directory: every relative path resolves from it. Interpolation
 // reads the one --interpolation-env file (Compose's --env-file), or else the project directory's .env, as Compose
 // does; the preflight refuses to run when its environment could change what Compose reads (P1.30a). The flag is not
-// called --env-file because Node reads that flag anywhere before a literal `--`, even after the script name, and applies
-// the file's NODE_OPTIONS before this code runs (Node v26.10.0 src/node_dotenv.cc:21-66, src/node.cc:982-1003; ruling
-// 2026-10-12-preflight-compose-inputs, Amendment 3). The `--` before our arguments stops that scan too.
+// called --env-file because Node reads that flag anywhere before a literal `--`, even after the script name, and
+// applies the file's NODE_OPTIONS before this code runs (Node v26.10.0 src/node_dotenv.cc:21-66,
+// src/node.cc:982-1003; ruling 2026-10-12-preflight-compose-inputs, Amendment 3). The `--` before our arguments stops
+// that scan too.
 //
 // Exit 0 when every check passes, 1 when one fails, 2 when the preflight cannot run (a bad argument, an unreadable or
-// malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3 to C5,
-// and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a secret value: env files are
-// read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
-// configured value is withheld whole.
+// malformed compose or env file). There is no flag to skip a check. A check that throws fails; the network checks (C3
+// to C5, and C24) give up after 30 s and fail. Output is one `PASS|FAIL <id> <reason>` line per check and never a
+// secret value: env files are read into SecretMaps, Compose is parsed here, never through `docker compose config`, and
+// a reason that holds any configured value is withheld whole.
 import { execFile } from "node:child_process";
 import { lstatSync, readFileSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
@@ -119,8 +120,8 @@ export const CLI_OPTIONS = {
 const USAGE = "usage: --env dev|prod --compose <file> [--compose <file>...] [--interpolation-env <file>]";
 
 function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
-  // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any other
-  // `--` is refused: parseArgs would read it as the start of positionals, and a trailing one ends nothing.
+  // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any
+  // other `--` is refused: parseArgs would read it as the start of positionals, and a trailing one ends nothing.
   const args = argv[0] === "--" ? argv.slice(1) : argv;
   if (args.includes("--")) throw new CannotRun(USAGE);
   let values: { env?: string; compose?: string[]; "interpolation-env"?: string[] };
@@ -263,8 +264,8 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
   // Compose takes a shell value over the env file (Docker docs, "Interpolation"; compose-go Mapping.Merge).
   refuseWhenSet(interpolated, environment);
   const secretPaths: string[] = [];
-  // Compose interpolates from its --env-file (our --interpolation-env), or else the `.env` in the project directory (compose-go cli/options.go
-  // WithEnvFiles, v2.7.1 and v2.13.0); a name the file lacks becomes empty, as in Compose.
+  // Compose interpolates from its --env-file (our --interpolation-env), or else the `.env` in the project directory
+  // (compose-go cli/options.go WithEnvFiles, v2.7.1 and v2.13.0); a name the file lacks becomes empty, as in Compose.
   const interpolationPath = envFile ?? join(dirname(files[0] as string), ".env");
   const interpolationFile =
     envFile === null && readText(interpolationPath) === null ? [] : readEnvFile(interpolationPath, readText);
