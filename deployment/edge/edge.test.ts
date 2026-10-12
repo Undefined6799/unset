@@ -507,6 +507,33 @@ describe("edge site rules (P1.28f)", () => {
     return edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, env, FILES));
   };
 
+  test("edge_reader_errors_carry_no_env_value", () => {
+    // P1.30h (record 2026-10-12-p130h-p130w-c18-follow-ups, ruling B2a): a reader error carries no value from env, the
+    // site address included. Each sentinel has its name's shape, so the reader puts it in and the error comes later.
+    const sentinels = {
+      PDS_HOST: "sentinelhost.example.test",
+      PDS_UPSTREAM: "sentinelupstream.example.test:3000",
+      ACME_EMAIL: "sentinel@sentinelmail.example.test",
+    } as const;
+    for (const [name, sentinel] of Object.entries(sentinels)) {
+      const env = { ...ENV, [name]: sentinel };
+      const quoted = `"{$${name}}" {\n\trespond 204\n}\n`;
+      expect(() => withSites({ "sites/other.caddy": quoted }, env), name).toThrow(
+        `quoted top-level token "{$${name}}" is not supported`,
+      );
+      for (const extra of [quoted, `{$${name}} {\n\tnot_a_directive\n}\n`]) {
+        let message = "";
+        try {
+          withSites({ "sites/other.caddy": extra }, env);
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message, `${name}: ${extra}`).not.toBe("");
+        expect(message, `${name}: ${extra}`).not.toContain(sentinel);
+      }
+    }
+  });
+
   test("edge_zones_written_in_place_fail", () => {
     // Mutation pin for the via check: the same rate_limit block written straight into the route, not imported from
     // pds-ratelimit, is not the zones (amendment 8, point 3).
