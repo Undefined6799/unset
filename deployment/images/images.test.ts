@@ -368,19 +368,29 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
   return problems;
 }
 
-/** The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&` or `;`. */
-function finalStageRemovals(dockerfile: string): Set<string> {
+/**
+ * The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&`. A RUN joined by
+ * anything else (`;`, `||`, `|`, a lone `&`, or a `#` comment, SEPARATOR below) could let a removal fail or vanish
+ * unseen, so it is refused and none of its removals count (P1.29u).
+ */
+function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused: boolean } {
   const all = instructions(dockerfile);
   const finalFromAt = all.findLastIndex((step) => /^FROM\s/i.test(step.text));
   const removed = new Set<string>();
+  let refused = false;
   for (const { text } of all.slice(finalFromAt + 1)) {
     if (!/^RUN\s/i.test(text)) continue;
-    for (const command of text.replace(/^RUN\s+/i, "").split(/&&|;/)) {
+    const script = text.replace(/^RUN\s+/i, "");
+    if (SEPARATOR.test(script.replaceAll("&&", ""))) {
+      refused = true;
+      continue;
+    }
+    for (const command of script.split("&&")) {
       const [rm, flags, ...paths] = command.trim().split(/\s+/);
       if (rm === "rm" && flags === "-rf") for (const path of paths) removed.add(path);
     }
   }
-  return removed;
+  return { removed, refused };
 }
 
 type Instruction = { line: number; text: string };
@@ -791,16 +801,23 @@ function osPackageProblems(dockerfile: string): string[] {
   }
 }
 
-const STRIPPED_PATH = /^\/[\w.@+-]+(?:\/[\w.@+-]+)*$/;
+/** Three or more literal segments under the root (P1.29u), so a stripped path never names `/usr` or `/usr/local`. */
+const STRIPPED_PATH = /^(?:\/[\w.@+-]+){3,}$/;
 
-/** Every way a lock entry's `stripped` list is malformed: empty, a path twice, or a path not absolute and literal. */
+/** Whether a stripped path is absolute, literal, at least three segments deep, and already in normal form. */
+const strippedPathOk = (path: string): boolean => STRIPPED_PATH.test(path) && posix.normalize(path) === path;
+
+/**
+ * Every way a lock entry's `stripped` list is malformed: empty, a path twice, or a path that is not a normalised
+ * absolute path at least three segments deep (P1.29u, record 2026-10-12-p129b-p129u-p129v-follow-ups, ruling 2).
+ */
 function strippedListProblems(name: string, declared: string[]): string[] {
   const problems = declared.length === 0 ? [`lock entry ${name} has an empty stripped list`] : [];
   if (new Set(declared).size !== declared.length) problems.push(`lock entry ${name} lists a stripped path twice`);
-  for (const path of declared) {
-    if (!STRIPPED_PATH.test(path) || path.split("/").includes("..")) {
-      problems.push(`lock entry ${name}: stripped path ${path} is not an absolute path without wildcards`);
-    }
+  for (const path of declared.filter((entry) => !strippedPathOk(entry))) {
+    problems.push(
+      `lock entry ${name}: stripped path ${path} is not a normalised absolute path at least three segments deep`,
+    );
   }
   return problems;
 }
@@ -818,9 +835,10 @@ function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
     const users = Object.entries(files).filter(([, text]) => finalEntry(text, lock) === name);
     if (users.length === 0) problems.push(`lock entry ${name} declares stripped paths but no final stage builds on it`);
     for (const [file, text] of users) {
-      const removed = finalStageRemovals(text);
+      const { removed, refused } = finalStageRemovals(text);
       const kept = stripped.filter((path) => !removed.has(path));
       problems.push(...kept.map((path) => `${file} keeps ${path}, which lock entry ${name} declares stripped`));
+      if (refused) problems.push(`${file}: a final-stage RUN joins commands with something other than &&`);
     }
   }
   return problems.sort();
@@ -964,9 +982,9 @@ describe("base images", () => {
         { node: { ...NODE, stripped: ["/opt/yarn-*", "usr/x", "/a/../b"] } },
       ),
     ).toEqual([
-      "lock entry node: stripped path /a/../b is not an absolute path without wildcards",
-      "lock entry node: stripped path /opt/yarn-* is not an absolute path without wildcards",
-      "lock entry node: stripped path usr/x is not an absolute path without wildcards",
+      "lock entry node: stripped path /a/../b is not a normalised absolute path at least three segments deep",
+      "lock entry node: stripped path /opt/yarn-* is not a normalised absolute path at least three segments deep",
+      "lock entry node: stripped path usr/x is not a normalised absolute path at least three segments deep",
       "ok keeps /a/../b, which lock entry node declares stripped",
       "ok keeps /opt/yarn-*, which lock entry node declares stripped",
       "ok keeps usr/x, which lock entry node declares stripped",
@@ -977,6 +995,33 @@ describe("base images", () => {
     expect(
       strippedProblems({ ok: `FROM ${pinnedNode}\n${both}` }, { node: { ...NODE, stripped: [npm, npm] } }),
     ).toEqual(["lock entry node lists a stripped path twice"]);
+    // P1.29u (record 2026-10-12-p129b-p129u-p129v-follow-ups, ruling 2): a stripped path is normalised and at least
+    // three segments deep, so no spelling widens what the mirror scan skips.
+    for (const path of [
+      "/usr/.",
+      "/./usr",
+      "/usr/../etc",
+      "/usr//bin",
+      "/usr/local/",
+      "/usr",
+      "/usr/local",
+      "/usr/local/./bin",
+      "/usr/local/../lib/x",
+    ]) {
+      const removal = `FROM ${pinnedNode}\nRUN rm -rf ${path}\n`;
+      expect(strippedProblems({ ok: removal }, { node: { ...NODE, stripped: [path] } }), path).toEqual([
+        `lock entry node: stripped path ${path} is not a normalised absolute path at least three segments deep`,
+      ]);
+    }
+    // A final-stage RUN joined by anything but && is refused, not split, so `|| true` cannot hide a failed removal.
+    for (const join of [" || true", "; true", " | true", " & true", " # true"]) {
+      const removal = `FROM ${pinnedNode}\nRUN rm -rf ${npm} ${corepack}${join}\n`;
+      expect(strippedProblems({ ok: removal }, declared), join).toEqual([
+        `ok keeps ${corepack}, which lock entry node declares stripped`,
+        `ok keeps ${npm}, which lock entry node declares stripped`,
+        "ok: a final-stage RUN joins commands with something other than &&",
+      ]);
+    }
   });
 
   test("every_dockerfile_has_a_known_kind", () => {
@@ -1784,6 +1829,6 @@ describe("postgres image", () => {
     expect(fromImages(read(POSTGRES_DOCKERFILE))).toEqual([`${base.ref}:${base.tag}@${base.digest}`]);
     // Nothing is copied in and the official docker-entrypoint.sh and its CMD are inherited unchanged.
     expect(postgres.filter((line) => /^(?:COPY|ADD|ENTRYPOINT|CMD|ENV|ARG|VOLUME) /.test(line))).toEqual([]);
-    expect(finalStageRemovals(read(POSTGRES_DOCKERFILE))).toContain("/usr/local/bin/gosu");
+    expect(finalStageRemovals(read(POSTGRES_DOCKERFILE)).removed).toContain("/usr/local/bin/gosu");
   });
 });
