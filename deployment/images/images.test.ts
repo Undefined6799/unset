@@ -371,18 +371,18 @@ function dl3026Problems(dockerfile: string, lock: Lock): string[] {
 /**
  * The paths an `rm -rf` deletes in the final stage: every word after `rm -rf` in a RUN, up to `&&`. A RUN joined by
  * anything else (`;`, `||`, `|`, a lone `&`, or a `#` comment, SEPARATOR below) could let a removal fail or vanish
- * unseen, so it is refused and none of its removals count (P1.29u).
+ * unseen, so it is refused, by the line it starts on, and none of its removals count (P1.29u, P1.29c).
  */
-function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused: boolean } {
+function finalStageRemovals(dockerfile: string): { removed: Set<string>; refused: number[] } {
   const all = instructions(dockerfile);
   const finalFromAt = all.findLastIndex((step) => /^FROM\s/i.test(step.text));
   const removed = new Set<string>();
-  let refused = false;
-  for (const { text } of all.slice(finalFromAt + 1)) {
+  const refused: number[] = [];
+  for (const { line, text } of all.slice(finalFromAt + 1)) {
     if (!/^RUN\s/i.test(text)) continue;
     const script = text.replace(/^RUN\s+/i, "");
     if (SEPARATOR.test(script.replaceAll("&&", ""))) {
-      refused = true;
+      refused.push(line);
       continue;
     }
     for (const command of script.split("&&")) {
@@ -838,7 +838,9 @@ function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
       const { removed, refused } = finalStageRemovals(text);
       const kept = stripped.filter((path) => !removed.has(path));
       problems.push(...kept.map((path) => `${file} keeps ${path}, which lock entry ${name} declares stripped`));
-      if (refused) problems.push(`${file}: a final-stage RUN joins commands with something other than &&`);
+      for (const line of refused) {
+        problems.push(`${file}: line ${line}: a final-stage RUN joins commands with something other than &&`);
+      }
     }
   }
   return problems.sort();
@@ -1019,9 +1021,14 @@ describe("base images", () => {
       expect(strippedProblems({ ok: removal }, declared), join).toEqual([
         `ok keeps ${corepack}, which lock entry node declares stripped`,
         `ok keeps ${npm}, which lock entry node declares stripped`,
-        "ok: a final-stage RUN joins commands with something other than &&",
+        "ok: line 2: a final-stage RUN joins commands with something other than &&",
       ]);
     }
+    // The message names each refused RUN by its first line, so a long Dockerfile points at it (P1.29c).
+    const later = `FROM ${pinnedNode} AS deps\nFROM ${pinnedNode}\nRUN rm -rf ${npm} \\\n  ${corepack}\nRUN true || true\n`;
+    expect(strippedProblems({ ok: later }, declared)).toEqual([
+      "ok: line 5: a final-stage RUN joins commands with something other than &&",
+    ]);
   });
 
   test("every_dockerfile_has_a_known_kind", () => {
