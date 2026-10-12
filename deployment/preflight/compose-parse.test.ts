@@ -64,6 +64,39 @@ describe("compose subset", () => {
       /network a: name is refused/,
     );
   });
+  // P1.30u: the edge service's mounts decide which Caddy config runs (C18), so `volumes` is read in a strict subset:
+  // short `SOURCE:TARGET[:ro|rw]` with a path source starting /, ./ or ../ or a plain volume name, or long syntax with
+  // only type (bind, volume, tmpfs), source, target and read_only. Compose-spec 05-services.md "volumes".
+  test("volumes_read_in_the_subset", () => {
+    const mounts = (lines: string) => parseCompose(`${base}    volumes:\n${lines}`, "c.yaml").services[0]?.mounts;
+    expect(mounts("      - ./sites:/etc/caddy/sites/enabled:ro\n      - data:/data\n      - /cache\n")).toEqual([
+      { type: "bind", source: "./sites", target: "/etc/caddy/sites/enabled", readOnly: true },
+      { type: "volume", source: "data", target: "/data", readOnly: false },
+      { type: "volume", source: null, target: "/cache", readOnly: false },
+    ]);
+    expect(
+      mounts(
+        "      - type: tmpfs\n        target: /tmp\n      - type: bind\n        source: /srv\n        target: /srv\n        read_only: true\n",
+      ),
+    ).toEqual([
+      { type: "tmpfs", source: null, target: "/tmp", readOnly: false },
+      { type: "bind", source: "/srv", target: "/srv", readOnly: true },
+    ]);
+    for (const entry of [
+      "~/sites:/etc/caddy",
+      "C:\\\\sites:/etc/caddy",
+      "./a:/b:z",
+      "./a:/b:ro:x",
+      "./a:relative",
+      "{type: image, source: x, target: /etc/caddy}",
+      "{type: bind, source: ./a, target: /b, bind: {propagation: shared}}",
+      "{type: bind, target: /b}",
+      '{type: bind, source: ./a, target: /b, read_only: "true"}',
+    ]) {
+      expect(() => mounts(`      - ${entry}\n`), entry).toThrow(ParseError);
+    }
+    refused(`${base}    volumes_from: [other]\n`);
+  });
   test("preflight_refuses_ambiguous_scalars", () => refused(`${base}    environment:\n      A: 0123\n`));
 });
 
@@ -94,6 +127,11 @@ services:
       front:
         aliases: [edge]
       inner:
+    volumes:
+      - ./sites:/etc/caddy/sites/enabled:ro
+      - data:/data
+      - type: tmpfs
+        target: /tmp
   pds:
     image: ghcr.io/undefined6799/mirror/pds@${digest}
     env_file: [pds.env]
@@ -113,6 +151,8 @@ networks:
   inner:
     internal: true
     driver: bridge
+volumes:
+  data: {}
 secrets:
   pds_admin:
     file: ./pds-admin.secret
@@ -147,6 +187,7 @@ type Theirs = {
       ports?: { target: number; published?: string; host_ip?: string }[];
       networks?: Record<string, unknown>;
       network_mode?: string;
+      volumes?: { type: string; source?: string; target: string; read_only?: boolean }[];
     }
   >;
   networks?: Record<string, { internal?: boolean }>;
@@ -181,6 +222,10 @@ function oursAsCompose(file: string) {
           ports: service.ports,
           networks: [...service.networks].sort(),
           networkMode: service.networkMode,
+          mounts: service.mounts.map((m) => ({
+            ...m,
+            source: m.type === "bind" && m.source !== null ? resolve(dirname(file), m.source) : m.source,
+          })),
         },
       ]),
     ),
@@ -206,6 +251,12 @@ function theirsAsOurs(theirs: Theirs) {
           })),
           networks: Object.keys(service.networks ?? {}).sort(),
           networkMode: service.network_mode ?? null,
+          mounts: (service.volumes ?? []).map((v) => ({
+            type: v.type,
+            source: v.source ?? null,
+            target: v.target,
+            readOnly: v.read_only ?? false,
+          })),
         },
       ]),
     ),

@@ -34,6 +34,8 @@ export type Inputs = {
   retirementReportPath: string;
   /** `deployment/networks.<env>.json`, the reviewed table of networks and members that C17 compares Compose with. */
   networkTablePath: string;
+  /** The repository's `deployment/edge`, whose Caddyfile and snippets the edge image carries (C18). */
+  edgeDir: string;
   readText: (path: string) => string | null;
   stat: (path: string) => Stats | null;
   uid: number;

@@ -18,7 +18,9 @@ const pdsHostname = ({ serviceEnv }: Inputs): string =>
 export const c21: Check = {
   id: "C21",
   run: (inputs) => {
-    if (pdsHostname(inputs) !== "0x40.space") return pass("n/a");
+    // A hostname is case-insensitive and may end in the root's dot (RFC 4343 section 2, RFC 1034 section 3.1).
+    const name = pdsHostname(inputs).toLowerCase();
+    if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space") return pass("n/a");
     const text = inputs.readText(inputs.retirementReportPath);
     if (text === null) return missing(inputs.retirementReportPath);
     let report: unknown;

@@ -95,7 +95,11 @@ function loadCompose(files: string[], readText: (path: string) => string | null)
       if (services.some((s) => s.service.name === service.name)) {
         throw new CannotRun(`service ${service.name} is defined twice`);
       }
-      services.push({ service, dir: dirname(file) });
+      // A bind source is relative to its own compose file's directory (compose-spec 05-services.md "volumes").
+      const mounts = service.mounts.map((m) =>
+        m.type === "bind" && m.source !== null ? { ...m, source: resolve(dirname(file), m.source) } : m,
+      );
+      services.push({ service: { ...service, mounts }, dir: dirname(file) });
     }
     for (const network of compose.networks) {
       if (networks.some((n) => n.name === network.name))
@@ -148,6 +152,7 @@ function loadInputs(argv: string[], deps: Deps): Inputs {
     run: deps.run,
     retirementReportPath: join(deps.root, RETIREMENT_REPORT),
     networkTablePath: join(deps.root, `deployment/networks.${env}.json`),
+    edgeDir: join(deps.root, "deployment/edge"),
     readText,
     stat: deps.stat ?? statOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,
