@@ -2,9 +2,11 @@
 // C9 needs 0600). The only double is the child-process runner, the preflight's one unmanaged dependency (TE-1).
 
 import { execFileSync } from "node:child_process";
+import type { Stats } from "node:fs";
 import {
   chmodSync,
   cpSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -69,6 +71,8 @@ services:
       PDS_HOSTNAME: pds.example.test
   web:
     image: ${WEB}
+    user: "65532:65532"
+    secrets: [db_password]
     environment:
       FINGERPRINT_CHECK: arachnid
 secrets:
@@ -140,7 +144,10 @@ function stack({
   };
   const env = Object.entries({ ...PDS_ENV, ...pdsEnv }).flatMap(([k, v]) => (v === null ? [] : [`${k}=${v}\n`]));
   secret("deployment/pds.env", env.join(""));
+  // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; checkDeps reads it as owned by web's uid.
   secret("deployment/secrets/db_password", `${CANARY}\n`);
+  chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
+  chmodSync(join(root, "deployment/secrets"), 0o700);
   if (dotEnv !== undefined) secret("deployment/.env", dotEnv);
   if (lock !== null) writeFileSync(join(root, "deployment/images.lock.json"), JSON.stringify(lock));
   writeFileSync(join(root, "deployment/cosign.pub"), "public key fixture\n");
@@ -192,9 +199,32 @@ function fakeRun(answers: Answers = {}) {
   return { run, calls };
 }
 
+/** web's uid in the all-good compose, which owns its mounted secret (P1.30o). */
+const WEB_UID = 65532;
+/**
+ * The real lstat, except that a file inside a deployment/secrets/ directory reads as owned by `owner`: a test cannot
+ * chown to another uid, and C9 compares the owner of a mounted secret with the uid of the service that mounts it.
+ */
+function lstatOwnedBy(owner: number): (path: string) => Stats | null {
+  return (path) => {
+    let info: Stats;
+    try {
+      info = lstatSync(path);
+    } catch {
+      return null;
+    }
+    if (!dirname(path).endsWith("/deployment/secrets")) return info;
+    return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid: owner });
+  };
+}
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
   const { root, file } = stack(s);
-  return preflight(["--env", env, "--compose", file], { root, run: fakeRun().run, ...deps });
+  return preflight(["--env", env, "--compose", file], {
+    root,
+    run: fakeRun().run,
+    lstat: lstatOwnedBy(WEB_UID),
+    ...deps,
+  });
 }
 const failed = (lines: string[]) => lines.filter((l) => l.startsWith("FAIL")).map((l) => l.split(" ")[1]);
 async function expectOnly(id: string, s: Stack, env = "prod", deps: Partial<Deps> = {}) {
@@ -308,23 +338,93 @@ describe("preflight", () => {
     await expectOnly("C8", { compose: edgeEnv });
   });
 
-  test("c9_secret_file_fails", async () => {
-    const { root, file } = stack();
-    chmodSync(join(root, "deployment/secrets/db_password"), 0o644);
-    const loose = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
-    expect(loose.lines).toContain(
-      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
-    );
-    // Too few bits fails the same way as too many (Codex review on #650).
-    chmodSync(join(root, "deployment/secrets/db_password"), 0o400);
-    const tight = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run });
-    expect(tight.lines).toContain(
-      `FAIL C9 ${join(root, "deployment/secrets/db_password")} must have exactly owner read and write permissions`,
-    );
-    const other = await check({}, "prod", { uid: 4242 });
-    expect(failed(other.lines)).toEqual(["C9"]);
+  // P1.30o: files Compose itself reads keep the deploy user's 0600 (architecture record 2026-10-12-c9-secret-file-owner).
+  test("c9_compose_read_file_fails", async () => {
+    for (const env of ["dev", "prod"]) {
+      const { root, file } = stack(env === "dev" ? { compose: DEV, pdsEnv: DEV_ENV } : {});
+      const run = (deps: Partial<Deps> = {}) =>
+        preflight(["--env", env, "--compose", file], {
+          root,
+          run: fakeRun().run,
+          lstat: lstatOwnedBy(WEB_UID),
+          ...deps,
+        });
+      const pdsEnv = join(root, "deployment/pds.env");
+      for (const mode of [0o644, 0o400]) {
+        chmodSync(pdsEnv, mode);
+        expect((await run()).lines).toContain(`FAIL C9 ${pdsEnv} must have exactly owner read and write permissions`);
+      }
+      chmodSync(pdsEnv, 0o600);
+      expect(failed((await run()).lines)).toEqual([]);
+      const other = (await run({ uid: 4242 })).lines.find((l) => l.startsWith("FAIL C9"));
+      expect(other).toBe(`FAIL C9 ${pdsEnv} is not owned by the deploy user`);
+    }
     const absent = await check({ compose: COMPOSE.replace("secrets/db_password", "secrets/absent") });
     expect(failed(absent.lines)).toEqual(["C9"]);
+  });
+
+  // P1.30o: a mounted secret is mode 0400, owned by the one uid that mounts it, in a 0700 directory of the deploy user.
+  test("c9_mounted_secret_owner_and_mode", async () => {
+    const path = (root: string) => join(root, "deployment/secrets/db_password");
+    const { root, file } = stack();
+    const run = (owner = WEB_UID) =>
+      preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, lstat: lstatOwnedBy(owner) });
+    expect(failed((await run()).lines)).toEqual([]);
+    const deployUid = process.getuid?.() ?? -1;
+    expect((await run(deployUid)).lines).toContain(
+      `FAIL C9 ${path(root)} is not owned by uid ${WEB_UID}, the user of web`,
+    );
+    for (const mode of [0o600, 0o440, 0o404, 0o4400]) {
+      chmodSync(path(root), mode);
+      expect((await run()).lines).toContain(`FAIL C9 ${path(root)} must have mode 0400`);
+    }
+  });
+
+  test("c9_secrets_directory_locked", async () => {
+    const { root, file } = stack();
+    const run = () =>
+      preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, lstat: lstatOwnedBy(WEB_UID) });
+    const dir = join(root, "deployment/secrets");
+    chmodSync(dir, 0o755);
+    expect((await run()).lines).toContain(`FAIL C9 ${dir} must be a directory with mode 0700 owned by the deploy user`);
+    chmodSync(dir, 0o700);
+    expect(failed((await run()).lines)).toEqual([]);
+    // A parent another user could write lets them swap the directory.
+    chmodSync(join(root, "deployment"), 0o777);
+    expect((await run()).lines).toContain(`FAIL C9 ${join(root, "deployment")} can be changed by another user`);
+    chmodSync(join(root, "deployment"), 0o755);
+    const other = await check({}, "prod", { uid: 4242 });
+    expect(other.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/is not owned by the deploy user$/);
+  });
+
+  test("c9_mounted_secret_readers", async () => {
+    const pdsReads = (user: string) =>
+      COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n${user}    secrets: [db_password]`);
+    const secret = (root: string) => join(root, "deployment/secrets/db_password");
+    // Two services with different uids.
+    const two = await check({ compose: pdsReads('    user: "1000:1000"\n') });
+    expect(two.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(/db_password is mounted by more than one uid$/);
+    // A mounting service with no user: the image default is invisible to the preflight.
+    const none = await check({ compose: pdsReads("") });
+    expect(none.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(
+      /^FAIL C9 pds mounts .*db_password but sets no user$/,
+    );
+    // Declared but mounted by nobody.
+    const unmounted = await check({ compose: COMPOSE.replace("    secrets: [db_password]\n", "") });
+    expect(unmounted.lines.find((l) => l.startsWith("FAIL C9"))).toMatch(
+      /db_password is declared but no service mounts it$/,
+    );
+    // A symlinked secret.
+    const { root, file } = stack();
+    rmSync(secret(root));
+    writeFileSync(join(root, "deployment/real"), "x\n");
+    symlinkSync(join(root, "deployment/real"), secret(root));
+    const linked = await preflight(["--env", "prod", "--compose", file], {
+      root,
+      run: fakeRun().run,
+      lstat: lstatOwnedBy(WEB_UID),
+    });
+    expect(linked.lines).toContain(`FAIL C9 ${secret(root)} is empty, a link or not a file`);
   });
 
   test("c10_published_port_fails", async () => {
@@ -730,7 +830,7 @@ describe("preflight C17 (P1.30t)", () => {
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: [edge]\n      inner:',
   )
     .replace("    env_file: pds.env", "    env_file: pds.env\n    networks: [inner]")
-    .replace("secrets:", "networks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
+    .replace("\nsecrets:", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
   const NETWORKED_TABLE = {
     default: { internal: false, members: ["web"] },
     front: { internal: false, members: ["edge"] },
@@ -751,7 +851,7 @@ describe("preflight C17 (P1.30t)", () => {
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks: [default, pds_net]',
         )
         .replace(`    image: ${WEB}`, `    image: ${WEB}\n    networks: ${webNetworks}`)
-        .replace("secrets:", "networks:\n  pds_net:\n    internal: true\nsecrets:");
+        .replace("\nsecrets:", "\nnetworks:\n  pds_net:\n    internal: true\nsecrets:");
     const table = {
       default: { internal: false, members: ["edge", "web"] },
       pds_net: { internal: true, members: ["edge", "pds"] },
@@ -767,7 +867,7 @@ describe("preflight C17 (P1.30t)", () => {
     await expectOnly("C17", { networks: {} });
     await expectOnly("C17", { networks: { default: { internal: false, members: ["edge", "pds"] } } });
     // A top-level networks.default changes that network's settings.
-    const internal = COMPOSE.replace("secrets:", "networks:\n  default:\n    internal: true\nsecrets:");
+    const internal = COMPOSE.replace("\nsecrets:", "\nnetworks:\n  default:\n    internal: true\nsecrets:");
     await expectOnly("C17", { compose: internal });
     const table = { default: { internal: true, members: ["edge", "pds", "web"] } };
     expect(failed((await check({ compose: internal, networks: table })).lines)).toEqual([]);
