@@ -2,6 +2,7 @@
 // image, so it lives in an *.image.test.ts file (step book P1.28i; architecture record
 // 2026-10-07-test-timing-fuzz-and-image-tests), apart from the reader's unit tests in caddyfile.test.ts.
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   cpSync,
   lstatSync,
@@ -57,12 +58,24 @@ function docker(args: readonly string[], timeoutMs: number): { code: number; out
   return { code: result.status ?? -1, out: result.stdout ?? "", err: result.stderr ?? String(result.error ?? "") };
 }
 
-/** Builds deployment/edge/Dockerfile with deployment/edge as the context; the image id. */
+/**
+ * Builds deployment/edge/Dockerfile with deployment/edge as the context under its own tag; the tag (P1.27z, as P1.27x
+ * does for product tests). Two builds of one context share an image id on CI's classic image store, so removing by id
+ * with -f removed the image under every other edge test; `rmi <tag>` removes the image only with its last tag
+ * (docs.docker.com, "docker image rm"). Plain progress, not -q, so a failure keeps the failing step's own log lines.
+ */
 function buildEdgeImage(): string {
-  const result = docker(["build", "-q", "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_MS);
-  if (result.code !== 0) throw new Error(`edge image build failed: ${result.err.slice(-2000)}`);
-  built.push(result.out.trim());
-  return result.out.trim();
+  const tag = `unset-test-${randomBytes(8).toString("hex")}`;
+  const result = docker(["build", "--progress=plain", "-t", tag, "-f", join(EDGE, "Dockerfile"), EDGE], BUILD_MS);
+  if (result.code !== 0) throw new Error(`edge image build failed: ${failedStep(result.err)}`);
+  built.push(tag);
+  return tag;
+}
+
+/** BuildKit's summary of the failing step to the end of its output (docker buildx 0.35.0), else the last 4000 chars. */
+function failedStep(stderr: string): string {
+  const from = stderr.lastIndexOf("\n------\n > ");
+  return (from === -1 ? stderr : stderr.slice(from + 1)).slice(-4_000);
 }
 
 /** The config files the image holds under /etc/caddy, by their repository path under deployment/edge. */
@@ -89,7 +102,10 @@ function imageConfig(image: string): Record<string, string> {
 describe("caddyfile reader against caddy adapt", () => {
   const env = { PDS_HOST, PDS_UPSTREAM: "upstream:3000", ACME_EMAIL: "edge@unset.test" };
   afterAll(() => {
-    for (const image of built) docker(["rmi", "-f", image], CALL_MS);
+    // The tag only, never -f: an image another edge test built from the same context stays (P1.27z).
+    const failed = built.map((tag) => docker(["rmi", tag], CALL_MS)).filter((removed) => removed.code !== 0);
+    if (failed.length > 0)
+      throw new Error(`docker rmi failed: ${failed.map((removed) => removed.err.trim()).join("; ")}`);
   }, CONTAINER_MS);
 
   test("caddyfile_reader_matches_caddy_adapt", () => {
