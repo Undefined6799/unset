@@ -141,6 +141,7 @@ test("budgets_match_plan", () => {
     "infrastructure/net-guard": 400,
     "shared/ui": 2500,
     "shared/ui-build": 800,
+    "shared/islands": 300,
   });
 });
 
