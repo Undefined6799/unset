@@ -402,6 +402,11 @@ describe("preflight", () => {
     });
     const passing = quote((i) => read(i, "web", "FINGERPRINT_CHECK"), pass);
     expect(await check({}, "prod", { checks: [passing] })).toEqual({ code: 0, lines: [`PASS CX ${WITHHELD}`] });
+    // A configured value inside the replacement text itself (Codex review on #627): the reason is left empty.
+    const marked = { dotEnv: "TOKEN=dotenv-only-value\nMARK=withheld\nWORD=missing\n" };
+    expect((await check(marked, "prod", { checks: [dotEnvOnly] })).lines).toEqual(["FAIL CX "]);
+    const absentMarked = quote(() => "dotenv-only-value", missing);
+    expect((await check(marked, "prod", { checks: [absentMarked] })).lines).toEqual(["FAIL CX "]);
   });
 
   test("password_probe_is_withheld_whole", async () => {
