@@ -71,7 +71,7 @@ services:
       ACME_EMAIL: edge@example.test
   pds:
     image: ${PDS}
-    env_file: pds.env
+    env_file: ../../unset-dev-env/pds.env
     environment:
       PDS_HOSTNAME: pds.example.test
   web:
@@ -82,7 +82,7 @@ services:
       FINGERPRINT_CHECK: arachnid
 secrets:
   db_password:
-    file: ../../unset-secrets/db_password
+    file: ../../unset-dev-secrets/db_password
 `;
 const LOCK = {
   edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
@@ -129,8 +129,10 @@ afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
 });
 
-/** The stack's secrets folder: `unset-secrets` beside the checkout, as the compose file names it. */
-const secretsOf = (root: string) => join(dirname(root), "unset-secrets");
+/** The stack's secrets folder: `unset-dev-secrets` beside the checkout, as the compose file names it. */
+const secretsOf = (root: string) => join(dirname(root), "unset-dev-secrets");
+/** The folder of the env files Compose reads: `unset-dev-env` beside the checkout. */
+const envOf = (root: string) => join(dirname(root), "unset-dev-env");
 
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
@@ -150,12 +152,16 @@ function stack({
   const root = join(base, "repo");
   mkdirSync(join(root, "deployment"), { recursive: true });
   mkdirSync(secretsOf(root));
+  mkdirSync(envOf(root), { mode: 0o700 });
+  chmodSync(envOf(root), 0o700);
   const secret = (path: string, text: string) => {
     writeFileSync(join(root, path), text);
     chmodSync(join(root, path), 0o600);
   };
   const env = Object.entries({ ...PDS_ENV, ...pdsEnv }).flatMap(([k, v]) => (v === null ? [] : [`${k}=${v}\n`]));
-  secret("deployment/pds.env", env.join(""));
+  // The env files Compose reads (P1.27u): beside the checkout too, in their own 0700 folder, never in a build context.
+  writeFileSync(join(envOf(root), "pds.env"), env.join(""));
+  chmodSync(join(envOf(root), "pds.env"), 0o600);
   // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; fakeFs reads it as owned by web's uid.
   writeFileSync(join(secretsOf(root), "db_password"), `${CANARY}\n`);
   chmodSync(join(secretsOf(root), "db_password"), 0o400);
@@ -222,7 +228,7 @@ const WEB_UID = 65532;
  * The real lstat with three changes a test cannot make for real (P1.30o, P1.27a):
  * - a directory above the stack's temporary folder reads as that folder itself (mkdtemp's 0700, the test's uid),
  *   because its own parents (often /tmp, sticky and world writable) are not the stack's to judge;
- * - a file inside an unset-secrets/ directory reads as owned by `owner`, since a test cannot chown to another uid;
+ * - a file inside an unset-dev-secrets/ directory reads as owned by `owner`, since a test cannot chown to another uid;
  * - a path named in `uids` reads as owned by that uid.
  */
 function fakeFs(root: string, owner = WEB_UID, uids: Record<string, number> = {}): Pick<Deps, "lstat"> {
@@ -234,7 +240,7 @@ function fakeFs(root: string, owner = WEB_UID, uids: Record<string, number> = {}
     } catch {
       return null;
     }
-    const uid = uids[path] ?? (dirname(path).endsWith("/unset-secrets") ? owner : info.uid);
+    const uid = uids[path] ?? (dirname(path).endsWith("/unset-dev-secrets") ? owner : info.uid);
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
   return { lstat };
@@ -371,7 +377,7 @@ describe("preflight", () => {
           ...fakeFs(root),
           ...deps,
         });
-      const pdsEnv = join(root, "deployment/pds.env");
+      const pdsEnv = join(envOf(root), "pds.env");
       for (const mode of [0o644, 0o400]) {
         chmodSync(pdsEnv, mode);
         expect((await run()).lines).toContain(`FAIL C9 ${pdsEnv} must have exactly owner read and write permissions`);
@@ -454,10 +460,12 @@ describe("preflight", () => {
     });
     expect(folder.lines).toContain(`FAIL C9 ${dir} must be a directory with mode 0700 owned by the deploy user`);
     // A deploy-owned link above the folder, pointing into a tree another user controls.
-    const linkedParent = stack({ compose: COMPOSE.replace("../../unset-secrets/", "../../linked/unset-secrets/") });
+    const linkedParent = stack({
+      compose: COMPOSE.replace("../../unset-dev-secrets/", "../../linked/unset-dev-secrets/"),
+    });
     const elsewhere = join(dirname(linkedParent.root), "elsewhere");
     mkdirSync(elsewhere, { mode: 0o700 });
-    renameSync(secretsOf(linkedParent.root), join(elsewhere, "unset-secrets"));
+    renameSync(secretsOf(linkedParent.root), join(elsewhere, "unset-dev-secrets"));
     symlinkSync(elsewhere, join(dirname(linkedParent.root), "linked"));
     const parent = await preflight(["--env", "prod", "--compose", linkedParent.file], {
       root: linkedParent.root,
@@ -469,7 +477,10 @@ describe("preflight", () => {
 
   test("c9_mounted_secret_readers", async () => {
     const pdsReads = (user: string) =>
-      COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n${user}    secrets: [db_password]`);
+      COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env",
+        `    env_file: ../../unset-dev-env/pds.env\n${user}    secrets: [db_password]`,
+      );
     const secret = (root: string) => join(secretsOf(root), "db_password");
     // Two services with different uids.
     const two = await check({ compose: pdsReads('    user: "1000:1000"\n') });
@@ -510,11 +521,14 @@ describe("preflight", () => {
   // source is the secrets folder, lies inside it, or contains it would hand the files over with no owner check.
   test("c9_bind_mount_reaching_secrets_fails", async () => {
     const binding = (source: string) =>
-      COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    volumes:\n      - ${source}:/srv:ro`);
+      COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env",
+        `    env_file: ../../unset-dev-env/pds.env\n    volumes:\n      - ${source}:/srv:ro`,
+      );
     // "/" and a ".." chain that Compose resolves to "/" contain every folder (verifier on #689).
     for (const source of [
-      "../../unset-secrets",
-      "../../unset-secrets/db_password",
+      "../../unset-dev-secrets",
+      "../../unset-dev-secrets/db_password",
       "../..",
       "/",
       "../../../../../../../../../..",
@@ -554,7 +568,7 @@ describe("preflight", () => {
     expect(loop.lines).toContain("FAIL C9 check error");
     // A link into the folder whose target does not exist yet: Compose would create it there (P1.27u).
     const dangling = stack({ compose: binding("./dangle") });
-    symlinkSync("../../unset-secrets/newdir", join(dangling.root, "deployment/dangle"));
+    symlinkSync("../../unset-dev-secrets/newdir", join(dangling.root, "deployment/dangle"));
     const dangle = await preflight(["--env", "prod", "--compose", dangling.file], {
       root: dangling.root,
       run: fakeRun().run,
@@ -562,7 +576,7 @@ describe("preflight", () => {
     });
     expect(dangle.lines).toContain("FAIL C9 pds binds a path that does not exist");
     // A sibling whose name only starts with the folder's name is not inside it.
-    const sibling = stack({ compose: binding("../../unset-secrets-old") });
+    const sibling = stack({ compose: binding("../../unset-dev-secrets-old") });
     mkdirSync(`${secretsOf(sibling.root)}-old`, { mode: 0o755 });
     chmodSync(`${secretsOf(sibling.root)}-old`, 0o755);
     const old = await preflight(["--env", "prod", "--compose", sibling.file], {
@@ -612,7 +626,7 @@ describe("preflight", () => {
       (await aliasing("/srv/alias/newdir", { "/srv/alias": "FOLDER", "/srv/alias/newdir": null })).lines,
     ).toContain(reaches);
     // Path containment alone, with no identities to compare.
-    for (const source of ["../../unset-secrets", "../../unset-secrets/db_password", "../..", "/"]) {
+    for (const source of ["../../unset-dev-secrets", "../../unset-dev-secrets/db_password", "../..", "/"]) {
       const s = stack({ compose: binding(source) });
       const blind = await preflight(["--env", "prod", "--compose", s.file], {
         root: s.root,
@@ -630,8 +644,8 @@ describe("preflight", () => {
   test("c9_bind_source_path_locked", async () => {
     const binding = (source: string) =>
       COMPOSE.replace(
-        "    env_file: pds.env",
-        `    env_file: pds.env
+        "    env_file: ../../unset-dev-env/pds.env",
+        `    env_file: ../../unset-dev-env/pds.env
     volumes:
       - ${source}:/srv:ro`,
       );
@@ -661,8 +675,8 @@ describe("preflight", () => {
     const serviceOwned = await run("./data/shared", (d) => ({ [join(d, "data/shared")]: 999 }));
     expect(serviceOwned.lines).toContain(changeable);
     const volume = COMPOSE.replace(
-      "    env_file: pds.env",
-      "    env_file: pds.env\n    volumes:\n      - pgdata:/srv",
+      "    env_file: ../../unset-dev-env/pds.env",
+      "    env_file: ../../unset-dev-env/pds.env\n    volumes:\n      - pgdata:/srv",
     ).concat("volumes:\n  pgdata: {}\n");
     expect(failed((await check({ compose: volume })).lines)).toEqual([]);
     const sticky = await run("./data/shared", (d) => void chmodSync(join(d, "data"), 0o1777));
@@ -698,8 +712,8 @@ describe("preflight", () => {
   // P1.30o: every mounted secret shares one locked folder, so one directory check covers them all.
   test("c9_mounted_secrets_share_one_folder", async () => {
     const second = COMPOSE.replace("    secrets: [db_password]", "    secrets: [db_password, api_key]").replace(
-      "    file: ../../unset-secrets/db_password\n",
-      "    file: ../../unset-secrets/db_password\n  api_key:\n    file: other/api_key\n",
+      "    file: ../../unset-dev-secrets/db_password\n",
+      "    file: ../../unset-dev-secrets/db_password\n  api_key:\n    file: other/api_key\n",
     );
     const { root, file } = stack({ compose: second });
     mkdirSync(join(root, "deployment/other"), { mode: 0o700 });
@@ -711,11 +725,14 @@ describe("preflight", () => {
   test("c10_published_port_fails", async () => {
     await expectOnly("C10", { compose: COMPOSE.replace('"127.0.0.1:2019:2019"', '"2019:2019"') });
     const pdsPort = COMPOSE.replace(
-      "    env_file: pds.env",
-      '    env_file: pds.env\n    ports: ["127.0.0.1:443:3000"]',
+      "    env_file: ../../unset-dev-env/pds.env",
+      '    env_file: ../../unset-dev-env/pds.env\n    ports: ["127.0.0.1:443:3000"]',
     );
     await expectOnly("C10", { compose: pdsPort });
-    const range = COMPOSE.replace("    env_file: pds.env", '    env_file: pds.env\n    ports: ["0.0.0.0:3000:3000"]');
+    const range = COMPOSE.replace(
+      "    env_file: ../../unset-dev-env/pds.env",
+      '    env_file: ../../unset-dev-env/pds.env\n    ports: ["0.0.0.0:3000:3000"]',
+    );
     await expectOnly("C10", { compose: range });
   });
 
@@ -932,7 +949,9 @@ describe("preflight", () => {
   });
 
   test("unreadable_env_file_cannot_run", async () => {
-    const result = await check({ compose: COMPOSE.replace("env_file: pds.env", "env_file: absent.env") });
+    const result = await check({
+      compose: COMPOSE.replace("env_file: ../../unset-dev-env/pds.env", "env_file: absent.env"),
+    });
     expect(result.code).toBe(2);
     expect(result.lines[0]).toMatch(/^ERROR cannot read .*absent\.env$/);
     const loose = await check({ pdsEnv: { PDS_HOSTNAME: '"quoted"' } });
@@ -1157,7 +1176,10 @@ describe("preflight C17 (P1.30t)", () => {
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: [edge]\n      inner:',
   )
-    .replace("    env_file: pds.env", "    env_file: pds.env\n    networks: [inner]")
+    .replace(
+      "    env_file: ../../unset-dev-env/pds.env",
+      "    env_file: ../../unset-dev-env/pds.env\n    networks: [inner]",
+    )
     .replace("\nsecrets:", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
   const NETWORKED_TABLE = {
     default: { internal: false, members: ["web"] },
@@ -1173,7 +1195,10 @@ describe("preflight C17 (P1.30t)", () => {
   test("c17_extra_service_on_pds_network_fails", async () => {
     // Only the services the table names may share a network with the PDS (P1.30's check table, C17).
     const withPdsNetwork = (webNetworks: string) =>
-      COMPOSE.replace("    env_file: pds.env", "    env_file: pds.env\n    networks: [pds_net]")
+      COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env",
+        "    env_file: ../../unset-dev-env/pds.env\n    networks: [pds_net]",
+      )
         .replace(
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks: [default, pds_net]',
@@ -1224,7 +1249,10 @@ describe("preflight C17 (P1.30t)", () => {
 
   test("c17_network_mode_fails", async () => {
     for (const mode of ["host", '"service:edge"', '"container:x"', "bridge"]) {
-      const compose = COMPOSE.replace("    env_file: pds.env", `    env_file: pds.env\n    network_mode: ${mode}`);
+      const compose = COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env",
+        `    env_file: ../../unset-dev-env/pds.env\n    network_mode: ${mode}`,
+      );
       const table = { default: { internal: false, members: ["edge", "web"] } };
       expect(await expectOnly("C17", { compose, networks: table })).toBe("FAIL C17 network_mode is set in pds");
     }
@@ -1448,16 +1476,16 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     const inside = (root: string) => {
       renameSync(secretsOf(root), join(root, "deployment/secrets"));
       const file = join(root, "deployment/compose.yaml");
-      writeFileSync(file, readFileSync(file, "utf8").replace("../../unset-secrets/", "secrets/"));
+      writeFileSync(file, readFileSync(file, "utf8").replace("../../unset-dev-secrets/", "secrets/"));
       writeFileSync(join(root, ".dockerignore"), "deployment/secrets\n");
     };
     expect((await run("..", "deployment/images/node-app.Dockerfile", inside)).lines).toContain(reaches);
-    expect((await run("../../unset-secrets", "../repo/deployment/images/node-app.Dockerfile")).lines).toContain(
+    expect((await run("../../unset-dev-secrets", "../repo/deployment/images/node-app.Dockerfile")).lines).toContain(
       reaches,
     );
     const within = (root: string) => mkdirSync(join(secretsOf(root), "sub"), { mode: 0o700 });
     expect(
-      (await run("../../unset-secrets/sub", "../../repo/deployment/images/node-app.Dockerfile", within)).lines,
+      (await run("../../unset-dev-secrets/sub", "../../repo/deployment/images/node-app.Dockerfile", within)).lines,
     ).toContain(reaches);
     // The sibling layout passes.
     expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).toEqual([]);
