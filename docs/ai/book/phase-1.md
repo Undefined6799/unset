@@ -57,7 +57,7 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30w, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.29y, P1.29d, P1.29, P1.29a, P1.29h, P1.29s, P1.29t, P1.32, P1.31, P1.37, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -248,7 +248,10 @@ flowchart LR
   P1_30e["P1.30e row edges in one cruise"]
   P1_30f["P1.30f row coverage by resolved path and kind"]
   P1_30h["P1.30h edge reader scrubs env values"]
+  P1_30g["P1.30g edge scrub mutant fixtures"]
   P1_30w["P1.30w preflight key allowlist and value scrub"]
+  P1_30k["P1.30k compose top-level key allowlist"]
+  P1_30m["P1.30m preflight withholds value reasons"]
   P1_30u["P1.30u preflight C18 edge zones"]
   P1_30n["P1.30n preflight refuses network names"]
   P1_31["P1.31 lexicons package"]
@@ -406,6 +409,9 @@ flowchart LR
   P1_30e --> P1_30f
   P1_30u --> P1_30h
   P1_30u --> P1_30w
+  P1_30h --> P1_30g
+  P1_30w --> P1_30k
+  P1_30w --> P1_30m
   P1_23g --> P1_23h
   P1_28g --> P1_28k
   P1_28k --> P1_28m
@@ -3561,6 +3567,7 @@ Diagram: none.
 
 ### P1.17r — Lock tests wait for the holder to start
 Tags: —            Depends on: P1.17 (merged)
+As built: merged by Alex at 2026-10-12T06:46:03Z as `f062c81` (#593).
 Slice 1, issue #590, product, test-only (`tests/integration/postgres/lock.test.ts`), kind/fix; book edit
 2026-10-12-p117r-lock-test-start-race (final 03:20Z), from the third lane's root cause relayed by the coordinator at
 03:14Z. Regression class, so it takes the front of the next free lane (Phase 1 or the third lane, as the coordinator
@@ -8237,11 +8244,13 @@ on every real run until P1.29 adds compose.dev.yaml. That is expected, because t
 
 ### P1.30h — Edge reader scrubs every env value
 Tags: [SEC]            Depends on: P1.30u (merged, #592)
-As built: merged by Alex at 2026-10-12T04:23:45Z as `f6c4785` (#609).
-Slice 1, issue #601, trusted base (`deployment/edge/caddyfile.ts` and its test), a tightening, kind/fix; book edit
-2026-10-12-p130h-p130w-c18-follow-ups (final 03:48Z), from architecture's B2a in 2026-10-12-c18-follow-ups. Owner:
-Phase 1, after P1.29u; no classifier path and no line from Alex. Independent of P1.30w (SE-6 keeps them apart). Nothing
-depends on it.
+As built: merged by Alex at 2026-10-12T04:23:45Z as `f6c4785` (#609). It also closed a leak where an enabled site file
+named after the host was printed (book edit 2026-10-12-p130g-edge-scrub-mutants, F5).
+Slice 1, issue #601, trusted base (`deployment/edge/caddyfile.ts` and its test), a tightening, kind/feature
+(trusted-base PRs carry `kind/feature` by convention, 00-README.md:272-273; the record's "kind/fix" was wrong, F5);
+book edit 2026-10-12-p130h-p130w-c18-follow-ups (final 03:48Z), from architecture's B2a in 2026-10-12-c18-follow-ups.
+Owner: Phase 1, after P1.29u; no classifier path and no line from Alex. Independent of P1.30w (SE-6 keeps them apart).
+P1.30g depends on it.
 
 **What:** `readEdgeConfig` scrubs every value it was given, over `ENV_NAMES`, from any CaddyfileError message before
 throwing. It keeps no list of names to scrub, and messages keep naming tokens only (P1.28l).
@@ -8252,11 +8261,40 @@ the body says why.
 
 ---
 
+### P1.30g — Pin the edge reader scrub with mutant fixtures
+Tags: [SEC]            Depends on: P1.30h (merged, #609)
+Slice 1, issue #620, trusted base, test-only (`deployment/edge/edge.test.ts`), a tightening, kind/feature (by
+convention, 00-README.md:272-273); book edit 2026-10-12-p130g-edge-scrub-mutants (final 04:44Z), from the coordinator's
+post-merge check of #609 relayed at 04:39Z. Owner: Phase 1; no line from Alex. Nothing depends on it.
+
+**Why:** #609 was clean, but four test gaps remain, and a mutant survives in each.
+
+**What:**
+- **F1:** a red fixture for an enabled site file named after a sentinel host. It fails when the outer scrub at
+  `caddyfile.ts:427` is removed.
+- **F2:** a fixture with the host value inside the upstream value. It fails when the longest-first sort at
+  `caddyfile.ts:111` is removed, because the mutant prints `{$PDS_HOST}:3000`.
+- **F3:** the `not_a_directive` fixture (`edge.test.ts:524`) is replaced with one whose message echoes a value, such as
+  `@m {$PDS_HOST}`, so it catches a leak.
+- **F4:** `edge_messages_never_carry_env_values` (`edge.test.ts:710-824`) gains PDS_HOST beside ACME_EMAIL and
+  PDS_UPSTREAM, with a shape-valid sentinel.
+
+**Red evidence:** the body shows each of the four mutants (outer scrub removed, sort removed, the old F3 fixture, no
+PDS_HOST case) surviving on main and killed on the PR. Mutants are run locally and not committed.
+
+Done when the four are killed, and the full suite is green.
+
+---
+
 ### P1.30w — Preflight refuses unread keys and scrubs values
 Tags: [SEC]            Depends on: P1.30u (merged, #592)
 Slice 1, issue #602, product (`deployment/preflight/`: `compose-parse.ts`, the C18 check, `checks/types.ts` and their
 tests), a tightening, kind/fix; same book edit, from architecture's B1 and B2b. Owner: Phase 1, after P1.29u, in either
-order with P1.30h. Nothing depends on it.
+order with P1.30h. P1.30k and P1.30m depend on it.
+
+As built: merged by Alex at 2026-10-12T06:43:03Z as `33a36dd` (#615). The C18 image-pin rider rode this PR, so P1.30i
+was not split out. The scrub landed once in `runCheck` (N1) instead of a helper each check calls, and #615 carried
+architecture's 04:45Z riders N1, N2, N6 and N7 (book edit 2026-10-12-p130k-compose-top-level-allowlist).
 
 **What:**
 1. **Exact key allowlist.** `service()` (`compose-parse.ts:159-176`) checks each service's keys against an
@@ -8278,10 +8316,66 @@ service's `image` must equal exactly, in repository and digest, the `ref` of the
 `deployment/images.lock.json`, the deploy contract C2 already reads (`preflight/index.ts:148`). A missing lock, or a
 lock with no `edge` entry, fails C18; the repository path lives only in the lock, which P1.27s writes. If the image
 comes through an env value, C18 reads it through the SecretMap and never prints it. Tests use a fixture lock, and any
-name in it is fixture data. Red fixtures: a different repository from the fixture lock; a different digest; a tag with
-no digest; a missing lock; a lock with no `edge` entry. If P1.30w passes about 550 source lines with the rider, the
-rider becomes its own step right after P1.30w, reserved as P1.30i "C18 pins the edge image by digest"; the PR body says
-which.
+name in it is fixture data. Red fixtures: a different repository from the fixture lock; a different digest from the
+fixture lock; a tag with no digest; a missing lock; a lock with no `edge` entry. If P1.30w passes about 550 source
+lines with the rider, the rider becomes its own step right after P1.30w, reserved as P1.30i "C18 pins the edge image
+by digest"; the PR body says which.
+
+**Riders on #615 itself** (architecture, 04:45Z; book edit 2026-10-12-p130k-compose-top-level-allowlist): **N1**, one
+scrub in `runCheck` (or the single Outcome-to-text function) for every check; **N2**, a unit test through `runCheck`
+that goes red when the scrub is removed; **N6**, C2's `expect(result.code).toBe(1)` restored; **N7**, `$` refusal cases
+through allowed keys. No new id.
+
+---
+
+### P1.30k — Compose reader refuses unread top-level keys
+Tags: [SEC]            Depends on: P1.30w (merged, #615)
+Slice 1, issue #619, product (`deployment/preflight/` compose-parse and its tests), a tightening, kind/fix; book edit
+2026-10-12-p130k-compose-top-level-allowlist (final 04:40Z), from the end of architecture's 2026-10-12-c18-follow-ups
+(04:45Z). Owner: Phase 1; no line from Alex. In either order with P1.30m. Nothing depends on it.
+
+**What** (amendment 1, 07:00Z, from architecture's "P1.30k amendment", option (a)):
+- **Top level:** an exact key allowlist: `name`, `services`, `networks`, `secrets` and `volumes`, plus `include` only
+  if the parser already reads or refuses it explicitly. Any other key, including `configs`, is a ParseError naming the
+  key only. A later key needs a ruling and a reader.
+- **Top-level `volumes`, names only:** each name (matching `VOLUME_NAME`) maps to `null` or `{}` only. Any key under a
+  volume (`driver`, `driver_opts`, `external`, `name`, `labels` or any other) is a ParseError naming only the key, so
+  no named volume hides a host bind. A service mount of a named volume not declared at the top level is a ParseError.
+- **Long-form `ports`:** `target`, `published` and `host_ip`, plus `protocol` only if `port()` reads it. Any other key
+  fails by name.
+
+**Red fixtures:** each refused: `driver_opts` with a host `device`, `driver: local`, `external: true` and `name:` under
+a volume; an undeclared named volume; a top-level `configs`; a long-form port with `mode` or `app_protocol`. Each is
+red, STACK keeps `volumes: data: {}` and stays green, and the compose files on main are green.
+
+Done when the reds are red, main's compose files parse, and the full suite is green.
+
+---
+
+### P1.30m — Preflight withholds reasons that carry values
+Tags: [SEC]            Depends on: P1.30w (merged, #615)
+Slice 1, issue #622, product (`deployment/preflight/` runner, readers, check templates and their tests), a tightening,
+kind/fix; book edit 2026-10-12-p130m-preflight-withhold (final 05:06Z, amendment 1 05:10Z), from architecture's ruling
+at the end of 2026-10-12-c18-follow-ups ("the runner withholds instead of replacing"). Owner: Phase 1; no line from
+Alex. Independent of P1.30k. Nothing depends on it.
+
+**What** (architecture's ruling, unchanged):
+- **One run-wide value set** records every value the readers hand out: all SecretMaps, compose `environment` literals
+  and env-file values. Empty values are left out.
+- **Withhold, never replace.** A FAIL or MISSING reason containing any value in the set prints only
+  `<check id> FAIL: reason withheld (it contained a configured value)`, or MISSING likewise. The verdict and exit code
+  are unchanged, and there is no opt-out or debug flag.
+- **Check wording:** C23, and any other `fail(` or `missing(` template that quotes an enum literal a value can take,
+  names keys and services instead. The PR lists the grep it ran.
+- **`scrubbed()` and the replace path are deleted.**
+- **The stale comment** at `deployment/preflight/checks/edge.test.ts:216-217` ("the check turns each edge env value it
+  read back into its name") is fixed here; it is product, not `deployment/edge/` (amendment 1).
+
+**Tests:** N-A's two-map probe, N-C's `short` password and a value cached between checks each print the withheld line,
+with no value and no template-shaped remainder; C23 prints in full when it holds no value; the C18 sentinel goes end
+to end through the preflight entry point. Red evidence: each probe leaks with the withhold removed.
+
+Done when every probe is withheld, the reds are shown, and the full suite is green.
 
 ---
 
