@@ -21,24 +21,33 @@ export function killBefore(budgetMs: number): number {
   return budgetMs - MARGIN_MS;
 }
 
-// The docker CLI's management commands, which take a second word (`docker --help`, "Management Commands", docker CLI 29.6.2).
+// The docker CLI's commands that take a second word: the management commands and the swarm commands
+// (`docker <command> --help` prints "Usage: docker <command> COMMAND", docker CLI 29.6.2), plus the experimental
+// `checkpoint` (docs.docker.com, "docker checkpoint").
 const GROUPS = new Set([
   "builder",
   "buildx",
+  "checkpoint",
   "compose",
+  "config",
   "container",
   "context",
   "image",
   "manifest",
   "network",
+  "node",
   "plugin",
+  "secret",
+  "service",
+  "stack",
+  "swarm",
   "system",
   "volume",
 ]);
 const WORD = /^[a-z][a-z-]*$/;
 
 /** The subcommand in full (`run`, `image inspect`), never a flag or a reference such as an image name. */
-function subcommand(args: readonly string[]): string {
+export function subcommand(args: readonly string[]): string {
   const [first, second] = args;
   if (first === undefined || !WORD.test(first)) return "";
   return GROUPS.has(first) && second !== undefined && WORD.test(second) ? `${first} ${second}` : first;
@@ -71,6 +80,10 @@ export function withCleanup<T>(body: () => T, cleanup: () => void): T {
   let result: T;
   try {
     result = body();
+    // An await in the body would resume after the cleanup removed what it uses, so only a synchronous body is taken.
+    if (typeof (result as { then?: unknown } | null)?.then === "function") {
+      throw new TypeError("withCleanup takes a synchronous body, not a promise");
+    }
   } catch (failure) {
     try {
       cleanup();

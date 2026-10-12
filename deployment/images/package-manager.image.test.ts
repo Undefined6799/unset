@@ -30,8 +30,8 @@ const REPO = join(DEPLOYMENT, "..");
 // the budget of this repository's container tests (60 to 120 s), never vitest's 5 s test or 10 s hook default (P1.29o).
 const CONTAINER_MS = 120_000;
 // Each docker call is killed just under the smallest budget of a test that makes it, so a hung daemon fails that test
-// with a named message before scripts/test/run.ts kills the whole run at 600 s (P1.27k): a build under privileges_fixture_image's 300 s, and a
-// create, export or removal under CONTAINER_MS.
+// with a named message before scripts/test/run.ts kills the whole run at 600 s (P1.27k): a build under
+// privileges_fixture_image's 300 s, and a create, export or removal under CONTAINER_MS.
 const BUILD_CALL_MS = killBefore(300_000);
 const CONTAINER_CALL_MS = killBefore(CONTAINER_MS);
 const json = (file: string): unknown => JSON.parse(readFileSync(join(import.meta.dirname, file), "utf8"));
