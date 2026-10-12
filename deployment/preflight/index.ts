@@ -1,7 +1,7 @@
 // The deploy preflight (P1.30; plan section 2 rule 23, sections 5.2, 5.3, 6.1): before any `compose up` on a server,
 // one command checks the stack against every rule that, if broken, would leak data or cannot be fixed later.
 //
-//   node deployment/preflight/index.ts --env dev|prod --compose <file> [--compose <file>...]
+//   node deployment/preflight/index.ts --env dev|prod --compose <absolute file> [--compose <absolute file>...]
 //
 // The first --compose file's directory is the project directory: every relative path resolves from it.
 //
@@ -11,8 +11,8 @@
 // read into SecretMaps, Compose is parsed here, never through `docker compose config`, and a reason that holds any
 // configured value is withheld whole.
 import { execFile } from "node:child_process";
-import { lstatSync, readFileSync, type Stats, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { lstatSync, readFileSync, realpathSync, type Stats, statSync } from "node:fs";
+import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { CHECKS } from "./checks/index.ts";
@@ -50,6 +50,7 @@ export type Deps = {
   readText?: (path: string) => string | null;
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
+  realpath?: (path: string) => string | null;
   uid?: number;
   checks?: readonly Check[];
   timeoutMs?: number;
@@ -83,6 +84,17 @@ const lstatOrNull = (path: string): Stats | null => {
   }
 };
 
+/** Null only when the path does not exist; any other error (EACCES, ELOOP) throws, so C9 fails closed. */
+const realpathOrNull = (path: string): string | null => {
+  try {
+    return realpathSync(path);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
+    throw error;
+  }
+};
+
 class CannotRun extends Error {}
 
 function parseCli(argv: string[]): { env: Env; files: string[] } {
@@ -99,7 +111,14 @@ function parseCli(argv: string[]): { env: Env; files: string[] } {
   }
   if (values.env !== "dev" && values.env !== "prod") throw new CannotRun("--env must be dev or prod");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
-  return { env: values.env, files: values.compose.map((file) => resolve(file)) };
+  // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
+  // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
+  // 2026-10-12-c9-secret-file-owner). Only an absolute, normal path means the same to both; it is walked as written.
+  // normalize keeps a trailing slash, which names no file, so that is refused here too rather than echoed on read.
+  if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
+    throw new CannotRun("--compose must be an absolute, normalised path");
+  }
+  return { env: values.env, files: values.compose };
 }
 
 /** The compose files as one stack: one project name, and each service defined in exactly one file. Exported for the
@@ -135,8 +154,10 @@ export function loadCompose(files: string[], readText: (path: string) => string 
       const build = service.build === null ? null : resolveBuild(service.build, projectDir);
       services.push({ ...service, mounts, envFiles, build });
     }
-    // A service names secrets declared in its own file (compose-parse Scope), so each name resolves within the file.
+    // compose-parse refuses a service secret its own file does not declare, and a name declared in two files is
+    // refused here (Compose would merge it, last file winning), so each name resolves within its own file (P1.27a).
     for (const [secret, path] of compose.secretFileByName) {
+      if (secretFileByName.has(secret)) throw new CannotRun(`secret ${secret} is defined twice`);
       const users = compose.services
         .filter((service) => service.secrets.includes(secret))
         .map((service) => ({ service: service.name, user: service.hardening.user }));
@@ -214,6 +235,7 @@ function loadInputs(argv: string[], deps: Deps): Loaded {
     readText,
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
+    realpath: deps.realpath ?? realpathOrNull,
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };
   return { inputs, configured: new ConfiguredValues(values) };
