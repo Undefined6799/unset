@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 33 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15 added 2026-10-12).
+Depth: **build-ready**. 34 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15 and P0.16 added 2026-10-12).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -60,6 +60,7 @@ Depth: **build-ready**. 33 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.13a | Licence check stays inside the test timeout | — | P0.13 | `phase-0.md` |
 | P0.14 | Phase 0 exit: planted faults are blocked; protection drills run once the ruleset is applied (GitHub Pro, 2026-10-06; no merge attempts) | [ALEX] (tail: applies the ruleset) | P0.03, P0.07, P0.08, P0.10 | `phase-0.md` |
 | P0.15 | Verified agent merges: ADR 0019, CLAUDE.md Merging line, README row, 0001 log entry | [SEC] [ALEX] (Alex merges by hand) | — | `phase-0.md` |
+| P0.16 | Delivery check asserts ADR 0019's merge rule ("never merge its own", "ADR 0019") | [SEC] | P0.15 | `phase-0.md` |
 
 ```mermaid
 flowchart TD
@@ -96,6 +97,7 @@ flowchart TD
   P0_13a["P0.13a Licence check speed"]
   P0_14["P0.14 Phase 0 exit"]
   P0_15["P0.15 Verified agent merges"]
+  P0_16["P0.16 Delivery check asserts ADR 0019"]
   P0_01 --> P0_02
   P0_02 --> P0_03
   P0_03 --> P0_04
@@ -131,6 +133,7 @@ flowchart TD
   P0_13 --> P0_13a
   P0_08 --> P0_14
   P0_10 --> P0_14
+  P0_15 --> P0_16
 ```
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)

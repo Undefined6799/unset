@@ -99,7 +99,7 @@ flowchart TD
   P007 --> P014["P0.14 exit drill [ALEX tail]"]
   P008 --> P014
   P010 --> P014
-  P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"]
+  P015["P0.15 verified agent merges, ADR 0019 [ALEX][SEC]"] --> P016["P0.16 Delivery check asserts ADR 0019 [SEC]"]
 ```
 
 The Alex halves of P0.11 and P0.13 can start on day one. P0.12's ceremony waits for P0.10's hardware keys. Every
@@ -3000,8 +3000,8 @@ Docs class, kind/docs; issue #595; slice 1, a governance step rather than a buil
 2026-10-12T03:25:26Z, his "Big things only" tap (03:27:13Z) on the card "Choose what still needs you once Claude merges
 its own checked PRs", and his "Let Claude merge" tap (03:30:26Z), which dropped the protected-paths exception.
 Owner: the third lane or Phase 2, whichever frees first after P1.17r (#590); not Phase 1, because the CLAUDE.md
-classifier refuses there. Nothing in the book depends on it; after it lands the coordinator updates its memory and
-hand-off rules, which is not a book step.
+classifier refuses there. P0.16 depends on it. After it lands the coordinator updates its memory and hand-off rules,
+which is not a book step.
 Where:
   - `docs/human/decisions/0019-verified-agent-merges.md` (new): architecture's draft
     (2026-10-12-adr-0019-verified-agent-merges-draft.md) word for word, as it stands when the PR opens. The conditions
@@ -3012,6 +3012,21 @@ Where:
     merging".
   - ADR 0008 and ADR 0017 are not edited (adr_immutable).
 Done when Alex merges it by hand. No agent merge happens under ADR 0019 before that merge is on main.
+
+---
+
+### P0.16 — Delivery check asserts the ADR 0019 merge rule
+Tags: [SEC]            Depends on: P0.15            Plan: —
+Check class (`scripts/docs/docs.ts` and its test), a tightening, kind/build; issue #597; slice 1, right after P0.15;
+book edit 2026-10-12-p016-delivery-check-adr-0019 (final 03:40Z), from architecture's ruling in
+2026-10-12-p015-delivery-check-wording (03:35Z). No line from Alex: scripts/docs is an SE-6 check path but not a
+classifier path, so any lane may take it, Phase 1 included. It starts after P0.15 merges. Nothing depends on it.
+What: `deliveryProblems` (`scripts/docs/docs.ts:76-87`) requires `never merge its own` instead of the bare `never
+merge`, and adds a requirement for `ADR 0019`; it keeps ``never push to `main` `` and the ADR 0009 citation; its message
+becomes "Delivery does not say an author thread never merges its own PR"; its doc comment cites ADR 0019.
+Red fixtures: a Delivery section without "never merge its own", and one without "ADR 0019". Each is red, and main's
+Delivery section (after P0.15) is green.
+Done when the fixtures are red and green as above, and the full suite is green.
 
 ---
 
