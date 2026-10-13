@@ -3848,7 +3848,7 @@ Not in this step: the public page (P3.12); indexing (P3.05); posts and follows p
 Diagram: see "Sequence: publish and unpublish".
 
 ### P2.24 — §5.3 go/no-go spike
-Tags: [SPIKE] [ALEX]            Depends on: P1.34            Plan: §5.3 "Phase 2 go/no-go"; §3 PDS account UI and branding; §4 dropped `account-manager`/`pds-gatekeeper`
+Tags: [SPIKE] [ALEX]            Depends on: P1.34, P1.33p            Plan: §5.3 "Phase 2 go/no-go"; §3 PDS account UI and branding; §4 dropped `account-manager`/`pds-gatekeeper`
 Where: `docs/human/decisions/00xx-pds-account-surface.md`, `docs/human/decisions/assets/pds-branding/*.png`, `docs/human/runbooks/pds-branding.md`,
   `deployment/` env for the dev PDS (and the production PDS by Alex)
 Size: ~0 source lines; ~60 lines of runbook and ADR; one Playwright script (~120 lines) for screenshots and probes
@@ -3856,18 +3856,20 @@ Size: ~0 source lines; ~60 lines of runbook and ADR; one Playwright script (~120
 Goal: Decide with evidence that the unpatched, branded PDS `/account` and sign-in pages can be the only account surface,
 so `account-manager` and `pds-gatekeeper` stay dropped.
 
-Inputs: the dev PDS (P1.29a, made fit for authority by P1.34/P1.35) at the pinned image digest — there is no
-  production PDS before Phase 5 (decision 20), so every item runs on the dev PDS and P5.12 re-runs items 1–6 against
-  production (the ADR says so); real SMTP on the dev PDS (P1.29a `PDS_EMAIL_SMTP_URL`, no Mailpit; E15 is settled);
-  P2.15 legal URLs; the design sheet's colours and logo.
+Inputs: the dev PDS (P1.29a, made fit for authority by P1.34/P1.35) at the pinned image digest — there is no production
+  PDS before Phase 5 (decision 20), so every item runs on the dev PDS and P5.12 re-runs items 1–6 against production
+  (the ADR says so); items 1 to 3 run on the dev PDS with real SMTP, by hand, on the account Alex creates by dev invite,
+  and no script creates or deletes accounts on dev (architecture's Amendment 7 follow-up of 2026-10-13-local-plc; book
+  edit 2026-10-13-verify-814-fixes, Amendment 2), so the spike waits on the same gate as the P2-A3 testers (P1.33p);
+  real SMTP on the dev PDS (P1.29a `PDS_EMAIL_SMTP_URL`, no Mailpit; E15 is settled); P2.15 legal URLs; the design
+  sheet's colours and logo.
 Outputs: the ADR with one row per item below (result, evidence path, PDS image digest, date), the screenshots, and
   Alex's written acceptance of the branding.
 
 Algorithm (experiment protocol; each item: steps → pass → fail and what changes downstream):
-  1. Email 2FA can be enabled at `/account`. Steps: create a test account on the local stack's PDS (a scripted test
-     identity, so local only; architecture's Amendment 7 of 2026-10-13-local-plc, Q2), sign in at `/account`, enable
-     email 2FA. Pass: the setting persists after sign-out/in. Fail → **stop**: `pds-gatekeeper` comes back on the table;
-     the book gets a new step before P2.26.
+  1. Email 2FA can be enabled at `/account`. Steps: on the dev-invite test account (Inputs), sign in at `/account`,
+     enable email 2FA. Pass: the setting persists after sign-out/in. Fail → **stop**: `pds-gatekeeper` comes back on the
+     table; the book gets a new step before P2.26.
   2. OAuth sign-in challenges for it. Steps: with 2FA on, sign in to `unset.sh` (P2.05 flow). Pass: the PDS asks for the
      emailed code before consent, and a wrong code is refused. Fail → **stop** and ask Alex: (a) accept for the closed test
      track only (dev PDS, disposable accounts) and open an upstream issue; (b) run `pds-gatekeeper` as before.
@@ -3980,6 +3982,75 @@ Diagram: see the three sequence diagrams at the top of this file.
 
 ---
 
+### P2.26b — Pin service images to the mirror by digest
+Tags: [SEC]            Depends on: P1.27s, P1.34t
+Slice 2, issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split (and its Amendment 1, which
+puts this step first), which takes the product half of P1.27s's struck "Interim base" paragraph. P1.34t is a
+dependency for C28 and the C21-under-dev fixtures the real-file test must meet.
+
+Where:
+- `deployment/images/{node-app,postgres,migrate}.Dockerfile`;
+- `deployment/images/bases.lock.json`: every entry's `source` flips from `"upstream"` to `"mirror"`, the two caddy
+  entries included. `ref`, `tag` and `digest` keep the upstream name, so mirror.yml's join (`ref:tag@digest` equals
+  the mirror list's `source`, `mirror.yml:71-72`) is unchanged and no check path moves. This step never writes the
+  mirror host into `ref`;
+- `deployment/images/images.test.ts`;
+- the first `deployment/images.lock.json`;
+- `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
+- the preflight real-file test in `deployment/preflight/`.
+
+`base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json` at
+the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only with
+its inline DL3026 ignore directly above it; the ignore-adjacency check (`images.test.ts:375-394`) keys on the upstream
+spelling, not on `source`. The tolerance stays harmless after P2.26c: hadolint's `trustedRegistries: ghcr.io` refuses an
+upstream `FROM` without an ignore, and P2.26c's `edge_no_dl3026_ignore` forbids the ignore. Architecture confirmed it
+(21:02Z) and requires P2.26d to remove it after P2.26c (book edit 2026-10-13-p127s-split, Amendment 2).
+
+Done when (tests, red first):
+- `bases_from_mirror` (every lock entry has `source` `"mirror"`, and every `FROM` under `deployment/images/` is its
+  mirror path) and `no_dl3026_ignore_left` (`deployment/images/*.Dockerfile` only; the edge is P2.26c's);
+- `dual_spelling_exactly_caddy`: the tolerance covers exactly the two caddy entries, keyed by ref and tag, not by a
+  pattern, and only at the lock digest;
+- `compose_dev_images_by_digest` (moved from P1.27s);
+- the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture
+  (moved from P1.34d item 12; book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
+  2026-10-13-p127s-split; architecture's Amendment 7 of 2026-10-13-local-plc, Q1). This step makes the test passable:
+  it needs the published images and the lock, not the edge's `FROM` spelling;
+- check is green.
+
+---
+
+### P2.26c — Pull the edge bases from the mirror (trusted base)
+Tags: [SEC] trusted            Depends on: P2.26b
+Slice 2, issue #817, trusted base (`deployment/edge/`), kind/build; book edit 2026-10-13-p127s-split, which takes the
+edge half of P1.27s's struck "Interim base" paragraph (SE-6: a check-path step cannot edit trusted files). It runs after
+P2.26b (book edit 2026-10-13-p127s-split, Amendment 1), whose lock already names the caddy entries as mirrored, and
+after P1.27s's first mirror run on main has published both edge bases (a check with nothing from Alex: the digests
+resolve on the mirror).
+
+Where: `deployment/edge/Dockerfile` and `deployment/edge/edge.test.ts`.
+
+**What:** both `FROM` lines (builder and runtime) take their mirror paths at the same digests, and their
+`# hadolint ignore=DL3026` lines and reason comments go (`.github/hadolint.yaml` ignores no rule; every exception is
+inline, so it moves with its Dockerfile). `edge.test.ts`'s ignore-adjacency test becomes "no DL3026 ignore remains".
+
+Done when (tests, red first): `edge_from_mirror_by_digest` and `edge_no_dl3026_ignore`, and check is green.
+
+---
+
+### P2.26d — Drop the edge dual spelling from the lock test
+Tags: [SEC]            Depends on: P2.26c
+Slice 2, issue #821, product (`deployment/images/images.test.ts`), kind/build; book edit
+2026-10-13-p127s-split, Amendment 2: the strict cleanup architecture requires (21:02Z), so P2.26b's caddy-only
+tolerance does not outlive its reason.
+
+**What:** delete the caddy dual-spelling branch from `base_digest_matches_lock`.
+
+Done when, red first, `mirror_entry_refuses_upstream_spelling` shows the upstream caddy spelling refused for a
+`"mirror"` entry, and check is green.
+
+---
+
 ### P2.26a — Minimal deploy by verified digest for the test host (added, decision 35 D5)
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
@@ -3988,7 +4059,7 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`
@@ -4101,12 +4172,18 @@ Outputs:
     public directory stays, marked closed." and a required tick "I understand"; `POST /signup` without the tick →
     `join.test_track_ack_required`. The tick is not stored (no new personal data).
   - `wipe-test-track.sh`: refuses to run unless either `ENV=dev`, the compose project `name:` is the dev name, and the
-    PDS hostname is `0x40.space` (the human testers' accounts; it seeds nothing), or `ENV=local`, the project
-    `unset-local` and a `.localhost` PDS host (the CI round-trip only; architecture's Amendment 7 of
-    2026-10-13-local-plc, Q2). It also refuses while `plc.directory/<authority DID>` names `https://0x40.space` as the
-    lexicon authority's PDS (the authority moves in P5.02a; phase-1-part2 note 12). It **never deletes the dev PDS data
-    volume** (P1.34 change control: the dev PDS is not scratch). Test accounts are removed one by one with
-    `com.atproto.admin.deleteAccount`, run by Alex (only Alex holds the dev PDS admin password, P1.34 custody): the script
+    PDS hostname is `0x40.space` (the human testers' accounts; it seeds nothing), or all four of `ENV=local`, the
+    compose project `unset-local`, every host it touches ending in `.localhost`, and every volume it wipes carrying the
+    `unset-local` compose project label (the same pair of checks as the P1.33l reader; the CI round-trip only;
+    architecture's Amendment 7 of 2026-10-13-local-plc, Q2, and its Q2 note; book edit 2026-10-13-verify-814-fixes, S3).
+    Each partial combination is refused. Under the local arm every target is the `unset-local` stack's own: its
+    database, its object store and its PDS admin password. Under the dev arm it also refuses while
+    `plc.directory/<authority DID>` names `https://0x40.space` as the lexicon authority's PDS (the authority moves in
+    P5.02a; phase-1-part2 note 12). The authority-host check applies to the dev arm only; the local arm is bound by its
+    four conditions, and a destructive guard never takes a configurable PLC URL (architecture's Amendment 7 follow-up of
+    2026-10-13-local-plc). It **never deletes the dev PDS data volume** (P1.34 change control: the dev PDS is not
+    scratch). Under the dev arm, test accounts are removed one by one with `com.atproto.admin.deleteAccount`, run by
+    Alex (only Alex holds the dev PDS admin password, P1.34 custody): the script
     prints the test-track DIDs (hosted DIDs from `app.account`, minus the keep list in the README: the lexicon authority
     and the named dev fixture accounts), waits, and continues only when `com.atproto.sync.getRepoStatus` reports none of
     them active. Then it deletes the `app` schema data (by re-running migrations on an empty database), the dev bucket's
@@ -4146,7 +4223,7 @@ Edge cases and failures:
   - Wipe script run with production env → refuses (test with a fake env).
   - Rescan record missing → wipe stops.
   - Hold rows present in P4.07's `legal_hold` table → wipe stops.
-  - Lexicon authority still hosted on the dev PDS → wipe refuses.
+  - Lexicon authority still hosted on the dev PDS → wipe refuses (dev arm).
   - A test-track DID still active after Alex's deletions → the script waits and names nothing but the count.
   - Banner missing on an error page → test fails.
 
@@ -4156,14 +4233,18 @@ Done when (tests):
     `join.test_track_ack_required`; with the tick → proceeds; banner off → no notice, no tick required.
   - `wipe.lists_tombstone_targets`: the script's summary lists every test-track DID (minus the keep list) for the
     tombstone runbook.
-  - `wipe.refuses_prod`: script with `ENV=production` or a non-dev PDS host → exits non-zero before touching anything.
+  - `wipe.refuses_prod`: script with `ENV=production` or a non-dev PDS host → exits non-zero before touching anything;
+    dev and prod are never wiped by the local arm.
+  - `wipe.local_arm_refuses_partial`: each of the local arm's four conditions dropped alone → exits non-zero before
+    touching anything (book edit 2026-10-13-verify-814-fixes, S3).
+  - `wipe.local_arm_refuses_dev_volume`: a dev-labelled volume under an otherwise-local target → refused.
   - `wipe_refuses_without_record`: no `retro_scan_record`, or one with `ok = false` → exits non-zero before deleting
     anything.
   - `wipe_refuses_on_stale_record`: `finished_at` older than the newest test-track upload → exits non-zero.
   - `wipe.stops_on_holds`: a seeded `legal_hold` table (P4.07) with one row → exits non-zero (skipped while the table
     does not exist).
-  - `wipe_refuses_while_authority_hosted`: a fake PLC answering that the authority DID's PDS is `https://0x40.space` →
-    exits non-zero before touching anything.
+  - `wipe_refuses_while_authority_hosted` (dev arm): a fake PLC answering that the authority DID's PDS is
+    `https://0x40.space` → exits non-zero before touching anything.
   - `wipe.never_deletes_pds_volume`: static check — the script contains no `docker volume rm`, `compose down -v` or
     path under the PDS data directory.
   - `wipe.waits_for_account_deletion`: one listed DID still active on the fake PDS → the script does not reach the

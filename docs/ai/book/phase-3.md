@@ -95,7 +95,7 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P1.18 | `guardedRequest(policy, {url, method, headers?, body?, timeoutMs, maxBytes, accept?}) → {status, headers, body}` and `guardedFetch(policy, defaults)` (on `undici.request`); policies `fixed` and one `public` policy (`atproto`) whose internal-host exception is our own PDS (P1.18a); errors `NetGuardError.code` `egress.*`; P1.18b proxy mode and the `egress-public` proxy for Tap |
 | P1.22 | locale and theme resolution; on public pages: theme by `prefers-color-scheme`, locale by `Accept-Language` with a URL override (plan §5.4 "Caching") |
 | P1.28 | Caddy config with log filter; admin-auth XRPC denied |
-| P1.29t | the stacks, tested (P1.29k to P1.29t): `compose.dev.yaml` with Postgres and the dev PDS, and seeded accounts on the local stack (architecture's Amendment 7 of 2026-10-13-local-plc, Q2) |
+| P1.29t | the stacks, tested (P1.29k to P1.29t): `compose.dev.yaml` with Postgres and the dev PDS (`.0x40.space`), and seeded accounts on the local stack (architecture's Amendment 7 of 2026-10-13-local-plc, Q2) |
 | P1.30 | deploy preflight (this phase adds checks) |
 | P1.31 | `lexicons.validate(nsid, value) → ok \| ValidationError`; lexicon `key` types; NSID constants |
 | P1.33 | Tailscale with Tailnet Lock; `admin` reachable on the host's tailnet address only |
@@ -2900,7 +2900,9 @@ Size: ~40 source lines (the resolver container), ~150 test lines, a one-page exi
 
 Goal: show, with test runs and recorded checks, that every Phase 3 exit criterion holds.
 
-Inputs: all Phase 3 steps merged; the dev stack.
+Inputs: all Phase 3 steps merged; the dev stack for items 1-3 and 5-8, with the dev test account Alex creates by invite
+([ALEX] runbook step, local-plc Amendment 6; no seed runs on dev); the local stack for item 4 (book edit
+2026-10-13-verify-814-fixes, N5).
 Outputs: the exit note with links to CI runs, line and dependency counts (plan §7), and Alex's sign-off.
 
 Algorithm (contract: the checks):

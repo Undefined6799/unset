@@ -36,8 +36,9 @@ actually built before any gate step runs.
 runs on `0x40.space`, the hostname the new development PDS takes at the public opening (P1.33p); P1.34 moves the dev PDS
 to the home server on non-public tailnet names only. Once P1.33p replaces it, the old accounts can no longer be
 deactivated or deleted through their PDS. So the retirement (formerly L.01 part A) is now **P1.33a** in `phase-1.md`.
-Since 2026-10-13 it gates the dev PDS taking `0x40.space` at the public opening (P1.33p), not P1.34's tailnet move (book
-edit 2026-10-12-p133p-public-opening). Only part B stays here as L.01.
+Since 2026-10-13 it runs before P1.34's tailnet move and the public opening (P1.33p; architecture's Amendment 7 of
+2026-10-13-local-plc, Q1; book edits 2026-10-12-p133p-public-opening and 2026-10-13-verify-814-fixes, S2). Only part B
+stays here as L.01.
 
 ```mermaid
 flowchart TD

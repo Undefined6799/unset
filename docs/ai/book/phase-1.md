@@ -288,7 +288,7 @@ flowchart LR
   P1_33m["P1.33m local Postgres init owned"]
   P1_34u["P1.34u local PLC role and database"]
   P1_34v["P1.34v local PLC in the local stack ALEX"]
-  P1_34y["P1.34y net-guard allows the local PLC host"]
+  P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z identity resolves through the local PLC"]
   P1_33i["P1.33i preflight may import shared/host-pin ALEX"]
   P1_33h["P1.33h host pin moved to shared/host-pin"]
@@ -6573,7 +6573,8 @@ Docker images, Alpine where offered, pinned by digest?". This generalises the No
   ignore order above apply to each upstream `FROM`.
 - **Vendor namespaces** (a PDS image, Tap, anything outside `library/`) are not covered: each needs an architecture
   ruling per image.
-- **End:** P1.27s flips every image to the mirror by the same digest (`mirrored_digest_equals_lock`).
+- **End:** after P1.27s's first mirror run, P2.26b (service images) and then P2.26c (edge) flip every image to the
+  mirror by the same digest (`mirrored_digest_equals_lock` stays P1.27s's; book edit 2026-10-13-p127s-split).
 - **Tests:** `base_digest_matches_lock` and `from_without_digest_refused` apply to every Dockerfile and compose
   image; `runtime_base_is_debian_slim` applies to node-app, and other images assert Alpine only where the lock says the
   official image offers it.
@@ -7908,12 +7909,17 @@ P1.29t depends on it.
     (item 12) and the leaf mount; the dev-root mount and `NODE_EXTRA_CA_CERTS` on pds and web only; the local-name
     network aliases; and the PLC service, its network and its database wiring, which exist in the local file only, with
     the local pds, web and appview on that network (tap only once P3.02 confirms it resolves DIDs; architecture's
-    Amendments 4 and 5 of 2026-10-13-local-plc); the db service's one read-only `init-local/` mount (P1.34u's files,
-    mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction,
-    fails with the key named. Preflight still runs in full on the local file; the drift test catches a weakening that
-    preflight would allow. This step moves `pds-token-reader` and `seed` from `compose.dev.yaml` to `compose.local.yaml`
-    in the same PR, so each always exists in exactly one file; until then they stay in the dev file and cannot run there
-    (P1.33l and the seed guard refuse dev; architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The reader-only test
+    Amendments 4 and 5 of 2026-10-13-local-plc); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local file,
+    `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps), and the
+    same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes, S4);
+    `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
+    2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
+    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
+    key named. Preflight still runs in full on the local file; the drift test catches a weakening that preflight would
+    allow. This step moves `pds-token-reader` from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it
+    always exists in exactly one file; until then it stays in the dev file and cannot run there (P1.33l refuses dev;
+    architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The drift allowance also names `seed` as local-only, which
+    P1.29s adds to `compose.local.yaml` (book edit 2026-10-13-verify-814-fixes, Amendment 1). The reader-only test
     (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
     `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). `compose.local.yaml` sets
     `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until P1.34v lands, DID creation fails at the PDS and never
@@ -7927,8 +7933,9 @@ P1.29t depends on it.
     2026-10-13-p127l-verify-owners, point 2: local-gaps Amendment 3 S2's C18 half, product, so SE-6 holds.) The reader's
     fix for dev's directory mount is P1.34q's (point 1). A test runs the preflight on the real `compose.local.yaml`
     under `--env local`, which admits builds, and must pass. The real `compose.dev.yaml` test under `--env dev` moves to
-    P1.27s, the step that makes it passable (it needs `deployment/images.lock.json` and an edge that is not `build:`);
-    no test is skipped or left red (book edit 2026-10-13-p127l-verify-owners, Amendment 1).
+    P2.26b, the step that makes it passable (it needs `deployment/images.lock.json` and an edge that is not `build:`);
+    no test is skipped or left red (book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
+    2026-10-13-p127s-split; P1.27s is check paths only, so the product test cannot ride it).
 13. A CI integration run: the local stack starts and the edge serves both names with the leaf. If a file mount on the
     read-only root fails, stop and report; never add a writable layer or a placeholder. If the run needs a `.github/`
     change, that change is its own check step (P1.34d's check part, first), and it needs Alex's typed line.
@@ -7937,7 +7944,7 @@ Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
 
 Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
-tests pass, and check is green.
+tests pass, the real `compose.local.yaml` test under `--env local` (item 12) passes, and check is green.
 
 ---
 
@@ -8319,9 +8326,10 @@ env must set `PDS_DID_PLC_URL`, by env:
 - The check is C28. No new dependency edge: P1.34t still does not depend on P1.34v.
 
 Done when red fixtures for local (unset, plc.directory, a public look-alike), for dev (unset, the local URL, a
-look-alike) and for prod (unset, the local URL) fail, dev with a non-0x40.space hostname and no complete report fails
-C21, the exact URL for each env passes, and check is green. Every existing `--env dev` pass fixture (P1.34d item 12's
-among them) carries a complete retirement-report fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
+look-alike) and for prod (unset, the local URL, a look-alike) fail, dev with a non-0x40.space hostname and no complete
+report fails C21, the exact URL for each env passes, and check is green. Every existing `--env dev` pass fixture
+(P2.26b's real `compose.dev.yaml` test, moved from P1.34d item 12, among them) carries a complete retirement-report
+fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
 
 ---
 
@@ -8397,27 +8405,39 @@ Done when the local PDS creates an account against the local PLC, the local-only
 
 ---
 
-### P1.34y — Allow only the local PLC host in net-guard
+### P1.34y — Add an inert local PLC policy to net-guard
 Tags: [SEC] trusted            Depends on: P1.34t
-Slice 1, issue #783, trusted base (`infrastructure/net-guard/`), lane the third thread; book edit
-2026-10-13-local-plc-steps.
+Slice 1, issue #783, trusted base (`infrastructure/net-guard/` only), lane the third thread; book edit
+2026-10-13-local-plc-steps, retitled by step-book note 2 of 2026-10-13-local-plc-a4-steps, from architecture's P1.34y /
+P1.34z note (Option A).
 
-**What:** an exact-host allowance for the local PLC name under the local profile only, never a private-range
-allowance. If P1.34z must touch `domains/identity/verify-handle.ts` (trusted), that edit moves here.
+**What:** `localPlc = internalPolicy("plc", ["http://plc:2582"])`: an exact origin, the `internal` kind, and no
+private-range allowance. net-guard stays env-blind, and the policy is inert until a composition root selects it
+(P1.34z). If P1.34z must touch `domains/identity/verify-handle.ts` (trusted), that edit moves here.
 
-Done when red fixtures for any other private host and for the allowance in dev or prod config fail, and check is green.
+Done when red fixtures fail for any other private host, another port or scheme, plc.directory, a look-alike, `plc`
+added to the public `plc` policy, and `localPlc` reachable from the public `plc` policy, and check is green. The
+"local allowance in dev or prod config" fixture moves to P1.34z.
 
 ---
 
 ### P1.34z — Point identity resolution at the local PLC
 Tags: [SEC]            Depends on: P1.34v, P1.34y
-Slice 1, issue #784, product (`domains/identity/` and the web, appview and tap config), lane the third thread, before
-P1.29s; book edit 2026-10-13-local-plc-steps.
+Slice 1, issue #784, product (`domains/identity/`, `shared/config`, `compose.local.yaml`, and the web, appview and tap
+config), lane the third thread, before P1.29s; book edit 2026-10-13-local-plc-steps and step-book note 2 of
+2026-10-13-local-plc-a4-steps, from architecture's P1.34y / P1.34z note (Option A).
 
 **What:** resolvers read the PLC URL from config and refuse any non-https PLC URL, except the exact local one under
 local.
+- `UNSET_ENV` gains `"local"`, with no separate `UNSET_STACK`; `compose.local.yaml` sets `UNSET_ENV=local`.
+- `PLC_URL=http://plc:2582` is accepted, and `localPlc` (P1.34y) selected, only when `UNSET_ENV` is `local`. Under dev,
+  test or prod it is refused at config load.
+- Every existing `=== "dev"` rule (`NETGUARD_ALLOW_LOOPBACK`, the commit placeholder and any others found) is listed
+  with an explicit local decision, each tested. An unlisted rule treats local like prod.
 
-Done when red fixtures for a non-https URL and for the local URL outside local fail, and check is green.
+Done when red fixtures for a non-https URL and for the local URL outside local fail, `env_values_enumerated` fails a
+new env value that has no decision, the local PLC URL or `localPlc` in a dev or prod config is refused at load (moved
+from P1.34y), and check is green.
 
 ---
 
@@ -8575,12 +8595,11 @@ Tags: [SEC] [ALEX]            Depends on: P1.27q, P1.27, Alex's typed approval o
 Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy job in
   `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests, and
   `scripts/ci/image-workflows.test.ts`. No product file rides with it.
-Interim base (2026-10-06-p127-base-by-digest-book-text, final): P1.27s flips every `FROM` host and the
-  `bases.lock.json` `source` back to the mirror and removes the DL3026 ignores; it brings `images.lock.json` with the
-  first publish and the ADR "image signing: key or keyless", re-decided from current documentation now the repository
-  is public (if keyless wins, Alex's signing-key tick item lapses; the environment, the reviewer and GATE_IF stay).
-  The mirror copy must keep the digests (`mirrored_digest_equals_lock`); if it cannot, that goes back to
-  architecture.
+Interim base: the base flip back to the mirror is P2.26b (product), then P2.26c (edge, trusted), which run after this
+  step's first mirror run on main (book edit 2026-10-13-p127s-split and its Amendment 1; the struck paragraph edited
+  product and trusted files, which SE-6 keeps out of a check-path PR). This step keeps the ADR "image signing: key or
+  keyless", re-decided from current documentation now the repository is public (if keyless wins, Alex's signing-key tick
+  item lapses; the environment, the reviewer and GATE_IF stay).
 Size: about 250 lines.
 
 Lapses if Alex approves the guard change before P1.27q opens; the same shape then lands in P1.27q.
@@ -8610,7 +8629,8 @@ Done when (tests):
     `publish_images_pull_request_trigger_fails`, `publish_job_cache_fails`, `packages_write_gated_publish_passes`;
   - `image-workflows.test.ts`: `no_tlog_upload_flag_present` (every cosign sign or attest call carries the flag, so no
     private-repository metadata reaches the public Rekor log) and `workflow_permissions_minimal` for `publish`;
-  - `compose_dev_images_by_digest` (F1 of book edit 2026-10-13-p129-after-745: no step carried it).
+  - `mirrored_digest_equals_lock`: the mirror copy job keeps the digests; if it cannot, that goes back to architecture.
+    `compose_dev_images_by_digest` moves to P2.26b (book edit 2026-10-13-p127s-split).
 
 Order: after P1.27, before P2.26a, which depends on it (a deploy by verified digest needs signed images). P1.30 does not
 depend on it: the preflight is tested against an injected verifier and fails closed on unsigned images. The slice 1 exit
@@ -9480,9 +9500,9 @@ would leak data or cannot be fixed later, and refuses to proceed on any failure.
 
 **Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
 files; the network table (P1.29).
-- `images.lock.json` and `cosign.pub` arrive with P1.27s, the network table with P1.29 and the retirement report with
-  P1.33a. Until then the checks that read them FAIL (below); the tests use fixtures for every input, so both parts
-  are green on main without those steps.
+- `cosign.pub` arrives with P1.27s and `images.lock.json` with P2.26b (book edit 2026-10-13-p127s-split), the network
+  table with P1.29 and the retirement report with P1.33a. Until then the checks that read them FAIL (below); the tests
+  use fixtures for every input, so both parts are green on main without those steps.
 - C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
   `node scripts/ci/verify-images.ts <lock>` by a fixed path and fixed arguments, with no shell and no config key. The
   preflight never imports `scripts/` (product code never imports tooling, `scripts/lint/.dependency-cruiser.cjs`).
@@ -9517,7 +9537,7 @@ files; the network table (P1.29).
   parser differential (the preflight reading a file one way and Compose another), so a CI-only test compares the
   preflight's view with Compose's own reading.
 
-Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in P1.30u; C25 in P1.30x):
+Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in P1.30u; C25 in P1.30x; C28 in P1.34t):
 | Id | Check |
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
@@ -11020,12 +11040,14 @@ P1.29h, P1.29s, P1.29t.
    carries Alex's mail-card answer (named when he answers), because local C11 and C19 and the reader's SMTP refusal
    cannot both hold until then (architecture's Amendment 3 of 2026-10-13-local-plc, point 2)): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring of `dev-precheck`,
-   the seed's `local:up` wiring (P1.34d) and their tests below. `dev-seed` runs under `local` only and refuses dev and
-   prod (architecture's Amendment 4 of 2026-10-13-local-plc, point 1); it creates accounts through the local PDS and
-   confirms their email through P1.29h's reader and the real `confirmEmail`; `dev-precheck` travels with it. It also
-   adds the compose key allowlist's one `logging` entry: exactly `{driver: "none"}`, on the seed service only (book edit
-   2026-10-12-p129s-seed-file-location, amendments 2 and 3). It also carries a test that a seed run leaves the secrets
-   folder's listing unchanged (book edit 2026-10-12-p134l-secrets-folder-listing, rider).
+   the seed's `local:up` wiring (P1.34d) and their tests below. It adds the `seed` service to `compose.local.yaml`
+   itself, with the drift allowance P1.34d prepared (book edit 2026-10-13-verify-814-fixes, Amendments 1 and 2).
+   `dev-seed` runs under `local` only and refuses dev and prod (architecture's Amendment 4 of 2026-10-13-local-plc,
+   point 1); it creates accounts through the local PDS and confirms their email through P1.29h's reader and the real
+   `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one `logging` entry: exactly
+   `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
+   also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
+   2026-10-12-p134l-secrets-folder-listing, rider).
 10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v and
     P1.34z): it runs on the local stack only (`local:up`); no probe runs under dev (architecture's Amendment 4 of
     2026-10-13-local-plc, point 1, and Amendment 6, S3). Its first assertion, before any browser flow, is a probe from
@@ -12731,18 +12753,19 @@ every public gate and its evidence lives here.
   sync.getRecord with proof, admin, TLS); `probe_proof_verification_fails_on_wrong_key` (fixture CAR signed by another
   key); `probe_gap_not_counted_as_up`; the outside probe green.
 
-**Not in this step:** P1.33a's prototype retirement, which gates the dev PDS taking `0x40.space` at the public
-opening, with or after this step.
+**Not in this step:** P1.33a's prototype retirement, which gates the dev PDS taking `0x40.space`. This step runs after
+P1.33a, which runs before P1.34 (book edit 2026-10-13-verify-814-fixes, Amendment 1).
 
 ---
 
 ### P1.33a — Retire the 0x40 prototype before going public (Alex; formerly L.01 part A)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** the dev PDS taking `0x40.space` at the public
-opening, with or after P1.33p (book edit 2026-10-12-p133p-public-opening; P1.34 no longer depends on it; P1.30 C21
-checks it) · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03: retire the old accounts before the development PDS
-takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` collision), decision 20, plan issue 19 (settled by
-decision 24)
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33 · **Runs before:** P1.34, and so before P1.33p's public opening (book
+edit 2026-10-12-p133p-public-opening; P1.34 depends on it again: under `--env dev`, C21 applies whatever the hostname
+(architecture's Amendment 7 of 2026-10-13-local-plc, Q1; book edit 2026-10-13-verify-814-fixes, S2 and Amendment 1);
+P1.30 C21 checks it) · **Plan:** §11 Q2a and **decision 24** (Alex, 2026-10-03: retire the old accounts before the
+development PDS takes the hostname; "start fresh" is final), §11 Q1 (`0x40.me` collision), decision 20, plan issue 19
+(settled by decision 24)
 
 **Why here (editor pass, global resolution 8):** P1.34 gives the hostname `0x40.space` to the new development PDS. The
 old prototype accounts live on the old PDS at that hostname and use `*.0x40.me` handles, the handle domain the
