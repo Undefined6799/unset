@@ -115,6 +115,10 @@ describe("caddyfile reader", () => {
     ]) {
       expect(() => read(text), text).toThrow("an environment placeholder must be a whole word");
     }
+    // A snippet argument is a whole word too, so no argument assembles part of a path (P1.34b).
+    expect(() => read("(s) {\n\trespond x{args[0]}\n}\nsite {\n\timport s y\n}")).toThrow(
+      "a snippet argument must be a whole word",
+    );
     expect(() => read("site {\n\t{$PDS_HOST} on\n}")).toThrow("{$PDS_HOST} cannot name a directive");
     expect(() => read("site {\n\timport {$PDS_HOST}\n}")).toThrow("{$PDS_HOST} cannot name a snippet");
     // Through a snippet argument, the placeholder keeps its name.

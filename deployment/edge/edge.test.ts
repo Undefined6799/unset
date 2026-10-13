@@ -942,9 +942,20 @@ describe("edge image", () => {
   });
 
   test("edge_runtime_non_root", () => {
-    const runtime = dockerfile.split(/^FROM .*$/m).at(-1) ?? "";
-    expect(runtime.match(/^USER .*$/gm)).toEqual(["USER 65532:65532"]);
-    expect(runtime.slice(runtime.indexOf("USER ")).match(/^RUN /m)).toBeNull();
+    const runtimeOf = (text: string) => text.split(/^\s*FROM\s.*$/im).at(-1) ?? "";
+    // One USER, the caddy uid, and no RUN after it, in any case and indentation Docker accepts (reference.md,
+    // "Format": instructions are not case-sensitive).
+    const nonRoot = (text: string): boolean => {
+      const runtime = runtimeOf(text);
+      const users = runtime.match(/^\s*USER\s.*$/gim) ?? [];
+      const afterUser = runtime.slice(Math.max(0, runtime.search(/^\s*USER\s/im)));
+      return users.join() === "USER 65532:65532" && !/^\s*RUN\s/im.test(afterUser);
+    };
+    expect(nonRoot(dockerfile)).toBe(true);
+    for (const line of ["user 0:0", "  USER 0:0", "USER\t0", 'run ["/bin/true"]', '  RUN ["/bin/true"]']) {
+      expect(nonRoot(`${dockerfile}${line}\n`), line).toBe(false);
+    }
+    const runtime = runtimeOf(dockerfile);
     expect(runtime).toMatch(/^RUN setcap cap_net_bind_service=\+ep \/usr\/bin\/caddy \\$/m);
     expect(runtime).toMatch(/HEALTHCHECK [\s\S]*http:\/\/127\.0\.0\.1:8081\/health/);
   });
@@ -963,9 +974,10 @@ describe("local stack files (P1.34c)", () => {
     expect(local("tls.caddy")).toBe("(tls) {\n\ttls /run/secrets/local_tls_cert /run/secrets/local_tls_key\n}");
   });
 
-  test("local_app_site_mirrors_the_pds_site", () => {
+  test("local_app_site_has_the_pds_sites_shared_snippets", () => {
     // TLS, the access log and the security headers as every public host has them; the zones first, then the upstream
-    // snippet, which drops the client's address headers, so web sees only the edge (ADR 0018, invariant 3).
+    // snippet, which drops the client's address headers, so web sees only the edge (ADR 0018, invariant 3). Unlike the
+    // PDS site it has no pds-route-class or xrpc-guard: those are the PDS's routes.
     expect(local("app.caddy")).toBe(
       [
         "{$APP_HOST} {",
@@ -982,11 +994,61 @@ describe("local stack files (P1.34c)", () => {
   });
 
   test("local_files_never_in_the_image", () => {
-    const sources = dockerfile
-      .split("\n")
-      .filter((line) => /^COPY /.test(line) && !line.includes("--from="))
-      .map((line) => line.split(/\s+/)[1]);
-    expect(sources).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    // COPY and ADD from the build context, in any case and indentation Docker accepts (moby/buildkit
+    // frontend/dockerfile/docs/reference.md, "Format": instructions are not case-sensitive), read as BuildKit reads
+    // them (frontend/dockerfile/parser, master): a line ending in an unescaped backslash joins the next, comment lines
+    // inside dropped (parser.go:168, :329-346); only the leading `--` words are flags, and a bare `--` ends them
+    // (split_command.go, extractBuilderFlags); the rest is a JSON string array when it parses as one, else words
+    // (line_parsers.go, parseMaybeJSONToList). The last source word is the destination, and a copy is from a build stage
+    // only when one of its flags is --from.
+    const args = (rest: string): string[] => {
+      try {
+        const parsed: unknown = JSON.parse(rest);
+        if (Array.isArray(parsed) && parsed.every((part) => typeof part === "string")) return parsed;
+      } catch {
+        // Not JSON: the shell form, read as words below.
+      }
+      return rest.split(/\s+/).filter((word) => word !== "");
+    };
+    const copy = (line: string): { flags: string[]; words: string[] } | undefined => {
+      const [, keyword, rest = ""] = /^(\S+)\s*(.*)$/.exec(line.trim()) ?? [];
+      if (!/^(COPY|ADD)$/i.test(keyword ?? "")) return undefined;
+      const flags = rest.match(/^(?:--\S+(?:\s+|$))*(?:--(?:\s+|$))?/)?.[0] ?? "";
+      const words = args(rest.slice(flags.length));
+      return { flags: flags.split(/\s+/).filter((flag) => flag !== "" && flag !== "--"), words };
+    };
+    const sources = (text: string): string[] =>
+      text
+        .replaceAll(/(^|[^\\])\\[ \t]*\r?\n(?:[ \t]*(?:#.*)?\r?\n)*/gm, "$1")
+        .split("\n")
+        .flatMap((line) => copy(line) ?? [])
+        .filter(({ flags }) => !flags.some((flag) => /^--from=/i.test(flag)))
+        .flatMap(({ words }) => words.slice(0, -1));
+    expect(sources(dockerfile)).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
+    for (const line of ["copy local/ /etc/caddy/local/", "  COPY local/app.caddy /etc/caddy/", "ADD local/ /srv/"]) {
+      expect(sources(`${dockerfile}${line}\n`), line).toContain(line.trim().split(/\s+/)[1]);
+    }
+    // Continuations are joined before the keyword is read, as BuildKit does (parser.go:168, :329-346), and a line is
+    // a build-stage copy only when one of its leading flags is --from.
+    for (const text of [
+      "COPY \\\n    local/ /etc/caddy/local/",
+      "COPY --chown=65532:65532 \\\n    local/ /srv/",
+      "COPY Caddyfile \\\n    local/ /etc/caddy/",
+      "CO\\\nPY local/ /srv/",
+      "COPY\\\n local/ /srv/",
+      "COPY \\\n# a comment\n    local/ /srv/",
+      "COPY --exclude=--from=x local/ /srv/",
+      // An escaped backslash ends no line (BuildKit's `([^\\])\\[ \t]*$`), so the COPY after it is its own
+      // instruction; only the leading `--` words are flags (split_command.go, extractBuilderFlags), so a later
+      // `--from=` word is a source; and the JSON form is read as BuildKit reads it (line_parsers.go, parseMaybeJSONToList).
+      "LABEL x=\\\\\nCOPY local/ /srv/",
+      "COPY local/ --from=x* /etc/caddy/local/",
+      'COPY ["local/","/etc/caddy/local/"]',
+      'COPY --chown=65532:65532 [ "local/", "/srv/" ]',
+      "COPY -- --from=x local/ /srv/",
+    ]) {
+      expect(sources(`${dockerfile}${text}\n`), text).toContain("local/");
+    }
     expect(readdirSync(join(EDGE, "local")).sort()).toEqual(["app.caddy", "tls.caddy"]);
   });
 });

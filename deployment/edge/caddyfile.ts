@@ -381,7 +381,7 @@ function expand(line: Line, expander: Expander): Line[] {
   }));
 }
 
-/** `{args[N]}` replaced by the import's Nth argument; any other `{args…}` form, or a missing argument, fails. */
+/** A whole-word `{args[N]}` replaced by the import's Nth argument; any other `{args…}` use, or a missing one, fails. */
 function withArgs(token: Token, args: readonly Token[]): Token {
   let env: EnvName | null = token.env;
   const text = token.text.replaceAll(/\{args([^}]*)\}/g, (whole, index: string) => {
@@ -390,6 +390,9 @@ function withArgs(token: Token, args: readonly Token[]): Token {
     if (value === undefined) fail(token.line, `{args${index}} has no value`);
     // A placeholder argument stays a whole word, so its position is still known (P1.28l).
     if (value.env !== null && whole !== token.text) fail(token.line, "an environment placeholder must be a whole word");
+    // Caddy substitutes inside a word (v2.11.7 caddyconfig/caddyfile/parse.go:580), so a part-word argument could
+    // assemble a word no raw token holds, such as a local-only leaf path; only a whole-word argument is read (P1.34b).
+    if (whole !== token.text) fail(token.line, "a snippet argument must be a whole word");
     env = value.env ?? env;
     return value.text;
   });
@@ -425,10 +428,11 @@ const CADDY_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.caddy$/;
  */
 export type EdgeMode = "shipped" | "local";
 /**
- * Words a file may hold only when read from local/: the app site's placeholders and the dev leaf's two secret paths
- * (P1.34c). A prod app site is a later ruling.
+ * What a file may hold only when read from local/: the app site's placeholders and the dev leaf's secrets (P1.34c). A
+ * token containing any of these fails anywhere else, so a leaf path spelled `/run/secrets//local_tls_cert` or through
+ * `..` fails too, with no path normalising to get wrong (P1.34b). A prod app site is a later ruling.
  */
-const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "/run/secrets/local_tls_cert", "/run/secrets/local_tls_key"];
+const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
 
 /**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
@@ -445,7 +449,8 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "/run/secrets/local_tls_ce
  *
  * In the "local" mode (P1.34a), `edgeDir/local/` counts beside sites/ for `sitesDir` and for each site, and
  * `local/tls.caddy` is read in place of `snippets/tls.caddy`, as its mount replaces it. In either mode a file outside
- * local/ holding a LOCAL_ONLY word fails, and APP_HOST and APP_UPSTREAM must differ from the PDS ones.
+ * local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and APP_UPSTREAM must differ from the
+ * PDS ones.
  */
 export function readEdgeConfig(
   edgeDir: string,
@@ -474,9 +479,8 @@ function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFi
   if (!siteBounds.some((bound) => enabled.startsWith(`${bound.path}/`))) {
     throw new CaddyfileError(`the enabled sites directory is not inside ${areas(siteBounds)}`);
   }
-  const lines = files
-    .read(entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false))
-    .split("\n");
+  const caddyfile = entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false);
+  const lines = localOnlyChecked(files, caddyfile, "Caddyfile", local).split("\n");
   for (const line of FILE_IMPORTS) {
     if (lines.filter((l) => l === line).length !== 1) {
       throw new CaddyfileError(`the Caddyfile must ${line} exactly once`);
@@ -507,12 +511,12 @@ function distinctAppValues(env: Env): void {
   }
 }
 
-/** The text of the file at `path`, which may hold a LOCAL_ONLY word only when it lies inside local/. */
+/** The text of the file at `path`, which may hold a LOCAL_ONLY part only when it lies inside local/. */
 function localOnlyChecked(files: EdgeFiles, path: string, name: string, local: Bound): string {
   const text = files.read(path);
   if (path.startsWith(`${local.path}/`)) return text;
   for (const line of lex(text)) {
-    const word = line.tokens.find((token) => LOCAL_ONLY.includes(token.text));
+    const word = line.tokens.find((token) => LOCAL_ONLY.some((part) => token.text.includes(part)));
     if (word !== undefined) throw new CaddyfileError(`${name}: ${word.text} is allowed only in local/`);
   }
   return text;
@@ -594,8 +598,12 @@ const named = (directives: Directive[], name: string): Directive[] => directives
  * sets none again. A site with no reverse_proxy is
  * exempt because it has no `reverse_proxy`, not because of its name or address;
  * it must still be bound to loopback and named for it, or it is a public site without rate limit. At most one site may
- * proxy a given upstream (P1.28f; amendment 8, point 4): until shared zone state across sites is proven, two sites on
- * one upstream would each count their clients separately.
+ * proxy a given upstream (P1.28f; amendment 8, point 4), so each upstream sits behind one site's rules. Zone state is
+ * shared across sites by zone name: caddy-ratelimit at the pinned 5625512f24f6 keeps each zone's limiters in one
+ * process-wide pool keyed by its name (ratelimit.go:92-96, handler.go:385). So every site importing pds-ratelimit
+ * spends the same per-client budgets; the local app site does, which Amendment 2 of
+ * unset-plan/book-edits/2026-10-12-refocus-local-signin-rulings.md accepts for local only, and a prod app site gets its
+ * own zone (Amendment 5, F3).
  *
  * Each env placeholder sits only in its position in PLACEHOLDER_POSITIONS, every upstream is a placeholder, and a
  * literal site address is loopback (P1.28l; amendment 9). Messages name a site by its addresses as written.
