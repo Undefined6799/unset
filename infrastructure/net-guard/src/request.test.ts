@@ -1,6 +1,6 @@
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { atproto, type Policy, plc } from "./policies.ts";
+import { atproto, localPlc, type Policy, plc } from "./policies.ts";
 import { fakeResolver, type Handler, httpServer, httpsServer, loopbackDial, testCertificate } from "./remote.fake.ts";
 import { createNetGuardWith, type EgressEvent } from "./request.ts";
 import { NetGuardError } from "./resolve.ts";
@@ -199,6 +199,35 @@ describe("guardedRequest", () => {
     expect(await codeOf(bad.guard.request(objects, { url: "http://objects:9000/" }))).toBe("egress.host_not_allowed");
     expect(await codeOf(bad.guard.request(objects, { url: "http://other:8333/" }))).toBe("egress.host_not_allowed");
     expect(await codeOf(bad.guard.request(plc, { url: "http://plc.directory/" }))).toBe("egress.scheme");
+  });
+
+  test("local_plc_is_one_exact_private_origin", async () => {
+    // P1.34y (record 2026-10-13-local-plc, Amendment 4): the local stack's PLC by its one internal origin, never a
+    // private range; the public `plc` policy keeps plc.directory alone.
+    handler = (_req, res) => res.end("ok");
+    expect(localPlc).toEqual({ name: "plc", kind: "internal", origins: ["http://plc:2582"] });
+    expect(plc).toEqual({ name: "plc", kind: "fixed", hosts: ["plc.directory"] });
+    const ok = guardFor({ plc: ["172.20.0.9"] }, servers.http.port);
+    expect((await ok.guard.request(localPlc, { url: "http://plc:2582/did:plc:x" })).status).toBe(200);
+    const bad = guardFor({ plc: [PUBLIC], db: ["172.20.0.9"], "plc.directory": [PUBLIC] }, servers.http.port);
+    expect(await codeOf(bad.guard.request(localPlc, { url: "http://plc:2582/" }))).toBe("egress.private_address");
+    for (const url of [
+      "http://db:2582/",
+      "http://plc:2583/",
+      "http://plc/",
+      "https://plc:2582/",
+      "http://plc.directory/",
+      "https://plc.directory/",
+      "http://10.0.0.7:2582/",
+      "http://172.20.0.9:2582/",
+      "http://plc.evil.example:2582/",
+    ]) {
+      expect(await codeOf(bad.guard.request(localPlc, { url })), url).toBe("egress.host_not_allowed");
+    }
+    expect(await codeOf(bad.guard.request(localPlc, { url: "http://user@plc:2582/" }))).toBe("egress.scheme");
+    expect(await codeOf(bad.guard.request(plc, { url: "http://plc:2582/" }))).toBe("egress.scheme");
+    expect(await codeOf(bad.guard.request(plc, { url: "https://plc/" }))).toBe("egress.host_not_allowed");
+    expect(await codeOf(bad.guard.request(plc, { url: "https://plc:2582/" }))).toBe("egress.port");
   });
 
   test("log_has_no_url", async () => {
