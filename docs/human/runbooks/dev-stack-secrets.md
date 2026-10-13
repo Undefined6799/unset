@@ -57,7 +57,7 @@ keeps every other host account out:
 | `pg_indexer_password` | `65532:65532` | migrate | the `indexer` role's password |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
-lists the folder, so a stray file here passes (a P1.27 follow-up adds that listing). The dev seed
+lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). The dev seed
 (P1.29s) writes `.seeded.json`, the seeded test accounts' handles, DIDs and passwords, to `unset-dev-env/` instead,
 mode `0600` and owned by you (Amendment 7 of the bind-ancestors record). Nothing in a container reads it.
 
@@ -71,8 +71,9 @@ Which files can be rotated on a running stack:
   files on every run (`syncRolePasswords`, infrastructure/postgres/roles.ts), so replace the file and restart the stack.
 - `pg_superuser_password`, `pg_migrator_password` and `pg_tap_password` cannot yet. The postgres image reads them only
   at initdb, which runs only on an empty data volume (docker-library/postgres 18/trixie/docker-entrypoint.sh:347,
-  `if [ -z "$DATABASE_ALREADY_EXISTS" ]`). Changing one later changes nothing in the database, and changing
-  `pg_migrator_password` or `migrate_pg_password` alone locks migrate out. Before P1.35 the only way is to remove the
+  `if [ -z "$DATABASE_ALREADY_EXISTS" ]`). Changing one later changes nothing in the database. Changing
+  `migrate_pg_password` alone locks migrate out at once; changing `pg_migrator_password` alone breaks the pair:
+  migrate is locked out after the next initdb. Change both together. Before P1.35 the only way is to remove the
   `pgdata` volume and start again, which loses the data; from P1.35 on, the warning above rules that out too.
 - `migrate_pg_password` must always hold the same value as `pg_migrator_password`.
 

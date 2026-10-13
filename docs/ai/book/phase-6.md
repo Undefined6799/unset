@@ -120,7 +120,7 @@ examples below stands for an opaque id).
 | P3.15/P3.20 | `app.report` (closed category list, `text` revealed via `mod.reveal_report`), the `mod.report_list` view and the report list screen; P6.15 adds a `source` column and a definer for ingest |
 | P3.19 | per-action WebAuthn signing for reveals |
 | P4.04 | `enqueueJob(kind, payload)` and the worker handler registry (no-network compute container) |
-| P4.07 | the one legal-hold design: one table, objects sealed with `sealTo` to the legal-hold key, the clock on `pds-admin` (one year after notification), no moderator view; the `preserve.*` verbs are P3.16c. Images enter it through the image entry point built in **P5.07b**; this file calls that entry point `openAbuseCase({ source, evidenceRef })` and P6.00 adopts its real name |
+| P4.07 | the one legal-hold design: one table, objects sealed with `sealTo` to the legal-hold key, the clock on `pds-admin` (one year after notification once the amended regime is in force; 21 days before it (per case, fixed at notification)), no moderator view; the `preserve.*` verbs are P3.16c. Images enter it through the image entry point built in **P5.07b**; this file calls that entry point `openAbuseCase({ source, evidenceRef })` and P6.00 adopts its real name |
 | P4.18 | `followState(viewerDid, subjectDid) → { viewerFollowsSubject, subjectFollowsViewer }` (if P4.18 exposes only `counts(did)` and "follows you", P6.06a adds this reader in P4.18's module) |
 | P5.02 | compose profiles and per-container networks; this phase adds the `chat` profile |
 | P5.04/P5.05/P5.06 | backup inventory file, drill script, secret inventory |
@@ -191,6 +191,8 @@ Steps added by this file (reasons in each step): **P6.00** (README rule), **P6.0
 
 ### P6.00 — Refine Phase 6
 Tags: [CHAT] (behaves as a [SPIKE]: a contradiction stops the steps it touches)            Depends on: Phase 5 exit (P5.13); P6.01 runs after this step (it depends on P6.00)            Plan: README "Depth of detail"; architecture principles 13–16
+Parked for this refine: `MATRIX_SERVER_NAME` is P1.32's permanent constant, so Phase 6 reads it rather than
+adding a config key of that name (P1.32's As built, phase-1.md).
 Where: `docs/ai/phase-6-refine.md` (the delta report); a PR against this book file through the editor (the agent never
   edits the book directly)
 Size: ~0 source lines, ~300 lines of document, ~0 test lines

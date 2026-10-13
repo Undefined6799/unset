@@ -28,3 +28,6 @@ decides; this file records the answer.
 | 20 | Tap/indexer egress vs "PDS and PLC only". | §5.x egress, decision 5 | General outbound HTTPS through net-guard for Tap and the indexer. | folded into the plan (02:41Z) |
 | 21 | `Vary: Cookie` defeats public-page caching. | §6.1 | Public profile pages carry no theme/language cookies. | folded into the plan (02:41Z) |
 | 22 | Foreign-PDS 413 on the master. | decision 22 | Pause and ask the user: publish at 720p (shown on the post) or keep as draft. | decided by Alex (decision 22) |
+
+Plan §6 decision 9 (preservation): the plan side is issue #758 (book edit 2026-10-12-csam-preservation-book-lines,
+item 11). The book states both regimes (P1.37, P3.16c, P4.07).

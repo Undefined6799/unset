@@ -168,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 246 steps: 222 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 257 steps: 233 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -365,6 +365,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27f | ~~Give the C26 symlink test a C9-valid fixture~~ **Superseded** by P1.27g (#684 closed unmerged) | — | P1.27y, P1.30o | `phase-1.md` |
 | P1.27a | Refuse sticky writable ancestors in C9 | [SEC] | P1.30o | `phase-1.md` |
 | P1.27u | Close the C9 bind reach gaps | [SEC] | P1.27a | `phase-1.md` |
+| P1.27p | Withhold only non-public configured values | [SEC] [ALEX] (card answered 23:13:27Z) | P1.29 | `phase-1.md` |
 | P1.27w | Run Compose only through the preflight wrapper | [SEC] | P1.30a, P1.30z | `phase-1.md` |
 | P1.27n | Close the P1.27y verifier test gaps | [SEC] | P1.27y | `phase-1.md` |
 | P1.27j | Tidy preflight comments and the tilde check | — | P1.30a | `phase-1.md` |
@@ -383,6 +384,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34r | Walk, open, then fstat in the env reader | [SEC] | P1.27j | `phase-1.md` |
 | P1.34c | Serve the local app site with a dev leaf (trusted base) | [SEC] | — | `phase-1.md` |
 | P1.34a | Let the edge reader accept the local app site (trusted base) | [SEC] | — | `phase-1.md` |
+| P1.34b | Tighten the edge local-files check and tests (trusted base) | — | P1.34a | `phase-1.md` |
+| P1.34g | Fix the edge integration test nits from #746 | — | P1.29a | `phase-1.md` |
+| P1.34i | Close the dev compose test gaps from #745 | — | P1.29a | `phase-1.md` |
+| P1.34j | Catch lowercase USER and edge bind mounts (trusted base) | [SEC] | P1.34b | `phase-1.md` |
+| P1.34l | Refuse stray files in the secrets folder | [SEC] | — | `phase-1.md` |
 | P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
@@ -396,8 +402,13 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
-| P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
+| P1.31d | Resolve package exports and lexicon scripts (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.31 | Lexicons package (with `sh.unset.follow` in the first set, answer 29b) | [PERMANENT] [SEC] [ALEX] [STOP] (Alex approves fields and consent text in its PR) | P1.01, P1.31d, P1.32 (Q4, the permission-set NSID) | `phase-1.md` |
+| P1.31c | Pin the lexicon NSID to the permanent value | — | P1.31 | `phase-1.md` |
+| P1.31e | Admit the private unset-source condition | — | P1.31c | `phase-1.md` |
+| P1.31f | Export the web server through unset-source | — | P1.31e | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
+| P1.37b | Harden the legal marker docs check | — | P1.37 | `phase-1.md` |
 | P1.36 | Compliance skeletons (pulled forward from slice 2, Alex 23:08Z; test in `scripts/docs/`, check class) | — | P0.07 | `phase-1.md` |
 | P2.01k | `resolveTxt` in `net-guard` (split from P2.01, SE-6) | [SEC] | P1.18 | `phase-2.md` |
 | P2.01q | `alsoKnownAs` guard (split from P2.01, SE-6) | — | P0.09c | `phase-2.md` |
@@ -587,6 +598,7 @@ flowchart TD
   P1_27f["P1.27f C26 test gets a C9-valid fixture"]
   P1_27n["P1.27n P1.27y verifier test gaps"]
   P1_27u["P1.27u C9 bind reach gaps"]
+  P1_27p["P1.27p Withhold only non-public values"]
   P1_27j["P1.27j Preflight comment and tilde tidy"]
   P1_11c["P1.11c Keep the setup error on cleanup"]
   P1_11i["P1.11i Edge tag removal and test labels"]
@@ -601,6 +613,11 @@ flowchart TD
   P1_11n["P1.11n Test helpers out of images"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
+  P1_34l["P1.34l Secrets folder listing"]
+  P1_34b["P1.34b Edge local-files check"]
+  P1_34g["P1.34g Edge integration test nits"]
+  P1_34i["P1.34i Dev compose test gaps"]
+  P1_34j["P1.34j Lowercase USER and bind mounts"]
   P1_34c["P1.34c Local app site with a dev leaf"]
   P1_34a["P1.34a Edge reader accepts local app site"]
   P1_34d["P1.34d PDS trusts one dev root"]
@@ -640,8 +657,13 @@ flowchart TD
   P1_30n["P1.30n Preflight refuses network names"]
   P1_32["P1.32 Permanent choices"]
   P1_32a["P1.32a ADR 0020 answered only"]
+  P1_31d["P1.31d Exports and lexicon scripts rules"]
   P1_31["P1.31 Lexicons package"]
+  P1_31c["P1.31c NSID cross-pin"]
+  P1_31e["P1.31e unset-source condition"]
+  P1_31f["P1.31f Web server via unset-source"]
   P1_37["P1.37 Legal paperwork"]
+  P1_37b["P1.37b Legal marker check hardening"]
   P1_36["P1.36 Compliance skeletons"]
   P2_01["P2.01 DID and handle resolution"]
   P2_01k["P2.01k resolveTxt in net-guard"]
@@ -804,6 +826,10 @@ flowchart TD
   P1_30p --> P1_30
   P1_01 --> P1_31
   P1_32 --> P1_31
+  P1_31d --> P1_31
+  P1_31 --> P1_31c
+  P1_31c --> P1_31e
+  P1_31e --> P1_31f
   P1_32 --> P1_32a
   P1_18 --> P2_01
   P2_01 --> P2_02
@@ -844,6 +870,7 @@ flowchart TD
   P2_07 --> P2_11
   P1_25 --> P2_15
   P1_37 --> P2_15
+  P1_37 --> P1_37b
   P2_11 --> P2_12
   P2_15 --> P2_12
   P1_15 --> P2_12
@@ -917,6 +944,10 @@ flowchart TD
   P1_29a --> P1_34d
   P1_27l --> P1_34d
   P1_34a --> P1_27l
+  P1_34a --> P1_34b
+  P1_29a --> P1_34g
+  P1_29a --> P1_34i
+  P1_34b --> P1_34j
   P1_34d --> P1_29t
   P1_29t --> P2_13a
   P1_30 --> P2_13a
@@ -1050,7 +1081,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 14 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -1062,8 +1093,8 @@ Arachnid application, and the Phase 1 exit.
 | P1.18b | `net-guard` forward-proxy mode and the egress proxy for processes that are not ours | [SEC] | P1.18a | `phase-1.md` |
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
-| P1.33a | Retire the 0x40 prototype before P1.34 (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P1.33a, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s | `phase-1.md` |
+| P1.33a | Retire the 0x40 prototype before going public (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
@@ -1077,7 +1108,8 @@ flowchart TD
   P1_15a["P1.15a Audit retention"]
   P1_18b["P1.18b net-guard forward-proxy mode and"]
   P1_33["P1.33 Server baseline"]
-  P1_33a["P1.33a Retire the 0x40 prototype before"]
+  P1_33a["P1.33a Retire the 0x40 prototype before going public"]
+  P1_33p["P1.33p Open the home server to the public"]
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
   P1_27s["P1.27s publish and sign images"]
@@ -1085,7 +1117,9 @@ flowchart TD
   P1_37a["P1.37a Apply for Arachnid Shield access"]
   P1_38["P1.38 Phase 1 exit"]
   P1_33 --> P1_33a
-  P1_33a --> P1_34
+  P1_33 --> P1_34
+  P1_34 --> P1_33p
+  P1_33a --> P1_33p
   P1_34 --> P1_35
   P1_35 --> P1_38
   P1_37a --> P1_38
@@ -1307,7 +1341,7 @@ Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a r
 | P4.06 | Video fingerprints: PDQ on sampled frames, checked through the `FingerprintCheck` stage from the egress step | [SEC] [MOD] | P4.05, P2.16 (`FingerprintCheck` stage, fake), P2.16b (PDQ) | `phase-4.md` |
 | P4.07g | Legal-hold reader logins (SE-6) | [SEC] | P4.00\*, P1.12 | `phase-4.md` |
 | P4.07k | Legal-hold domain and the offline export CLI (split from P4.07, SE-6) | [SEC] [MOD] | P4.07g, P4.06, P3.16c, P1.14a | `phase-4.md` |
-| P4.07 | Match path: block, sealed 365-day legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07g, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
+| P4.07 | Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07g, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
 | P4.07h | The body of `core.is_held` (split from P4.07, SE-6) | [SEC] [MOD] | P4.07 | `phase-4.md` |
 | P4.08 | Local image gate: nudity (NudeNet class) and gore (hold-only), in the no-network container | [MOD] | P4.05 | `phase-4.md` |
 | P4.09 | Local transcript (whisper.cpp `base`) → draft WebVTT captions | — | P4.05 | `phase-4.md` |
@@ -1712,7 +1746,7 @@ flowchart LR
 | Id | Status |
 |---|---|
 | P2.16a | Retired. The Arachnid Shield API spike moved to **P5.07b** with the real check (decision 23, global resolution 2). |
-| L.01 part A | Now **P1.33a** in Phase 1, before P1.34 (global resolution 8). L.01 keeps part B. |
+| L.01 part A | Now **P1.33a** in Phase 1, before going public (global resolution 8; P1.33p since 2026-10-13). L.01 keeps part B. |
 | L.02's severity definitions | Now **P0.09b**; L.02 keeps only the gate. |
 | P0.11b, P0.12b | Not used. P0.11's agent part that needs no input from Alex is P0.11a. The rest of P0.11, and P0.12 and P0.13, stay split inline. |
 | P0.09o | Retired 2026-10-12 21:12Z: folded into **P0.09n** (#692), because its pieces only go green with P0.09n's. Not reused. |

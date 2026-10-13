@@ -2,10 +2,10 @@
 
 What to do when a fingerprint match, a local check, a reviewer or a user report points at child sexual abuse and
 exploitation material (CSAEM) on our service. Plan §5.8 and §6 (decisions 9, 21 and 30). The law below was read on
-2026-10-12; every citation is marked for the lawyer hour, and each marker has a row in
-[`legal-status.md`](legal-status.md). This is an operating runbook, not legal advice. Decision 9's one-year
-preservation is ahead of the law in force: it applies only once C-16's amendments commence, and until then the rule
-is 21 days (section 4; plan §5.8 and §6 as restated on 2026-10-12).
+2026-10-12 (the Act's title on 2026-10-13); every citation is marked for the lawyer hour, and each marker has a row in
+[`legal-status.md`](legal-status.md). This is an operating runbook, not legal advice. Decision 9's one-year preservation
+is ahead of the law in force: it applies only once C-16's amendments commence, and until then the rule is 21 days
+(section 4; plan §5.8 and §6 as restated on 2026-10-12).
 
 **Who:** Alex, the only person who reports. Nobody opens or reviews the item, Alex included: every report works from
 the alert's metadata.
@@ -25,14 +25,15 @@ Cybertip.ca says the same on its report page (https://www.cybertip.ca/en/report/
    blocks it; plan §5.8). Confirm in the admin panel that the hold exists; do not open the media.
 2. Freeze the uploader's uploads. Never freeze the reporter's account.
 3. Note the time you were alerted. The reporting steps in sections 2 and 3 run "as soon as feasible" from here; the
-   preservation clock in section 4 starts later: it counts from the day after the police notice is made.
+   preservation clock in section 4 starts later: it counts from the day after the notice is made (to police today;
+   to the designated body once C-16 commences).
 
 ## 2. Which duty applies
 
 The in-force law is An Act respecting the mandatory reporting of Internet child sexual abuse and exploitation material
-by persons who provide an Internet service, S.C. 2011, c. 4 ("the Act"; title as amended by S.C. 2024, c. 23, s. 12,
-in force 2025-10-10; Justice Laws, current to 2026-09-21), and the Internet Child Pornography Reporting Regulations,
-SOR/2011-292 (current to 2026-06-21). The Act has no short title until C-16 s. 178 commences.
+by persons who provide an Internet service, S.C. 2011, c. 4 ("the Act"; title as amended by S.C. 2024, c. 23, subpar.
+12(a)(i), in force 2025-10-10; Justice Laws, current to 2026-09-21), and the Internet Child Pornography Reporting
+Regulations, SOR/2011-292 (current to 2026-06-21). The Act has no short title until C-16 s. 178 commences.
 
 | Situation | Duty | Where |
 | --- | --- | --- |
@@ -42,7 +43,9 @@ SOR/2011-292 (current to 2026-06-21). The Act has no short title until C-16 s. 1
 
 The Cybertip.ca service-provider form takes a URL or IP only and gives a receipt. Keep the receipt with the case record;
 the form advises keeping it for at least 2 years [lawyer to confirm: L2]. For material on our own network, the page
-tells the provider to report to local police instead: that is the s. 3 notice in section 3.
+tells the provider to report to local police instead: that is the s. 3 notice in section 3. For an address on our own
+service, do both: send the s. 3 notice and submit the address on the form; if the form redirects an own-network address
+to police, record that in the case record [lawyer to confirm: L2].
 
 Suspected material that no fingerprint matched follows the same path; whether the duties and timing differ for
 suspected versus matched material is on the lawyer-hour list [lawyer to confirm: L4]. Written child sexual material in
@@ -64,10 +67,10 @@ under review.
 
 ## 4. Preserve, then destroy
 
-C-16, the Protecting Victims Act (S.C. 2026, c. 19), received royal assent on 2026-06-18. Its Mandatory Reporting
-Act amendments (ss. 178 to 183) come into force on a date the Governor in Council fixes, and that date is not yet
-fixed (Justice Laws, current to 2026-09-21) [lawyer to confirm: L7]. Check Justice Laws and the Canada Gazette Part II
-before every case until the order is made.
+C-16, the Protecting Victims Act (S.C. 2026, c. 19), received royal assent on 2026-06-18. Its amendments to the Act
+(sections 178 to 183; s. 178 adds the short title "Mandatory Reporting Act") come into force on a date the Governor in
+Council fixes, and that date is not yet fixed (Justice Laws, current to 2026-09-21) [lawyer to confirm: L7]. Check
+Justice Laws and the Canada Gazette Part II before every case until the order is made.
 
 - **Until then:** notify the police in writing (s. 3); preserve all related computer data for **21 days after the
   day the police notice is made** (s. 4(1)): the notice day is not counted, so a notice on 1 October is kept through
@@ -112,4 +115,5 @@ we answer a production order for the preserved data [lawyer to confirm: L21].
 Sources read 2026-10-12: https://laws-lois.justice.gc.ca/eng/acts/I-20.7/FullText.html,
 https://laws-lois.justice.gc.ca/eng/regulations/SOR-2011-292/FullText.html,
 https://www.parl.ca/legisinfo/en/bill/45-1/c-16, https://www.justice.gc.ca/eng/csj-sjc/pl/c16/,
-https://www.cybertip.ca/en/report/federal/.
+https://www.cybertip.ca/en/report/federal/. The Act's title and its source, S.C. 2024, c. 23, subpar. 12(a)(i), were
+read 2026-10-13 at the first address.

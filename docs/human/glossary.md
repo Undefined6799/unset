@@ -75,7 +75,7 @@ word in the code that is not here and not plain English has found a defect: add 
 | **fingerprint** | A PDQ perceptual hash, computed locally (P2.16b) for each image and for frames taken from each video, and compared with known abuse material; no MD5 or TMK is checked. |
 | **`FingerprintCheck`** | The interface of the fingerprint check stage: `check(hashes)` answers `clear`, `match` (with a classification such as `harmful-abusive-material`) or `unavailable` and never throws; a fake from Phase 2, the real Arachnid client from P5.07b, and production refuses to boot without the real one. |
 | **Arachnid Shield** | The Canadian Centre for Child Protection's service our PDQ fingerprints are checked against (real client in P5.07b); media never leaves. |
-| **legal hold** | Preservation after a fingerprint match, a report or suspected material (Bill C-16): material sealed with `sealTo` to the offline legal-hold key in P4.07's one table, kept until one year after notification on `pds-admin`'s clock (`preserve.*` verbs, P3.16c, code name `LegalHold`); no verb shortens it and no server can decrypt it. Only a named owner's own `legal_hold_reader` login exports it (ciphertext, offline CLI); `admin` sees hold metadata only. |
+| **legal hold** | Preservation after a fingerprint match, a report or suspected material (Bill C-16): material sealed with `sealTo` to the offline legal-hold key in P4.07's one table, kept until one year after notification once the amended regime is in force; 21 days before it (per case, fixed at notification), on `pds-admin`'s clock (`preserve.*` verbs, P3.16c, code name `LegalHold`); no verb shortens it and no server can decrypt it. Only a named owner's own `legal_hold_reader` login exports it (ciphertext, offline CLI); `admin` sees hold metadata only. |
 | **delete hold** | Not a legal hold: the 7-day wait (or second person's approval) before `pds-admin` deletes an account (`hold.*` verbs, P3.16a, code name `DeleteHold`). |
 | **transmission data** | The uploader's address, time and route, sealed to the legal-hold key into a short-lived buffer for every upload; a match moves it unchanged into the legal hold, anything else destroys it within minutes (decision 21). |
 | **delist** | Removing an account from our directory and feeds without touching its repo. |
@@ -112,7 +112,8 @@ word in the code that is not here and not plain English has found a defect: add 
   `isHeld`, `matched_hold`, `needs_reauth`, `master_downgraded`, severity 1/2/3, and the phase-5 names `alert.send`, `ops.report`,
   `permissionSetCheck`, `release.json` (phase-5 Notes).
 - Fixed: fingerprint (PDQ only, no TMK or MD5; editor resolution 2); legal hold (P4.07 table, `sealTo`, one year after
-  notification on `pds-admin`'s clock; resolution 3); transmission data (a buffer for every upload, decision 21); seal,
+  notification once the amended regime is in force and 21 days before it, per case and fixed at notification, on
+  `pds-admin`'s clock; resolution 3); transmission data (a buffer for every upload, decision 21); seal,
   net-guard and `eraseDid` (resolutions 3 and 4); message request (every DM starts as an invite, decision 12; phase-6 Notes 9).
 - Lead sweep (2026-10-03): `isHeld` → `core.is_held` with its two forms (lead decision 2); seal and `sealTo` entries
   name `sealStream`/`unsealStream` and `sealToStream` and the owner's argument order (lead decision 1); legal hold
