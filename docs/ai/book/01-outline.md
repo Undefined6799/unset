@@ -396,9 +396,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34o | Read app.caddy as one local file mount (trusted base) | [SEC] | P1.34a | `phase-1.md` |
 | P1.34q | Read local edge sites as per-file mounts (trusted base) | [SEC] | P1.34o | `phase-1.md` |
 | P1.33t | Require the tls import in every edge site | [SEC] | P1.27l | `phase-1.md` |
-| P1.34t | Refuse a public PLC URL on dev and local | [SEC] | — | `phase-1.md` |
+| P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
 | P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t | `phase-1.md` |
-| P1.34v | Run a local PLC directory in the dev stack | [SEC] [ALEX] (card) | P1.34u | `phase-1.md` |
+| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card) | P1.34u | `phase-1.md` |
 | P1.34y | Allow only the local PLC host in net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -431,7 +431,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.01k | `resolveTxt` in `net-guard` (split from P2.01, SE-6) | [SEC] | P1.18 | `phase-2.md` |
 | P2.01q | `alsoKnownAs` guard (split from P2.01, SE-6) | — | P0.09c | `phase-2.md` |
 | P2.01m | `resolveVetted` on c-ares for public names | [SEC] | P2.01k | `phase-2.md` |
-| P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18 | `phase-2.md` |
+| P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18, P1.34z | `phase-2.md` |
 | P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
@@ -451,7 +451,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -643,9 +643,9 @@ flowchart TD
   P1_34o["P1.34o app.caddy as one local file mount"]
   P1_34q["P1.34q Local edge sites as per-file mounts"]
   P1_33t["P1.33t tls import in every edge site"]
-  P1_34t["P1.34t Refuse a public PLC URL"]
+  P1_34t["P1.34t Pin the PLC URL per environment"]
   P1_34u["P1.34u Local PLC role and database"]
-  P1_34v["P1.34v Local PLC in the dev stack"]
+  P1_34v["P1.34v Local PLC in the local stack"]
   P1_34y["P1.34y net-guard allows the local PLC host"]
   P1_34z["P1.34z Identity resolves through the local PLC"]
   P1_33i["P1.33i Preflight may import shared/host-pin"]
@@ -1011,6 +1011,7 @@ flowchart TD
   P1_33j --> P1_33k
   P1_33k --> P1_34d
   P1_29t --> P2_13a
+  P1_34d --> P2_13a
   P1_30 --> P2_13a
   P1_30 --> P1_30s
   P1_30s --> P2_13a
@@ -1109,6 +1110,7 @@ flowchart TD
   P1_03 --> P1_08e
   P1_08e --> P1_08
   P2_01k --> P2_01
+  P1_34z --> P2_01
   P2_01q --> P2_01
   P2_01k --> P2_01m
   P2_01 --> P2_01a
@@ -1155,7 +1157,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before going public (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.34t | `phase-1.md` |
+| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
@@ -1181,7 +1183,6 @@ flowchart TD
   P1_33 --> P1_33a
   P1_33 --> P1_34
   P1_34 --> P1_33p
-  P1_34t --> P1_33p
   P1_33a --> P1_33p
   P1_33p --> P1_35
   P1_33a --> P1_35
