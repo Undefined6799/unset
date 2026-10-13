@@ -403,7 +403,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33m | Own the local Postgres init in CODEOWNERS (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d, P1.33m | `phase-1.md` |
 | P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card) | P1.34u, P1.34d | `phase-1.md` |
-| P1.34y | Allow only the local PLC host in net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
+| P1.34y | Add an inert local PLC policy to net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
@@ -653,7 +653,7 @@ flowchart TD
   P1_33m["P1.33m Local Postgres init owned"]
   P1_34u["P1.34u Local PLC role and database"]
   P1_34v["P1.34v Local PLC in the local stack"]
-  P1_34y["P1.34y net-guard allows the local PLC host"]
+  P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z Identity resolves through the local PLC"]
   P1_33i["P1.33i Preflight may import shared/host-pin"]
   P1_33h["P1.33h Host pin moved to shared/host-pin"]

@@ -288,7 +288,7 @@ flowchart LR
   P1_33m["P1.33m local Postgres init owned"]
   P1_34u["P1.34u local PLC role and database"]
   P1_34v["P1.34v local PLC in the local stack ALEX"]
-  P1_34y["P1.34y net-guard allows the local PLC host"]
+  P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z identity resolves through the local PLC"]
   P1_33i["P1.33i preflight may import shared/host-pin ALEX"]
   P1_33h["P1.33h host pin moved to shared/host-pin"]
@@ -7912,13 +7912,14 @@ P1.29t depends on it.
     Amendments 4 and 5 of 2026-10-13-local-plc); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local file,
     `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps), and the
     same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes, S4);
-    the db service's one read-only `init-local/` mount (P1.34u's files, mounted by P1.34v); and `pds-token-reader` and
-    `seed`, local-only services. Anything else, in either direction, fails with the key named. Preflight still runs in
-    full on the local file; the drift test catches a weakening that preflight would allow. This step moves
-    `pds-token-reader` from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it always exists in exactly
-    one file; until then it stays in the dev file and cannot run there (P1.33l refuses dev; architecture's Amendment 7
-    of 2026-10-13-local-plc, Q3). The drift allowance also names `seed` as local-only, which P1.29s adds to
-    `compose.local.yaml` (book edit 2026-10-13-verify-814-fixes, Amendment 1). The reader-only test
+    `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
+    2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
+    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
+    key named. Preflight still runs in full on the local file; the drift test catches a weakening that preflight would
+    allow. This step moves `pds-token-reader` from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it
+    always exists in exactly one file; until then it stays in the dev file and cannot run there (P1.33l refuses dev;
+    architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The drift allowance also names `seed` as local-only, which
+    P1.29s adds to `compose.local.yaml` (book edit 2026-10-13-verify-814-fixes, Amendment 1). The reader-only test
     (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
     `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). `compose.local.yaml` sets
     `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until P1.34v lands, DID creation fails at the PDS and never
@@ -8404,27 +8405,39 @@ Done when the local PDS creates an account against the local PLC, the local-only
 
 ---
 
-### P1.34y — Allow only the local PLC host in net-guard
+### P1.34y — Add an inert local PLC policy to net-guard
 Tags: [SEC] trusted            Depends on: P1.34t
-Slice 1, issue #783, trusted base (`infrastructure/net-guard/`), lane the third thread; book edit
-2026-10-13-local-plc-steps.
+Slice 1, issue #783, trusted base (`infrastructure/net-guard/` only), lane the third thread; book edit
+2026-10-13-local-plc-steps, retitled by step-book note 2 of 2026-10-13-local-plc-a4-steps, from architecture's P1.34y /
+P1.34z note (Option A).
 
-**What:** an exact-host allowance for the local PLC name under the local profile only, never a private-range
-allowance. If P1.34z must touch `domains/identity/verify-handle.ts` (trusted), that edit moves here.
+**What:** `localPlc = internalPolicy("plc", ["http://plc:2582"])`: an exact origin, the `internal` kind, and no
+private-range allowance. net-guard stays env-blind, and the policy is inert until a composition root selects it
+(P1.34z). If P1.34z must touch `domains/identity/verify-handle.ts` (trusted), that edit moves here.
 
-Done when red fixtures for any other private host and for the allowance in dev or prod config fail, and check is green.
+Done when red fixtures fail for any other private host, another port or scheme, plc.directory, a look-alike, `plc`
+added to the public `plc` policy, and `localPlc` reachable from the public `plc` policy, and check is green. The
+"local allowance in dev or prod config" fixture moves to P1.34z.
 
 ---
 
 ### P1.34z — Point identity resolution at the local PLC
 Tags: [SEC]            Depends on: P1.34v, P1.34y
-Slice 1, issue #784, product (`domains/identity/` and the web, appview and tap config), lane the third thread, before
-P1.29s; book edit 2026-10-13-local-plc-steps.
+Slice 1, issue #784, product (`domains/identity/`, `shared/config`, `compose.local.yaml`, and the web, appview and tap
+config), lane the third thread, before P1.29s; book edit 2026-10-13-local-plc-steps and step-book note 2 of
+2026-10-13-local-plc-a4-steps, from architecture's P1.34y / P1.34z note (Option A).
 
 **What:** resolvers read the PLC URL from config and refuse any non-https PLC URL, except the exact local one under
 local.
+- `UNSET_ENV` gains `"local"`, with no separate `UNSET_STACK`; `compose.local.yaml` sets `UNSET_ENV=local`.
+- `PLC_URL=http://plc:2582` is accepted, and `localPlc` (P1.34y) selected, only when `UNSET_ENV` is `local`. Under dev,
+  test or prod it is refused at config load.
+- Every existing `=== "dev"` rule (`NETGUARD_ALLOW_LOOPBACK`, the commit placeholder and any others found) is listed
+  with an explicit local decision, each tested. An unlisted rule treats local like prod.
 
-Done when red fixtures for a non-https URL and for the local URL outside local fail, and check is green.
+Done when red fixtures for a non-https URL and for the local URL outside local fail, `env_values_enumerated` fails a
+new env value that has no decision, the local PLC URL or `localPlc` in a dev or prod config is refused at load (moved
+from P1.34y), and check is green.
 
 ---
 
