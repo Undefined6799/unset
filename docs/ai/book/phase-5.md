@@ -279,11 +279,14 @@ The host keys can put objects but hold no retention permission, so each object t
 The `holds` bucket is the exception (P5.04; book edit 2026-10-13-batch-47-after-771, G-2 and Amendment 1, from
 architecture's 2026-10-13-batch-46-contradictions): a 7-day compliance-mode default and no lifecycle deletion. Four
 credentials, by least privilege: the **host writer** may PutObject only, so every object takes the 7-day default and the
-host cannot set or extend retention; the **extender**, a separate credential with PutObjectRetention used only on
-`pds-admin`'s admin path and never on the PDS host, capped by a bucket policy condition at 400 remaining days; the
-**destroyer**, a separate credential in a separate unit off the request path, may list, read retention and legal-hold
-status and DeleteObjectVersion, reads the case's hold state from `pds-admin` read-only, and never touches retention; a
-**legal hold** uses the offline admin key only (PutObjectLegalHold). Other buckets keep their own retention design.
+host cannot set or extend retention; the **extender** (PutObjectRetention, extend only, capped by a bucket policy
+condition at 400 remaining days) and the **destroyer** (ListBucketVersions, GetObjectLegalHold, GetObjectRetention and
+DeleteObjectVersion, never touching retention), both scoped to `legal-hold/*` and held only by a new **`holds-agent`**
+process, which reaches the bucket only through net-guard (exact host, resolved, vetted and pinned, no redirects), is
+reachable only from `pds-admin` on its own internal network, and acts only on a `pds-admin`-signed, single-use
+instruction bound to the holdId, the exact object keys and the permit id, valid for at most 60 s (P5.04 writes its ADR,
+AB-3; book edit 2026-10-12-csam-preservation-book-lines, Amendments 9 to 11); a **legal hold** uses the offline admin
+key only (PutObjectLegalHold). Other buckets keep their own retention design.
 
 A legal-hold object outlives the N-day pruning because it lives in its own bucket (plan §6: "a legal hold is the only
 thing that outlives N").
@@ -650,9 +653,11 @@ Outputs:
   own cursor and the same collection filters, and is acked into the same indexer.
 - **`pds-admin`** accepts on `review-pdsadmin` only the verb `preserve.create`, enforced inside `pds-admin` by
   listener-to-verb mapping (plan issue 15). On `jobs-pdsadmin` (internal network, no egress; architecture thread
-  2026-10-04) it accepts only `preserve.listExpired` and `preserve.close`, enforced the same way. The `jobs` process
-  holds the `retention` service key, which the roster scopes to exactly those two verbs (P3.16c's table already has
-  both; no verb is added).
+  2026-10-04) it accepts only `preserve.listExpired` and `preserve.extendOpen`, enforced the same way. The `jobs`
+  process holds the `retention` service key, which the roster scopes to exactly those two verbs (book edit
+  2026-10-12-csam-preservation-book-lines, Amendment 9).
+- **`holds-agent`** (P5.04's process) sits on `pdsadmin-holds` (internal; `pds-admin` and `holds-agent` only), and its
+  only egress is net-guard's route to the holds bucket host. `pds-admin`'s one other edge is to it.
 
 Algorithm (what the build agent writes, and what the guard test checks):
   1. Write the services and networks from the table. A service that is not in the table is an error.
@@ -734,10 +739,14 @@ Done when (tests):
     - every egress subnet drops private and metadata ranges;
     - only the listed subnets have the hairpin.
   - `pdsadmin_review_listener_preserve_only`: from `review-pdsadmin`, any verb other than `preserve.create` → refused.
-  - `pdsadmin_jobs_listener_preserve_expiry_only`: from `jobs-pdsadmin`, `preserve.listExpired` and `preserve.close`
-    (with the `retention` key) are served; every other verb, including `preserve.create` and `invite.issue`, is refused,
+  - `pdsadmin_jobs_listener_preserve_expiry_only`: from `jobs-pdsadmin`, `preserve.listExpired` and
+    `preserve.extendOpen` (with the `retention` key) are served; every other verb, including `preserve.destroy`,
+    `preserve.create` and `invite.issue`, is refused,
     even with a key that lists it. A roster giving the `retention` key any other verb → Deny all (P3.16's load rule).
-    `jobs` reaches no other `pds-admin` network, and `pds-admin` still has no egress.
+    `jobs` reaches no other `pds-admin` network, and `pds-admin` still has no egress; its one other edge is internal,
+    to `holds-agent` on `pdsadmin-holds`.
+  - `pdsadmin_holds_members_only`: no service other than `pds-admin` and `holds-agent` is on `pdsadmin-holds`;
+    `holds_agent_egress_bucket_only`: holds-agent has no egress but the holds bucket host.
   - `compose_render_never_printed`.
   - The live checks (`own_hosts_reachable`, the negative probes) run in P5.10.
 
@@ -833,19 +842,20 @@ Algorithm, one run of class C:
      Run `age -r <recipient>…`, check its exit, and check the output is non-empty.
   6. **Upload** with that bucket's host key, plus the header `x-amz-checksum-sha256`.
      - Backups and audit: no retention header is sent; the object takes the bucket's default retention (round 1 F7).
-     - Holds: no retention header is sent; the object takes the 7-day compliance default, and the extender then sets the
-       case's retain-until (book edit 2026-10-13-batch-47-after-771, Amendment 1, replacing book edit
-       2026-10-12-p504-holds-bucket-lock, item 2).
+     - Holds: no retention header is sent; the object takes the 7-day compliance default, and holds-agent's extender, on
+       `pds-admin`'s signed instruction, then sets the case's retain-until (book edit 2026-10-13-batch-47-after-771,
+       Amendment 1, replacing book edit 2026-10-12-p504-holds-bucket-lock, item 2).
      - Upload timeout 30 minutes; 2 retries with backoff; then fail with `upload_failed`.
      - Before any upload, `retainUntilCap(class)` is computed and checked against the bucket's default retention:
-       backups N + 1 days; audit at most the class period + 1 day; holds exactly the case's preserve-until. A bucket
+       backups N + 1 days; audit at most the class period + 1 day; holds exactly the case's preserve-until (an open hold
+       with no target is bounded at now + 7 days). A bucket
        whose default exceeds its cap, or a holds bucket whose default is not 7 days in compliance mode, blocks the
        upload with `retention_cap` (round 1 F19: a wrong lock cannot be undone).
   7. **Verify.** `HEAD` the object and require all of these, or fail with `verify_failed`:
      - the stored SHA-256 checksum (not the ETag) equals the local hash;
      - the size matches;
      - `GetObjectRetention` returns mode `COMPLIANCE`, with retain-until ≤ the cap; for holds, retain-until at least the
-       7-day default and no later than the case's target.
+       7-day default and no later than the case's target (now + 7 days for an open hold with no target).
   8. Upload the sidecar. Delete scratch. Report `ok`. Release the lock.
   9. **On any failure:** delete scratch, report `ok: false` with the code, write an `alert.send("immediate", "backup", …)`
      outbox row, and exit non-zero.
@@ -866,37 +876,61 @@ Hold class: scan `legal-hold/` for hold IDs not yet in `holds`. For each one:
 - copy every object;
 - verify it against P4.07's manifest; on mismatch → fail with `hold_manifest_mismatch` and raise an immediate alert;
 - the case's preserve-until applies (architecture's ruling, book edit 2026-10-12-p504-holds-bucket-lock, which
-  replaces the old 365-day bucket default; law citations [lawyer to confirm]):  1. **A 7-day compliance default on the
-     holds bucket** (book edit 2026-10-13-batch-47-after-771, Amendment 1, replacing "no default lock"): the host writer
-     has PutObject only, so it cannot set or extend retention; only the extender, on `pds-admin`'s admin path, changes
-     retain-until, capped at 400 remaining days.
+  replaces the old 365-day bucket default; book edit 2026-10-12-csam-preservation-book-lines, Amendments 9 to 11, from
+  regime Amendments 11 to 13; law citations [lawyer to confirm]):
+  1. **A 7-day compliance default on the holds bucket** (book edit 2026-10-13-batch-47-after-771, Amendment 1, replacing
+     "no default lock"): the host writer has PutObject only, so it cannot set or extend retention; only the extender,
+     held by holds-agent and used on `pds-admin`'s signed instruction, changes retain-until, capped at 400 remaining
+     days.
   2. **Retain-until** equals the case's preserve-until (P3.16c rule 1, P4.07k), fixed at notification by the regime in
      force, in compliance mode. It is computed once from the case record by P4.07k, never by hand (a never-recorded (A)
      gives 21 days; an unparsable (A) blocks destruction). While a hold is provisional, each extension sets min(now + 7
-     d, target); once the target is known, exactly the target. A report hold before notification gets a **provisional
-     retain-until of creation + 7 days** (the review window), in compliance mode, and it is only ever extended: at the
-     s. 3 notice to preserve-until; at a "not reportable" finding, provisional-and-extend up to finding + 30 days with
-     nothing granted up front; or by an audited review extension in 7-day steps, each raising an urgent task. **Lapse:**
-     while a hold is open, the extender renews in 7-day steps and raises the case each time, so a missed review never
-     lets retain-until pass. The
+     d, target); once the target is known, exactly the target. An open hold with no target is bounded at now + 7 days. A
+     report hold before notification gets a **provisional retain-until of creation + 7 days** (the review window), in
+     compliance mode, and it is only ever extended: at the s. 3 notice to preserve-until; at a "not reportable" finding,
+     provisional-and-extend up to finding + 30 days with nothing granted up front; or by an audited review extension in
+     7-day steps, each raising an urgent task. **Lapse:** while a hold is open, jobs' daily `preserve.extendOpen` has
+     `pds-admin` sign 7-day extensions, never past the hold's `destroyableFrom`, raising the case each time, so a missed
+     review never lets retain-until pass. Undated holds keep extending in 7-day steps, and a transition to a later date
+     resumes extension to the new date. After `destroyableFrom`, the credential model alone protects the bytes. The
      backup accepts the provisional date as its preserve-until (book edit 2026-10-13-batch-47-after-771, G-2, from
      architecture's 2026-10-13-batch-46-contradictions; refines H-1).
   3. **A judicial order** is an S3 legal hold on the case's objects, set and later cleared by an owner with the offline
      admin key and recorded with the order reference (audit: case id and timestamp only). It never extends the date,
      because a compliance date cannot be undone.
-  4. **Destruction is a job.** Lock expiry deletes nothing. The job deletes each object as soon as feasible after its
-     retain-until when no legal hold is on it (s. 4(2)), with any document made only for the preservation, and audits
-     it. The destroyer refuses any object whose hold is open in `pds-admin`, even after retain-until has passed; an
-     object whose retain-until runs more than a day past its target raises an alert.
-  5. **Tests:** a today's-regime case gets exactly notification plus 21 days and cannot be locked past day 21; a
+  4. **Destruction is a moderator action.** Lock expiry deletes nothing. jobs raises a "destruction due" task once
+     `destroyableFrom` passes, and the moderator's daily action meets s. 4(2)'s "as soon as feasible" [lawyer to
+     confirm], with any document made only for the preservation, and audits it. holds-agent deletes only on
+     `pds-admin`'s signed instruction, which `pds-admin` issues only under a valid permit while no other hold is open.
+     For each named key it deletes every version and every delete marker, then lists the prefix, and reports
+     "destroyed" only if nothing remains; any remainder is a failure, the hold stays open and a human task is raised.
+     Its legal-hold check is per version, and an unreadable legal-hold status counts as on. It starts no S3 request
+     after the instruction's expiry; its S3 client has retries off, and each request's timeout ends before that expiry.
+     An object whose retain-until runs more than a day past its target raises an alert, as before.
+  5. **holds-agent** is its own process (AB-3), and **this step writes its ADR**. It is the sole holder of the extender
+     and destroyer credentials, whose scope on `legal-hold/*` is exactly `s3:ListBucketVersions` (prefix-scoped),
+     `s3:GetObjectLegalHold`, `s3:GetObjectRetention`, `s3:DeleteObjectVersion` and `s3:PutObjectRetention` (extend
+     only). It reaches the bucket only through net-guard (exact host, resolved, vetted and pinned, no redirects), is
+     reachable only from `pds-admin` on `pdsadmin-holds` (P5.02), and acts only on a `pds-admin`-signed, single-use
+     instruction (delete or extend) bound to the holdId, the exact object keys and the permit id, valid for at most 60
+     s.
+  6. **Provider.** Before this step picks a provider (P5.00 Q2), its PR shows, against that provider: version deletes;
+     prefix-scoped policies for each action in item 5; compliance-mode retention; and read-after-delete consistency of
+     ListObjectVersions. A provider that fails any of these is not chosen (regime Amendment 13 N3).
+  7. **Tests:** a today's-regime case gets exactly notification plus 21 days and cannot be locked past day 21; a
      never-recorded (A) gives 21 with a fresh commencement check, and an unparsable (A) blocks destruction; an object
      without retention is refused; a holds bucket without the 7-day compliance default refuses with `retention_cap`; a
-     21-day case uploads and verifies; the destruction job is refused before the date, succeeds after it and is refused
+     21-day case uploads and verifies; the destroy action is refused before the date, succeeds after it and is refused
      while a legal hold is on; a regime switch leaves existing objects' dates unchanged; the host writer cannot delete
-     or change retention; the extender cannot set retention beyond the 400-day cap; the destroyer cannot change
-     retention; the provisional date is extended at notice and at finding and never shortened (G-2); a missed review
-     triggers auto-renewal and nothing is destroyed; an open hold blocks the destroyer after expiry; an over-extension
-     raises the alert (Amendment 1).
+     or change retention; the extender cannot set retention beyond the 400-day cap; holds-agent's destroyer cannot
+     change retention; the provisional date is extended at notice and at finding and never shortened (G-2); a missed
+     review triggers auto-renewal and nothing is destroyed; an open hold blocks holds-agent after expiry; an
+     over-extension raises the alert (Amendment 1); holds-agent refuses an unsigned or replayed instruction, a key
+     outside the instruction, and an instruction older than 60 s; `access-denied-delete-version` (AccessDenied on
+     DeleteObject and on DeleteObjectVersion for jobs and every principal except holds-agent); `no-version-remains`
+     (after a permitted destroy, no version and no marker remains); `leftover-version-no-receipt`;
+     `extension-capped-at-destroyable-from`; `destroy-right-after-date`; `undated-keeps-extending`;
+     `legal-hold-checked-per-version` (an unreadable status → refused); `expired-instruction-starts-no-request`.
 
 Freshness, inside (hourly):
 - For each class, read the newest report.
@@ -2348,7 +2382,7 @@ Inputs:
   (P4.27); sessions and nonces (P2.03, P1.16); the OAuth state store (P2.04).
 - **The hold predicate from P4.07**: the SQL function `core.is_held` (lead decision; owned by P4.07), the same
   predicate `eraseDid` uses (round 1 F10). Two forms: `core.is_held(did)` and `core.is_held(subject_kind, subject_ref)`
-  (P3.07 declares it, P4.07 writes the body). When a hold closes, P4.07's expiry job re-runs `erase_did` with
+  (P3.07 declares it, P4.07 writes the body). When a hold closes, P4.07's `close_expired_hold` re-runs `erase_did` with
   `why = legal_hold_closed` from `core.erase_pending_hold`.
 - The read key for the locked buckets and the mirror (`egress-retention`, P5.02; `ListObjectVersions` and
   `GetObjectRetention` only).
@@ -2414,7 +2448,8 @@ Algorithm (weekly checker):
        (immediate alert; compliance mode cannot be undone, so this is a severity 1 issue).
   3. The mirror: no `deleted/` object older than N + 2 days. No object under an excluded prefix (`drafts/`,
      `legal-hold/`, `quarantine/`, `tempt/`, `tmp/`) → otherwise `mirror_scope_leak`.
-  4. Holds: no hold object past its `expiresAt` + 2 days.
+  4. Holds: no hold object past its `expiresAt` + 2 days; an open hold with no target is bounded at now + 7 days
+     (P5.04).
   5. Logs: file modification times through a read-only mount.
 
 Edge cases and failures:
@@ -3014,7 +3049,8 @@ Source: `reviews/bibliography-review/00-synthesis.md`, `r-06-critic.md` §3, and
 - P5.00 (architecture thread, item k): new step 2a, the process-placement test for scheduled jobs. Today's jobs all
   pass; a failing job → stop.
 - P5.02 (item l): new internal network `jobs-pdsadmin` on the `jobs` and `pds-admin` rows. `pds-admin` serves only
-  `preserve.listExpired` and `preserve.close` there and still has no egress. Test
+  `preserve.listExpired` and `preserve.extendOpen` there and has no egress; its one other edge is internal, to
+  `holds-agent` on `pdsadmin-holds` (book edit 2026-10-12-csam-preservation-book-lines, Amendment 9). Test
   `pdsadmin_jobs_listener_preserve_expiry_only`. P3.16c already had both verbs, so none was added.
 - P5.02a (item d): the `importRepo` retry cites README rule 8a.
 
