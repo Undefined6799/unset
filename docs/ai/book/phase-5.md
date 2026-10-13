@@ -248,7 +248,7 @@ flowchart LR
   PGB & SQL & PAS & APD --> JOB
   JOB -->|class key, no retention rights| B1[(bucket backups: default lock N days<br/>noncurrent versions expire 1 day)]
   AUD --> B2[(bucket audit: default lock 2 years)]
-  HOLD --> B3[("bucket holds: 7-day compliance default;<br/>extended per case on the admin path")]
+  HOLD --> B3[("bucket holds: 7-day compliance default;<br/>extended per case by holds-agent on pds-admin's signed instruction")]
   SEC -->|escrow recipient| B4[(bucket escrow: default lock N days)]
   BLOB --> MJ --> MIRB[(mirror bucket; deleted objects kept N days)]
   JOB -->|ops.report| FR
@@ -346,8 +346,9 @@ Algorithm:
      - it parses no input from outside the system.
      Otherwise it becomes its own process, with an ADR naming its driver (rule AB-3). Apply the test to each job this
      revision confirms and record one line per job in the revision. Today's jobs all pass: drafts and upload expiry
-     (P4.25), hold expiry (P4.07, through `jobs-pdsadmin`), the Ozone 6-month purge (`ozone_retention`), the P5.09
-     classes, and P4.27 metrics through the `SECURITY DEFINER` `metrics_compute`. A job that fails the test →
+     (P4.25), the daily preservation task (P4.07: `preserve.listExpired` and `preserve.extendOpen` through
+     `jobs-pdsadmin`, and EXECUTE on the three `cleanup_owner` definers), the Ozone 6-month purge (`ozone_retention`),
+     the P5.09 classes, and P4.27 metrics through the `SECURITY DEFINER` `metrics_compute`. A job that fails the test →
      **stop** and ask before building it inside `jobs`.
   3a. Settle the step-book findings routed here (`reviews/step-book-findings-triage.md`, editor pass 2026-10-04):
      F-31 (scheduled jobs and the indexer refuse to run
@@ -924,7 +925,7 @@ Hold class: scan `legal-hold/` for hold IDs not yet in `holds`. For each one:
      while a legal hold is on; a regime switch leaves existing objects' dates unchanged; the host writer cannot delete
      or change retention; the extender cannot set retention beyond the 400-day cap; holds-agent's destroyer cannot
      change retention; the provisional date is extended at notice and at finding and never shortened (G-2); a missed
-     review triggers auto-renewal and nothing is destroyed; an open hold blocks holds-agent after expiry; an
+     review triggers auto-renewal and nothing is destroyed; an open hold blocks the destroy after expiry; an
      over-extension raises the alert (Amendment 1); holds-agent refuses an unsigned or replayed instruction, a key
      outside the instruction, and an instruction older than 60 s; `access-denied-delete-version` (AccessDenied on
      DeleteObject and on DeleteObjectVersion for jobs and every principal except holds-agent); `no-version-remains`
@@ -2143,7 +2144,8 @@ hold.
 
 **The single erasure rule (round 1 F10; owner P4.07):** `eraseDid(did)` erases every row and object for the DID
 **except** rows and objects under an open legal hold, and returns `partially_erased_legal_hold` when anything was kept.
-When the hold closes, P4.07's expiry runs the remaining erasure.
+When the hold closes, P4.07's `close_expired_hold` runs the remaining erasure (after a verified destroy receipt, once no
+other hold on the DID is open).
 - P3.07, P5.04, P5.09 and this step all follow it.
 - No step blocks a whole erasure because of a hold.
 - A foreign-PDS `#account deleted` event therefore never loops or gets dropped.

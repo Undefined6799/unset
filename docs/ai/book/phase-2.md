@@ -4252,8 +4252,8 @@ Done when (tests):
   - `wipe.local_arm_refuses_dev_volume`: a dev-labelled volume under an otherwise-local target → refused.
   - `wipe.local_refuses_dotted_internal`, `wipe.local_refuses_ip_host` and `wipe.local_refuses_foreign_service` (a
     service name from another compose file): each under an otherwise-local target → refused (book edit
-    2026-10-13-verify-819-fixes, Amendment 1, Q2). - `wipe_refuses_without_record`: no `retro_scan_record`, or one with
-    `ok = false` → exits non-zero before deleting
+    2026-10-13-verify-819-fixes, Amendment 1, Q2).
+  - `wipe_refuses_without_record`: no `retro_scan_record`, or one with `ok = false` → exits non-zero before deleting
     anything.
   - `wipe_refuses_on_stale_record`: `finished_at` older than the newest test-track upload → exits non-zero.
   - `wipe.stops_on_holds`: a seeded `legal_hold` table (P4.07) with one row → exits non-zero (skipped while the table

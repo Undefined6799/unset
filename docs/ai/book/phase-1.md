@@ -11277,7 +11277,7 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
     interface only when P1.34 opens outside access).
   - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand; local only: P1.29s adds it to
     `compose.local.yaml`; P1.34d's drift allowance names it (book edit 2026-10-13-verify-814-fixes, Amendment 1,
-    Codex 3; architecture's Amendment 7 of 2026-10-13-local-plc, Q3).
+    Codex 3; architecture's Amendment 7 of 2026-10-13-local-plc, Q3)).
 - `dev-precheck` (run by `npm run dev:up` before `docker compose up`): refuses when `0x40.space` answers
   `describeServer` with a DID that is neither the expected dev PDS DID nor absent (protects against the old
   prototype PDS), when the env names a production host, and when `preflight --env dev` (P1.30) fails.

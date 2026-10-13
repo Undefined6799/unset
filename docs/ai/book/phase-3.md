@@ -232,7 +232,7 @@ stateDiagram-v2
   Active --> DeletionPending: status=deleted (hidden at once)
   DeletionPending --> Erased: PDS confirms RepoNotFound or status deleted → eraseDid
   DeletionPending --> PartlyErased: open legal hold → eraseDid erases all but held material (partially_erased_legal_hold)
-  PartlyErased --> Erased: hold closes → P4.07 expiry re-runs eraseDid
+  PartlyErased --> Erased: hold closed after a verified destroy receipt → P4.07's close_expired_hold re-runs eraseDid
   DeletionPending --> Inactive: PDS says the repo exists and is not deleted (7 days of retries, then alert)
   Erased --> [*]: tombstone (HMAC of the DID) blocks re-tracking and re-ingest
   note right of Active
@@ -1000,10 +1000,11 @@ Algorithm (contract: which transitions apply at once and which need confirmation
   `confirm_deletion` job:
   1. `r = confirmRepoStatus(did)`.
   2. `{notFound}` or `{active:false, status:"deleted"}`:
-     - `core.erase_did(did, 'account_deleted')`. Under an open legal hold it erases everything except the held
-       material and returns `partially_erased_legal_hold` (P3.07's single rule); the account stays hidden and
-       P4.07's hold expiry finishes the erasure. A hold never blocks, defers or loops the deletion (editor pass;
-       phase-5 F10). `core.erase_did` failing (for example the hold check erroring) → retry with the backoff below.
+     - `core.erase_did(did, 'account_deleted')`. Under an open legal hold it erases everything except the held material
+       and returns `partially_erased_legal_hold` (P3.07's single rule); the account stays hidden and P4.07's
+       `close_expired_hold` finishes the erasure once the hold's destroy receipt verifies and no other hold on the DID
+       is open. A hold never blocks, defers or loops the deletion (editor pass; phase-5 F10). `core.erase_did` failing
+       (for example the hold check erroring) → retry with the backoff below.
   3. Any other answer (the repo exists and is not deleted) → clear the `deleted` status to the answer's status;
      stays hidden unless step `confirm_status` later confirms active; alert `deletion_not_confirmed`.
   4. `{unavailable}` → retry with backoff for 7 days, then alert and stop retrying; **never erase on an error**.
@@ -1228,9 +1229,9 @@ marks `storage`, then runs the erase hooks; `indexer` untracks and marks `untrac
 the row and raises `alert.send('erasure_stuck')` (P3.20c) after 3 runs.
 
 Edge cases and failures:
-  - Open legal hold → everything else is erased now; held rows and objects stay; outcome
-    `partially_erased_legal_hold`; `erase_pending_hold` row. The hold closes → P4.07's expiry re-runs `erase_did` →
-    outcome `erased`.
+  - Open legal hold → everything else is erased now; held rows and objects stay; outcome `partially_erased_legal_hold`;
+    `erase_pending_hold` row. The hold closes (P4.07's `close_expired_hold`, after a verified destroy receipt, once no
+    other hold on the DID is open) → it re-runs `erase_did` → outcome `erased`.
   - `core.is_held` fails → nothing erased this time; P3.06's backoff retries; never erases while the hold state is
     unknown.
   - A hook is pending (chat down) → the core erasure is complete; `erase_report` lists the hook as pending; the
@@ -2317,7 +2318,7 @@ Outputs (contract):
 | `reverseToReportable {holdId}` | R owner | yes | analyst hold → report hold; the analyst extensions stop, then the notification path: `preserve.notify` extends to the regime's preserve-until from the notice date (G-3; findings 8 and 10) | — |
 | `preserve.listExpired {}` | S:`retention` | no | monitoring only: `[holdId]` for open (not `destroyed`) holds where `destroyableFrom ≤ now` on `pds-admin`'s clock, or that have no `destroyableFrom` and either a fixed regime or an age over 7 days (regime Amendments 12 S3 and 13; book edit 2026-10-13-codex-813-close-expired-hold); expiry alone never closes or deletes anything | list |
 | `preserve.extendOpen {}` | S:`retention` | no | parameterless: `pds-admin` chooses the open (not `destroyed`) holds itself and signs one extend instruction per hold to holds-agent; jobs cannot name a hold; each extension is capped at the hold's `destroyableFrom`, undated holds keep extending in 7-day steps, and a transition to a later date resumes extension to the new date (regime Amendment 12 S4) | — |
-| `preserve.destroy {holdId, permit}` | S:`admin`, moderator-signed, on `pdsadmin-admin` only | yes | as "Destruction" above: a valid, unused permit of at most 60 s for this hold; `destroyableFrom` present and passed; no other open hold; delete through holds-agent, then close; a hold already `destroyed` → the stored receipt, no instruction, no S3 request | signed receipt |
+| `preserve.destroy {holdId, permit}` | S:`admin`, moderator-signed, on `pdsadmin-admin` only | yes | as "Destruction" above: a valid, unused permit of at most 60 s for this hold; `destroyableFrom` present and passed; no other open hold; delete through holds-agent, then close; a hold already `destroyed` → the stored receipt, no instruction, no S3 request (`admin` issues the permit only with no FAULT) | signed receipt |
 
   - No verb shortens, cancels or releases a hold early, and there is no close verb: a hold closes only inside
     `preserve.destroy`. `markNotReportable` and `reverseToReportable` change only a hold's kind, on the dated path
@@ -3098,9 +3099,12 @@ legal-hold key question is `P4a-A1`.
 **Editor pass (2026-10-03)** (brief: global resolutions 1–10; requests from the other files' notes and `editor-todo.md`):
 - **P3.07** rewritten to the single erasure rule (resolution 3; editor-todo; phase-5 F10; phase-2 E11/E25; lead
   decision): erase everything except rows and objects under an open legal hold, outcome `partially_erased_legal_hold`,
-  finish when the hold closes (P4.07's expiry re-runs `erase_did` with `why = legal_hold_closed`). Registry strategy
-  `retain_legal_hold` (P1.13 enum) with the predicate `core.is_held` (body owned by P4.07). Removed
-  `core.is_under_legal_hold`, `RAISE 'legal_hold'`, `core.erase_deferred`/`defer_erase`; added
+  finish when the hold closes (P4.07's expiry re-runs `erase_did` with `why = legal_hold_closed`). *[Superseded
+  2026-10-13 by book edit 2026-10-13-codex-813-close-expired-hold: `preserve.close` is gone; the `retention` key holds
+  `preserve.listExpired` and `preserve.extendOpen` only; `close_expired_hold`, after a verified destroy receipt, re-runs
+  `erase_did`. See P3.16c and P4.07.]* Registry strategy `retain_legal_hold` (P1.13 enum) with the predicate
+  `core.is_held` (body owned by P4.07). Removed `core.is_under_legal_hold`, `RAISE 'legal_hold'`,
+  `core.erase_deferred`/`defer_erase`; added
   `core.erase_pending_hold`. Tests `erase-skips-held-rows`, `erase-finishes-when-hold-closes`,
   `erase-hold-check-error-erases-nothing`, `foreign-account-deleted-under-hold` replace `erase-legal-hold-blocks`.
   P3.06's deletion branch, the account-state diagram and test `deleted-under-hold-erases-all-but-held` follow.

@@ -1039,7 +1039,8 @@ Tests add, red first: `regime-neither-fact` (21 days, police: kept through D+21)
 raised, no `preserveUntil` while blocked, then one year from the send), `regime-b-only` (21 days, police),
 `regime-a-and-b` (one year, to (B)), `regime-b-pending-blocks-send` (regime Amendment 7 S9), `regime-unparsable-a`
 (FAULT), `regime-a-removed-after-valid` (FAULT: send and destruction blocked, task raised),
-`regime-a-removed-keeps-a-only-block` (the block stays, no police send), `regime-a-never-recorded` (the in-force
+`regime-a-removed-keeps-a-only-block` (the block stays, no police send), `regime-unparsable-b` (a (B) FAULT: send
+and destruction blocked, task raised; regime Amendment 7 S9), `regime-a-never-recorded` (the in-force
 regime), `fault-persists-until-superseded`, `fault-partial-supersede-stays`, `fault-manual-case-keeps-regime`;
 `in-force-kept-through-d21-destroyable-d22`; `anniversary-29-feb-notice` (kept through 28 February, destroyable from 1
 March); `anniversary-28-feb-leap-year`; `anniversary-31-dec-notice`. Test names read "kept through X, destroyable from
@@ -1058,20 +1059,22 @@ Edge cases and failures: as P4.07; the CLI's database calls are tested against a
   function in P4.07's integration tests.
 Threats: the legal-hold seal path.
   - I Plaintext of held material on any server → no decrypt code (P1.14a `no_decrypt_in_servers`), ciphertext-only
-    export (P4.07 `legal-hold-export-in-no-image`). Done when (tests): P4.07's tests for `onMatch` and the CLI that need
-    no database (P4.00 lists them); `legal-hold-export-in-no-image`; `notify-today-regime-sets-21-days` (book edit
-    2026-10-12-batch-46-hold-lines, H-5): a notification under today's regime keeps the case through D+21, destroyable
-    from D+22; a never-recorded (A) gives the in-force regime, destroyed only behind a check at most 7 days old (P4.07),
-    and an unparsable (A) is FAULT, which blocks the send and destruction; the tests listed in "Preservation regime"
-    above, `regime-unparsable-a` replacing `regime-bad-a`. Reuse: none. Not in this step: the migration, definers,
-    callers, admin screen and jobs' daily preservation task (P4.07). Diagram: none.
+    export (P4.07 `legal-hold-export-in-no-image`).
+Done when (tests): P4.07's tests for `onMatch` and the CLI that need no database (P4.00 lists them);
+  `legal-hold-export-in-no-image`; `notify-today-regime-sets-21-days` (book edit 2026-10-12-batch-46-hold-lines, H-5):
+  a notification under today's regime keeps the case through D+21, destroyable from D+22; a never-recorded (A) gives
+  the in-force regime, destroyed only behind a check at most 7 days old (P4.07), and an unparsable (A) is FAULT, which
+  blocks the send and destruction; the tests listed in "Preservation regime" above, `regime-unparsable-a` replacing
+  `regime-bad-a`.
+Reuse: none. Not in this step: the migration, definers, callers, admin screen and jobs' daily preservation task
+  (P4.07). Diagram: none.
 
 ---
 
 ### P4.07 — Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view
 Tags: [SEC] [MOD]            Depends on: P4.07k, P4.07g, P4.06, P3.16 and P3.16c (the preserve verbs), P4.03, P3.20, P1.14a, P3.07            Plan: §5.8 "Abuse-material law (decision 9)", "Fingerprints", decision 21 (the buffer); §6 retention (the abuse-material preservation row as #758 restated it: 21 days after notification today, one year once C-16's amendments commence, per case and fixed at notification; transmission data sealed with the hold and destroyed with it); admin design §6.6, §7, §8.1; plan-issues 4
 Where: (`domains/moderation/legal-hold/*`, the one hold entry point `onMatch` shared with P5.07b for images, and `interfaces/legal-hold-export/` are **P4.07k**, trusted base, SE-6; this step wires them) `interfaces/review/egress/on-match.ts` (the video caller); `interfaces/review/compute/preserve-copy.ts`; `apps/admin/screens/legal-hold.ts` (owner-only case view from hold metadata, notify); definer functions `keep_transmission_for_match`, `move_transmission_to_hold`, `destroy_transmission`, `core.list_holds`, `core.export_sealed_record`, and `close_expired_hold`, `unanswered_expired_permits` and `recorded_unused_receipts` with their NOLOGIN owner `cleanup_owner` and its cleanup-key table (the body of `core.is_held`, declared by P3.07, is **P4.07h**: replacing an existing function is trusted base, SE-6); the `legal_hold.media_key` row in `infrastructure/postgres/sealed-columns.json`; (the owners' human login roles in `roles.json` are P4.07g); migration for `legal_hold`, `legal_hold_transmission` and the `adm` case event `s2_filed` (finding 9) (the `uploads_frozen` flag is P2.16's column on `app.account`; the `preserve.*` verbs are built by P3.16c); jobs' daily preservation task under the `retention` role; `admin`'s regime epoch, permit lease, insert-only receipt table and the moderator's "destroy due" action; runbook update `docs/human/legal/cybertip-runbook.md` (from P1.37) with the offline decryption procedure
-Size: ~330 source lines (egress ~100, compute ~110, admin ~70, expiry ~50), ~420 test lines
+Size: ~330 source lines (egress ~100, compute ~110, admin ~70, daily preservation task ~50), ~420 test lines
 
 **Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
 confirm]), book edit 2026-10-12-csam-preservation-book-lines item 5 and Amendments 5 to 11, the latest winning, with
@@ -1094,7 +1097,8 @@ whether a hold may be destroyed, and when it may, it issues the **destroy permit
   any zone puts in force on or before that day blocks, whether the history reads PENDING or IN_FORCE and whether that
   (A) was first recorded already in force, until a per-case transition decision is recorded on the lawyer's guidance.
   **The check:** a recorded human check that s. 180 is not in force (read on Justice Laws or the Canada Gazette), no
-  more than 7 days old at the instant the permit is issued; a check is void if any zone dates it on or after any valid
+  more than 7 days old at the instant the delete is issued, so a 21-day case's permit expires no later than the check's
+  7-day mark (regime Amendments 6 §4 and 8.3); a check is void if any zone dates it on or after any valid
   (A)'s in-force date, an (A) recorded after the check included. A one-year case, or one with a recorded transition
   decision, needs no check; a transitioned case is destroyed only under the regime and on the date its decision fixed,
   which `admin` re-sends through `preserve.notify` (keep or extend only; the re-send moves the epoch).
@@ -1183,13 +1187,14 @@ before. "One year" below is the post-commencement path.
     stays pending and runs when that other hold's own cleanup closes it. Its tag comparison is not constant-time; the
     P3.16c ADR notes this (book edit 2026-10-13-codex-813-close-expired-hold, R3, Erratum 1 and Note A mappings).
   - `unanswered_expired_permits()` (owner `cleanup_owner`, SECURITY DEFINER; `retention` has EXECUTE): hold ids only,
-    one for each permit that expired with no answer and no receipt (R1).
+    one for each permit that expired with no answer and no receipt (R1). It is the only route back to a `destroyed`
+    hold (regime Amendment 14 erratum 1, note A N1).
   - `recorded_unused_receipts()` (owner `cleanup_owner`, SECURITY DEFINER; `retention` has EXECUTE): hold ids only, one
     for each recorded receipt not yet used. This is how jobs sees a recorded receipt; jobs gets no SELECT on `admin`'s
     tables.
   - The three `cleanup_owner` definers pin `search_path` to `pg_catalog`, then the owning schema, with no `public`. They
     call `public.hmac(...)` schema-qualified, and `cleanup_owner` has `USAGE` on `public`, exactly as `audit.append`
-    does (0008:58, :121; Build note N3). Every lapse and expiry they compare uses the database clock
+    does (0008:12, :58, :121; Build note N3). Every lapse and expiry they compare uses the database clock
     (`clock_timestamp()`).
   - **`cleanup_owner`** is a new NOLOGIN role on the `audit_owner` pattern. It owns the three functions and the
     cleanup-key table, and holds only: SELECT on `admin`'s receipt and permit tables; DELETE on the sealed transmission
@@ -1314,11 +1319,20 @@ organisation (C3P) under the Mandatory Reporting Act.
 **Algorithm (owner report, `admin`):**
 1. Owner opens the case in `admin` (owner role required, else 403): case facts and hold metadata only.
 2. On their own device, the owner runs `legal-hold-export <holdId>` with their own `lh_<owner>` login over the tailnet: `core.export_sealed_record` writes the audit row (`pii.transmission_export`, the owner's DID as actor) and returns the ciphertext; the CLI writes the bundle. `admin` is not involved, holds no `legal_hold_reader` membership and cannot export or decrypt. Any failure (no tailnet, no mapping, certificate refused) → no bundle (fail closed).
-3. On their own device, the owner decrypts per the runbook (`docs/human/runbooks/open-sealed.md` from P1.14a). Decryption needs one of the two hardware keys in hand (P0-A4, answered by Alex 2026-10-03 11:45Z): the owner opens the K2 identity file from its USB copy with `age-plugin-yubikey` (PIN and touch) straight into the `age -d -i` call (process substitution; the opened identity is never written to disk), so the bundle is decrypted with the standard `age` CLI; there is no paper or passphrase copy of K2. The export CLI itself still decrypts nothing. Then the owner checks (P1.14a runbook: check the context of the record and of the media object's header line, and compare the media with the manifest's plaintext sha256), files the Cybertip.ca report (hashes, classification, provider ref, DID, handle, upload time, transmission data; never media from our side: C3P requests preserved data through the runbook if needed), and destroys the local plaintext afterwards.
+3. On their own device, the owner decrypts per the runbook (`docs/human/runbooks/open-sealed.md` from P1.14a).
+   Decryption needs one of the two hardware keys in hand (P0-A4, answered by Alex 2026-10-03 11:45Z): the owner opens
+   the K2 identity file from its USB copy with `age-plugin-yubikey` (PIN and touch) straight into the `age -d -i` call
+   (process substitution; the opened identity is never written to disk), so the bundle is decrypted with the standard
+   `age` CLI; there is no paper or passphrase copy of K2. The export CLI itself still decrypts nothing. Then the owner
+   checks (P1.14a runbook: check the context of the record and of the media object's header line, and compare the media
+   with the manifest's plaintext sha256), files the Cybertip.ca report (hashes, classification, provider ref, DID,
+   handle, upload time, transmission data; never media from our side: C3P requests preserved data through the runbook if
+   needed), and destroys the local plaintext afterwards.
 4. The owner records the Cybertip.ca filing as the `adm` case event `s2_filed` (the s. 2 filing), sends the written s. 3
-   notice, and records it: `preserve.notify {holdId, notifiedAt, regime, preserveUntil}` (signed; `notifiedAt` is the s.
-   3 notice, never the Cybertip.ca filing; `regime` and `preserveUntil` computed by P4.07k) → `expiresAt =
-   preserveUntil`, mirrored to `legal_hold.notified_at`. `preserve.notify` fires on the s. 3 notice only (book edit
+   notice, and records it: `preserve.notify {holdId, notifiedAt, regime, preserveUntil, destroyableFrom}` (signed;
+   `notifiedAt` is the s. 3 notice, never the Cybertip.ca filing; `regime` and `preserveUntil` computed by P4.07k,
+   `destroyableFrom` by `admin` under the zone rule above; any missing → refused) → `expiresAt = preserveUntil`,
+   mirrored to `legal_hold.notified_at`. `preserve.notify` fires on the s. 3 notice only (book edit
    2026-10-13-batch-47-after-771, from architecture's 2026-10-13-batch-46-contradictions).
 5. A `report` hold with no notification after 24 h → immediate alert, then daily digest; an `analyst` hold follows the
    runbook's analyst path: an unresolved near match starts pending with no expiry while the 7-day extensions continue,
@@ -3867,7 +3881,7 @@ Plan gaps, outline errors and contradictions found while writing P4.01–P4.15, 
    (P0.06 / admin design §8.1) allow-lists exactly these two tables.
 2. **Public-key seal** `seal.encryptTo(pubKeyId)` goes into the one seal module as **P1.14a** (catalogued in `02-shared-blocks.md`); the legal-hold key pair joins the P0.12 ceremony (inventory row K2, opened only with one of the two hardware keys; P0-A4 answered).
 3. **Where the legal-hold private key lives is Alex question P4a-A1.** P4.07 is built with the recommended default: no server holds it; `admin` only exports the sealed record; the owner decrypts offline. The online-decrypt path is not built. Settled by Alex (2026-10-03, answers 1 and 31).
-4. **`P3.16c` preserve verbs** (create, notify, listExpired, close): `pds-admin` accepts `review_egress`'s `PDS_PRESERVE_KEY` for `preserve.create` only (as `web`'s key for `invite.issue`), the `retention` key for listExpired/close, owners for notify. Specified in P4.07.
+4. **`P3.16c` preserve verbs** (create, notify, listExpired, close): `pds-admin` accepts `review_egress`'s `PDS_PRESERVE_KEY` for `preserve.create` only (as `web`'s key for `invite.issue`), the `retention` key for listExpired/close, owners for notify. Specified in P4.07. *[Superseded 2026-10-13 by book edit 2026-10-13-codex-813-close-expired-hold: `preserve.close` is gone; the `retention` key holds `preserve.listExpired` and `preserve.extendOpen` only; `close_expired_hold`, after a verified destroy receipt, re-runs `erase_did`. See P3.16c and P4.07.]*
 5. **Egress network (plan issue):** `review_egress` reaches the outside hosts through the hostname-allow-list forward proxy (a P1.18 change) **and** internal `pds-admin` `preserve.create` only. It reads no media except `frames-cleared/*` (review F1). *[Superseded 2026-10-03 by answer 30b: one outside host (Arachnid Shield), no media at all; see the editor pass below.]*
 6. **Lawyer hour (P5.12 list):** preservation clock (expiry: the case's preserve-until, fixed at notification by the
    regime in force (21 days today; one year, the calendar anniversary, after commencement); analyst hold 30 days after
@@ -4121,6 +4135,9 @@ P4.21 stop), **P4b-E14** (default tabs), **P4b-E18** (metric rounding), **P4b-E1
    - The erasure rule: `eraseDid` erases everything except held material, reports `partially_erased_legal_hold`, and
      never refuses the whole erasure. The remainder is tracked in `core.erase_pending_hold`. When the hold closes, the
      expiry job runs `erase_did` again with `why = legal_hold_closed`.
+     *[Superseded 2026-10-13 by book edit 2026-10-13-codex-813-close-expired-hold: `preserve.close` is gone; the
+     `retention` key holds `preserve.listExpired` and `preserve.extendOpen` only; `close_expired_hold`, after a verified
+     destroy receipt, re-runs `erase_did`. See P3.16c and P4.07.]*
    - The account flag: `uploads_frozen` is P2.16's column on `app.account`.
 7. **E22 (part-2 note; editor-todo), P4.14, P4.17, P4.20, P4.25.** `needs_reauth` expires after 30 days, then the
    post returns to draft. The new column `waiting_since` is set with the flag. P4.25's return-to-draft rule sends a
@@ -4364,6 +4381,9 @@ columns the same PR creates").
 - **P4.07k** (new, between P4.07g and P4.07): `domains/moderation/legal-hold/*` and `interfaces/legal-hold-export/`,
   the trusted-base part, first; P4.07 keeps the callers, admin screen, migration, definers and expiry job, and its
   Where no longer lists those two folders or the login roles (P4.07g). This answers the earlier "Open" note.
+  *[Superseded 2026-10-13 by book edit 2026-10-13-codex-813-close-expired-hold: `preserve.close` is gone; the
+  `retention` key holds `preserve.listExpired` and `preserve.extendOpen` only; `close_expired_hold`, after a verified
+  destroy receipt, re-runs `erase_did`. See P3.16c and P4.07.]*
 - ~~P4.07's `CREATE OR REPLACE` of `core.is_held`'s body is neutral under SE-6's exact wording (P0.09c), so it
   rides.~~ Superseded by the next note: it is trusted base and is P4.07h.
 
