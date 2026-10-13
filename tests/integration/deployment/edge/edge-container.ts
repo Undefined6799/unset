@@ -50,6 +50,8 @@ export interface ProbeResult {
 
 export interface Edge {
   readonly image: string;
+  /** The fresh named volume at /data, seeded from the image as a deployment's would be (P1.27o). */
+  readonly dataVolume: string;
   /** Every request the stub upstream received, in order. */
   readonly seen: Seen[];
   /** Sends `path` exactly as written (no normalising) to the PDS host over TLS from the test process. */
@@ -140,6 +142,15 @@ function removeContainer(name: string, timeoutMs: number): void {
   if (removed.code !== 0) throw new Error(`docker rm failed (${name}): ${removed.err.trim()}`);
 }
 
+/**
+ * Removes the edge's /data volume, after its container, which holds it while it exists. Checked like removeContainer:
+ * a volume that stays would seed nothing for the next run but would leak (P1.27o; DC-4).
+ */
+function removeVolume(volume: string, timeoutMs: number): void {
+  const removed = docker(["volume", "rm", "-f", volume], { timeoutMs });
+  if (removed.code !== 0) throw new Error(`docker volume rm failed (${volume}): ${removed.err.trim()}`);
+}
+
 /** The bridge gateway: the stub listens there, so only containers on the bridge reach it. */
 function bridgeGateway(callMs: number): string {
   const inspected = docker(["network", "inspect", "bridge", "--format", "{{(index .IPAM.Config 0).Gateway}}"], {
@@ -195,6 +206,7 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
   const gateway = bridgeGateway(callMs);
   const stub = await startStub(gateway, seen);
   const name = `unset-edge-${process.pid}-${Date.now()}`;
+  const dataVolume = dataVolumeOf(name);
   const ro = (from: string, to: string) => ["-v", `${from}:${to}:ro`];
   // Defined before the run: a killed `run -d` may still have created the container, and the stub must close (N6).
   const closeStub = () =>
@@ -204,6 +216,7 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
   const stop = async () => {
     try {
       removeContainer(name, callMs);
+      removeVolume(dataVolume, callMs);
     } catch (failure) {
       const closeFailure = await closeStub().then(
         () => null,
@@ -216,6 +229,11 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
     await closeStub();
   };
   try {
+    // Created here, labelled like the container, so a volume a killed run leaks can be found by its owner label.
+    const created = docker(["volume", "create", "--label", `${OWNER_LABEL}=${process.pid}`, dataVolume], {
+      timeoutMs: callMs,
+    });
+    if (created.code !== 0) throw new Error(`docker volume create failed: ${created.err.trim()}`);
     const run = docker(
       [
         "run",
@@ -227,8 +245,10 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
         "--read-only",
         "--tmpfs",
         "/tmp",
-        "--tmpfs",
-        "/data:uid=65532,gid=65532",
+        // A fresh named volume, not tmpfs: Docker seeds it from the image's /data, owner and mode included, as on a
+        // deployed edge, so a root-owned /data in the image fails here (P1.27o).
+        "-v",
+        `${dataVolume}:/data`,
         "--tmpfs",
         "/config:uid=65532,gid=65532",
         "--add-host",
@@ -259,6 +279,9 @@ export async function startEdge(image: string, callMs = CALL_MS): Promise<Edge> 
   }
 }
 
+/** The edge container's /data volume, named after the container; stop removes both. */
+const dataVolumeOf = (name: string): string => `${name}-data`;
+
 /** The internal CA's root, so the test client verifies the edge's certificate instead of skipping verification. */
 async function readRootCa(name: string): Promise<string> {
   const deadline = Date.now() + 15_000;
@@ -281,6 +304,7 @@ function edgeHandle(
   const tls = { host: "127.0.0.1", port, servername: PDS_HOST, ca };
   return {
     image,
+    dataVolume: dataVolumeOf(name),
     seen,
     send: (path, headers = {}) =>
       new Promise((resolve, reject) => {

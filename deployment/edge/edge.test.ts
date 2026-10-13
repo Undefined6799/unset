@@ -33,6 +33,31 @@ const lock = JSON.parse(readFileSync(join(EDGE, "..", "images", "bases.lock.json
   { ref: string; tag: string; digest: string; source: string }
 >;
 
+/**
+ * The final stage's RUN instructions before USER, each with its continuation lines joined by newlines. Keywords are
+ * matched in any case with any whitespace after them, and a line continues only after one ending in a backslash
+ * (moby/buildkit frontend/dockerfile/docs/reference.md, "Format" and "escape", read 2026-10-12).
+ */
+const runsBeforeUser = (text: string): string[] => {
+  const runtime = text.split(/^FROM\s.*$/im).at(-1) ?? "";
+  const instructions: string[] = [];
+  let continued = false;
+  for (const line of runtime.split("\n")) {
+    if (!continued && (line.trim() === "" || /^\s*#/.test(line))) continue;
+    instructions.push(continued ? `${instructions.pop() ?? ""}\n${line}` : line);
+    continued = line.endsWith("\\");
+  }
+  const user = instructions.findIndex((instruction) => /^\s*USER\s/i.test(instruction));
+  return instructions.slice(0, user === -1 ? undefined : user).filter((instruction) => /^\s*RUN\s/i.test(instruction));
+};
+/** The setcap line as P1.28o wrote it; Amendment 3 keeps it unchanged. */
+const SETCAP_RUN = [
+  "RUN setcap cap_net_bind_service=+ep /usr/bin/caddy \\",
+  "    && apk del --no-network curl libcap \\",
+  "    && rm -rf /usr/share/caddy /etc/caddy \\",
+  "    && apk del --no-network apk-tools",
+].join("\n");
+
 /** The image each FROM names, stage names left out. */
 const froms = (text: string): string[] =>
   [...text.matchAll(/^FROM\s+(\S+)(?:\s+AS\s+\S+)?\s*$/gim)].map((m) => m[1] ?? "");
@@ -880,6 +905,39 @@ describe("edge image", () => {
       dockerfile.replace("--output", "--with github.com/example/other \\\n      --output"),
     ]) {
       expect(pinProblems(fixture), fixture).not.toEqual([]);
+    }
+  });
+
+  test("edge_final_stage_runs_are_the_ruled_three_in_order", () => {
+    // Book edit 2026-10-12-edge-data-volume-owner, Amendment 3: exactly three RUNs before USER, the setcap line
+    // unchanged, then the two exec-form lines final-stage-runs.json lists, in its order.
+    const listed = JSON.parse(read("final-stage-runs.json")) as string[][];
+    const ruled = (text: string): boolean => {
+      const [setcap, ...exec] = runsBeforeUser(text);
+      return (
+        setcap === SETCAP_RUN &&
+        exec.length === listed.length &&
+        exec.every((run, at) => JSON.stringify(JSON.parse(run.replace(/^RUN /, ""))) === JSON.stringify(listed[at]))
+      );
+    };
+    expect(listed).toHaveLength(2);
+    expect(ruled(dockerfile)).toBe(true);
+    const chown = 'RUN ["/bin/chown", "-R", "65532:65532", "/data", "/config"]\n';
+    const chmod = 'RUN ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"]\n';
+    for (const fixture of [
+      dockerfile.replace(chown, ""),
+      dockerfile.replace(chown, "").replace(chmod, `${chmod}${chown}`),
+      dockerfile.replace(chmod, `${chmod}RUN ["/bin/true"]\n`),
+      dockerfile.replace("rm -rf /usr/share/caddy /etc/caddy", "rm -rf /usr/share/caddy"),
+      dockerfile.replace("COPY Caddyfile", 'RUN ["/bin/true"]\nCOPY Caddyfile'),
+      // Instructions are case-insensitive and any whitespace follows the keyword; an indented line is not a
+      // continuation unless the line before ends in a backslash (Dockerfile reference, "Format").
+      dockerfile.replace(chmod, `${chmod}run ["/bin/true"]\n`),
+      dockerfile.replace(chmod, `${chmod}RUN\t["/bin/true"]\n`),
+      dockerfile.replace(chmod, `${chmod}  RUN ["/bin/true"]\n`),
+    ]) {
+      expect(fixture).not.toBe(dockerfile);
+      expect(ruled(fixture), fixture).toBe(false);
     }
   });
 

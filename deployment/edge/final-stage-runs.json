@@ -1,0 +1,1 @@
+[["/bin/chown", "-R", "65532:65532", "/data", "/config"], ["/bin/chmod", "-R", "u=rwX,go=,-t", "/data", "/config"]]
