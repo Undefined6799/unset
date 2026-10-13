@@ -25,8 +25,8 @@ Cybertip.ca says the same on its report page (https://www.cybertip.ca/en/report/
    blocks it; plan §5.8). Confirm in the admin panel that the hold exists; do not open the media.
 2. Freeze the uploader's uploads. Never freeze the reporter's account.
 3. Note the time you were alerted. The reporting steps in sections 2 and 3 run "as soon as feasible" from here; the
-   preservation clock in section 4 starts later: it counts from the day after the notice is made (to police today;
-   to the designated body once C-16 commences).
+   preservation clock in section 4 starts later: it counts from the day after the notice is made (to police today; to
+   the law enforcement body the regulations designate once C-16 commences).
 
 ## 2. Which duty applies
 
@@ -77,25 +77,43 @@ Justice Laws and the Canada Gazette Part II before every case until the order is
   22 October and destroyed from 23 October. Keep it in a secure offline location (Regs s. 12). Then, as soon as
   feasible, destroy the data we would not keep in the ordinary course of business and any document prepared to
   preserve it (s. 4(2)), unless a judicial order requires otherwise [lawyer to confirm: L8].
-- **After commencement:** notify the law enforcement body the regulations designate; attach transmission data
-  (Criminal Code s. 487.011: for example routing, IP address, date and time) when the material is manifestly CSAEM;
-  and preserve for **one year after the day the notice to that body is made** (new ss. 3(1) and 4(1); the notice day
-  is not counted) [lawyer to confirm: L9].
+- **After commencement:** notify the law enforcement body the regulations designate; attach transmission data (Criminal
+  Code s. 487.011: for example routing, IP address, date and time) when the material is manifestly CSAEM; and preserve
+  for **one year after the day the notice to that body is made** (new ss. 3(1) and 4(1); the notice day is not counted;
+  one year is the calendar anniversary, Interpretation Act s. 37, so a 29 February notice holds until 1 March)
+  [lawyer to confirm: L9]. Commencement can be staged (C-16 s. 205(3)), so two facts matter: (A) the order bringing s.
+  180 (new ss. 3-4) into force sets the one-year length, and (B) the regulation designating the body sets where the
+  notice goes. With (A) but no (B), nothing is sent and the hold stays open: see item 2 below.
 
 How we apply it (architecture's design rule of 2026-10-12, held for the lawyer hour, not a decision)
 [lawyer to confirm: L20]:
 1. The hold length is fixed per case at notification: the case record stores the regime and the preserve-until date.
    A later regime change never shortens or extends a hold already running.
-2. The regime switches only through a reviewed config change that cites the order in council. A missing or bad value
-   means the in-force regime: 21 days, then destroy.
+2. The regime switches only through reviewed config changes, one per fact, each citing its instrument and in-force date:
+   (A) the order bringing C-16 s. 180 into force, which sets the preservation length, and (B) the regulation designating
+   the law enforcement body, which sets where the notice goes. If (A) was never recorded, the in-force regime applies
+   (21 days), but nothing is destroyed until a person has recorded, within the last 7 days, that s. 180 is still not in
+   force (Justice Laws or the Canada Gazette); a stale or missing check blocks destruction and raises an urgent task. A
+   recorded (A) that cannot be read or is inconsistent blocks destruction, with no automatic expiry and an urgent task.
+   Notices go out under the in-force s. 3 either way. Commencement never reverses. If the recorded order disappears or
+   stops parsing after it was once valid, the system stops all sends and destruction and raises an urgent task. Fix the
+   config. Do not treat it as the old regime. Once (A) is in force, a missing or unparsable (B) means nothing is sent to
+   a designated body, and a missing (B) never shortens a hold; without (A), (B) plays no part. With (B) and no (A), the
+   in-force law applies in full: 21 days and the written notice to police. With (A) and no (B), nothing is sent: the
+   send is blocked, you and the lawyer get an urgent task that repeats until it is resolved, and the hold stays open
+   with nothing destroyed until one year after the day the notice is actually made.
 3. A judicial preservation order is an explicit extension on the case, recorded with its reference.
 4. Destruction is an audited event (case id and time only) covering the data and any document made only for the
    preservation.
 
 Open for the lawyer hour: which regime governs a notice made before commencement [lawyer to confirm: L10]; what
-"ordinary course of business" means for our log retention, and so what the sealed transmission buffer may keep today
-[lawyer to confirm: L11]; whether a report under a foreign duty counts (new s. 9.01) [lawyer to confirm: L12]; and how
-we answer a production order for the preserved data [lawyer to confirm: L21].
+"ordinary course of business" means for our log retention, and so what the sealed transmission buffer may keep today;
+whether that exception covers the 30-day compliance-locked backups that hold legal-hold rows (P5.04), and whether a hold
+record inside a backup is a "document that is prepared for the purpose of preserving" the data, which s. 4(2) says to
+destroy after 21 days [lawyer to confirm: L11]; whether a report under a foreign duty counts (new s. 9.01)
+[lawyer to confirm: L12]; how we answer a production order for the preserved data [lawyer to confirm: L21]; and how long
+an unclassified near match may be held pending a C3P analyst's answer (the design raises a task at day 30 and goes to
+Alex at day 60) [lawyer to confirm: L22].
 
 ## 5. Close the case
 
@@ -115,5 +133,6 @@ we answer a production order for the preserved data [lawyer to confirm: L21].
 Sources read 2026-10-12: https://laws-lois.justice.gc.ca/eng/acts/I-20.7/FullText.html,
 https://laws-lois.justice.gc.ca/eng/regulations/SOR-2011-292/FullText.html,
 https://www.parl.ca/legisinfo/en/bill/45-1/c-16, https://www.justice.gc.ca/eng/csj-sjc/pl/c16/,
-https://www.cybertip.ca/en/report/federal/. The Act's title and its source, S.C. 2024, c. 23, subpar. 12(a)(i), were
-read 2026-10-13 at the first address.
+https://www.cybertip.ca/en/report/federal/. The Act's current title was read 2026-10-13 at the first address, whose
+history notes cite only "2024, c. 23, s. 12"; subpar. 12(a)(i), which amends the title, was read 2026-10-13 at
+https://laws-lois.justice.gc.ca/eng/AnnualStatutes/2024_23/FullText.html (S.C. 2024, c. 23).

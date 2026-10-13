@@ -57,7 +57,7 @@ and this table is the only place to change.
 | P1.25 shell | `AppShell`, `ErrorPage(code)`, legal page route slots `/legal/terms`, `/legal/privacy`. |
 | P1.31 lexicons | `validateRecord(nsid, value) -> {ok: true, value} \| {ok: false, path, message}`; `LIMITS.profile.*`, `LIMITS.section.*`; NSID constants; its own `sh.unset.authApp`, cross-pinned by P1.31c (#760) to `PERMISSION_SET_NSID` in shared/config, which P2.04 imports; the permission-set JSON (for the scope-equality test); vendored `app.bsky.actor.profile` validator. |
 | P1.34/P1.35 PDS | No production PDS before Phase 5 (decision 20; P1.34 only registers `unset.ac`). Phase 2 runs entirely against the dev PDS `0x40.space`, made fit to be an authority by P1.35: invite-only, `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me` (dev `.0x40.space`), permission set published and resolvable. |
-| P1.37 legal 1 | Arachnid Shield application status; Cybertip report-and-preserve runbook (`docs/human/runbooks/cybertip.md`); incident-response page. |
+| P1.37 legal 1 | Arachnid Shield application status; Cybertip report-and-preserve runbook (`docs/human/legal/cybertip-runbook.md`); incident-response page. |
 
 ## Shared conventions for this phase
 

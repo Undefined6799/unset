@@ -711,6 +711,11 @@ Edge cases and failures:
   - Missing password or empty filter → `indexer` and Tap refuse to boot.
 
 Done when (tests):
+  - `tap_edge` (book edit 2026-10-13-p129a-build-rulings, Amendment 3; P1.29's networks table): an internal network
+    whose only members are tap and the edge; the edge's attachment carries the `PDS_HOST` alias (`APP_HOST` only if
+    tap calls it); the strict parser accepts aliases on edge attachments only, with the allowed values listed per
+    network. Tests: from tap, `PDS_HOST` resolves to the edge's `tap_edge` address and TLS verifies against the dev
+    root; red: a third service on `tap_edge`; red: an alias on tap's own attachment.
   - `track-callback-enqueues`: a P2.06 callback test → one `app.track_request` row in the same transaction; a
     failed callback leaves none.
   - `backfill-before-track-commit-not-lost`: the stub Tap emits events before returning 200 → every one applied.
@@ -2230,9 +2235,27 @@ Size: ~150 source lines, ~250 test lines
 confirm]), book edit 2026-10-12-csam-preservation-book-lines item 4): two regimes until C-16's reporting amendments
 commence. Until then: written notice to police (s. 3), 21 days of offline preservation (s. 4(1), SOR/2011-292 s. 12),
 then destruction of what is not kept in the ordinary course (s. 4(2)), unless a judicial order requires otherwise. After
-commencement: one year after notification. `preserve.create` and `preserve.notify` store the regime in force at
-notification and the preserve-until date it fixes; a later regime change never shortens or extends a running hold. The
-365-day figures below are the post-commencement path.
+commencement: one year after notification, as the calendar anniversary (Interpretation Act s. 37), not 365 days: a 29
+February notice holds until 1 March, and the later candidate always wins, so rounding never destroys early.
+`preserve.create` and `preserve.notify` store the regime in force at notification and the preserve-until date it fixes;
+a later regime change never shortens or extends a running hold. The one-year figures below are the post-commencement
+path. The switch records two facts, each a reviewed config change citing its instrument number and in-force date (book
+edit 2026-10-12-csam-preservation-book-lines, Amendments 1 to 4): (A) the order bringing C-16 s. 180 (new ss. 3-4) into
+force, and (B) the regulation designating the law enforcement body (new para. 12(c.1)). Fail-closed is split by fact.
+(A) never recorded gives the 21-day regime, but the destruction job destroys only with a recorded human commencement
+check (s. 180 still not in force, read on Justice Laws or the Canada Gazette) no older than 7 days; a stale or missing
+check blocks destruction, keeps the hold and raises an urgent task. (A) present but unparsable or inconsistent blocks
+destruction, with no automatic expiry and an urgent task. Notices still go out under the in-force s. 3 in both cases;
+only destruction waits (Amendment 3, replacing Amendment 2's "a bad (A) gives 21 days"). Commencement is one-way
+(Amendment 4): P4.07k keeps (A) in an append-only config history, and once a valid (A) has ever been recorded, a later
+absent or unparsable (A) is a configuration fault, not the old regime: every send is blocked (an open (A)-only block and
+new cases included, with no police notice under the old s. 3), destruction is blocked and an urgent human task is
+raised. For (B): once (A) is in force, a missing or unparsable (B) means no send to a designated body (the send is
+blocked and an urgent human task raised), and a missing (B) never shortens a hold; without (A), (B) plays no part and
+the police are notified. (B) without (A): the in-force regime in full, 21 days and notice to police under the in-force
+s. 3. (A) without (B): the send is blocked, the urgent task repeats until resolved, and the hold is open from the block
+(no preserve-until date) until one year after the day the notice is actually made; nothing is destroyed while blocked.
+(A) and (B): one year from the send date, notice to (B). [lawyer to confirm]
 
 Goal: give Phase 4 the four `preserve.*` verbs on `pds-admin`'s clock, so a legal hold (per-case length, above) can be
 created by the review egress step, recorded as notified by an owner, listed when expired and closed only after expiry,
@@ -2243,13 +2266,16 @@ Outputs (contract):
   - Legal-hold state is rebuilt from `log.jsonl` entries with `phase: "preserve"`; `state.legal_hold_dids` is the
     set of `subject_did` with an open legal hold.
   - `LegalHold = {holdId, holdRef, kind: "report" | "analyst", subject_did, created_at, created_by, notified_at?,
-    expires_at?, closed_at?}`.
+    regime?, preserveUntil?, expires_at?, closed_at?}`; `regime` and `preserveUntil` are set once, by `preserve.notify`
+    (Amendment 3).
   - Verbs and callers (the service keys are added to the roster in Phase 4; Phase 3 tests use test keys):
 
 | Verb | Callers | Touch | Rule | Result |
 |---|---|---|---|---|
-| `preserve.create {holdRef (128-bit), kind, subject_did}` | S:`review_egress` (`PDS_PRESERVE_KEY`, **this verb only**); R owner | no (S) / yes (R) | idempotent on `holdRef` (same `holdId` back); `created_by` is taken from the verified key (the `review_egress` kid or the owner DID), never from `args`; `kind = analyst` → `expiresAt = createdAt + 365 d` (provisional, lawyer hour; P4.07's table); `kind = report` → no expiry until notified; adds `subject_did` to `legal_hold_dids` (provisional P3-B3); immediate owner alert | `{holdId, createdAt}` (`pds-admin`'s clock) |
-| `preserve.notify {holdId, notifiedAt}` | R owner | yes | `createdAt ≤ notifiedAt ≤ now` (`pds-admin`'s clock) → else 400; `expiresAt = max(expiresAt, notifiedAt + 365 d)` (never shortens); a second notify → 409 | — |
+| `preserve.create {holdRef (128-bit), kind, subject_did}` | S:`review_egress` (`PDS_PRESERVE_KEY`, **this verb only**); R owner | no (S) / yes (R) | idempotent on `holdRef` (same `holdId` back); `created_by` is taken from the verified key (the `review_egress` kid or the owner DID), never from `args`; `kind = analyst` → pending, with no expiry: the creation is not a finding; the 7-day provisional extensions continue (P5.04), and the 30 days start only at `markNotReportable` (finding 11, book edit 2026-10-13-batch-47-after-771, Amendment 1; replaces `createdAt + 30 d` and the older `createdAt + 365 d`); still pending at day 30 → urgent task, at day 60 → Alex [lawyer to confirm the pending period]; `kind = report` → no expiry until notified; adds `subject_did` to `legal_hold_dids` (provisional P3-B3); immediate owner alert | `{holdId, createdAt}` (`pds-admin`'s clock) |
+| `preserve.notify {holdId, notifiedAt, regime, preserveUntil}` | R owner | yes | `createdAt ≤ notifiedAt ≤ now` (`pds-admin`'s clock) → else 400; `notifiedAt` is the s. 3 notice, never the Cybertip.ca filing; P4.07k computes `regime` and `preserveUntil` once at the s. 3 notice (21 days today, the one-year calendar anniversary once (A) is in force) and passes both; either missing or unparsable → 400; `pds-admin` honours them and never recomputes; `expiresAt = max(expiresAt, preserveUntil)` (never shortens); a second notify → 409 | — |
+| `markNotReportable {holdId}` | R owner | yes | the owner action passes the `holdId`; the reason code (closed list, no free text) and the reasoning stay in `admin` (finding 10); report or pending analyst hold → analyst hold, provisional-and-extend up to `findingAt + 30 d` with nothing granted up front (finding 8, book edit 2026-10-13-batch-47-after-771, Amendment 1); an "uncertain" finding cannot call it (G-3, book edit 2026-10-13-batch-47-after-771 from architecture's 2026-10-13-batch-46-contradictions) | — |
+| `reverseToReportable {holdId}` | R owner | yes | analyst hold → report hold; the analyst extensions stop, then the notification path: `preserve.notify` extends to the regime's preserve-until from the notice date (G-3; findings 8 and 10) | — |
 | `preserve.listExpired {}` | S:`retention` | no | `[holdId]` with `expiresAt ≤ now` and not closed | list |
 | `preserve.close {holdId}` | S:`retention` | no | only an expired hold → else 409 `not_expired`; removes the DID from `legal_hold_dids` when no other open hold names it | — |
 
@@ -2275,8 +2301,14 @@ Edge cases and failures:
 Done when (tests):
   - `pds-admin-preserve-key-scope`: the preserve key for `preserve.notify`, `account.takedown` or `hold.execute` → refused and logged; for `preserve.create` → accepted; repeated `holdRef` → same `holdId`.
   - `pds-admin-no-early-release`: no verb shortens or cancels; `preserve.close` before expiry → 409.
-  - `preserve-notify-sets-365-days`; `preserve-notify-twice-409`; `preserve-notify-never-shortens`;
-    `preserve-notify-future-or-before-create-400`; `analyst-hold-expires-365-days-after-create`;
+  - `preserve-notify-uses-given-preserve-until`; `preserve-notify-refuses-missing-regime` (either field missing or
+    unparsable → 400); `preserve-notify-twice-409`;
+    `preserve-notify-never-shortens`;
+    `preserve-notify-future-or-before-create-400`; `analyst-hold-expires-30-days-after-finding` (G-3);
+    `mark-not-reportable-needs-reason-code` (in `admin`); `mark-not-reportable-refuses-uncertain`;
+    `reverse-to-reportable-takes-notification-path`; `reverse-day-1-gets-notice-plus-21` (markNotReportable on day 0,
+    reversal and notice on day 1 → notice + 21 days, nothing held to day 30; finding 8);
+    `pending-analyst-no-response-by-day-30` (nothing destroyed, the task raised, extensions continue; finding 11);
     `preserve-create-createdby-from-key` (a `createdBy` in `args` → 400 `bad_args`).
   - The 21-day path (the "Preservation regime" above; book edit 2026-10-12-csam-preservation-book-lines) gets its own
     tests in the step that builds it: `preserve-notify-sets-21-days`, `regime-recorded-at-notification`.
@@ -3030,8 +3062,9 @@ legal-hold key question is `P4a-A1`.
   with 403 `target_protected`.
 - **P3.16c (resolution 3; must match P4.07):** the four `preserve.*` verbs stay here. `created_by` comes from the
   verified key, so P4.07's `createdBy` argument should be dropped (phase-4 editor); `subject_did` stays (P3-B3); analyst
-  holds expire 365 days after creation, report holds 365 days after notification once the amended regime is in force and
-  21 days before it (per case, fixed at notification), notify never shortens; P5.07b's image path uses the same verb
+  holds expire 30 days after the "not reportable" finding (G-3), report holds one year (the calendar anniversary) after
+  notification once the amended regime is in force and 21 days before it (per case, fixed at notification), notify never
+  shortens; P5.07b's image path uses the same verb
   with its own service key if it is not `review_egress`.
 - **P3.22 (phase-1 notes; phase-5 notes):** `auditor` reads `audit.chain`, `audit.segment`, `audit.redaction_log`
   only; daily `verifyChain(…, "links")`, weekly owner `"full"`; `audit.verify_macs` dropped (body-MAC checks are
