@@ -8,7 +8,8 @@
 # setgid files the Debian base ships, so the postgres kind's privilege list is empty (P1.29p).
 # P1.11k: the base's ssl-cert package generates a "snakeoil" key pair at upstream build time, so every copy of the
 # official image carries the same private key. Nothing here uses it (no server config in this repository sets `ssl`),
-# so the pair goes; bases.lock.json lists both paths as stripped, and the mirror scan skips them.
+# so the pair goes, and the subject-hash link to the certificate with it; bases.lock.json lists the two files as
+# stripped, and the mirror scan skips them (the link is not a secret, so it is not listed).
 
 # Upstream base until P1.27s mirrors it (book edit 2026-10-06-p127-upstream-base-by-digest); removed by P1.27s.
 # hadolint ignore=DL3026
@@ -16,6 +17,7 @@ FROM docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d87
 LABEL org.opencontainers.image.source="https://github.com/Undefined6799/unset"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only AND PostgreSQL"
 RUN rm -rf /usr/local/bin/gosu /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
+    /etc/ssl/certs/ce275665.0 \
   && apt-get purge --allow-remove-essential -y apt \
   && dpkg --purge --force-remove-essential --force-depends debconf dpkg libapt-pkg7.0 \
   && rm -f /var/lib/dpkg/info/*.preinst /var/lib/dpkg/info/*.postinst /var/lib/dpkg/info/*.prerm \
