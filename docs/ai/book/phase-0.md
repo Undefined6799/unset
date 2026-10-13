@@ -2617,10 +2617,10 @@ found on main goes in the same PR's record as a P0.09 book fix, never as an allo
 
 ### P0.09x — List the cleanup definers as trusted functions
 Tags: [ALEX] (typed line)            Depends on: —            Plan: rule SE-6
-Check class (`.github/CODEOWNERS`), kind/build; book edit 2026-10-13-codex-813-close-expired-hold, architecture
-amendment 2 of 23:42Z and its step-book mapping, from the verifier of #824 (verify-824-6ec1d8c, B1). P4.07g creates
-three new SECURITY DEFINER functions in `core` and grants `retention` EXECUTE on them. Unless their names are already on
-the CODEOWNERS `# trusted functions:` line, P0.09c classifies those grants as a feature grant in a trusted PR
+Check class (`.github/CODEOWNERS`), kind/build; issue #825; book edit 2026-10-13-codex-813-close-expired-hold,
+architecture amendment 2 of 23:42Z and its step-book mapping, from the verifier of #824 (verify-824-6ec1d8c, B1). P4.07g
+creates three new SECURITY DEFINER functions in `core` and grants `retention` EXECUTE on them. Unless their names are
+already on the CODEOWNERS `# trusted functions:` line, P0.09c classifies those grants as a feature grant in a trusted PR
 (`mixed_grant_change`), and P4.07g cannot add the names itself, because a PR that touches `/.github/` may touch no
 `infrastructure/` path. Precedent: P0.03 (`c37c980`) listed today's names before the steps that create them. This is a
 tightening: the names become trusted base, so only isolated trusted PRs can change them.

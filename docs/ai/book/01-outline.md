@@ -1937,7 +1937,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P0.09r (#722):** a typed line, "yes P0.09r scripts/guards git-env diagnostics", for the classifier path.
 - **P0.09w (#816):** a typed line, "yes P0.09w scripts/docs outline checks", for the classifier path (it supersedes
   "yes docs cycle check scripts/docs").
-- **P0.09x:** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
+- **P0.09x (#825):** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
   it.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
 - **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
