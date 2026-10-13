@@ -1464,7 +1464,8 @@ Done when (tests):
   - `callback.email_read_failure_tolerated`: `pdsCall` returns transient → still 303 success; `email_confirmed` null.
   - `callback.db_failure`: DB throws in step 9 → `login.failed`, no Set-Cookie for `__Host-sid`.
   - `callback.pds_unreachable`: token request times out → `login.pds_unreachable`.
-  - `callback.dev_pds_e2e` (Playwright, compose.dev): seeded account signs in through the real dev PDS → lands on `/welcome`.
+  - `callback.dev_pds_e2e` (Playwright, the `local` stack through `local:up`): seeded account signs in through the real
+    local PDS → lands on `/welcome`.
   - `callback.two_tabs_second_succeeds`: tab 1 starts (cookie N1), tab 2 starts (cookie N2); tab 1's callback →
     `login.state_mismatch`, cookie still N2; tab 2's callback → success.
   - `callback.stray_hit_keeps_nonce`: GET `/oauth/callback?code=x&state=unknown` with a live cookie → `login.expired`;

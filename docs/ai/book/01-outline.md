@@ -397,8 +397,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34q | Read local edge sites as per-file mounts (trusted base) | [SEC] | P1.34o | `phase-1.md` |
 | P1.33t | Require the tls import in every edge site | [SEC] | P1.27l | `phase-1.md` |
 | P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
-| P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t | `phase-1.md` |
-| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card) | P1.34u | `phase-1.md` |
+| P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d | `phase-1.md` |
+| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card) | P1.34u, P1.34d | `phase-1.md` |
 | P1.34y | Allow only the local PLC host in net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -416,7 +416,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27o | Edge /data and /config owned by caddy (trusted base) | [SEC] | P1.34e | `phase-1.md` |
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k, P1.33l | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k, P1.33l, P1.34d | `phase-1.md` |
 | P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v, P1.34z | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
@@ -996,6 +996,9 @@ flowchart TD
   P1_33t --> P1_34d
   P1_34t --> P1_34u
   P1_34u --> P1_34v
+  P1_34d --> P1_34v
+  P1_34d --> P1_34u
+  P1_34d --> P1_29s
   P1_34t --> P1_34y
   P1_34v --> P1_34z
   P1_34y --> P1_34z
