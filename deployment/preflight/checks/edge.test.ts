@@ -367,18 +367,67 @@ describe("C18 certificates (P1.33t)", () => {
     expect(zones(withSite(inSite))).toEqual({ pass: false, reason: "{$PDS_HOST}: has its own tls directive" });
   });
 
-  test("c18_only_a_plain_http_loopback_site_skips_tls", () => {
-    // The image's health check, http://127.0.0.1:8081, passes with no import. The same loopback site without the
-    // http:// prefix gets automatic HTTPS, which for an IP address is Caddy's internal CA, so it must import tls.
-    const loopback = (address: string) => {
+  test("c18_only_the_image_health_site_skips_tls", () => {
+    // Architecture's Amendment 5 to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md: only the image's own health
+    // site, exactly as the Caddyfile writes it, goes without `import tls`. A loopback site without http:// gets
+    // automatic HTTPS, which for an IP address is Caddy's internal CA.
+    const HEALTH = "http://127.0.0.1:8081 {\n\tbind 127.0.0.1\n\trespond /health 200\n\trespond 404\n}\n";
+    const caddyfileOf = (repo: ReturnType<typeof repository>) => join(repo.edgeDir, "Caddyfile");
+    expect(readFileSync(caddyfileOf(repository()), "utf8")).toContain(HEALTH);
+    /** C18 with `site` enabled beside the PDS site, after `edit` to the Caddyfile. */
+    const withExtra = (site: string | null, edit = (text: string) => text) => {
       const repo = repository();
-      writeFileSync(join(repo.edgeDir, "sites", "loop.caddy"), `${address} {\n\tbind 127.0.0.1\n\trespond 204\n}\n`);
-      symlinkSync(join(repo.edgeDir, "sites", "loop.caddy"), join(repo.sitesDir, "loop.caddy"));
+      writeFileSync(caddyfileOf(repo), edit(readFileSync(caddyfileOf(repo), "utf8")));
+      if (site !== null) {
+        writeFileSync(join(repo.edgeDir, "sites", "loop.caddy"), site);
+        symlinkSync(join(repo.edgeDir, "sites", "loop.caddy"), join(repo.sitesDir, "loop.caddy"));
+      }
       return zones(repo);
     };
-    expect(loopback("http://127.0.0.1:8082")).toEqual({ pass: true, reason: "ok" });
+    const NO_TLS = (address: string) => expect.stringContaining(`${address}: does not import tls`);
+    expect(withExtra(null)).toEqual({ pass: true, reason: "ok" });
+    // The same block in a sites file, beside the Caddyfile's or in its place.
+    // Beside it, neither copy is exempt: which one Caddy would take is not the reader's to guess.
+    expect(withExtra(HEALTH)).toEqual({
+      pass: false,
+      reason: "http://127.0.0.1:8081: does not import tls; http://127.0.0.1:8081: does not import tls",
+    });
+    expect(withExtra(HEALTH, (text) => text.replace(HEALTH, ""))).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    // Another loopback port, in a sites file or in the Caddyfile itself.
+    const port = HEALTH.replace(":8081", ":8082");
+    expect(withExtra(port)).toEqual({ pass: false, reason: "http://127.0.0.1:8082: does not import tls" });
+    expect(withExtra(null, (text) => text.replace(HEALTH, port))).toEqual({
+      pass: false,
+      reason: "http://127.0.0.1:8082: does not import tls",
+    });
+    // Another bind, or an added reverse_proxy, in the Caddyfile's own block.
+    expect(
+      withExtra(null, (text) =>
+        text.replace("\tbind 127.0.0.1\n\trespond /health", "\tbind 0.0.0.0\n\trespond /health"),
+      ),
+    ).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    expect(
+      withExtra(null, (text) => text.replace("\trespond 404\n", "\troute {\n\t\treverse_proxy 127.0.0.1:9\n\t}\n")),
+    ).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    // An http:// site with a public name, and loopback sites with no scheme.
+    expect(withExtra("http://www.unset.test {\n\trespond 204\n}\n")).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://www.unset.test"),
+    });
     for (const address of ["127.0.0.1:8443", "[::1]:8443"]) {
-      expect(loopback(address), address).toEqual({ pass: false, reason: `${address}: does not import tls` });
+      expect(withExtra(`${address} {\n\tbind 127.0.0.1\n\trespond 204\n}\n`), address).toEqual({
+        pass: false,
+        reason: `${address}: does not import tls`,
+      });
     }
   });
 

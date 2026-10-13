@@ -20,6 +20,7 @@ import {
   edgeSiteProblems,
   readCaddyfile,
   readEdgeConfig,
+  type Site,
 } from "../../edge/caddyfile.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
@@ -153,21 +154,52 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap, mode: Edge
   return problems.length === 0 ? pass() : fail(problems.join("; "));
 }
 
-/** A site Caddy serves over plain HTTP on loopback only (the image's health check), so no certificate is chosen. */
-const PLAIN_LOOPBACK = /^http:\/\/(?:127\.0\.0\.1|\[::1\]):\d{1,5}$/;
+/**
+ * The image's own health site, deployment/edge/Caddyfile:48-53 on main 79b3582, as the reader reads it: the one site
+ * that goes without `import tls` (architecture's Amendment 5 to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md).
+ * Plain HTTP on loopback, so Caddy chooses no certificate for it (caddyserver/website
+ * src/docs/markdown/automatic-https.md, "Activation", read 2026-10-13).
+ */
+const HEALTH_SITE = JSON.stringify([
+  ["http://127.0.0.1:8081"],
+  [null],
+  [
+    ["bind", ["127.0.0.1"], [null], null, null],
+    ["respond", ["/health", "200"], [null, null], null, null],
+    ["respond", ["404"], [null], null, null],
+  ],
+]);
+const healthShaped = (site: Site): boolean =>
+  JSON.stringify([site.addresses, site.placeholders, shape(site.directives)]) === HEALTH_SITE;
+
+/**
+ * The health site, when it is exempt: exactly one site in the served config has its shape, and the image's Caddyfile,
+ * read alone without its two file imports, holds exactly that one site and nothing else. So the same block in a sites
+ * or local file, beside the Caddyfile's or in its place, is never exempt.
+ */
+function exemptHealthSite(config: Caddyfile, edgeDir: string, env: Partial<Record<EnvName, string>>): Site | null {
+  const shaped = config.sites.filter(healthShaped);
+  if (shaped.length !== 1) return null;
+  const own = EDGE_FILES.read(join(edgeDir, "Caddyfile"))
+    .split("\n")
+    .filter((line) => !FILE_IMPORT_LINES.includes(line))
+    .join("\n");
+  const sites = readCaddyfile(own, env).sites;
+  return sites.length === 1 && healthShaped(sites[0] as Site) ? (shaped[0] as Site) : null;
+}
+/** The Caddyfile's two file imports (deployment/edge/caddyfile.ts FILE_IMPORTS), each a whole line. */
+const FILE_IMPORT_LINES = ["import snippets/*.caddy", "import sites/enabled/*.caddy"];
 
 const flatten = (directives: Directive[]): Directive[] =>
   directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
 
 /**
  * Why some site could get a certificate other than the env's own (tls) snippet gives it (P1.33t; architecture's
- * Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md). Every site but a plain-HTTP loopback one
+ * Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md). Every site but the image's health site
  * imports tls, and no tls directive in it comes from anywhere else; the (tls) served reads the same as the one the
  * env's own file defines (snippets/tls.caddy, or local/tls.caddy under local), whatever file defined it. This closes
- * Caddy's internal CA, which refocus Amendment 1 forbids. Caddy skips automatic HTTPS for an `http://` site address
- * (caddyserver/website src/docs/markdown/automatic-https.md, "Activation", read 2026-10-13). The global options that
- * would change the issuer (local_certs, skip_install_trust, pki, auto_https) are already outside the reader's global
- * allowlist.
+ * Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
+ * (local_certs, skip_install_trust, pki, auto_https) are already outside the reader's global allowlist.
  */
 function certificateProblems(
   config: Caddyfile,
@@ -176,8 +208,9 @@ function certificateProblems(
   mode: EdgeMode,
 ): string[] {
   const found: string[] = [];
+  const health = exemptHealthSite(config, edgeDir, env);
   for (const site of config.sites) {
-    if (site.addresses.every((address) => PLAIN_LOOPBACK.test(address))) continue;
+    if (site === health) continue;
     // Named as written, `{$NAME}` for a placeholder, never its value (P1.28l).
     const name = site.addresses
       .map((address, at) => (site.placeholders[at] ? `{$${site.placeholders[at]}}` : address))
@@ -208,16 +241,12 @@ function ownTls(path: string, env: Partial<Record<EnvName, string>>): Directive[
 
 /** Whether two directive lists read the same, wherever in their files they were written. */
 function sameDirectives(served: Directive[], own: Directive[] | null): boolean {
-  const shape = (directives: Directive[]): unknown =>
-    directives.map(({ name, args, placeholders, block, via }) => [
-      name,
-      args,
-      placeholders,
-      block && shape(block),
-      via,
-    ]);
   return own !== null && JSON.stringify(shape(served)) === JSON.stringify(shape(own));
 }
+
+/** A directive list as data, without the line numbers that say where it was written. */
+const shape = (directives: Directive[]): unknown =>
+  directives.map(({ name, args, placeholders, block, via }) => [name, args, placeholders, block && shape(block), via]);
 
 /**
  * The files a local edge mounts from deployment/edge/local/, by target: each at most once, read-only, by that name.
