@@ -146,7 +146,8 @@ describe("httpsPost", () => {
   test("pinned_post_survives_a_connect_that_fails_at_once", { timeout: 30_000 }, async () => {
     // Coordinator's second review of #786, N1: an IPv6 pin on a host without IPv6 fails inside connect() (EAFNOSUPPORT,
     // measured on Node 26.10.0). Linux fails a TCP connect to the limited broadcast address the same way on every host
-    // (ENETUNREACH), so it stands in here: the request must reject, not end the process with an unhandled error.
+    // (ENETUNREACH), so it stands in here: the request must reject, not end the process with an unhandled error. It is
+    // outside the fixture address rule (RFC 5737, 2001:db8::/32, loopback) on purpose: no packet leaves for it.
     expect(await inChild(request({ address: "255.255.255.255" }), {})).toEqual({ code: 0, out: "rejected" });
   });
 

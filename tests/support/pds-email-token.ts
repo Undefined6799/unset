@@ -64,10 +64,11 @@ const REQUEST_MS = 10_000;
 const RESOLVE_MS = 5_000;
 const TOKEN = /^[A-Z2-7]{5}-[A-Z2-7]{5}$/;
 
-// Every key of @atproto/pds 0.5.37's dist/config/env.js whose name says it may name another machine, classified
-// (architecture record 2026-10-13-p129h-local-token-reader, Amendment 3, S2'). pds-email-token.image.test.ts reads
-// env.js from the pinned PDS image and fails on any key matching OUTBOUND_NAME that is not classified here.
-export const OUTBOUND_NAME = /URL|URI|ENDPOINT|HOST|ADDRESS|NAMESERVERS|CRAWLERS|DIRECTORY|CDN|_DID_PLC/;
+// Every key @atproto/pds 0.5.37's dist/config/env.js reads, classified (architecture record
+// 2026-10-13-p129h-local-token-reader, Amendment 3, S2', first bullet; coordinator's verify of #803 at 94ab296, B7).
+// pds-email-token.image.test.ts reads env.js from the pinned PDS image and fails on any key not classified here,
+// whatever its name: a key can send the PDS out just by being set.
+const LOCAL_NAMES = ["PDS_HOSTNAME", "PDS_SERVICE_HANDLE_DOMAINS"];
 const MAIL = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL"];
 /** URLs the PDS connects to; PDS_CRAWLERS is a comma list (env.js envList). */
 const OUTBOUND_URLS = [
@@ -80,19 +81,27 @@ const OUTBOUND_URLS = [
   "PDS_MOD_SERVICE_URL",
   "PDS_REPORT_SERVICE_URL",
 ];
-/**
- * Keys that pick a provider whose endpoint is AWS's own when none is set (Codex on #803): a bucket with no
- * PDS_BLOBSTORE_S3_ENDPOINT is AWS S3 (@atproto/pds 0.5.37 dist/config/config.js:51-60), and a KMS key id is AWS KMS,
- * which takes no endpoint at all (dist/config/secrets.js:26-30). The pattern above does not match them.
- */
-const PROVIDER_SELECTORS = ["PDS_BLOBSTORE_S3_BUCKET", "PDS_PLC_ROTATION_KEY_KMS_KEY_ID"];
 /** host:port addresses the PDS connects to; the nameservers are a comma list. */
 const OUTBOUND_ADDRESSES = ["PDS_REDIS_SCRATCH_ADDRESS", "PDS_HANDLE_BACKUP_NAMESERVERS"];
 /**
- * Keys the pattern matches that send nothing from the PDS: links and images the browser loads (dist/config/config.js
- * 222-252, describeServer), mail addresses (mail itself is refused), and folders in the data volume.
+ * Keys that turn on a provider just by being set, naming no host (Codex on #803; verify at 94ab296, B1-B4):
+ * - a bucket is S3: AWS's own when no endpoint is set (dist/config/config.js:51-60), `<bucket>.<endpoint host>` unless
+ *   path style is on, and credentials the AWS SDK looks up itself unless a static key id is set (config.js:61-67);
+ * - a KMS key id is AWS KMS, which takes no endpoint at all (dist/config/secrets.js:26-30);
+ * - an hCaptcha site key calls api.hcaptcha.com (config.js:265-271; oauth-provider 0.23.1 lib/hcaptcha.js:105-111);
+ * - a lexicon authority DID is resolved, and a did:web fetched from its host (config.js:279-281).
  */
+const PROVIDER_SELECTORS = [
+  "PDS_BLOBSTORE_S3_BUCKET",
+  "PDS_PLC_ROTATION_KEY_KMS_KEY_ID",
+  "PDS_HCAPTCHA_SITE_KEY",
+  "PDS_LEXICON_AUTHORITY_DID",
+];
+/** How a bucket's client picks its host and its credentials; the secret access key is never read. */
+const S3_FORM = ["PDS_BLOBSTORE_S3_FORCE_PATH_STYLE", "PDS_BLOBSTORE_S3_ACCESS_KEY_ID"];
+/** The rest of env.js, never read here, by why none sends the PDS to a host it names. */
 const NOT_OUTBOUND = [
+  // Links and images the browser loads (config.js:222-252, describeServer).
   "PDS_HOME_URL",
   "PDS_LOGO_URL",
   "PDS_BACKGROUND_DARK_URL",
@@ -100,50 +109,152 @@ const NOT_OUTBOUND = [
   "PDS_PRIVACY_POLICY_URL",
   "PDS_TERMS_OF_SERVICE_URL",
   "PDS_SUPPORT_URL",
+  "PDS_PRIMARY_COLOR",
+  "PDS_ERROR_COLOR",
+  "PDS_INFO_COLOR",
+  "PDS_SUCCESS_COLOR",
+  "PDS_WARNING_COLOR",
+  // Mail addresses and options: mail itself is refused, and without it the addresses stop the PDS starting
+  // (config.js:131-156).
   "PDS_CONTACT_EMAIL_ADDRESS",
   "PDS_EMAIL_FROM_ADDRESS",
   "PDS_MODERATION_EMAIL_ADDRESS",
+  "PDS_EMAIL_DISABLE_CONFIRMATION_LINK",
+  // Places in the data volume.
   "PDS_DATA_DIRECTORY",
   "PDS_ACTOR_STORE_DIRECTORY",
+  "PDS_ACCOUNT_DB_LOCATION",
+  "PDS_SEQUENCER_DB_LOCATION",
+  "PDS_DID_CACHE_DB_LOCATION",
+  "PDS_BLOBSTORE_DISK_LOCATION",
+  "PDS_BLOBSTORE_DISK_TMP_LOCATION",
+  // DIDs: the PDS's own (not fetched), a did:key, and those used only with their judged URL (config.js:109-118,
+  // 162-189).
+  "PDS_SERVICE_DID",
+  "PDS_RECOVERY_DID_KEY",
+  "PDS_BSKY_APP_VIEW_DID",
+  "PDS_ENTRYWAY_DID",
+  "PDS_MOD_SERVICE_DID",
+  "PDS_REPORT_SERVICE_DID",
+  // Secrets and keys, used only with a judged or refused key above, or held by the PDS alone.
+  "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
+  "PDS_JWT_SECRET",
+  "PDS_ADMIN_PASSWORD",
+  "PDS_DPOP_SECRET",
+  "PDS_ENTRYWAY_ADMIN_TOKEN",
+  "PDS_ENTRYWAY_JWT_VERIFY_KEY_K256_PUBLIC_KEY_HEX",
+  "PDS_ENTRYWAY_PLC_ROTATION_KEY",
+  "PDS_REDIS_SCRATCH_PASSWORD",
+  "PDS_RATE_LIMIT_BYPASS_KEY",
+  "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
+  "PDS_HCAPTCHA_SECRET_KEY",
+  "PDS_HCAPTCHA_TOKEN_SALT",
+  // S3 options with no host of their own; the region only signs once an endpoint is set.
+  "PDS_BLOBSTORE_S3_REGION",
+  "PDS_BLOBSTORE_S3_REQUEST_TIMEOUT_MS",
+  "PDS_BLOBSTORE_S3_UPLOAD_TIMEOUT_MS",
+  // Limits, timeouts, flags and names. The two that loosen SSRF on request-driven fetches name no destination;
+  // preflight's C14 judges them.
+  "PDS_PORT",
+  "PDS_VERSION",
+  "PDS_SERVICE_NAME",
+  "PDS_DEV_MODE",
+  "PDS_DISABLE_SSRF_PROTECTION",
+  "PDS_INVITE_REQUIRED",
+  "PDS_INVITE_INTERVAL",
+  "PDS_INVITE_EPOCH",
+  "PDS_ACCEPTING_REPO_IMPORTS",
+  "PDS_MAX_REPO_IMPORT_SIZE",
+  "PDS_REPO_BACKFILL_LIMIT_MS",
+  "PDS_MAX_SUBSCRIPTION_BUFFER",
+  "PDS_ENABLE_DID_DOC_WITH_SESSION",
+  "PDS_OAUTH_TRUSTED_CLIENTS",
+  "PDS_ACTOR_STORE_CACHE_SIZE",
+  "PDS_BLOB_UPLOAD_LIMIT",
+  "PDS_DID_CACHE_MAX_TTL",
+  "PDS_DID_CACHE_STALE_TTL",
+  "PDS_ID_RESOLVER_TIMEOUT",
+  "PDS_FETCH_MAX_RESPONSE_SIZE",
+  "PDS_SQLITE_DISABLE_WAL_AUTO_CHECKPOINT",
+  "PDS_RATE_LIMITS_ENABLED",
+  "PDS_RATE_LIMIT_BYPASS_IPS",
+  "PDS_PROXY_ALLOW_HTTP2",
+  "PDS_PROXY_BODY_TIMEOUT",
+  "PDS_PROXY_HEADERS_TIMEOUT",
+  "PDS_PROXY_MAX_RESPONSE_SIZE",
+  "PDS_PROXY_MAX_RETRIES",
+  "PDS_PROXY_PREFER_COMPRESSED",
 ];
-/** Every key matching OUTBOUND_NAME that the wrapper has judged; PDS_HOSTNAME is checked on its own. */
 export const CLASSIFIED_KEYS: ReadonlySet<string> = new Set([
-  "PDS_HOSTNAME",
+  ...LOCAL_NAMES,
   ...MAIL,
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
   ...PROVIDER_SELECTORS,
+  ...S3_FORM,
   ...NOT_OUTBOUND,
 ]);
 /**
- * The drift check on the pinned env.js (Amendment 3, S2'): every key it reads whose name matches OUTBOUND_NAME and that
- * is not classified, plus every classified key it no longer reads. It refuses a file where any read is not one of
- * @atproto/common's env helpers with a literal name, so a changed form cannot pass as "no keys".
+ * Variables of the PDS's process, which no env.js reads and so no drift test can see (verify at 94ab296, B5 and B6):
+ * proxy-from-env, bundled with axios in @did-plc/lib 0.0.4, reads both spellings and npm's (dist/index.js:19222-19271)
+ * for every PLC call; NODE_USE_ENV_PROXY routes Node's global fetch too, per Node v24.19.0 doc/api/cli.md; and
+ * NODE_OPTIONS can turn that on, or load any module (--import, --require).
+ */
+const PROXY_KEYS = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "npm_config_proxy",
+  "npm_config_http_proxy",
+  "npm_config_https_proxy",
+  "NODE_USE_ENV_PROXY",
+];
+/** The only NODE_OPTIONS accepted: the heap size the dev PDS sets (deployment/compose.dev.yaml). */
+const HEAP_SIZE_ONLY = /^--max-old-space-size=[1-9][0-9]*$/;
+
+// The only import line of the pinned env.js, and its four helpers (@atproto/common 0.8.5 dist/env.js).
+const HELPERS_IMPORT = "import { envBool, envInt, envList, envStr } from '@atproto/common';";
+/**
+ * The drift check on the pinned env.js (Amendment 3, S2'): every key it reads that is not classified, plus every
+ * classified key it no longer reads. It refuses a file that could reach the environment any other way than one of
+ * the four helpers called with a literal name (verify at 94ab296, S1): no `process`, no import but the helpers', each
+ * helper named only in that import and in a read, and no key-shaped name outside a read.
  */
 export function outboundDrift(envJs: string): string[] {
-  // Any space or line break before the parenthesis is still a call, so it counts as a read (Codex on #803).
-  const reads = [...envJs.matchAll(/\benv[A-Za-z]*\s*\(/g)].length;
+  const count = (pattern: RegExp) => [...envJs.matchAll(pattern)].length;
   const keys = [...envJs.matchAll(/\benv(?:Str|Int|Bool|List)\('([A-Z][A-Z0-9_]*)'\)/g)].map(
     (match) => match[1] as string,
   );
-  if (keys.length === 0 || keys.length !== reads) return ["env.js reads a key in a form this check does not parse"];
+  const imports = envJs.split("\n").filter((line) => /\b(?:import|require)\b/.test(line));
+  const parsed =
+    keys.length > 0 &&
+    count(/\bprocess\b/g) === 0 &&
+    imports.length === 1 &&
+    imports[0] === HELPERS_IMPORT &&
+    count(/\benv(?:Str|Int|Bool|List)\b/g) === keys.length + 4 &&
+    count(/\benv[A-Za-z]*\s*\(/g) === keys.length &&
+    count(/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/g) === keys.length;
+  if (!parsed) return ["env.js reads a key in a form this check does not parse"];
   const read = new Set(keys);
   return [
-    ...[...read]
-      .filter((key) => OUTBOUND_NAME.test(key) && !CLASSIFIED_KEYS.has(key))
-      .map((key) => `${key} unclassified`),
+    ...[...read].filter((key) => !CLASSIFIED_KEYS.has(key)).map((key) => `${key} unclassified`),
     ...[...CLASSIFIED_KEYS].filter((key) => !read.has(key)).map((key) => `${key} no longer read`),
   ];
 }
 
 /** The only PDS variables read; Docker prints these and no other, so its secrets never reach this process. */
 const PDS_KEYS = [
-  "PDS_HOSTNAME",
-  "PDS_SERVICE_HANDLE_DOMAINS",
+  ...LOCAL_NAMES,
   ...MAIL,
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
   ...PROVIDER_SELECTORS,
+  ...S3_FORM,
+  ...PROXY_KEYS,
+  "NODE_OPTIONS",
 ];
 /** One PEM certificate and nothing else. */
 const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$/;
@@ -241,9 +352,44 @@ function checkLocalStack(stack: LocalStack, docker: Docker): { host: string; ca:
     refuse("a handle domain is not local");
   }
   if (MAIL.some((name) => (pdsEnv.get(name) ?? "") !== "")) refuse("the PDS has a mail server set");
+  checkProcess(pdsEnv);
+  checkProviders(pdsEnv);
   checkOutbound(docker, pdsEnv, isLocal);
   checkPdsVolume(docker, pds);
   return { host: pdsHost, ca };
+}
+
+/** No proxy, and NODE_OPTIONS at most the heap size: the PDS's process connects only where its keys say. */
+function checkProcess(env: Map<string, string>): void {
+  for (const name of PROXY_KEYS) {
+    if ((env.get(name) ?? "") !== "") refuse(`${name} is set, so the PDS sends requests through a proxy`);
+  }
+  const options = env.get("NODE_OPTIONS") ?? "";
+  if (options !== "" && !HEAP_SIZE_ONLY.test(options)) refuse("NODE_OPTIONS is not only a heap size");
+}
+
+/**
+ * No provider that names no host of its own: no KMS, hCaptcha or lexicon authority, and a bucket only on a judged
+ * endpoint, path style (envBool's "true" or "1", @atproto/common 0.8.5 dist/env.js:12-19) and a static key id, so
+ * the AWS SDK's own credential lookup never runs (config.js:61-67).
+ */
+function checkProviders(env: Map<string, string>): void {
+  const set = (name: string): boolean => (env.get(name) ?? "") !== "";
+  if (set("PDS_PLC_ROTATION_KEY_KMS_KEY_ID")) refuse("PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS");
+  if (set("PDS_HCAPTCHA_SITE_KEY")) refuse("PDS_HCAPTCHA_SITE_KEY is set, so the PDS calls hCaptcha");
+  if (set("PDS_LEXICON_AUTHORITY_DID")) {
+    refuse("PDS_LEXICON_AUTHORITY_DID is set, so the PDS resolves lexicons through that DID");
+  }
+  if (!set("PDS_BLOBSTORE_S3_BUCKET")) return;
+  if (!set("PDS_BLOBSTORE_S3_ENDPOINT")) {
+    refuse("PDS_BLOBSTORE_S3_BUCKET is set without PDS_BLOBSTORE_S3_ENDPOINT, so the PDS uses AWS S3");
+  }
+  if (!["true", "1"].includes(env.get("PDS_BLOBSTORE_S3_FORCE_PATH_STYLE") ?? "")) {
+    refuse("PDS_BLOBSTORE_S3_FORCE_PATH_STYLE is not true, so the S3 host is the bucket's subdomain");
+  }
+  if (!set("PDS_BLOBSTORE_S3_ACCESS_KEY_ID")) {
+    refuse("PDS_BLOBSTORE_S3_ACCESS_KEY_ID is unset, so the AWS SDK looks up credentials itself");
+  }
 }
 
 /**
@@ -254,11 +400,6 @@ function checkLocalStack(stack: LocalStack, docker: Docker): { host: string; ca:
  */
 function checkOutbound(docker: Docker, env: Map<string, string>, isLocal: (name: string) => boolean): void {
   if ((env.get("PDS_DID_PLC_URL") ?? "") === "") refuse("PDS_DID_PLC_URL is unset, so the PDS uses the public PLC");
-  const set = (name: string): boolean => (env.get(name) ?? "") !== "";
-  if (set("PDS_BLOBSTORE_S3_BUCKET") && !set("PDS_BLOBSTORE_S3_ENDPOINT")) {
-    refuse("PDS_BLOBSTORE_S3_BUCKET is set without PDS_BLOBSTORE_S3_ENDPOINT, so the PDS uses AWS S3");
-  }
-  if (set("PDS_PLC_ROTATION_KEY_KMS_KEY_ID")) refuse("PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS");
   const onStack = (host: string): boolean =>
     loopback(host.replace(/^\[(.*)\]$/, "$1")) ||
     isLocal(host) ||
@@ -330,6 +471,8 @@ function containerEnv(docker: Docker, id: string, keys: readonly string[]): Map<
   const wanted = new Map<string, string>();
   for (const line of printed.split("\n").filter((line) => line !== "")) {
     const pair = JSON.parse(line) as string;
+    // A name set twice is refused: which value the process sees is the runtime's choice (runc keeps the last).
+    if (wanted.has(pair.slice(0, pair.indexOf("=")))) refuse("a container variable is set twice");
     wanted.set(pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1));
   }
   return wanted;
