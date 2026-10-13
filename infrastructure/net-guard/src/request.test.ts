@@ -214,6 +214,7 @@ describe("guardedRequest", () => {
     for (const url of [
       "http://db:2582/",
       "http://plc:2583/",
+      "http://plc:25820/",
       "http://plc/",
       "https://plc:2582/",
       "http://plc.directory/",
