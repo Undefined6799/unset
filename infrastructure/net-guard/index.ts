@@ -3,7 +3,7 @@
 export { type Classification, classifyAddress, isInternalName, normaliseHost } from "./src/classify.ts";
 export { resolveTxt, type TxtOptions, type TxtResolver } from "./src/dns.ts";
 export { type FetchDefaults, guardedFetch, libraryFetch } from "./src/libraryFetch.ts";
-export { atproto, internalPolicy, type Policy, plc } from "./src/policies.ts";
+export { atproto, internalPolicy, localPlc, type Policy, plc } from "./src/policies.ts";
 export { type AddressClass, RANGES, type Range } from "./src/ranges.ts";
 export {
   createNetGuard,

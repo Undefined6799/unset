@@ -29,3 +29,12 @@ export function internalPolicy(name: string, origins: readonly string[]): Policy
   if (origins.length === 0 || bad.length > 0) throw new TypeError("internal policy origins must be http(s) origins");
   return { name, kind: "internal", origins: [...origins] };
 }
+
+/**
+ * The local stack's own PLC directory (P1.34y; architecture record 2026-10-13-local-plc, Amendment 4): one exact origin,
+ * plain http inside the stack, private or loopback answers (the internal kind); never a private range. It matches the
+ * URL preflight C28 requires under --env local (the did-method-plc server's default port, @did-plc/server 0.0.1
+ * src/bin.ts:18), and a change to one changes the other. net-guard stays env-blind: the policy is inert until a
+ * composition root selects it, which P1.34z allows only under UNSET_ENV=local.
+ */
+export const localPlc: Policy = internalPolicy("plc", ["http://plc:2582"]);

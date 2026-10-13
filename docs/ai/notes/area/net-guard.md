@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[config]]", "[[node-dns-lookup-hides-nxdomain]]"]
 replaced_by: null
 tags: [area, net-guard]
-checked: 2026-10-06
+checked: 2026-10-13
 ---
 # net-guard
 
@@ -25,6 +25,8 @@ sends all such traffic through this folder.
   rebinding.
 - `src/dns.ts`: TXT lookups on c-ares, bounded by our own timer.
 - `src/policies.ts`: named egress policies; every request names one. There is no model-provider policy in v1.
+  `plc` is plc.directory alone; `localPlc` is the local stack's PLC at exactly `http://plc:2582` (P1.34y), an
+  internal origin, never a private range, inert until a composition root selects it under UNSET_ENV=local (P1.34z).
 - `src/request.ts`: the guarded request, with no redirects and caps on time, bytes and decompressed bytes.
 - `src/libraryFetch.ts`: a fetch shape for libraries that take a custom fetch.
 
