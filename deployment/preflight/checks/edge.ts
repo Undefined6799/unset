@@ -40,6 +40,8 @@ export const EDGE_FILES = {
   read: (path: string): string => readFileSync(path, "utf8"),
 };
 
+const mountTarget = (mount: Mount): string => posix.normalize(mount.target).replace(/(.)\/+$/, "$1");
+
 /** A mount target at, under or above /etc/caddy, other than the sites directory itself. */
 const overCaddyConfig = (target: string): boolean =>
   target === "/" || target === CADDY_ROOT || target.startsWith(`${CADDY_ROOT}/`) || CADDY_ROOT.startsWith(`${target}/`);
@@ -54,7 +56,7 @@ export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string }
   if (edge === undefined) return missing("the edge service");
   const sites: Mount[] = [];
   for (const mount of edge.mounts) {
-    const target = posix.normalize(mount.target).replace(/(.)\/+$/, "$1");
+    const target = mountTarget(mount);
     if (target === SITES_TARGET) sites.push(mount);
     else if (overCaddyConfig(target)) return fail(`the edge mounts over ${target}`);
   }
