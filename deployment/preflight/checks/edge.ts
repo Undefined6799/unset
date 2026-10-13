@@ -23,6 +23,7 @@ import {
 } from "../../edge/caddyfile.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
+import { runsBuilt } from "./build.ts";
 import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
@@ -227,6 +228,7 @@ function sameDirectives(served: Directive[], own: Directive[] | null): boolean {
 const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
   [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
 };
+const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 /** The dev leaf's certificate and key (P1.34c), the only secrets a local edge reads. */
 const LOCAL_EDGE_SECRETS = ["local_tls_cert", "local_tls_key"];
 
@@ -234,8 +236,11 @@ const LOCAL_EDGE_SECRETS = ["local_tls_cert", "local_tls_key"];
 function localEdgeZones(inputs: Inputs): Outcome {
   const edge = inputs.compose.services.find((service) => service.name === "edge");
   if (edge === undefined) return missing("the edge service");
-  const built = edge.image === null && edge.build?.dockerfile === join(inputs.root, "deployment/edge/Dockerfile");
-  if (!built) return fail("the edge is not built from deployment/edge/Dockerfile");
+  // The one definition C25 uses too: exactly that Dockerfile, a build C26 passes, and no image beside it (the #789
+  // verify, N2: the path's text alone let a build C26 refuses through).
+  if (runsBuilt(edge, inputs, undefined, EDGE_DOCKERFILE) !== "yes") {
+    return fail(`the edge is not built from ${EDGE_DOCKERFILE}`);
+  }
   if (edge.secrets.some((name) => !LOCAL_EDGE_SECRETS.includes(name))) {
     return fail("the edge reads a secret other than the dev leaf's");
   }
