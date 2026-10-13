@@ -59,18 +59,20 @@ Plan §8 Phase 1 now opens with a first slice: **sign in with an atproto account
 (`apps/web → interfaces/http → domains/identity → infrastructure/pds → the development PDS`), then the rest follows as
 later slices (guideline §12). This file is in build order; step ids did not change, so every cross-reference holds.
 
-- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit 2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a, P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
-  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c,
-  P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m,
-  P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h,
-  P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i,
-  P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c,
-  P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l,
-  P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
-  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j, P1.33k, P1.33l, P1.34d, P1.34t, P1.33m, P1.34u,
-  P1.34v, P1.34y, P1.34z, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
-  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12,
-  P2.13 and the slice exit P2.13a.
+- **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
+  2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
+  P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b,
+  P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g,
+  P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r,
+  P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z,
+  P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
+  P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
+  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.34f, P1.34p,
+  P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a,
+  P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j,
+  P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.29s, P1.29t, P1.34g, P1.34i,
+  P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
+  23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -296,6 +298,7 @@ flowchart LR
   P1_29i["P1.29i token reader judges every outbound key"]
   P1_34c["P1.34c local app site with a dev leaf"]
   P1_34d["P1.34d PDS trusts one dev root"]
+  P1_33n["P1.33n site reader per-file only"]
   P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_11c["P1.11c keep the setup error on cleanup"]
   P1_11i["P1.11i edge tag removal and test labels"]
@@ -568,6 +571,8 @@ flowchart LR
   P1_29a --> P1_34d
   P1_27l --> P1_34d
   P1_34q --> P1_34d
+  P1_34d --> P1_33n
+  P1_34q --> P1_33n
   P1_33t --> P1_34d
   P1_33k --> P1_34d
   P1_34d --> P1_29t
@@ -608,6 +613,7 @@ flowchart LR
   P1_28p --> P1_28z
   P1_30u --> P1_34
   P1_33 --> P1_34
+  P1_33a --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
   P1_34 --> P1_33p
@@ -7054,11 +7060,11 @@ Tags: [SEC] [ALEX]            Depends on: P1.30y (merged, #659), P1.30a, P1.29 (
 As built: merged at 2026-10-13T12:26:10Z as `b9434e6` (#789, head 3435dbf) (merge data read by REST). It carried C7's
 crawler rule and C18's build-only edge on local (Amendment 2 of book edit 2026-10-13-p127l-to-third-lane), C25 and C27
 by exact Dockerfile identity (Amendment 4), and C15's `.localhost` handle rule, the narrowed C2 and the C23 and
-network-table pins (Amendment 5; read on main in Amendment 6: `checks/settings.ts:30-47`, `images.ts:50-64`,
-`lock.ts:17`). The local compose file and `local:up` moved to P1.34d (Amendment 4). #789 refuses the node base unbuilt
-on every service under local; architecture's Amendment 4 of 2026-10-13-p127l-local-gaps rules that this is the intended
-fail-closed state for now, but it would block P1.34d's `compose.local.yaml`, so P1.33k admits it before P1.34d, on
-`pds-token-reader` only.
+network-table pins (Amendment 5; read on main in Amendment 6: `checks/settings.ts:29-58`, `images.ts:45-79`,
+`lock.ts:16-21` (`lockOrNone`); book edit 2026-10-13-p127l-verify-owners, point 4). The local compose file and
+`local:up` moved to P1.34d (Amendment 4). #789 refuses the node base unbuilt on every service under local;
+architecture's Amendment 4 of 2026-10-13-p127l-local-gaps rules that this is the intended fail-closed state for now, but
+it would block P1.34d's `compose.local.yaml`, so P1.33k admits it before P1.34d, on `pds-token-reader` only.
 Slice 1, issue #671, product (`deployment/preflight/`, its tests, the local compose file and the `local:up` script),
 lane the third thread (moved for lane balance, book edit 2026-10-13-p127l-to-third-lane); book edit
 2026-10-12-p127l-p127m-local-unsigned-path, from architecture's 2026-10-12-p129-local-build-preflight (item 2). Alex's
@@ -7606,13 +7612,33 @@ the upstream ssl-cert snakeoil private key, and our image built from that base s
 - Our postgres uses only the socket and our own certs, so nothing should reference these files. If a config does, stop
   and report rather than keep the key.
 
-The mirror scan is in scope (Amendment 1, in #804, open at 8285c07): `mirror.yml:71-74` passes each runtime
-entry's `stripped` paths to Trivy as `--skip-dirs` and `--skip-files` (P1.29v, which Alex approved, "Skip stripped
-files", 2026-10-07T18:56:42Z), so listing the two paths clears the mirror's postgres finding with no allowlist, no
-loosening and no check-path edit. The stop condition was not triggered: only Debian's `pg_createcluster` reads
-`createcluster.conf`, and neither the entrypoint nor this repository runs it.
+The mirror scan is in scope (Amendment 1, as built in #804, merged at 2026-10-13T19:25:34Z as `47690a0`, head 8285c07,
+merge data read by REST; #804 also removes the dangling `ce275665.0` hash link to the deleted certificate, with a
+dangling-link test): `mirror.yml:71-74` passes each runtime entry's `stripped` paths to Trivy as `--skip-dirs` and
+`--skip-files` (P1.29v, which Alex approved, "Skip stripped files", 2026-10-07T18:56:42Z), so listing the two paths
+clears the mirror's postgres finding with no allowlist, no loosening and no check-path edit. The stop condition was not
+triggered: Debian's `pg_createcluster` hard-codes the snakeoil paths (`:457-458`; `createcluster.conf` mentions them
+only in a comment) and skips SSL when the key is missing, and neither the entrypoint nor this repository runs it.
 
 Done when the image test is green, check is green, and the PR body shows the test failing before the fix.
+
+---
+
+### P1.33s — Scan each image's exported filesystem
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.11k
+Slice 1, issue #807, check path (`.github/workflows/images.yml`, and the coverage comment in `mirror.yml`), kind/fix,
+lane the third thread; book edit 2026-10-13-p133s-exported-fs-secret-scan, from architecture's
+2026-10-13-image-secret-scan-gap. Not paused: it fixes a hole on main. It needs Alex's typed line "yes P1.33s
+.github/workflows exported-filesystem secret scan in images.yml".
+
+**What:** for each image `images.yml` builds, create a container without starting it, `docker export` its filesystem,
+and run `trivy rootfs --scanners secret --exit-code 1` on it, with the same Trivy pin, no ignore file and no skip. It
+runs beside the existing per-image scan; the vuln scan is unchanged. The coverage comments at `images.yml:74-76` and
+`mirror.yml:62-64` are corrected to say what each scan covers. Whether `scan` becomes a required check stays P1.27r's
+(after launch).
+
+Done when the new job is green on a branch with P1.11k merged and red on a fixture image that carries a test key, the
+PR shows both runs, and check is green.
 
 ---
 
@@ -7882,11 +7908,12 @@ P1.29t depends on it.
     (item 12) and the leaf mount; the dev-root mount and `NODE_EXTRA_CA_CERTS` on pds and web only; the local-name
     network aliases; and the PLC service, its network and its database wiring, which exist in the local file only, with
     the local pds, web and appview on that network (tap only once P3.02 confirms it resolves DIDs; architecture's
-    Amendments 4 and 5 of 2026-10-13-local-plc); the db service's one `init-local/` mount (P1.34u); and
-    `pds-token-reader`, a local-only service. Anything else, in either direction, fails with the key named. Preflight
-    still runs in full on the local file; the drift test catches a weakening that preflight would allow. This step moves
-    `pds-token-reader` from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it always exists in exactly
-    one file; until then it stays in the dev file and cannot run there (P1.33l refuses dev). The reader-only test
+    Amendments 4 and 5 of 2026-10-13-local-plc); the db service's one read-only `init-local/` mount (P1.34u's files,
+    mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction,
+    fails with the key named. Preflight still runs in full on the local file; the drift test catches a weakening that
+    preflight would allow. This step moves `pds-token-reader` and `seed` from `compose.dev.yaml` to `compose.local.yaml`
+    in the same PR, so each always exists in exactly one file; until then they stay in the dev file and cannot run there
+    (P1.33l and the seed guard refuse dev; architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The reader-only test
     (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
     `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). Until this step lands, `local:up`
     does not exist.
@@ -7896,16 +7923,35 @@ P1.29t depends on it.
     `sites/enabled`; today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77` refuses
     file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged. (Book edit
     2026-10-13-p127l-verify-owners, point 2: local-gaps Amendment 3 S2's C18 half, product, so SE-6 holds.) The reader's
-    fix for dev's directory mount is P1.34q's (point 1). A test runs the preflight on the real `compose.dev.yaml` under
-    `--env dev` and passes once P1.34q's reader fix is in (book edit 2026-10-13-p134o-after-791, Amendment 1).
+    fix for dev's directory mount is P1.34q's (point 1). A test runs the preflight on the real `compose.local.yaml`
+    under `--env local`, which admits builds, and must pass. The real `compose.dev.yaml` test under `--env dev` moves to
+    P1.27s, the step that makes it passable (it needs `deployment/images.lock.json` and an edge that is not `build:`);
+    no test is skipped or left red (book edit 2026-10-13-p127l-verify-owners, Amendment 1).
 13. A CI integration run: the local stack starts and the edge serves both names with the leaf. If a file mount on the
-    read-only root fails, stop and report; never add a writable layer or a placeholder.
+    read-only root fails, stop and report; never add a writable layer or a placeholder. If the run needs a `.github/`
+    change, that change is its own check step (P1.34d's check part, first), and it needs Alex's typed line.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
 
 Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
 tests pass, and check is green.
+
+---
+
+### P1.33n — Drop the directory form from the site reader
+Tags: [SEC] trusted            Depends on: P1.34d, P1.34q
+Slice 1, issue #810, trusted base (`deployment/edge/`), kind/refactor (kind/fix if the verifier finds it reachable),
+lane the third thread after P1.34d; book edit 2026-10-13-p133n-drop-sites-directory-form, from the coordinator's relay
+at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps Amendment 3 S2). The
+verifier found the directory form reachable in #809 only through a missing mode gate, which #809 fixes, so what remains
+is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out of #809.
+
+**What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, once P1.34d
+moves C18 to the `SiteMount` list. Only the per-file `SiteMount` form remains.
+
+Done when, red first, a test shows the reader itself refuses a directory mount under local (not only C18), and check
+is green.
 
 ---
 
@@ -8092,7 +8138,12 @@ passes, and check is green.
 
 ### P1.34m — Scan newly pinned runtime images in PR CI
 Tags: [SEC] [ALEX] (typed line, 2026-10-13T04:29:00Z)            Depends on: —
-As built: merged at 2026-10-13T12:24:30Z as `9c9cefa` (#785, head ed370d1) (merge data read by REST).
+As built: merged at 2026-10-13T12:24:30Z as `9c9cefa` (#785, head ed370d1) (merge data read by REST). For the next
+step that touches the scan (book edit 2026-10-13-p134m-after-785): F1, the pins time step guards each jq read and
+names the pin (a 200 body of non-objects, or imagetools output that is not an object, now ends in jq exit 5); F2, the
+annotation reports every lookup kind's status (orgs/ then users/), not only the last; N-b, the `done < <(jq …)` loops
+drop jq's status. The first mirror.yml run on main is the PDS pin's (ghcr.io/bluesky-social/pds:0.4.5037) first scan;
+its annotations go to the coordinator.
 Slice 1, issue #775, check paths (`.github/workflows/`: `mirror.yml` or `images.yml`, the lane picks one, and the
 selector's unit test), kind/build, lane Phase 2 from the start; book edit 2026-10-13-p134m-pr-scan-new-runtime-pins.
 From Alex's tap "Add a CI job" (2026-10-13T04:02:36Z). Not paused: every PR that changes the runtime lock after this
@@ -8263,7 +8314,8 @@ env must set `PDS_DID_PLC_URL`, by env:
 
 Done when red fixtures for local (unset, plc.directory, a public look-alike) and for dev (unset, the local URL, a
 look-alike) fail, dev with a non-0x40.space hostname and no complete report fails C21, the exact URL for each env
-passes, and check is green.
+passes, and check is green. Every existing `--env dev` pass fixture (P1.34d item 12's among them) carries a complete
+retirement-report fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
 
 ---
 
@@ -8275,9 +8327,11 @@ is trusted base (`.github/CODEOWNERS:131`), but `init-local/` is not covered. A 
 typed line "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
 
 **What:** add `/deployment/postgres/init-local/ @Undefined6799` to the trusted-base section of `.github/CODEOWNERS`,
-with its codeowners test row.
+with a test for it.
 
-Done when the codeowners test fails without the line, passes with it, and check is green.
+Done when a test in `scripts/workspace/codeowners.test.ts` reads the trusted-base section and requires
+`/deployment/postgres/init-local/`, fails without the line and passes with it, and check is green. (The file's existing
+checks only warn, so this is a new failing assertion.)
 
 ---
 
@@ -8289,13 +8343,15 @@ book edit 2026-10-13-local-plc-a6-steps.
 
 **What:**
 - A dedicated database and a least-privilege role for the PLC, created by a **local-only init file** in
-  `deployment/postgres/init-local/`. Only `compose.local.yaml` mounts it, on the db service (P1.34d's file); P1.34d's
-  drift test allowlists that one mount as local only. No shared role.
+  `deployment/postgres/init-local/`. No shared role. The db service's one read-only mount of it goes into
+  `compose.local.yaml` in P1.34v (product; P1.34d's drift test allowlists it), not here: this trusted-base step carries
+  only `init-local/` and tests that sit in it or under `tests/**/init-local/` (`scripts/guards/trusted-base.ts:248-254`,
+  `ridesAlong`).
 - `roles.json` and the shared init (`deployment/postgres/init/`) gain nothing, so dev and prod Postgres have no PLC
   role or database.
 
-Done when, red first, tests show the local init creates the role and database, `compose.dev.yaml` and P5.02's
-`compose.yaml` mount no `init-local/`, and `roles.json` has no PLC role, and check is green.
+Done when, red first, tests show the local init creates the role and database, and `roles.json` has no PLC role,
+and check is green.
 
 ---
 
@@ -8319,12 +8375,13 @@ the local file).
   touched, and a missing confirmation removes nothing (Amendment 5, point 2).
 - The local PDS env's `PDS_DID_PLC_URL` is its internal URL, and P1.34t's local arm names that exact URL. The dev
   stack (`compose.dev.yaml`, `dev-public.example.env`) has no PLC service and uses `https://plc.directory`.
-- This step adds the service, database wiring and network to P1.34d's `compose.local.yaml`; the drift test allows
-  exactly that difference.
+- This step adds the service, database wiring and network to P1.34d's `compose.local.yaml`, with the db service's
+  one read-only mount of P1.34u's `init-local/`; the drift test allows exactly those differences.
 - The image, by Alex's card (the coordinator asks; recommended: the upstream image, **local** stack only): either the
   upstream did-method-plc image pinned by digest, with a `localOnly: true` lock entry, pre-merge scan and age evidence;
   or a build from pinned upstream source on our node base. A local-only test fails the PLC image, service, network or
-  database in any compose file other than `compose.local.yaml`.
+  database in any compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml`
+  mounts `init-local/`.
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
@@ -8377,8 +8434,8 @@ Slice 1, issue #795, product, kind/refactor (move only), lane the third thread; 
 (Amendment 2), from architecture's Amendments 3 and 4 of 2026-10-13-p129h-local-token-reader. P1.33j depends on it.
 
 **What:** `resolveChecked` (C9's walk, with WALK_REASONS), `localDockerHost` and `hostWalk` move into a new generic
-`shared/host-pin` package (workspace files per `scripts/workspace/new-workspace.md`), with `childEnv` if the token
-wrapper needs it whole. Move only means:
+`shared/host-pin` package that knows nothing of compose or preflight (workspace files per
+`scripts/workspace/new-workspace.md`), with `childEnv` if the token wrapper needs it whole. Move only means:
 - Function bodies move byte for byte, secrets.ts's private helpers included (followLink, components, entryProblem,
   FOREIGN_FILESYSTEMS, MAX_LINKS); secrets.ts imports them back. No copy is left behind.
 - The package owns `WalkInputs`; preflight's `checks/types.ts` imports and extends it, so it is declared once.
@@ -8386,11 +8443,12 @@ wrapper needs it whole. Move only means:
   catch-and-rethrow.
 - No new export beyond what the stack wrapper and the token wrapper import.
 
-Anything else (a renamed reason, a changed signature) is not move only: stop and report. If depcruise or the tsconfig
-references refuse the package, stop and report; never inline it.
+Anything else (a renamed reason, a changed signature, a new parameter) is not move only: stop and report. If depcruise
+or the tsconfig references refuse the package, stop and report; never inline it.
 
-Done when every existing test passes with only its imports edited, the PR body lists every line that is not a moved
-block, `git diff --color-moved=zebra` shows the rest as moved, and check is green.
+Done when every existing test (the C9 walk, localDockerHost, childEnv and stack tests) passes with only its imports
+edited, nothing else is in the PR, the PR body lists every line that is not a moved block, `git diff
+--color-moved=zebra` shows the rest as moved, and check is green.
 
 ---
 
@@ -8452,6 +8510,12 @@ Slice 1, issue #798, product (`tests/support/`, `tests/integration/`), lane the 
 2026-10-13-host-pin-steps (Amendment 4), from architecture's Amendment 3 of 2026-10-13-p129h-local-token-reader (S2').
 Not paused: it fixes a hole on main. The letter was reserved for a split of P1.29g that never happened (#554 merged
 whole), so it is free.
+As built: merged at 2026-10-13T19:25:16Z as `b22d8c6` (#803, head c1edecc) (merge data read by REST). It goes further
+than S2' for S3: the reader refuses any `PDS_BLOBSTORE_S3_BUCKET` outright, whatever the other S3 keys say, because the
+locked S3 client leaves the stack through metadata fallbacks, the AWS config file and bucket-name host rewrites that no
+env-name check can see; the S3 option keys count only with a bucket, and the endpoint key stays judged as a URL. The dev
+PDS keeps blobs on disk, so this removes no working configuration (architecture's Amendment 5 of
+2026-10-13-p129h-local-token-reader, confirmed 14:25Z as a tightening).
 
 **What:**
 - Every env key in the pinned `@atproto/pds` env.js (0.5.37) is classified. A set outbound key must hold a loopback
@@ -9467,7 +9531,7 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C18 | edge: the Caddy site for the PDS host (and every site with an upstream) imports `ratelimit.caddy` and carries `header_up -X-Forwarded-For`, `-X-Real-IP` and `-Forwarded` (read from the config the edge image or mount serves); with C7 and C12 this is plan §5.2's "three settings" |
 | C19 | moderation mail (phase-3 PI-6): `PDS_MODERATION_EMAIL_SMTP_URL` and `PDS_MODERATION_EMAIL_ADDRESS` present; same scheme rule as C11 (Mailpit never allowed). Without them the PDS drops every moderation receipt, alert and digest silently |
 | C20 | `PDS_MOD_SERVICE_*` absent (phase-5 F4: only `PDS_REPORT_SERVICE_*` may be set, from Phase 5) |
-| C21 | under `--env dev` whatever the hostname (P1.34t; architecture's Amendment 6 of 2026-10-13-local-plc, Q1), and when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL. Other hostnames skip it (PASS with the fixed reason "skipped: PDS_HOSTNAME is unset or a different host", as built by P1.30j) |
+| C21 | under `--env dev` whatever the hostname (P1.34t; architecture's Amendment 6 of 2026-10-13-local-plc, Q1), and when `PDS_HOSTNAME=0x40.space`: the committed `retirement-check` report (P1.33a) says part A complete (`retirement_part_a_complete`); report absent or incomplete → FAIL. Outside dev, other hostnames skip it (PASS with the fixed reason "skipped: PDS_HOSTNAME is unset or a different host", as built by P1.30j) |
 | C22 | when the env sets `VIDEO_MASTER_MAX_BYTES` (Phase 4 on): `PDS_BLOB_UPLOAD_LIMIT` is set and ≥ it (the PDS default is 5 MB; phase-4-part1 note 10); before Phase 4, PASS with the fixed reason "skipped: VIDEO_MASTER_MAX_BYTES is unset" (as built by P1.30j) |
 | C23 | prod only (P5.07b, decision 23): `FINGERPRINT_CHECK=arachnid` and `FAKE_FINGERPRINT_LIST` absent; dev and local skip it (PASS with the fixed reason "skipped: dev stage", as built by P1.30j); the server's own boot refusal (P5.07b) is the second guard |
 | C24 | host clock (findings F-16): `timedatectl show -p NTPSynchronized --value` prints `yes`, and when `chronyc` is installed `chronyc tracking` reports a system-time offset ≤ 1 s. Service-auth JWTs (60 s), `pds-admin` envelopes (`iat`/`exp`, 5 s of future leeway) and WebAuthn assertions assume a synchronised clock. Command missing or output unparsable → FAIL. Skipped only when `PDS_HOSTNAME` ends in `.localhost` (an agent's throwaway stack): PASS with the fixed reason "skipped: PDS_HOSTNAME ends in .localhost", as built by P1.30d |
@@ -11161,7 +11225,8 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   - `tap` (profile `tap`; dynamic mode pointed at the dev PDS; provisional until the P3.01 spike decides).
   - `edge` (P1.28 image; ports 80 and 443 published on the host's tailnet address in pure dev, or on the public
     interface only when P1.34 opens outside access).
-  - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand).
+  - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand; local only: P1.34d moves it to
+    `compose.local.yaml` with `pds-token-reader`, architecture's Amendment 7 of 2026-10-13-local-plc, Q3).
 - `dev-precheck` (run by `npm run dev:up` before `docker compose up`): refuses when `0x40.space` answers
   `describeServer` with a DID that is neither the expected dev PDS DID nor absent (protects against the old
   prototype PDS), when the env names a production host, and when `preflight --env dev` (P1.30) fails.
@@ -11626,7 +11691,8 @@ Done when `npm run check` and the image tests are green, every red fixture fails
 space-name fixture is read correctly.
 
 **Size:** P1.29g stays one PR. If it passes about 550 lines, items 5 and 6 split out as P1.29i, owned by Phase 1, after
-P1.29g and before P1.29p; the PR says so under "What I am unsure about".
+P1.29g and before P1.29p; the PR says so under "What I am unsure about". (Lapsed: #554 merged P1.29g whole as
+718fb69; P1.29i is now the outbound-key step, book edit 2026-10-13-host-pin-steps, Amendment 4.)
 
 ---
 
@@ -12611,8 +12677,8 @@ Edge case (moved from P1.34): Address changes while DDNS lags → the probe fail
 copies cover logins.
 
 **Moved from P1.34, public gates** (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5): P1.34's Done-when
-is the private names and dev-root certificates, the re-run tailnet probe and the C-checks; every public gate and its
-evidence lives here.
+is the private names and dev-root certificates, the read-only dev-stack check (describeServer, health) and the C-checks;
+every public gate and its evidence lives here.
 - The edge obtains its Let's Encrypt certificate (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
 - `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no
   bypass key or IPs), public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit);
@@ -12801,7 +12867,7 @@ sequenceDiagram
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
@@ -12819,10 +12885,12 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
 - Names: non-public only, either the dev root's constrained hosts or names under `int.unset.sh` (then the root's
   `nameConstraints` change to match, P1.34d's runbook). No `*.0x40.me` handles are issued and no public DNS changes. The
   tailnet stack is the dev stack: `PDS_DID_PLC_URL=https://plc.directory` (P1.34t's dev arm), no PLC service, no seed
-  runs on it and no probe creates an identity on it (the first check above is a read; book edit
-  2026-10-13-local-plc-a6-steps); test identities stay on the local stack's PLC (architecture's Amendment 4 of
+  or probe runs on it (the first check above is a read-only call; architecture's Amendment 6 of 2026-10-13-local-plc,
+  S3); test identities stay on the local stack's PLC (architecture's Amendment 4 of
   2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps).
-- The `0x40.space` hostname, and so P1.33a, belong to the public opening (P1.33p), not to this tailnet move.
+- P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
+  (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
+  the public opening (P1.33p).
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
 domain) with no PDS behind it; the **development PDS on `0x40.space`** hosts the lexicon authority account until
@@ -12889,7 +12957,7 @@ A. unset.ac
  4. Send the agent the registrar name and that DNSSEC and the lock are on.
 B. 0x40.space: moved to P1.33p (book edit 2026-10-13-batch-47-after-771, G-1); steps 5 and 6 belong to P1.33p.
 C. Prerequisites on the old prototype (P1.33a, formerly L.01 part A)
- 7. (Moved to P1.33p: P1.33a gates the public opening, not this tailnet move; see Target.)
+ 7. P1.33a part A complete (C21 under dev; see Target; architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
 D. Dev PDS fit for the authority
  8. Generate the dev PDS recovery key on the offline machine with the P0.12 runbook (a key separate from the
     authority's own offline keys; recorded as its own P0.12 inventory row); put only its did:key in PDS_RECOVERY_DID_KEY, BEFORE any account that matters
@@ -12908,7 +12976,8 @@ D. Dev PDS fit for the authority
 12. Power and recovery: the homelab and router on a UPS; both restart automatically after power loss.
 13. Store the secrets bundle (pds.env with the admin password and the PDS's PLC rotation key, cosign and age
     material excluded) separately encrypted, per secrets-bundle.md.
-14. Confirm with the agent that one backup and one restore test have run, and the re-run tailnet probe is green.
+14. Confirm with the agent that one backup and one restore test have run, and the read-only dev-stack check
+    (describeServer, health) is green.
 ```
 
 **Agent prepares and verifies:**

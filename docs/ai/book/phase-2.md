@@ -3864,7 +3864,8 @@ Outputs: the ADR with one row per item below (result, evidence path, PDS image d
   Alex's written acceptance of the branding.
 
 Algorithm (experiment protocol; each item: steps → pass → fail and what changes downstream):
-  1. Email 2FA can be enabled at `/account`. Steps: create a test account on the dev PDS, sign in at `/account`, enable
+  1. Email 2FA can be enabled at `/account`. Steps: create a test account on the local stack's PDS (a scripted test
+     identity, so local only; architecture's Amendment 7 of 2026-10-13-local-plc, Q2), sign in at `/account`, enable
      email 2FA. Pass: the setting persists after sign-out/in. Fail → **stop**: `pds-gatekeeper` comes back on the table;
      the book gets a new step before P2.26.
   2. OAuth sign-in challenges for it. Steps: with 2FA on, sign in to `unset.sh` (P2.05 flow). Pass: the PDS asks for the
@@ -4099,8 +4100,10 @@ Outputs:
     {pdsHost}) that anyone can look up. It is for the test only and will be closed before launch; its record in the
     public directory stays, marked closed." and a required tick "I understand"; `POST /signup` without the tick →
     `join.test_track_ack_required`. The tick is not stored (no new personal data).
-  - `wipe-test-track.sh`: refuses to run unless `ENV=dev`, the compose project `name:` is the dev name, and the PDS
-    hostname is `0x40.space`. It also refuses while `plc.directory/<authority DID>` names `https://0x40.space` as the
+  - `wipe-test-track.sh`: refuses to run unless either `ENV=dev`, the compose project `name:` is the dev name, and the
+    PDS hostname is `0x40.space` (the human testers' accounts; it seeds nothing), or `ENV=local`, the project
+    `unset-local` and a `.localhost` PDS host (the CI round-trip only; architecture's Amendment 7 of
+    2026-10-13-local-plc, Q2). It also refuses while `plc.directory/<authority DID>` names `https://0x40.space` as the
     lexicon authority's PDS (the authority moves in P5.02a; phase-1-part2 note 12). It **never deletes the dev PDS data
     volume** (P1.34 change control: the dev PDS is not scratch). Test accounts are removed one by one with
     `com.atproto.admin.deleteAccount`, run by Alex (only Alex holds the dev PDS admin password, P1.34 custody): the script
@@ -4165,7 +4168,8 @@ Done when (tests):
     path under the PDS data directory.
   - `wipe.waits_for_account_deletion`: one listed DID still active on the fake PDS → the script does not reach the
     data-deleting part.
-  - `wipe.dev_roundtrip` (CI on a throwaway compose project): seed, delete the test accounts, wipe → `app` schema and the
+  - `wipe.local_roundtrip` (CI on the local stack, `ENV=local`, project `unset-local`): seed, delete the test accounts,
+    wipe → `app` schema and the
     `drafts/` prefix empty; the PDS volume and the keep-list accounts untouched.
   - Alex's checklist items 1–5 (with 2a) ticked in the README's status table (manual).
 Reuse (provisional — for reuse review): none in the prototype (it had no test track); `compose-overlay-must-pin-project-name`
