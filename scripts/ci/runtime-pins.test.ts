@@ -43,6 +43,21 @@ describe("changed runtime pins", () => {
     ]);
   });
 
+  test("a_digest_or_tag_change_alone_is_selected", () => {
+    // Renovate re-pins a digest under the same tag, or moves the tag to an image it already pinned by digest; either
+    // change alone selects the pin, and so does a ref change alone.
+    const base = { x: entry(1) };
+    expect(changedRuntimePins(base, { x: entry(1, { digest: sha(2) }) })).toEqual([
+      { source: `docker.io/library/r1:1@${sha(2)}`, stripped: [] },
+    ]);
+    expect(changedRuntimePins(base, { x: entry(1, { tag: "2" }) })).toEqual([
+      { source: `docker.io/library/r1:2@${sha(1)}`, stripped: [] },
+    ]);
+    expect(changedRuntimePins(base, { x: entry(1, { ref: "docker.io/library/q1" }) })).toEqual([
+      { source: `docker.io/library/q1:1@${sha(1)}`, stripped: [] },
+    ]);
+  });
+
   test("a_pin_moved_to_runtime_is_selected", () => {
     expect(changedRuntimePins({ x: entry(1, { stage: "build" }) }, { x: entry(1) })).toEqual([
       { source: source(1), stripped: [] },
@@ -64,6 +79,17 @@ describe("changed runtime pins", () => {
       expect(() => changedRuntimePins({}, bad), JSON.stringify(bad)).toThrow();
     }
     expect(() => changedRuntimePins({ x: { ...entry(1), tag: 2 } }, {})).toThrow();
+    // A stage is exactly "runtime" or "build": a missing, non-string or differently spelled stage is refused, never
+    // read as build-only and skipped. A null stripped list is refused, not read as none.
+    for (const bad of [
+      { stage: 1 },
+      { stage: undefined },
+      { stage: "Runtime" },
+      { stage: "runtime " },
+      { stripped: null },
+    ]) {
+      expect(() => changedRuntimePins({}, { x: entry(1, bad) }), JSON.stringify(bad)).toThrow();
+    }
     // The selection reaches shell arguments and log lines, so a ref, tag or path that could carry a newline, a
     // workflow command or a glob is refused rather than passed on, even on a build-only entry.
     for (const bad of [

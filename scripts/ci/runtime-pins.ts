@@ -45,8 +45,8 @@ function runtimePins(lock: unknown): Map<string, RuntimePin> {
     const ref = field(entry.ref, REF, "ref", name);
     const source = `${ref}:${field(entry.tag, TAG, "tag", name)}@${field(entry.digest, DIGEST, "digest", name)}`;
     const stripped = strippedOf(entry.stripped, name);
-    if (typeof entry.stage !== "string") throw new Error(`lock entry ${name}: stage is malformed`);
-    if (entry.stage !== "runtime") continue;
+    if (entry.stage !== "runtime" && entry.stage !== "build") throw new Error(`lock entry ${name}: stage is malformed`);
+    if (entry.stage === "build") continue;
     pins.set(JSON.stringify([source, stripped]), { source, stripped });
   }
   return pins;
