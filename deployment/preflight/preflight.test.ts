@@ -1542,6 +1542,41 @@ describe("preflight C17 (P1.30t)", () => {
       const table = { default: { internal: false, members: ["edge", "web"] } };
       expect(await expectOnly("C17", { compose, networks: table })).toBe("FAIL C17 network_mode is set in pds");
     }
+    // P1.29h: `none` joins no network, so there is nothing for the table to check, but only the tools-profile reader
+    // may use it; on a service `up` starts it is still refused.
+    const none = COMPOSE.replace(
+      "    env_file: ../../unset-dev-env/pds.env",
+      "    env_file: ../../unset-dev-env/pds.env\n    network_mode: none",
+    );
+    const table = { default: { internal: false, members: ["edge", "web"] } };
+    expect(await expectOnly("C17", { compose: none, networks: table })).toBe("FAIL C17 network_mode is set in pds");
+  });
+
+  test("c17_tools_reader_has_no_network", async () => {
+    const reader = COMPOSE.replace(
+      "\nsecrets:",
+      "\n  pds-token-reader:\n    image: x\n    profiles: [tools]\n    network_mode: none\n    logging:\n      driver: none\nsecrets:",
+    );
+    // Only the reader may set logging (the parser), so a renamed copy drops it.
+    const unlogged = (text: string) => text.replace("    logging:\n      driver: none\n", "");
+    expect(reader).not.toBe(COMPOSE);
+    const lines = (await check({ compose: reader })).lines;
+    expect(lines.filter((line) => / C17\b/.test(line))).toEqual(["PASS C17 ok"]);
+    // Only that service (architecture, 2026-10-13 04:17Z): the tools profile under another name still fails.
+    const renamed = unlogged(reader.replace("  pds-token-reader:", "  reader:"));
+    const renamedLines = (await check({ compose: renamed })).lines;
+    expect(renamedLines.filter((line) => / C17\b/.test(line))).toEqual(["FAIL C17 network_mode is set in reader"]);
+    // By its exact name, never a prefix or a longer name; and only inside the tools profile (the parser admits no
+    // other profile).
+    const variants: [string, string][] = [
+      ["pds-token-reader-2", unlogged(reader.replace("  pds-token-reader:", "  pds-token-reader-2:"))],
+      ["pds-token", unlogged(reader.replace("  pds-token-reader:", "  pds-token:"))],
+      ["pds-token-reader", reader.replace("    profiles: [tools]\n", "")],
+    ];
+    for (const [name, compose] of variants) {
+      const result = (await check({ compose })).lines.filter((line) => / C17\b/.test(line));
+      expect(result, compose).toEqual([`FAIL C17 network_mode is set in ${name}`]);
+    }
   });
 
   test("c17_table_mismatch_each_direction", async () => {

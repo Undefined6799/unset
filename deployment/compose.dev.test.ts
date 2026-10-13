@@ -67,6 +67,26 @@ const runOnlyImages = (): Set<string> =>
       .map((b) => `${b.ref}:${b.tag}@${b.digest}`),
   );
 
+/** The token reader's name: the one service that runs the Node base unbuilt, and only in this file (P1.29h). */
+const TOKEN_READER = "pds-token-reader";
+/**
+ * The locked Node runtime base, run as shipped by the token reader alone, under the tools profile with no network
+ * (architecture record 2026-10-13-p129h-local-token-reader, Amendment 1 point 3). Every other Node service is built
+ * from our Dockerfiles.
+ */
+const isTokenReaderNode = (s: Service): boolean => {
+  const node = readLock().node;
+  return (
+    s.name === TOKEN_READER &&
+    s.build === null &&
+    s.image === `${node?.ref}:${node?.tag}@${node?.digest}` &&
+    s.profiles.length === 1 &&
+    s.profiles[0] === "tools" &&
+    s.networkMode === "none" &&
+    s.networks.length === 0
+  );
+};
+
 describe("compose.dev.yaml (P1.29)", () => {
   test("compose_dev_name_pinned", () => {
     // Vault note compose-overlay-must-pin-project-name: an overlay never lands in another env's project.
@@ -86,7 +106,61 @@ describe("compose.dev.yaml (P1.29)", () => {
         if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
         // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile, except a
         // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
-        if (s.build === null) expect(runOnly.has(s.image ?? ""), `${file} ${s.name}`).toBe(true);
+        if (s.build === null) {
+          expect(runOnly.has(s.image ?? "") || (file === FILE && isTokenReaderNode(s)), `${file} ${s.name}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  test("node_base_runs_unbuilt_only_for_the_token_reader", () => {
+    const reader = service(dev(), TOKEN_READER);
+    expect(isTokenReaderNode(reader)).toBe(true);
+    // Red fixtures (Amendment 1 point 3): the same image on another service, without the profile, or with a network.
+    expect(isTokenReaderNode({ ...reader, name: "web" })).toBe(false);
+    expect(isTokenReaderNode({ ...reader, profiles: [] })).toBe(false);
+    expect(isTokenReaderNode({ ...reader, networkMode: null, networks: ["db"] })).toBe(false);
+    expect(isTokenReaderNode({ ...reader, networkMode: "host" })).toBe(false);
+    expect(isTokenReaderNode({ ...reader, image: `${reader.image?.split("@")[0]}@sha256:${"0".repeat(64)}` })).toBe(
+      false,
+    );
+  });
+
+  test("pds_token_reader_reads_only_the_pds_volume", () => {
+    // The record, point 1: the volume read-only and the one reader script read-only; no env file, no env, no secret.
+    const reader = service(dev(), TOKEN_READER);
+    expect(reader.mounts).toEqual([
+      { type: "volume", source: "pdsdata", target: "/data", readOnly: true },
+      { type: "bind", source: "../tests/support/pds-email-token-read.ts", target: "/reader/read.ts", readOnly: true },
+    ]);
+    expect([reader.envFiles, reader.environment, reader.secrets, reader.ports, reader.dependsOn]).toEqual([
+      [],
+      [],
+      [],
+      [],
+      [],
+    ]);
+    // Amendment 2, B1: the token on its stdout reaches no log driver.
+    expect(reader.logging).toBe("none");
+    // The PDS keeps its database at /home/node/pds/account.sqlite, so the reader finds it at /data/pds.
+    expect(service(dev(), "pds").mounts).toContainEqual(
+      expect.objectContaining({ type: "volume", source: "pdsdata", target: "/home/node" }),
+    );
+    expect(readFileSync(join(DEPLOYMENT, "..", "tests/support/pds-email-token-read.ts"), "utf8")).toContain(
+      'const ACCOUNT_DB = "/data/pds/account.sqlite";',
+    );
+  });
+
+  test("pds_token_reader_only_in_the_dev_file", () => {
+    // Never in a non-dev compose file, and no other service carries a profile (the record, point 1).
+    const files = readdirSync(DEPLOYMENT, { recursive: true, encoding: "utf8" }).filter(
+      (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
+    );
+    for (const file of files) {
+      for (const s of parseCompose(read(file), file).services) {
+        const allowed = file === FILE && s.name === TOKEN_READER;
+        expect(s.name === TOKEN_READER && !allowed, `${file} ${s.name}`).toBe(false);
+        expect(s.profiles.length > 0 && !allowed, `${file} ${s.name}`).toBe(false);
       }
     }
   });
@@ -145,7 +219,8 @@ describe("compose.dev.yaml (P1.29)", () => {
       expect(h.readOnly, s.name).toBe(true);
       // Every service names its numeric non-root user: a mounted secret is owned by that uid (C9 record (vi)).
       expect(h.user, s.name).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
-      expect(h.restart, s.name).toBe(s.name === "migrate" ? "no" : "unless-stopped");
+      // A one-off run (migrate, and the token reader under `compose run`) never restarts.
+      expect(h.restart, s.name).toBe(s.name === "migrate" || s.name === TOKEN_READER ? "no" : "unless-stopped");
       expect(
         s.tmpfs.some((t) => t.target === "/tmp"),
         s.name,

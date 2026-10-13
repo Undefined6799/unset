@@ -170,6 +170,48 @@ describe("compose subset", () => {
       );
     }
   });
+  // P1.29h (architecture record 2026-10-13-p129h-local-token-reader, Amendment 1 item 2): a profile keeps a service out
+  // of `up`, so it is read only as exactly `[tools]` on a service with no network at all, the local token reader.
+  test("profiles_only_tools_with_no_network", () => {
+    const tools = "    profiles: [tools]\n    network_mode: none\n";
+    expect(parseCompose(`${base}${tools}`, "c.yaml").services[0]?.profiles).toEqual(["tools"]);
+    expect(parseCompose(base, "c.yaml").services[0]?.profiles).toEqual([]);
+    for (const [yaml, why] of [
+      ["    profiles: [debug]\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: [tools, debug]\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: []\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: tools\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: [tools]\n", "a service with profiles must set network_mode: none"],
+      ["    profiles: [tools]\n    networks: [db]\n", "a service with profiles must set network_mode: none"],
+      ["    profiles: [tools]\n    network_mode: host\n", "a service with profiles must set network_mode: none"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    expect(() => parseCompose(`${base}    profiles: ["\${P}"]\n    network_mode: none\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:5: $ in profiles"),
+    );
+  });
+  // P1.29h (architecture record 2026-10-13-p129h-local-token-reader, Amendment 2, B1): the token reader's stdout is a
+  // credential, so no log driver may keep it. `logging` is exactly {driver: none}, only on that service, which must set
+  // it.
+  test("logging_only_none_on_the_token_reader", () => {
+    const reader = (extra: string) =>
+      `name: unset-dev\nservices:\n  pds-token-reader:\n    image: x\n    profiles: [tools]\n    network_mode: none\n${extra}`;
+    const none = "    logging:\n      driver: none\n";
+    expect(parseCompose(reader(none), "c.yaml").services[0]?.logging).toBe("none");
+    expect(parseCompose(base, "c.yaml").services[0]?.logging).toBeNull();
+    for (const [yaml, line, why] of [
+      [reader(""), 4, "pds-token-reader must set logging: {driver: none}"],
+      [reader("    logging:\n      driver: json-file\n"), 8, "logging must be exactly {driver: none}"],
+      [reader("    logging:\n      driver: local\n"), 8, "logging must be exactly {driver: none}"],
+      [reader(`${none}      options:\n        max-size: 1m\n`), 8, "logging must be exactly {driver: none}"],
+      [reader("    logging: none\n"), 7, "logging must be exactly {driver: none}"],
+      [`${base}${none}`, 6, "logging is allowed only on pds-token-reader"],
+    ] as const) {
+      expect(() => parseCompose(yaml, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:${line}: ${why}`));
+    }
+  });
+
   // P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 2 in 2026-10-12-batch33-codex-rulings):
   // each hardening and limit key is read in one shape, and a value the ruling does not allow is refused by key name.
   test("hardening_keys_read_in_the_subset", () => {
@@ -634,6 +676,8 @@ type Theirs = {
       ports?: { target: number; published?: string; host_ip?: string }[];
       networks?: Record<string, unknown>;
       network_mode?: string;
+      profiles?: string[];
+      logging?: { driver?: string };
       volumes?: { type: string; source?: string; target: string; read_only?: boolean }[];
       read_only?: boolean;
       cap_drop?: string[];
@@ -688,6 +732,8 @@ function oursAsCompose(file: string) {
           ports: service.ports,
           networks: [...service.networks].sort(),
           networkMode: service.networkMode,
+          profiles: service.profiles,
+          logging: service.logging,
           hardening: service.hardening,
           // One file here, so its directory is the project directory Compose resolves a context from.
           build:
@@ -730,6 +776,8 @@ function theirsAsOurs(theirs: Theirs) {
           })),
           networks: Object.keys(service.networks ?? {}).sort(),
           networkMode: service.network_mode ?? null,
+          profiles: service.profiles ?? [],
+          logging: service.logging?.driver ?? null,
           hardening: {
             readOnly: service.read_only ?? null,
             capDrop: service.cap_drop ?? [],
