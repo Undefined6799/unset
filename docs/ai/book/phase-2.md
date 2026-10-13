@@ -4040,7 +4040,7 @@ Done when (tests, red first): `edge_from_mirror_by_digest` and `edge_no_dl3026_i
 
 ### P2.26d — Drop the edge dual spelling from the lock test
 Tags: [SEC]            Depends on: P2.26c
-Slice 2, issue pending (board), product (`deployment/images/images.test.ts`), kind/build; book edit
+Slice 2, issue #821, product (`deployment/images/images.test.ts`), kind/build; book edit
 2026-10-13-p127s-split, Amendment 2: the strict cleanup architecture requires (21:02Z), so P2.26b's caddy-only
 tolerance does not outlive its reason.
 
