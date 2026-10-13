@@ -46,14 +46,15 @@ describe("tests/support/pds-email-token.ts with Docker", () => {
         expect(made.code, made.err).toBe(0);
         const keys = ["PDS_HOSTNAME", "PDS_CRAWLERS", "PDS_EMPTY", "PDS_UNSET"];
         const printed = docker(["inspect", "--format", envFormat(keys), name], call);
-        expect(printed).toEqual({
-          code: 0,
-          out:
-            '"PDS_HOSTNAME=pds.example.test"\n' +
-            '"PDS_CRAWLERS=http://plc:2582/a=b,https://relay.localhost"\n' +
-            '"PDS_EMPTY="\n\n',
-          err: "",
-        });
+        expect(printed.code, printed.err).toBe(0);
+        // In the container's own Config.Env order, which the daemon decides (CI's printed them sorted, this
+        // container's Docker in creation order); the reader keys each line by name, so only the set is pinned.
+        const lines = printed.out.split("\n").filter((line) => line !== "");
+        expect(lines.sort()).toEqual([
+          '"PDS_CRAWLERS=http://plc:2582/a=b,https://relay.localhost"',
+          '"PDS_EMPTY="',
+          '"PDS_HOSTNAME=pds.example.test"',
+        ]);
       },
       () => void docker(["rm", "-f", name], call),
     );
