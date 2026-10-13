@@ -10,6 +10,7 @@ import { join, posix } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { describe, expect, test } from "vitest";
 import { POSTGRES_IMAGE } from "../../tests/support/postgres.ts";
+import { VENDOR_IMAGES } from "./vendor.ts";
 
 const DEPLOYMENT = join(import.meta.dirname, "..");
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
@@ -44,12 +45,6 @@ type Lock = Record<string, Base>;
 const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPACE.test(ref);
-/**
- * Vendor images we run as shipped, each by its exact name, never a host or namespace, and never a base: Bluesky's PDS
- * (Alex, "Allow pinned", 2026-10-07T13:00:19Z; P1.29a). Each is a run-only lock entry, scanned by the mirror workflow
- * at the shipped gate (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
- */
-const VENDOR_IMAGES = new Set(["ghcr.io/bluesky-social/pds"]);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
 const PINNED = /^([a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+)(?::([\w][\w.-]{0,127}))?@(sha256:[0-9a-f]{64})$/;
 
