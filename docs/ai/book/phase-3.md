@@ -95,7 +95,7 @@ These are the names this file builds on. P3.00 replaces each with what was actua
 | P1.18 | `guardedRequest(policy, {url, method, headers?, body?, timeoutMs, maxBytes, accept?}) → {status, headers, body}` and `guardedFetch(policy, defaults)` (on `undici.request`); policies `fixed` and one `public` policy (`atproto`) whose internal-host exception is our own PDS (P1.18a); errors `NetGuardError.code` `egress.*`; P1.18b proxy mode and the `egress-public` proxy for Tap |
 | P1.22 | locale and theme resolution; on public pages: theme by `prefers-color-scheme`, locale by `Accept-Language` with a URL override (plan §5.4 "Caching") |
 | P1.28 | Caddy config with log filter; admin-auth XRPC denied |
-| P1.29t | the dev stack, tested (P1.29k to P1.29t): `compose.dev.yaml` with Postgres, dev PDS (`.0x40.space`), seeded accounts |
+| P1.29t | the stacks, tested (P1.29k to P1.29t): `compose.dev.yaml` with Postgres and the dev PDS, and seeded accounts on the local stack (architecture's Amendment 7 of 2026-10-13-local-plc, Q2) |
 | P1.30 | deploy preflight (this phase adds checks) |
 | P1.31 | `lexicons.validate(nsid, value) → ok \| ValidationError`; lexicon `key` types; NSID constants |
 | P1.33 | Tailscale with Tailnet Lock; `admin` reachable on the host's tailnet address only |
@@ -2911,9 +2911,10 @@ Algorithm (contract: the checks):
      the result is recorded. The check from outside our network (for example Bluesky's public `resolveHandle` and a
      DNS-over-HTTPS lookup) moves to P5.02a and the launch gate, once the production PDS exists.
   3. Suspend: P3.21 three runs in a row.
-  4. Deletion: delete a test account on the dev PDS by the user path and, separately, by a held delete with a
-     fake-clocked `pds-admin`; after each, P3.07's coverage query finds zero rows, the outbox is empty, Tap no
-     longer tracks the DID, a tombstone exists, and replaying a buffered event for it changes nothing.
+  4. Deletion: delete a test account on the local stack's PDS (a scripted test identity, so local only; architecture's
+     Amendment 7 of 2026-10-13-local-plc, Q2) by the user path and, separately, by a held delete with a fake-clocked
+     `pds-admin`; after each, P3.07's coverage query finds zero rows, the outbox is empty, Tap no longer tracks the DID,
+     a tombstone exists, and replaying a buffered event for it changes nothing.
   5. Ported tests: P3.04's mapping check passes; `invariants.pending.json` is empty.
   6. Runbooks 1–8 have dated rehearsal lines.
   7. Budgets: `admin` + `pds-admin` + audit under the 3,000-line warning (plan §5.7), or the warning noted.
