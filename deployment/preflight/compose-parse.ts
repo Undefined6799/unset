@@ -46,6 +46,8 @@ export type Service = {
   secrets: string[];
   /** `profiles`: empty, or exactly ["tools"] on a service with `network_mode: none` (P1.29h). */
   profiles: string[];
+  /** `logging`: null, or "none" on the token reader, which must set it (P1.29h, Amendment 2 B1). */
+  logging: "none" | null;
 };
 export type Build = { context: string; dockerfile: string };
 export type Tmpfs = { target: string; options: string | null };
@@ -306,6 +308,7 @@ const SERVICE_KEYS = new Set([
   "depends_on",
   "secrets",
   "profiles",
+  "logging",
 ]);
 
 /** What a service may name in its own file: named volumes, top-level secrets and other services. */
@@ -334,6 +337,7 @@ function service(r: Reader, name: string, spec: unknown, scope: Scope): Service 
     dependsOn: dependsOn(r, spec.get("depends_on", true), scope.services),
     secrets: serviceSecrets(r, spec.get("secrets", true), scope.secrets),
     profiles: profiles(r, spec),
+    logging: logging(r, name, spec),
   };
 }
 
@@ -352,6 +356,28 @@ function profiles(r: Reader, spec: YAMLMap): string[] {
     r.fail(node, "a service with profiles must set network_mode: none");
   }
   return ["tools"];
+}
+
+/** The one service that may set `logging`, and must: its stdout is the email token (P1.29h). */
+const TOKEN_READER = "pds-token-reader";
+
+/**
+ * `logging` exactly `{driver: none}`, on the token reader only, which must set it: with driver none Docker keeps no
+ * log of the token, while `compose run`'s attached stdout still reaches the caller (architecture record
+ * 2026-10-13-p129h-local-token-reader, Amendment 2, B1). Any other driver or any option is refused.
+ */
+function logging(r: Reader, name: string, spec: YAMLMap): "none" | null {
+  const node = spec.get("logging", true);
+  if (node === undefined) {
+    if (name === TOKEN_READER) r.fail(spec, `${TOKEN_READER} must set logging: {driver: none}`);
+    return null;
+  }
+  if (name !== TOKEN_READER) r.fail(node, `logging is allowed only on ${TOKEN_READER}`);
+  const driver = isMap(node) && node.items.length === 1 ? node.get("driver", true) : undefined;
+  if (driver === undefined || r.text(driver, "logging driver") !== "none") {
+    r.fail(node, "logging must be exactly {driver: none}");
+  }
+  return "none";
 }
 
 /**

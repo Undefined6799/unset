@@ -140,6 +140,8 @@ describe("compose.dev.yaml (P1.29)", () => {
       [],
       [],
     ]);
+    // Amendment 2, B1: the token on its stdout reaches no log driver.
+    expect(reader.logging).toBe("none");
     // The PDS keeps its database at /home/node/pds/account.sqlite, so the reader finds it at /data/pds.
     expect(service(dev(), "pds").mounts).toContainEqual(
       expect.objectContaining({ type: "volume", source: "pdsdata", target: "/home/node" }),

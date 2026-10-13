@@ -197,6 +197,10 @@ services:
     image: docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33
     profiles: [tools]
     network_mode: none
+    # The token is a credential: no log driver keeps a copy, and the attached stdout still reaches the wrapper
+    # (architecture record 2026-10-13-p129h-local-token-reader, Amendment 2, B1).
+    logging:
+      driver: none
     user: "1000:1000"
     read_only: true
     cap_drop: [ALL]
