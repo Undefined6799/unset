@@ -937,29 +937,41 @@ describe("local stack files (P1.34c)", () => {
 
   test("local_files_never_in_the_image", () => {
     // COPY and ADD from the build context, in any case and indentation Docker accepts (moby/buildkit
-    // frontend/dockerfile/docs/reference.md, "Format": instructions are not case-sensitive), after joining each
-    // backslash continuation and dropping comment lines inside it, as the parser does first (parser.go:168, :329-346).
-    // Flags are dropped, the last word is the destination, and a copy is from a build stage only when one of its words
-    // is the --from flag.
+    // frontend/dockerfile/docs/reference.md, "Format": instructions are not case-sensitive), read as BuildKit reads
+    // them (frontend/dockerfile/parser, master): a line ending in an unescaped backslash joins the next, comment lines
+    // inside dropped (parser.go:168, :329-346); only the leading `--` words are flags, and a bare `--` ends them
+    // (split_command.go, extractBuilderFlags); the rest is a JSON string array when it parses as one, else words
+    // (line_parsers.go, parseMaybeJSONToList). The last source word is the destination, and a copy is from a build stage
+    // only when one of its flags is --from.
+    const args = (rest: string): string[] => {
+      try {
+        const parsed: unknown = JSON.parse(rest);
+        if (Array.isArray(parsed) && parsed.every((part) => typeof part === "string")) return parsed;
+      } catch {
+        // Not JSON: the shell form, read as words below.
+      }
+      return rest.split(/\s+/).filter((word) => word !== "");
+    };
+    const copy = (line: string): { flags: string[]; words: string[] } | undefined => {
+      const [, keyword, rest = ""] = /^(\S+)\s*(.*)$/.exec(line.trim()) ?? [];
+      if (!/^(COPY|ADD)$/i.test(keyword ?? "")) return undefined;
+      const flags = rest.match(/^(?:--\S+(?:\s+|$))*(?:--(?:\s+|$))?/)?.[0] ?? "";
+      const words = args(rest.slice(flags.length));
+      return { flags: flags.split(/\s+/).filter((flag) => flag !== "" && flag !== "--"), words };
+    };
     const sources = (text: string): string[] =>
       text
-        .replaceAll(/\\[ \t]*\r?\n(?:[ \t]*(?:#.*)?\r?\n)*/g, "")
+        .replaceAll(/(^|[^\\])\\[ \t]*\r?\n(?:[ \t]*(?:#.*)?\r?\n)*/gm, "$1")
         .split("\n")
-        .map((line) => line.trim().split(/\s+/))
-        .filter(([keyword]) => /^(COPY|ADD)$/i.test(keyword ?? ""))
-        .filter((words) => !words.some((word) => /^--from=/i.test(word)))
-        .flatMap((words) =>
-          words
-            .slice(1)
-            .filter((word) => !word.startsWith("--"))
-            .slice(0, -1),
-        );
+        .flatMap((line) => copy(line) ?? [])
+        .filter(({ flags }) => !flags.some((flag) => /^--from=/i.test(flag)))
+        .flatMap(({ words }) => words.slice(0, -1));
     expect(sources(dockerfile)).toEqual(["Caddyfile", "snippets/", "sites/pds.caddy"]);
     for (const line of ["copy local/ /etc/caddy/local/", "  COPY local/app.caddy /etc/caddy/", "ADD local/ /srv/"]) {
       expect(sources(`${dockerfile}${line}\n`), line).toContain(line.trim().split(/\s+/)[1]);
     }
     // Continuations are joined before the keyword is read, as BuildKit does (parser.go:168, :329-346), and a line is
-    // a build-stage copy only when one of its words is the --from flag.
+    // a build-stage copy only when one of its leading flags is --from.
     for (const text of [
       "COPY \\\n    local/ /etc/caddy/local/",
       "COPY --chown=65532:65532 \\\n    local/ /srv/",
@@ -968,6 +980,14 @@ describe("local stack files (P1.34c)", () => {
       "COPY\\\n local/ /srv/",
       "COPY \\\n# a comment\n    local/ /srv/",
       "COPY --exclude=--from=x local/ /srv/",
+      // An escaped backslash ends no line (BuildKit's `([^\\])\\[ \t]*$`), so the COPY after it is its own
+      // instruction; only the leading `--` words are flags (split_command.go, extractBuilderFlags), so a later
+      // `--from=` word is a source; and the JSON form is read as BuildKit reads it (line_parsers.go, parseMaybeJSONToList).
+      "LABEL x=\\\\\nCOPY local/ /srv/",
+      "COPY local/ --from=x* /etc/caddy/local/",
+      'COPY ["local/","/etc/caddy/local/"]',
+      'COPY --chown=65532:65532 [ "local/", "/srv/" ]',
+      "COPY -- --from=x local/ /srv/",
     ]) {
       expect(sources(`${dockerfile}${text}\n`), text).toContain("local/");
     }
