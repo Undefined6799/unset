@@ -437,12 +437,14 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
 /**
  * The edge's config as Caddy v2.11.7 reads it (P1.28e; architecture amendment 7 to
  * 2026-10-07-p130s-networks-and-caddyfile-reader): `edgeDir`'s Caddyfile with `import snippets/*.caddy` replaced by
- * `edgeDir/snippets` and `import sites/enabled/*.caddy` by `sitesDir`, each in byte order (doImport uses
- * filepath.Glob, whose glob() sorts the names, go src/path/filepath/match.go). Each import line must appear exactly
- * once; an included file is not scanned for imports again, so any other file import reaches readCaddyfile and fails.
+ * `edgeDir/snippets` and `import sites/enabled/*.caddy` by the enabled sites, each in byte order (doImport uses
+ * filepath.Glob, Caddy v2.11.7 caddyconfig/caddyfile/parse.go:445, whose glob() sorts the names, Go 1.27.2
+ * src/path/filepath/match.go:320-336; it skips the dotfiles a leading `*` matches, parse.go:455-468). Each import
+ * line must appear exactly once; an included file is not scanned for imports again, so any other file import reaches
+ * readCaddyfile and fails.
  *
  * Containment (P1.28f; amendment 8, point 1): every path is resolved, and each resolved path must stay where it
- * belongs. `sitesDir` lies inside `edgeDir/sites/`; a snippet is a regular file inside `edgeDir/snippets/`; a site is
+ * belongs. `sitesDir` is `edgeDir/sites/` itself, as the dev stack mounts it (P1.34q), or lies inside it; a snippet is a regular file inside `edgeDir/snippets/`; a site is
  * a regular file, or a symlink to one, inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
  * beyond that count, and a file swapped between `kind` and `read`, since this is a build-time reader over a checkout.
  * Any error it throws carries no value from `env` (P1.30h).
@@ -450,13 +452,15 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
  * In the "local" mode (P1.34a, P1.34o), `local/app.caddy` is read as one more enabled site and `local/tls.caddy` in
  * place of `snippets/tls.caddy`, as the local stack's two read-only file mounts place them; each must be a regular file
  * inside local/, and no other file there is read (architecture record 2026-10-13-p127l-local-gaps, item 1). `sitesDir`
- * stays inside sites/ in both modes. In either mode a file outside
+ * stays inside sites/ in both modes. Only the local mode takes the enabled sites as a list of file mounts in place of
+ * `sitesDir` (P1.34q; local-gaps Amendment 3 S2), checked by `mountedSites`; C18 still passes a directory there until
+ * P1.34d moves it to the list. In either mode a file outside
  * local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and APP_UPSTREAM must differ from the
  * PDS ones.
  */
 export function readEdgeConfig(
   edgeDir: string,
-  sitesDir: string,
+  sitesDir: string | readonly SiteMount[],
   env: Env,
   files: EdgeFiles,
   mode: EdgeMode = "shipped",
@@ -464,8 +468,20 @@ export function readEdgeConfig(
   return unechoed(env, () => readEdgeTree(edgeDir, sitesDir, env, files, mode));
 }
 
+/** One read-only file mount at /etc/caddy/sites/enabled/`name`: the host file it binds and its name there (P1.34q). */
+export type SiteMount = { source: string; name: string };
+
 /** `readEdgeConfig` before its errors are scrubbed. */
-function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFiles, mode: EdgeMode): Caddyfile {
+function readEdgeTree(
+  edgeDir: string,
+  sitesDir: string | readonly SiteMount[],
+  env: Env,
+  files: EdgeFiles,
+  mode: EdgeMode,
+): Caddyfile {
+  if (typeof sitesDir !== "string" && mode !== "local") {
+    throw new CaddyfileError("site file mounts are read only in the local mode");
+  }
   distinctAppValues(env);
   const root = resolved(files, edgeDir, "the edge directory");
   const sites: Bound = { path: `${root}/sites`, area: "sites/" };
@@ -476,9 +492,11 @@ function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFi
   if (mode === "local" && resolved(files, local.path, "the local directory") !== local.path) {
     throw new CaddyfileError("local/ leaves the edge directory");
   }
-  const enabled = resolved(files, sitesDir, "the enabled sites directory");
-  if (!enabled.startsWith(`${sites.path}/`))
-    throw new CaddyfileError("the enabled sites directory is not inside sites/");
+  if (typeof sitesDir === "string") {
+    const enabled = resolved(files, sitesDir, "the enabled sites directory");
+    if (enabled !== sites.path && !enabled.startsWith(`${sites.path}/`))
+      throw new CaddyfileError("the enabled sites directory is not inside sites/");
+  }
   const caddyfile = entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false);
   const lines = localOnlyChecked(files, caddyfile, "Caddyfile", local).split("\n");
   for (const line of FILE_IMPORTS) {
@@ -496,6 +514,7 @@ function readEdgeTree(edgeDir: string, sitesDir: string, env: Env, files: EdgeFi
   const expanded = lines.map((line) => {
     if (line === FILE_IMPORTS[0]) return globbed(files, snippets.path, [snippets], false, line, read);
     if (line === FILE_IMPORTS[1]) {
+      if (typeof sitesDir !== "string") return mountedSites(files, sitesDir, sites, local, read);
       return globbed(files, sitesDir, [sites], true, line, read, mode === "local" ? local : null);
     }
     return line;
@@ -580,6 +599,48 @@ function globbed(
       if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
       if (mounted !== null && name === MOUNTED_SITE) return read(mounted.path, name, [mounted], false);
       return read(dir, name, bounds, links);
+    })
+    .join("\n");
+}
+
+/**
+ * The text of the local stack's enabled sites, given as its file mounts (P1.34q; architecture record
+ * 2026-10-13-p127l-local-gaps, Amendment 3 S2): exactly one mount for every `*.caddy` in sites/, under its own name,
+ * plus local/app.caddy as MOUNTED_SITE, and nothing else. Each source is the regular file itself, never a link or a
+ * directory, so the mount binds what the reader reads; then each is read in byte order, as Caddy's glob over the mount
+ * targets reads them, under `entry`'s containment and hard-link rules.
+ */
+function mountedSites(
+  files: EdgeFiles,
+  mounts: readonly SiteMount[],
+  sites: Bound,
+  local: Bound,
+  read: Reader,
+): string {
+  const expected = new Map<string, Bound>();
+  for (const name of files.list(sites.path).filter((n) => n.endsWith(".caddy"))) expected.set(name, sites);
+  if (expected.has(MOUNTED_SITE)) {
+    throw new CaddyfileError(`${MOUNTED_SITE}: an enabled site has the mounted app site's name`);
+  }
+  expected.set(MOUNTED_SITE, local);
+  const seen = new Set<string>();
+  for (const { source, name } of mounts) {
+    if (files.kind(source).type !== "file") throw new CaddyfileError(`${name}: the mount is not one regular file`);
+    const bound = expected.get(name);
+    if (bound === undefined) throw new CaddyfileError(`${name}: not a site the local stack mounts`);
+    if (resolved(files, source, name) !== `${bound.path}/${name}`) {
+      throw new CaddyfileError(`${name}: not mounted from ${bound.area}${name}`);
+    }
+    if (seen.has(name)) throw new CaddyfileError(`${name}: mounted more than once`);
+    seen.add(name);
+  }
+  const names = [...expected.keys()].sort();
+  for (const name of names) if (!seen.has(name)) throw new CaddyfileError(`${name}: not mounted`);
+  return names
+    .map((name) => {
+      if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
+      const bound = expected.get(name) as Bound;
+      return read(bound.path, name, [bound], false);
     })
     .join("\n");
 }
