@@ -415,7 +415,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27o | Edge /data and /config owned by caddy (trusted base) | [SEC] | P1.34e | `phase-1.md` |
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k | `phase-1.md` |
 | P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v, P1.34z | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
@@ -998,6 +998,9 @@ flowchart TD
   P1_34v --> P1_34z
   P1_34y --> P1_34z
   P1_34z --> P1_29s
+  P1_29i --> P1_29s
+  P1_33j --> P1_29s
+  P1_33k --> P1_29s
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33j

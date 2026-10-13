@@ -546,6 +546,9 @@ flowchart LR
   P1_34v --> P1_34z
   P1_34y --> P1_34z
   P1_34z --> P1_29s
+  P1_29i --> P1_29s
+  P1_33j --> P1_29s
+  P1_33k --> P1_29s
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33j
@@ -10829,8 +10832,9 @@ P1.29h, P1.29s, P1.29t.
    but without B2' and S2' of architecture's Amendment 3 of 2026-10-13-p129h-local-token-reader. Those are now P1.33j
    (B2', the shared socket pin, after P1.33h) and P1.29i (S2', every outbound key) (book edit 2026-10-13-host-pin-steps,
    Amendments 3 and 4).
-9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h, P1.34t, P1.34v and P1.34z, book
-   edit 2026-10-13-local-plc-steps): `scripts/dev-seed.ts` and
+9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i,
+   P1.33j and P1.33k, book edits 2026-10-13-local-plc-steps and 2026-10-13-host-pin-steps Amendment 5, so the seed never
+   runs the token reader before its holes are closed): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring and their tests
    below. `dev-seed` creates accounts through the dev PDS and, on `local` only, confirms their email through P1.29h's
    reader and the real `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one
