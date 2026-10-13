@@ -36,15 +36,17 @@ function visible(doc: string): string {
     .join("\n");
 }
 
-const cells = (line: string): string[] =>
-  line
+const cells = (raw: string): string[] => {
+  const line = raw.trimEnd();
+  return line
     .slice(1, line.endsWith("|") ? -1 : undefined)
     .split("|")
     .map((c) => c.trim());
+};
 
 /** The status table's rows as cells: the lines after the header and its separator, up to the first non-table line. */
 function statusRows(source: string): string[][] | undefined {
-  const doc = visible(source);
+  const doc = visible(source.replaceAll("\r\n", "\n"));
   const header = HEADER.exec(doc);
   if (header === null) return undefined;
   const lines = doc.slice(header.index).split("\n").slice(2);

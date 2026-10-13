@@ -81,7 +81,8 @@ Every incident is recorded, whether or not it was reported. PIPEDA keeps each re
 breach occurred (SOR/2018-64 s. 6); Quebec keeps it at least 5 years after we became aware (A-2.1, r. 3.1 s. 8). We keep
 5 years, the longer of the two [lawyer to confirm: L19]. This repository is public, so the register is kept outside it,
 in Alex's own records, with these columns: became aware; incident period; circumstances; information involved; number of
-people (and in Quebec); risk found and why; reports and notices sent, with dates; measures taken.
+people (and in Quebec); risk found and why; reports and notices sent, with dates; whether a public notice was given, and
+why (A-2.1, r. 3.1 s. 7(7)); measures taken.
 
 Sources read 2026-10-12: https://laws-lois.justice.gc.ca/eng/acts/P-8.6/page-3.html,
 https://laws-lois.justice.gc.ca/eng/regulations/SOR-2018-64/FullText.html,

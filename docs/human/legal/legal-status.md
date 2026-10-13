@@ -13,7 +13,7 @@ Status is one of: `to do`, `in progress`, `submitted`, `done`.
 | Lawyer hour booked | to do | — | — | Alex books it and sends the L rows below |
 | Arachnid Shield application (P1.37a) | to do | — | — | P1.37a |
 | L1 no duty or authority to search (Act s. 6) | to do | — | — | Lawyer hour |
-| L2 report addresses to Cybertip.ca (Act s. 2; Regs s. 2, 3) | to do | — | — | Lawyer hour |
+| L2 report addresses to Cybertip.ca, our own service's included (Act s. 2; Regs s. 2, 10) | to do | — | — | Lawyer hour |
 | L3 written police notice for our own service (Act s. 3; Regs s. 11) | to do | — | — | Lawyer hour |
 | L4 suspected versus matched material: duties and timing | to do | — | — | Lawyer hour |
 | L5 written child sexual material in comments | to do | — | — | Lawyer hour |

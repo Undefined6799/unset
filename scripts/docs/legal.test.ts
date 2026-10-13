@@ -36,6 +36,13 @@ test("legal_status_dates_are_real", () => {
   expect(statusProblems(table("| G | submitted | 2028-02-29 | — | wait |"))).toEqual([]);
 });
 
+test("legal_status_tolerates_trailing_space_and_crlf", () => {
+  expect(statusProblems(table("| A | to do | — | — | x |   ", "| B | to do | — | — | x |"))).toEqual([]);
+  expect(
+    statusProblems(table("| A | to do | — | — | x |", "| B | to do | — | — | x |").replaceAll("\n", "\r\n")),
+  ).toEqual([]);
+});
+
 test("legal_status_table_not_empty_or_hidden", () => {
   expect(statusProblems(HEADER)).toEqual(["legal-status.md table has no rows"]);
   const hidden = (doc: string) =>
