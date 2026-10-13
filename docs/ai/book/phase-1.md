@@ -67,10 +67,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c,
   P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l,
   P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
-  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j, P1.33k, P1.33l, P1.34d, P1.34t, P1.34u, P1.34v,
-  P1.34y, P1.34z, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37,
-  P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and
-  the slice exit P2.13a.
+  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j, P1.33k, P1.33l, P1.34d, P1.34t, P1.33m, P1.34u,
+  P1.34v, P1.34y, P1.34z, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
+  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12,
+  P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -283,6 +283,7 @@ flowchart LR
   P1_34q["P1.34q local edge sites as per-file mounts"]
   P1_33t["P1.33t tls import in every edge site"]
   P1_34t["P1.34t pin the PLC URL per environment"]
+  P1_33m["P1.33m local Postgres init owned"]
   P1_34u["P1.34u local PLC role and database"]
   P1_34v["P1.34v local PLC in the local stack ALEX"]
   P1_34y["P1.34y net-guard allows the local PLC host"]
@@ -545,6 +546,7 @@ flowchart LR
   P1_34o --> P1_34q
   P1_27l --> P1_33t
   P1_34t --> P1_34u
+  P1_33m --> P1_34u
   P1_34u --> P1_34v
   P1_34d --> P1_34v
   P1_34d --> P1_34u
@@ -8265,11 +8267,25 @@ passes, and check is green.
 
 ---
 
+### P1.33m — Own the local Postgres init in CODEOWNERS
+Tags: [SEC] [ALEX] (typed line)            Depends on: —
+Slice 1, issue #808, check path (`.github/CODEOWNERS` and its codeowners test row), lane the third thread; book edit
+2026-10-13-local-plc-a6-steps, from architecture's Amendment 6 of 2026-10-13-local-plc, S4. `/deployment/postgres/init/`
+is trusted base (`.github/CODEOWNERS:131`), but `init-local/` is not covered. A tightening, but the path needs Alex's
+typed line "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
+
+**What:** add `/deployment/postgres/init-local/ @Undefined6799` to the trusted-base section of `.github/CODEOWNERS`,
+with its codeowners test row.
+
+Done when the codeowners test fails without the line, passes with it, and check is green.
+
+---
+
 ### P1.34u — Give the local PLC its own role and database
-Tags: [SEC] trusted            Depends on: P1.34t, P1.34d
-Slice 1, issue #781, trusted base (`deployment/postgres/init-local/`, with a CODEOWNERS entry if the trusted-base
-section does not already cover it), lane the third thread; book edit 2026-10-13-local-plc-steps, with
-architecture's Amendment 6 of 2026-10-13-local-plc, S4.
+Tags: [SEC] trusted            Depends on: P1.34t, P1.34d, P1.33m
+Slice 1, issue #781, trusted base (`deployment/postgres/init-local/`, owned in CODEOWNERS by P1.33m), lane the third
+thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 6 of 2026-10-13-local-plc, S4, and
+book edit 2026-10-13-local-plc-a6-steps.
 
 **What:**
 - A dedicated database and a least-privilege role for the PLC, created by a **local-only init file** in
@@ -12801,10 +12817,11 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   CGNAT address (100.64/10) as it may refuse a private one, stop and bring architecture the exact error and the PDS
   version. No workaround.
 - Names: non-public only, either the dev root's constrained hosts or names under `int.unset.sh` (then the root's
-  `nameConstraints` change to match, P1.34d's runbook). No `*.0x40.me` handles are issued and no public DNS
-  changes. The tailnet stack is the dev stack: `PDS_DID_PLC_URL=https://plc.directory` (P1.34t's dev arm), no PLC
-  service, and no seeds or probes run on it; test identities stay on the local stack's PLC (architecture's Amendment 4
-  of 2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps).
+  `nameConstraints` change to match, P1.34d's runbook). No `*.0x40.me` handles are issued and no public DNS changes. The
+  tailnet stack is the dev stack: `PDS_DID_PLC_URL=https://plc.directory` (P1.34t's dev arm), no PLC service, no seed
+  runs on it and no probe creates an identity on it (the first check above is a read; book edit
+  2026-10-13-local-plc-a6-steps); test identities stay on the local stack's PLC (architecture's Amendment 4 of
+  2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps).
 - The `0x40.space` hostname, and so P1.33a, belong to the public opening (P1.33p), not to this tailnet move.
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account

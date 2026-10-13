@@ -168,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 275 steps: 251 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 276 steps: 252 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -397,7 +397,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34q | Read local edge sites as per-file mounts (trusted base) | [SEC] | P1.34o | `phase-1.md` |
 | P1.33t | Require the tls import in every edge site | [SEC] | P1.27l | `phase-1.md` |
 | P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
-| P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d | `phase-1.md` |
+| P1.33m | Own the local Postgres init in CODEOWNERS (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d, P1.33m | `phase-1.md` |
 | P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card) | P1.34u, P1.34d | `phase-1.md` |
 | P1.34y | Allow only the local PLC host in net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
@@ -644,6 +645,7 @@ flowchart TD
   P1_34q["P1.34q Local edge sites as per-file mounts"]
   P1_33t["P1.33t tls import in every edge site"]
   P1_34t["P1.34t Pin the PLC URL per environment"]
+  P1_33m["P1.33m Local Postgres init owned"]
   P1_34u["P1.34u Local PLC role and database"]
   P1_34v["P1.34v Local PLC in the local stack"]
   P1_34y["P1.34y net-guard allows the local PLC host"]
@@ -995,6 +997,7 @@ flowchart TD
   P1_27l --> P1_33t
   P1_33t --> P1_34d
   P1_34t --> P1_34u
+  P1_33m --> P1_34u
   P1_34u --> P1_34v
   P1_34d --> P1_34v
   P1_34d --> P1_34u
