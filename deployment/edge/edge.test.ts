@@ -884,9 +884,20 @@ describe("edge image", () => {
   });
 
   test("edge_runtime_non_root", () => {
-    const runtime = dockerfile.split(/^FROM .*$/m).at(-1) ?? "";
-    expect(runtime.match(/^USER .*$/gm)).toEqual(["USER 65532:65532"]);
-    expect(runtime.slice(runtime.indexOf("USER ")).match(/^RUN /m)).toBeNull();
+    const runtimeOf = (text: string) => text.split(/^\s*FROM\s.*$/im).at(-1) ?? "";
+    // One USER, the caddy uid, and no RUN after it, in any case and indentation Docker accepts (reference.md,
+    // "Format": instructions are not case-sensitive).
+    const nonRoot = (text: string): boolean => {
+      const runtime = runtimeOf(text);
+      const users = runtime.match(/^\s*USER\s.*$/gim) ?? [];
+      const afterUser = runtime.slice(Math.max(0, runtime.search(/^\s*USER\s/im)));
+      return users.join() === "USER 65532:65532" && !/^\s*RUN\s/im.test(afterUser);
+    };
+    expect(nonRoot(dockerfile)).toBe(true);
+    for (const line of ["user 0:0", "  USER 0:0", "USER\t0", 'run ["/bin/true"]', '  RUN ["/bin/true"]']) {
+      expect(nonRoot(`${dockerfile}${line}\n`), line).toBe(false);
+    }
+    const runtime = runtimeOf(dockerfile);
     expect(runtime).toMatch(/^RUN setcap cap_net_bind_service=\+ep \/usr\/bin\/caddy \\$/m);
     expect(runtime).toMatch(/HEALTHCHECK [\s\S]*http:\/\/127\.0\.0\.1:8081\/health/);
   });
