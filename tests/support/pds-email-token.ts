@@ -80,6 +80,12 @@ const OUTBOUND_URLS = [
   "PDS_MOD_SERVICE_URL",
   "PDS_REPORT_SERVICE_URL",
 ];
+/**
+ * Keys that pick a provider whose endpoint is AWS's own when none is set (Codex on #803): a bucket with no
+ * PDS_BLOBSTORE_S3_ENDPOINT is AWS S3 (@atproto/pds 0.5.37 dist/config/config.js:51-60), and a KMS key id is AWS KMS,
+ * which takes no endpoint at all (dist/config/secrets.js:26-30). The pattern above does not match them.
+ */
+const PROVIDER_SELECTORS = ["PDS_BLOBSTORE_S3_BUCKET", "PDS_PLC_ROTATION_KEY_KMS_KEY_ID"];
 /** host:port addresses the PDS connects to; the nameservers are a comma list. */
 const OUTBOUND_ADDRESSES = ["PDS_REDIS_SCRATCH_ADDRESS", "PDS_HANDLE_BACKUP_NAMESERVERS"];
 /**
@@ -106,6 +112,7 @@ export const CLASSIFIED_KEYS: ReadonlySet<string> = new Set([
   ...MAIL,
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
+  ...PROVIDER_SELECTORS,
   ...NOT_OUTBOUND,
 ]);
 /**
@@ -130,7 +137,14 @@ export function outboundDrift(envJs: string): string[] {
 }
 
 /** The only PDS variables read; Docker prints these and no other, so its secrets never reach this process. */
-const PDS_KEYS = ["PDS_HOSTNAME", "PDS_SERVICE_HANDLE_DOMAINS", ...MAIL, ...OUTBOUND_URLS, ...OUTBOUND_ADDRESSES];
+const PDS_KEYS = [
+  "PDS_HOSTNAME",
+  "PDS_SERVICE_HANDLE_DOMAINS",
+  ...MAIL,
+  ...OUTBOUND_URLS,
+  ...OUTBOUND_ADDRESSES,
+  ...PROVIDER_SELECTORS,
+];
 /** One PEM certificate and nothing else. */
 const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$/;
 const KNOWN_READER_REASONS = new Set<string>(Object.values(READER_REASONS));
@@ -240,6 +254,11 @@ function checkLocalStack(stack: LocalStack, docker: Docker): { host: string; ca:
  */
 function checkOutbound(docker: Docker, env: Map<string, string>, isLocal: (name: string) => boolean): void {
   if ((env.get("PDS_DID_PLC_URL") ?? "") === "") refuse("PDS_DID_PLC_URL is unset, so the PDS uses the public PLC");
+  const set = (name: string): boolean => (env.get(name) ?? "") !== "";
+  if (set("PDS_BLOBSTORE_S3_BUCKET") && !set("PDS_BLOBSTORE_S3_ENDPOINT")) {
+    refuse("PDS_BLOBSTORE_S3_BUCKET is set without PDS_BLOBSTORE_S3_ENDPOINT, so the PDS uses AWS S3");
+  }
+  if (set("PDS_PLC_ROTATION_KEY_KMS_KEY_ID")) refuse("PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS");
   const onStack = (host: string): boolean =>
     loopback(host.replace(/^\[(.*)\]$/, "$1")) ||
     isLocal(host) ||

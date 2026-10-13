@@ -372,6 +372,16 @@ describe("tests/support/pds-email-token.ts", () => {
         `${name} names a host outside the local stack`,
         (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, [name as string]: value as string } }),
       ]),
+      // Codex on #803: keys that pick a provider whose endpoint is AWS's own when none is set (@atproto/pds 0.5.37
+      // dist/config/config.js:51-60, an unset endpoint; dist/config/secrets.js:26-30, KMS takes no endpoint at all).
+      [
+        "PDS_BLOBSTORE_S3_BUCKET is set without PDS_BLOBSTORE_S3_ENDPOINT, so the PDS uses AWS S3",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_BLOBSTORE_S3_BUCKET: "blobs" } }),
+      ],
+      [
+        "PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_PLC_ROTATION_KEY_KMS_KEY_ID: "alias/plc" } }),
+      ],
       [
         "the PDS does not keep its data in a named volume at /home/node",
         (w) => ({ ...w, mounts: [{ Type: "bind", Destination: "/home/node" }] }),
@@ -418,6 +428,7 @@ describe("tests/support/pds-email-token.ts", () => {
     const outbound = {
       PDS_CRAWLERS: "http://plc:2582,https://relay.localhost",
       PDS_BSKY_APP_VIEW_URL: "",
+      PDS_BLOBSTORE_S3_BUCKET: "blobs",
       PDS_BLOBSTORE_S3_ENDPOINT: "https://app.example.test",
       PDS_HANDLE_BACKUP_NAMESERVERS: "127.0.0.53,[::1]:53",
       PDS_REDIS_SCRATCH_ADDRESS: "127.0.0.1:6379",
@@ -499,7 +510,10 @@ describe("tests/support/pds-email-token.ts", () => {
     expect(result.asked.edge).toEqual(["PDS_HOST"]);
     expect(result.asked.pds).toContain("PDS_HOSTNAME");
     expect(result.asked.pds).toContain("PDS_REDIS_SCRATCH_ADDRESS");
-    expect(result.asked.pds?.filter((key) => /SECRET|PASSWORD|KEY|TOKEN/.test(key))).toEqual([]);
+    // The KMS key id names a key held by AWS and holds no secret; it is asked so a set one is refused.
+    const secretLike = (key: string) =>
+      /SECRET|PASSWORD|KEY|TOKEN/.test(key) && key !== "PDS_PLC_ROTATION_KEY_KMS_KEY_ID";
+    expect(result.asked.pds?.filter(secretLike)).toEqual([]);
   });
 
   test("email_token_redirect_is_refused", async () => {
