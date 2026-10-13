@@ -6523,17 +6523,18 @@ reduced default below and the push, sign and attest work is **P1.27s**:
 - If Alex approves the guard change before P1.27q opens, P1.27s's shape (below) lands in P1.27q instead and P1.27s
   lapses.
 
-**Interim base: upstream Node on Debian slim by digest until P1.27s (Alex, 01:29Z)** (book edit
+**Interim base: upstream Node on Debian slim by digest until P2.26b (P2.26c for the edge) (Alex, 01:29Z)** (book edit
 2026-10-06-p127-base-by-digest-book-text, final; architecture 2026-10-06-p127-upstream-base-by-digest; base changed by
 architecture 2026-10-07-p127-node-base-debian-slim and book edit 2026-10-07-p127d-node-debian-slim). Alex answered "Yes,
-digest" at 2026-10-07 00:17Z. He first chose Alpine at 00:09Z ("Base image for container will be alpine linux"),
-then asked at 01:26:43Z "Is it too late to revert docker image to debian slim?" and tapped "Debian slim" at 01:29:53Z
-on the card "Switch the web image base from Alpine back to Debian slim (P1.27)?"; P1.27d makes that change in code.
-The mirror exists only once P1.27s can push, so until then P1.27 builds from the one official upstream base by
-digest. This amends the text below:
-- **Goal (amended):** every image a deploy can pull comes from our registry by digest, was scanned, carries an SBOM
-  and SLSA provenance, and is signed with our key; until P1.27s, builds in CI and on dev machines pull the upstream
-  base by digest. Nothing is pushed or signed until P1.27s; Trivy scans the built image.
+digest" at 2026-10-07 00:17Z. He first chose Alpine at 00:09Z ("Base image for container will be alpine linux"), then
+asked at 01:26:43Z "Is it too late to revert docker image to debian slim?" and tapped "Debian slim" at 01:29:53Z on the
+card "Switch the web image base from Alpine back to Debian slim (P1.27)?"; P1.27d makes that change in code. The mirror
+exists only once P1.27s can push, so until then P1.27 builds from the one official upstream base by digest. This amends
+the text below:
+- **Goal (amended):** every image a deploy can pull comes from our registry by digest, was scanned, carries an SBOM and
+  SLSA provenance, and is signed with our key; until P2.26b, builds in CI and on dev machines pull the upstream base by
+  digest. Nothing is pushed or signed until P1.27s (publish), and the bases flip in P2.26b (book edit
+  2026-10-13-verify-819-fixes, S1); Trivy scans the built image.
 - **Base:** `node:26-trixie-slim`, pinned by its multi-arch index digest in every stage (`deps`, `build`, `runtime`).
   The runtime stage runs no `apt-get install`; a build stage that needs a package pins its exact version (hadolint
   DL3008, never ignored) and removes the apt lists in the same layer. apt and dpkg stay in the image, so Trivy can
@@ -6542,13 +6543,13 @@ digest. This amends the text below:
   read-only-friendly, the node HEALTHCHECK and `npm ci --ignore-scripts` are unchanged. A new Debian codename is its
   own reviewed bump.
 - **Pins:** `deployment/images/bases.lock.json`, shaped `{ "node": { ref, tag: "26-trixie-slim", digest (index), source:
-  "upstream" | "mirror" } }`. `images.lock.json` and the signing ADR move to P1.27s, so the Where line drops
+  "upstream" | "mirror" } }`. The signing ADR moves to P1.27s, and `images.lock.json` to P2.26b, so the Where line drops
   `deployment/images.lock.json` and the ADR and gains `bases.lock.json`. `verify-images.ts` is unchanged; it checks
   every `FROM` digest equals its lock entry, no `FROM` lacks a digest, and every host is on the allowlist (the one
   official upstream image plus our GHCR namespace).
-- **Hadolint:** each upstream `FROM` is preceded by a reason comment (citing the record, "removed by P1.27s"), then
-  `# hadolint ignore=DL3026` on the line directly above it (v2.15.1 applies an inline ignore to the next line only).
-  Allowed nowhere else; P1.27s removes it.
+- **Hadolint:** each upstream `FROM` is preceded by a reason comment (citing the record, "removed by P2.26b (P2.26c for
+  the edge)"), then `# hadolint ignore=DL3026` on the line directly above it (v2.15.1 applies an inline ignore to the
+  next line only). Allowed nowhere else; P2.26b removes it (P2.26c for the edge).
 - **Tests (added):** `base_digest_matches_lock`, `dl3026_ignore_only_on_upstream_base` (asserts that order),
   `from_without_digest_refused`, `from_host_not_allowlisted_refused`, `runtime_has_no_package_manager`,
   `runtime_base_is_debian_slim` (every Node `FROM` is `docker.io/library/node` with a tag matching
@@ -6559,9 +6560,9 @@ digest. This amends the text below:
 - **Order:** P1.27; then P1.28, P1.29 and P1.30 on locally built images; then P1.27s (Alex: `packages: write` and the
   signing environment); P1.27r after launch.
 
-**Official images rule, until P1.27s** (book edit 2026-10-07-official-images-rule, final). Alex tapped "Yes, all
-official" at 2026-10-07 00:54Z on the card "Until our private mirror exists, may every container build use official
-Docker images, Alpine where offered, pinned by digest?". This generalises the Node-only interim base above:
+**Official images rule, until P2.26b (P2.26c for the edge)** (book edit 2026-10-07-official-images-rule, final). Alex
+tapped "Yes, all official" at 2026-10-07 00:54Z on the card "Until our private mirror exists, may every container build
+use official Docker images, Alpine where offered, pinned by digest?". This generalises the Node-only interim base above:
 - **Which images:** every container build (node-app, edge, and the dev-stack services P1.28 to P1.30 build or run)
   may use any `docker.io/library/*` official image.
 - **Variant** (amended by 2026-10-07-p127d-node-debian-slim, Alex 01:29Z): Debian slim for Node; Alpine where offered
@@ -8423,9 +8424,11 @@ added to the public `plc` policy, and `localPlc` reachable from the public `plc`
 
 ### P1.34z — Point identity resolution at the local PLC
 Tags: [SEC]            Depends on: P1.34v, P1.34y
-Slice 1, issue #784, product (`domains/identity/`, `shared/config`, `compose.local.yaml`, and the web, appview and tap
-config), lane the third thread, before P1.29s; book edit 2026-10-13-local-plc-steps and step-book note 2 of
-2026-10-13-local-plc-a4-steps, from architecture's P1.34y / P1.34z note (Option A).
+Slice 1, issue #784, product (`domains/identity/`, `shared/config`, `compose.local.yaml`,
+`infrastructure/pds/identity-network.ts`, `infrastructure/postgres/migrate-cli.ts` and `rewrap-cli.ts`, and the web,
+appview and tap config), lane the third thread, before P1.29s; book edit 2026-10-13-local-plc-steps, step-book note 2 of
+2026-10-13-local-plc-a4-steps, from architecture's P1.34y / P1.34z note (Option A), and book edit
+2026-10-13-verify-819-fixes, Amendments 1 and 2.
 
 **What:** resolvers read the PLC URL from config and refuse any non-https PLC URL, except the exact local one under
 local.
@@ -8434,10 +8437,23 @@ local.
   test or prod it is refused at config load.
 - Every existing `=== "dev"` rule (`NETGUARD_ALLOW_LOOPBACK`, the commit placeholder and any others found) is listed
   with an explicit local decision, each tested. An unlisted rule treats local like prod.
+- Every comparison on `UNSET_ENV` is listed. Each negative form (`!== "prod"` and the like) is rewritten as a positive
+  allowlist with `local` decided. `local` takes the strict branch by default; a looser branch needs a stated reason and
+  a test. The three trusted-base `shared/http` `=== "dev"` rules stay untouched here (SE-6): they already give `local`
+  the strict branch, and if `local` ever needs the looser one, that is its own trusted step booked before this one.
+- `infrastructure/pds/identity-network.ts` takes its PLC policy from the composition root, which injects `localPlc`
+  under `local` and `plc` otherwise (today :68-69 refuses any non-https PLC URL against the fixed `plc` policy, and :75
+  always uses `plc`). `http:` is accepted only when the injected policy is `localPlc` and the URL is exactly its
+  origin.
+- The `oneOf(["dev","test","prod"])` enums in `infrastructure/postgres/migrate-cli.ts:19` and `rewrap-cli.ts:13` gain
+  `"local"`. Under `local`, migrate runs exactly as under `dev`, because local data is throwaway (a stated decision,
+  with a test); rewrap takes the strict (prod) branch unless a reason is booked.
 
 Done when red fixtures for a non-https URL and for the local URL outside local fail, `env_values_enumerated` fails a
-new env value that has no decision, the local PLC URL or `localPlc` in a dev or prod config is refused at load (moved
-from P1.34y), and check is green.
+new env value that has no decision and any new negative form, and covers every `UNSET_ENV` enum in the repository
+(`migrate-cli.ts` and `rewrap-cli.ts` included), the local PLC URL or `localPlc` in a dev or prod config is refused at
+load (moved from P1.34y), `identity_network_local_plc_http_only_under_local` (the local origin passes with `localPlc`
+and is refused with `plc`) and `identity_network_plc_requires_https` pass, and check is green.
 
 ---
 
@@ -8990,7 +9006,7 @@ takes admin Basic auth).
 **Outputs:**
 - `deployment/edge/Dockerfile`: standard Caddy plus exactly one plugin, `github.com/mholt/caddy-ratelimit`, built with
   `xcaddy` at pinned versions (Caddy and plugin by commit), runtime from the mirrored Caddy image by digest
-  (until P1.27s, the official `caddy:<2.x.y>-builder-alpine` and `caddy:<2.x.y>-alpine` by index digest under the
+  (until P2.26c, the official `caddy:<2.x.y>-builder-alpine` and `caddy:<2.x.y>-alpine` by index digest under the
   official images rule in P1.27, listed in `bases.lock.json` with `"source": "upstream"` and in `mirror.list.json`),
   non-root with `cap_net_bind_service` only. It is a first-party image, so P1.27 scans, signs and locks it.
   (Standard Caddy has no rate limiter; this is the plugin Caddy's own docs point to. Licence Apache-2.0; the
@@ -9500,9 +9516,11 @@ would leak data or cannot be fixed later, and refuses to proceed on any failure.
 
 **Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
 files; the network table (P1.29).
-- `cosign.pub` arrives with P1.27s and `images.lock.json` with P2.26b (book edit 2026-10-13-p127s-split), the network
-  table with P1.29 and the retirement report with P1.33a. Until then the checks that read them FAIL (below); the tests
-  use fixtures for every input, so both parts are green on main without those steps.
+- `cosign.pub` and `images.lock.json` arrive with P2.26b (book edits 2026-10-13-p127s-split and
+  2026-10-13-verify-819-fixes, S1: `cosign.pub` is product and is the first publish's verifying key; if P1.27s's ADR
+  chooses keyless, no `cosign.pub` exists and P2.26b's lock carries the keyless identity instead), the network table
+  with P1.29 and the retirement report with P1.33a. Until then the checks that read them FAIL (below); the tests use
+  fixtures for every input, so both parts are green on main without those steps.
 - C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
   `node scripts/ci/verify-images.ts <lock>` by a fixed path and fixed arguments, with no shell and no config key. The
   preflight never imports `scripts/` (product code never imports tooling, `scripts/lint/.dependency-cruiser.cjs`).
@@ -10328,7 +10346,7 @@ mode; shape-valid sentinel values for PDS_HOST, ACME_EMAIL and PDS_UPSTREAM that
 04:25Z amendment in 2026-10-12-p203-session-workspace-and-c18-image). C18 holds no repository constant. The edge
 service's `image` must equal exactly, in repository and digest, the `ref` of the `edge` entry in
 `deployment/images.lock.json`, the deploy contract C2 already reads (`preflight/index.ts:148`). A missing lock, or a
-lock with no `edge` entry, fails C18; the repository path lives only in the lock, which P1.27s writes. If the image
+lock with no `edge` entry, fails C18; the repository path lives only in the lock, which P2.26b writes. If the image
 comes through an env value, C18 reads it through the SecretMap and never prints it. Tests use a fixture lock, and any
 name in it is fixture data. Red fixtures: a different repository from the fixture lock; a different digest from the
 fixture lock; a tag with no digest; a missing lock; a lock with no `edge` entry. If P1.30w passes about 550 source
@@ -11257,8 +11275,9 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   - `tap` (profile `tap`; dynamic mode pointed at the dev PDS; provisional until the P3.01 spike decides).
   - `edge` (P1.28 image; ports 80 and 443 published on the host's tailnet address in pure dev, or on the public
     interface only when P1.34 opens outside access).
-  - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand; local only: P1.34d moves it to
-    `compose.local.yaml` with `pds-token-reader`, architecture's Amendment 7 of 2026-10-13-local-plc, Q3).
+  - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand; local only: P1.29s adds it to
+    `compose.local.yaml`; P1.34d's drift allowance names it (book edit 2026-10-13-verify-814-fixes, Amendment 1,
+    Codex 3; architecture's Amendment 7 of 2026-10-13-local-plc, Q3)).
 - `dev-precheck` (run by `npm run dev:up` before `docker compose up`): refuses when `0x40.space` answers
   `describeServer` with a DID that is neither the expected dev PDS DID nor absent (protects against the old
   prototype PDS), when the env names a production host, and when `preflight --env dev` (P1.30) fails.

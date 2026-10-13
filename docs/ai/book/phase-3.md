@@ -232,7 +232,7 @@ stateDiagram-v2
   Active --> DeletionPending: status=deleted (hidden at once)
   DeletionPending --> Erased: PDS confirms RepoNotFound or status deleted → eraseDid
   DeletionPending --> PartlyErased: open legal hold → eraseDid erases all but held material (partially_erased_legal_hold)
-  PartlyErased --> Erased: hold closes → P4.07 expiry re-runs eraseDid
+  PartlyErased --> Erased: hold closed after a verified destroy receipt → P4.07's close_expired_hold re-runs eraseDid
   DeletionPending --> Inactive: PDS says the repo exists and is not deleted (7 days of retries, then alert)
   Erased --> [*]: tombstone (HMAC of the DID) blocks re-tracking and re-ingest
   note right of Active
@@ -1000,10 +1000,11 @@ Algorithm (contract: which transitions apply at once and which need confirmation
   `confirm_deletion` job:
   1. `r = confirmRepoStatus(did)`.
   2. `{notFound}` or `{active:false, status:"deleted"}`:
-     - `core.erase_did(did, 'account_deleted')`. Under an open legal hold it erases everything except the held
-       material and returns `partially_erased_legal_hold` (P3.07's single rule); the account stays hidden and
-       P4.07's hold expiry finishes the erasure. A hold never blocks, defers or loops the deletion (editor pass;
-       phase-5 F10). `core.erase_did` failing (for example the hold check erroring) → retry with the backoff below.
+     - `core.erase_did(did, 'account_deleted')`. Under an open legal hold it erases everything except the held material
+       and returns `partially_erased_legal_hold` (P3.07's single rule); the account stays hidden and P4.07's
+       `close_expired_hold` finishes the erasure once the hold's destroy receipt verifies and no other hold on the DID
+       is open. A hold never blocks, defers or loops the deletion (editor pass; phase-5 F10). `core.erase_did` failing
+       (for example the hold check erroring) → retry with the backoff below.
   3. Any other answer (the repo exists and is not deleted) → clear the `deleted` status to the answer's status;
      stays hidden unless step `confirm_status` later confirms active; alert `deletion_not_confirmed`.
   4. `{unavailable}` → retry with backoff for 7 days, then alert and stop retrying; **never erase on an error**.
@@ -1170,8 +1171,8 @@ Outputs (contract):
     - `core.allow_retrack(did, actor_did, case_id, jti)` (definer; EXECUTE to `admin`; owner role checked by the
       caller's signed action, P3.20a) deletes the tombstone row.
   - Remainder under a hold: `core.erase_pending_hold(did types.did PK, created_at)`, written when the outcome is
-    partial and deleted when a later run erases everything. When P4.07's hold-expiry job closes a hold, it calls
-    `core.erase_did(did, 'legal_hold_closed')` for that DID, which erases what was kept.
+    partial and deleted when a later run erases everything. When P4.07's `close_expired_hold` closes a hold and no
+    other hold on the DID is open, it calls `core.erase_did(did, 'legal_hold_closed')`, which erases what was kept.
   - Outbox `core.erase_outbox(did PK, why, created_at, storage_done_at NULL, untracked_at NULL, hooks jsonb NOT NULL
     DEFAULT '{}')` with definers `core.erase_outbox_list(part)`, `core.erase_outbox_mark(did, part)` (`part` ∈
     `storage`, `untrack`; EXECUTE to `web` for `storage`, `indexer` for `untrack`) and `core.erase_hook_mark(did, hook,
@@ -1228,9 +1229,9 @@ marks `storage`, then runs the erase hooks; `indexer` untracks and marks `untrac
 the row and raises `alert.send('erasure_stuck')` (P3.20c) after 3 runs.
 
 Edge cases and failures:
-  - Open legal hold → everything else is erased now; held rows and objects stay; outcome
-    `partially_erased_legal_hold`; `erase_pending_hold` row. The hold closes → P4.07's expiry re-runs `erase_did` →
-    outcome `erased`.
+  - Open legal hold → everything else is erased now; held rows and objects stay; outcome `partially_erased_legal_hold`;
+    `erase_pending_hold` row. The hold closes (P4.07's `close_expired_hold`, after a verified destroy receipt, once no
+    other hold on the DID is open) → it re-runs `erase_did` → outcome `erased`.
   - `core.is_held` fails → nothing erased this time; P3.06's backoff retries; never erases while the hold state is
     unknown.
   - A hook is pending (chat down) → the core erasure is complete; `erase_report` lists the hook as pending; the
@@ -1285,7 +1286,7 @@ Done when (tests):
 
 Reuse:
   - Prototype `appview/src/db.ts:376` `purgeDid` → LESSON, provisional: one function so a table cannot be forgotten; here enforced by the coverage test.
-Not in this step: the PDS-side delete (P3.16a); the body of `core.is_held`, the held tables and the hold-expiry
+Not in this step: the PDS-side delete (P3.16a); the body of `core.is_held`, the held tables and the cleanup
 re-run (P4.07); the erasure case screen and statement (P5.08b); the chat hook (P6.04a); PLC tombstone (runbook,
 Phase 5); backups (P5.04).
 Diagram: none.
@@ -1829,7 +1830,8 @@ P1.15's audit vocabulary (for `jti` matching).
 Outputs (contract):
   - **Networks** (F9): one per caller, `pds-admin` binds on each: `pdsadmin-web` (`web`), `pdsadmin-admin`
     (`admin`); Phase 4 adds `pdsadmin-review` (`review-egress`) and `jobs-pdsadmin` (the `jobs` process, which holds
-    the `retention` service key, scoped to `preserve.listExpired` and `preserve.close`; R5-01; P5.02 names it). `pds-admin` also sits on
+    the `retention` service key, scoped to `preserve.listExpired` and `preserve.extendOpen`; R5-01; P5.02 names it;
+    regime Amendment 11, book edit 2026-10-12-csam-preservation-book-lines, Amendment 9). `pds-admin` also sits on
     the PDS's internal network. No two callers share a network, so P3.17's "`web` cannot reach `admin`" holds.
   - **HTTP**: `POST /v1/envelope` (`application/json`, ≤16 KiB); `POST /v1/invite.issue` (P2.09's route, served
     for **one release** then removed: expand, then contract); `GET /health` → `{ok, commit, roster_serial,
@@ -2232,60 +2234,97 @@ Diagram: none.
 
 ### P3.16c — `pds-admin`: preserve verbs (legal holds) for Phase 4
 Tags: [SEC] [MOD]            Depends on: P3.16a            Plan: §5.2 processes ("internal `pds-admin` for `preserve.create` alone"), §5.8 "Abuse-material law (decision 9)", decision 21; AD §8; plan issue PI-4; phase 4 P4.07
-Where: `interfaces/pds-admin/legal-holds.ts`, `verbs.ts` (four rows)
+Where: `interfaces/pds-admin/legal-holds.ts`, `verbs.ts` (seven rows); the destroy-permit ADR in `docs/human/decisions/`
 Size: ~150 source lines, ~250 test lines
 
 **Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
-confirm]), book edit 2026-10-12-csam-preservation-book-lines item 4): two regimes until C-16's reporting amendments
-commence. Until then: written notice to police (s. 3), 21 days of offline preservation (s. 4(1), SOR/2011-292 s. 12),
-then destruction of what is not kept in the ordinary course (s. 4(2)), unless a judicial order requires otherwise. After
-commencement: one year after notification, as the calendar anniversary (Interpretation Act s. 37), not 365 days: a 29
-February notice holds until 1 March, and the later candidate always wins, so rounding never destroys early.
-`preserve.create` and `preserve.notify` store the regime in force at notification and the preserve-until date it fixes;
-a later regime change never shortens or extends a running hold. The one-year figures below are the post-commencement
-path. The switch records two facts, each a reviewed config change citing its instrument number and in-force date (book
-edit 2026-10-12-csam-preservation-book-lines, Amendments 1 to 4): (A) the order bringing C-16 s. 180 (new ss. 3-4) into
-force, and (B) the regulation designating the law enforcement body (new para. 12(c.1)). Fail-closed is split by fact.
-(A) never recorded gives the 21-day regime, but the destruction job destroys only with a recorded human commencement
-check (s. 180 still not in force, read on Justice Laws or the Canada Gazette) no older than 7 days; a stale or missing
-check blocks destruction, keeps the hold and raises an urgent task. (A) present but unparsable or inconsistent blocks
-destruction, with no automatic expiry and an urgent task. Notices still go out under the in-force s. 3 in both cases;
-only destruction waits (Amendment 3, replacing Amendment 2's "a bad (A) gives 21 days"). Commencement is one-way
-(Amendment 4): P4.07k keeps (A) in an append-only config history, and once a valid (A) has ever been recorded, a later
-absent or unparsable (A) is a configuration fault, not the old regime: every send is blocked (an open (A)-only block and
-new cases included, with no police notice under the old s. 3), destruction is blocked and an urgent human task is
-raised. For (B): once (A) is in force, a missing or unparsable (B) means no send to a designated body (the send is
-blocked and an urgent human task raised), and a missing (B) never shortens a hold; without (A), (B) plays no part and
-the police are notified. (B) without (A): the in-force regime in full, 21 days and notice to police under the in-force
-s. 3. (A) without (B): the send is blocked, the urgent task repeats until resolved, and the hold is open from the block
-(no preserve-until date) until one year after the day the notice is actually made; nothing is destroyed while blocked.
-(A) and (B): one year from the send date, notice to (B). [lawyer to confirm]
+confirm]), book edit 2026-10-12-csam-preservation-book-lines item 4 and Amendments 5 to 11, the latest winning, with
+book edit 2026-10-13-codex-813-close-expired-hold for regime Amendment 14): two regimes until C-16's reporting
+amendments commence. Until then: written notice to police (s. 3), 21 days of offline preservation (s. 4(1), SOR/2011-292
+s. 12), then destruction of what is not kept in the ordinary course (s. 4(2)), unless a judicial order requires
+otherwise. After commencement: one year, ending on the calendar anniversary of the notice day (Interpretation Act ss.
+27(4), 28 and 37), not 365 days. `preserveUntil` is the last day kept, inclusive: a 29 February notice is kept through
+28 February and destroyable from 1 March. The two facts (A) and (B), their states, FAULT, the transition guard, the
+commencement check, the time zones and the destroy permit all live in `admin` (P4.07k and P4.07). `pds-admin` never
+computes days or regime facts: at notify it receives `regime`, `preserveUntil` and `destroyableFrom` (a UTC instant
+`admin` computes), stores them once, and refuses destruction before `destroyableFrom` or without it. A later regime
+change never shortens a running hold. The one-year figures below are the post-commencement path.
 
-Goal: give Phase 4 the four `preserve.*` verbs on `pds-admin`'s clock, so a legal hold (per-case length, above) can be
-created by the review egress step, recorded as notified by an owner, listed when expired and closed only after expiry,
-with no verb that shortens or cancels it, and with the held account protected from the reaper and the held delete.
+**Destruction** (regime Amendments 7 to 14): `pds-admin` is the only service that can have `legal-hold/*` deleted, and
+it never holds a bucket credential itself: it signs single-use instructions to `holds-agent` (P5.04), which alone holds
+the extender and destroyer credentials, on its own internal network `pdsadmin-holds`. `pds-admin` never calls `admin`.
+- **`preserve.destroy {holdId, permit}`** is served to `admin` only, on `pdsadmin-admin`, in an envelope carrying the
+  moderator's WebAuthn signature and the permit. It refuses unless the permit is valid, unused (`pds-admin` records its
+  id), at most 60 s old and bound to this `holdId`; `destroyableFrom` is present and has passed; and no other hold is
+  open.
+- **"Open hold"** means any other hold of any kind on the same objects or account (another case's hold, an analyst
+  hold, a provisional hold), plus any S3 legal hold flag on the objects. The permit's own hold is excluded, and a
+  `destroyed` hold is never open.
+- **The delete.** `pds-admin` signs one delete instruction (holdId, the exact object keys, the permit id) that expires
+  10 s before the permit. It re-checks the permit's expiry before the delete and again before the close, and stops if
+  it has passed. holds-agent deletes every version and every delete marker of each key, then lists the prefix, and
+  reports "destroyed" only if nothing remains.
+- **The close.** Only after that report does `pds-admin` close the hold: in one log entry it marks the hold
+  `destroyed`, removes the DID from `legal_hold_dids` when no other open hold names it, and stores the receipt. The
+  `destroyed` row keeps only holdId, permit id, epoch, time and tags, with no PII, retained for [lawyer to confirm].
+- **The receipt** carries two tags over one canonical encoding of (holdId, permit id, epoch, time, "destroyed"): an
+  Ed25519 signature by `pds-admin`'s receipt key, for `admin`'s audit record only, and an HMAC-SHA256 tag under the
+  cleanup key, which only `pds-admin` (from env, never logged) and P4.07's `cleanup_owner` table hold.
+- **A lost receipt.** A destroy on a hold already `destroyed` returns the stored receipt unchanged, signs no
+  instruction, makes no S3 request, and consumes the new permit. It still needs a valid moderator envelope and a fresh,
+  single-use permit.
+- Any failure (a refused instruction, a leftover version, an expired permit) leaves the hold open, with a human task.
+
+**The destroy-permit ADR rides this step's PR** (D8; the first step that builds the permit's verifying side; its number
+is the next free one when written, 0021 being Q3). It covers:
+- the moderator action and the permit lease (P4.07): `admin` records the permit (id, holdId, epoch, expiry ≤ 60 s) under
+  the epoch row's `FOR UPDATE`, re-reading the epoch, and refuses while any unlapsed pending-move mark exists; it
+  commits, then calls `preserve.destroy` outside any transaction. Every epoch-moving write, a config reload of (A), (B)
+  or the regime included, takes the same lock. A waiting writer records its own pending-move mark, which lapses at the
+  latest live permit's expiry plus 5 s, and removes its own mark in the commit that moves the epoch. There is no epoch
+  endpoint;
+- what "answered" means: a destroyed receipt, or a refusal `pds-admin` made before any instruction was signed. An
+  error, a timeout or no reply is not an answer;
+- the clocks: the instruction expires 10 s before the permit, `admin`'s call deadline is the permit's expiry, there are
+  no SDK retries, and every lapse is computed on the database clock;
+- the keys: the permit key, the receipt key and the cleanup key, each with its custody, provisioning, rotation with a
+  two-key overlap, and revocation, never logged; pgcrypto present in `postgres:18-trixie`; and that the cleanup tag's
+  comparison in PL/pgSQL is not constant-time, acceptable because only `retention` can call it;
+- `cleanup_owner` (P4.07): why it exists, what it owns, its grants, and migrator's SET-only membership (`GRANT
+  cleanup_owner TO migrator WITH SET TRUE, INHERIT FALSE`, as at 0003:65). The bootstrap superuser and migrator are the
+  trusted base outside this boundary;
+- the fail-closed paths.
+
+Goal: give Phase 4 the `preserve.*` verbs on `pds-admin`'s clock, so a legal hold (per-case length, above) can be
+created by the review egress step, recorded as notified by an owner, listed when due, extended while open, and destroyed
+only by a moderator's permitted destroy, with no verb that shortens or cancels it, and with the held account protected
+from the reaper and the held delete.
 
 Inputs: P3.16 pipeline, key model and log; P3.16d receipts and alerts; P3.16a and P3.16b refusal hooks.
 Outputs (contract):
   - Legal-hold state is rebuilt from `log.jsonl` entries with `phase: "preserve"`; `state.legal_hold_dids` is the
     set of `subject_did` with an open legal hold.
   - `LegalHold = {holdId, holdRef, kind: "report" | "analyst", subject_did, created_at, created_by, notified_at?,
-    regime?, preserveUntil?, expires_at?, closed_at?}`; `regime` and `preserveUntil` are set once, by `preserve.notify`
-    (Amendment 3).
+    regime?, preserveUntil?, destroyableFrom?, expires_at?, destroyed?: {permitId, epoch, at, tags}}`; `regime`,
+    `preserveUntil` and `destroyableFrom` are set by `preserve.notify` (Amendment 3; regime Amendment 9 S3) and change
+    only through its keep-or-extend re-send.
   - Verbs and callers (the service keys are added to the roster in Phase 4; Phase 3 tests use test keys):
 
 | Verb | Callers | Touch | Rule | Result |
 |---|---|---|---|---|
 | `preserve.create {holdRef (128-bit), kind, subject_did}` | S:`review_egress` (`PDS_PRESERVE_KEY`, **this verb only**); R owner | no (S) / yes (R) | idempotent on `holdRef` (same `holdId` back); `created_by` is taken from the verified key (the `review_egress` kid or the owner DID), never from `args`; `kind = analyst` → pending, with no expiry: the creation is not a finding; the 7-day provisional extensions continue (P5.04), and the 30 days start only at `markNotReportable` (finding 11, book edit 2026-10-13-batch-47-after-771, Amendment 1; replaces `createdAt + 30 d` and the older `createdAt + 365 d`); still pending at day 30 → urgent task, at day 60 → Alex [lawyer to confirm the pending period]; `kind = report` → no expiry until notified; adds `subject_did` to `legal_hold_dids` (provisional P3-B3); immediate owner alert | `{holdId, createdAt}` (`pds-admin`'s clock) |
-| `preserve.notify {holdId, notifiedAt, regime, preserveUntil}` | R owner | yes | `createdAt ≤ notifiedAt ≤ now` (`pds-admin`'s clock) → else 400; `notifiedAt` is the s. 3 notice, never the Cybertip.ca filing; P4.07k computes `regime` and `preserveUntil` once at the s. 3 notice (21 days today, the one-year calendar anniversary once (A) is in force) and passes both; either missing or unparsable → 400; `pds-admin` honours them and never recomputes; `expiresAt = max(expiresAt, preserveUntil)` (never shortens); a second notify → 409 | — |
+| `preserve.notify {holdId, notifiedAt, regime, preserveUntil, destroyableFrom}` | R owner; the re-send, moderator-signed from `admin` | yes | `createdAt ≤ notifiedAt ≤ now` (`pds-admin`'s clock) → else 400; `notifiedAt` is the s. 3 notice, never the Cybertip.ca filing; `admin` computes `regime`, `preserveUntil` and `destroyableFrom` once at the s. 3 notice and passes all three; any missing or unparsable → 400; `pds-admin` honours them and never recomputes; `expiresAt = max(expiresAt, preserveUntil)` (never shortens); a second notify → 409, except `admin`'s re-send for a transition decision or a FAULT exit, which may only keep or extend: an earlier `destroyableFrom` → refused, with a human task (regime Amendments 9 S2 and 11 item 4) | — |
 | `markNotReportable {holdId}` | R owner | yes | the owner action passes the `holdId`; the reason code (closed list, no free text) and the reasoning stay in `admin` (finding 10); report or pending analyst hold → analyst hold, provisional-and-extend up to `findingAt + 30 d` with nothing granted up front (finding 8, book edit 2026-10-13-batch-47-after-771, Amendment 1); an "uncertain" finding cannot call it (G-3, book edit 2026-10-13-batch-47-after-771 from architecture's 2026-10-13-batch-46-contradictions) | — |
 | `reverseToReportable {holdId}` | R owner | yes | analyst hold → report hold; the analyst extensions stop, then the notification path: `preserve.notify` extends to the regime's preserve-until from the notice date (G-3; findings 8 and 10) | — |
-| `preserve.listExpired {}` | S:`retention` | no | `[holdId]` with `expiresAt ≤ now` and not closed | list |
-| `preserve.close {holdId}` | S:`retention` | no | only an expired hold → else 409 `not_expired`; removes the DID from `legal_hold_dids` when no other open hold names it | — |
+| `preserve.listExpired {}` | S:`retention` | no | monitoring only: `[holdId]` for open (not `destroyed`) holds where `destroyableFrom ≤ now` on `pds-admin`'s clock, or that have no `destroyableFrom` and either a fixed regime or an age over 7 days (regime Amendments 12 S3 and 13; book edit 2026-10-13-codex-813-close-expired-hold); expiry alone never closes or deletes anything | list |
+| `preserve.extendOpen {}` | S:`retention` | no | parameterless: `pds-admin` chooses the open (not `destroyed`) holds itself and signs one extend instruction per hold to holds-agent; jobs cannot name a hold; each extension is capped at the hold's `destroyableFrom`, undated holds keep extending in 7-day steps, and a transition to a later date resumes extension to the new date (regime Amendment 12 S4) | — |
+| `preserve.destroy {holdId, permit}` | S:`admin`, moderator-signed, on `pdsadmin-admin` only | yes | as "Destruction" above: a valid, unused permit of at most 60 s for this hold; `destroyableFrom` present and passed; no other open hold; delete through holds-agent, then close; a hold already `destroyed` → the stored receipt, no instruction, no S3 request (`admin` issues the permit only with no FAULT) | signed receipt |
 
-  - No verb shortens, cancels or edits a legal hold. No verb carries media, ciphertext or the legal-hold private
-    key: Phase 4 part 1 keeps that key **offline** with the owners (owner export only); `pds-admin` holds only the
-    clock, the hold ids and the DIDs.
+  - No verb shortens, cancels or releases a hold early, and there is no close verb: a hold closes only inside
+    `preserve.destroy`. `markNotReportable` and `reverseToReportable` change only a hold's kind, on the dated path
+    above. No verb carries media, ciphertext or the legal-hold private key: Phase 4 part 1 keeps that key **offline**
+    with the owners (owner export only); `pds-admin` holds only the clock, the hold ids, the DIDs, the receipt and
+    cleanup keys, and the signing key for holds-agent's instructions.
   - `preserve.create` has **no hosted check**: an uploader may be on any PDS.
   - One verb set for every hold: P4.07's video match path and P5.07b's image match path both call
     `preserve.create`; a caller other than `review_egress` gets its own roster `service_keys` entry listing
@@ -2298,31 +2337,48 @@ Algorithm (hypothesis): each verb is a small function over the rebuilt map; entr
 
 Edge cases and failures:
   - `review_egress`'s key used for any other verb → 403 `verb_not_allowed_for_key` (P3.16 step 4).
+  - `retention`'s key used for `preserve.destroy` or any verb but `preserve.listExpired` and `preserve.extendOpen` →
+    403.
   - `preserve.create` retried after a timeout → same `holdId` (idempotent on `holdRef`).
   - A held DID's delete hold → `hold.execute` 409 `legal_hold`; the reaper skips it.
   - Host clock forged by host root → accepted risk (AD §4.2); the log and receipts record every step.
 
 Done when (tests):
-  - `pds-admin-preserve-key-scope`: the preserve key for `preserve.notify`, `account.takedown` or `hold.execute` → refused and logged; for `preserve.create` → accepted; repeated `holdRef` → same `holdId`.
-  - `pds-admin-no-early-release`: no verb shortens or cancels; `preserve.close` before expiry → 409.
-  - `preserve-notify-uses-given-preserve-until`; `preserve-notify-refuses-missing-regime` (either field missing or
-    unparsable → 400); `preserve-notify-twice-409`;
-    `preserve-notify-never-shortens`;
+  - `pds-admin-preserve-key-scope`: the preserve key for `preserve.notify`, `account.takedown` or `hold.execute` →
+    refused and logged; for `preserve.create` → accepted; repeated `holdRef` → same `holdId`.
+  - `pds-admin-no-early-release`: no verb shortens or cancels a hold; `preserve.destroy` without a valid, unused permit
+    of at most 60 s, before `destroyableFrom`, or with no `destroyableFrom` → refused; there is no close verb.
+  - `preserve-notify-uses-given-preserve-until`; `preserve-notify-refuses-missing-regime` (`regime`, `preserveUntil` or
+    `destroyableFrom` missing or unparsable → 400); `preserve-notify-twice-409`;
+    `preserve-notify-never-shortens`; `resend-later-accepted`; `resend-earlier-refused` (with the human task);
     `preserve-notify-future-or-before-create-400`; `analyst-hold-expires-30-days-after-finding` (G-3);
-    `mark-not-reportable-needs-reason-code` (in `admin`); `mark-not-reportable-refuses-uncertain`;
+    `mark-not-reportable-refuses-uncertain`;
     `reverse-to-reportable-takes-notification-path`; `reverse-day-1-gets-notice-plus-21` (markNotReportable on day 0,
     reversal and notice on day 1 → notice + 21 days, nothing held to day 30; finding 8);
     `pending-analyst-no-response-by-day-30` (nothing destroyed, the task raised, extensions continue; finding 11);
     `preserve-create-createdby-from-key` (a `createdBy` in `args` → 400 `bad_args`).
+  - The permit: `permit-expired-refused`, `permit-other-hold-refused`, `permit-replay` (a used permit id → refused),
+    `permit-stale` (older than 60 s → refused), `permit-before-destroyable-from-refused`, `permit-valid-destroys`,
+    `no-destroyable-from-never-destroyed`, `destroy-refused-while-other-hold-open` (another hold, an analyst or
+    provisional hold, or an S3 legal hold flag), `instruction-expires-before-permit` (10 s earlier).
+  - The close: `destroy-closes-after-delete` (a valid destroy closes the hold, marks it `destroyed` and returns a
+    receipt whose HMAC tag verifies under the cleanup key); `failed-delete-leaves-hold-open` (and a leftover version);
+    `permit-lapses-before-close` (the expiry passes between the delete and the close → the hold stays open, with a
+    task); `destroy-on-destroyed-returns-receipt` (the stored receipt, no instruction, no S3 request, the new permit
+    consumed); `destroyed-stale-permit` (an expired or replayed permit on a `destroyed` hold → refused);
+    `destroyed-not-listed-or-extended`.
   - The 21-day path (the "Preservation regime" above; book edit 2026-10-12-csam-preservation-book-lines) gets its own
     tests in the step that builds it: `preserve-notify-sets-21-days`, `regime-recorded-at-notification`.
   - `legal-hold-did-blocks-reaper-and-execute`.
   - `preserve-state-rebuilt-from-log`.
-  - `retention-key-list-and-close-only`.
+  - `retention-key-list-and-extend-only`; `extend-open-picks-holds` (jobs cannot name a hold);
+    `extension-capped-at-destroyable-from`; `undated-keeps-extending`.
+  - `mark-not-reportable-needs-reason-code` is `admin`'s test and is in P4.07.
 
 Reuse: none.
-Not in this step: the match path, the sealed record, owner export and the hold-expiry job (P4.07); the review
-egress step (P4.06); the body of `core.is_held` and the erasure re-run when a hold closes (P4.07).
+Not in this step: the match path, the sealed record, owner export, `admin`'s regime, permit and "destroy due" action,
+jobs' daily preservation task and the cleanup (P4.07); holds-agent and the holds bucket (P5.04); the review egress step
+(P4.06); the body of `core.is_held` and the erasure re-run when a hold closes (P4.07).
 Diagram: none (phase 4 part 1's P4.07 sequence shows the callers).
 
 ### P3.17 — `admin` skeleton
@@ -3043,9 +3099,12 @@ legal-hold key question is `P4a-A1`.
 **Editor pass (2026-10-03)** (brief: global resolutions 1–10; requests from the other files' notes and `editor-todo.md`):
 - **P3.07** rewritten to the single erasure rule (resolution 3; editor-todo; phase-5 F10; phase-2 E11/E25; lead
   decision): erase everything except rows and objects under an open legal hold, outcome `partially_erased_legal_hold`,
-  finish when the hold closes (P4.07's expiry re-runs `erase_did` with `why = legal_hold_closed`). Registry strategy
-  `retain_legal_hold` (P1.13 enum) with the predicate `core.is_held` (body owned by P4.07). Removed
-  `core.is_under_legal_hold`, `RAISE 'legal_hold'`, `core.erase_deferred`/`defer_erase`; added
+  finish when the hold closes (P4.07's expiry re-runs `erase_did` with `why = legal_hold_closed`). *[Superseded
+  2026-10-13 by book edit 2026-10-13-codex-813-close-expired-hold: `preserve.close` is gone; the `retention` key holds
+  `preserve.listExpired` and `preserve.extendOpen` only; `close_expired_hold`, after a verified destroy receipt, re-runs
+  `erase_did`. See P3.16c and P4.07.]* Registry strategy `retain_legal_hold` (P1.13 enum) with the predicate
+  `core.is_held` (body owned by P4.07). Removed `core.is_under_legal_hold`, `RAISE 'legal_hold'`,
+  `core.erase_deferred`/`defer_erase`; added
   `core.erase_pending_hold`. Tests `erase-skips-held-rows`, `erase-finishes-when-hold-closes`,
   `erase-hold-check-error-erases-nothing`, `foreign-account-deleted-under-hold` replace `erase-legal-hold-blocks`.
   P3.06's deletion branch, the account-state diagram and test `deleted-under-hold-erases-all-but-held` follow.
@@ -3067,7 +3126,7 @@ legal-hold key question is `P4a-A1`.
   included; no theme or language cookie read; `?lang`, else edge-normalised `Accept-Language`.
 - **P3.16 (phase-1 part 2 note 17):** `LEXICON_AUTHORITY_DID`; every verb (and the reaper and break-glass) refuses it
   with 403 `target_protected`.
-- **P3.16c (resolution 3; must match P4.07):** the four `preserve.*` verbs stay here. `created_by` comes from the
+- **P3.16c (resolution 3; must match P4.07):** the `preserve.*` verbs stay here. `created_by` comes from the
   verified key, so P4.07's `createdBy` argument should be dropped (phase-4 editor); `subject_did` stays (P3-B3); analyst
   holds expire 30 days after the "not reportable" finding (G-3), report holds one year (the calendar anniversary) after
   notification once the amended regime is in force and 21 days before it (per case, fixed at notification), notify never
@@ -3243,8 +3302,9 @@ Source: `reviews/bibliography-review/00-synthesis.md` and `r-06-critic.md` (R2-0
   (P3.16a), `takedown-outcome-readable-after-lost-reply` (P3.16d). P3.20b's hypothesis algorithm already lists
   `attempted` rows without an outcome; P3.00 should make it read those verbs per row when it settles P3.20b.
 - P3.16 (R5-01; architecture thread): the Phase 4 network is `jobs-pdsadmin` (was `pdsadmin-retention`); its caller is the
-  `jobs` process holding the `retention` key, scoped to `preserve.listExpired` and `preserve.close`. P3.16c already has
-  both verbs, so no verb was added.
+  `jobs` process holding the `retention` key, scoped to `preserve.listExpired` and `preserve.extendOpen` (book edit
+  2026-10-12-csam-preservation-book-lines, Amendment 9, replacing `preserve.close`). P3.16c drops `preserve.close`;
+  destruction is `preserve.destroy` from `admin`.
 
 ### Editor pass (2026-10-04, bibliography review, decision 37)
 
