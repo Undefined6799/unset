@@ -3982,44 +3982,57 @@ Diagram: see the three sequence diagrams at the top of this file.
 
 ---
 
-### P2.26c — Pull the edge bases from the mirror
-Tags: [SEC] trusted            Depends on: P1.27s
-Slice 2, issue #817, trusted base (`deployment/edge/`), kind/build; book edit 2026-10-13-p127s-split, which takes the
-edge half of P1.27s's struck "Interim base" paragraph (SE-6: a check-path step cannot edit trusted files). It runs
-after P1.27s's first mirror run on main has published both edge bases (a check with nothing from Alex: the digests
-resolve on the mirror).
-
-Where: `deployment/edge/Dockerfile` and `deployment/edge/edge.test.ts`.
-
-**What:** both `FROM` lines (builder and runtime) take the GHCR mirror host at the same digests, and their
-`# hadolint ignore=DL3026` lines and reason comments go (`.github/hadolint.yaml` ignores no rule; every exception is
-inline, so it moves with its Dockerfile). `edge.test.ts`'s ignore-adjacency test becomes "no DL3026 ignore remains".
-
-Done when (tests, red first): `edge_from_mirror_by_digest` and `edge_no_dl3026_ignore`, and check is green.
-
----
-
 ### P2.26b — Pin service images to the mirror by digest
-Tags: [SEC]            Depends on: P1.27s, P2.26c, P1.34t
-Slice 2, issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split, which takes the product
-half of P1.27s's struck "Interim base" paragraph. P1.34t is a dependency for C28 and the C21-under-dev fixtures the
-real-file test must meet.
+Tags: [SEC]            Depends on: P1.27s, P1.34t
+Slice 2, issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split (and its Amendment 1, which
+puts this step first), which takes the product half of P1.27s's struck "Interim base" paragraph. P1.34t is a
+dependency for C28 and the C21-under-dev fixtures the real-file test must meet.
 
 Where:
 - `deployment/images/{node-app,postgres,migrate}.Dockerfile`;
-- `deployment/images/bases.lock.json` (`source` back to the mirror);
+- `deployment/images/bases.lock.json`: every entry's `source` flips from `"upstream"` to `"mirror"`, the two caddy
+  entries included. `ref`, `tag` and `digest` keep the upstream name, so mirror.yml's join (`ref:tag@digest` equals
+  the mirror list's `source`, `mirror.yml:71-72`) is unchanged and no check path moves. This step never writes the
+  mirror host into `ref`;
 - `deployment/images/images.test.ts`;
 - the first `deployment/images.lock.json`;
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
 - the preflight real-file test in `deployment/preflight/`.
 
+`base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json`
+at the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only
+with its inline DL3026 ignore directly above it; the ignore-adjacency check (`images.test.ts:375-394`) keys on the
+upstream spelling, not on `source`. The tolerance stays harmless after P2.26c: hadolint's `trustedRegistries:
+ghcr.io` refuses an upstream `FROM` without an ignore, and P2.26c's `edge_no_dl3026_ignore` forbids the ignore. (Sent
+to architecture; if it prefers this strict, a product cleanup step after P2.26c drops the tolerance.)
+
 Done when (tests, red first):
-- `bases_from_mirror` (no upstream host in any `FROM` or in `bases.lock.json`) and `no_dl3026_ignore_left`;
+- `bases_from_mirror` (every lock entry has `source` `"mirror"`, and every `FROM` under `deployment/images/` is its
+  mirror path) and `no_dl3026_ignore_left` (`deployment/images/*.Dockerfile` only; the edge is P2.26c's);
 - `compose_dev_images_by_digest` (moved from P1.27s);
 - the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture
   (moved from P1.34d item 12; book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
-  2026-10-13-p127s-split; architecture's Amendment 7 of 2026-10-13-local-plc, Q1). This step makes the test passable;
+  2026-10-13-p127s-split; architecture's Amendment 7 of 2026-10-13-local-plc, Q1). This step makes the test passable:
+  it needs the published images and the lock, not the edge's `FROM` spelling;
 - check is green.
+
+---
+
+### P2.26c — Pull the edge bases from the mirror (trusted base)
+Tags: [SEC] trusted            Depends on: P2.26b
+Slice 2, issue #817, trusted base (`deployment/edge/`), kind/build; book edit 2026-10-13-p127s-split, which takes the
+edge half of P1.27s's struck "Interim base" paragraph (SE-6: a check-path step cannot edit trusted files). It runs after
+P2.26b (book edit 2026-10-13-p127s-split, Amendment 1), whose lock already names the caddy entries as mirrored, and
+after P1.27s's first mirror run on main has published both edge bases (a check with nothing from Alex: the digests
+resolve on the mirror).
+
+Where: `deployment/edge/Dockerfile` and `deployment/edge/edge.test.ts`.
+
+**What:** both `FROM` lines (builder and runtime) take their mirror paths at the same digests, and their
+`# hadolint ignore=DL3026` lines and reason comments go (`.github/hadolint.yaml` ignores no rule; every exception is
+inline, so it moves with its Dockerfile). `edge.test.ts`'s ignore-adjacency test becomes "no DL3026 ignore remains".
+
+Done when (tests, red first): `edge_from_mirror_by_digest` and `edge_no_dl3026_ignore`, and check is green.
 
 ---
 
@@ -4031,7 +4044,7 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P2.26c, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`

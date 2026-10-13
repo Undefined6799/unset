@@ -6573,8 +6573,8 @@ Docker images, Alpine where offered, pinned by digest?". This generalises the No
   ignore order above apply to each upstream `FROM`.
 - **Vendor namespaces** (a PDS image, Tap, anything outside `library/`) are not covered: each needs an architecture
   ruling per image.
-- **End:** after P1.27s's first mirror run, P2.26c (edge) and P2.26b (service images) flip every image to the mirror
-  by the same digest (`mirrored_digest_equals_lock` stays P1.27s's; book edit 2026-10-13-p127s-split).
+- **End:** after P1.27s's first mirror run, P2.26b (service images) and then P2.26c (edge) flip every image to the
+  mirror by the same digest (`mirrored_digest_equals_lock` stays P1.27s's; book edit 2026-10-13-p127s-split).
 - **Tests:** `base_digest_matches_lock` and `from_without_digest_refused` apply to every Dockerfile and compose
   image; `runtime_base_is_debian_slim` applies to node-app, and other images assert Alpine only where the lock says the
   official image offers it.
@@ -8595,11 +8595,11 @@ Tags: [SEC] [ALEX]            Depends on: P1.27q, P1.27, Alex's typed approval o
 Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy job in
   `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests, and
   `scripts/ci/image-workflows.test.ts`. No product file rides with it.
-Interim base: the base flip back to the mirror is P2.26c (edge, trusted) and P2.26b (product), which run after this
-  step's first mirror run on main (book edit 2026-10-13-p127s-split; the struck paragraph edited product and trusted
-  files, which SE-6 keeps out of a check-path PR). This step keeps the ADR "image signing: key or keyless", re-decided
-  from current documentation now the repository is public (if keyless wins, Alex's signing-key tick item lapses; the
-  environment, the reviewer and GATE_IF stay).
+Interim base: the base flip back to the mirror is P2.26b (product), then P2.26c (edge, trusted), which run after this
+  step's first mirror run on main (book edit 2026-10-13-p127s-split and its Amendment 1; the struck paragraph edited
+  product and trusted files, which SE-6 keeps out of a check-path PR). This step keeps the ADR "image signing: key or
+  keyless", re-decided from current documentation now the repository is public (if keyless wins, Alex's signing-key tick
+  item lapses; the environment, the reviewer and GATE_IF stay).
 Size: about 250 lines.
 
 Lapses if Alex approves the guard change before P1.27q opens; the same shape then lands in P1.27q.

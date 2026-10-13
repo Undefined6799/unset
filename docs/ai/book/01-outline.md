@@ -283,7 +283,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25p | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
-| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P2.26c and P2.26b flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
+| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P2.26b, then P2.26c, flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.27d | Switch the web image base to Debian slim (`node:26-trixie-slim`, Alex 2026-10-07 01:29Z) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28q | images.yml: build, lint, scan, health-check the edge image | check | P1.27q, P1.27 | `phase-1.md` |
 | P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
@@ -1232,9 +1232,9 @@ Depth: **build-ready**. 22 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26c | Pull the edge bases from the mirror | [SEC] trusted | P1.27s | `phase-2.md` |
-| P2.26b | Pin service images to the mirror by digest | [SEC] | P1.27s, P2.26c, P1.34t | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
+| P2.26b | Pin service images to the mirror by digest | [SEC] | P1.27s, P1.34t | `phase-2.md` |
+| P2.26c | Pull the edge bases from the mirror (trusted base) | [SEC] | P2.26b | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P2.26c, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
@@ -1256,8 +1256,8 @@ flowchart TD
   P2_23["P2.23 Publish and unpublish"]
   P2_24["P2.24 §5.3 go/no-go spike"]
   P2_26["P2.26 Phase 2 exit"]
-  P2_26c["P2.26c Edge bases from the mirror"]
   P2_26b["P2.26b Service images by digest"]
+  P2_26c["P2.26c Edge bases from the mirror"]
   P2_26a["P2.26a Minimal deploy for the test host"]
   P2_25["P2.25 Closed test track"]
   P2_16b --> P2_16
@@ -1271,8 +1271,9 @@ flowchart TD
   P2_23 --> P2_26
   P2_24 --> P2_26
   P2_26 --> P2_26a
-  P2_26c --> P2_26b
+  P2_26b --> P2_26c
   P2_26b --> P2_26a
+  P2_26c --> P2_26a
   P2_26a --> P2_25
   P2_10 --> P2_25
   P2_18k --> P2_18
