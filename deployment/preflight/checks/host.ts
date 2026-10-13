@@ -14,13 +14,17 @@ const SYSTEM_TIME = /^System time\s*:\s*([0-9]+(?:\.[0-9]+)?) seconds (?:fast|sl
 const pdsHostname = ({ serviceEnv }: Inputs): string =>
   serviceEnv.get("pds")?.use("PDS_HOSTNAME", (v) => v ?? "") ?? "";
 
-/** C21: on the old 0x40.space host, the retirement report says part A is complete; any other host skips it. */
+/**
+ * C21: on the old 0x40.space host, and under --env dev whatever the hostname, the retirement report says part A is
+ * complete; any other host skips it. The dev PDS publishes to the public PLC (C28), so no dev account may exist before
+ * retirement part A (P1.34t; architecture record 2026-10-13-local-plc, Amendment 6, Q1).
+ */
 export const c21: Check = {
   id: "C21",
   run: (inputs) => {
     // A hostname is case-insensitive and may end in the root's dot (RFC 4343 section 2, RFC 1034 section 3.1).
     const name = pdsHostname(inputs).toLowerCase();
-    if ((name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space")
+    if (inputs.env !== "dev" && (name.endsWith(".") ? name.slice(0, -1) : name) !== "0x40.space")
       return pass("skipped: PDS_HOSTNAME is unset or a different host");
     const text = inputs.readText(inputs.retirementReportPath);
     if (text === null) return missing(inputs.retirementReportPath);

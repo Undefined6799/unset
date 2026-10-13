@@ -75,6 +75,27 @@ export const c7: Check = {
   }),
 };
 
+/**
+ * The PLC directory each env's PDS publishes to (P1.34t; architecture record 2026-10-13-local-plc, Amendment 4). Dev
+ * (the 0x40.space PDS, decision 20) and prod use the public directory, exactly; local, where seeds and probes create
+ * test identities, uses only its own PLC, so none reaches the public one. `plc` on the did-method-plc server's default
+ * port (@did-plc/server 0.0.1 src/bin.ts:18) is the name P1.34v gives that service.
+ */
+const PLC_URL = { dev: "https://plc.directory", prod: "https://plc.directory", local: "http://plc:2582" } as const;
+
+/** C28: PDS_DID_PLC_URL is set and is exactly its env's PLC. Unset or empty, the PDS uses https://plc.directory
+ * (@atproto/pds 0.5.37 dist/config/config.js:99), which a local stack must never do. */
+export const c28: Check = {
+  id: "C28",
+  run: withPds((env, { env: stage }) => {
+    if (!env.has("PDS_DID_PLC_URL")) return fail("PDS_DID_PLC_URL missing");
+    if (equals(env, "PDS_DID_PLC_URL", PLC_URL[stage])) return pass();
+    return fail(
+      stage === "local" ? "PDS_DID_PLC_URL is not the local PLC" : `PDS_DID_PLC_URL is not ${PLC_URL[stage]}`,
+    );
+  }),
+};
+
 /** C8: no rate-limit bypass key or address in any service's environment, even empty. */
 export const c8: Check = {
   id: "C8",
