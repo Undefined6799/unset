@@ -404,9 +404,21 @@ describe("edge reader, local sites as per-file mounts (P1.34q)", () => {
     expect(() => mounted(tree, swap("app.caddy", join(tree.edgeDir, "sites", "pds.caddy")))).toThrow(
       "app.caddy: not mounted from local/app.caddy",
     );
+    // Nor another file of the right folder: the mount must bind exactly the file the reader reads.
+    expect(() => mounted(tree, swap("app.caddy", local("other.caddy")))).toThrow(
+      "app.caddy: not mounted from local/app.caddy",
+    );
   });
 
   test("a_directory_mount_fails", () => {
+    // Nor sites/ itself as the enabled directory under local: that is dev's directory mount, which Amendment 3 S2
+    // replaces with the file mounts, so only the shipped mode reads it (record 2026-10-13-p127l-verify-owners, item 1).
+    const real = localTree();
+    rmSync(real.sitesDir, { recursive: true });
+    expect(() => read({ ...real, sitesDir: join(real.edgeDir, "sites") }, "local")).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+    expect(() => read({ ...real, sitesDir: join(real.edgeDir, "sites") })).not.toThrow();
     const tree = localTree();
     for (const source of [join(tree.edgeDir, "sites"), tree.sitesDir, join(tree.edgeDir, "local")]) {
       expect(() => mounted(tree, [...mountsOf(tree), { source, name: "enabled.caddy" }]), source).toThrow(

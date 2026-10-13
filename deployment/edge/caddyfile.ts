@@ -444,7 +444,8 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
  * readCaddyfile and fails.
  *
  * Containment (P1.28f; amendment 8, point 1): every path is resolved, and each resolved path must stay where it
- * belongs. `sitesDir` is `edgeDir/sites/` itself, as the dev stack mounts it (P1.34q), or lies inside it; a snippet is a regular file inside `edgeDir/snippets/`; a site is
+ * belongs. `sitesDir` lies inside `edgeDir/sites/`, or in the shipped mode only is `sites/` itself, as
+ * the dev stack mounts it (P1.34q); a snippet is a regular file inside `edgeDir/snippets/`; a site is
  * a regular file, or a symlink to one, inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
  * beyond that count, and a file swapped between `kind` and `read`, since this is a build-time reader over a checkout.
  * Any error it throws carries no value from `env` (P1.30h).
@@ -494,7 +495,7 @@ function readEdgeTree(
   }
   if (typeof sitesDir === "string") {
     const enabled = resolved(files, sitesDir, "the enabled sites directory");
-    if (enabled !== sites.path && !enabled.startsWith(`${sites.path}/`))
+    if ((mode !== "shipped" || enabled !== sites.path) && !enabled.startsWith(`${sites.path}/`))
       throw new CaddyfileError("the enabled sites directory is not inside sites/");
   }
   const caddyfile = entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false);
