@@ -20,7 +20,7 @@ import {
 } from "../../edge/caddyfile.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
-import { readLock } from "./images.ts";
+import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */

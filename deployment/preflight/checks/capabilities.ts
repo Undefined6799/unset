@@ -4,7 +4,7 @@
 // P1.30y: a service with both an image and a build is the edge only when both name it (Amendment 5 of
 // 2026-10-12-p204s-p130x-p130y-booked).
 import { join } from "node:path";
-import { lockOrNone } from "./images.ts";
+import { lockOrNone } from "./lock.ts";
 import { type Check, fail, missing, pass, runsImage } from "./types.ts";
 
 export const c25: Check = {

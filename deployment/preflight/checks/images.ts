@@ -7,32 +7,16 @@
 // admits a build, which C26 and C27 judge, or an image named exactly as a base lock entry or a mirror source, and C3
 // to C5 print UNSIGNED. --env dev and --env prod never take this path (c2_to_c5_unchanged_under_dev_and_prod).
 import { join } from "node:path";
+import { readLock } from "./lock.ts";
 import type { VerifyResult } from "./types.ts";
 import { type Check, fail, type Inputs, missing, pass, unsigned } from "./types.ts";
 
-type LockEntry = { ref?: unknown; origin?: unknown };
 const OUR_IMAGE = /^(ghcr\.io\/undefined6799\/[a-z0-9._/-]+)(?::[\w][\w.-]{0,127})?(@sha256:[0-9a-f]{64})$/;
 /** Index media types: OCI image index and Docker manifest list (docs: docker buildx imagetools inspect --raw). */
 const INDEX_TYPES = [
   "application/vnd.oci.image.index.v1+json",
   "application/vnd.docker.distribution.manifest.list.v2+json",
 ];
-
-/** The deploy lock C2 to C5 and C18 read, or null when the file is missing. */
-export function readLock(inputs: Inputs): Record<string, LockEntry> | null {
-  const text = inputs.readText(inputs.lockPath);
-  if (text === null) return null;
-  const lock = JSON.parse(text) as unknown;
-  if (typeof lock !== "object" || lock === null || Array.isArray(lock)) throw new Error("lock is not an object");
-  return lock as Record<string, LockEntry>;
-}
-
-/**
- * The lock for a check that also accepts a service by its build (C25, C27). A local stack has none (P1.27l), so there
- * only the build can pass: an empty lock names no ref for an image to match.
- */
-export const lockOrNone = (inputs: Inputs): Record<string, LockEntry> | null =>
-  inputs.env === "local" ? {} : readLock(inputs);
 
 /** C2: every service image is ours by digest and the lock lists that digest. */
 export const c2: Check = {
