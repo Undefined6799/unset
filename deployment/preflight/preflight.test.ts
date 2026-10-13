@@ -45,6 +45,7 @@ const REPO = join(import.meta.dirname, "..", "..");
 
 const PDS_ENV: Record<string, string> = {
   PDS_RECOVERY_DID_KEY: RECOVERY_KEY,
+  PDS_DID_PLC_URL: "https://plc.directory",
   PDS_INVITE_REQUIRED: "true",
   PDS_CRAWLERS: "",
   PDS_ADMIN_PASSWORD: `${CANARY}-${"x".repeat(16)}`,
@@ -107,6 +108,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C25",
   "C26",
   "C27",
+  "C28",
 ]);
 
 type Stack = {
@@ -114,7 +116,8 @@ type Stack = {
   pdsEnv?: Record<string, string | null>;
   lock?: object | null;
   dotEnv?: string;
-  report?: string;
+  /** The retirement report's text; `undefined` writes none, even under --env dev (see `check`). */
+  report?: string | undefined;
   /** The network table, written as both networks.dev.json and networks.prod.json: an object, raw text, or none. */
   networks?: object | string | null;
   /** Extra enabled edge sites, by file name. */
@@ -262,8 +265,11 @@ const as4242 =
     const uid = path === rootOwned ? 0 : info.uid === process.getuid?.() ? 4242 : info.uid;
     return Object.assign(Object.create(Object.getPrototypeOf(info)), info, { uid });
   };
+/** A complete retirement report: every dev stack needs one, whatever its hostname (C21; local-plc Amendments 6-7). */
+const PART_A_DONE = '{"retirement_part_a_complete": true}';
 async function check(s: Stack = {}, env = "prod", deps: Partial<Deps> = {}) {
-  const { root, file } = stack(s);
+  // A dev pass fixture carries the complete report unless the test names its own (`report: undefined` for none).
+  const { root, file } = stack(env === "dev" && !("report" in s) ? { ...s, report: PART_A_DONE } : s);
   return preflight(["--env", env, "--compose", file], {
     root,
     run: fakeRun().run,
@@ -386,7 +392,7 @@ describe("preflight", () => {
   // P1.30o: files Compose itself reads keep the deploy user's 0600 (architecture record 2026-10-12-c9-secret-file-owner).
   test("c9_compose_read_file_fails", async () => {
     for (const env of ["dev", "prod"]) {
-      const { root, file } = stack(env === "dev" ? { compose: DEV, pdsEnv: DEV_ENV } : {});
+      const { root, file } = stack(env === "dev" ? { compose: DEV, pdsEnv: DEV_ENV, report: PART_A_DONE } : {});
       const run = (deps: Partial<Deps> = {}) =>
         preflight(["--env", env, "--compose", file], {
           root,
@@ -1357,6 +1363,52 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     );
   });
 
+  test("c21_dev_needs_the_report_whatever_the_hostname", async () => {
+    // Under --env dev C21 applies to any PDS hostname, so no dev account exists before P1.33a (local-plc Amendment 6,
+    // Q1); prod and local keep the 0x40.space rule.
+    expect(await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: undefined }, "dev")).toMatch(
+      /input missing: .*retirement-check\.json$/,
+    );
+    const half = '{"retirement_part_a_complete": false}';
+    await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev");
+    for (const name of ["pds.localhost", "dev.example.test", "0x40.space"]) {
+      const compose = host(name).replace("name: unset-prod", "name: unset-dev");
+      expect(failed((await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines), name).toContain(
+        "C21",
+      );
+    }
+    expect((await check()).lines).toContain("PASS C21 skipped: PDS_HOSTNAME is unset or a different host");
+  });
+
+  test("c28_dev_and_prod_use_exactly_the_public_plc", async () => {
+    // Decision 20 and local-plc Amendment 4: the dev (0x40.space) and prod PDS publish to plc.directory and nowhere else.
+    // The PDS reads an unset or empty value as https://plc.directory (@atproto/pds 0.5.37 dist/config/config.js:99,
+    // env.js:57), so the value is required spelled out.
+    for (const env of ["prod", "dev"]) {
+      const base: Stack = env === "dev" ? { compose: DEV } : {};
+      const pdsEnv = env === "dev" ? DEV_ENV : {};
+      for (const value of [
+        null,
+        "",
+        "http://plc:2582",
+        "https://plc.directory/",
+        "http://plc.directory",
+        "https://plc.directory.example.test",
+        "https://PLC.directory",
+        "https://evil.example/https://plc.directory",
+        "'https://plc.directory '",
+        "https://user@plc.directory",
+        "https://plc.directory:443",
+        "https://plc%2Edirectory",
+      ]) {
+        expect(
+          await expectOnly("C28", { ...base, pdsEnv: { ...pdsEnv, PDS_DID_PLC_URL: value } }, env),
+          `${env} ${value}`,
+        ).toBe(value === null ? "FAIL C28 PDS_DID_PLC_URL missing" : "FAIL C28 PDS_DID_PLC_URL is not the public PLC");
+      }
+    }
+  });
+
   test("c15_subdomain_entry_refused", async () => {
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,x.0x40.me" } });
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".x.0x40.me" } });
@@ -2201,7 +2253,7 @@ secrets:
    * The handle domain is the PDS's own. Mail stays set: C11 and C19 stay required under local until Alex answers the
    * local-mail card (architecture record 2026-10-13-p127l-local-gaps, item 2).
    */
-  const LOCAL_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".pds.localhost" };
+  const LOCAL_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".pds.localhost", PDS_DID_PLC_URL: "http://plc:2582" };
   const LOCAL_FILES = {
     ...NODE_APP,
     "deployment/edge/Dockerfile": "FROM scratch\n",
@@ -2251,6 +2303,31 @@ secrets:
     ]);
     expect(lines.at(-1)).toBe(LOCAL_LAST);
     expect(code).toBe(0);
+  });
+
+  test("local_c28_admits_only_the_local_plc", async () => {
+    // local-plc Amendment 4: seeds and probes run here, so the PDS must never reach the public directory; only the local
+    // PLC's exact internal URL passes, and unset (the PDS's plc.directory default) fails.
+    const c28 = async (value: string | null) =>
+      (await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_DID_PLC_URL: value } })).lines.find((line) =>
+        / C28 /.test(line),
+      );
+    expect(await c28("http://plc:2582")).toBe("PASS C28 ok");
+    expect(await c28(null)).toBe("FAIL C28 PDS_DID_PLC_URL missing");
+    for (const value of [
+      "",
+      "https://plc.directory",
+      "http://plc:2582/",
+      "http://plc:2583",
+      "https://plc:2582",
+      "http://plc.localhost:2582",
+      "http://plc:2582.example.test",
+      "http://evil.example/http://plc:2582",
+      "'http://plc:2582 '",
+      "http://user@plc:2582",
+    ]) {
+      expect(await c28(value), value).toBe("FAIL C28 PDS_DID_PLC_URL is not the local PLC");
+    }
   });
 
   test("local_unsigned_never_hides_a_failure", async () => {
