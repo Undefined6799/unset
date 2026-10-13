@@ -64,10 +64,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c,
   P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l,
   P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
-  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j, P1.33k, P1.34d, P1.34t, P1.34u, P1.34v, P1.34y,
-  P1.34z, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b,
-  P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice
-  exit P2.13a.
+  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j, P1.33k, P1.33l, P1.34d, P1.34t, P1.34u, P1.34v,
+  P1.34y, P1.34z, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37,
+  P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and
+  the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -288,6 +288,7 @@ flowchart LR
   P1_33h["P1.33h host pin moved to shared/host-pin"]
   P1_33j["P1.33j token reader uses the shared pin"]
   P1_33k["P1.33k node base for the token reader"]
+  P1_33l["P1.33l reader project from the env"]
   P1_29i["P1.29i token reader judges every outbound key"]
   P1_34c["P1.34c local app site with a dev leaf"]
   P1_34d["P1.34d PDS trusts one dev root"]
@@ -549,6 +550,8 @@ flowchart LR
   P1_29i --> P1_29s
   P1_33j --> P1_29s
   P1_33k --> P1_29s
+  P1_33l --> P1_29s
+  P1_33j --> P1_33l
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33j
@@ -8353,6 +8356,22 @@ Done when both fixtures fail on main and pass with the change, and check is gree
 
 ---
 
+### P1.33l — Derive the reader's project from the env
+Tags: [SEC]            Depends on: P1.33j
+Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
+P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
+of 2026-10-13-local-plc (Codex on #800). Not paused: P1.29s needs it to run the reader under local. A new step keeps
+P1.33k a preflight change.
+
+**What:** the reader stops hard-coding `PROJECT = "unset-dev"` (`tests/support/pds-email-token.ts:61` on main). Its
+project is `unset-${env}`, with env exactly `dev` or `local`, explicit and with no default. Before any lookup it
+refuses unless that name equals both the compose project `name:` and the project label on the volume it reads. Red
+fixtures: a wrong env, a mismatched compose name, and a mismatched volume label.
+
+Done when each fixture fails on main (red first) and check is green.
+
+---
+
 ### P1.33k — Admit the node base for the token reader
 Tags: [SEC]            Depends on: P1.33j
 Slice 1, issue #802, product (`deployment/preflight/checks/images.ts` and its tests), kind/fix, lane the third thread
@@ -10866,8 +10885,10 @@ P1.29h, P1.29s, P1.29t.
    (B2', the shared socket pin, after P1.33h) and P1.29i (S2', every outbound key) (book edit 2026-10-13-host-pin-steps,
    Amendments 3 and 4).
 9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i,
-   P1.33j and P1.33k, book edits 2026-10-13-local-plc-steps and 2026-10-13-host-pin-steps Amendment 5, so the seed never
-   runs the token reader before its holes are closed): `scripts/dev-seed.ts` and
+   P1.33j, P1.33k and P1.33l, book edits 2026-10-13-local-plc-steps, 2026-10-13-host-pin-steps Amendment 5 and
+   2026-10-13-local-plc-a3-steps, so the seed never runs the token reader before its holes are closed; and the step that
+   carries Alex's mail-card answer (named when he answers), because local C11 and C19 and the reader's SMTP refusal
+   cannot both hold until then (architecture's Amendment 3 of 2026-10-13-local-plc, point 2)): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring and their tests
    below. `dev-seed` creates accounts through the dev PDS and, on `local` only, confirms their email through P1.29h's
    reader and the real `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one
@@ -12493,7 +12514,7 @@ proved he can recover it from the console.
 
 ### P1.33p — Open the home server to the public internet (Alex)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34, P1.34t · **Plan:** §5.7; decision 20
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34, P1.34t, P5.02 · **Plan:** §5.7; decision 20
 
 Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-public-opening, from architecture's
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
@@ -12566,6 +12587,9 @@ evidence lives here.
   added fixture shows the public URL is still refused under dev and local. There is no gated dev-to-public transition
   (Amendment 2, point 1): a fixture shows `dev-public.env` with `https://plc.directory` still fails under dev after
   this step.
+- The prod stack runs the Phase 5 production compose file (P5.02, `deployment/compose.yaml`), which has no PLC
+  service, network or database wiring, so this step cannot land before Phase 5 (architecture's Amendment 3 of
+  2026-10-13-local-plc, point 3; book edit 2026-10-13-local-plc-a3-steps).
 - Edge cases:
   - Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
     the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
