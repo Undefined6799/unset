@@ -64,11 +64,11 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
 
 /**
  * C17: no `network_mode` (host, service: or container: would bypass the table), and the networks match the table. The
- * one exception is `none` on the tools-profile token reader, which joins no network at all (P1.29h; architecture
- * record 2026-10-13-p129h-local-token-reader, Amendment 1).
+ * one exception is `none` on the tools-profile token reader, by its name, which joins no network at all (P1.29h;
+ * architecture record 2026-10-13-p129h-local-token-reader, Amendment 1, and its 04:17Z answer on C17).
  */
 const noNetworkReader = (service: Service): boolean =>
-  service.networkMode === "none" && service.profiles.includes("tools");
+  service.name === "pds-token-reader" && service.networkMode === "none" && service.profiles.includes("tools");
 
 export const c17: Check = {
   id: "C17",

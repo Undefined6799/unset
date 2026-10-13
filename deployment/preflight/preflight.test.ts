@@ -1555,11 +1555,15 @@ describe("preflight C17 (P1.30t)", () => {
   test("c17_tools_reader_has_no_network", async () => {
     const reader = COMPOSE.replace(
       "\nsecrets:",
-      "\n  reader:\n    image: x\n    profiles: [tools]\n    network_mode: none\nsecrets:",
+      "\n  pds-token-reader:\n    image: x\n    profiles: [tools]\n    network_mode: none\nsecrets:",
     );
     expect(reader).not.toBe(COMPOSE);
     const lines = (await check({ compose: reader })).lines;
     expect(lines.filter((line) => / C17\b/.test(line))).toEqual(["PASS C17 ok"]);
+    // Only that service (architecture, 2026-10-13 04:17Z): the tools profile under another name still fails.
+    const renamed = reader.replace("  pds-token-reader:", "  reader:");
+    const renamedLines = (await check({ compose: renamed })).lines;
+    expect(renamedLines.filter((line) => / C17\b/.test(line))).toEqual(["FAIL C17 network_mode is set in reader"]);
   });
 
   test("c17_table_mismatch_each_direction", async () => {
