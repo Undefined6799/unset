@@ -39,9 +39,15 @@ export class ReaderRefusal extends Error {}
 
 /** The account database, opened read-only; a missing file or a stopped PDS is refused, never created. */
 export function openAccountDb(path: string): DatabaseSync {
+  let db: DatabaseSync | null = null;
   try {
-    return new DatabaseSync(path, { readOnly: true });
+    db = new DatabaseSync(path, { readOnly: true });
+    // SQLite opens the WAL index lazily, so a stopped PDS shows only at the first read (measured in
+    // pds-email-token-read.image.test.ts): read the schema here so it is refused with the reason, not as a failure.
+    db.prepare("SELECT count(*) FROM sqlite_schema").get();
+    return db;
   } catch {
+    db?.close();
     throw new ReaderRefusal(READER_REASONS.cannotOpen);
   }
 }
