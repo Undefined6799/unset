@@ -2212,7 +2212,7 @@ secrets:
   /** The local stack after `edit`, with its leaf secret files written beside the other secrets. */
   async function local(
     edit: (text: string) => string = (text) => text,
-    { links = {}, ...s }: Stack & { links?: Record<string, string> } = {},
+    { links = {}, remove = [], ...s }: Stack & { links?: Record<string, string>; remove?: string[] } = {},
   ) {
     const { root, file } = stack({
       compose: edit(LOCAL),
@@ -2227,6 +2227,7 @@ secrets:
     }
     chmodSync(join(root, "deployment/edge/local"), 0o755);
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
+    for (const path of remove) rmSync(join(root, path));
     const result = await preflight(["--env", "local", "--compose", file], {
       root,
       run: fakeRun().run,
@@ -2498,6 +2499,42 @@ secrets:
         ),
       ),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
+  // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local
+  // the (tls) every site imports is the leaf's, from the local/tls.caddy mount, and nothing else gives a site a
+  // certificate.
+  test("local_c18_serves_only_the_leaf_snippet", async () => {
+    const c18 = async (edit: (text: string) => string, files: Record<string, string> = {}) =>
+      (await local(edit, { files })).lines.find((line) => / C18 /.test(line));
+    const site = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8");
+    const leaf = readFileSync(join(EDGE_DIR, "local/tls.caddy"), "utf8");
+    // Without its mount Caddy serves snippets/tls.caddy, which is not what C18 read under local.
+    expect(
+      await c18((text) => text.replace("      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n", "")),
+    ).toBe("FAIL C18 the TLS snippet is not mounted");
+    expect(await c18((text) => text, { "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "") })).toBe(
+      "FAIL C18 {$PDS_HOST}: does not import tls",
+    );
+    expect(
+      await c18((text) => text, {
+        "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "$&\ttls internal\n"),
+      }),
+    ).toBe("FAIL C18 {$PDS_HOST}: has its own tls directive");
+    expect(
+      await c18((text) => text, {
+        "deployment/edge/local/tls.caddy": leaf.replace("(tls) {", "(tls-leaf) {"),
+        "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n",
+      }),
+    ).toBe("FAIL C18 the (tls) snippet served is not local/tls.caddy");
+    // With snippets/tls.caddy gone, the reader reads no leaf in its place, so another file's (tls) is what it judged.
+    const gone = await local((text) => text, {
+      remove: ["deployment/edge/snippets/tls.caddy"],
+      files: { "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n" },
+    });
+    expect(gone.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 the (tls) snippet served is not local/tls.caddy",
+    );
   });
 
   test("dev_and_prod_still_refuse_the_local_file_mounts", async () => {
