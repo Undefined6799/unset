@@ -7596,8 +7596,11 @@ the upstream ssl-cert snakeoil private key, and our image built from that base s
 - Our postgres uses only the socket and our own certs, so nothing should reference these files. If a config does, stop
   and report rather than keep the key.
 
-Not in scope: the upstream mirror image, whose scan still flags the key. An allowlist entry for that exact path would
-loosen a check path, so it is Alex's call; the coordinator raises it if `mirror.yml` stays red after this step.
+The mirror scan is in scope (Amendment 1, as built in #804, head 7824226): `mirror.yml:71-74` passes each runtime
+entry's `stripped` paths to Trivy as `--skip-dirs` and `--skip-files` (P1.29v, which Alex approved, "Skip stripped
+files", 2026-10-07T18:56:42Z), so listing the two paths clears the mirror's postgres finding with no allowlist, no
+loosening and no check-path edit. The stop condition was not triggered: only Debian's `pg_createcluster` reads
+`createcluster.conf`, and neither the entrypoint nor this repository runs it.
 
 Done when the image test is green, check is green, and the PR body shows the test failing before the fix.
 
