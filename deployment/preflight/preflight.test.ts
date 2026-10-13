@@ -1571,6 +1571,8 @@ describe("preflight C17 (P1.30t)", () => {
     const variants: [string, string][] = [
       ["pds-token-reader-2", unlogged(reader.replace("  pds-token-reader:", "  pds-token-reader-2:"))],
       ["pds-token", unlogged(reader.replace("  pds-token-reader:", "  pds-token:"))],
+      // Case counts too: the parser takes any service name as written.
+      ["PDS-Token-Reader", unlogged(reader.replace("  pds-token-reader:", "  PDS-Token-Reader:"))],
       ["pds-token-reader", reader.replace("    profiles: [tools]\n", "")],
     ];
     for (const [name, compose] of variants) {
