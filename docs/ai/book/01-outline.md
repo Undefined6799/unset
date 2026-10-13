@@ -1419,7 +1419,7 @@ flowchart TD
 
 ## Phase 4 — Video, review, social, feeds
 
-Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a reviewed hypothesis). 38 steps.
+Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a reviewed hypothesis). 39 steps.
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1431,10 +1431,11 @@ Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a r
 | P4.04 | `review` worker skeleton: no-network compute container, egress container, Postgres job queue | [SEC] | P4.04g, P4.00\*, P1.27, P1.12, P1.18, P1.18b, P1.02, P1.03 | `phase-4.md` |
 | P4.05 | Probe, limits and transcode: ffprobe validation, stripped 1080p master, 360p and 720p faststart renditions, posters | [SEC] | P4.04, P4.03 | `phase-4.md` |
 | P4.06 | Video fingerprints: PDQ on sampled frames, checked through the `FingerprintCheck` stage from the egress step | [SEC] [MOD] | P4.05, P2.16 (`FingerprintCheck` stage, fake), P2.16b (PDQ) | `phase-4.md` |
-| P4.07g | Legal-hold reader logins (SE-6) | [SEC] | P4.00\*, P1.12 | `phase-4.md` |
+| P4.07c | Legal-hold cleanup tables (split from P4.07, SE-6) | [SEC] | P4.03, P3.07, P3.16c, P1.14a | `phase-4.md` |
+| P4.07g | Legal-hold reader logins and the cleanup owner (SE-6) | [SEC] | P4.00\*, P1.12, P4.07c, P3.07 | `phase-4.md` |
 | P4.07k | Legal-hold domain and the offline export CLI (split from P4.07, SE-6) | [SEC] [MOD] | P4.07g, P4.06, P3.16c, P1.14a | `phase-4.md` |
-| P4.07 | Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07g, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
-| P4.07h | The body of `core.is_held` (split from P4.07, SE-6) | [SEC] [MOD] | P4.07 | `phase-4.md` |
+| P4.07 | Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07c, P4.07g, P4.07h, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
+| P4.07h | The body of `core.is_held` (split from P4.07, SE-6) | [SEC] [MOD] | P4.07c | `phase-4.md` |
 | P4.08 | Local image gate: nudity (NudeNet class) and gore (hold-only), in the no-network container | [MOD] | P4.05 | `phase-4.md` |
 | P4.09 | Local transcript (whisper.cpp `base`) → draft WebVTT captions | — | P4.05 | `phase-4.md` |
 | P4.09a | Local text gate: rules, Detoxify multilingual, Llama Guard 3 1B, in the no-network container (answers 30, 30b) | [MOD] [SEC] [SPIKE] (step 0) | P4.04, P4.09 | `phase-4.md` |
@@ -1476,7 +1477,8 @@ flowchart TD
   P4_06["P4.06 Video fingerprints"]
   P4_07["P4.07 Match path"]
   P4_07h["P4.07h Body of core.is_held"]
-  P4_07g["P4.07g Legal-hold reader logins"]
+  P4_07c["P4.07c Legal-hold cleanup tables"]
+  P4_07g["P4.07g Legal-hold logins and cleanup owner"]
   P4_07k["P4.07k Legal-hold domain and export CLI"]
   P4_08["P4.08 Local nudity gate"]
   P4_09["P4.09 Local transcript"]
@@ -1565,7 +1567,11 @@ flowchart TD
   P4_25g --> P4_25
   P4_07g --> P4_07k
   P4_07k --> P4_07
-  P4_07 --> P4_07h
+  P4_03 --> P4_07c
+  P4_07c --> P4_07g
+  P4_07c --> P4_07h
+  P4_07g --> P4_07
+  P4_07h --> P4_07
   P4_07h --> P4_25
 ```
 
@@ -2008,7 +2014,8 @@ does not create is isolated trusted base).
 - **P2.09k** (`pds-admin` egress policy, ahead of P2.09) and **P2.09d** (the dev-stack compose service, after P2.09,
   since `compose.dev.yaml` is not trusted base). P2.09 itself is all trusted base.
 - **P3.07k** (`eraseDid` functions and hooks, ahead of P3.07).
-- **P4.07h** (the body of `core.is_held`, right after P4.07).
+- **P4.07h** (the body of `core.is_held`, right after P4.07; *[superseded 2026-10-13: after P4.07c and before P4.07,
+  book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment of 22:16Z and its step-book mapping]*).
 - P5.07g keeps any replacement of P4.07's two definers (no new row).
 - Counts: Phase 2 19 rows, Phase 3 36, Phase 4 38. Ordering check re-run (see "Dependency check (2026-10-04, SE-6
   corrections)").

@@ -2269,7 +2269,7 @@ the extender and destroyer credentials, on its own internal network `pdsadmin-ho
   `destroyed` row keeps only holdId, permit id, epoch, time and tags, with no PII, retained for [lawyer to confirm].
 - **The receipt** carries two tags over one canonical encoding of (holdId, permit id, epoch, time, "destroyed"): an
   Ed25519 signature by `pds-admin`'s receipt key, for `admin`'s audit record only, and an HMAC-SHA256 tag under the
-  cleanup key, which only `pds-admin` (from env, never logged) and P4.07's `cleanup_owner` table hold.
+  cleanup key, which only `pds-admin` (from env, never logged) and P4.07g's `cleanup_owner` table hold.
 - **A lost receipt.** A destroy on a hold already `destroyed` returns the stored receipt unchanged, signs no
   instruction, makes no S3 request, and consumes the new permit. It still needs a valid moderator envelope and a fresh,
   single-use permit.
@@ -2290,7 +2290,7 @@ is the next free one when written, 0021 being Q3). It covers:
 - the keys: the permit key, the receipt key and the cleanup key, each with its custody, provisioning, rotation with a
   two-key overlap, and revocation, never logged; pgcrypto present in `postgres:18-trixie`; and that the cleanup tag's
   comparison in PL/pgSQL is not constant-time, acceptable because only `retention` can call it;
-- `cleanup_owner` (P4.07): why it exists, what it owns, its grants, and migrator's SET-only membership (`GRANT
+- `cleanup_owner` (P4.07g): why it exists, what it owns, its grants, and migrator's SET-only membership (`GRANT
   cleanup_owner TO migrator WITH SET TRUE, INHERIT FALSE`, as at 0003:65). The bootstrap superuser and migrator are the
   trusted base outside this boundary;
 - the fail-closed paths.
