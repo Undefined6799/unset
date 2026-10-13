@@ -2211,10 +2211,12 @@ secrets:
     "deployment/mirror.list.json": MIRROR,
   };
   const LOCAL_LAST = "LOCAL unsigned, local-only stack: never deploy it";
+  /** The edge Dockerfile itself, built from the root: the path is right, but C26 refuses the context. */
+  const OFF_CONTEXT_EDGE = "      context: ..\n      dockerfile: deployment/edge/Dockerfile\n";
   /** The local stack after `edit`, with its leaf secret files written beside the other secrets. */
   async function local(
     edit: (text: string) => string = (text) => text,
-    { links = {}, ...s }: Stack & { links?: Record<string, string> } = {},
+    { links = {}, remove = [], ...s }: Stack & { links?: Record<string, string>; remove?: string[] } = {},
   ) {
     const { root, file } = stack({
       compose: edit(LOCAL),
@@ -2229,6 +2231,7 @@ secrets:
     }
     chmodSync(join(root, "deployment/edge/local"), 0o755);
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
+    for (const path of remove) rmSync(join(root, path));
     const result = await preflight(["--env", "local", "--compose", file], {
       root,
       run: fakeRun().run,
@@ -2357,6 +2360,15 @@ secrets:
     expect(await lines(postgres(`    image: ${LOCKED_PDS}\n`))).toContain(
       "FAIL C27 postgres mounts the socket-directory tmpfs but is not built from deployment/images/postgres.Dockerfile",
     );
+    // Md (book edit 2026-10-13-p127l-verify-owners, item 3): the right Dockerfile, but a build C26 refuses (here its
+    // context), counts for neither check.
+    const offContext = "    build:\n      context: ./images\n      dockerfile: postgres.Dockerfile\n";
+    expect(await lines(postgres(offContext))).toContain(
+      "FAIL C27 postgres mounts the socket-directory tmpfs but is not built from deployment/images/postgres.Dockerfile",
+    );
+    expect(
+      await lines((text) => text.replace("      context: ./edge\n      dockerfile: Dockerfile\n", OFF_CONTEXT_EDGE)),
+    ).toContain("FAIL C25 edge adds a capability but is not built from deployment/edge/Dockerfile");
   });
 
   test("dev_and_prod_capability_and_socket_checks_still_need_the_lock", async () => {
@@ -2502,6 +2514,65 @@ secrets:
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
   });
 
+  // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local
+  // the (tls) every site imports is the leaf's, from the local/tls.caddy mount, and nothing else gives a site a
+  // certificate.
+  test("local_c18_serves_only_the_leaf_snippet", async () => {
+    const c18 = async (edit: (text: string) => string, files: Record<string, string> = {}) =>
+      (await local(edit, { files })).lines.find((line) => / C18 /.test(line));
+    const site = readFileSync(join(EDGE_DIR, "sites/pds.caddy"), "utf8");
+    const leaf = readFileSync(join(EDGE_DIR, "local/tls.caddy"), "utf8");
+    // Without its mount Caddy serves snippets/tls.caddy, which is not what C18 read under local.
+    expect(
+      await c18((text) => text.replace("      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n", "")),
+    ).toBe("FAIL C18 the TLS snippet is not mounted");
+    expect(await c18((text) => text, { "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "") })).toBe(
+      "FAIL C18 {$PDS_HOST}: does not import tls",
+    );
+    expect(
+      await c18((text) => text, {
+        "deployment/edge/sites/pds.caddy": site.replace("\timport tls\n", "$&\ttls internal\n"),
+      }),
+    ).toBe("FAIL C18 {$PDS_HOST}: has its own tls directive");
+    expect(
+      await c18((text) => text, {
+        "deployment/edge/local/tls.caddy": leaf.replace("(tls) {", "(tls-leaf) {"),
+        "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n",
+      }),
+    ).toBe("FAIL C18 the (tls) snippet served is not local/tls.caddy");
+    // The #789 verify's pins (E7, E9, E10): the snippet's mount twice, another local/ file at its target, and the
+    // leaf reached through a link inside local/.
+    const mount = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
+    expect(await c18((text) => text.replace(mount, `${mount}${mount}`))).toBe(
+      "FAIL C18 the edge mounts /etc/caddy/snippets/tls.caddy more than once",
+    );
+    expect(await c18((text) => text.replace(mount, mount.replace("local/tls.caddy:", "local/app.caddy:")))).toBe(
+      "FAIL C18 the TLS snippet is not deployment/edge/local/tls.caddy",
+    );
+    const linked = await local((text) => text.replace(mount, mount.replace("local/tls.caddy:", "local/leaf.caddy:")), {
+      links: { "deployment/edge/local/leaf.caddy": "tls.caddy" },
+    });
+    expect(linked.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 the TLS snippet is not a regular file: deployment/edge/local/tls.caddy",
+    );
+    // E2 and N2: the edge is the edge Dockerfile's build only when nothing else names it, and C26 passes that build.
+    const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
+    expect(await c18((text) => text.replace(edgeBuild, `${edgeBuild}    image: ${EDGE}\n`))).toBe(
+      "FAIL C18 the edge is not built from deployment/edge/Dockerfile",
+    );
+    expect(
+      await c18((text) => text.replace("      context: ./edge\n      dockerfile: Dockerfile\n", OFF_CONTEXT_EDGE)),
+    ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+    // With snippets/tls.caddy gone, the reader reads no leaf in its place, so another file's (tls) is what it judged.
+    const gone = await local((text) => text, {
+      remove: ["deployment/edge/snippets/tls.caddy"],
+      files: { "deployment/edge/snippets/z.caddy": "(tls) {\n\ttls internal\n}\n" },
+    });
+    expect(gone.lines.find((line) => / C18 /.test(line))).toBe(
+      "FAIL C18 the (tls) snippet served is not local/tls.caddy",
+    );
+  });
+
   test("dev_and_prod_still_refuse_the_local_file_mounts", async () => {
     for (const [file, target] of [
       ["tls.caddy", "/etc/caddy/snippets/tls.caddy"],
@@ -2529,11 +2600,30 @@ secrets:
         / C15 /.test(line),
       );
     expect(await c15(".pds.localhost")).toBe("PASS C15 ok");
-    for (const domains of [".example.test", ".0x40.space", ".other.localhost", ".pds.localhost,.example.test"]) {
+    // S5 (the #789 verify): a look-alike that ends in the host's text but not at a label boundary.
+    for (const domains of [
+      ".example.test",
+      ".0x40.space",
+      ".other.localhost",
+      ".pds.localhost,.example.test",
+      ".evil-pds.localhost",
+    ]) {
       expect(await c15(domains), domains).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not under the local PDS host");
     }
     expect(await c15(".0x40.me")).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
     expect(await c15("")).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not set");
+    // Mj (book edit 2026-10-13-p127l-verify-owners, item 3): C15's own `.localhost` rule on PDS_HOSTNAME, reached
+    // directly. Handles under a PDS host that is not `.localhost` fail, however well they sit under it.
+    const host = async (name: string) =>
+      (
+        await local((text) => text.replace("PDS_HOSTNAME: pds.localhost", `PDS_HOSTNAME: ${name}`), {
+          pdsEnv: { PDS_HOSTNAME: name, PDS_SERVICE_HANDLE_DOMAINS: `.${name}` },
+        })
+      ).lines.find((line) => / C15 /.test(line));
+    for (const name of ["pds.example.test", "pds.localhost.example.test", "localhost"]) {
+      expect(await host(name), name).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not under the local PDS host");
+    }
+    expect(await host("pds.localhost")).toBe("PASS C15 ok");
   });
 
   test("local_takes_dev_c23_skip_and_network_table", async () => {
