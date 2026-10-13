@@ -168,7 +168,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 260 steps: 236 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 276 steps: 252 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -375,6 +375,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11r | Try every edge test tag on cleanup (trusted base) | — | — | `phase-1.md` |
 | P1.11s | Report a failed edge removal; pin afterAll | — | — | `phase-1.md` |
 | P1.11n | Name test helpers apart; keep them out of images | — | P0.09n | `phase-1.md` |
+| P1.11k | Strip the snakeoil key from the postgres image | [SEC] | — | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
 | P1.34w | Tighten the wrapper's argument handling | [SEC] | — | `phase-1.md` |
@@ -389,10 +390,25 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34i | Close the dev compose test gaps from #745 | — | P1.29a | `phase-1.md` |
 | P1.34j | Catch lowercase USER and edge bind mounts (trusted base) | [SEC] | P1.34b | `phase-1.md` |
 | P1.34l | Refuse stray files in the secrets folder | [SEC] | — | `phase-1.md` |
-| P1.34m | Scan newly pinned runtime images in PR CI | [SEC] | — | `phase-1.md` |
+| P1.34m | Scan newly pinned runtime images in PR CI | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.34n | Apply the P1.29a rulings after #774 | [SEC] | P1.29a | `phase-1.md` |
 | P1.34k | Deny PDS safety-off flags in the live env | [SEC] | P1.34n | `phase-1.md` |
-| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l | `phase-1.md` |
+| P1.34o | Read app.caddy as one local file mount (trusted base) | [SEC] | P1.34a | `phase-1.md` |
+| P1.34q | Read local edge sites as per-file mounts (trusted base) | [SEC] | P1.34o | `phase-1.md` |
+| P1.33t | Require the tls import in every edge site | [SEC] | P1.27l | `phase-1.md` |
+| P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
+| P1.33m | Own the local Postgres init in CODEOWNERS (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d, P1.33m | `phase-1.md` |
+| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card) | P1.34u, P1.34d | `phase-1.md` |
+| P1.34y | Allow only the local PLC host in net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
+| P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
+| P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
+| P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
+| P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
+| P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
+| P1.29i | Judge every outbound PDS key in the token reader | [SEC] | — | `phase-1.md` |
+| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
@@ -401,8 +417,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27o | Edge /data and /config owned by caddy (trusted base) | [SEC] | P1.34e | `phase-1.md` |
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h | `phase-1.md` |
-| P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k, P1.33l, P1.34d | `phase-1.md` |
+| P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v, P1.34z | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
 | P1.31d | Resolve package exports and lexicon scripts (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -416,7 +432,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.01k | `resolveTxt` in `net-guard` (split from P2.01, SE-6) | [SEC] | P1.18 | `phase-2.md` |
 | P2.01q | `alsoKnownAs` guard (split from P2.01, SE-6) | — | P0.09c | `phase-2.md` |
 | P2.01m | `resolveVetted` on c-ares for public names | [SEC] | P2.01k | `phase-2.md` |
-| P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18 | `phase-2.md` |
+| P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18, P1.34z | `phase-2.md` |
 | P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
@@ -436,7 +452,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -614,6 +630,7 @@ flowchart TD
   P1_34e["P1.34e Final-stage RUN lines per kind"]
   P1_11s["P1.11s Edge removal failures reported"]
   P1_11n["P1.11n Test helpers out of images"]
+  P1_11k["P1.11k Snakeoil key stripped from postgres"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
   P1_34l["P1.34l Secrets folder listing"]
@@ -624,6 +641,21 @@ flowchart TD
   P1_34m["P1.34m Scan new runtime pins in PR CI"]
   P1_34n["P1.34n P1.29a rulings after #774"]
   P1_34k["P1.34k Deny PDS safety-off flags"]
+  P1_34o["P1.34o app.caddy as one local file mount"]
+  P1_34q["P1.34q Local edge sites as per-file mounts"]
+  P1_33t["P1.33t tls import in every edge site"]
+  P1_34t["P1.34t Pin the PLC URL per environment"]
+  P1_33m["P1.33m Local Postgres init owned"]
+  P1_34u["P1.34u Local PLC role and database"]
+  P1_34v["P1.34v Local PLC in the local stack"]
+  P1_34y["P1.34y net-guard allows the local PLC host"]
+  P1_34z["P1.34z Identity resolves through the local PLC"]
+  P1_33i["P1.33i Preflight may import shared/host-pin"]
+  P1_33h["P1.33h Host pin moved to shared/host-pin"]
+  P1_33j["P1.33j Token reader uses the shared pin"]
+  P1_33k["P1.33k Node base for the token reader"]
+  P1_33l["P1.33l Token reader pinned to the local stack"]
+  P1_29i["P1.29i Token reader judges every outbound key"]
   P1_34c["P1.34c Local app site with a dev leaf"]
   P1_34a["P1.34a Edge reader accepts local app site"]
   P1_34d["P1.34d PDS trusts one dev root"]
@@ -959,7 +991,33 @@ flowchart TD
   P1_34n --> P1_34k
   P1_34k --> P1_29t
   P1_34d --> P1_29t
+  P1_34a --> P1_34o
+  P1_34o --> P1_34q
+  P1_34q --> P1_34d
+  P1_27l --> P1_33t
+  P1_33t --> P1_34d
+  P1_34t --> P1_34u
+  P1_33m --> P1_34u
+  P1_34u --> P1_34v
+  P1_34d --> P1_34v
+  P1_34d --> P1_34u
+  P1_34d --> P1_29s
+  P1_34t --> P1_34y
+  P1_34v --> P1_34z
+  P1_34y --> P1_34z
+  P1_34z --> P1_29s
+  P1_29i --> P1_29s
+  P1_33j --> P1_29s
+  P1_33k --> P1_29s
+  P1_33l --> P1_29s
+  P1_33j --> P1_33l
+  P1_34z --> P1_29t
+  P1_33i --> P1_33h
+  P1_33h --> P1_33j
+  P1_33j --> P1_33k
+  P1_33k --> P1_34d
   P1_29t --> P2_13a
+  P1_34d --> P2_13a
   P1_30 --> P2_13a
   P1_30 --> P1_30s
   P1_30s --> P2_13a
@@ -1058,6 +1116,7 @@ flowchart TD
   P1_03 --> P1_08e
   P1_08e --> P1_08
   P2_01k --> P2_01
+  P1_34z --> P2_01
   P2_01q --> P2_01
   P2_01k --> P2_01m
   P2_01 --> P2_01a
@@ -1104,7 +1163,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before going public (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.34 | `phase-1.md` |
+| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
