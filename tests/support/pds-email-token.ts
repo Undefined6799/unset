@@ -84,9 +84,11 @@ const OUTBOUND_URLS = [
 /** host:port addresses the PDS connects to; the nameservers are a comma list. */
 const OUTBOUND_ADDRESSES = ["PDS_REDIS_SCRATCH_ADDRESS", "PDS_HANDLE_BACKUP_NAMESERVERS"];
 /**
- * Keys that turn on a provider just by being set, naming no host (Codex on #803; verify at 94ab296, B1-B4):
- * - a bucket is S3: AWS's own when no endpoint is set (dist/config/config.js:51-60), `<bucket>.<endpoint host>` unless
- *   path style is on, and credentials the AWS SDK looks up itself unless a static key id is set (config.js:61-67);
+ * Keys that turn on a provider just by being set, naming no host (Codex on #803; verify at 94ab296, B1-B4, and at
+ * d24dd55, B2):
+ * - a bucket is S3 (dist/config/config.js:51-67), refused outright: with every S3 key judged, the locked S3 client
+ *   still asks instance metadata for a region, AWS_DEFAULTS_MODE or the AWS config file can make it do so, and some
+ *   bucket names ignore path style or the endpoint. The PDS keeps blobs on disk instead (config.js:48-50);
  * - a KMS key id is AWS KMS, which takes no endpoint at all (dist/config/secrets.js:26-30);
  * - an hCaptcha site key calls api.hcaptcha.com (config.js:265-271; oauth-provider 0.23.1 lib/hcaptcha.js:105-111);
  * - a lexicon authority DID is resolved, and a did:web fetched from its host (config.js:279-281).
@@ -97,8 +99,6 @@ const PROVIDER_SELECTORS = [
   "PDS_HCAPTCHA_SITE_KEY",
   "PDS_LEXICON_AUTHORITY_DID",
 ];
-/** How a bucket's client picks its host and its credentials; the secret access key is never read. */
-const S3_FORM = ["PDS_BLOBSTORE_S3_FORCE_PATH_STYLE", "PDS_BLOBSTORE_S3_ACCESS_KEY_ID"];
 /** The rest of env.js, never read here, by why none sends the PDS to a host it names. */
 const NOT_OUTBOUND = [
   // Links and images the browser loads (config.js:222-252, describeServer).
@@ -146,10 +146,12 @@ const NOT_OUTBOUND = [
   "PDS_ENTRYWAY_PLC_ROTATION_KEY",
   "PDS_REDIS_SCRATCH_PASSWORD",
   "PDS_RATE_LIMIT_BYPASS_KEY",
-  "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
   "PDS_HCAPTCHA_SECRET_KEY",
   "PDS_HCAPTCHA_TOKEN_SALT",
-  // S3 options with no host of their own; the region only signs once an endpoint is set.
+  // S3 options, used only with a bucket, which is refused.
+  "PDS_BLOBSTORE_S3_FORCE_PATH_STYLE",
+  "PDS_BLOBSTORE_S3_ACCESS_KEY_ID",
+  "PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY",
   "PDS_BLOBSTORE_S3_REGION",
   "PDS_BLOBSTORE_S3_REQUEST_TIMEOUT_MS",
   "PDS_BLOBSTORE_S3_UPLOAD_TIMEOUT_MS",
@@ -191,14 +193,14 @@ export const CLASSIFIED_KEYS: ReadonlySet<string> = new Set([
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
   ...PROVIDER_SELECTORS,
-  ...S3_FORM,
   ...NOT_OUTBOUND,
 ]);
 /**
  * Variables of the PDS's process, which no env.js reads and so no drift test can see (verify at 94ab296, B5 and B6):
- * proxy-from-env, bundled with axios in @did-plc/lib 0.0.4, reads both spellings and npm's (dist/index.js:19222-19271)
- * for every PLC call; NODE_USE_ENV_PROXY routes Node's global fetch too, per Node v24.19.0 doc/api/cli.md; and
- * NODE_OPTIONS can turn that on, or load any module (--import, --require).
+ * proxy-from-env, bundled with axios in @did-plc/lib 0.0.4, reads each name in lower and upper case, npm's included
+ * (dist/index.js:19222-19271; verify at d24dd55, B1), for every PLC call; NODE_USE_ENV_PROXY routes Node's global
+ * fetch too, per Node v24.19.0 doc/api/cli.md; and NODE_OPTIONS can turn that on, or load any module (--import,
+ * --require).
  */
 const PROXY_KEYS = [
   "HTTP_PROXY",
@@ -210,6 +212,9 @@ const PROXY_KEYS = [
   "npm_config_proxy",
   "npm_config_http_proxy",
   "npm_config_https_proxy",
+  "NPM_CONFIG_PROXY",
+  "NPM_CONFIG_HTTP_PROXY",
+  "NPM_CONFIG_HTTPS_PROXY",
   "NODE_USE_ENV_PROXY",
 ];
 /** The only NODE_OPTIONS accepted: the heap size the dev PDS sets (deployment/compose.dev.yaml). */
@@ -220,8 +225,9 @@ const HELPERS_IMPORT = "import { envBool, envInt, envList, envStr } from '@atpro
 /**
  * The drift check on the pinned env.js (Amendment 3, S2'): every key it reads that is not classified, plus every
  * classified key it no longer reads. It refuses a file that could reach the environment any other way than one of
- * the four helpers called with a literal name (verify at 94ab296, S1): no `process`, no import but the helpers', each
- * helper named only in that import and in a read, and no key-shaped name outside a read.
+ * the four helpers called with a literal name (verify at 94ab296, S1): no `process`, no import but the helpers', one
+ * export (no re-export of another file; verify at d24dd55, S2), each helper named only in that import and in a read,
+ * and no key-shaped name outside a read. The image test also checks that no other file of the package reads it.
  */
 export function outboundDrift(envJs: string): string[] {
   const count = (pattern: RegExp) => [...envJs.matchAll(pattern)].length;
@@ -234,6 +240,7 @@ export function outboundDrift(envJs: string): string[] {
     count(/\bprocess\b/g) === 0 &&
     imports.length === 1 &&
     imports[0] === HELPERS_IMPORT &&
+    count(/\bexport\b/g) === 1 &&
     count(/\benv(?:Str|Int|Bool|List)\b/g) === keys.length + 4 &&
     count(/\benv[A-Za-z]*\s*\(/g) === keys.length &&
     count(/\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b/g) === keys.length;
@@ -252,7 +259,6 @@ const PDS_KEYS = [
   ...OUTBOUND_URLS,
   ...OUTBOUND_ADDRESSES,
   ...PROVIDER_SELECTORS,
-  ...S3_FORM,
   ...PROXY_KEYS,
   "NODE_OPTIONS",
 ];
@@ -368,27 +374,14 @@ function checkProcess(env: Map<string, string>): void {
   if (options !== "" && !HEAP_SIZE_ONLY.test(options)) refuse("NODE_OPTIONS is not only a heap size");
 }
 
-/**
- * No provider that names no host of its own: no KMS, hCaptcha or lexicon authority, and a bucket only on a judged
- * endpoint, path style (envBool's "true" or "1", @atproto/common 0.8.5 dist/env.js:12-19) and a static key id, so
- * the AWS SDK's own credential lookup never runs (config.js:61-67).
- */
+/** No provider that names no host of its own: no S3 bucket, KMS, hCaptcha or lexicon authority. */
 function checkProviders(env: Map<string, string>): void {
   const set = (name: string): boolean => (env.get(name) ?? "") !== "";
+  if (set("PDS_BLOBSTORE_S3_BUCKET")) refuse("PDS_BLOBSTORE_S3_BUCKET is set, so the PDS stores blobs in S3");
   if (set("PDS_PLC_ROTATION_KEY_KMS_KEY_ID")) refuse("PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS");
   if (set("PDS_HCAPTCHA_SITE_KEY")) refuse("PDS_HCAPTCHA_SITE_KEY is set, so the PDS calls hCaptcha");
   if (set("PDS_LEXICON_AUTHORITY_DID")) {
     refuse("PDS_LEXICON_AUTHORITY_DID is set, so the PDS resolves lexicons through that DID");
-  }
-  if (!set("PDS_BLOBSTORE_S3_BUCKET")) return;
-  if (!set("PDS_BLOBSTORE_S3_ENDPOINT")) {
-    refuse("PDS_BLOBSTORE_S3_BUCKET is set without PDS_BLOBSTORE_S3_ENDPOINT, so the PDS uses AWS S3");
-  }
-  if (!["true", "1"].includes(env.get("PDS_BLOBSTORE_S3_FORCE_PATH_STYLE") ?? "")) {
-    refuse("PDS_BLOBSTORE_S3_FORCE_PATH_STYLE is not true, so the S3 host is the bucket's subdomain");
-  }
-  if (!set("PDS_BLOBSTORE_S3_ACCESS_KEY_ID")) {
-    refuse("PDS_BLOBSTORE_S3_ACCESS_KEY_ID is unset, so the AWS SDK looks up credentials itself");
   }
 }
 

@@ -62,9 +62,8 @@ type World = {
   resolved: { address: string }[] | "fails" | "hangs";
   status: [number, number];
 };
-/** A bucket that stays on the stack: a stack service, path style, and static credentials. */
-const S3_ON_STACK = {
-  PDS_BLOBSTORE_S3_BUCKET: "blobs",
+/** Every S3 key the previous head judged, set the way it accepted: a stack service, path style, a static key id. */
+const S3_JUDGED = {
   PDS_BLOBSTORE_S3_ENDPOINT: "http://plc:2582",
   PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
   PDS_BLOBSTORE_S3_ACCESS_KEY_ID: "key-id-fixture",
@@ -398,10 +397,6 @@ describe("tests/support/pds-email-token.ts", () => {
       // Codex on #803: keys that pick a provider whose endpoint is AWS's own when none is set (@atproto/pds 0.5.37
       // dist/config/config.js:51-60, an unset endpoint; dist/config/secrets.js:26-30, KMS takes no endpoint at all).
       [
-        "PDS_BLOBSTORE_S3_BUCKET is set without PDS_BLOBSTORE_S3_ENDPOINT, so the PDS uses AWS S3",
-        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_BLOBSTORE_S3_BUCKET: "blobs" } }),
-      ],
-      [
         "PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS",
         (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_PLC_ROTATION_KEY_KMS_KEY_ID: "alias/plc" } }),
       ],
@@ -416,19 +411,18 @@ describe("tests/support/pds-email-token.ts", () => {
         "PDS_LEXICON_AUTHORITY_DID is set, so the PDS resolves lexicons through that DID",
         (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_LEXICON_AUTHORITY_DID: did } }),
       ]),
-      // A bucket on a stack host still connects to <bucket>.<host> unless path style is on, and finds its own
-      // credentials (STS, container metadata, IMDS) unless a static key is set.
-      ...["", "false", "0", "yes", "TRUE"].map((style): [string, (w: World) => World] => [
-        "PDS_BLOBSTORE_S3_FORCE_PATH_STYLE is not true, so the S3 host is the bucket's subdomain",
-        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, ...S3_ON_STACK, PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: style } }),
-      ]),
-      [
-        "PDS_BLOBSTORE_S3_ACCESS_KEY_ID is unset, so the AWS SDK looks up credentials itself",
-        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, ...S3_ON_STACK, PDS_BLOBSTORE_S3_ACCESS_KEY_ID: "" } }),
-      ],
-      // Process-level keys, pinned here: @did-plc/lib 0.0.4 bundles axios with proxy-from-env, which reads both
-      // spellings and npm's (dist/index.js:19222-19271); NODE_USE_ENV_PROXY routes Node's fetch (Node v24.19.0
-      // doc/api/cli.md).
+      // Any bucket (verify at d24dd55, B2): the locked S3 client still leaves the stack with every S3 key judged. With
+      // no region it asks instance metadata, AWS_DEFAULTS_MODE or the AWS config file can do the same, and some bucket
+      // names ignore both path style and the endpoint. The PDS keeps blobs on disk instead.
+      ...[{}, S3_JUDGED, { ...S3_JUDGED, PDS_BLOBSTORE_S3_REGION: "us-east-1" }].map(
+        (s3): [string, (w: World) => World] => [
+          "PDS_BLOBSTORE_S3_BUCKET is set, so the PDS stores blobs in S3",
+          (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_BLOBSTORE_S3_BUCKET: "blobs", ...s3 } }),
+        ],
+      ),
+      // Process-level keys, pinned here: @did-plc/lib 0.0.4 bundles axios with proxy-from-env, which reads each name
+      // in lower and upper case, npm's included (dist/index.js:19222-19271; verify at d24dd55, B1). NODE_USE_ENV_PROXY
+      // routes Node's global fetch too (Node v24.19.0 doc/api/cli.md).
       ...[
         "HTTP_PROXY",
         "HTTPS_PROXY",
@@ -439,6 +433,9 @@ describe("tests/support/pds-email-token.ts", () => {
         "npm_config_proxy",
         "npm_config_http_proxy",
         "npm_config_https_proxy",
+        "NPM_CONFIG_PROXY",
+        "NPM_CONFIG_HTTP_PROXY",
+        "NPM_CONFIG_HTTPS_PROXY",
         "NODE_USE_ENV_PROXY",
       ].map((name): [string, (w: World) => World] => [
         `${name} is set, so the PDS sends requests through a proxy`,
@@ -514,7 +511,7 @@ describe("tests/support/pds-email-token.ts", () => {
     const outbound = {
       PDS_CRAWLERS: "http://plc:2582,https://relay.localhost",
       PDS_BSKY_APP_VIEW_URL: "",
-      ...S3_ON_STACK,
+      // An endpoint alone sends nothing (no bucket), but is still judged.
       PDS_BLOBSTORE_S3_ENDPOINT: "https://app.example.test",
       PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: "s3-secret-fixture",
       PDS_HANDLE_BACKUP_NAMESERVERS: "127.0.0.53,[::1]:53",
@@ -525,13 +522,10 @@ describe("tests/support/pds-email-token.ts", () => {
     };
     const urls = await attempt({ ...local(), pdsEnv: { ...local().pdsEnv, ...outbound } });
     expect(urls.error).toBeNull();
-    // Path style as envBool reads it (@atproto/common 0.8.5 dist/env.js:12-19), and no NODE_OPTIONS at all.
+    // No NODE_OPTIONS at all passes too.
     const { NODE_OPTIONS: _, ...noOptions } = local().pdsEnv;
-    const one = await attempt({
-      ...local(),
-      pdsEnv: { ...noOptions, ...S3_ON_STACK, PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "1" },
-    });
-    expect(one.error).toBeNull();
+    const bare = await attempt({ ...local(), pdsEnv: noOptions });
+    expect(bare.error).toBeNull();
   });
 
   test("email_token_docker_runs_on_this_machine_only", async () => {
@@ -605,9 +599,9 @@ describe("tests/support/pds-email-token.ts", () => {
     expect(result.asked.pds).toContain("PDS_HOSTNAME");
     expect(result.asked.pds).toContain("PDS_REDIS_SCRATCH_ADDRESS");
     expect(result.asked.pds).toContain("NODE_OPTIONS");
-    // These name a key or a site and hold no secret: the KMS key id, the S3 access key id (its secret is never
-    // asked) and hCaptcha's public site key. They are asked so the wrapper can judge them.
-    const named = ["PDS_PLC_ROTATION_KEY_KMS_KEY_ID", "PDS_BLOBSTORE_S3_ACCESS_KEY_ID", "PDS_HCAPTCHA_SITE_KEY"];
+    // These name a key or a site and hold no secret: the KMS key id and hCaptcha's public site key. They are asked so
+    // a set one is refused.
+    const named = ["PDS_PLC_ROTATION_KEY_KMS_KEY_ID", "PDS_HCAPTCHA_SITE_KEY"];
     const secretLike = (key: string) => /SECRET|PASSWORD|KEY|TOKEN|SALT/.test(key) && !named.includes(key);
     expect(result.asked.pds?.filter(secretLike)).toEqual([]);
   });
@@ -660,6 +654,7 @@ describe("tests/support/pds-email-token.ts", () => {
       // One shape per rule that only that rule catches: process, a call of another env helper, a key-shaped name.
       "process.env[name]",
       "envAny(name)",
+      "envAny (name)",
       "globalThis['proc' + 'ess'].env.PDS_X_URL",
     ];
     for (const shape of shapes) {
@@ -671,6 +666,8 @@ describe("tests/support/pds-email-token.ts", () => {
       ["import { envStr as e } from '@atproto/common';", "e('PDS_X_URL')"],
       ["import { envBool, envInt, envList, envStr, readKey } from '@atproto/common';", "readKey('PDS_X_URL')"],
       [`${IMPORT}\nconst str = envStr;`, "str(name)"],
+      [IMPORT.replace("envStr }", "envStr, readKey as r }"), "r(name)"],
+      [`${IMPORT}\nexport * from './other.js';`, "envStr('PDS_X_URL')"],
       [`${IMPORT}\nimport * as common from '@atproto/common';`, "common[helper](name)"],
       [`${IMPORT}\nconst common = require('@atproto/common');`, "common[helper](name)"],
       [`${IMPORT}\nconst { envStr: s } = require('@atproto/common');`, "s('PDS_X_URL')"],

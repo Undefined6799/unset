@@ -19,7 +19,16 @@ const PDS = /^ {4}image: (ghcr\.io\/bluesky-social\/pds:\S+@sha256:[0-9a-f]{64})
 )?.[1];
 // The image installs its service with pnpm under /app (bluesky-social/pds Dockerfile, WORKDIR /app, COPY ./service);
 // the package link resolves into pnpm's store.
-const ENV_JS = "/app/node_modules/@atproto/pds/dist/config/env.js";
+const PDS_DIST = "/app/node_modules/@atproto/pds/dist";
+const ENV_JS = `${PDS_DIST}/config/env.js`;
+// Prints every .js file under its argument that names process.env or one of @atproto/common's env helpers.
+const ENV_READERS = [
+  "const { readdirSync, readFileSync } = require('node:fs');",
+  "const dir = process.argv[1];",
+  "const reads = /process\\.env|\\benv(?:Str|Int|Bool|List)\\b/;",
+  "for (const file of readdirSync(dir, { recursive: true }).sort())",
+  "  if (/\\.[cm]?js$/.test(file) && reads.test(readFileSync(dir + '/' + file, 'utf8'))) console.log(file);",
+].join("\n");
 
 const TEST_MS = 300_000;
 
@@ -30,6 +39,14 @@ describe("tests/support/pds-email-token.ts with Docker", () => {
     const read = docker(["run", "--rm", "--network", "none", "--entrypoint", "cat", PDS as string, ENV_JS], call);
     expect(read.code, read.err).toBe(0);
     expect(outboundDrift(read.out)).toEqual([]);
+    // env.js is the only file of the package that reads the environment, so drift there is all the drift (verify at
+    // d24dd55, S2): a read moved to another file, or re-exported from one, would never be scanned.
+    const readers = docker(
+      ["run", "--rm", "--network", "none", "--entrypoint", "node", PDS as string, "-e", ENV_READERS, PDS_DIST],
+      call,
+    );
+    expect(readers.code, readers.err).toBe(0);
+    expect(readers.out.trim().split("\n")).toEqual(["config/env.js"]);
   });
 
   test("email_token_inspect_template_prints_only_named_keys", { timeout: TEST_MS }, () => {
