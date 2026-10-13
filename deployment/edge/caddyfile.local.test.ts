@@ -223,6 +223,35 @@ describe("edge reader, local-only words everywhere else (P1.34b)", () => {
     }
   });
 
+  test("a_snippet_argument_cannot_build_a_leaf_path", () => {
+    // Caddy substitutes {args[N]} inside a word (v2.11.7 caddyconfig/caddyfile/parse.go:580), so a snippet argument
+    // could assemble a leaf path that no raw token holds; the reader takes an argument only as a whole word.
+    const pds = readFileSync(join(EDGE, "sites", "pds.caddy"), "utf8");
+    const leaf = "(zleaf) {\n\ttls /run/secrets/{args[0]}_cert /run/secrets/{args[0]}_key\n}\n";
+    const split = "(zleaf) {\n\ttls /run/secrets/{args[0]}{args[1]}_cert /run/secrets/{args[0]}{args[1]}_key\n}\n";
+    for (const [name, files] of [
+      [
+        "a snippet file",
+        { "snippets/zleaf.caddy": leaf, "sites/pds.caddy": pds.replace("import tls\n", "import zleaf local_tls\n") },
+      ],
+      [
+        "a split argument",
+        { "snippets/zleaf.caddy": split, "sites/pds.caddy": pds.replace("import tls\n", "import zleaf loc al_tls\n") },
+      ],
+      [
+        "the Caddyfile",
+        {
+          Caddyfile: caddyfile.replace("import snippets/*.caddy\n", `import snippets/*.caddy\n${leaf}`),
+          "sites/pds.caddy": pds.replace("import tls\n", "import zleaf local_tls\n"),
+        },
+      ],
+    ] as const) {
+      const tree = localTree({}, files);
+      expect(() => read(tree, "local"), name).toThrow("a snippet argument must be a whole word");
+      expect(() => read(shippedOf(tree)), name).toThrow("a snippet argument must be a whole word");
+    }
+  });
+
   test("app_host_is_a_site_address_only", () => {
     const site = APP_SITE.replace("\timport tls\n", "\timport tls\n\theader X-App {$APP_HOST}\n");
     expect(problems(localTree({ "app.caddy": site }))).toContain(

@@ -381,7 +381,7 @@ function expand(line: Line, expander: Expander): Line[] {
   }));
 }
 
-/** `{args[N]}` replaced by the import's Nth argument; any other `{args…}` form, or a missing argument, fails. */
+/** A whole-word `{args[N]}` replaced by the import's Nth argument; any other `{args…}` use, or a missing one, fails. */
 function withArgs(token: Token, args: readonly Token[]): Token {
   let env: EnvName | null = token.env;
   const text = token.text.replaceAll(/\{args([^}]*)\}/g, (whole, index: string) => {
@@ -390,6 +390,9 @@ function withArgs(token: Token, args: readonly Token[]): Token {
     if (value === undefined) fail(token.line, `{args${index}} has no value`);
     // A placeholder argument stays a whole word, so its position is still known (P1.28l).
     if (value.env !== null && whole !== token.text) fail(token.line, "an environment placeholder must be a whole word");
+    // Caddy substitutes inside a word (v2.11.7 caddyconfig/caddyfile/parse.go:580), so a part-word argument could
+    // assemble a word no raw token holds, such as a local-only leaf path; only a whole-word argument is read (P1.34b).
+    if (whole !== token.text) fail(token.line, "a snippet argument must be a whole word");
     env = value.env ?? env;
     return value.text;
   });
