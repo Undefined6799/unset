@@ -97,7 +97,8 @@ describe("postgres image", () => {
 
   test("postgres_image_has_no_sample_key_pair", { timeout: CONTAINER_MS }, () => {
     // The base's ssl-cert package generates a "snakeoil" key pair at upstream build time, so every copy of the official
-    // image holds the same private key; it is listed as root so the 0710 private folder can be read.
+    // image holds the same private key, and the subject-hash link to the certificate; it is listed as root so the 0710
+    // private folder can be read. Any dangling link under /etc/ssl also fails, which catches a renamed hash link.
     const run = docker(
       [
         "run",
@@ -110,7 +111,7 @@ describe("postgres image", () => {
         "sh",
         image,
         "-c",
-        "ls -A /etc/ssl/private; find /etc/ssl -name '*snakeoil*'",
+        "ls -A /etc/ssl/private; find /etc/ssl -name '*snakeoil*' -o -xtype l",
       ],
       { timeoutMs: CONTAINER_CALL_MS },
     );
