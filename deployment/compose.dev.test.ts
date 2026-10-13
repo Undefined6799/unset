@@ -10,7 +10,7 @@ import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
-import { type Compose, parseCompose, type Service } from "./preflight/compose-parse.ts";
+import { type Compose, parseCompose, parseStrictData, type Service } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -83,6 +83,26 @@ describe("compose.dev.yaml (P1.29)", () => {
         // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
         if (s.build === null) expect(runOnly.has(s.image ?? ""), `${file} ${s.name}`).toBe(true);
       }
+    }
+  });
+
+  test("run_only_image_is_exactly_a_runtime_lock_entry", () => {
+    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, point 2: an image with no build must equal a
+    // `stage: runtime` lock entry with `buildStage: false` byte for byte.
+    const lock = readLock();
+    const exact = (key: string) => `${lock[key]?.ref}:${lock[key]?.tag}@${lock[key]?.digest}`;
+    const runOnly = runOnlyImages();
+    expect(runOnly.has(exact("pds"))).toBe(true);
+    const otherDigest = `sha256:${"0".repeat(64)}`;
+    for (const image of [
+      `${lock.pds?.ref}:${lock.pds?.tag}@${otherDigest}`,
+      `${lock.pds?.ref}:${lock.pds?.tag}`,
+      `${lock.pds?.ref}@${lock.pds?.digest}`,
+      ` ${exact("pds")}`,
+      exact("caddy-builder"),
+      exact("node"),
+    ]) {
+      expect(runOnly.has(image), image).toBe(false);
     }
   });
 
@@ -265,6 +285,16 @@ describe("compose.dev.yaml (P1.29)", () => {
 const envOf = (s: Service): Map<string, string> =>
   new Map(s.environment.map(([key, value]) => [key, "ref" in value ? `\${${value.ref}}` : value.literal]));
 
+/** The names an env template sets, comments and blank lines left out. */
+const envNames = (text: string): string[] =>
+  text
+    .split("\n")
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => line.slice(0, line.indexOf("=")));
+/** A setting that turns a PDS protection off or puts it in development mode. */
+const switchesProtectionOff = (name: string): boolean =>
+  name.includes("DEV_MODE") || (name.startsWith("PDS_") && name.includes("DISABLE"));
+
 /** Pino's levels at info or above, and silent (P1.30 C12): debug and trace would log mail tokens (below). */
 const LOG_LEVELS = new Set(["info", "warn", "error", "fatal", "silent"]);
 const SMTP = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_ADDRESS"];
@@ -306,7 +336,6 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_INVITE_REQUIRED: "true",
       PDS_CRAWLERS: "",
       PDS_RATE_LIMITS_ENABLED: "false",
-      PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
@@ -369,6 +398,41 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     for (const name of ["PDS_DATA_DIRECTORY", "PDS_BLOBSTORE_DISK_LOCATION"]) {
       expect(env.get(name)?.startsWith("/home/node/"), name).toBe(true);
     }
+  });
+
+  test("no_pds_disable_or_dev_mode_variable", () => {
+    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose ("Also"), the fail-closed twin of F-25: no
+    // PDS_DISABLE_SSRF_PROTECTION, no PDS_DEV_MODE and no other PDS switch that turns a protection off, in this file's
+    // services or in any env template a stack copies from.
+    const templates = readdirSync(join(DEPLOYMENT, "env")).filter((file) => file.endsWith(".example.env"));
+    expect(templates).toContain("pds.example.env");
+    const names = [
+      ...dev().services.flatMap((s) => s.environment.map(([name]) => name)),
+      ...templates.flatMap((file) => envNames(read(join("env", file)))),
+    ];
+    expect(names).toContain("PDS_HOSTNAME");
+    expect(names.filter(switchesProtectionOff)).toEqual([]);
+    for (const name of [
+      "PDS_DISABLE_SSRF_PROTECTION",
+      "PDS_DEV_MODE",
+      "PDS_EMAIL_DISABLE_CONFIRMATION_LINK",
+      "DEV_MODE",
+    ]) {
+      expect(switchesProtectionOff(name), name).toBe(true);
+    }
+    for (const name of ["PDS_HOSTNAME", "PDS_INVITE_REQUIRED", "LOG_ENABLED"]) {
+      expect(switchesProtectionOff(name), name).toBe(false);
+    }
+  });
+
+  test("edge_answers_for_the_app_and_pds_hosts", () => {
+    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1: the PDS reaches both hosts (it fetches
+    // the app's client metadata) through the edge's aliases on the network they share, never extra_hosts or a fixed
+    // address. compose-parse refuses aliases anywhere else or with other values (aliases_only_on_the_edge_with_its_two_hosts).
+    const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
+    expect(raw.services.edge?.networks).toEqual({ edge: { aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"] } });
+    expect(service(dev(), "pds").networks).toContain("edge");
+    expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
   });
 
   test("edge_serves_the_repository_sites", () => {
