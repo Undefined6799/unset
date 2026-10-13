@@ -8356,22 +8356,6 @@ Done when both fixtures fail on main and pass with the change, and check is gree
 
 ---
 
-### P1.33l — Derive the reader's project from the env
-Tags: [SEC]            Depends on: P1.33j
-Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
-P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
-of 2026-10-13-local-plc (Codex on #800). Not paused: P1.29s needs it to run the reader under local. A new step keeps
-P1.33k a preflight change.
-
-**What:** the reader stops hard-coding `PROJECT = "unset-dev"` (`tests/support/pds-email-token.ts:61` on main). Its
-project is `unset-${env}`, with env exactly `dev` or `local`, explicit and with no default. Before any lookup it
-refuses unless that name equals both the compose project `name:` and the project label on the volume it reads. Red
-fixtures: a wrong env, a mismatched compose name, and a mismatched volume label.
-
-Done when each fixture fails on main (red first) and check is green.
-
----
-
 ### P1.33k — Admit the node base for the token reader
 Tags: [SEC]            Depends on: P1.33j
 Slice 1, issue #802, product (`deployment/preflight/checks/images.ts` and its tests), kind/fix, lane the third thread
@@ -8389,6 +8373,21 @@ Done when every fixture is red for its own reason and check is green.
 
 ---
 
+### P1.33l — Derive the reader's project from the env
+Tags: [SEC]            Depends on: P1.33j
+Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
+P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
+of 2026-10-13-local-plc (Codex on #800). Not paused: P1.29s needs it to run the reader under local. A new step keeps
+P1.33k a preflight change.
+
+**What:** the reader stops hard-coding `PROJECT = "unset-dev"` (`tests/support/pds-email-token.ts:61` on main). Its
+project is `unset-${env}`, with env exactly `dev` or `local`, explicit and with no default. Before any lookup it
+refuses unless that name equals both the compose project `name:` and the project label on the volume it reads. Red
+fixtures: a wrong env, a mismatched compose name, and a mismatched volume label.
+
+Done when each fixture fails on main (red first) and check is green.
+
+---
 
 ### P1.29i — Judge every outbound PDS key in the token reader
 Tags: [SEC]            Depends on: —
@@ -12514,7 +12513,7 @@ proved he can recover it from the console.
 
 ### P1.33p — Open the home server to the public internet (Alex)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34, P1.34t, P5.02 · **Plan:** §5.7; decision 20
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34, P1.34t · **Plan:** §5.7; decision 20
 
 Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-public-opening, from architecture's
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
@@ -12587,9 +12586,11 @@ evidence lives here.
   added fixture shows the public URL is still refused under dev and local. There is no gated dev-to-public transition
   (Amendment 2, point 1): a fixture shows `dev-public.env` with `https://plc.directory` still fails under dev after
   this step.
-- The prod stack runs the Phase 5 production compose file (P5.02, `deployment/compose.yaml`), which has no PLC
-  service, network or database wiring, so this step cannot land before Phase 5 (architecture's Amendment 3 of
-  2026-10-13-local-plc, point 3; book edit 2026-10-13-local-plc-a3-steps).
+- The prod stack runs the production compose file (`deployment/compose.yaml`, P5.02), which has no PLC service,
+  network or database wiring (architecture's Amendment 3 of 2026-10-13-local-plc, point 3; book edit
+  2026-10-13-local-plc-a3-steps). Open, for architecture: P1.35 and P1.38 depend on this step, and P5.02 depends
+  through P5.00, P4.28, P3.00 and P2.26 on P1.38, so the P5.02 edge would close a cycle. This step does not start
+  until that is ruled.
 - Edge cases:
   - Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
     the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
