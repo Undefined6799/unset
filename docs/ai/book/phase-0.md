@@ -2602,17 +2602,15 @@ asserts:
   and their own dependencies are ignored);
 - `outline_graph_acyclic`: the dependency graph has no cycle; a failure names one cycle's ids in order;
 - `heading_matches_row`: each step heading's "Depends on:" ids equal its outline row's, as a set (prose such as "Alex's
-  typed approval" is ignored), and the heading's title equals the row's title after one trailing parenthetical group
-  is removed from each side, such as "(trusted base)" or "(added, decision 35)". Everything before it must match
-  exactly; rows keep their suffixes, and no other normalization is allowed (book edit
-  2026-10-13-p009w-outline-graph-check, Amendment 1).
+  typed approval" is ignored). Titles are not compared: about 107 headings differ from their rows, and choosing a side
+  for each is not a check PR's job (book edit 2026-10-13-p009w-outline-graph-check, Amendment 2, which strikes
+  Amendment 1's title rule; title alignment can be a later docs step).
 
 The mermaid graphs are not checked: they are drawn from the rows, and checking them is a follow-up only if the verifier
 finds them drifting.
 
 Done when each test has a planted failing fixture (an unknown id, a three-step cycle, a heading whose dependency differs
-from its row, and a heading and row that differ only inside the trailing parentheses, which passes, beside one that
-differs before them, which fails), all three pass on main as it stands when built, and check is green. Any real drift
+from its row), all three pass on main as it stands when built, and check is green. Any real drift
 found on main goes in the same PR's record as a P0.09 book fix, never as an allowlist entry.
 
 ---

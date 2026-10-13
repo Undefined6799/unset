@@ -170,10 +170,13 @@ flowchart TD
   P218 --> P221[P2.21 editor]; P219 --> P221; P220 --> P221; P123 --> P221
   P221 --> P222[P2.22 privacy switches]
   P221 --> P223[P2.23 publish]; P222 --> P223; P131 --> P223
-  P134 --> P224[P2.24 go/no-go spike]
+  P134 --> P224[P2.24 go/no-go spike]; P133p[P1.33p public opening] --> P224
   P210 --> P225[P2.25 test track]; P216 --> P225; P226 --> P225; P215 --> P225
   P223 --> P226[P2.26 exit]; P224 --> P226
   P226 --> P226a[P2.26a minimal deploy, test host]; P226a --> P225
+  P127s[P1.27s publish and sign] --> P226b[P2.26b mirror bases + lock]; P134t[P1.34t PLC URL per env] --> P226b
+  P226b --> P226c[P2.26c edge bases]; P226c --> P226d[P2.26d drop dual spelling]; P226d --> P226a
+  P226b --> P226a; P226c --> P226a
   P107[P1.07 CSRF] --> P206; P207 --> P211; P207 --> P223; P207 --> P222
   P114 -.-> P210; P211 -.-> P212; P131 -.-> P221
 ```
@@ -3995,16 +3998,20 @@ Where:
   the mirror list's `source`, `mirror.yml:71-72`) is unchanged and no check path moves. This step never writes the
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
-- the first `deployment/images.lock.json`;
+- the first `deployment/images.lock.json`, and `deployment/cosign.pub` beside it (the first publish's verifying key;
+  if P1.27s's ADR chooses keyless, there is no `cosign.pub` and the lock carries the keyless identity instead;
+  book edit 2026-10-13-verify-819-fixes, S1);
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
 - the preflight real-file test in `deployment/preflight/`.
 
 `base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json` at
 the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only with
-its inline DL3026 ignore directly above it; the ignore-adjacency check (`images.test.ts:375-394`) keys on the upstream
-spelling, not on `source`. The tolerance stays harmless after P2.26c: hadolint's `trustedRegistries: ghcr.io` refuses an
-upstream `FROM` without an ignore, and P2.26c's `edge_no_dl3026_ignore` forbids the ignore. Architecture confirmed it
-(21:02Z) and requires P2.26d to remove it after P2.26c (book edit 2026-10-13-p127s-split, Amendment 2).
+its inline DL3026 ignore directly above it. P2.26b changes the ignore-adjacency check (`images.test.ts:375-394`), which
+today keys on `source` (:381), so that it keys on the upstream spelling; otherwise flipping caddy fails with "2 ignores
+for 0 upstream FROMs" (book edit 2026-10-13-verify-819-fixes, N5). The tolerance stays harmless after P2.26c: hadolint's
+`trustedRegistries: ghcr.io` refuses an upstream `FROM` without an ignore, and P2.26c's `edge_no_dl3026_ignore` forbids
+the ignore. Architecture confirmed it (21:02Z) and requires P2.26d to remove it after P2.26c (book edit
+2026-10-13-p127s-split, Amendment 2).
 
 Done when (tests, red first):
 - `bases_from_mirror` (every lock entry has `source` `"mirror"`, and every `FROM` under `deployment/images/` is its
@@ -4044,10 +4051,13 @@ Slice 2, issue #821, product (`deployment/images/images.test.ts`), kind/build; b
 2026-10-13-p127s-split, Amendment 2: the strict cleanup architecture requires (21:02Z), so P2.26b's caddy-only
 tolerance does not outlive its reason.
 
-**What:** delete the caddy dual-spelling branch from `base_digest_matches_lock`.
+Where: `deployment/images/images.test.ts`.
+
+**What:** delete the caddy dual-spelling branch from `base_digest_matches_lock`, and retire P2.26b's
+`dual_spelling_exactly_caddy` with it (book edit 2026-10-13-verify-819-fixes, Q4).
 
 Done when, red first, `mirror_entry_refuses_upstream_spelling` shows the upstream caddy spelling refused for a
-`"mirror"` entry, and check is green.
+`"mirror"` entry, nothing is left red, and check is green.
 
 ---
 
@@ -4173,9 +4183,11 @@ Outputs:
     `join.test_track_ack_required`. The tick is not stored (no new personal data).
   - `wipe-test-track.sh`: refuses to run unless either `ENV=dev`, the compose project `name:` is the dev name, and the
     PDS hostname is `0x40.space` (the human testers' accounts; it seeds nothing), or all four of `ENV=local`, the
-    compose project `unset-local`, every host it touches ending in `.localhost`, and every volume it wipes carrying the
-    `unset-local` compose project label (the same pair of checks as the P1.33l reader; the CI round-trip only;
-    architecture's Amendment 7 of 2026-10-13-local-plc, Q2, and its Q2 note; book edit 2026-10-13-verify-814-fixes, S3).
+    compose project `unset-local`, every host it touches local (each public origin ends in `.localhost`, and each
+    internal service URL uses a bare host that exactly matches a service name in the parsed `compose.local.yaml`; book
+    edit 2026-10-13-verify-819-fixes, Amendment 1, Q2), and every volume it wipes carrying the `unset-local` compose
+    project label (the same pair of checks as the P1.33l reader; the CI round-trip only; architecture's Amendment 7 of
+    2026-10-13-local-plc, Q2, and its Q2 note; book edit 2026-10-13-verify-814-fixes, S3).
     Each partial combination is refused. Under the local arm every target is the `unset-local` stack's own: its
     database, its object store and its PDS admin password. Under the dev arm it also refuses while
     `plc.directory/<authority DID>` names `https://0x40.space` as the lexicon authority's PDS (the authority moves in
@@ -4238,7 +4250,10 @@ Done when (tests):
   - `wipe.local_arm_refuses_partial`: each of the local arm's four conditions dropped alone → exits non-zero before
     touching anything (book edit 2026-10-13-verify-814-fixes, S3).
   - `wipe.local_arm_refuses_dev_volume`: a dev-labelled volume under an otherwise-local target → refused.
-  - `wipe_refuses_without_record`: no `retro_scan_record`, or one with `ok = false` → exits non-zero before deleting
+  - `wipe.local_refuses_dotted_internal`, `wipe.local_refuses_ip_host` and `wipe.local_refuses_foreign_service` (a
+    service name from another compose file): each under an otherwise-local target → refused (book edit
+    2026-10-13-verify-819-fixes, Amendment 1, Q2). - `wipe_refuses_without_record`: no `retro_scan_record`, or one with
+    `ok = false` → exits non-zero before deleting
     anything.
   - `wipe_refuses_on_stale_record`: `finished_at` older than the newest test-track upload → exits non-zero.
   - `wipe.stops_on_holds`: a seeded `legal_hold` table (P4.07) with one row → exits non-zero (skipped while the table
