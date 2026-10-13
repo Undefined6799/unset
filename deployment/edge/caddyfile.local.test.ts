@@ -173,9 +173,6 @@ describe("edge reader, local app site (P1.34a)", () => {
   });
 });
 
-/** The same tree, read the shipped way: its sites/enabled links only to the shipped PDS site. */
-const shippedOf = (tree: { edgeDir: string; sitesDir: string }) => tree;
-
 /** The placeholder addresses of each site that has one, in order: the Caddyfile's own loopback site is left out. */
 const addresses = (config: { sites: { placeholders: (string | null)[] }[] }) =>
   config.sites
@@ -198,7 +195,7 @@ describe("edge reader, local-only words everywhere else (P1.34b)", () => {
     for (const [word, text] of Object.entries(uses)) {
       const tree = localTree({}, { Caddyfile: `${caddyfile}\n${text}` });
       expect(() => read(tree, "local"), word).toThrow(`Caddyfile: ${word} is allowed only in local/`);
-      expect(() => read(shippedOf(tree)), word).toThrow(`Caddyfile: ${word} is allowed only in local/`);
+      expect(() => read(tree), word).toThrow(`Caddyfile: ${word} is allowed only in local/`);
     }
   });
 
@@ -241,7 +238,7 @@ describe("edge reader, local-only words everywhere else (P1.34b)", () => {
     ] as const) {
       const tree = localTree({}, files);
       expect(() => read(tree, "local"), name).toThrow("a snippet argument must be a whole word");
-      expect(() => read(shippedOf(tree)), name).toThrow("a snippet argument must be a whole word");
+      expect(() => read(tree), name).toThrow("a snippet argument must be a whole word");
     }
   });
 
