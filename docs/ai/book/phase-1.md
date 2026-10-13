@@ -7915,8 +7915,10 @@ P1.29t depends on it.
     in the same PR, so each always exists in exactly one file; until then they stay in the dev file and cannot run there
     (P1.33l and the seed guard refuse dev; architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The reader-only test
     (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
-    `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). Until this step lands, `local:up`
-    does not exist.
+    `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). `compose.local.yaml` sets
+    `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until P1.34v lands, DID creation fails at the PDS and never
+    reaches plc.directory, which is fail-closed for the seed (step-book note 1 of 2026-10-13-local-plc-a4-steps,
+    confirmed by architecture 19:31Z). Until this step lands, `local:up` does not exist.
 12. The local edge mounts each `sites/*.caddy` file and `local/app.caddy` read-only at
     `/etc/caddy/sites/enabled/<name>.caddy`, with no directory mount (book edit 2026-10-13-p134o-after-791, Amendment
     1). C18 under local accepts exactly those per-file read-only site mounts and refuses a directory mount at
@@ -8301,8 +8303,9 @@ operations.
 
 **What** (architecture's Amendment 4 of 2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps): the loaded PDS
 env must set `PDS_DID_PLC_URL`, by env:
-- **local:** exactly the local PLC's internal URL (P1.34v). Unset, `https://plc.directory` and any other host are
-  refused. Until the local PLC exists the check refuses, which blocks account creation. Seeds and probes (P1.29s,
+- **local:** exactly the constant `http://plc:2582`: the service name P1.34v uses, on the did-method-plc server's
+  default port (@did-plc/server 0.0.1 `src/bin.ts:18`; step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by
+  architecture 19:31Z). Unset, `https://plc.directory` and any other value are refused. Seeds and probes (P1.29s,
   P1.29t) run only under local, so test identities never reach the public directory.
 - **dev** (the 0x40.space stack, decision 20): exactly `https://plc.directory`, and nothing else. C21 (the P1.33a
   retirement report), C6 (a valid recovery key) and C7 (invites) already gate that stack, so this arm needs no P1.33p
@@ -8311,11 +8314,14 @@ env must set `PDS_DID_PLC_URL`, by env:
   before P1.33p opens it. Under `--env dev`, C21 applies whatever the hostname, because the dev stack is the 0x40.space
   authority host; until P1.33a's report is complete, dev does not pass. Invites stay required (C7), and issuing one on
   dev is Alex's runbook step after P1.33p (P1.35 step 1); no agent or script issues one.
+- **prod:** exactly `https://plc.directory`, a tightening that follows from P5.02's "No PLC" line (step-book note 1 of
+  2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z).
+- The check is C28. No new dependency edge: P1.34t still does not depend on P1.34v.
 
-Done when red fixtures for local (unset, plc.directory, a public look-alike) and for dev (unset, the local URL, a
-look-alike) fail, dev with a non-0x40.space hostname and no complete report fails C21, the exact URL for each env
-passes, and check is green. Every existing `--env dev` pass fixture (P1.34d item 12's among them) carries a complete
-retirement-report fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
+Done when red fixtures for local (unset, plc.directory, a public look-alike), for dev (unset, the local URL, a
+look-alike) and for prod (unset, the local URL) fail, dev with a non-0x40.space hostname and no complete report fails
+C21, the exact URL for each env passes, and check is green. Every existing `--env dev` pass fixture (P1.34d item 12's
+among them) carries a complete retirement-report fixture (architecture's Amendment 7 of 2026-10-13-local-plc, Q1).
 
 ---
 
@@ -8373,8 +8379,11 @@ the local file).
   the only creator of roles and databases (P1.34u). `local:reset` removes only volumes labelled
   `com.docker.compose.project=unset-local`, after a typed confirmation. Red fixtures: a dev-labelled volume is never
   touched, and a missing confirmation removes nothing (Amendment 5, point 2).
-- The local PDS env's `PDS_DID_PLC_URL` is its internal URL, and P1.34t's local arm names that exact URL. The dev
-  stack (`compose.dev.yaml`, `dev-public.example.env`) has no PLC service and uses `https://plc.directory`.
+- The service is named `plc` and listens on 2582, so the local PDS env's `PDS_DID_PLC_URL=http://plc:2582` (set by
+  P1.34d) is P1.34t's constant; a different name or port changes that constant in the same PR. The test asserts that
+  `compose.local.yaml` defines a service named `plc` whenever the local URL is `http://plc:2582` (step-book note 1 of
+  2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z). The dev stack (`compose.dev.yaml`,
+  `dev-public.example.env`) has no PLC service and uses `https://plc.directory`.
 - This step adds the service, database wiring and network to P1.34d's `compose.local.yaml`, with the db service's
   one read-only mount of P1.34u's `init-local/`; the drift test allows exactly those differences.
 - The image, by Alex's card (the coordinator asks; recommended: the upstream image, **local** stack only): either the
@@ -9536,6 +9545,7 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C23 | prod only (P5.07b, decision 23): `FINGERPRINT_CHECK=arachnid` and `FAKE_FINGERPRINT_LIST` absent; dev and local skip it (PASS with the fixed reason "skipped: dev stage", as built by P1.30j); the server's own boot refusal (P5.07b) is the second guard |
 | C24 | host clock (findings F-16): `timedatectl show -p NTPSynchronized --value` prints `yes`, and when `chronyc` is installed `chronyc tracking` reports a system-time offset ≤ 1 s. Service-auth JWTs (60 s), `pds-admin` envelopes (`iat`/`exp`, 5 s of future leeway) and WebAuthn assertions assume a synchronised clock. Command missing or output unparsable → FAIL. Skipped only when `PDS_HOSTNAME` ends in `.localhost` (an agent's throwaway stack): PASS with the fixed reason "skipped: PDS_HOSTNAME ends in .localhost", as built by P1.30d |
 | C25 | edge low-port capability (P1.30x; Amendment 5 of book edit 2026-10-12-p204s-p130x-p130y-booked): `cap_add: [NET_BIND_SERVICE]` only on a service that runs the lock's edge image (which image a service runs is a lock fact, `checks/capabilities.ts`), only with `cap_drop: [ALL]`; when a service has both `image` and `build`, both must name edge (the comparison lands with P1.30y, which reads `build`) |
+| C28 | `PDS_DID_PLC_URL` by env (P1.34t; step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z): local exactly `http://plc:2582`; dev and prod exactly `https://plc.directory`; unset or anything else → FAIL |
 
 **Algorithm:**
 ```text
