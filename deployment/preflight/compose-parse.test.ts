@@ -206,6 +206,8 @@ describe("compose subset", () => {
       [reader("    logging:\n      driver: local\n"), 8, "logging must be exactly {driver: none}"],
       [reader(`${none}      options:\n        max-size: 1m\n`), 8, "logging must be exactly {driver: none}"],
       [reader("    logging: none\n"), 7, "logging must be exactly {driver: none}"],
+      [reader('    logging:\n      driver: "none "\n'), 8, "logging must be exactly {driver: none}"],
+      [reader('    logging:\n      driver: "None"\n'), 8, "logging must be exactly {driver: none}"],
       [`${base}${none}`, 6, "logging is allowed only on pds-token-reader"],
     ] as const) {
       expect(() => parseCompose(yaml, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:${line}: ${why}`));
