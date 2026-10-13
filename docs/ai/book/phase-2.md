@@ -3999,16 +3999,18 @@ Where:
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
 - the preflight real-file test in `deployment/preflight/`.
 
-`base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json`
-at the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only
-with its inline DL3026 ignore directly above it; the ignore-adjacency check (`images.test.ts:375-394`) keys on the
-upstream spelling, not on `source`. The tolerance stays harmless after P2.26c: hadolint's `trustedRegistries:
-ghcr.io` refuses an upstream `FROM` without an ignore, and P2.26c's `edge_no_dl3026_ignore` forbids the ignore. (Sent
-to architecture; if it prefers this strict, a product cleanup step after P2.26c drops the tolerance.)
+`base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json` at
+the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only with
+its inline DL3026 ignore directly above it; the ignore-adjacency check (`images.test.ts:375-394`) keys on the upstream
+spelling, not on `source`. The tolerance stays harmless after P2.26c: hadolint's `trustedRegistries: ghcr.io` refuses an
+upstream `FROM` without an ignore, and P2.26c's `edge_no_dl3026_ignore` forbids the ignore. Architecture confirmed it
+(21:02Z) and requires P2.26d to remove it after P2.26c (book edit 2026-10-13-p127s-split, Amendment 2).
 
 Done when (tests, red first):
 - `bases_from_mirror` (every lock entry has `source` `"mirror"`, and every `FROM` under `deployment/images/` is its
   mirror path) and `no_dl3026_ignore_left` (`deployment/images/*.Dockerfile` only; the edge is P2.26c's);
+- `dual_spelling_exactly_caddy`: the tolerance covers exactly the two caddy entries, keyed by ref and tag, not by a
+  pattern, and only at the lock digest;
 - `compose_dev_images_by_digest` (moved from P1.27s);
 - the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture
   (moved from P1.34d item 12; book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
@@ -4036,6 +4038,19 @@ Done when (tests, red first): `edge_from_mirror_by_digest` and `edge_no_dl3026_i
 
 ---
 
+### P2.26d — Drop the edge dual spelling from the lock test
+Tags: [SEC]            Depends on: P2.26c
+Slice 2, issue pending (board), product (`deployment/images/images.test.ts`), kind/build; book edit
+2026-10-13-p127s-split, Amendment 2: the strict cleanup architecture requires (21:02Z), so P2.26b's caddy-only
+tolerance does not outlive its reason.
+
+**What:** delete the caddy dual-spelling branch from `base_digest_matches_lock`.
+
+Done when, red first, `mirror_entry_refuses_upstream_spelling` shows the upstream caddy spelling refused for a
+`"mirror"` entry, and check is green.
+
+---
+
 ### P2.26a — Minimal deploy by verified digest for the test host (added, decision 35 D5)
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
@@ -4044,7 +4059,7 @@ Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check 
 test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P2.26c, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`

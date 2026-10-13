@@ -1210,7 +1210,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 22 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
+Depth: **build-ready**. 23 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1234,7 +1234,8 @@ Depth: **build-ready**. 22 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
 | P2.26b | Pin service images to the mirror by digest | [SEC] | P1.27s, P1.34t | `phase-2.md` |
 | P2.26c | Pull the edge bases from the mirror (trusted base) | [SEC] | P2.26b | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P2.26c, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
+| P2.26d | Drop the edge dual spelling from the lock test | [SEC] | P2.26c | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
@@ -1258,6 +1259,7 @@ flowchart TD
   P2_26["P2.26 Phase 2 exit"]
   P2_26b["P2.26b Service images by digest"]
   P2_26c["P2.26c Edge bases from the mirror"]
+  P2_26d["P2.26d Strict lock test again"]
   P2_26a["P2.26a Minimal deploy for the test host"]
   P2_25["P2.25 Closed test track"]
   P2_16b --> P2_16
@@ -1272,8 +1274,8 @@ flowchart TD
   P2_24 --> P2_26
   P2_26 --> P2_26a
   P2_26b --> P2_26c
-  P2_26b --> P2_26a
-  P2_26c --> P2_26a
+  P2_26c --> P2_26d
+  P2_26d --> P2_26a
   P2_26a --> P2_25
   P2_10 --> P2_25
   P2_18k --> P2_18
