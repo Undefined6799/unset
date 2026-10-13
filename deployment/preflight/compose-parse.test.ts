@@ -170,6 +170,27 @@ describe("compose subset", () => {
       );
     }
   });
+  // P1.29h (architecture record 2026-10-13-p129h-local-token-reader, Amendment 1 item 2): a profile keeps a service out
+  // of `up`, so it is read only as exactly `[tools]` on a service with no network at all, the local token reader.
+  test("profiles_only_tools_with_no_network", () => {
+    const tools = "    profiles: [tools]\n    network_mode: none\n";
+    expect(parseCompose(`${base}${tools}`, "c.yaml").services[0]?.profiles).toEqual(["tools"]);
+    expect(parseCompose(base, "c.yaml").services[0]?.profiles).toEqual([]);
+    for (const [yaml, why] of [
+      ["    profiles: [debug]\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: [tools, debug]\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: []\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: tools\n    network_mode: none\n", "profiles must be exactly [tools]"],
+      ["    profiles: [tools]\n", "a service with profiles must set network_mode: none"],
+      ["    profiles: [tools]\n    networks: [db]\n", "a service with profiles must set network_mode: none"],
+      ["    profiles: [tools]\n    network_mode: host\n", "a service with profiles must set network_mode: none"],
+    ]) {
+      expect(() => parseCompose(`${base}${yaml}`, "c.yaml"), yaml).toThrow(new ParseError(`c.yaml:5: ${why}`));
+    }
+    expect(() => parseCompose(`${base}    profiles: ["\${P}"]\n    network_mode: none\n`, "c.yaml")).toThrow(
+      new ParseError("c.yaml:5: $ in profiles"),
+    );
+  });
   // P1.30x (architecture record 2026-10-12-p129-compose-service-keys; Codex ruling 2 in 2026-10-12-batch33-codex-rulings):
   // each hardening and limit key is read in one shape, and a value the ruling does not allow is refused by key name.
   test("hardening_keys_read_in_the_subset", () => {

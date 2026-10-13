@@ -1542,6 +1542,24 @@ describe("preflight C17 (P1.30t)", () => {
       const table = { default: { internal: false, members: ["edge", "web"] } };
       expect(await expectOnly("C17", { compose, networks: table })).toBe("FAIL C17 network_mode is set in pds");
     }
+    // P1.29h: `none` joins no network, so there is nothing for the table to check, but only the tools-profile reader
+    // may use it; on a service `up` starts it is still refused.
+    const none = COMPOSE.replace(
+      "    env_file: ../../unset-dev-env/pds.env",
+      "    env_file: ../../unset-dev-env/pds.env\n    network_mode: none",
+    );
+    const table = { default: { internal: false, members: ["edge", "web"] } };
+    expect(await expectOnly("C17", { compose: none, networks: table })).toBe("FAIL C17 network_mode is set in pds");
+  });
+
+  test("c17_tools_reader_has_no_network", async () => {
+    const reader = COMPOSE.replace(
+      "\nsecrets:",
+      "\n  reader:\n    image: x\n    profiles: [tools]\n    network_mode: none\nsecrets:",
+    );
+    expect(reader).not.toBe(COMPOSE);
+    const lines = (await check({ compose: reader })).lines;
+    expect(lines.filter((line) => / C17\b/.test(line))).toEqual(["PASS C17 ok"]);
   });
 
   test("c17_table_mismatch_each_direction", async () => {

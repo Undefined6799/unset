@@ -44,6 +44,8 @@ export type Service = {
   dependsOn: Dependency[];
   /** Declared secret names; Compose mounts each at /run/secrets/<name>. */
   secrets: string[];
+  /** `profiles`: empty, or exactly ["tools"] on a service with `network_mode: none` (P1.29h). */
+  profiles: string[];
 };
 export type Build = { context: string; dockerfile: string };
 export type Tmpfs = { target: string; options: string | null };
@@ -103,6 +105,7 @@ const NO_INTERPOLATION = [
   "tmpfs",
   "depends_on",
   "secrets",
+  "profiles",
 ];
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -302,6 +305,7 @@ const SERVICE_KEYS = new Set([
   "tmpfs",
   "depends_on",
   "secrets",
+  "profiles",
 ]);
 
 /** What a service may name in its own file: named volumes, top-level secrets and other services. */
@@ -329,7 +333,25 @@ function service(r: Reader, name: string, spec: unknown, scope: Scope): Service 
     tmpfs: tmpfs(r, spec.get("tmpfs", true)),
     dependsOn: dependsOn(r, spec.get("depends_on", true), scope.services),
     secrets: serviceSecrets(r, spec.get("secrets", true), scope.secrets),
+    profiles: profiles(r, spec),
   };
+}
+
+/**
+ * `profiles` keeps a service out of `docker compose up` until it is named (compose-spec 15-profiles.md). The only one
+ * is the local token reader's: exactly `[tools]`, on a service with no network at all (architecture record
+ * 2026-10-13-p129h-local-token-reader, Amendment 1 item 2).
+ */
+function profiles(r: Reader, spec: YAMLMap): string[] {
+  const node = spec.get("profiles", true);
+  if (node === undefined) return [];
+  const values = isSeq(node) ? node.items.map((item) => r.text(item, "profile")) : [];
+  if (values.length !== 1 || values[0] !== "tools") r.fail(node, "profiles must be exactly [tools]");
+  const mode = spec.get("network_mode", true);
+  if (mode === undefined || r.text(mode, "network_mode") !== "none") {
+    r.fail(node, "a service with profiles must set network_mode: none");
+  }
+  return ["tools"];
 }
 
 /**
