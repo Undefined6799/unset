@@ -5,6 +5,7 @@ import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { lockOrNone } from "./images.ts";
 import { holdsEnvFile, reachesSecretsFolder, resolveChecked, WALK_REASONS } from "./secrets.ts";
+import type { Service } from "../compose-parse.ts";
 import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
@@ -79,21 +80,25 @@ export const c26: Check = {
   run: (inputs) => {
     for (const { name, build } of inputs.compose.services) {
       if (build === null) continue;
-      const reach = contextProblem(build.context, inputs);
-      if (reach !== null) return fail(`${name} builds from a context ${reach}`);
-      if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
-        return fail(`${name} builds from a Dockerfile the images workflow does not scan`);
-      }
-      const path = relative(inputs.root, build.dockerfile).split(sep).join("/");
-      if (namesakes(inputs.root, imageName(path)) !== 1) {
-        return fail(`${name} builds an image whose name another Dockerfile also takes`);
-      }
-      const context = basename(build.dockerfile) === "Dockerfile" ? dirname(build.dockerfile) : inputs.root;
-      if (build.context !== context) return fail(`${name} builds from a context other than the images workflow's`);
+      const problem = buildProblem(build, inputs);
+      if (problem !== null) return fail(`${name} ${problem}`);
     }
     return pass();
   },
 };
+
+/** Why C26 refuses this build, after the service's name, or null. */
+function buildProblem(build: NonNullable<Service["build"]>, inputs: Inputs): string | null {
+  const reach = contextProblem(build.context, inputs);
+  if (reach !== null) return `builds from a context ${reach}`;
+  if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
+    return "builds from a Dockerfile the images workflow does not scan";
+  }
+  const path = relative(inputs.root, build.dockerfile).split(sep).join("/");
+  if (namesakes(inputs.root, imageName(path)) !== 1) return "builds an image whose name another Dockerfile also takes";
+  const context = basename(build.dockerfile) === "Dockerfile" ? dirname(build.dockerfile) : inputs.root;
+  return build.context === context ? null : "builds from a context other than the images workflow's";
+}
 
 const SOCKET_DIR = "/var/run/postgresql";
 
