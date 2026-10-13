@@ -2042,8 +2042,9 @@ describe("preflight --env local (P1.27l)", () => {
   );
   const NODE_APP = { "deployment/images/node-app.Dockerfile": "FROM scratch\n" };
   /** C2 to C5's lines, with the stack's temporary root named as <root>. */
-  async function imageLines(s: Stack, env: string, deps: Partial<Deps> = {}): Promise<string[]> {
+  async function imageLines(s: Stack, env: string, deps: Partial<Deps> = {}, noKey = false): Promise<string[]> {
     const { root, file } = stack(s);
+    if (noKey) rmSync(join(root, "deployment/cosign.pub"));
     const { lines } = await preflight(["--env", env, "--compose", file], {
       root,
       run: fakeRun().run,
@@ -2059,7 +2060,7 @@ describe("preflight --env local (P1.27l)", () => {
     const dev = { compose: DEV, pdsEnv: DEV_ENV };
     const verifyFails = { run: fakeRun({ verify: { code: 1, stderr: "edge: signature does not verify: bad\n" } }).run };
     const platform = { run: fakeRun({ mediaType: "application/vnd.oci.image.manifest.v1+json" }).run };
-    const cases: [string, Stack, string, Partial<Deps>][] = [
+    const cases: [string, Stack, string, Partial<Deps>, boolean?][] = [
       ["prod", {}, "prod", {}],
       ["dev", dev, "dev", {}],
       ["no lock", { lock: null }, "prod", {}],
@@ -2074,6 +2075,13 @@ describe("preflight --env local (P1.27l)", () => {
         "dev",
         {},
       ],
+      // The verifier on #789: a mutant dropping dev's cosign.pub requirement survived nine samples. Both stages, and
+      // the failing paths under dev as under prod.
+      ["no key", {}, "prod", {}, true],
+      ["dev no key", dev, "dev", {}, true],
+      ["dev not ours", { ...dev, compose: DEV.replace(EDGE, `docker.io/library/caddy@${digest("a")}`) }, "dev", {}],
+      ["dev unsigned", dev, "dev", verifyFails],
+      ["prod platform", {}, "prod", platform],
     ];
     const PASSED = [
       "PASS C2 ok",
@@ -2085,7 +2093,8 @@ describe("preflight --env local (P1.27l)", () => {
       (id) => `FAIL ${id} input missing: <root>/deployment/images.lock.json`,
     );
     const seen: Record<string, string[]> = {};
-    for (const [name, s, env, deps] of cases) seen[name] = await imageLines(s, env, deps);
+    for (const [name, s, env, deps, noKey] of cases) seen[name] = await imageLines(s, env, deps, noKey);
+    const NO_KEY = ["C3", "C4"].map((id) => `FAIL ${id} input missing: <root>/deployment/cosign.pub`);
     expect(seen).toEqual({
       prod: PASSED,
       dev: PASSED,
@@ -2096,6 +2105,11 @@ describe("preflight --env local (P1.27l)", () => {
       platform: [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
       "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
       "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "no key": [PASSED[0], ...NO_KEY, PASSED[3]],
+      "dev no key": [PASSED[0], ...NO_KEY, PASSED[3]],
+      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "dev unsigned": [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
+      "prod platform": [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
     });
   });
 
@@ -2121,7 +2135,6 @@ services:
     volumes:
       - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
       - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
-      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
     environment:
       PDS_HOST: pds.localhost
       PDS_UPSTREAM: pds:3000
@@ -2211,27 +2224,44 @@ secrets:
     expect(failed(crawled.lines)).toEqual(["C7"]);
   });
 
-  test("local_c2_admits_builds_and_pinned_bases_only", async () => {
-    const pdsImage = (image: string) => (text: string) => text.replace(LOCKED_PDS, image);
-    const [ref, pin] = LOCKED_PDS.split("@") as [string, string];
+  test("local_c2_admits_builds_and_run_only_vendor_images", async () => {
+    // Architecture record 2026-10-13-p127l-local-gaps, Amendment 2, point 2: unbuilt, only a vendor image the dev stack
+    // runs as shipped, by exact ref:tag@digest; a builder, a base we harden, and any partial reference are refused.
+    const c2 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C2 /.test(line));
+    expect(await c2((text) => text)).toBe("PASS C2 ok");
+    const bases = JSON.parse(BASES) as Record<string, { ref: string; tag: string; digest: string }>;
+    const exact = (key: string) => `${bases[key]?.ref}:${bases[key]?.tag}@${bases[key]?.digest}`;
+    const pds = bases.pds as { ref: string; tag: string; digest: string };
     for (const image of [
-      ref,
-      `${ref.split(":")[0]}@${pin}`,
-      `${ref}@sha256:${"0".repeat(64)}`,
-      `ghcr.io/undefined6799/mirror/pds@${pin}`,
-      `${ref}@${pin} `.trim().replace("pds:", "pds2:"),
+      exact("caddy-builder"),
+      exact("postgres"),
+      exact("caddy"),
+      exact("node"),
+      pds.ref,
+      `${pds.ref}:${pds.tag}`,
+      `${pds.ref}@${pds.digest}`,
+      `${pds.ref}:${pds.tag}@sha256:${"0".repeat(64)}`,
+      `ghcr.io/undefined6799/mirror/pds@${pds.digest}`,
     ]) {
-      const { lines } = await local(pdsImage(image));
-      expect(
-        lines.find((line) => / C2 /.test(line)),
-        image,
-      ).toBe("FAIL C2 pds image is not a locked base or mirror source by digest");
+      expect(await c2((text) => text.replace(LOCKED_PDS, image)), image).toBe(
+        "FAIL C2 pds image is not a run-only vendor image by tag and digest",
+      );
     }
     // A service with neither an image nor a build cannot run, and Compose refuses it; C2 says so too.
-    const unbuilt = await local((text) =>
-      text.replace("    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n", ""),
+    const webBuild = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+    expect(await c2((text) => text.replace(webBuild, ""))).toBe("FAIL C2 web has neither an image nor a build");
+    // A build counts only with no image beside it, and only from a Dockerfile C26 passes.
+    expect(await c2((text) => text.replace(webBuild, `${webBuild}    image: ${LOCKED_PDS}\n`))).toBe(
+      "FAIL C2 web has both an image and a build",
     );
-    expect(unbuilt.lines.find((line) => / C2 /.test(line))).toBe("FAIL C2 web has neither an image nor a build");
+    // Outside deployment/, so the images workflow never scans it.
+    const unscanned = await local(
+      (text) => text.replace("deployment/images/node-app.Dockerfile", "apps/other.Dockerfile"),
+      {
+        files: { "apps/other.Dockerfile": "FROM scratch\n" },
+      },
+    );
+    expect(unscanned.lines.find((line) => / C2 /.test(line))).toBe("FAIL C2 web builds from a Dockerfile C26 refuses");
   });
 
   test("local_guards_loopback_ports_and_localhost_pds", async () => {
@@ -2249,8 +2279,8 @@ secrets:
   });
 
   test("local_capability_and_socket_checks_need_no_lock", async () => {
-    // C25 and C27 accept the edge and the database by their Dockerfiles, which a local stack builds; with no lock the
-    // build is the only identity they can pass, and a pulled image fails them as on dev.
+    // Architecture record 2026-10-13-p127l-local-gaps, Amendment 1, point 1: with no lock, C25 and C27 know the edge and
+    // the database only by a build of exactly their Dockerfile that C26 passes, with no image beside it.
     const postgres = (from: string) => (text: string) =>
       text.replace(
         "  web:\n",
@@ -2258,12 +2288,66 @@ secrets:
       );
     const built = "    build:\n      context: ..\n      dockerfile: deployment/images/postgres.Dockerfile\n";
     const files = { "deployment/images/postgres.Dockerfile": "FROM scratch\n" };
-    const ok = await local(postgres(built), { files });
-    expect(ok.lines.filter((line) => / C2[57] /.test(line))).toEqual(["PASS C25 ok", "PASS C27 ok"]);
-    const pulled = await local(postgres(`    image: ${LOCKED_PDS}\n`), { files });
-    expect(pulled.lines).toContain(
-      "FAIL C27 postgres mounts the socket-directory tmpfs but does not run the lock's database image",
+    const lines = async (edit: (text: string) => string, s: Stack & { links?: Record<string, string> } = {}) =>
+      (await local(edit, { ...s, files: { ...files, ...s.files } })).lines.filter((line) => / C2[57] /.test(line));
+    expect(await lines(postgres(built))).toEqual(["PASS C25 ok", "PASS C27 ok"]);
+    // Red fixtures, each by the Dockerfile's identity alone.
+    const webBuild = "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n";
+    const nonEdge = await lines((text) =>
+      text.replace(webBuild, `${webBuild}    cap_drop: [ALL]\n    cap_add: [NET_BIND_SERVICE]\n`),
     );
+    expect(nonEdge).toContain("FAIL C25 web adds a capability but is not built from deployment/edge/Dockerfile");
+    const linked = await lines(
+      (text) => text.replace("      dockerfile: Dockerfile\n", "      dockerfile: link.Dockerfile\n"),
+      {
+        links: { "deployment/edge/link.Dockerfile": "Dockerfile" },
+      },
+    );
+    expect(linked).toContain("FAIL C25 edge adds a capability but is not built from deployment/edge/Dockerfile");
+    const nonPostgres = await lines((text) =>
+      text.replace(webBuild, `${webBuild}    tmpfs:\n      - /var/run/postgresql:uid=70,gid=70,mode=0700\n`),
+    );
+    expect(nonPostgres).toContain(
+      "FAIL C27 web mounts the socket-directory tmpfs but is not built from deployment/images/postgres.Dockerfile",
+    );
+    expect(await lines(postgres(`${built}    image: ${LOCKED_PDS}\n`))).toContain(
+      "FAIL C27 postgres mounts the socket-directory tmpfs but its image and build name different images",
+    );
+    const edgeBuild = "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n";
+    expect(await lines((text) => text.replace(edgeBuild, `${edgeBuild}    image: ${LOCKED_PDS}\n`))).toContain(
+      "FAIL C25 edge adds a capability but its image and build name different images",
+    );
+    expect(await lines(postgres(`    image: ${LOCKED_PDS}\n`))).toContain(
+      "FAIL C27 postgres mounts the socket-directory tmpfs but is not built from deployment/images/postgres.Dockerfile",
+    );
+  });
+
+  test("dev_and_prod_capability_and_socket_checks_still_need_the_lock", async () => {
+    // Amendment 1, point 1: the build-only fixture that passes C25 and C27 under local fails both under dev and prod,
+    // which still read the lock.
+    const postgres = (text: string) =>
+      text.replace(
+        "  web:\n",
+        "  postgres:\n    build:\n      context: ..\n      dockerfile: deployment/images/postgres.Dockerfile\n" +
+          "    tmpfs:\n      - /var/run/postgresql:uid=70,gid=70,mode=0700\n$&",
+      );
+    const edgeBuilt = (text: string) =>
+      text.replace(`    image: ${EDGE}\n`, "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n");
+    const files = {
+      "deployment/images/postgres.Dockerfile": "FROM scratch\n",
+      "deployment/edge/Dockerfile": "FROM scratch\n",
+    };
+    for (const [env, s] of [
+      ["prod", { compose: postgres(edgeBuilt(COMPOSE)), files, lock: null }],
+      ["dev", { compose: postgres(edgeBuilt(DEV)), files, lock: null, pdsEnv: DEV_ENV }],
+    ] as const) {
+      const { lines } = await check(s, env);
+      const judged = lines.filter((line) => / C2[57] /.test(line)).map((line) => line.replace(/: \/.*\//, ": <root>/"));
+      expect(judged, env).toEqual([
+        "FAIL C25 input missing: <root>/images.lock.json",
+        "FAIL C27 input missing: <root>/images.lock.json",
+      ]);
+    }
   });
 
   test("local_still_requires_mail_until_alex_answers", async () => {
@@ -2327,24 +2411,38 @@ secrets:
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
     );
-    // Architecture record 2026-10-13-p127l-local-gaps, item 1: the app site by exact name, once, read-only, no link.
+    // The app site's mount waits for P1.34o's reader (book edit 2026-10-13-p127l-to-third-lane, Amendment 1): until the
+    // reader reads local/app.caddy with the enabled sites, C18 refuses it as any other mount over the sites.
     const app = "./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro";
-    expect(await c18((text) => text.replace(app, app.replace(":ro", ""))), "writable").toBe(
-      "FAIL C18 the app site is not mounted read-only",
-    );
-    expect(await c18((text) => text.replace(app, app.replace("app.caddy:", "tls.caddy:")))).toBe(
-      "FAIL C18 the app site is not deployment/edge/local/app.caddy",
-    );
-    expect(await c18(volume(app))).toBe("FAIL C18 the edge mounts /etc/caddy/sites/enabled/app.caddy more than once");
+    expect(await c18(volume(app))).toBe("FAIL C18 the edge mounts over /etc/caddy/sites/enabled/app.caddy");
     expect(await c18(volume("./edge/local/app.caddy:/etc/caddy/sites/enabled/second.caddy:ro"))).toBe(
       "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/second.caddy",
     );
-    const linked = await local((text) => text.replace("./edge/local/app.caddy:", "./edge/local/app-link.caddy:"), {
-      links: { "deployment/edge/local/app-link.caddy": "app.caddy" },
+    // A volume at the snippet's target is not the file it names, however it is filled.
+    const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
+    expect(
+      await c18((text) =>
+        text
+          .replace(tls, "      - snippet:/etc/caddy/snippets/tls.caddy:ro\n")
+          .replace("\nsecrets:", "\nvolumes:\n  snippet: {}\nsecrets:"),
+      ),
+    ).toBe("FAIL C18 the TLS snippet is not a bind mount");
+    // The leaf's two secrets by exact name: another `local_` secret is still another secret.
+    expect(
+      await c18((text) =>
+        text
+          .replace("secrets: [local_tls_cert, local_tls_key]", "secrets: [local_tls_cert, local_tls_extra]")
+          .replace(
+            "  local_tls_key:\n",
+            "  local_tls_extra:\n    file: ../../unset-dev-secrets/local_tls_key\n  local_tls_key:\n",
+          ),
+      ),
+    ).toBe("FAIL C18 the edge reads a secret other than the dev leaf's");
+    // The reader's local mode: the snippet C18 judges is local/tls.caddy, not the shipped snippets/tls.caddy.
+    const broken = await local((text) => text, {
+      files: { "deployment/edge/local/tls.caddy": "this is { not caddy\n" },
     });
-    expect(linked.lines.find((line) => / C18 /.test(line))).toBe(
-      "FAIL C18 the app site is not a regular file: deployment/edge/local/app.caddy",
-    );
+    expect(broken.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable: /);
     expect(
       await c18((text) =>
         text.replace("secrets: [local_tls_cert, local_tls_key]", "secrets: [local_tls_cert, db_password]"),
@@ -2356,19 +2454,77 @@ secrets:
         text.replace("    build:\n      context: ./edge\n      dockerfile: Dockerfile\n", `    image: ${EDGE}\n`),
       ),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+    // Nor from any other Dockerfile, scanned or not.
+    expect(
+      await c18((text) =>
+        text.replace(
+          "    build:\n      context: ./edge\n      dockerfile: Dockerfile\n",
+          "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n",
+        ),
+      ),
+    ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
   });
 
-  test("dev_still_refuses_the_local_file_mounts", async () => {
+  test("dev_and_prod_still_refuse_the_local_file_mounts", async () => {
     for (const [file, target] of [
       ["tls.caddy", "/etc/caddy/snippets/tls.caddy"],
       ["app.caddy", "/etc/caddy/sites/enabled/app.caddy"],
     ]) {
-      const mounted = DEV.replace(
-        "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n",
-        `$&      - ./edge/local/${file}:${target}:ro\n`,
+      const mount = (text: string) =>
+        text.replace(
+          "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n",
+          `$&      - ./edge/local/${file}:${target}:ro\n`,
+        );
+      for (const [env, s] of [
+        ["dev", { compose: mount(DEV), pdsEnv: DEV_ENV }],
+        ["prod", { compose: mount(COMPOSE) }],
+      ] as const) {
+        const { lines } = await check(s, env);
+        expect(lines, `${env} ${file}`).toContain(`FAIL C18 the edge mounts over ${target}`);
+      }
+    }
+  });
+
+  test("local_c15_keeps_handles_under_the_local_pds_host", async () => {
+    // Architecture record 2026-10-13-p127l-local-gaps, Amendment 2, point 1: a tightening, never prod's rule.
+    const c15 = async (domains: string) =>
+      (await local((text) => text, { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: domains } })).lines.find((line) =>
+        / C15 /.test(line),
       );
-      const { lines } = await check({ compose: mounted, pdsEnv: DEV_ENV }, "dev");
-      expect(lines).toContain(`FAIL C18 the edge mounts over ${target}`);
+    expect(await c15(".pds.localhost")).toBe("PASS C15 ok");
+    for (const domains of [".example.test", ".0x40.space", ".other.localhost", ".pds.localhost,.example.test"]) {
+      expect(await c15(domains), domains).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not under the local PDS host");
+    }
+    expect(await c15(".0x40.me")).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
+    expect(await c15("")).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not set");
+  });
+
+  test("local_takes_dev_c23_skip_and_network_table", async () => {
+    // Amendment 2, point 3: both neutral, disclosed and pinned. C23 prints dev's skip, and the table read is dev's.
+    const result = await local();
+    const devLine = (await check({ compose: DEV, pdsEnv: DEV_ENV }, "dev")).lines.find((line) => / C23 /.test(line));
+    expect(result.lines.find((line) => / C23 /.test(line))).toBe(devLine);
+    // The table read is dev's: with prod's table unreadable, local still passes C17, and with dev's, it fails it.
+    const tables = (dev: string, prod: string) =>
+      local((text) => text, {
+        networks: TABLE,
+        files: { "deployment/networks.dev.json": dev, "deployment/networks.prod.json": prod },
+      });
+    const prodBroken = await tables(JSON.stringify(TABLE), "not json");
+    expect(prodBroken.lines.find((line) => / C17 /.test(line))).toBe("PASS C17 ok");
+    const devBroken = await tables("not json", JSON.stringify(TABLE));
+    expect(devBroken.lines.find((line) => / C17 /.test(line))).toMatch(/^FAIL C17 /);
+  });
+
+  test("env_flag_once_and_exact", async () => {
+    // The verifier on #789: parseArgs keeps the last of a repeated flag, so `--env prod --env local` ran the local path.
+    const { root, file } = stack();
+    const run = async (args: string[]) =>
+      (await preflight([...args, "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) })).lines;
+    expect(await run(["--env", "prod", "--env", "local"])).toEqual(["ERROR --env may be given once"]);
+    expect(await run(["--env", "local", "--env", "local"])).toEqual(["ERROR --env may be given once"]);
+    for (const args of [[], ["--env", ""], ["--env", "LOCAL"], ["--env", "Prod"], ["--env", "staging"]]) {
+      expect(await run(args), JSON.stringify(args)).toEqual(["ERROR --env must be dev, prod or local"]);
     }
   });
 });

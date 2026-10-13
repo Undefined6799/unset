@@ -148,10 +148,14 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap, mode: Edge
   return problems.length === 0 ? pass() : fail(problems.join("; "));
 }
 
-/** The files a local edge mounts from deployment/edge/local/, by target: each at most once, read-only, by that name. */
+/**
+ * The files a local edge mounts from deployment/edge/local/, by target: each at most once, read-only, by that name.
+ * The app site's mount (local/app.caddy at sites/enabled/app.caddy) waits for P1.34o's reader, which reads that file
+ * with the enabled sites; until then the reader would never see what Caddy serves there, so C18 refuses the mount as
+ * any other over the sites directory (book edit 2026-10-13-p127l-to-third-lane, Amendment 1: "fail C18 closed").
+ */
 const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
   [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
-  [`${SITES_TARGET}/app.caddy`]: { file: "app.caddy", what: "the app site" },
 };
 /** The dev leaf's certificate and key (P1.34c), the only secrets a local edge reads. */
 const LOCAL_EDGE_SECRETS = ["local_tls_cert", "local_tls_key"];

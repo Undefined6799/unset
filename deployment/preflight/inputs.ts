@@ -127,7 +127,7 @@ function readEnvOrNull(path: string): EnvRead | null {
  * `--import` are banned too (cli.test.ts, ruling Amendment 3).
  */
 export const CLI_OPTIONS = {
-  env: { type: "string" },
+  env: { type: "string", multiple: true },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
 } as const;
@@ -143,13 +143,16 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   // other `--` is refused: parseArgs would read it as the start of positionals, and a trailing one ends nothing.
   const args = argv[0] === "--" ? argv.slice(1) : argv;
   if (args.includes("--")) throw new CannotRun(USAGE);
-  let values: { env?: string; compose?: string[]; "interpolation-env"?: string[] };
+  let values: { env?: string[]; compose?: string[]; "interpolation-env"?: string[] };
   try {
     ({ values } = parseArgs({ args, options: CLI_OPTIONS, strict: true, allowPositionals: false }));
   } catch {
     throw new CannotRun(USAGE);
   }
-  if (!isEnv(values.env)) throw new CannotRun("--env must be dev, prod or local");
+  // parseArgs keeps the last of a repeated string flag, so `--env prod --env local` would run as local: refused.
+  const [env, ...more] = values.env ?? [];
+  if (more.length > 0) throw new CannotRun("--env may be given once");
+  if (!isEnv(env)) throw new CannotRun("--env must be dev, prod or local");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
   // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
   // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
@@ -158,7 +161,7 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
     throw new CannotRun("--compose must be an absolute, normalised path");
   }
-  return { env: values.env, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
+  return { env, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
 }
 
 /**

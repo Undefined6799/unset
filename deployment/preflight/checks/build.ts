@@ -88,7 +88,7 @@ export const c26: Check = {
 };
 
 /** Why C26 refuses this build, after the service's name, or null. */
-function buildProblem(build: NonNullable<Service["build"]>, inputs: Inputs): string | null {
+export function buildProblem(build: NonNullable<Service["build"]>, inputs: Inputs): string | null {
   const reach = contextProblem(build.context, inputs);
   if (reach !== null) return `builds from a context ${reach}`;
   if (!scanned(inputs.root, build.dockerfile, inputs.stat(build.dockerfile)?.isFile() === true)) {
@@ -100,7 +100,31 @@ function buildProblem(build: NonNullable<Service["build"]>, inputs: Inputs): str
   return build.context === context ? null : "builds from a context other than the images workflow's";
 }
 
+/**
+ * Whether `service` runs the image built from `dockerfile` (repository-relative). Under dev and prod the lock's `ref`
+ * or the build names it (runsImage). Under --env local there is no lock, so only the build can (P1.27l; record
+ * 2026-10-13-p127l-local-gaps, Amendment 1): a build of exactly that Dockerfile, which C26 passes, with no image beside
+ * it to disagree with. No name, tag or label stands in for it.
+ */
+export function runsBuilt(
+  service: Service,
+  inputs: Inputs,
+  ref: unknown,
+  dockerfile: string,
+): "yes" | "no" | "mismatch" {
+  const path = join(inputs.root, dockerfile);
+  if (inputs.env !== "local") return runsImage(service, ref, path);
+  if (service.build === null) return "no";
+  if (service.image !== null) return "mismatch";
+  return service.build.dockerfile === path && buildProblem(service.build, inputs) === null ? "yes" : "no";
+}
+
+/** What a reason says a service does not run: the lock's image, or under --env local the Dockerfile it must build. */
+export const notRunning = (inputs: Inputs, image: string, dockerfile: string): string =>
+  inputs.env === "local" ? `is not built from ${dockerfile}` : `does not run the lock's ${image}`;
+
 const SOCKET_DIR = "/var/run/postgresql";
+const POSTGRES_DOCKERFILE = "deployment/images/postgres.Dockerfile";
 
 /** C27: only the postgres image gets a tmpfs over its socket directory, in either tmpfs form. */
 export const c27: Check = {
@@ -114,14 +138,13 @@ export const c27: Check = {
     if (mounting.length === 0) return pass();
     const lock = lockOrNone(inputs);
     if (lock === null) return missing(inputs.lockPath);
-    const dockerfile = join(inputs.root, "deployment/images/postgres.Dockerfile");
     for (const service of mounting) {
-      const runs = runsImage(service, lock.postgres?.ref, dockerfile);
+      const runs = runsBuilt(service, inputs, lock.postgres?.ref, POSTGRES_DOCKERFILE);
       // Keys and services only: the socket path and the image's name are values a configured PGHOST or POSTGRES_USER
       // could hold, and such a reason would be withheld whole (P1.30j).
       const why = `${service.name} mounts the socket-directory tmpfs but`;
       if (runs === "mismatch") return fail(`${why} its image and build name different images`);
-      if (runs === "no") return fail(`${why} does not run the lock's database image`);
+      if (runs === "no") return fail(`${why} ${notRunning(inputs, "database image", POSTGRES_DOCKERFILE)}`);
     }
     return pass();
   },
