@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
@@ -54,11 +55,15 @@ const runsNode = (s: Service): boolean => nodeBuilt(s) || s.name === "pds";
 type LockEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
 const readLock = (): Record<string, LockEntry> =>
   JSON.parse(read("images/bases.lock.json")) as Record<string, LockEntry>;
-/** A lock entry run as shipped: a runtime image no Dockerfile builds on (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2). */
+/**
+ * A lock entry run as shipped: a vendor image (deployment/images/vendor.ts) locked as a runtime image no Dockerfile
+ * builds on (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2). The runtime bases we harden in our own
+ * Dockerfiles, caddy and postgres, are never one (Codex on #774).
+ */
 const runOnlyImages = (): Set<string> =>
   new Set(
     Object.values(readLock())
-      .filter((b) => b.stage === "runtime" && !b.buildStage)
+      .filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage)
       .map((b) => `${b.ref}:${b.tag}@${b.digest}`),
   );
 
@@ -101,6 +106,10 @@ describe("compose.dev.yaml (P1.29)", () => {
       ` ${exact("pds")}`,
       exact("caddy-builder"),
       exact("node"),
+      // Codex on #774: buildStage false means no Dockerfile stage builds on the entry, not that we run it as shipped,
+      // so the runtime bases we harden in our own Dockerfiles must never stand in for their builds.
+      exact("caddy"),
+      exact("postgres"),
     ]) {
       expect(runOnly.has(image), image).toBe(false);
     }
@@ -285,15 +294,21 @@ describe("compose.dev.yaml (P1.29)", () => {
 const envOf = (s: Service): Map<string, string> =>
   new Map(s.environment.map(([key, value]) => [key, "ref" in value ? `\${${value.ref}}` : value.literal]));
 
-/** The names an env template sets, comments and blank lines left out. */
-const envNames = (text: string): string[] =>
+/** The settings an env template writes, comments and blank lines left out. */
+const envSettings = (text: string): [string, string][] =>
   text
     .split("\n")
     .filter((line) => line !== "" && !line.startsWith("#"))
-    .map((line) => line.slice(0, line.indexOf("=")));
-/** A setting that turns a PDS protection off or puts it in development mode. */
-const switchesProtectionOff = (name: string): boolean =>
-  name.includes("DEV_MODE") || (name.startsWith("PDS_") && name.includes("DISABLE"));
+    .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]);
+/**
+ * A setting that turns a PDS protection off or puts it in development mode. The one exemption, by exact name and value,
+ * is the confirmation-link switch C16 requires (architecture record 2026-10-13-p129a-pds-and-edge-in-compose,
+ * Amendment 2; plan section 5.3).
+ */
+const switchesProtectionOff = (name: string, value: string): boolean => {
+  if (name === "PDS_EMAIL_DISABLE_CONFIRMATION_LINK" && value === "true") return false;
+  return name.includes("DEV_MODE") || (name.startsWith("PDS_") && name.includes("DISABLE"));
+};
 
 /** Pino's levels at info or above, and silent (P1.30 C12): debug and trace would log mail tokens (below). */
 const LOG_LEVELS = new Set(["info", "warn", "error", "fatal", "silent"]);
@@ -336,6 +351,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_INVITE_REQUIRED: "true",
       PDS_CRAWLERS: "",
       PDS_RATE_LIMITS_ENABLED: "false",
+      PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
@@ -406,23 +422,31 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     // services or in any env template a stack copies from.
     const templates = readdirSync(join(DEPLOYMENT, "env")).filter((file) => file.endsWith(".example.env"));
     expect(templates).toContain("pds.example.env");
-    const names = [
-      ...dev().services.flatMap((s) => s.environment.map(([name]) => name)),
-      ...templates.flatMap((file) => envNames(read(join("env", file)))),
+    const settings: [string, string][] = [
+      ...dev().services.flatMap((s) => [...envOf(s)]),
+      ...templates.flatMap((file) => envSettings(read(join("env", file)))),
     ];
-    expect(names).toContain("PDS_HOSTNAME");
-    expect(names.filter(switchesProtectionOff)).toEqual([]);
-    for (const name of [
-      "PDS_DISABLE_SSRF_PROTECTION",
-      "PDS_DEV_MODE",
-      "PDS_EMAIL_DISABLE_CONFIRMATION_LINK",
-      "DEV_MODE",
-    ]) {
-      expect(switchesProtectionOff(name), name).toBe(true);
-    }
-    for (const name of ["PDS_HOSTNAME", "PDS_INVITE_REQUIRED", "LOG_ENABLED"]) {
-      expect(switchesProtectionOff(name), name).toBe(false);
-    }
+    expect(settings.map(([name]) => name)).toContain("PDS_HOSTNAME");
+    expect(settings.filter(([name, value]) => switchesProtectionOff(name, value))).toEqual([]);
+    const off: [string, string][] = [
+      ["PDS_DISABLE_SSRF_PROTECTION", "true"],
+      ["PDS_DISABLE_SSRF_PROTECTION", "false"],
+      ["PDS_DEV_MODE", "true"],
+      ["DEV_MODE", "1"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "false"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "1"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "${X}"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINKS", "true"],
+      ["PDS_X_DISABLE_Y", "true"],
+    ];
+    for (const [name, value] of off) expect(switchesProtectionOff(name, value), `${name}=${value}`).toBe(true);
+    const on: [string, string][] = [
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "true"],
+      ["PDS_HOSTNAME", "${PDS_HOSTNAME}"],
+      ["PDS_INVITE_REQUIRED", "true"],
+      ["LOG_ENABLED", "false"],
+    ];
+    for (const [name, value] of on) expect(switchesProtectionOff(name, value), `${name}=${value}`).toBe(false);
   });
 
   test("edge_answers_for_the_app_and_pds_hosts", () => {
