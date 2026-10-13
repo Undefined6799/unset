@@ -3,13 +3,25 @@
 // node:fs reads the shared edge reader takes, and the reader's verdict. The reader and the site rules are
 // deployment/edge/caddyfile.ts (P1.28e, P1.28f, P1.28l), imported here and nowhere duplicated; C18 reads the Caddyfile
 // and snippets from the repository, which the edge image carries byte for byte (caddyfile.image.test.ts).
+//
+// Under --env local (P1.27l) the edge is built from deployment/edge/Dockerfile rather than run from the lock, and it
+// mounts two files from deployment/edge/local/ beside its sites: the dev leaf's TLS snippet and the app site
+// (architecture records 2026-10-12-refocus-local-signin-rulings, Amendment 2, and 2026-10-13-p127l-local-gaps, items
+// 1 and 2). Every config rule still applies to what it serves; only where the image's identity comes from changes.
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { posix } from "node:path";
-import { CaddyfileError, ENV_NAMES, type EnvName, edgeSiteProblems, readEdgeConfig } from "../../edge/caddyfile.ts";
-import type { Compose, Mount } from "../compose-parse.ts";
+import { join, posix } from "node:path";
+import {
+  CaddyfileError,
+  type EdgeMode,
+  ENV_NAMES,
+  type EnvName,
+  edgeSiteProblems,
+  readEdgeConfig,
+} from "../../edge/caddyfile.ts";
+import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { readLock } from "./images.ts";
-import { type Check, fail, missing, type Outcome, pass } from "./types.ts";
+import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
 export const SITES_TARGET = "/etc/caddy/sites/enabled";
@@ -51,14 +63,18 @@ const overCaddyConfig = (target: string): boolean =>
  * edge must mount nothing else at, under or above /etc/caddy, or the image's Caddyfile is not what runs; the source
  * must be a directory inside the repository's deployment/edge/, so which sites run stays a reviewed repository fact.
  */
-export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string } | Outcome {
+export function edgeSitesDir(
+  compose: Compose,
+  edgeDir: string,
+  localTargets: readonly string[] = [],
+): { dir: string } | Outcome {
   const edge = compose.services.find((service) => service.name === "edge");
   if (edge === undefined) return missing("the edge service");
   const sites: Mount[] = [];
   for (const mount of edge.mounts) {
     const target = mountTarget(mount);
     if (target === SITES_TARGET) sites.push(mount);
-    else if (overCaddyConfig(target)) return fail(`the edge mounts over ${target}`);
+    else if (overCaddyConfig(target) && !localTargets.includes(target)) return fail(`the edge mounts over ${target}`);
   }
   const [mount, ...others] = sites;
   if (mount === undefined) return missing(`the edge mount at ${SITES_TARGET}`);
@@ -116,7 +132,7 @@ function edgeImage(compose: Compose, edgeRef: string | undefined): Outcome | nul
   return edge.image === edgeRef ? null : fail("the edge service does not run the lock's edge image");
 }
 
-function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
+function readZones(edgeDir: string, sitesDir: string, env: SecretMap, mode: EdgeMode = "shipped"): Outcome {
   const values: Partial<Record<EnvName, string>> = {};
   for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
     const value = env.use(name, (v) => v);
@@ -124,7 +140,7 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
   }
   let problems: string[];
   try {
-    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES));
+    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES, mode));
   } catch (error) {
     if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
     throw error;
@@ -132,9 +148,71 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap): Outcome {
   return problems.length === 0 ? pass() : fail(problems.join("; "));
 }
 
+/** The files a local edge mounts from deployment/edge/local/, by target: each at most once, read-only, by that name. */
+const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
+  [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
+  [`${SITES_TARGET}/app.caddy`]: { file: "app.caddy", what: "the app site" },
+};
+/** The dev leaf's certificate and key (P1.34c), the only secrets a local edge reads. */
+const LOCAL_EDGE_SECRETS = ["local_tls_cert", "local_tls_key"];
+
+/** C18 under --env local: a built edge whose mounts and secrets are the local stack's, then the same config rules. */
+function localEdgeZones(inputs: Inputs): Outcome {
+  const edge = inputs.compose.services.find((service) => service.name === "edge");
+  if (edge === undefined) return missing("the edge service");
+  const built = edge.image === null && edge.build?.dockerfile === join(inputs.root, "deployment/edge/Dockerfile");
+  if (!built) return fail("the edge is not built from deployment/edge/Dockerfile");
+  if (edge.secrets.some((name) => !LOCAL_EDGE_SECRETS.includes(name))) {
+    return fail("the edge reads a secret other than the dev leaf's");
+  }
+  const sites = edgeSitesDir(inputs.compose, inputs.edgeDir, Object.keys(LOCAL_MOUNTS));
+  if (!("dir" in sites)) return sites;
+  const files = localFileMounts(edge, inputs.edgeDir);
+  if (files !== null) return files;
+  const env = inputs.serviceEnv.get("edge");
+  if (env === undefined) return missing("the edge service's environment");
+  return readZones(inputs.edgeDir, sites.dir, env, "local");
+}
+
+/**
+ * Why the local edge's binds are not exactly its sites plus LOCAL_MOUNTS, each a read-only bind of that one regular
+ * file in deployment/edge/local/, or null. A link is refused even when it points inside, so the mount names the file.
+ */
+function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
+  const local = EDGE_FILES.realpath(join(edgeDir, "local"));
+  const seen = new Set<string>();
+  for (const mount of edge.mounts) {
+    const target = mountTarget(mount);
+    if (target === SITES_TARGET) continue;
+    const allowed = LOCAL_MOUNTS[target];
+    if (allowed === undefined) {
+      if (mount.type === "bind") return fail("the edge binds more than its sites and the local files");
+      continue;
+    }
+    if (seen.has(target)) return fail(`the edge mounts ${target} more than once`);
+    seen.add(target);
+    const problem = localFileMount(mount, allowed, local);
+    if (problem !== null) return problem;
+  }
+  return null;
+}
+
+/** Why one LOCAL_MOUNTS entry is not a read-only bind of exactly its file in `local`, the realpathed local/. */
+function localFileMount(mount: Mount, allowed: { file: string; what: string }, local: string | null): Outcome | null {
+  if (mount.type !== "bind" || mount.source === null) return fail(`${allowed.what} is not a bind mount`);
+  if (!mount.readOnly) return fail(`${allowed.what} is not mounted read-only`);
+  const named = `deployment/edge/local/${allowed.file}`;
+  if (local === null || EDGE_FILES.realpath(mount.source) !== join(local, allowed.file)) {
+    return fail(`${allowed.what} is not ${named}`);
+  }
+  if (EDGE_FILES.kind(mount.source).type !== "file") return fail(`${allowed.what} is not a regular file: ${named}`);
+  return null;
+}
+
 export const c18: Check = {
   id: "C18",
   run: (inputs) => {
+    if (inputs.env === "local") return localEdgeZones(inputs);
     const lock = readLock(inputs);
     if (lock === null) return missing(inputs.lockPath);
     const ref = lock.edge?.ref;

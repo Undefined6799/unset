@@ -3,7 +3,7 @@
 // the postgres image.
 import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
-import { readLock } from "./images.ts";
+import { lockOrNone } from "./images.ts";
 import { holdsEnvFile, reachesSecretsFolder, resolveChecked, WALK_REASONS } from "./secrets.ts";
 import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
 
@@ -107,7 +107,7 @@ export const c27: Check = {
         service.mounts.some((mount) => mount.type === "tmpfs" && mount.target === SOCKET_DIR),
     );
     if (mounting.length === 0) return pass();
-    const lock = readLock(inputs);
+    const lock = lockOrNone(inputs);
     if (lock === null) return missing(inputs.lockPath);
     const dockerfile = join(inputs.root, "deployment/images/postgres.Dockerfile");
     for (const service of mounting) {

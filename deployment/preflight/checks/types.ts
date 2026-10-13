@@ -4,7 +4,8 @@ import type { Stats } from "node:fs";
 import type { Compose, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 
-export type Env = "dev" | "prod";
+/** `local` is an agent's or developer's throwaway stack built from source (P1.27l); `dev` and `prod` are deployed. */
+export type Env = "dev" | "prod" | "local";
 /** A file secret bind-mounted into containers, with the `user` of each service that mounts it (null when unset). */
 export type MountedSecret = { path: string; mountedBy: { service: string; user: string | null }[] };
 export type VerifyResult = { ok: true } | { ok: false; failures: string[] };
@@ -59,7 +60,8 @@ export type Inputs = {
   uid: number;
 };
 
-export type Outcome = { pass: boolean; reason: string };
+/** `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED. */
+export type Outcome = { pass: boolean; reason: string; unsigned?: true };
 export type Check = {
   id: string;
   network?: true;
@@ -71,6 +73,8 @@ export const fail = (reason: string): Outcome => ({ pass: false, reason });
 /** The prefix of every missing-input reason; the runner keeps it when it withholds the rest (P1.30m). */
 export const MISSING = "input missing: ";
 export const missing = (path: string): Outcome => fail(`${MISSING}${path}`);
+/** A check that does not apply to a local stack's unsigned images: neither a pass nor a failure (P1.27l). */
+export const unsigned = (reason: string): Outcome => ({ pass: true, reason, unsigned: true });
 
 export function serviceNamed(inputs: Inputs, name: string): Service | undefined {
   return inputs.compose.services.find((service) => service.name === name);
