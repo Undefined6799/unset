@@ -248,7 +248,7 @@ flowchart LR
   PGB & SQL & PAS & APD --> JOB
   JOB -->|class key, no retention rights| B1[(bucket backups: default lock N days<br/>noncurrent versions expire 1 day)]
   AUD --> B2[(bucket audit: default lock 2 years)]
-  HOLD --> B3[(bucket holds: no default lock;<br/>per-object retain-until (case))]
+  HOLD --> B3[("bucket holds: 7-day compliance default;<br/>extended per case on the admin path")]
   SEC -->|escrow recipient| B4[(bucket escrow: default lock N days)]
   BLOB --> MJ --> MIRB[(mirror bucket; deleted objects kept N days)]
   JOB -->|ops.report| FR
@@ -268,13 +268,22 @@ flowchart LR
   B4 --> R2
 ```
 
-Lifecycle rules delete expired objects; the host never does. Object Lock requires versioning, so every bucket has two
-lifecycle rules: expire the current version at lock + 1 day, and expire non-current versions and delete markers
+Lifecycle rules delete expired objects in every bucket but `holds`; the host never does. Object Lock requires
+versioning, so every bucket but `holds` has two lifecycle rules: expire the current version at lock + 1 day, and expire
+non-current versions and delete markers
 1 day after they become non-current. Without the second rule, "expired" data stays forever as non-current versions
 (round 1 F7).
 
-The host keys can put objects but hold no retention permission, so each object takes its bucket's default retention. A
-hold that needs a longer retention than the bucket default is extended with the offline admin key (P4.07 runbook).
+The host keys can put objects but hold no retention permission, so each object takes its bucket's default retention.
+
+The `holds` bucket is the exception (P5.04; book edit 2026-10-13-batch-47-after-771, G-2 and Amendment 1, from
+architecture's 2026-10-13-batch-46-contradictions): a 7-day compliance-mode default and no lifecycle deletion. Four
+credentials, by least privilege: the **host writer** may PutObject only, so every object takes the 7-day default and the
+host cannot set or extend retention; the **extender**, a separate credential with PutObjectRetention used only on
+`pds-admin`'s admin path and never on the PDS host, capped by a bucket policy condition at 400 remaining days; the
+**destroyer**, a separate credential in a separate unit off the request path, may list, read retention and legal-hold
+status and DeleteObjectVersion, reads the case's hold state from `pds-admin` read-only, and never touches retention; a
+**legal hold** uses the offline admin key only (PutObjectLegalHold). Other buckets keep their own retention design.
 
 A legal-hold object outlives the N-day pruning because it lives in its own bucket (plan §6: "a legal hold is the only
 thing that outlives N").
@@ -391,7 +400,8 @@ Outputs:
 - **ADR:** the answers to Q1–Q7, with the date, prices as quoted on the decision day, and who decided.
 - **`deployment/hosting.md`:**
   - provider, region and VPS size;
-  - the four locked buckets (`backups`, `audit`, `holds`, `escrow`) and their default retentions;
+  - the four locked buckets (`backups`, `audit`, `holds`, `escrow`) and their default retentions (`holds` has a
+    7-day compliance default and no lifecycle deletion; G-2 and Amendment 1);
   - the mirror bucket;
   - endpoint hostnames (these become the fixed-host allowlists of `egress-backup` and `egress-retention`);
   - N, RPO and RTO;
@@ -819,18 +829,19 @@ Algorithm, one run of class C:
      Run `age -r <recipient>…`, check its exit, and check the output is non-empty.
   6. **Upload** with that bucket's host key, plus the header `x-amz-checksum-sha256`.
      - Backups and audit: no retention header is sent; the object takes the bucket's default retention (round 1 F7).
-     - Holds: the upload sends an explicit compliance-mode retain-until equal to the case's preserve-until (book edit
+     - Holds: no retention header is sent; the object takes the 7-day compliance default, and the extender then sets the
+       case's retain-until (book edit 2026-10-13-batch-47-after-771, Amendment 1, replacing book edit
        2026-10-12-p504-holds-bucket-lock, item 2).
      - Upload timeout 30 minutes; 2 retries with backoff; then fail with `upload_failed`.
      - Before any upload, `retainUntilCap(class)` is computed and checked against the bucket's default retention:
        backups N + 1 days; audit at most the class period + 1 day; holds exactly the case's preserve-until. A bucket
-       whose default exceeds its cap, or a holds bucket with any default retention, blocks the upload with
-       `retention_cap` (round 1 F19: a wrong lock cannot be undone).
+       whose default exceeds its cap, or a holds bucket whose default is not 7 days in compliance mode, blocks the
+       upload with `retention_cap` (round 1 F19: a wrong lock cannot be undone).
   7. **Verify.** `HEAD` the object and require all of these, or fail with `verify_failed`:
      - the stored SHA-256 checksum (not the ETag) equals the local hash;
      - the size matches;
-     - `GetObjectRetention` returns mode `COMPLIANCE`, with retain-until ≤ the cap; for holds, retain-until equal to
-       the case's preserve-until.
+     - `GetObjectRetention` returns mode `COMPLIANCE`, with retain-until ≤ the cap; for holds, retain-until at least the
+       7-day default and no later than the case's target.
   8. Upload the sidecar. Delete scratch. Report `ok`. Release the lock.
   9. **On any failure:** delete scratch, report `ok: false` with the code, write an `alert.send("immediate", "backup", …)`
      outbox row, and exit non-zero.
@@ -851,23 +862,37 @@ Hold class: scan `legal-hold/` for hold IDs not yet in `holds`. For each one:
 - copy every object;
 - verify it against P4.07's manifest; on mismatch → fail with `hold_manifest_mismatch` and raise an immediate alert;
 - the case's preserve-until applies (architecture's ruling, book edit 2026-10-12-p504-holds-bucket-lock, which
-  replaces the old 365-day bucket default; law citations [lawyer to confirm]):
-  1. **No default lock on the holds bucket.** The write path refuses an object without an explicit retain-until; where
-     the store supports the condition, the bucket policy also denies a PutObject without object-lock retention
-     headers, and otherwise the writer's own test proves the refusal.
+  replaces the old 365-day bucket default; law citations [lawyer to confirm]):  1. **A 7-day compliance default on the
+     holds bucket** (book edit 2026-10-13-batch-47-after-771, Amendment 1, replacing "no default lock"): the host writer
+     has PutObject only, so it cannot set or extend retention; only the extender, on `pds-admin`'s admin path, changes
+     retain-until, capped at 400 remaining days.
   2. **Retain-until** equals the case's preserve-until (P3.16c rule 1, P4.07k), fixed at notification by the regime in
-     force, in compliance mode. It is computed once from the case record, never by hand, and fails closed to 21 days.
+     force, in compliance mode. It is computed once from the case record by P4.07k, never by hand (a never-recorded (A)
+     gives 21 days; an unparsable (A) blocks destruction). While a hold is provisional, each extension sets min(now + 7
+     d, target); once the target is known, exactly the target. A report hold before notification gets a **provisional
+     retain-until of creation + 7 days** (the review window), in compliance mode, and it is only ever extended: at the
+     s. 3 notice to preserve-until; at a "not reportable" finding, provisional-and-extend up to finding + 30 days with
+     nothing granted up front; or by an audited review extension in 7-day steps, each raising an urgent task. **Lapse:**
+     while a hold is open, the extender renews in 7-day steps and raises the case each time, so a missed review never
+     lets retain-until pass. The
+     backup accepts the provisional date as its preserve-until (book edit 2026-10-13-batch-47-after-771, G-2, from
+     architecture's 2026-10-13-batch-46-contradictions; refines H-1).
   3. **A judicial order** is an S3 legal hold on the case's objects, set and later cleared by an owner with the offline
      admin key and recorded with the order reference (audit: case id and timestamp only). It never extends the date,
      because a compliance date cannot be undone.
   4. **Destruction is a job.** Lock expiry deletes nothing. The job deletes each object as soon as feasible after its
      retain-until when no legal hold is on it (s. 4(2)), with any document made only for the preservation, and audits
-     it.
+     it. The destroyer refuses any object whose hold is open in `pds-admin`, even after retain-until has passed; an
+     object whose retain-until runs more than a day past its target raises an alert.
   5. **Tests:** a today's-regime case gets exactly notification plus 21 days and cannot be locked past day 21; a
-     missing or bad switch gives 21; an object without retention is refused; a holds bucket with a default lock
-     refuses with `retention_cap`; a 21-day case uploads and verifies; the destruction job is refused before the date,
-     succeeds after it and is refused while a legal hold is on; a regime switch leaves existing objects' dates
-     unchanged.
+     never-recorded (A) gives 21 with a fresh commencement check, and an unparsable (A) blocks destruction; an object
+     without retention is refused; a holds bucket without the 7-day compliance default refuses with `retention_cap`; a
+     21-day case uploads and verifies; the destruction job is refused before the date, succeeds after it and is refused
+     while a legal hold is on; a regime switch leaves existing objects' dates unchanged; the host writer cannot delete
+     or change retention; the extender cannot set retention beyond the 400-day cap; the destroyer cannot change
+     retention; the provisional date is extended at notice and at finding and never shortened (G-2); a missed review
+     triggers auto-renewal and nothing is destroyed; an open hold blocks the destroyer after expiry; an over-extension
+     raises the alert (Amendment 1).
 
 Freshness, inside (hourly):
 - For each class, read the newest report.
@@ -2645,6 +2670,16 @@ The legal content stays in full detail; the drafting order is a hypothesis.
            frozen or told? The answer replaces P4.07's provisional 4-hour re-alert and the analyst-path expiry.
         9. **Review notice without a third party** (answer 30b): now that no content leaves our servers, is the
            checkbox still needed, or is the notice (P4.11) enough?
+       10. **Backups and preservation documents** [lawyer to confirm] (book edit 2026-10-13-p5-lawyer-checklist-backups;
+           runbook and `legal-status.md` L11): under the 21-day regime, s. 4(2) requires destroying the preserved data
+           and any document prepared for the purpose of preserving it. Do the 30-day compliance-locked backups (P5.04)
+           that hold legal-hold rows fall under the ordinary-course exception? Are those rows (case record,
+           preserve-until, manifest) such documents? If not covered, how are they destroyed inside a backup that cannot
+           be shortened (options: exclude hold rows from backups, a separate holds-metadata store with its own short
+           lock, or crypto-shredding)? No mechanism is booked until the lawyer answers.
+       11. **Pending analyst holds** [lawyer to confirm] (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding
+           11; `legal-status.md` L22): how long may an unclassified near match be held pending a C3P analyst's answer?
+           The book's default: an urgent task at day 30 and Alex at day 60, with nothing destroyed while pending.
   - [ ] Decide each answer. The agent turns each one into an issue or a book change.
   - [ ] Approve the final notice text in EN and FR.
 

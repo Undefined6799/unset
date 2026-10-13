@@ -63,9 +63,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i,
   P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c,
   P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
-  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34d, P1.29h, P1.29s, P1.29t,
-  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
-  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34d,
+  P1.29h, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b,
+  P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice
+  exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -271,6 +272,9 @@ flowchart LR
   P1_34g["P1.34g edge integration test nits"]
   P1_34i["P1.34i dev compose test gaps"]
   P1_34j["P1.34j lowercase USER and bind mounts"]
+  P1_34m["P1.34m scan new runtime pins in PR CI"]
+  P1_34n["P1.34n P1.29a rulings after #774"]
+  P1_34k["P1.34k deny PDS safety-off flags"]
   P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_11c["P1.11c keep the setup error on cleanup"]
   P1_11i["P1.11i edge tag removal and test labels"]
@@ -514,6 +518,9 @@ flowchart LR
   P1_29a --> P1_34g
   P1_29a --> P1_34i
   P1_34b --> P1_34j
+  P1_29a --> P1_34n
+  P1_34n --> P1_34k
+  P1_34k --> P1_29t
   P1_28 --> P1_29a
   P1_27y --> P1_27n
   P1_30o --> P1_27a
@@ -528,6 +535,7 @@ flowchart LR
   P1_27a --> P1_27u
   P1_27u --> P1_29
   P1_29 --> P1_27p
+  P1_34a --> P1_34b
   P1_30a --> P1_27j
   P1_27i --> P1_11c
   P1_11c --> P1_11f
@@ -553,6 +561,9 @@ flowchart LR
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
   P1_34 --> P1_33p
+  P1_33p --> P1_35
+  P1_33a --> P1_35
+  P1_33p --> P1_38
   P0_12 --> P1_34
   P0_11 -.-> P1_34
   P1_29t -.-> P1_34
@@ -6991,10 +7002,10 @@ Done when the file exists with that content and check is green.
 ### P1.27l — Let local-only stacks pass C2 to C5 unsigned
 Tags: [SEC] [ALEX]            Depends on: P1.30y (merged, #659), P1.30a, P1.29 (services), P1.27m, P1.34a
 Slice 1, issue #671, product (`deployment/preflight/`, its tests, the local compose file and the `local:up` script),
-lane Phase 2, after P1.30o; book edit 2026-10-12-p127l-p127m-local-unsigned-path, from architecture's
-2026-10-12-p129-local-build-preflight (item 2). Alex's card as for P1.27m ("Yes, local only", 16:44:52Z). It replaces
-the pending record 2026-10-12-pending-local-unsigned-path. P1.34d (#742) depends on it; P1.34a (#749) lands
-before it.
+lane the third thread (moved for lane balance, book edit 2026-10-13-p127l-to-third-lane); book edit
+2026-10-12-p127l-p127m-local-unsigned-path, from architecture's 2026-10-12-p129-local-build-preflight (item 2). Alex's
+card as for P1.27m ("Yes, local only", 16:44:52Z). It replaces the pending record
+2026-10-12-pending-local-unsigned-path. P1.34d (#742) depends on it; P1.34a (#749) lands before it.
 
 **Why:** C2 fails a build-only service (no `image:`), and C3 to C5 fail until P1.27s, so no machine can run the Slice 1
 stack before Alex sets up signing. Under `--env local` a local build is the checked-out source, with no registry hop
@@ -7022,6 +7033,11 @@ Layers that still hold: base images digest-pinned and lock-checked, Dockerfiles 
 PDS with no real accounts. What it gives up: local images are not the signed CI artifacts.
 
 Notes (book edits 2026-10-12-batch-46-hold-lines and 2026-10-13-p134a-as-built-and-p127l-notes):
+- P1.29h's token-reader wrapper gains this step's local label as an extra required check (book edit
+  2026-10-13-p129h-book-lines, Amendment 1).
+- C11 and C19 (SMTP) stay deployed-only: under `--env local` they are out of scope, as today (local drops mail; book
+  edit 2026-10-07-pds-mail-se7-and-local-verification, item 1). This is the existing scope, not a new skip; a test
+  pins that `--env dev` still requires them (book edit 2026-10-13-p134n-p129a-follow-up).
 - Update ASVS V13.3.2 (`docs/human/compliance/asvs-5-l2.md`): #746 (P1.27o) left the row as it was, because the
   deployed volume belongs here, and P1.29 marked it partial.
 - C18 and the reader agree on one local enabled-sites directory, inside `sites/` or inside `local/`. A
@@ -7765,7 +7781,10 @@ P1.29t depends on it.
    a throwaway root: an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf are refused;
    the two exact hosts pass.
 9. C18 under `--env local` fails unless the leaf's DNS SANs equal exactly {APP_HOST, PDS_HOST} with no IP SAN, and
-   fails if the leaf expires within 14 days. Reasons are fixed words.
+   fails if the leaf expires within 14 days. Reasons are fixed words. (Amendment 3, from Codex's P2 on #779.) Beside
+   it, `APP_HOST` must be a valid hostname equal to `new URL(WEB_PUBLIC_ORIGIN).hostname`; a missing or stale
+   `APP_HOST` gives the edge the wrong alias. Red fixtures: missing, stale (another host) and invalid, each with a
+   fixed-word reason.
 10. The ratelimit zone is shared for local only; a prod app site gets its own zone.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
@@ -7817,8 +7836,8 @@ the coordinator's verify after merge (book edit 2026-10-13-p134a-as-built-and-p1
 Tags: trusted            Depends on: P1.34a (merged, #755)
 Slice 1, issue #762, trusted base (`deployment/edge/` only, about 30 lines), kind/fix, lane the third thread
 (branch three commits off 38e89b1); book edit 2026-10-12-p134b-edge-local-follow-ups, from the coordinator's 23:29Z
-ask after #755 merged at 760d26a. Not paused: it fixes a hole already on main. Nothing from Alex. Nothing depends on
-it.
+ask after #755 merged at 760d26a. Not paused: it fixes a hole already on main. Nothing from Alex. P1.34j (#768)
+depends on it.
 
 **What:**
 1. #750's N1: `local_files_never_in_the_image` matches COPY and ADD in any case and at any indentation, with three
@@ -7837,9 +7856,6 @@ main into #763 and adds items 5 and 6 there. If #763 merges first, items 5 and 6
 test nits from #746"** (trusted, `deployment/edge/` only, kind/fix, third thread, after #746); P1.34h is reserved,
 and the board opens its issue only on that path.
 
-Amendment 3 (03:35Z): #746 merged at 03:27:39Z as af876d8 and #763 stays at 33a12e5 without items 5 and 6. They
-move to P1.34j (#768) as its items 8 and 9. P1.34h is released and never opened.
-
 Amendment 2 (00:05Z, from the coordinator's verify of #755 after merge):
 7. The Caddyfile now goes through `localOnlyChecked`, with a red fixture.
 8. Test nits N1 to N4 from the same verify.
@@ -7847,7 +7863,12 @@ Amendment 2 (00:05Z, from the coordinator's verify of #755 after merge):
    `(dev, ino)` check goes in the reader. One condition: the per-entry containment check is separator-aware, with a
    red fixture for a `local-x/` sibling; a bare `startsWith` is fixed for both `sites/` and `local/`.
 
+Amendment 3 (03:35Z): #746 merged at 03:27:39Z as af876d8 and #763 stays at 33a12e5 without items 5 and 6. They
+move to P1.34j (#768) as its items 8 and 9. P1.34h is released and never opened.
+
 Done when each fixture fails without its change and `npm run check` is green.
+
+As built: #763, merged 2026-10-13T03:36:04Z as `4a2b0de` (head 33a12e5) (merge data read by REST).
 
 ---
 
@@ -7921,6 +7942,8 @@ than mirroring BuildKit's parser (architecture confirmed at 00:58Z: restricting 
 4. Any COPY or ADD flag word holding a quote or a backslash is refused (N7: `COPY --exclude=x\ --from=build local/
    /etc/caddy/local/`, and `COPY --"" --from=build local/ …` with a context file named `--from=build`).
 5. Item 2's `COPY --from=` pin to the one binary copy covers the rest.
+Red fixtures: one for each N7, N8 and N9 example. Item 1a's continuation join stays for `images.test.ts`; item 3 keeps
+the edge test's own line handling simple.
 6. (Architecture) Refuse any parser directive: a leading `# syntax=` or `# escape=` comment, in any case, before the
    first instruction. `escape=` swaps the continuation character, which would reopen N7 and N8. Red fixture.
 7. (Architecture) Refuse heredocs (`<<` in any RUN, COPY or ADD), because their bodies bypass the line rules. Red
@@ -7930,8 +7953,6 @@ Amendment 2 (03:35Z, #746's two trusted test nits; P1.34h is released and folds 
 8. N1: `runsBeforeUser` treats an escaped backslash as a continuation. With item 3's LF-only rule it follows item 1a's
    BuildKit rule: a trailing `\\` does not continue. Red fixture: `LABEL x=\\` followed by a listed duplicate RUN.
 9. N7: the RUN replace at `edge.test.ts:920` is case-insensitive. Red fixture: a lowercase `run`.
-Red fixtures: one for each N7, N8 and N9 example. Item 1a's continuation join stays for `images.test.ts`; item 3 keeps
-the edge test's own line handling simple.
 
 Done when `npm run check` is green and each fixture fails without its fix.
 
@@ -7952,6 +7973,77 @@ P1.27u amendment 7's rule, which was ruled but never built.
 
 Done when, red first, a stray `.seeded.json`, a `.new` file and a dotfile each fail with a count, the expected set
 passes, and check is green.
+
+---
+
+### P1.34m — Scan newly pinned runtime images in PR CI
+Tags: [SEC]            Depends on: —
+Slice 1, issue #775, check paths (`.github/workflows/`: `mirror.yml` or `images.yml`, the lane picks one, and the
+selector's unit test), kind/build, lane Phase 2 from the start; book edit 2026-10-13-p134m-pr-scan-new-runtime-pins.
+From Alex's tap "Add a CI job" (2026-10-13T04:02:36Z). Not paused: every PR that changes the runtime lock after this
+merges depends on it. #774 (P1.29a) merged at 43c435f before this step existed, so P1.29a does not depend on it;
+whether that PDS pin is scanned after merge is Alex's card. It needs Alex's typed line "yes P1.34m .github/workflows
+PR image scan and full mirror scan", relayed to Phase 2 by id.
+
+**Threats:** a newly pinned image with known fixable HIGH or CRITICAL CVEs merges unscanned; a pin pushed after the
+age window is not caught; a workflow token with more than package read rights; a mirror scan that stops at the first
+red source, so later sources (the PDS today) are never scanned.
+
+**What:**
+(a) A `pull_request` job (`contents: read` and `packages: read` only, no secret beyond `GITHUB_TOKEN`, no
+`pull_request_target`):
+1. It takes only the runtime lock entries whose `ref:tag@digest` differs from the base branch's lock.
+2. It runs `docker buildx imagetools inspect` on each and prints the push time as GHCR's package-version
+   `created_at` (P1.29a's build rulings, Amendment 2); imagetools' created time is a build-time lower bound only. If
+   GHCR is unreachable, the job fails closed.
+3. It runs Trivy on each with `--severity HIGH,CRITICAL --ignore-unfixed`, plus the mirror's stripped-path skips.
+4. It never scans unchanged sources on a PR; the upstream caddy entry's Go CVEs stay with `mirror.yml`'s own run.
+
+(b) `mirror.yml`'s "Scan every upstream source by digest" scans every source: it annotates each failing source by
+name and still exits non-zero at the end if any failed, instead of stopping at the first failure under
+`bash -eo pipefail`. A tightening: more is scanned, and the run stays red.
+
+**Tests:** the lock-diff selector, red first: an unchanged entry is skipped, a changed digest and a new entry are
+selected, a removed entry is skipped. Two failing fixture sources are both annotated and the job is red; a passing
+source after a failing one is still scanned. actionlint stays green.
+
+Done when the job runs on a PR that changes a pin, scans only that pin and fails on a fixture image with a fixable
+HIGH, the mirror loop scans every source, and CI is green.
+
+---
+
+### P1.34n — Apply the P1.29a rulings after #774
+Tags: [SEC]            Depends on: P1.29a
+Slice 1, issue #776, product (deployment compose and its tests, as #774), kind/fix, lane the third thread after
+P1.29a, branch `claude/build-lane-3-yar277-p129a2`, titled "P1.34n …"; book edit 2026-10-13-p134n-p129a-follow-up.
+#774 merged at 43c435f before P1.29a's build rulings (book edit 2026-10-13-p129a-build-rulings) landed. Not paused:
+it is on the sign-in path. Nothing from Alex.
+
+**What:**
+1. Amendment 1 of the build rulings: the edge aliases for exactly `APP_HOST` and `PDS_HOST`, the strict-parser rule
+   and the resolve-plus-TLS test.
+2. The static disable-switch test, with the exact exemption `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true` (C16
+   requires it). P1.34k moves it into the shared preflight list.
+3. The run-only fixtures.
+4. Codex's #774 P2: a run-only image must also be a vendor image, so caddy and postgres cannot skip their hardened
+   builds.
+
+Done when each fixture fails without its fix (red first) and check is green.
+
+---
+
+### P1.34k — Deny PDS safety-off flags in the live env
+Tags: [SEC]            Depends on: P1.34n
+Slice 1, issue #777, product (`deployment/preflight/` and its tests), kind/fix, lane the third thread after P1.34n and
+before P1.29t; book edit 2026-10-13-p134n-p129a-follow-up (Amendment 2 item 1 of the build rulings). Not paused.
+Nothing from Alex: it is a tightening.
+
+**What:** one list in one `deployment/preflight/` module serves both the static test (moved there from P1.34n) and a
+preflight check over the loaded live PDS env. It denies `PDS_DISABLE_SSRF_PROTECTION`, `PDS_DEV_MODE` and every PDS
+`*_DISABLE_*` key, with one exemption matched by exact name and value: `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true`.
+
+Done when, red first, each denied key fails in both checks with a fixture, the exemption passes only with its exact
+value, and check is green.
 
 ---
 
@@ -10338,8 +10430,45 @@ P1.29h, P1.29s, P1.29t.
    `LOG_LEVEL` is absent or exactly one of `info`, `warn`, `error`, `fatal`, `silent`; its comment cites the file and
    line of that log call in the pinned release, re-read on every PDS bump, and if a bump moves the log to info the
    rule becomes "`LOG_ENABLED=false`, full stop"; no log filter); and the remaining static PDS compose tests.
-8. **P1.29h "Read the local PDS email token in tests"** ([SEC], feature: `tests/support/`, plus the `compose.dev.yaml`
-   change that bind-mounts the local PDS data under the repo's ignored local directory and that ignore line; depends
+   Build rulings (book edits 2026-10-13-p129a-pds-and-edge-in-compose and 2026-10-13-p129a-build-rulings, from the third
+   lane's build on a081279; PDS 0.5.37, image `ghcr.io/bluesky-social/pds:0.4.5037` by index digest; the git tag is
+   `v0.4.5037`, but upstream's `build-and-push-ghcr.yaml` publishes `type=semver,pattern={{version}}`, which drops the
+   `v`, read 2026-10-13):
+   - **No `ipam`.** The strict parser's network keys stay as they are; the networks table has no address column.
+   - **A service without `build:`** is allowed only when its `image:` equals a `stage: runtime` lock entry's
+     `ref:tag@digest` byte for byte (the 2026-10-07 run-only image ruling, point 2; not a loosening). Built services
+     keep their rule. Red fixtures: the right tag with another digest, a build-stage entry, a bare tag.
+   - **PDS hardening:** `user: "1000:1000"`, `read_only: true`, `cap_drop: [ALL]`,
+     `security_opt: [no-new-privileges:true]`, a tmpfs at `/tmp`. One named volume at a directory that exists in
+     the image and is owned by 1000 (`/home/node` on a `node:*-alpine` base), so a fresh volume copies that owner;
+     `PDS_DATA_DIRECTORY` and `PDS_BLOBSTORE_DISK_LOCATION` both sit under it (e.g. `/home/node/pds` and
+     `/home/node/pds/blocks`). Never `/pds`: it is not in the image, so a fresh volume there is root-owned.
+   - **Edge ports:** 80 and 443 publish on `127.0.0.1` only (no `::`, no `0.0.0.0`); a test refuses any other host
+     IP in `compose.dev.yaml`. The tailnet bind moves to P1.34.
+   - **AppView and report-service settings** stay unset.
+   - **Aliases, not fixed addresses** (Amendment 1 of the build rulings): the edge's entry on the `edge` network carries
+     aliases for exactly `APP_HOST` and `PDS_HOST`, so the PDS reaches the app host's client metadata through the edge;
+     no `extra_hosts`. The strict parser accepts aliases only there and only with those two values. Red fixtures: an
+     alias on another service, another alias value. Amendment 3 (tap's hairpin) is not built here: tap's service arrives
+     in P3.02, which builds `tap_edge`, the edge's `PDS_HOST` alias on it and the per-network alias rule.
+   - **One deny list, two checks** (Amendment 2 of the build rulings, a tightening): one list in one
+     `deployment/preflight/` module serves a red-first static test over `compose.dev.yaml` and every `*.example.env`,
+     and a new preflight check over the loaded live PDS env. It denies `PDS_DISABLE_SSRF_PROTECTION`, `PDS_DEV_MODE` and
+     every PDS `*_DISABLE_*` key, with one exemption matched by exact name and value:
+     `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true`. A red fixture per case. #774 merged before this ruling, so the static
+     test is **P1.34n** and the live-env check **P1.34k "Deny PDS safety-off flags in the live env"** (#777, third
+     thread, after P1.34n, before P1.29t). The fail-closed twin of F-25.
+   - **Scan and age evidence before merge** (Alex's "Allow pinned" tap, "under the usual scan and age rules"): the PR
+     body gives the push time and the Trivy result. The push time is the GHCR package-version API's `created_at` for the
+     version holding the pinned digest (Amendment 2); imagetools' created time is only a build-time lower bound, and the
+     tag's commit date is supporting evidence only. In order: (a) the PR's own CI, if a workflow on the PR can pull the
+     pinned digest, run Trivy and read that `created_at`; (b) failing that, or if the API is unreachable (fail closed),
+     an Alex task: the commands run on his machine, output pasted into the PR; (c) a post-merge scan for local dev only,
+     before P1.34, only by his card, because it is a loosening. The PR may go ready but is not safe to merge until (a)
+     or (b) is in the body.
+8. **P1.29h "Read the local PDS email token in tests"** ([SEC], feature: `tests/support/`, plus a dev-only reader
+   service in `compose.dev.yaml` (book edits 2026-10-13-p129h-book-lines and 2026-10-13-p129h-local-token-reader,
+   option (a)); depends
    on P1.29a; the third thread, moved from Phase 1 by the refocus (2026-10-12) because it changes
    `compose.dev.yaml` after P1.29a): slice 1's email gate uses the real `requestEmailConfirmation` and
    `confirmEmail` flow and
@@ -10350,6 +10479,31 @@ P1.29h, P1.29s, P1.29t.
    refused as an admin bypass, and real SMTP on developer machines is refused. Tests:
    `email_token_reader_fails_on_unknown_schema`, `local_confirm_uses_real_endpoint`,
    `email_token_reader_refuses_non_local`, `email_token_reader_read_only`. P1.29s and P2.11 depend on it.
+   The reader service:
+   - It runs with `docker compose run --rm`, under a dev-only profile, on our locked node runtime base by digest (not
+     the PDS image); it never appears in a non-dev compose file (the existing dev-only test pattern).
+   - It runs as 1000:1000 with `read_only`, `cap_drop: [ALL]`, `no-new-privileges` and `network_mode: none`.
+   - It mounts `pdsdata:/data:ro` and the reader script read-only (owned by the deploy user, passing C9), with no env
+     file and no secrets.
+   - It runs one parameterized SELECT of one account's pending token, keyed by a DID validated against the DID syntax
+     first, and prints only the token or exits non-zero with a fixed reason. If SQLite's WAL mode refuses a read-only
+     open on the read-only mount, stop and report the exact error: never drop `:ro`, never use `immutable=1`.
+   - The token travels only on stdout, straight into `confirmEmail`; it is never logged, echoed, written to disk or put
+     in an error message.
+   - (Amendment 1 of book edit 2026-10-13-p129h-book-lines: P1.29h does not wait on P1.27l.) The wrapper refuses
+     unless `PDS_HOST`, read from the running PDS container's env, is a dev-root constrained name; `PDS_HOSTNAME` ends
+     in `.localhost` or is one of those names; the volume is the `unset-dev` project's, found by its compose project
+     and volume labels; and no public name appears in the PDS env. Each condition has a red fixture. P1.27l later adds
+     its local label as an extra required check.
+   - Parser (here, product): `profiles: [tools]` is accepted only on a `network_mode: none` service; `command` and
+     `entrypoint` stay refused, and the DID is passed as a run argument. Red fixtures: another profile name, profiles
+     on a networked service, profiles on an existing service.
+   - `compose_images_match_lock` admits the node runtime lock entry, by exact `ref:tag@digest`, only for
+     `pds-token-reader`, under the tools profile with no network. Red fixtures: that image on another service,
+     without the profile, or with a network.
+   - PDS data stays in the named volume. The bind and its ignore line are withdrawn.
+   Tests add: the wrapper run with a captured logger never shows the token; red fixtures for another project label
+   and a non-local host; the reader service absent from every non-dev compose file.
 9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring and their tests
    below. `dev-seed` creates accounts through the dev PDS and, on `local` only, confirms their email through P1.29h's
@@ -10357,15 +10511,18 @@ P1.29h, P1.29s, P1.29t.
    `logging` entry: exactly `{driver: "none"}`, on the seed service only (book edit
    2026-10-12-p129s-seed-file-location, amendments 2 and 3). It also carries a test that a seed run leaves the
    secrets folder's listing unchanged (book edit 2026-10-12-p134l-secrets-folder-listing, rider).
-10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s and P1.34d): its first assertion,
+10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s, P1.34d and P1.34k): its first assertion,
     before any browser flow, is a probe from inside the PDS container: an HTTPS GET of web's `client_id` over
     `pds_egress` succeeds, the chain verifies against the dev root, and the body parses as client metadata. If the
     PDS's own fetch refuses the app host's private address, the builder stops and sends architecture the exact error
     and the PDS version; no workaround (book edit 2026-10-12-p134c-p134d-local-dev-root-ca). Then
     `pds_device_row_has_no_client_ip`
-    (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. If the CI job
-    that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
-    measures it, and it needs Alex's typed line.
+    (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. It also asserts
+    P1.29a's PDS user and volume, red first: `id -u` is 1000, the data directory is owned by 1000, and a write succeeds;
+    a root-owned volume fails the test, not the boot silently (book edit 2026-10-13-p129a-build-rulings). From inside
+    the PDS, `APP_HOST` and `PDS_HOST` each resolve to the edge's runtime address and the TLS chain verifies against the
+    dev root (Amendment 1). If the CI job that runs them needs a `.github/` change, that change is its own check part,
+    `P1.29q`, booked when the thread measures it, and it needs Alex's typed line.
 11. **P1.29y "Fold the old image jobs into the scan matrix"** ([SEC] [ALEX], check: `.github/workflows/images.yml`,
     `scripts/ci/list-dockerfiles.ts`, `image-workflows.test.ts`, `mirror-scan.test.ts`, kind/build; issue #581; depends
     on P1.29w (merged, #571) and P1.29v (merged, #583), which also edits images.yml; owner Phase 2 or the third lane,
@@ -10525,12 +10682,14 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   Phase 2, `web`) may share one:
   | Network | Settings | Members |
   |---|---|---|
-  | `edge` | not internal; fixed subnet (e.g. `172.30.10.0/24`); fixed IPs | edge `.2`, pds `.3` (and `web` `.4` from Phase 2) |
+  | `edge` | not internal; no `ipam` | edge, pds (and `web` from Phase 2) |
   | `pds_egress` | not internal | pds only (outbound HTTPS: PLC, DID and handle resolution, OAuth client metadata, other permission sets, AppView) |
   | `db` | `internal: true` | postgres, migrate (and `web` from Phase 2) |
   | `tap` | `internal: true` | tap and its DB (profile `tap`) |
-  | `tap_egress` | not internal | tap only (reaches the dev PDS through its public name and the edge, like any outside consumer) |
-  Only the edge publishes ports.
+  | `tap_egress` | not internal | tap only (outbound; the edge stays off it) |
+  | `tap_edge` | `internal: true` | tap and the edge only; the edge's attachment carries the `PDS_HOST` alias (`APP_HOST` only if tap calls it), so tap reaches the dev PDS through the edge without joining the PDS-facing network (book edit 2026-10-13-p129a-build-rulings, Amendment 3) |
+  Only the edge publishes ports. No network sets `ipam` and no service has a fixed address (book edit
+  2026-10-13-p129a-build-rulings, item 1): P1.29t reads the edge's address at run time with `docker inspect`.
 - Services:
   - `postgres` (networks `db`; no published port; data in the named volume `pgdata:/var/lib/postgresql`, the PG 18
     data path confirmed and recorded by P1.11 in `docs/human/db/migrations.md`; the same image digest as CI's
@@ -10634,10 +10793,10 @@ dev-seed:
   `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent (P1.29a, where the `pds` service first
   exists). P1.30 C7 still checks the deployed env at preflight; nothing deploys before P1.28 and every P1.29 part are
   merged.
-- `pds_device_row_has_no_client_ip` (integration, dev stack; moved from P1.30, book edit 2026-10-07-p130-split): sign
-  in through the edge from a test client, then read the PDS `device` table's `ipAddress` → it equals the edge's
-  internal fixed IP, never the client's. P1.29t (book edit 2026-10-07-p129-split) is the first step that runs the
-  stack with the edge in front of the PDS.
+- `pds_device_row_has_no_client_ip` (integration, dev stack; moved from P1.30, book edit 2026-10-07-p130-split): sign in
+  through the edge from a test client, then read the PDS `device` table's `ipAddress` → it equals the edge's address on
+  `edge`, read at run time with `docker inspect`, never the client's. P1.29t (book edit 2026-10-07-p129-split) is the
+  first step that runs the stack with the edge in front of the PDS.
 - `seed_refuses_non_dev`: ENV=prod → exit 2.
 - `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
 - `seed_never_prints_password`: run against a stub PDS; stderr, the wrapper's output and `docker logs` contain no
@@ -11194,7 +11353,9 @@ the sign-in path. P1.31 depends on it.
    2026-10-12-p131-depcruise-and-lexicon-choices; it joins here because P1.31d had not merged):
    `scripts/workspace/references.ts` follows nested references and fails closed on cycles, containment, per-depth
    options, `composite` and `noCheck`, each with a red fixture. Widening `addsOnlyNewReferences` is declined.
-4. **An anchored depcruise exclude** (amendment 2): `exportsFields` makes it necessary, and it is a tightening.
+4. **An anchored depcruise exclude** (amendment 2): `exportsFields` makes it necessary, and it is a tightening. The
+   old `(^|/)(dist|…)/` pattern also dropped `node_modules/*/dist/` edges. Pin: `package_dist_entry_is_checked` fails
+   with only the exclude reverted, and the PR body lists it as its own item.
 5. **A `noCheck` check at root depth** (amendment 2).
 The render edge keeps its exact either-state pin for now; "types" in `conditionNames` is declined. The private
 `unset-source` condition is the later pair P1.31e and P1.31f.
@@ -11978,6 +12139,72 @@ It gates the first 80/443 forward.
 **What (moved out of P1.33):** the 80/443 forwards and the accept rule; ip-echo and the echo assertion; V5; the
 CGNAT and DDNS branches. Alex's router and DNS actions are as P1.33 lists them.
 
+**Moved from P1.34** (book edits 2026-10-13-batch-47-after-771 and 2026-10-13-batch-46-contradictions, G-1:
+P1.34 is tailnet only, so its public items live here; P1.33p depends on P1.34 and not the other way round). The rule
+for the book: any step that first makes something reachable from the internet depends on P1.33p.
+
+Alex's steps (P1.34's former steps 5, 6 and 9):
+
+```text
+ 5. Confirm registrar lock and DNSSEC on 0x40.space (enable them if off).
+ 6. CAA on 0x40.space: 0 issue "letsencrypt.org" (optionally with accounturi=<Caddy's ACME account URI>, RFC
+    8657, once Caddy has registered). The edge is pinned to Let's Encrypt (P1.28).
+ 9. Public address: if the ISP address is static → A record for 0x40.space. If dynamic → the DDNS updater
+    (deployment/ddns) with an API token scoped to that single record only; if the DNS provider cannot scope a token
+    to one record → STOP and choose with the agent (another provider for 0x40.space, or a static address).
+    _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
+    No AAAA record unless IPv6 was probed in P1.33.
+```
+
+Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
+- V2: P1.34's V1 DNSSEC check on `0x40.space`, plus the CAA record; registrar lock confirmed by Alex.
+- V3: from outside, `describeServer` on `0x40.space` → 200 with `inviteCodeRequired: true`.
+- V4: outside admin probes → 404/401 (the P1.28 tests, now against the live host).
+- V7: probe green for 24 h before P1.35 starts; the hairpin check passed (P1.29a's edge aliases).
+
+Edge case (moved from P1.34): Address changes while DDNS lags → the probe fails; the authorization servers' cached
+copies cover logins.
+
+**Moved from P1.34, public gates** (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5): P1.34's Done-when
+is the private names and dev-root certificates, the re-run tailnet probe and the C-checks; every public gate and its
+evidence lives here.
+- The edge obtains its Let's Encrypt certificate (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
+- `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no
+  bypass key or IPs), public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit);
+  the provider is set up before P1.34 — Notes, SMTP provider.
+- **Probe (P1b-A2 default, provisional):** a separate **public** repo `unset-probe` containing only a scheduled
+  workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
+  are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
+  timeout 10 s per request:
+  1. `GET https://0x40.space/xrpc/_health` → 200;
+  2. `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200
+     and a CAR whose commit proof verifies against the DID document's signing key (the same check resolvers do,
+     `lex-resolver.ts:495-520`), and whose record CID equals the expected CID committed in the probe repo;
+  3. admin probes: `com.atproto.admin.getAccountInfos`, `com.atproto.server.createInviteCode` (POST, no auth) and a
+     Basic-auth request → 404/401; any 2xx → the run fails with "admin surface exposed";
+  4. TLS certificate valid for more than 14 days.
+  Alerting: a failed run notifies Alex by GitHub's workflow-failure e-mail; two consecutive failures are an
+  outage. Runs that did not execute (GitHub schedule delays) are counted separately as "probe gap", never as up or
+  down: each run writes its timestamp to a workflow artefact, and a weekly job reports gaps over 45 minutes and the
+  measured availability. Nothing about outages is written to public issues.
+- Threats: E the PDS admin API or a debug setting exposed → P1.30's checks with `dev-public.env`, and the outside
+  probe tries admin (`dev_public_env_matches_policy`, `probe_checks_present`); S a substituted repository served under
+  our name → the probe verifies `sync.getRecord` proofs (`probe_proof_verification_fails_on_wrong_key`); D probe gaps
+  never counted as up (`probe_gap_not_counted_as_up`).
+- P1.29h's reader (book edit 2026-10-13-p129h-book-lines, Amendment 1): a check refuses the `tools` profile and the
+  `pds-token-reader` service on any stack whose `PDS_HOST` is public, with red fixtures.
+- Edge cases:
+  - Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
+    the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
+    revisited), or bringing P5.02a forward. IPv6-only is not enough (some resolvers and authorization servers lack
+    IPv6).
+  - ISP blocks inbound 443 → as CGNAT. Blocks only 80 → fine (TLS-ALPN-01).
+  - Probe repo's schedule stops (GitHub disables schedules in repos without activity for 60 days) → the weekly gap
+    report notices; the runbook says to re-enable it.
+- Done when (tests): `dev_public_env_matches_policy` (reuses P1.30's checks); `probe_checks_present` (health,
+  sync.getRecord with proof, admin, TLS); `probe_proof_verification_fails_on_wrong_key` (fixture CAR signed by another
+  key); `probe_gap_not_counted_as_up`; the outside probe green.
+
 **Not in this step:** P1.33a's prototype retirement, which gates the dev PDS taking `0x40.space` at the public
 opening, with or after this step.
 
@@ -12188,9 +12415,11 @@ the probe (location per P1b-A2: default a separate public repo `unset-probe`, be
 
 **Size:** ~200 lines of config, scripts and workflow, ~220 lines of runbooks, ~150 test lines.
 
-**Goal:** `unset.ac` is owned and locked down, and the dev PDS on `0x40.space` is reachable from the internet only
-through the edge, invite-only, with its admin surface unreachable, a recovery key set, no client address stored
-or logged, backed up with a passing restore test, and probed from outside.
+**Goal:** `unset.ac` is owned and locked down, and the dev PDS on the home server is reachable on the tailnet only,
+through the edge, under non-public names with dev-root certificates, invite-only, with its admin surface
+unreachable, a recovery key set, no client address stored or logged, and backed up with a passing restore test.
+Every public gate and its evidence (the public env, the Let's Encrypt certificate, the outside probe and its tests)
+is P1.33p's (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5).
 
 **Checklist (Alex):**
 ```text
@@ -12202,10 +12431,7 @@ A. unset.ac
  3. Create NO records except: CAA 0 issue ";" (no certificate may be issued yet — P5.02a replaces it);
     SPF "v=spf1 -all"; DMARC "v=DMARC1; p=reject"; null MX "0 ." (no mail, no spoofing). No A/AAAA.
  4. Send the agent the registrar name and that DNSSEC and the lock are on.
-B. 0x40.space as a name on the resolution path
- 5. Confirm registrar lock and DNSSEC on 0x40.space (enable them if off).
- 6. CAA on 0x40.space: 0 issue "letsencrypt.org" (optionally with accounturi=<Caddy's ACME account URI>, RFC
-    8657, once Caddy has registered). The edge is pinned to Let's Encrypt (P1.28).
+B. 0x40.space: moved to P1.33p (book edit 2026-10-13-batch-47-after-771, G-1); steps 5 and 6 belong to P1.33p.
 C. Prerequisites on the old prototype (P1.33a, formerly L.01 part A)
  7. P1.33a is complete: every old account was given notice and an export, then retired (decision 24), the old
     stack is shut down and its secrets retired; `retirement-check` reports `retirement_part_a_complete`. If not →
@@ -12214,48 +12440,32 @@ D. Dev PDS fit for the authority
  8. Generate the dev PDS recovery key on the offline machine with the P0.12 runbook (a key separate from the
     authority's own offline keys; recorded as its own P0.12 inventory row); put only its did:key in PDS_RECOVERY_DID_KEY, BEFORE any account that matters
     is created (it is stamped into DID docs at creation and cannot be retrofitted).
- 9. Public address: if the ISP address is static → A record for 0x40.space. If dynamic → the DDNS updater
-    (deployment/ddns) with an API token scoped to that single record only; if the DNS provider cannot scope a token
-    to one record → STOP and choose with the agent (another provider for 0x40.space, or a static address).
-    _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
-    No AAAA record unless IPv6 was probed in P1.33.
+ 9. (Moved to P1.33p: the public A record or DDNS updater; G-1.)
 10. (Merged into step 11; book edit 2026-10-12-p130a-p130l-compose-inputs-booked.)
 11. Run P1.27w's wrapper with `compose.dev.yaml` and
-    `--interpolation-env <absolute path of unset-dev-env/dev-public.env>`, the env folder beside the checkout (0700;
+    `--interpolation-env <absolute path of the tailnet env file in unset-dev-env/>` (`dev-public.env` is P1.33p's),
+    the env folder beside the checkout (0700;
     file 0600, owned by the deploy user). The flag is required (P1.34f
     amendment 1). It runs the preflight (P1.30, all PASS), stops on any failure, then runs
     `docker compose … --env-file … up -d` with the same files (services without a profile start by default; there is
-    no "default" profile). The edge obtains certificates (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
+    no "default" profile). The edge serves the dev-root leaf for the non-public names (P1.34d); the Let's Encrypt
+    certificate (TLS-ALPN-01) is P1.33p's.
 12. Power and recovery: the homelab and router on a UPS; both restart automatically after power loss.
 13. Store the secrets bundle (pds.env with the admin password and the PDS's PLC rotation key, cosign and age
     material excluded) separately encrypted, per secrets-bundle.md.
-14. Confirm with the agent that one backup and one restore test have run, and the probe is green.
+14. Confirm with the agent that one backup and one restore test have run, and the re-run tailnet probe is green.
 ```
 
 **Agent prepares and verifies:**
-- `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no bypass key or IPs),
-  public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit); the provider is set
-  up before P1.34 — Notes, SMTP provider.
-- Hairpin check: `curl https://0x40.space/xrpc/_health` from inside the compose network (from a throwaway
-  container on `tap_egress`). If it fails (router has no NAT loopback), add split-horizon resolution for the
-  containers that need it (`extra_hosts: 0x40.space:<edge fixed IP>` on `web` and `tap`), never on the PDS. The
-  PDS resolves its own lexicons locally (`pds/src/context.ts:357-410`), and its source names this failure mode
-  (`context.ts:363-366`).
-- **Probe (P1b-A2 default, provisional):** a separate **public** repo `unset-probe` containing only a scheduled
-  workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
-  are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
-  timeout 10 s per request:
-  1. `GET https://0x40.space/xrpc/_health` → 200;
-  2. `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200
-     and a CAR whose commit proof verifies against the DID document's signing key (the same check resolvers do,
-     `lex-resolver.ts:495-520`), and whose record CID equals the expected CID committed in the probe repo;
-  3. admin probes: `com.atproto.admin.getAccountInfos`, `com.atproto.server.createInviteCode` (POST, no auth) and a
-     Basic-auth request → 404/401; any 2xx → the run fails with "admin surface exposed";
-  4. TLS certificate valid for more than 14 days.
-  Alerting: a failed run notifies Alex by GitHub's workflow-failure e-mail; two consecutive failures are an
-  outage. Runs that did not execute (GitHub schedule delays) are counted separately as "probe gap", never as up or
-  down: each run writes its timestamp to a workflow artefact, and a weekly job reports gaps over 45 minutes and the
-  measured availability. Nothing about outages is written to public issues.
+- `dev-public.env` and the outside probe moved to P1.33p (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding
+5).
+- `pds.env` gains the SMTP names on deployed dev (C11 and C19 require them there); the values come with the SMTP card
+  before P1.34 (book edit 2026-10-13-p134n-p129a-follow-up, from Codex's #774 P1).
+- Hairpin: the stack reaches its own hosts through P1.29a's edge network aliases for `APP_HOST` and `PDS_HOST`, not
+  through `0x40.space` and never with `extra_hosts` (book edit 2026-10-13-p129a-build-rulings, Amendment 1; the tailnet
+  ruling); tap reaches `PDS_HOST` through the edge's alias on `tap_edge` (Amendment 3; built in P3.02). Check from
+  inside the compose network that each host resolves to the edge. The PDS resolves its own lexicons locally
+  (`pds/src/context.ts:357-410`), and its source names this failure mode (`context.ts:363-366`).
 - `deployment/backup/dev-pds.sh` (daily, run by a systemd timer on the host as a dedicated user):
   1. for every SQLite file of the PDS (account DB, sequencer, DID cache, and each actor store), use SQLite's
      `.backup` (WAL-safe); if any `.backup` fails → stop the PDS container for at most 60 s, copy the files, start
@@ -12276,41 +12486,29 @@ D. Dev PDS fit for the authority
 - V1: `delv unset.ac SOA` validates (or a validating resolver sets the AD flag) and `dig DS unset.ac` at the `.ac`
   servers returns a DS; no A/AAAA; SPF, DMARC, null MX and CAA present. (`dig +dnssec unset.ac` on an apex with
   no A record returns NODATA, so it proves nothing.)
-- V2: the same DNSSEC check on `0x40.space`, plus the CAA record; registrar lock confirmed by Alex.
-- V3: from outside, `describeServer` on `0x40.space` → 200 with `inviteCodeRequired: true`.
-- V4: outside admin probes → 404/401 (the P1.28 tests, now against the live host).
+- V2, V3 and V4 belong to P1.33p (G-1).
 - V5: `PDS_RECOVERY_DID_KEY` present (preflight C6) and equal to the did:key Alex reported.
 - V6: one encrypted backup present off-site; one restore test passed.
-- V7: probe green for 24 h before P1.35 starts; hairpin check passed or split-horizon in place.
+- V7 belongs to P1.33p (G-1).
 - V8: an edge log sample and the PDS `device` table from the live host contain no client address.
 
 **Edge cases and failures:**
-- Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
-  the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
-  revisited), or bringing P5.02a forward. IPv6-only is not enough (some resolvers and authorization servers lack
-  IPv6).
-- ISP blocks inbound 443 → as CGNAT. Blocks only 80 → fine (TLS-ALPN-01).
-- Address changes while DDNS lags → the probe fails; the authorization servers' cached copies cover logins.
+- No public IPv4, a blocked 443 and a stopped probe schedule are public-opening cases: moved to P1.33p.
 - Dev PDS upgrade breaks → restore the previous image digest; the backup taken before the upgrade covers data.
 - Somebody deletes the volume → restore from backup; the runbook's first line warns; `dev:down` never passes `-v`.
-- Probe repo's schedule stops (GitHub disables schedules in repos without activity for 60 days) → the weekly gap
-  report notices; the runbook says to re-enable it.
 
-**Threats:** the dev PDS on the public internet, now on the login path of the lexicon authority.
-  - E The PDS admin API or a debug setting exposed → the dev host runs P1.30's checks and the outside probe tries
-    admin (`dev_public_env_matches_policy`, `probe_checks_present`).
-  - S A substituted repository served under our name → the probe verifies `sync.getRecord` proofs
-    (`probe_proof_verification_fails_on_wrong_key`).
+**Threats:** the dev PDS on the tailnet, soon on the login path of the lexicon authority (the public-internet
+threats and their tests, E and S, are P1.33p's).
+  - E The PDS admin API or a debug setting exposed → the dev host runs P1.30's C-checks.
   - I Backups leak plaintext, or a restore test answers on the public name → encrypted backups, restore on a
     non-public name (`backup_script_encrypts_and_leaves_no_plaintext`, `restore_test_has_no_public_name`).
-  - D Data loss on the only copy → every actor store backed up (`backup_covers_every_sqlite_file`); probe gaps never
-    counted as up (`probe_gap_not_counted_as_up`).
+  - D Data loss on the only copy → every actor store backed up (`backup_covers_every_sqlite_file`).
 
-**Done when (tests):** `dev_public_env_matches_policy` (reuses P1.30's checks); `probe_checks_present` (health,
-sync.getRecord with proof, admin, TLS); `probe_proof_verification_fails_on_wrong_key` (fixture CAR signed by
-another key); `probe_gap_not_counted_as_up`; `backup_script_encrypts_and_leaves_no_plaintext`;
+**Done when (tests):** the private names and dev-root certificates in place; P1.29t's client-metadata probe re-run
+green on the tailnet; P1.30's C-checks all PASS; `backup_script_encrypts_and_leaves_no_plaintext`;
 `backup_covers_every_sqlite_file` (fixture data dir with three actor stores); `restore_test_has_no_public_name`
-(script refuses when the scratch host resolves as `0x40.space`); V1–V8 recorded in `dev-pds-on-login-path.md`.
+(script refuses when the scratch host resolves as `0x40.space`); V1, V5, V6 and V8 recorded in
+`dev-pds-on-login-path.md` (V2, V3, V4 and V7 are P1.33p's).
 
 **Reuse** (all provisional — for reuse review): vault note `pds-key-custody-and-disaster-recovery` → LESSON;
 `deploy/secrets/pds.env.example` → LESSON.
@@ -12328,7 +12526,7 @@ schedules a monitor holds the repository token, its permissions and a runner. **
 `.github/workflows/lexicon-monitor.yml` and `scripts/ci/lexicon-monitor.ts` (moved under a check folder); this step
 holds `shared/lexicons/` and the runbooks.
 
-**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.34,
+**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.34, P1.33p (G-1: public lexicon resolution fetches from the public PDS), P1.33a (creating its account on `https://0x40.space` is when the dev PDS takes that name; decision 24 retires the prototype first),
 P0.12 (rows K1 and K1b), P0.13 (licence ADR: the lexicons are MIT), P1.18 · **Plan:** §3, §5.2, §5.3 ("published never from CI or agents"), §10 (nightly PLC log check); decision 20
 
 **Where:** `docs/human/runbooks/{lexicon-authority.md, plc-nullification.md, permission-set-changed.md,
@@ -12606,7 +12804,7 @@ its fake (P2.16); storing the API key (P5.06).
 
 ### P1.38 — Phase 1 exit
 
-**Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
+**Tags:** — · **Depends on:** P1.26, P1.19, P1.22b (the i18n slice: the exit needs both languages), P1.35, P1.33, P1.33p (G-1: the exit signs in through bsky.social with a public client metadata document), P1.34, P1.36, P1.37, P1.37a, P1.15s (the audit chain tamper tests; book edit 2026-10-07-p115s-chain-tests) · **Plan:** §8 Phase 1 exit criteria, §4 (size targets)
 
 **Where:** `.github/workflows/phase-exit.yml`; `scripts/phase-metrics.ts`; `docs/human/phase-exits/phase-1.md`.
 

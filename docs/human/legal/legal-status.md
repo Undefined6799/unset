@@ -22,7 +22,7 @@ Status is one of: `to do`, `in progress`, `submitted`, `done`.
 | L8 21-day offline preservation, then destroy (s. 4; Regs s. 12) | to do | — | — | Lawyer hour |
 | L9 after commencement: designated body, transmission data, one year | to do | — | — | Lawyer hour |
 | L10 which regime governs a notice made before commencement | to do | — | — | Lawyer hour |
-| L11 "ordinary course of business" and the sealed buffer | to do | — | — | Lawyer hour |
+| L11 "ordinary course of business": the sealed buffer, and backups holding legal-hold rows (s. 4(2) documents) | to do | — | — | Lawyer hour |
 | L12 reports under a foreign duty (new s. 9.01) | to do | — | — | Lawyer hour |
 | L13 PIPEDA applicability before the service is commercial | to do | — | — | Lawyer hour |
 | L14 Quebec Act applicability with Quebec users | to do | — | — | Lawyer hour |
@@ -33,3 +33,4 @@ Status is one of: `to do`, `in progress`, `submitted`, `done`.
 | L19 register kept 5 years | to do | — | — | Lawyer hour |
 | L20 hold design rule: fixed per case, regime switch, extensions, destruction | to do | — | — | Lawyer hour |
 | L21 answering a production order for preserved data | to do | — | — | Lawyer hour |
+| L22 how long an unclassified near match may be held pending a C3P analyst | to do | — | — | Lawyer hour |
