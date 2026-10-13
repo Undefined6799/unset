@@ -405,7 +405,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
 | P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
-| P1.33l | Derive the reader's project from the env | [SEC] | P1.33j | `phase-1.md` |
+| P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
 | P1.29i | Judge every outbound PDS key in the token reader | [SEC] | — | `phase-1.md` |
 | P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
@@ -652,7 +652,7 @@ flowchart TD
   P1_33h["P1.33h Host pin moved to shared/host-pin"]
   P1_33j["P1.33j Token reader uses the shared pin"]
   P1_33k["P1.33k Node base for the token reader"]
-  P1_33l["P1.33l Reader project from the env"]
+  P1_33l["P1.33l Token reader pinned to the local stack"]
   P1_29i["P1.29i Token reader judges every outbound key"]
   P1_34c["P1.34c Local app site with a dev leaf"]
   P1_34a["P1.34a Edge reader accepts local app site"]

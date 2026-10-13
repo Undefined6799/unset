@@ -292,7 +292,7 @@ flowchart LR
   P1_33h["P1.33h host pin moved to shared/host-pin"]
   P1_33j["P1.33j token reader uses the shared pin"]
   P1_33k["P1.33k node base for the token reader"]
-  P1_33l["P1.33l reader project from the env"]
+  P1_33l["P1.33l token reader pinned to the local stack"]
   P1_29i["P1.29i token reader judges every outbound key"]
   P1_34c["P1.34c local app site with a dev leaf"]
   P1_34d["P1.34d PDS trusts one dev root"]
@@ -8392,7 +8392,7 @@ Done when every fixture is red for its own reason and check is green.
 
 ---
 
-### P1.33l — Derive the reader's project from the env
+### P1.33l — Pin the token reader to the local stack
 Tags: [SEC]            Depends on: P1.33j
 Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
 P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
