@@ -1232,7 +1232,7 @@ Depth: **build-ready**. 22 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26c | Pull the edge bases from the mirror (trusted base) | [SEC] | P1.27s | `phase-2.md` |
+| P2.26c | Pull the edge bases from the mirror | [SEC] trusted | P1.27s | `phase-2.md` |
 | P2.26b | Pin service images to the mirror by digest | [SEC] | P1.27s, P2.26c, P1.34t | `phase-2.md` |
 | P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
