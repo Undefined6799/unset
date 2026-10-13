@@ -632,6 +632,10 @@ Outputs:
   - `edge` has a fixed address `EDGE_ADDR` (`ipam`);
   - each `egress-*` network has a fixed subnet;
   - every other network is `internal: true`.
+- **No PLC** (book edits 2026-10-13-local-plc-a3-steps and 2026-10-13-local-plc-a4-steps; architecture's Amendments 3
+  and 4 of 2026-10-13-local-plc): the file has no PLC service, network or database wiring, through P1.34v's local-only
+  test; the PDS uses exactly `https://plc.directory`, and prod's C17 table has no PLC network. The file stays
+  `deployment/compose.yaml` (architecture confirmed: no `compose.prod.yaml`).
 - **`pg_hba.conf`:** each login role may connect only from its own `db-<role>` subnet; everything else is rejected.
 - **`backup` role** (added to P1.12's matrix by **P5.02g**, its own step: grants on existing tables, SE-6), round 1 F6. It is **not** `pg_read_all_data`:
   - `backup-grants.sql` is generated from the P1.12 grant matrix;

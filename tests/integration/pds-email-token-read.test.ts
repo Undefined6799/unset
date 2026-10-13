@@ -92,5 +92,11 @@ describe("tests/support/pds-email-token-read.ts", () => {
     const garbage = join(dir, "garbage.sqlite");
     writeFileSync(garbage, "not a database, long enough to fill the SQLite header and more ".repeat(4));
     expect(() => openAccountDb(garbage)).toThrow(new Error("the PDS account database is not a SQLite database"));
+    // Any other failure is the general reason: a writer holding an exclusive lock answers SQLITE_BUSY (5; measured on
+    // Node 26.10.0, sqlite.org/rescode.html#busy), and the reader neither waits nor names it as a stopped PDS.
+    const locked = accountDb([["confirm_email", DID, TOKEN]]);
+    locked.writer.exec("PRAGMA locking_mode = EXCLUSIVE; DELETE FROM email_token WHERE did = 'nobody'");
+    expect(() => openAccountDb(locked.path)).toThrow(new Error("the PDS account database could not be read"));
+    locked.writer.close();
   });
 });

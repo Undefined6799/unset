@@ -726,7 +726,11 @@ Done when (tests):
   - `tap-filters-equal-handled-set`; `empty-filter-refused`.
   - `grant-web-insert-only-track`: `web` INSERT only; `indexer` SELECT+DELETE only; `web` cannot SELECT.
   - `compose-tap-isolated`: no `ports`; `tap-relay` on `ingest-relay` and `tap-egress` only; `tap-own` on
-    `ingest-own` and the PDS network only; `web`, `api`, `media`, `admin` on neither ingest network.
+    `ingest-own` and the PDS network only; `web`, `api`, `media`, `admin` on neither ingest network. Local PLC (book
+    edit 2026-10-13-local-plc-a4-steps; architecture's Amendment 5 of 2026-10-13-local-plc, point 3): this step reads
+    the pinned Tap source; if Tap resolves DIDs, the test gains exactly one allowance, tap on the PLC network in
+    `compose.local.yaml` only (dev and prod stay pinned as above), and tap joins P1.34v's PLC network; otherwise no
+    change.
   - `firewall-tap-egress-private-dropped`: static check of every range; an integration probe from a sidecar with
     `network_mode: service:tap-relay` (the Tap image has no `curl`) expects timeouts to `10.0.0.1`,
     `100.100.100.100` and a public address reached directly, and a successful public request through

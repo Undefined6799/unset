@@ -1061,7 +1061,12 @@ describe("base images", () => {
       source: "upstream",
       stage: "runtime",
       buildStage: false,
-      stripped: ["/usr/local/bin/gosu"],
+      // P1.11k: the snakeoil key pair the base's ssl-cert package generates; the final stage deletes both.
+      stripped: [
+        "/usr/local/bin/gosu",
+        "/etc/ssl/private/ssl-cert-snakeoil.key",
+        "/etc/ssl/certs/ssl-cert-snakeoil.pem",
+      ],
     });
     // Bluesky's PDS image (P1.29a), run as shipped: a runtime entry no Dockerfile builds on.
     expect(lock.pds).toStrictEqual({

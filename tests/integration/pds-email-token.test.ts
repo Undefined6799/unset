@@ -3,9 +3,15 @@
 // local stack (architecture record 2026-10-13-p129h-local-token-reader, points 3 and 4 and Amendment 1). Docker,
 // openssl and the PDS are stand-ins here; the running stack is P1.29t's.
 import type { Stats } from "node:fs";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import type { Call, Ran } from "../support/docker.ts";
-import { confirmLocalEmail, type LocalStack, type PinnedPost } from "../support/pds-email-token.ts";
+import {
+  CLASSIFIED_KEYS,
+  confirmLocalEmail,
+  type LocalStack,
+  outboundDrift,
+  type PinnedPost,
+} from "../support/pds-email-token.ts";
 
 const DID = `did:plc:${"a".repeat(24)}`;
 const EMAIL = "someone@example.test";
@@ -46,13 +52,21 @@ type World = {
   pds: string[];
   edge: string[];
   pdsEnv: Record<string, string>;
+  /** Lines printed for the PDS in this order instead of pdsEnv's, for a variable set twice. */
+  pdsEnvLines?: [string, string][];
   edgeEnv: Record<string, string>;
   mounts: { Type: string; Name?: string; Destination: string }[];
   volumes: string[];
   reader: Ran;
-  /** What resolving the edge's PDS_HOST answers, or "fails" for a resolver error. */
-  resolved: { address: string }[] | "fails";
+  /** What resolving the edge's PDS_HOST answers, "fails" for a resolver error, "hangs" for one that never answers. */
+  resolved: { address: string }[] | "fails" | "hangs";
   status: [number, number];
+};
+/** Every S3 key the previous head judged, set the way it accepted: a stack service, path style, a static key id. */
+const S3_JUDGED = {
+  PDS_BLOBSTORE_S3_ENDPOINT: "http://plc:2582",
+  PDS_BLOBSTORE_S3_FORCE_PATH_STYLE: "true",
+  PDS_BLOBSTORE_S3_ACCESS_KEY_ID: "key-id-fixture",
 };
 const local = (): World => ({
   caller: { PATH: "/usr/bin", HOME: "/home/dev", DOCKER_CONTEXT: "remote", COMPOSE_FILE: "x.yaml" },
@@ -67,6 +81,8 @@ const local = (): World => ({
     PDS_HOSTNAME: "pds.example.test",
     PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test",
     PDS_DID_PLC_URL: "http://plc:2582",
+    // What the dev PDS runs with (deployment/compose.dev.yaml).
+    NODE_OPTIONS: "--max-old-space-size=768",
     // Read by the wrapper only as far as its keys: never kept, never shown.
     PDS_JWT_SECRET: "jwt-secret-fixture",
   },
@@ -78,7 +94,22 @@ const local = (): World => ({
   status: [200, 200],
 });
 
-const env = (values: Record<string, string>) => JSON.stringify(Object.entries(values).map(([k, v]) => `${k}=${v}`));
+// The only inspect template for an environment: Docker prints each named pair as a JSON string on its own line and
+// nothing else (Docker CLI 29.8.2 templates/templates.go:18-20; measured on a real container, see the PR).
+const ENV_FORMAT =
+  /^\{\{range \.Config\.Env\}\}\{\{if eq \(index \(split \. "="\) 0\)((?: "[A-Za-z0-9_]+")+)\}\}\{\{json \.\}\}\{\{println\}\}\{\{end\}\}\{\{end\}\}$/;
+
+/** What Docker prints for `format` over `values`, or null for any other template. */
+function picked(format: string, values: [string, string][]): { keys: string[]; out: string } | null {
+  const named = ENV_FORMAT.exec(format)?.[1];
+  if (named === undefined) return null;
+  const keys = named
+    .trim()
+    .split(" ")
+    .map((key) => JSON.parse(key) as string);
+  const pairs = values.filter(([key]) => keys.includes(key));
+  return { keys, out: `${pairs.map(([key, value]) => `${JSON.stringify(`${key}=${value}`)}\n`).join("")}\n` };
+}
 
 /** Runs confirmLocalEmail against `world`, recording every command, request and log line. */
 async function attempt(world: World) {
@@ -86,9 +117,11 @@ async function attempt(world: World) {
   const envs: Readonly<Record<string, string>>[] = [];
   const resolved: string[] = [];
   const requests: PinnedPost[] = [];
+  const asked: Record<string, string[]> = {};
   const logged: string[] = [];
   const run = (file: string, args: readonly string[], call: Call): Ran => {
     expect(call.timeoutMs).toBeGreaterThan(0);
+    expect(call.timeoutMs).toBeLessThanOrEqual(30_000);
     commands.push([file, ...args]);
     const line = [file, ...args].join(" ");
     const ok = (out: string): Ran => ({ code: 0, out, err: "" });
@@ -108,8 +141,21 @@ async function attempt(world: World) {
     if (line.includes("label=com.docker.compose.service=edge")) return ids(world.edge);
     const service = /label=com\.docker\.compose\.service=(\S+)/.exec(line)?.[1];
     if (args[0] === "ps" && service !== undefined) return ids(world.services[service] ?? []);
-    if (line.includes(".Config.Env") && line.endsWith(PDS_ID)) return ok(env(world.pdsEnv));
-    if (line.includes(".Config.Env") && line.endsWith(EDGE_ID)) return ok(env(world.edgeEnv));
+    if (args[0] === "inspect" && line.includes(".Config.Env")) {
+      const id = args.at(-1) as string;
+      const values =
+        id === PDS_ID
+          ? (world.pdsEnvLines ?? Object.entries(world.pdsEnv))
+          : id === EDGE_ID
+            ? Object.entries(world.edgeEnv)
+            : undefined;
+      const answer = picked(args[2] ?? "", values ?? []);
+      if (values === undefined || args.length !== 4 || args[1] !== "--format" || answer === null) {
+        throw new Error(`unexpected command ${line}`);
+      }
+      asked[id === PDS_ID ? "pds" : "edge"] = answer.keys;
+      return ok(answer.out);
+    }
     if (line.includes(".Mounts")) return ok(JSON.stringify(world.mounts));
     if (args[0] === "volume") {
       // Without both label filters every project's volumes would match.
@@ -122,6 +168,11 @@ async function attempt(world: World) {
   const resolve = async (host: string) => {
     resolved.push(host);
     if (world.resolved === "fails") throw new Error(`getaddrinfo ENOTFOUND ${host}`);
+    if (world.resolved === "hangs") {
+      return new Promise<never>(() => {
+        // Never settles: a resolver that does not answer.
+      });
+    }
     return world.resolved;
   };
   const post = async (request: PinnedPost): Promise<number> => {
@@ -156,7 +207,7 @@ async function attempt(world: World) {
   } catch (caught) {
     error = caught;
   }
-  return { commands, envs, resolved, requests, logged, error };
+  return { commands, envs, resolved, requests, asked, logged, error };
 }
 
 /** Nothing secret or personal in what the wrapper said or threw (SE-7). */
@@ -166,6 +217,9 @@ function expectNothingLeaked(result: Awaited<ReturnType<typeof attempt>>): void 
     expect(said.join("\n")).not.toContain(value);
   }
 }
+
+// The only import line of @atproto/pds 0.5.37's dist/config/env.js.
+const IMPORT = "import { envBool, envInt, envList, envStr } from '@atproto/common';";
 
 describe("tests/support/pds-email-token.ts", () => {
   test("local_confirm_uses_real_endpoint", async () => {
@@ -179,7 +233,9 @@ describe("tests/support/pds-email-token.ts", () => {
     ]);
     for (const request of result.requests) {
       expect(request.headers.authorization).toBe(`Bearer ${JWT}`);
+      // RE-1: a deadline, and a short one; nothing here waits on more than the local machine.
       expect(request.timeoutMs).toBeGreaterThan(0);
+      expect(request.timeoutMs).toBeLessThanOrEqual(10_000);
     }
     expect(JSON.parse(String(result.requests[1]?.body))).toEqual({ email: EMAIL, token: TOKEN });
     // The reader runs once, after the request, as the tools profile's one-off container on the pinned project.
@@ -232,6 +288,11 @@ describe("tests/support/pds-email-token.ts", () => {
         "ssh://deploy@203.0.113.5",
         "npipe:////./pipe/docker",
         "unix://run/docker.sock",
+        // Another scheme over the same absolute path (coordinator's second review of #786, S3').
+        `ssh://${SOCKET}`,
+        `tcp://${SOCKET}`,
+        `npipe://${SOCKET}`,
+        `UNIX://${SOCKET}`,
       ].map((host): [string, (w: World) => World] => [
         "DOCKER_HOST must be a Docker socket on this machine",
         (w) => ({ ...w, caller: { ...w.caller, DOCKER_HOST: host } }),
@@ -240,7 +301,13 @@ describe("tests/support/pds-email-token.ts", () => {
         "DOCKER_HOST must be a Docker socket on this machine",
         (w) => ({ ...w, caller: { ...w.caller, DOCKER_HOST: "unix:///tmp/not-a-socket" } }),
       ],
-      ["the Docker daemon is not on this machine", (w) => ({ ...w, daemon: "homelab" })],
+      // The daemon's name exactly: never a prefix, a longer name or another case.
+      ...["homelab", "devbox2", "devbox.example.test", "dev", "DEVBOX", "Devbox", "", "devbox devbox"].map(
+        (daemon): [string, (w: World) => World] => [
+          "the Docker daemon is not on this machine",
+          (w) => ({ ...w, daemon }),
+        ],
+      ),
       // The dev root (S2): an absolute path to a regular file holding one PEM certificate, read here.
       ...[
         "dev-root-ca.pem",
@@ -273,9 +340,16 @@ describe("tests/support/pds-email-token.ts", () => {
       ],
       ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "unset.ac" } })],
       ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "evil.localhost.example" } })],
+      ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "pdslocalhost" } })],
+      ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "localhost" } })],
       [
         "a handle domain is not local",
         (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,.unset.ac" } }),
+      ],
+      // A handle domain is a suffix and starts with its dot.
+      [
+        "a handle domain is not local",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_SERVICE_HANDLE_DOMAINS: "pds.example.test" } }),
       ],
       [
         "the PDS has a mail server set",
@@ -300,9 +374,96 @@ describe("tests/support/pds-email-token.ts", () => {
         ["PDS_ENTRYWAY_URL", "https://entryway.example"],
         ["PDS_MOD_SERVICE_URL", "https://mod.example"],
         ["PDS_REPORT_SERVICE_URL", "https://report.example"],
+        // Look-alikes of the local names (S2'): .localhost is a suffix with its dot, never a substring.
+        ["PDS_DID_PLC_URL", "https://localhost.evil.example"],
+        ["PDS_DID_PLC_URL", "https://evil-localhost.example"],
+        ["PDS_DID_PLC_URL", "https://evillocalhost"],
+        ["PDS_DID_PLC_URL", "https://pds.example.test.evil.example"],
+        ["PDS_DID_PLC_URL", "http://[::ffff:127.0.0.1]:2582"],
+        // Loopback is a whole address, never a prefix (coordinator's verify of #803 at 94ab296, S2).
+        ["PDS_DID_PLC_URL", "https://127.0.0.1.evil.example"],
+        ["PDS_REDIS_SCRATCH_ADDRESS", "127.0.0.1.evil.example:6379"],
+        // Every other outbound key of @atproto/pds 0.5.37's env.js (Amendment 3, S2'), set to a public name.
+        ["PDS_BLOBSTORE_S3_ENDPOINT", "https://s3.example"],
+        ["PDS_BSKY_APP_VIEW_CDN_URL_PATTERN", "https://cdn.example/img/%s/plain/%s/%s@%s"],
+        ["PDS_HANDLE_BACKUP_NAMESERVERS", "127.0.0.1,198.51.100.53"],
+        ["PDS_HANDLE_BACKUP_NAMESERVERS", "198.51.100.53:53"],
+        ["PDS_REDIS_SCRATCH_ADDRESS", "redis.example:6379"],
+        ["PDS_REDIS_SCRATCH_ADDRESS", "203.0.113.9:6379"],
       ].map(([name, value]): [string, (w: World) => World] => [
         `${name} names a host outside the local stack`,
         (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, [name as string]: value as string } }),
+      ]),
+      // Codex on #803: keys that pick a provider whose endpoint is AWS's own when none is set (@atproto/pds 0.5.37
+      // dist/config/config.js:51-60, an unset endpoint; dist/config/secrets.js:26-30, KMS takes no endpoint at all).
+      [
+        "PDS_PLC_ROTATION_KEY_KMS_KEY_ID is set, so the PDS uses AWS KMS",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_PLC_ROTATION_KEY_KMS_KEY_ID: "alias/plc" } }),
+      ],
+      // Coordinator's verify of #803 at 94ab296, B1-B6: keys that send the PDS out without naming a host the wrapper
+      // judges. hCaptcha needs all three of its keys (dist/config/config.js:265-271), so the public site key alone is
+      // refused and the secret is never read.
+      [
+        "PDS_HCAPTCHA_SITE_KEY is set, so the PDS calls hCaptcha",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HCAPTCHA_SITE_KEY: "site-key-fixture" } }),
+      ],
+      ...["did:web:lexicon.example.test", `did:plc:${"b".repeat(24)}`].map((did): [string, (w: World) => World] => [
+        "PDS_LEXICON_AUTHORITY_DID is set, so the PDS resolves lexicons through that DID",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_LEXICON_AUTHORITY_DID: did } }),
+      ]),
+      // Any bucket (verify at d24dd55, B2): the locked S3 client still leaves the stack with every S3 key judged. With
+      // no region it asks instance metadata, AWS_DEFAULTS_MODE or the AWS config file can do the same, and some bucket
+      // names ignore both path style and the endpoint. The PDS keeps blobs on disk instead.
+      ...[{}, S3_JUDGED, { ...S3_JUDGED, PDS_BLOBSTORE_S3_REGION: "us-east-1" }].map(
+        (s3): [string, (w: World) => World] => [
+          "PDS_BLOBSTORE_S3_BUCKET is set, so the PDS stores blobs in S3",
+          (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_BLOBSTORE_S3_BUCKET: "blobs", ...s3 } }),
+        ],
+      ),
+      // Process-level keys, pinned here: @did-plc/lib 0.0.4 bundles axios with proxy-from-env, which reads each name
+      // in lower and upper case, npm's included (dist/index.js:19222-19271; verify at d24dd55, B1). NODE_USE_ENV_PROXY
+      // routes Node's global fetch too (Node v24.19.0 doc/api/cli.md).
+      ...[
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "npm_config_proxy",
+        "npm_config_http_proxy",
+        "npm_config_https_proxy",
+        "NPM_CONFIG_PROXY",
+        "NPM_CONFIG_HTTP_PROXY",
+        "NPM_CONFIG_HTTPS_PROXY",
+        "NODE_USE_ENV_PROXY",
+      ].map((name): [string, (w: World) => World] => [
+        `${name} is set, so the PDS sends requests through a proxy`,
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, [name]: "http://proxy.example.test:3128" } }),
+      ]),
+      ...[
+        "--use-env-proxy",
+        "--import @atproto/pds/telemetry",
+        "--max-old-space-size=768 --require /tmp/x.js",
+        "--max-old-space-size=0",
+        " --max-old-space-size=768",
+      ].map((options): [string, (w: World) => World] => [
+        "NODE_OPTIONS is not only a heap size",
+        (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, NODE_OPTIONS: options } }),
+      ]),
+      // A variable printed twice is refused, whichever value comes last (S3; runc keeps the last).
+      ...[
+        ["https://plc.directory", "http://plc:2582"],
+        ["http://plc:2582", "https://plc.directory"],
+      ].map((values): [string, (w: World) => World] => [
+        "a container variable is set twice",
+        (w) => ({
+          ...w,
+          pdsEnvLines: [
+            ...Object.entries(w.pdsEnv).filter(([key]) => key !== "PDS_DID_PLC_URL"),
+            ...values.map((value): [string, string] => ["PDS_DID_PLC_URL", value]),
+          ],
+        }),
       ]),
       [
         "the PDS does not keep its data in a named volume at /home/node",
@@ -311,6 +472,22 @@ describe("tests/support/pds-email-token.ts", () => {
       // Another project's volume, or one whose labels were not set by Compose for unset-dev's pdsdata.
       ["the PDS volume is not the unset-dev project's pdsdata", (w) => ({ ...w, volumes: [] })],
       ["the PDS volume is not the unset-dev project's pdsdata", (w) => ({ ...w, volumes: ["other_pdsdata"] })],
+      // Exactly one labelled volume, and it is the one mounted.
+      [
+        "the PDS volume is not the unset-dev project's pdsdata",
+        (w) => ({ ...w, volumes: [VOLUME, "unset-dev_pdsdata2"] }),
+      ],
+      // The mount at /home/node is judged, not the first volume.
+      [
+        "the PDS does not keep its data in a named volume at /home/node",
+        (w) => ({
+          ...w,
+          mounts: [
+            { Type: "volume", Name: VOLUME, Destination: "/other" },
+            { Type: "bind", Destination: "/home/node" },
+          ],
+        }),
+      ],
       [
         "the PDS volume is not the unset-dev project's pdsdata",
         (w) => ({ ...w, mounts: [{ Type: "volume", Name: "other_pdsdata", Destination: "/home/node" }] }),
@@ -330,10 +507,25 @@ describe("tests/support/pds-email-token.ts", () => {
     // The .localhost form passes: a PDS_HOSTNAME under it is local by definition (RFC 6761, section 6.3).
     const localhost = await attempt({ ...local(), pdsEnv: { ...local().pdsEnv, PDS_HOSTNAME: "pds.localhost" } });
     expect(localhost.error).toBeNull();
-    // A stack service by exact label, a local name, and a dev root name pass as service URLs.
-    const crawlers = { PDS_CRAWLERS: "http://plc:2582,https://relay.localhost", PDS_BSKY_APP_VIEW_URL: "" };
-    const urls = await attempt({ ...local(), pdsEnv: { ...local().pdsEnv, ...crawlers } });
+    // A stack service by exact label, a local name, a dev root name and a loopback address pass; an unset key passes.
+    const outbound = {
+      PDS_CRAWLERS: "http://plc:2582,https://relay.localhost",
+      PDS_BSKY_APP_VIEW_URL: "",
+      // An endpoint alone sends nothing (no bucket), but is still judged.
+      PDS_BLOBSTORE_S3_ENDPOINT: "https://app.example.test",
+      PDS_BLOBSTORE_S3_SECRET_ACCESS_KEY: "s3-secret-fixture",
+      PDS_HANDLE_BACKUP_NAMESERVERS: "127.0.0.53,[::1]:53",
+      PDS_REDIS_SCRATCH_ADDRESS: "127.0.0.1:6379",
+      PDS_BSKY_APP_VIEW_CDN_URL_PATTERN: "http://[::1]:2584/img/%s/plain/%s/%s@%s",
+      // Links and images the browser loads, never fetched by the PDS (dist/config/config.js:222-252).
+      PDS_LOGO_URL: "https://logo.example/logo.png",
+    };
+    const urls = await attempt({ ...local(), pdsEnv: { ...local().pdsEnv, ...outbound } });
     expect(urls.error).toBeNull();
+    // No NODE_OPTIONS at all passes too.
+    const { NODE_OPTIONS: _, ...noOptions } = local().pdsEnv;
+    const bare = await attempt({ ...local(), pdsEnv: noOptions });
+    expect(bare.error).toBeNull();
   });
 
   test("email_token_docker_runs_on_this_machine_only", async () => {
@@ -382,6 +574,108 @@ describe("tests/support/pds-email-token.ts", () => {
     expect(v6.requests.map(({ address }) => address)).toEqual(["::1", "::1"]);
     const range = await attempt({ ...local(), resolved: [{ address: "127.0.1.1" }] });
     expect(range.error).toBeNull();
+  });
+
+  test("email_token_pds_host_lookup_has_a_deadline", async () => {
+    // RE-1: a resolver that never answers ends the run, before the token is asked for.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const pending = attempt({ ...local(), resolved: "hangs" });
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result = await pending;
+      expect(result.error).toEqual(new Error("the edge's PDS_HOST does not resolve"));
+      expect(result.requests).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("email_token_inspect_reads_only_named_keys", async () => {
+    // Coordinator's second review of #786, N3: Docker prints only the named variables, so the PDS's secrets never
+    // reach this process.
+    const result = await attempt(local());
+    expect(result.error).toBeNull();
+    expect(result.asked.edge).toEqual(["PDS_HOST"]);
+    expect(result.asked.pds).toContain("PDS_HOSTNAME");
+    expect(result.asked.pds).toContain("PDS_REDIS_SCRATCH_ADDRESS");
+    expect(result.asked.pds).toContain("NODE_OPTIONS");
+    // These name a key or a site and hold no secret: the KMS key id and hCaptcha's public site key. They are asked so
+    // a set one is refused.
+    const named = ["PDS_PLC_ROTATION_KEY_KMS_KEY_ID", "PDS_HCAPTCHA_SITE_KEY"];
+    const secretLike = (key: string) => /SECRET|PASSWORD|KEY|TOKEN|SALT/.test(key) && !named.includes(key);
+    expect(result.asked.pds?.filter(secretLike)).toEqual([]);
+  });
+
+  test("email_token_redirect_is_refused", async () => {
+    // A 3xx is not success: node:https follows nothing, and the wrapper takes only 2xx.
+    const moved = await attempt({ ...local(), status: [302, 200] });
+    expect(moved.error).toEqual(new Error("the PDS refused requestEmailConfirmation (HTTP 302)"));
+    expect(moved.commands.some((command) => command.includes("pds-token-reader"))).toBe(false);
+    expectNothingLeaked(moved);
+  });
+
+  test("email_token_outbound_drift_names_new_and_stale_keys", () => {
+    // The check pds-email-token.image.test.ts runs on the pinned image's env.js, here on a file in its shape.
+    const reads = (keys: string[]) =>
+      `${IMPORT}\nexport function readEnv() {\n  return {\n${keys
+        .map((key, i) => `    k${i}: envStr('${key}'),\n`)
+        .join("")}  };\n}\n`;
+    const current = [...CLASSIFIED_KEYS];
+    expect(outboundDrift(reads(current))).toEqual([]);
+    // Every new key fails until it is classified, whatever its name (coordinator's verify of #803 at 94ab296, B7): a
+    // key that picks a provider by being set names no host. So does a classified key upstream dropped.
+    expect(outboundDrift(reads([...current, "PDS_NEW_SERVICE_URL", "PDS_NEW_PROVIDER_TOKEN"]))).toEqual([
+      "PDS_NEW_SERVICE_URL unclassified",
+      "PDS_NEW_PROVIDER_TOKEN unclassified",
+    ]);
+    expect(outboundDrift(reads(current.filter((key) => key !== "PDS_CRAWLERS")))).toEqual([
+      "PDS_CRAWLERS no longer read",
+    ]);
+    // A read in another form cannot pass as "no keys".
+    const other = "  x: envUrl('PDS_X_URL'),\n";
+    expect(outboundDrift(reads(current).replace("  };", `${other}  };`))).toEqual([
+      "env.js reads a key in a form this check does not parse",
+    ]);
+    expect(outboundDrift("export {}\n")).toEqual(["env.js reads a key in a form this check does not parse"]);
+    // Codex on #803: a helper call spaced or wrapped before its parenthesis, or a name in double quotes, is a read too.
+    // So is every other shape that reaches the environment (S1): process.env in any form, a helper under another
+    // name or called another way, and a comment before the parenthesis.
+    const shapes = [
+      "envStr ('PDS_X_URL')",
+      "envStr\n      ('PDS_X_URL')",
+      'envStr("PDS_X_URL")',
+      "process.env.PDS_X_URL",
+      "process.env['PDS_X_URL']",
+      "(({ PDS_X_URL }) => PDS_X_URL)(process.env)",
+      "(0, common_1.envStr)('PDS_X_URL')",
+      "envStr?.('PDS_X_URL')",
+      "envStr.call(null, 'PDS_X_URL')",
+      "envStr /* url */ ('PDS_X_URL')",
+      // One shape per rule that only that rule catches: process, a call of another env helper, a key-shaped name.
+      "process.env[name]",
+      "envAny(name)",
+      "envAny (name)",
+      "globalThis['proc' + 'ess'].env.PDS_X_URL",
+    ];
+    for (const shape of shapes) {
+      expect(outboundDrift(reads(current).replace("  };", `  x: ${shape},\n  };`)), shape).toEqual([
+        "env.js reads a key in a form this check does not parse",
+      ]);
+    }
+    const imports: [string, string][] = [
+      ["import { envStr as e } from '@atproto/common';", "e('PDS_X_URL')"],
+      ["import { envBool, envInt, envList, envStr, readKey } from '@atproto/common';", "readKey('PDS_X_URL')"],
+      [`${IMPORT}\nconst str = envStr;`, "str(name)"],
+      [IMPORT.replace("envStr }", "envStr, readKey as r }"), "r(name)"],
+      [`${IMPORT}\nexport * from './other.js';`, "envStr('PDS_X_URL')"],
+      [`${IMPORT}\nimport * as common from '@atproto/common';`, "common[helper](name)"],
+      [`${IMPORT}\nconst common = require('@atproto/common');`, "common[helper](name)"],
+      [`${IMPORT}\nconst { envStr: s } = require('@atproto/common');`, "s('PDS_X_URL')"],
+    ];
+    for (const [head, call] of imports) {
+      const file = reads(current).replace(IMPORT, head).replace("  };", `  x: ${call},\n  };`);
+      expect(outboundDrift(file), head).toEqual(["env.js reads a key in a form this check does not parse"]);
+    }
   });
 
   test("email_token_fetch_errors_are_fixed_reasons", async () => {

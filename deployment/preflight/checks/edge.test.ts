@@ -314,3 +314,170 @@ describe("C18 (P1.30u)", () => {
     });
   });
 });
+
+// P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md; step book
+// Amendment 1 to 2026-10-13-p134o-after-791.md): every edge site takes its certificate from the env's own (tls)
+// snippet, through `import tls`, and from nothing else. Refocus Amendment 1 forbids Caddy's internal CA.
+describe("C18 certificates (P1.33t)", () => {
+  const edgeEnv = () => new SecretMap(Object.entries(ENV));
+  const zones = (repo: ReturnType<typeof repository>) =>
+    edgeZones(compose([sitesFrom(repo.sitesDir)]), repo.edgeDir, edgeEnv(), EDGE_IMAGE);
+  /** The repository with the enabled PDS site replaced by `text`. */
+  const withSite = (text: string) => {
+    const repo = repository();
+    unlinkSync(join(repo.sitesDir, "pds.caddy"));
+    writeFileSync(join(repo.edgeDir, "sites", "own.caddy"), text);
+    symlinkSync(join(repo.edgeDir, "sites", "own.caddy"), join(repo.sitesDir, "own.caddy"));
+    return repo;
+  };
+  const shipped = readFileSync(join(EDGE, "sites", "pds.caddy"), "utf8");
+  const IMPORT = "\timport tls\n";
+
+  test("c18_site_without_tls_import_fails", () => {
+    expect(shipped).toContain(IMPORT);
+    expect(zones(withSite(shipped.replace(IMPORT, "")))).toEqual({
+      pass: false,
+      reason: "{$PDS_HOST}: does not import tls",
+    });
+    // A second site beside the PDS's, with no import of its own, fails by name too.
+    const repo = repository();
+    const second = shipped.replace(IMPORT, "").replace("{$PDS_HOST} {", "other.unset.test {");
+    writeFileSync(join(repo.edgeDir, "sites", "other.caddy"), second);
+    symlinkSync(join(repo.edgeDir, "sites", "other.caddy"), join(repo.sitesDir, "other.caddy"));
+    expect(zones(repo)).toMatchObject({ pass: false, reason: expect.stringContaining("other.unset.test: does not") });
+  });
+
+  test("c18_site_own_tls_directive_fails", () => {
+    for (const own of ["\ttls internal\n", "\ttls\n", "\ttls {\n\t\tissuer internal\n\t}\n"]) {
+      // In place of the import, and beside it.
+      expect(zones(withSite(shipped.replace(IMPORT, own))), own).toEqual({
+        pass: false,
+        reason: "{$PDS_HOST}: does not import tls; {$PDS_HOST}: has its own tls directive",
+      });
+      expect(zones(withSite(shipped.replace(IMPORT, `${IMPORT}${own}`))), own).toEqual({
+        pass: false,
+        reason: "{$PDS_HOST}: has its own tls directive",
+      });
+    }
+    // Through another snippet, defined in snippets/ or in the site file itself.
+    const repo = withSite(shipped.replace(IMPORT, `${IMPORT}\timport own-tls\n`));
+    writeFileSync(join(repo.edgeDir, "snippets", "own-tls.caddy"), "(own-tls) {\n\ttls internal\n}\n");
+    expect(zones(repo)).toEqual({ pass: false, reason: "{$PDS_HOST}: has its own tls directive" });
+    const inSite = `(own-tls) {\n\ttls internal\n}\n${shipped.replace(IMPORT, `${IMPORT}\timport own-tls\n`)}`;
+    expect(zones(withSite(inSite))).toEqual({ pass: false, reason: "{$PDS_HOST}: has its own tls directive" });
+  });
+
+  test("c18_only_the_image_health_site_skips_tls", () => {
+    // Architecture's Amendment 5 to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md: only the image's own health
+    // site, exactly as the Caddyfile writes it, goes without `import tls`. A loopback site without http:// gets
+    // automatic HTTPS, which for an IP address is Caddy's internal CA.
+    const HEALTH = "http://127.0.0.1:8081 {\n\tbind 127.0.0.1\n\trespond /health 200\n\trespond 404\n}\n";
+    const caddyfileOf = (repo: ReturnType<typeof repository>) => join(repo.edgeDir, "Caddyfile");
+    expect(readFileSync(caddyfileOf(repository()), "utf8")).toContain(HEALTH);
+    /** C18 with `site` enabled beside the PDS site, after `edit` to the Caddyfile. */
+    const withExtra = (site: string | null, edit = (text: string) => text) => {
+      const repo = repository();
+      writeFileSync(caddyfileOf(repo), edit(readFileSync(caddyfileOf(repo), "utf8")));
+      if (site !== null) {
+        writeFileSync(join(repo.edgeDir, "sites", "loop.caddy"), site);
+        symlinkSync(join(repo.edgeDir, "sites", "loop.caddy"), join(repo.sitesDir, "loop.caddy"));
+      }
+      return zones(repo);
+    };
+    const NO_TLS = (address: string) => expect.stringContaining(`${address}: does not import tls`);
+    expect(withExtra(null)).toEqual({ pass: true, reason: "ok" });
+    // The same block in a sites file, beside the Caddyfile's or in its place.
+    // Beside it, neither copy is exempt: which one Caddy would take is not the reader's to guess.
+    expect(withExtra(HEALTH)).toEqual({
+      pass: false,
+      reason: "http://127.0.0.1:8081: does not import tls; http://127.0.0.1:8081: does not import tls",
+    });
+    expect(withExtra(HEALTH, (text) => text.replace(HEALTH, ""))).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    // Another loopback port, in a sites file or in the Caddyfile itself.
+    const port = HEALTH.replace(":8081", ":8082");
+    expect(withExtra(port)).toEqual({ pass: false, reason: "http://127.0.0.1:8082: does not import tls" });
+    expect(withExtra(null, (text) => text.replace(HEALTH, port))).toEqual({
+      pass: false,
+      reason: "http://127.0.0.1:8082: does not import tls",
+    });
+    // Another bind, or an added reverse_proxy, in the Caddyfile's own block.
+    expect(
+      withExtra(null, (text) =>
+        text.replace("\tbind 127.0.0.1\n\trespond /health", "\tbind 0.0.0.0\n\trespond /health"),
+      ),
+    ).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    expect(
+      withExtra(null, (text) =>
+        text.replace("\trespond 404\n", "\trespond 404\n\troute {\n\t\treverse_proxy 127.0.0.1:9\n\t}\n"),
+      ),
+    ).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    // A tls added after the two respond lines: the block must be exactly the image's, not start like it.
+    expect(withExtra(null, (text) => text.replace("\trespond 404\n", "\trespond 404\n\ttls internal\n"))).toEqual({
+      pass: false,
+      reason: "http://127.0.0.1:8081: does not import tls; http://127.0.0.1:8081: has its own tls directive",
+    });
+    // An http:// site with a public name, and loopback sites with no scheme.
+    expect(withExtra("http://www.unset.test {\n\trespond 204\n}\n")).toMatchObject({
+      pass: false,
+      reason: NO_TLS("http://www.unset.test"),
+    });
+    for (const address of ["127.0.0.1:8443", "[::1]:8443"]) {
+      expect(withExtra(`${address} {\n\tbind 127.0.0.1\n\trespond 204\n}\n`), address).toEqual({
+        pass: false,
+        reason: `${address}: does not import tls`,
+      });
+    }
+  });
+
+  test("c18_global_certificate_options_fail", () => {
+    // Already refused by the reader's global allowlist (deployment/edge/caddyfile.ts DIRECTIVES.global) before P1.33t;
+    // pinned here so a wider allowlist cannot let one through unseen.
+    for (const option of [
+      "local_certs",
+      "skip_install_trust",
+      "pki {\n\t\tca local\n\t}",
+      "auto_https off",
+      "auto_https disable_certs",
+    ]) {
+      const repo = repository();
+      const caddyfile = join(repo.edgeDir, "Caddyfile");
+      writeFileSync(caddyfile, readFileSync(caddyfile, "utf8").replace("\tadmin off\n", `\tadmin off\n\t${option}\n`));
+      expect(zones(repo), option).toMatchObject({
+        pass: false,
+        reason: expect.stringMatching(
+          /^the edge config is unreadable: line \d+: directive \S+ is not allowed in global$/,
+        ),
+      });
+    }
+  });
+
+  test("c18_tls_snippet_not_the_envs_own_fails", () => {
+    // The (tls) every site imports is defined by another snippet file, while snippets/tls.caddy defines another name.
+    const repo = repository();
+    const tls = join(repo.edgeDir, "snippets", "tls.caddy");
+    writeFileSync(tls, readFileSync(tls, "utf8").replace("(tls) {", "(tls-acme) {"));
+    writeFileSync(join(repo.edgeDir, "snippets", "z.caddy"), "(tls) {\n\ttls internal\n}\n");
+    expect(zones(repo)).toEqual({ pass: false, reason: "the (tls) snippet served is not snippets/tls.caddy" });
+    // Or snippets/tls.caddy is gone.
+    const gone = repository();
+    unlinkSync(join(gone.edgeDir, "snippets", "tls.caddy"));
+    writeFileSync(join(gone.edgeDir, "snippets", "z.caddy"), "(tls) {\n\ttls internal\n}\n");
+    expect(zones(gone)).toEqual({ pass: false, reason: "the (tls) snippet served is not snippets/tls.caddy" });
+    // The same ACME body in another file fails too: the env's own file must define the (tls) that is served.
+    const moved = repository();
+    const body = readFileSync(join(moved.edgeDir, "snippets", "tls.caddy"), "utf8");
+    writeFileSync(join(moved.edgeDir, "snippets", "tls.caddy"), body.replace("(tls) {", "(tls-acme) {"));
+    writeFileSync(join(moved.edgeDir, "snippets", "z.caddy"), body);
+    expect(zones(moved)).toEqual({ pass: false, reason: "the (tls) snippet served is not snippets/tls.caddy" });
+    expect(zones(repository())).toEqual({ pass: true, reason: "ok" });
+  });
+});

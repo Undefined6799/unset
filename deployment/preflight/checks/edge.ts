@@ -11,15 +11,20 @@
 import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join, posix } from "node:path";
 import {
+  type Caddyfile,
   CaddyfileError,
+  type Directive,
   type EdgeMode,
   ENV_NAMES,
   type EnvName,
   edgeSiteProblems,
+  readCaddyfile,
   readEdgeConfig,
+  type Site,
 } from "../../edge/caddyfile.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
+import { runsBuilt } from "./build.ts";
 import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
@@ -140,13 +145,108 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap, mode: Edge
   }
   let problems: string[];
   try {
-    problems = edgeSiteProblems(readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES, mode));
+    const config = readEdgeConfig(edgeDir, sitesDir, values, EDGE_FILES, mode);
+    problems = [...edgeSiteProblems(config), ...certificateProblems(config, edgeDir, values, mode)];
   } catch (error) {
     if (error instanceof CaddyfileError) return fail(`the edge config is unreadable: ${error.message}`);
     throw error;
   }
   return problems.length === 0 ? pass() : fail(problems.join("; "));
 }
+
+/**
+ * The image's own health site, deployment/edge/Caddyfile:48-53 on main 79b3582, as the reader reads it: the one site
+ * that goes without `import tls` (architecture's Amendment 5 to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md).
+ * Plain HTTP on loopback, so Caddy chooses no certificate for it (caddyserver/website
+ * src/docs/markdown/automatic-https.md, "Activation", read 2026-10-13).
+ */
+const HEALTH_SITE = JSON.stringify([
+  ["http://127.0.0.1:8081"],
+  [null],
+  [
+    ["bind", ["127.0.0.1"], [null], null, null],
+    ["respond", ["/health", "200"], [null, null], null, null],
+    ["respond", ["404"], [null], null, null],
+  ],
+]);
+const healthShaped = (site: Site): boolean =>
+  JSON.stringify([site.addresses, site.placeholders, shape(site.directives)]) === HEALTH_SITE;
+
+/**
+ * The health site, when it is exempt: exactly one site in the served config has its shape, and the image's Caddyfile,
+ * read alone without its two file imports, holds exactly that one site and nothing else. So the same block in a sites
+ * or local file, beside the Caddyfile's or in its place, is never exempt.
+ */
+function exemptHealthSite(config: Caddyfile, edgeDir: string, env: Partial<Record<EnvName, string>>): Site | null {
+  const shaped = config.sites.filter(healthShaped);
+  if (shaped.length !== 1) return null;
+  const own = EDGE_FILES.read(join(edgeDir, "Caddyfile"))
+    .split("\n")
+    .filter((line) => !FILE_IMPORT_LINES.includes(line))
+    .join("\n");
+  const sites = readCaddyfile(own, env).sites;
+  return sites.length === 1 && healthShaped(sites[0] as Site) ? (shaped[0] as Site) : null;
+}
+/** The Caddyfile's two file imports (deployment/edge/caddyfile.ts FILE_IMPORTS), each a whole line. */
+const FILE_IMPORT_LINES = ["import snippets/*.caddy", "import sites/enabled/*.caddy"];
+
+const flatten = (directives: Directive[]): Directive[] =>
+  directives.flatMap((directive) => [directive, ...flatten(directive.block ?? [])]);
+
+/**
+ * Why some site could get a certificate other than the env's own (tls) snippet gives it (P1.33t; architecture's
+ * Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md). Every site but the image's health site
+ * imports tls, and no tls directive in it comes from anywhere else; the (tls) served reads the same as the one the
+ * env's own file defines (snippets/tls.caddy, or local/tls.caddy under local); a (tls) from any other file fails. This
+ * closes Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
+ * (local_certs, skip_install_trust, pki, auto_https) are already outside the reader's global allowlist.
+ */
+function certificateProblems(
+  config: Caddyfile,
+  edgeDir: string,
+  env: Partial<Record<EnvName, string>>,
+  mode: EdgeMode,
+): string[] {
+  const found: string[] = [];
+  const health = exemptHealthSite(config, edgeDir, env);
+  for (const site of config.sites) {
+    if (site === health) continue;
+    // Named as written, `{$NAME}` for a placeholder, never its value (P1.28l).
+    const name = site.addresses
+      .map((address, at) => (site.placeholders[at] ? `{$${site.placeholders[at]}}` : address))
+      .join(" ");
+    if (!site.directives.some((directive) => directive.name === "tls" && directive.via === "tls")) {
+      found.push(`${name}: does not import tls`);
+    }
+    const tls = flatten(site.directives).filter((directive) => directive.name === "tls");
+    if (tls.some((directive) => directive.via !== "tls")) found.push(`${name}: has its own tls directive`);
+  }
+  const own = mode === "local" ? "local/tls.caddy" : "snippets/tls.caddy";
+  if (!sameDirectives(config.snippet("tls"), ownTls(join(edgeDir, own), env))) {
+    found.push(`the (tls) snippet served is not ${own}`);
+  }
+  return found;
+}
+
+/** The (tls) snippet the env's own file defines, or null when the file is missing or defines none. */
+function ownTls(path: string, env: Partial<Record<EnvName, string>>): Directive[] | null {
+  if (EDGE_FILES.realpath(path) === null) return null;
+  try {
+    return readCaddyfile(EDGE_FILES.read(path), env).snippet("tls");
+  } catch (error) {
+    if (error instanceof CaddyfileError) return null;
+    throw error;
+  }
+}
+
+/** Whether two directive lists read the same, wherever in their files they were written. */
+function sameDirectives(served: Directive[], own: Directive[] | null): boolean {
+  return own !== null && JSON.stringify(shape(served)) === JSON.stringify(shape(own));
+}
+
+/** A directive list as data, without the line numbers that say where it was written. */
+const shape = (directives: Directive[]): unknown =>
+  directives.map(({ name, args, placeholders, block, via }) => [name, args, placeholders, block && shape(block), via]);
 
 /**
  * The files a local edge mounts from deployment/edge/local/, by target: each at most once, read-only, by that name.
@@ -157,6 +257,7 @@ function readZones(edgeDir: string, sitesDir: string, env: SecretMap, mode: Edge
 const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
   [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
 };
+const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
 /** The dev leaf's certificate and key (P1.34c), the only secrets a local edge reads. */
 const LOCAL_EDGE_SECRETS = ["local_tls_cert", "local_tls_key"];
 
@@ -164,8 +265,11 @@ const LOCAL_EDGE_SECRETS = ["local_tls_cert", "local_tls_key"];
 function localEdgeZones(inputs: Inputs): Outcome {
   const edge = inputs.compose.services.find((service) => service.name === "edge");
   if (edge === undefined) return missing("the edge service");
-  const built = edge.image === null && edge.build?.dockerfile === join(inputs.root, "deployment/edge/Dockerfile");
-  if (!built) return fail("the edge is not built from deployment/edge/Dockerfile");
+  // The one definition C25 uses too: exactly that Dockerfile, a build C26 passes, and no image beside it (the #789
+  // verify, N2: the path's text alone let a build C26 refuses through).
+  if (runsBuilt(edge, inputs, undefined, EDGE_DOCKERFILE) !== "yes") {
+    return fail(`the edge is not built from ${EDGE_DOCKERFILE}`);
+  }
   if (edge.secrets.some((name) => !LOCAL_EDGE_SECRETS.includes(name))) {
     return fail("the edge reads a secret other than the dev leaf's");
   }
@@ -179,8 +283,9 @@ function localEdgeZones(inputs: Inputs): Outcome {
 }
 
 /**
- * Why the local edge's binds are not exactly its sites plus LOCAL_MOUNTS, each a read-only bind of that one regular
- * file in deployment/edge/local/, or null. A link is refused even when it points inside, so the mount names the file.
+ * Why the local edge's binds are not exactly its sites plus every one of LOCAL_MOUNTS, each a read-only bind of that
+ * one regular file in deployment/edge/local/, or null. A link is refused even when it points inside, so the mount
+ * names the file.
  */
 function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
   const local = EDGE_FILES.realpath(join(edgeDir, "local"));
@@ -198,7 +303,10 @@ function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
     const problem = localFileMount(mount, allowed, local);
     if (problem !== null) return problem;
   }
-  return null;
+  // Each is required, not only allowed: without the TLS snippet's mount Caddy serves snippets/tls.caddy, while C18
+  // read local/tls.caddy in its place (P1.33t).
+  const absent = Object.keys(LOCAL_MOUNTS).find((target) => !seen.has(target));
+  return absent === undefined ? null : fail(`${LOCAL_MOUNTS[absent]?.what} is not mounted`);
 }
 
 /** Why one LOCAL_MOUNTS entry is not a read-only bind of exactly its file in `local`, the realpathed local/. */

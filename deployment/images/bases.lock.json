@@ -31,7 +31,11 @@
     "source": "upstream",
     "stage": "runtime",
     "buildStage": false,
-    "stripped": ["/usr/local/bin/gosu"]
+    "stripped": [
+      "/usr/local/bin/gosu",
+      "/etc/ssl/private/ssl-cert-snakeoil.key",
+      "/etc/ssl/certs/ssl-cert-snakeoil.pem"
+    ]
   },
   "pds": {
     "ref": "ghcr.io/bluesky-social/pds",

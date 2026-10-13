@@ -383,7 +383,7 @@ Done when (tests): `no_record_on_nxdomain`, `no_record_on_nodata_both`, `one_fam
 ---
 
 ### P2.01 — DID and handle resolution
-Tags: [SEC]            Depends on: P2.01k, P2.01q, P1.18            Plan: §2 rules 1, 13; §3 "PLC read replicas"; §5.2; Q1
+Tags: [SEC]            Depends on: P2.01k, P2.01q, P1.18, P1.34z            Plan: §2 rules 1, 13; §3 "PLC read replicas"; §5.2; Q1
 Status: built (#72). Rulings folded in: architecture 2026-10-06 00:10Z (p201-identity-port-guard-resolver) and the
   step book's 2026-10-05 p201-build-corrections; merge order P2.01q, P2.01, then P2.01a and P2.01m in either order.
 Where: `domains/identity/{contract.ts, did-doc.ts, resolve-did.ts, resolve-handle.ts, syntax.ts, index.ts}` and ADR
@@ -396,8 +396,9 @@ outcomes that separate "does not exist" from "could not tell right now".
 
 Inputs: the domain port `IdentityNetwork` (`domains/identity/contract.ts`; implemented in `infrastructure/pds` with
   `guardedFetch` and `resolveTxt` by P2.01a, and wired in `interfaces/http/compose.ts` by P2.04), in place of direct
-  `guardedFetch` and `resolveTxt` calls (ADG §2: a domain imports no infrastructure); config keys `PLC_URL` (required, `https://plc.directory` in every
-  environment in Phase 2), `IDENTITY_HTTP_TIMEOUT_MS` (default 3000), `IDENTITY_DNS_TIMEOUT_MS` (default 2000),
+  `guardedFetch` and `resolveTxt` calls (ADG §2: a domain imports no infrastructure); config keys `PLC_URL` (required:
+  `https://plc.directory` under dev and prod, and the exact local PLC URL under local only (P1.34z; book edit
+  2026-10-13-local-plc-a4-steps)), `IDENTITY_HTTP_TIMEOUT_MS` (default 3000), `IDENTITY_DNS_TIMEOUT_MS` (default 2000),
   `DID_DOC_CACHE_TTL_S` (default 300), `DID_DOC_CACHE_MAX` (default 10000).
 Outputs:
   - `type Did = string & {__brand: 'Did'}`; `type Handle = string & {__brand: 'Handle'}` (lowercase, validated).
@@ -557,9 +558,11 @@ Where: `infrastructure/pds/identity-network.ts`, its mapping test, and the packa
 Rule: implements P2.01's `IdentityNetwork` with `guardedFetch` and `resolveTxt`, under architecture's conditions:
   `plc` bound to `PLC_URL`; `public` https `GET` only, no userinfo; `maxBytes` capped at 64 KiB; one test case per
   `egress.*` code mapped to `unavailable`, `refused` or `no_such_host`. A construction-time check that `PLC_URL` is
-  https and on the host net-guard's `plc` policy allows fails closed at startup. Timeouts and `PLC_URL` come as
-  adapter options from the interface's config (no `shared/config` change). It adds no wiring: P2.04 builds it into
-  `interfaces/http/compose.ts`. A shared `*.fake.ts` for composition roots, if ever needed, lives here beside it.
+  https and on the host net-guard's `plc` policy allows (`plc.directory` under dev and prod, plus P1.34y's exact
+  local host under the local profile only; book edit 2026-10-13-local-plc-a4-steps) fails closed at startup. Timeouts
+  and `PLC_URL` come as adapter options from the interface's config (no `shared/config` change). It adds no wiring:
+  P2.04 builds it into `interfaces/http/compose.ts`. A shared `*.fake.ts` for composition roots, if ever needed, lives
+  here beside it.
 
 ---
 
@@ -1461,7 +1464,8 @@ Done when (tests):
   - `callback.email_read_failure_tolerated`: `pdsCall` returns transient → still 303 success; `email_confirmed` null.
   - `callback.db_failure`: DB throws in step 9 → `login.failed`, no Set-Cookie for `__Host-sid`.
   - `callback.pds_unreachable`: token request times out → `login.pds_unreachable`.
-  - `callback.dev_pds_e2e` (Playwright, compose.dev): seeded account signs in through the real dev PDS → lands on `/welcome`.
+  - `callback.dev_pds_e2e` (Playwright, the `local` stack through `local:up`): seeded account signs in through the real
+    local PDS → lands on `/welcome`.
   - `callback.two_tabs_second_succeeds`: tab 1 starts (cookie N1), tab 2 starts (cookie N2); tab 1's callback →
     `login.state_mismatch`, cookie still N2; tab 2's callback → success.
   - `callback.stray_hit_keeps_nonce`: GET `/oauth/callback?code=x&state=unknown` with a live cookie → `login.expired`;
@@ -2020,7 +2024,7 @@ Not in this step: the profile editor (P2.21); privacy switch actions (P2.22); ex
 Diagram: none.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
-Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
+Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
 Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` dev stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation
@@ -2043,7 +2047,8 @@ Outputs:
     and any change the book needs (routed as a plan or book issue, never fixed silently).
 
 Algorithm:
-  1. Bring up the `local` stack (`compose.dev.yaml` with the `local` env, profile `app`); seed one account.
+  1. Bring up the `local` stack (`local:up`, which runs `compose.local.yaml`, profile `app`; architecture's Amendment 5
+     of 2026-10-13-local-plc, point 1); seed one account.
   2. Run the scenario: `/login` → handle of the seeded account → the local PDS's sign-in page → consent (the fallback
      scope set is expected until P1.35 publishes the permission set; P2.05 logs `oauth.scope_fallback_used`) →
      `/oauth/callback` → onboarding (age, terms) → email verification (`requestEmailConfirmation`, P1.29h's
