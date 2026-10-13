@@ -1434,8 +1434,8 @@ Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a r
 | P4.07c | Legal-hold cleanup tables (split from P4.07, SE-6) | [SEC] | P4.03, P3.07, P3.16c, P1.14a | `phase-4.md` |
 | P4.07g | Legal-hold reader logins and the cleanup owner (SE-6) | [SEC] | P4.00\*, P1.12, P4.07c, P3.07 | `phase-4.md` |
 | P4.07k | Legal-hold domain and the offline export CLI (split from P4.07, SE-6) | [SEC] [MOD] | P4.07g, P4.06, P3.16c, P1.14a | `phase-4.md` |
-| P4.07 | Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07c, P4.07g, P4.07h, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
 | P4.07h | The body of `core.is_held` (split from P4.07, SE-6) | [SEC] [MOD] | P4.07c | `phase-4.md` |
+| P4.07 | Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07c, P4.07g, P4.07h, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
 | P4.08 | Local image gate: nudity (NudeNet class) and gore (hold-only), in the no-network container | [MOD] | P4.05 | `phase-4.md` |
 | P4.09 | Local transcript (whisper.cpp `base`) → draft WebVTT captions | — | P4.05 | `phase-4.md` |
 | P4.09a | Local text gate: rules, Detoxify multilingual, Llama Guard 3 1B, in the no-network container (answers 30, 30b) | [MOD] [SEC] [SPIKE] (step 0) | P4.04, P4.09 | `phase-4.md` |
@@ -1857,9 +1857,11 @@ flowchart LR
 ## Dependency check (2026-10-04, SE-6 corrections)
 
 Re-run by script over all 237 rows after adding P2.09k, P2.09d, P3.07k and P4.07h: no duplicate id, every dependency
-names a step that exists and comes earlier in the row order, every id matches P0.09c's id pattern. Changed
-dependencies: P2.09 adds P2.09k; P2.10 adds P2.09d; P3.07 adds P3.07k; P4.25 adds P4.07h. P4.07h follows P4.07 (its
-body reads P4.07's table); every other split lands ahead of its feature step.
+names a step that exists and comes earlier in the row order, every id matches P0.09c's id pattern. Changed dependencies:
+P2.09 adds P2.09k; P2.10 adds P2.09d; P3.07 adds P3.07k; P4.25 adds P4.07h. P4.07h follows P4.07 (its body reads P4.07's
+table); every other split lands ahead of its feature step. *[Superseded 2026-10-13: P4.07h now follows P4.07c and its
+row sits above P4.07, which depends on it (book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment of
+22:16Z and its step-book mapping, and architecture's 22:17Z confirmation).]*
 
 ## Dependency check (2026-10-04, SE-6 follow-up ruling)
 

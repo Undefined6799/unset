@@ -187,7 +187,7 @@ Written in parallel with the steps that own them; the editor reconciles names. E
 | P4.02 | Lexicons `sh.unset.video` (`video` blob = 1080p master, or the 720p rendition when `master_downgraded`; `poster`, `aspectRatio`, `captions[{lang, file: blob text/vtt}]`, `caption` text) plus `sh.unset.comment` and `sh.unset.like` (plan §5.8). Caption files are **repo blobs** (a public post; other clients read them) and `media` keeps a served copy (plan §5.8, 22:49Z; E11). P4.02 also registers `sh.unset.video` with the P3.05 ingest, promoting `video_cid` and `created_at` (E8). |
 | P4.03 / P4.04 | `video_upload(id, did, state, created_at, expires_at, rkey, needs_reauth, master_downgraded, …)` with part 1's single state enum: `uploaded`, `processing`, `ready`, `private`, `reviewing`, `unsure`, `blocked`, `appealed`, `approved`, `pds_refused_master`, `published`, and the terminal states `matched_hold`, `failed`, `appeal_upheld`, `publish_failed`, `expired`. `needs_reauth` and `master_downgraded` are flags, not states. Review job kinds include `limits`, `preserve_copy`, `unblur_frame`, `manual_match`, `nudity`, `text_gate` and `route`. `review_egress` reads no media at all (answer 30b). |
 | P4.05 / P4.14 | Storage layout (part 1): drafts live under `drafts/<did>/v/<uploadId>/…`. At publish, P4.14 copies renditions, posters and captions to `media/<did>/v/<rkey>/{r360.mp4, r720.mp4, master.mp4, poster.avif, poster.webp, captions.<lang>.vtt}`. This file assumes that, after the copy, P4.14's publisher inserts `idx.rendition_set(did, rkey, master_cid, ready_at, duration_ms, width, height, master_downgraded)` (E7, R8, E25). Private posts live under `drafts/<did>/private/` with no 30-day rule and no lifecycle tag. |
-| P4.07 | Legal holds: the one table `legal_hold(hold_id, did, subject_kind, subject_ref, kind, state, …)` in the app schema, written in P4.07's transaction B; `pds-admin` stays authoritative for the hold clock (the per-case preserve-until fixed at notification by the regime in force, 21 days today; 30 days after the finding for an analyst hold; G-4). This file reads holds only through the one hold predicate `core.is_held('video', upload_id) → boolean` (declared by P3.07, body by P4.07; R5; see P4.25). |
+| P4.07 | Legal holds: the one table `legal_hold(hold_id, did, subject_kind, subject_ref, kind, state, …)` in the app schema, written in P4.07's transaction B; `pds-admin` stays authoritative for the hold clock (the per-case preserve-until fixed at notification by the regime in force, 21 days today; 30 days after the finding for an analyst hold; G-4). This file reads holds only through the one hold predicate `core.is_held('video', upload_id) → boolean` (declared by P3.07, body by P4.07h; R5; see P4.25). |
 | P4.08 / P4.09a | Local image gate `nudity.check(images[]) → {nudity: clear \| unsure \| fail, gore: clear \| hold}` and local text gate `textGate.check({fields: [{source, text}]}) → allow \| hold(reasons) \| block(reasons) \| suspected_csam`, both in the no-network compute container. P4.17 sends images and text, and P4.20 sends text, through these same two functions (R4). P4.10 (Claude) is off in v1 (answer 30b). |
 | P4.11 | `review.submit(job: ReviewJob) → jobId` with `ReviewJob = {kind: 'video', uploadId} \| {kind: 'bsky_post', did, draftId, text, imageKeys[≤4]} \| {kind: 'comment', did, pendingCommentId, text}` and one pipeline per kind. Video uses the part-1 pipeline. For `bsky_post`, the images were already cleared by the P2.16 gate at upload, then go through the P4.08 image gate (nudity and gore), then the P4.09a text gate on the text and alt texts. `comment` is text only: no image gate, then the P4.09a text gate. Nothing leaves our servers for any kind (answer 30b). The decision callback is `onReviewDecision(jobId, pass \| fail(reason) \| unsure)`, and `unsure` waits for P4.12. The union is defined once in P4.11's outputs (editor pass, R4/E27a). |
 | P4.13 | Appeals go `blocked → appealed → approved \| appeal_upheld`, and a person decides them. P4.17 and P4.20 reuse the same appeal route and statement-of-reasons text for their kinds. |
@@ -999,7 +999,8 @@ Threats: the cleanup boundary.
   - T A flag `admin` wrote lifts a hold → the receipt table has no "verified" column; only P4.07g's
     `close_expired_hold` writes the hold's closed state, and P4.07h's `core.is_held` reads nothing else.
 Done when (tests): shape tests only: each table's columns; `admin`'s receipt table is insert-only.
-Reuse: none. Not in this step: `cleanup_owner`, the cleanup-key table and every definer (P4.07g, P4.07k);
+Reuse: none. Not in this step: `cleanup_owner`, the cleanup-key table and the cleanup definers (P4.07g); the other
+  legal-hold definers (P4.07); the body of `core.is_held` (P4.07h);
   `core.erase_pending_hold` (P3.07); callers (P4.07). Diagram: none.
 
 ---
@@ -1044,8 +1045,8 @@ Outputs: per owner, role `lh_<owner>` (class `human`, `LOGIN`, `connectionLimit`
     Then, only if `core.erase_pending_hold` lists the subject's DID and no other hold on it is open, it runs
     `erase_did(did, why = legal_hold_closed)` (P3.07); otherwise the erase stays pending and runs when that other hold's
     own cleanup closes it. Its tag comparison is not constant-time; the P3.16c ADR notes this (book edit
-    2026-10-13-codex-813-close-expired-hold, R3, Erratum 1 and Note A mappings). - `unanswered_expired_permits()` (owner
-    `cleanup_owner`, SECURITY DEFINER; `retention` has EXECUTE): hold ids only,
+    2026-10-13-codex-813-close-expired-hold, R3, Erratum 1 and Note A mappings).
+  - `unanswered_expired_permits()` (owner `cleanup_owner`, SECURITY DEFINER; `retention` has EXECUTE): hold ids only,
     one for each permit that expired with no answer and no receipt (R1). It is the only route back to a `destroyed`
     hold (regime Amendment 14 erratum 1, note A N1).
   - `recorded_unused_receipts()` (owner `cleanup_owner`, SECURITY DEFINER; `retention` has EXECUTE): hold ids only, one
@@ -1070,10 +1071,15 @@ Threats: the legal-hold export and the cleanup boundary.
   - S A receipt `admin` forged or replayed closes a hold → the forgery, binding and once-only tests below.
   - E A login role reads the cleanup key, or reaches `cleanup_owner` → `cleanup-key-login-roles-refused`,
     `cleanup-owner-members`.
+  - I `jobs` reads `admin`'s receipts or permits, or the cleanup key → `retention-cannot-read-admin-tables`,
+    `cleanup-key-login-roles-refused`.
+  - E A definer resolves a name through a schema another role can write → `search_path` pinned to `pg_catalog`, then
+    the owning schema, `public.hmac` schema-qualified; `cleanup-definers-pinned`.
 Done when (tests): `roster_complete` and `class_assertions` (P1.12) with the new roles; an `lh_<owner>` has no
   password; the cleanup definers' database tests, moved from P4.07 (forgery, binding and once-only):
-  - `close-without-receipt-refused` (a hold id with no recorded receipt → refused, even after expiry; it replaces `close-needs-receipt`); `close-wrong-receipt` (another hold's receipt → refused); `close-with-receipt` (a valid receipt deletes the row and runs any pending erase); `close-untagged-receipt` (an `admin`-role insert of a receipt `pds-admin` did not tag → refused); `close-wrong-permit` (a permit id that is not `admin`'s recorded permit for that hold → refused); `close-twice-refused` (the second call → refused; it replaces `close-receipt-reused`); `close-after-permit-expiry` (a receipt time after the recorded permit's expiry → refused); `close-other-hold-tag` (a valid tag for another hold → refused).
+  - `close-without-receipt-refused` (a hold id with no recorded receipt → refused, even after expiry; it replaces `close-needs-receipt`); `close-wrong-receipt` (another hold's receipt → refused); `close-with-receipt` (a valid receipt, closed by a call made after the permit has expired as jobs' daily task does, deletes the row and runs any pending erase); `close-untagged-receipt` (an `admin`-role insert of a receipt `pds-admin` did not tag → refused); `close-wrong-permit` (a permit id, or an epoch, that is not `admin`'s recorded permit for that hold → refused; one case each); `close-twice-refused` (the second call, or a duplicate receipt row `admin` inserts for the same hold → refused; it replaces `close-receipt-reused`); `close-receipt-after-permit-expiry` (a receipt whose own time is at or after the recorded permit's expiry → refused; the check compares the receipt's time, never the call time); `close-other-hold-tag` (a valid tag for another hold → refused).
   - `cleanup-key-login-roles-refused`: every `rolcanlogin` role other than migrator, enumerated from `pg_roles`, is refused SELECT on the cleanup-key table; `cleanup-owner-members`: `pg_auth_members`, read transitively, shows exactly migrator's two membership rows in `cleanup_owner` (PostgreSQL's own ADMIN row from creating the role and the migration's SET grant, both with `inherit_option = false`, as `audit_owner_membership` at grants.test.ts:256-271 checks), and no other login role reaches it; `retention-cannot-read-admin-tables` (no SELECT on `admin`'s receipt or permit tables).
+  - `cleanup-definers-pinned`: a catalog check that the three definers are SECURITY DEFINER, owned by `cleanup_owner`, with `proconfig` `search_path=pg_catalog, <owning schema>` (as P4.25's `expiry_is_held_definer_pinned_search_path`).
 Reuse: none. Not in this step: `core.export_sealed_record`, `app.legal_hold_reader_login`, `pg_hba.conf`, the CLI
   (P4.07); the tables (P4.07c); jobs' callers (P4.07). Diagram: none.
 
@@ -1142,8 +1148,8 @@ Done when (tests): P4.07's tests for `onMatch` and the CLI that need no database
   the in-force regime, destroyed only behind a check at most 7 days old (P4.07), and an unparsable (A) is FAULT, which
   blocks the send and destruction; the tests listed in "Preservation regime" above, `regime-unparsable-a` replacing
   `regime-bad-a`.
-Reuse: none. Not in this step: the migration, definers, callers, admin screen and jobs' daily preservation task
-  (P4.07). Diagram: none.
+Reuse: none. Not in this step: the hold tables (P4.07c); the cleanup definers (P4.07g); the remaining migration,
+  definers, callers, admin screen and jobs' daily preservation task (P4.07). Diagram: none.
 
 ---
 
@@ -1151,6 +1157,7 @@ Reuse: none. Not in this step: the migration, definers, callers, admin screen an
 Tags: [SEC] [MOD]            Depends on: P4.07k, P4.07c, P4.07g, P4.07h, P4.06, P3.16 and P3.16c (the preserve verbs), P4.03, P3.20, P1.14a, P3.07            Plan: §5.8 "Abuse-material law (decision 9)", "Fingerprints", decision 21 (the buffer); §6 retention (the abuse-material preservation row as #758 restated it: 21 days after notification today, one year once C-16's amendments commence, per case and fixed at notification; transmission data sealed with the hold and destroyed with it); admin design §6.6, §7, §8.1; plan-issues 4
 Where: (`domains/moderation/legal-hold/*`, the one hold entry point `onMatch` shared with P5.07b for images, and `interfaces/legal-hold-export/` are **P4.07k**, trusted base, SE-6; this step wires them) `interfaces/review/egress/on-match.ts` (the video caller); `interfaces/review/compute/preserve-copy.ts`; `apps/admin/screens/legal-hold.ts` (owner-only case view from hold metadata, notify); definer functions `keep_transmission_for_match`, `move_transmission_to_hold`, `destroy_transmission`, `core.list_holds`, `core.export_sealed_record` (the cleanup definers, `cleanup_owner` and its cleanup-key table are **P4.07g**; the body of `core.is_held`, declared by P3.07, is **P4.07h**: replacing an existing function is trusted base, SE-6); the `legal_hold.media_key` row in `infrastructure/postgres/sealed-columns.json`; (the owners' human login roles in `roles.json` are P4.07g); migration for the `adm` case event `s2_filed` (finding 9) (the hold tables are **P4.07c**) (the `uploads_frozen` flag is P2.16's column on `app.account`; the `preserve.*` verbs are built by P3.16c); jobs' daily preservation task under the `retention` role; `admin`'s regime epoch, permit lease and receipt recording on the case (their tables are P4.07c), `pds-admin`'s stored-receipt answer, and the moderator's "destroy due" action; runbook update `docs/human/legal/cybertip-runbook.md` (from P1.37) with the offline decryption procedure
 Size: ~330 source lines (egress ~100, compute ~110, admin ~70, daily preservation task ~50), ~420 test lines
+  before the cleanup definers' tests moved to P4.07g (P4.00 re-counts)
 
 **Preservation regime** (architecture's 2026-10-12-csam-preservation-regime (not a decision; every citation [lawyer to
 confirm]), book edit 2026-10-12-csam-preservation-book-lines item 5 and Amendments 5 to 11, the latest winning, with
@@ -1451,8 +1458,9 @@ organisation (C3P) under the Mandatory Reporting Act.
 - `no-media-route`: static scan of `admin` and `media` routes → none reads `legal-hold/`; a signed URL minted for `legal-hold/…` is refused by `media`.
 - Destruction and cleanup (book edit 2026-10-12-csam-preservation-book-lines, Amendments 9 to 11, and book edit 2026-10-13-codex-813-close-expired-hold; they replace `expiry-job-deletes`):
   - `destroy-due-task`: an eligible hold raises the task, and the moderator action destroys and closes it, with a receipt and an audit row; `blocked-hold-overdue`: a blocked hold escalates after a day; `undated-hold-task`: an open hold with no date older than 7 days raises the task; `jobs-cannot-destroy`: the `retention` key calling `preserve.destroy` → refused; `permit-replay`; `permit-stale` (older than 60 s → refused); `instruction-outlives-permit` → refused; the `retention` role has no direct `DELETE` grant on `legal_hold_transmission`.
-  - The cleanup definers' database tests (the `close-*` set, `cleanup-key-login-roles-refused`,
-    `cleanup-owner-members` and `retention-cannot-read-admin-tables`) are P4.07g's.
+  - The cleanup definers' database tests (the `close-*` set, `cleanup-key-login-roles-refused`, `cleanup-owner-members`,
+    `retention-cannot-read-admin-tables` and `cleanup-definers-pinned`) are P4.07g's. jobs' task here runs as the real
+    `retention` role, with no SELECT on `admin`'s tables.
   - `receipt-lost-in-transit`: the permit expires, "receipt missing" is raised, a new "destroy due" returns the stored receipt with no instruction and no S3 request, then `close_expired_hold` runs; `destroyed-stale-permit` (an expired or replayed permit on a `destroyed` hold → refused); `destroyed-hold-not-open` (a destroyed hold does not block a later hold or the erase on the same account); `hold-opened-before-cleanup` (a hold opened between the destroy and the cleanup leaves the first hold's sealed row deleted and the erase pending).
   - `mark-not-reportable-needs-reason-code` (in `admin`; moved from P3.16c).
 - `erase-skips-hold`: `eraseDid` on a DID with an open hold → every other row erased, `legal_hold*` rows and `legal-hold/` objects kept, outcome `partially_erased_legal_hold` (never a refusal); after the hold closes, `close_expired_hold` runs `erase_did` with `why = legal_hold_closed`, the `core.erase_pending_hold` row goes, and nothing of the DID remains.
@@ -3588,7 +3596,7 @@ Outputs:
   (`updated_at = now`); `pending_comment` in the same case has no draft state, so its row is deleted (state `expired`)
   and its author sees "not posted". P4.14, P4.17 and P4.20 set `waiting_since` when they set `needs_reauth`.
 - Holds are read only through **`core.is_held('video', upload_id) → boolean`** (the one hold predicate: declared by
-  P3.07, body by P4.07; editor pass, lead decision 2026-10-03, replacing this step's former `app.is_held`). `EXECUTE`
+  P3.07, body by P4.07h; editor pass, lead decision 2026-10-03, replacing this step's former `app.is_held`). `EXECUTE`
   to `retention`; it returns a boolean, never a hold row. This settles R5: the hold index this job reads is a Postgres
   table; `pds-admin` keeps the authoritative clock and is never called by this job.
 - Job `retention.drafts.run(now)` → `{expiredRows, returnedToDraft, deletedObjects, skippedHeld, overdueAppeals, errors}`; daily at 03:15 UTC.

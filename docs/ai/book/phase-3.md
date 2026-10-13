@@ -1150,9 +1150,12 @@ Outputs (contract):
     `kept_held`. **`core.is_held` is the one hold predicate** (lead decision 2026-10-03; P4.07, P5.04 and P5.09 call
     the same SQL function; there is no TypeScript twin). This step declares it in two forms, both definer
     with `search_path` pinned and returning `boolean`: `core.is_held(did text)` (the DID has an open hold) and
-    `core.is_held(subject_kind text, subject_ref text)` (that subject has an open hold). In Phase 3 both return false
-    (no held table exists yet); P4.07 writes the body and registers its own tables (`legal_hold`, `legal_hold_transmission`, the
-    matched upload row and its case) as `retain_legal_hold`. An error inside `core.is_held` aborts the whole call:
+    `core.is_held(subject_kind text, subject_ref text)` (that subject has an open hold). Both are a temporary
+    placeholder that returns false until **P4.07h** replaces the body; P4.07h lands right after P4.07c, which creates
+    `legal_hold`, and before P4.07, the first step that can open a hold (P4.07 depends on P4.07h in the outline), so the
+    placeholder never answers while a hold can exist and is never deployed as the only body once one can. P4.07c
+    registers `legal_hold` and `legal_hold_transmission`, and P4.07 the matched upload row and its case, as
+    `retain_legal_hold`. An error inside `core.is_held` aborts the whole call:
     nothing is deleted and the caller retries (the hold state is never guessed).
   - `mod.erase_foreign_did(did, case_id, jti, actor_did, reason_code)` (definer, EXECUTE to `admin` only): refuses
     unless a completed `adm.db_hold` exists for the DID (P3.20a) **and** `idx.account.pds_endpoint` is not our PDS;
@@ -1286,9 +1289,9 @@ Done when (tests):
 
 Reuse:
   - Prototype `appview/src/db.ts:376` `purgeDid` → LESSON, provisional: one function so a table cannot be forgotten; here enforced by the coverage test.
-Not in this step: the PDS-side delete (P3.16a); the body of `core.is_held`, the held tables and the cleanup
-re-run (P4.07); the erasure case screen and statement (P5.08b); the chat hook (P6.04a); PLC tombstone (runbook,
-Phase 5); backups (P5.04).
+Not in this step: the PDS-side delete (P3.16a); the body of `core.is_held` (P4.07h); the held tables (P4.07c); the
+cleanup re-run (`close_expired_hold`, P4.07g, called by P4.07's daily task); the erasure case screen and statement
+(P5.08b); the chat hook (P6.04a); PLC tombstone (runbook, Phase 5); backups (P5.04).
 Diagram: none.
 
 ### P3.08 — Handle registry rule
@@ -2377,8 +2380,9 @@ Done when (tests):
 
 Reuse: none.
 Not in this step: the match path, the sealed record, owner export, `admin`'s regime, permit and "destroy due" action,
-jobs' daily preservation task and the cleanup (P4.07); holds-agent and the holds bucket (P5.04); the review egress step
-(P4.06); the body of `core.is_held` and the erasure re-run when a hold closes (P4.07).
+jobs' daily preservation task (P4.07); the cleanup definers (P4.07g); holds-agent and the holds bucket (P5.04); the
+review egress step (P4.06); the body of `core.is_held` (P4.07h) and the erasure re-run when a hold closes
+(`close_expired_hold`, P4.07g).
 Diagram: none (phase 4 part 1's P4.07 sequence shows the callers).
 
 ### P3.17 — `admin` skeleton
