@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 44 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n).
+Depth: **build-ready**. 45 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n; P0.09w added 2026-10-13).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -60,6 +60,7 @@ Depth: **build-ready**. 44 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09s | Reach domains only through their exports | — | P0.09n | `phase-0.md` |
 | P0.09u | Pin the identity syntax subpath to its file | — | P0.09p | `phase-0.md` |
 | P0.09v | Contain Dockerfiles with the native realpath | [SEC] | — | `phase-0.md` |
+| P0.09w | Check the outline: cycles, unknown ids, headings | [ALEX] (typed line) | — | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -108,6 +109,7 @@ flowchart TD
   P0_09s["P0.09s Domains only through exports"]
   P0_09u["P0.09u Pin the syntax subpath"]
   P0_09v["P0.09v Dockerfiles by native realpath"]
+  P0_09w["P0.09w Outline graph check"]
   P0_10["P0.10 Secret scanning"]
   P0_11a["P0.11a Reserved labels"]
   P0_11["P0.11 Domains"]
@@ -281,7 +283,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25p | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
-| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P1.27s flips to the mirror) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
+| P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P1.27s, interim departure, Alex 2026-10-07 00:17Z; P2.26c and P2.26b flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
 | P1.27d | Switch the web image base to Debian slim (`node:26-trixie-slim`, Alex 2026-10-07 01:29Z) | [SEC] | P1.27 | `phase-1.md` |
 | P1.28q | images.yml: build, lint, scan, health-check the edge image | check | P1.27q, P1.27 | `phase-1.md` |
 | P1.28d | Base entries labelled by stage (feature) | [SEC] | P1.27 | `phase-1.md` |
@@ -1208,7 +1210,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
+Depth: **build-ready**. 22 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1227,10 +1229,12 @@ Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.21 | Profile editor | — | P2.16, P2.18, P2.19, P2.20, P1.23, P1.31 | `phase-2.md` |
 | P2.22 | Privacy switches as a state machine | [SEC] (Q-A, Q-D provisional; Q-B, Q-C, Q-E answered) | P2.21, P2.07 | `phase-2.md` |
 | P2.23 | Publish and unpublish | [SEC] | P2.21, P2.22, P1.31, P2.07 | `phase-2.md` |
-| P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34 | `phase-2.md` |
+| P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
+| P2.26c | Pull the edge bases from the mirror (trusted base) | [SEC] | P1.27s | `phase-2.md` |
+| P2.26b | Pin service images to the mirror by digest | [SEC] | P1.27s, P2.26c, P1.34t | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26b, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
@@ -1252,6 +1256,8 @@ flowchart TD
   P2_23["P2.23 Publish and unpublish"]
   P2_24["P2.24 §5.3 go/no-go spike"]
   P2_26["P2.26 Phase 2 exit"]
+  P2_26c["P2.26c Edge bases from the mirror"]
+  P2_26b["P2.26b Service images by digest"]
   P2_26a["P2.26a Minimal deploy for the test host"]
   P2_25["P2.25 Closed test track"]
   P2_16b --> P2_16
@@ -1265,6 +1271,8 @@ flowchart TD
   P2_23 --> P2_26
   P2_24 --> P2_26
   P2_26 --> P2_26a
+  P2_26c --> P2_26b
+  P2_26b --> P2_26a
   P2_26a --> P2_25
   P2_10 --> P2_25
   P2_18k --> P2_18

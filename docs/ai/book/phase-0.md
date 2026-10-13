@@ -2587,6 +2587,32 @@ refused (red on db10ce2), a realpath that throws (a dangling link) is refused, a
 
 ---
 
+### P0.09w — Check the outline: cycles, unknown ids, headings
+Tags: [ALEX] (typed line)            Depends on: —            Plan: rule SE-6
+Check class (`scripts/docs/`), kind/build; issue #816; book edit 2026-10-13-p009w-outline-graph-check, from the
+verifier of #814 (verify-814-7656465, "Mutants"): no docs test checks the outline, so an unknown dependency id, a cycle
+and a heading that disagrees with its row all pass `scripts/docs` (the 80-step P1.33p → P5.02 cycle reverted in
+local-plc-a3-steps went unnoticed the same way). Lane: Phase 2, which handles check paths, at the end of its row: it is
+not on the sign-in path, and Alex may pull it forward. It needs Alex's typed line "yes P0.09w scripts/docs outline
+checks", which supersedes the earlier "yes docs cycle check scripts/docs" (that covered the cycle only).
+
+**What:** `scripts/docs/docs.test.ts` parses `docs/ai/book/01-outline.md` and every `phase-*.md` step heading, then
+asserts:
+- `outline_dependency_ids_exist`: every id in a row's dependency column names a row (retired and folded rows count,
+  and their own dependencies are ignored);
+- `outline_graph_acyclic`: the dependency graph has no cycle; a failure names one cycle's ids in order;
+- `heading_matches_row`: each step heading's "Depends on:" ids equal its outline row's, as a set (prose such as "Alex's
+  typed approval" is ignored), and the heading's title equals the row's title.
+
+The mermaid graphs are not checked: they are drawn from the rows, and checking them is a follow-up only if the verifier
+finds them drifting.
+
+Done when each test has a planted failing fixture (an unknown id, a three-step cycle, a heading whose dependency
+differs from its row), all three pass on main as it stands when built, and check is green. Any real drift found on main
+goes in the same PR's record as a P0.09 book fix, never as an allowlist entry.
+
+---
+
 ### P0.09o — Bar trusted code from untrusted packages (folded into P0.09n)
 Retired 2026-10-12 21:12Z: book edit 2026-10-12-p009o-trusted-product-imports, amendment 1, from architecture's
 Amendment 1 item 4 of 2026-10-12-workspace-imports-and-remote-daemon. The resolver, the product-file boundary and the
