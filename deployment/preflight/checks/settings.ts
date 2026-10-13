@@ -26,7 +26,12 @@ export const c14: Check = {
   ),
 };
 
-/** C15: handle domains set explicitly, `.0x40.space` in dev, and never the retired `.0x40.me`. */
+/**
+ * C15: handle domains set explicitly, `.0x40.space` in dev, and never the retired `.0x40.me`. Under --env local every
+ * domain sits under the PDS's own `.localhost` host, the one name the dev root permits a suffix of (record
+ * 2026-10-13-p127l-local-gaps, Amendment 2, point 1; 2026-10-12-p134c-p134d-local-dev-root-ca, the nameConstraints
+ * line), so no handle on a local stack names a real domain.
+ */
 export const c15: Check = {
   id: "C15",
   run: withPds((env, { env: stage }) => {
@@ -38,9 +43,19 @@ export const c15: Check = {
     if (stage === "dev" && !(domains.length === 1 && domains[0] === ".0x40.space")) {
       return fail("PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
+    if (stage === "local" && !domains.every((domain) => underLocalHost(env, domain))) {
+      return fail("PDS_SERVICE_HANDLE_DOMAINS is not under the local PDS host");
+    }
     return pass();
   }),
 };
+
+/** Whether `domain` is the PDS's `.localhost` host as a suffix, or a suffix under it. */
+function underLocalHost(env: SecretMap, domain: string): boolean {
+  const host = value(env, "PDS_HOSTNAME") ?? "";
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.localhost$/.test(host)) return false;
+  return domain === `.${host}` || domain.endsWith(`.${host}`);
+}
 
 /** C16: no confirmation link in mail (plan section 5.3: "the deploy preflight fails otherwise"). */
 export const c16: Check = {

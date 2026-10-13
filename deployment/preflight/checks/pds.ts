@@ -1,7 +1,7 @@
 // C6, C7, C8, C11 and C12 (P1.30; plan section 5.2, 5.3): the PDS's own settings that would leak data or cannot be
 // fixed later. Values are read only through the SecretMap; a reason names the variable, never its value.
 import type { SecretMap } from "../secret-map.ts";
-import { type Check, fail, type Inputs, type Outcome, pass } from "./types.ts";
+import { type Check, type Env, fail, type Inputs, type Outcome, pass } from "./types.ts";
 
 /** The PDS service's environment; a stack without a `pds` service fails every PDS check. */
 function pdsEnv(inputs: Inputs): SecretMap | null {
@@ -63,7 +63,8 @@ export const c7: Check = {
   id: "C7",
   run: withPds((env, { env: stage }) => {
     if (!equals(env, "PDS_INVITE_REQUIRED", "true")) return fail("PDS_INVITE_REQUIRED does not require invites");
-    if (stage === "dev" && !equals(env, "PDS_CRAWLERS", "")) return fail("PDS_CRAWLERS is not set empty in dev");
+    // A local stack is a dev stack on one machine: it never asks the network to crawl it either (P1.27l).
+    if (stage !== "prod" && !equals(env, "PDS_CRAWLERS", "")) return fail("PDS_CRAWLERS is not set empty in dev");
     if (!env.use("PDS_ADMIN_PASSWORD", (v) => (v ?? "").length >= 32)) {
       return fail("PDS_ADMIN_PASSWORD is shorter than 32 characters");
     }
@@ -88,7 +89,9 @@ export const c8: Check = {
 
 /** C11: mail leaves over TLS, never through Mailpit in prod. Nodemailer reads the URL's query as transport options
  * (nodemailer 10.0.15 shared/index.js parseConnectionUrl), so `requireTLS=true` makes STARTTLS mandatory. */
-export function smtpProblem(raw: string | undefined, stage: "dev" | "prod", name: string): string | null {
+// Mailpit stays dev's alone: a local stack is held to prod's rule here until Alex's local-mail card (architecture
+// record 2026-10-13-p127l-local-gaps, item 2).
+export function smtpProblem(raw: string | undefined, stage: Env, name: string): string | null {
   if (raw === undefined) return `${name} missing`;
   let url: URL;
   try {

@@ -1,7 +1,7 @@
 // The deploy preflight (P1.30; plan section 2 rule 23, sections 5.2, 5.3, 6.1): before any `compose up` on a server,
 // one command checks the stack against every rule that, if broken, would leak data or cannot be fixed later.
 //
-//   node deployment/preflight/index.ts -- --env dev|prod --compose <absolute file> [--compose <absolute file>...]
+//   node deployment/preflight/index.ts -- --env dev|prod|local --compose <absolute file> [--compose <absolute file>...]
 //     [--interpolation-env <absolute file>]
 //
 // The first --compose file's directory is the project directory: every relative path resolves from it. Interpolation
@@ -19,7 +19,7 @@
 // a reason that holds any configured value is withheld whole.
 import { execFile } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { CHECKS } from "./checks/index.ts";
+import { CHECKS, LOCAL_CHECKS } from "./checks/index.ts";
 import { type Check, type Inputs, MISSING, type Outcome, type Run } from "./checks/types.ts";
 import { ParseError } from "./compose-parse.ts";
 import { CannotRun, type Deps, type Loaded, loadInputs } from "./inputs.ts";
@@ -48,7 +48,7 @@ const WITHHELD = "reason withheld (it contained a configured value)";
 function withheldIfValued(outcome: Outcome, configured: ConfiguredValues): Outcome {
   if (!configured.occurIn(outcome.reason)) return outcome;
   const reason = outcome.reason.startsWith(MISSING) ? `${MISSING}${WITHHELD}` : WITHHELD;
-  return { pass: outcome.pass, reason: configured.occurIn(reason) ? "" : reason };
+  return { ...outcome, reason: configured.occurIn(reason) ? "" : reason };
 }
 
 /** The check's outcome, a timeout for a network check past its deadline, or a failure for a throw. */
@@ -76,13 +76,22 @@ export async function preflight(argv: string[], deps: Deps): Promise<Result> {
   }
   const lines: string[] = [];
   let failed = false;
-  for (const check of deps.checks ?? CHECKS) {
+  const local = loaded.inputs.env === "local";
+  for (const check of [...(deps.checks ?? CHECKS), ...(local ? LOCAL_CHECKS : [])]) {
     const outcome = await runCheck(check, loaded, deps.timeoutMs ?? NETWORK_TIMEOUT_MS);
     failed ||= !outcome.pass;
-    lines.push(`${outcome.pass ? "PASS" : "FAIL"} ${check.id} ${outcome.reason}`);
+    lines.push(`${verdict(outcome)} ${check.id} ${outcome.reason}`);
   }
+  // A local stack's last word, pass or fail (architecture record 2026-10-12-p129-local-build-preflight, item 2).
+  if (local) lines.push(LOCAL_LAST_LINE);
   return { code: failed ? 1 : 0, lines };
 }
+
+/** A line's first word: UNSIGNED only ever marks a pass (types.ts `unsigned`), so it never hides a failure. */
+const verdict = (outcome: Outcome): string => (outcome.unsigned ? "UNSIGNED" : outcome.pass ? "PASS" : "FAIL");
+
+/** The line that ends every `--env local` run: its images are the checkout's own builds, never signed artifacts. */
+export const LOCAL_LAST_LINE = "LOCAL unsigned, local-only stack: never deploy it";
 
 /** Child processes with no shell and a bounded output; a spawn error reads as a failed run. */
 const run: Run = (file, args, signal) =>

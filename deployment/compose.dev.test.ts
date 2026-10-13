@@ -8,6 +8,7 @@ import { describe, expect, test } from "vitest";
 import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { edgeSitesDir } from "./preflight/checks/edge.ts";
+import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
@@ -163,6 +164,12 @@ describe("compose.dev.yaml (P1.29)", () => {
         expect(s.profiles.length > 0 && !allowed, `${file} ${s.name}`).toBe(false);
       }
     }
+  });
+
+  test("preflight_vendor_images_match", () => {
+    // The preflight keeps its own copy of the vendor list, since it may not import deployment/images/ (P1.27l): C2
+    // under --env local admits exactly what this file's run-only rule admits.
+    expect([...PREFLIGHT_VENDOR_IMAGES].sort()).toEqual([...VENDOR_IMAGES].sort());
   });
 
   test("run_only_image_is_exactly_a_runtime_lock_entry", () => {

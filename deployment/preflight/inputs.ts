@@ -127,26 +127,32 @@ function readEnvOrNull(path: string): EnvRead | null {
  * `--import` are banned too (cli.test.ts, ruling Amendment 3).
  */
 export const CLI_OPTIONS = {
-  env: { type: "string" },
+  env: { type: "string", multiple: true },
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
 } as const;
 const USAGE =
-  "usage: --env dev|prod --compose <absolute file> [--compose <absolute file>...] " +
+  "usage: --env dev|prod|local --compose <absolute file> [--compose <absolute file>...] " +
   "[--interpolation-env <absolute file>]";
+
+const ENVS: readonly string[] = ["dev", "prod", "local"] satisfies Env[];
+const isEnv = (value: string | undefined): value is Env => value !== undefined && ENVS.includes(value);
 
 function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string | null } {
   // `node index.ts -- args` keeps the `--`; exactly one, first, is the call form and is dropped (Amendment 4). Any
   // other `--` is refused: parseArgs would read it as the start of positionals, and a trailing one ends nothing.
   const args = argv[0] === "--" ? argv.slice(1) : argv;
   if (args.includes("--")) throw new CannotRun(USAGE);
-  let values: { env?: string; compose?: string[]; "interpolation-env"?: string[] };
+  let values: { env?: string[]; compose?: string[]; "interpolation-env"?: string[] };
   try {
     ({ values } = parseArgs({ args, options: CLI_OPTIONS, strict: true, allowPositionals: false }));
   } catch {
     throw new CannotRun(USAGE);
   }
-  if (values.env !== "dev" && values.env !== "prod") throw new CannotRun("--env must be dev or prod");
+  // parseArgs keeps the last of a repeated string flag, so `--env prod --env local` would run as local: refused.
+  const [env, ...more] = values.env ?? [];
+  if (more.length > 0) throw new CannotRun("--env may be given once");
+  if (!isEnv(env)) throw new CannotRun("--env must be dev, prod or local");
   if (values.compose === undefined || values.compose.length === 0) throw new CannotRun("--compose is required");
   // Compose resolves a relative path against $PWD and Node against the physical cwd, which differ under a linked
   // directory, so the preflight would judge another tree than the one deployed (architecture, Amendment 3 of record
@@ -155,7 +161,7 @@ function parseCli(argv: string[]): { env: Env; files: string[]; envFile: string 
   if (!values.compose.every((file) => isAbsolute(file) && normalize(file) === file && !file.endsWith("/"))) {
     throw new CannotRun("--compose must be an absolute, normalised path");
   }
-  return { env: values.env, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
+  return { env, files: values.compose, envFile: envFileOf(values["interpolation-env"]) };
 }
 
 /**
@@ -280,6 +286,9 @@ function envReader(readEnv: (path: string) => EnvRead | null) {
   return { ids, read, parse };
 }
 
+/** The local stack is the dev stack's topology on one machine, so it is compared with the dev table (P1.27l). */
+const networkTable = (env: Env): "dev" | "prod" => (env === "local" ? "dev" : env);
+
 /** The checks' inputs, and every value the readers handed out on the way (P1.30m). */
 export type Loaded = { inputs: Inputs; configured: ConfiguredValues };
 
@@ -337,7 +346,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     manifestKind: manifestKind(deps),
     run: deps.run,
     retirementReportPath: join(deps.root, RETIREMENT_REPORT),
-    networkTablePath: join(deps.root, `deployment/networks.${env}.json`),
+    networkTablePath: join(deps.root, `deployment/networks.${networkTable(env)}.json`),
     edgeDir: join(deps.root, "deployment/edge"),
     readText,
     stat: deps.stat ?? statOrNull,
