@@ -114,7 +114,8 @@ export const CLASSIFIED_KEYS: ReadonlySet<string> = new Set([
  * @atproto/common's env helpers with a literal name, so a changed form cannot pass as "no keys".
  */
 export function outboundDrift(envJs: string): string[] {
-  const reads = [...envJs.matchAll(/\benv[A-Za-z]*\(/g)].length;
+  // Any space or line break before the parenthesis is still a call, so it counts as a read (Codex on #803).
+  const reads = [...envJs.matchAll(/\benv[A-Za-z]*\s*\(/g)].length;
   const keys = [...envJs.matchAll(/\benv(?:Str|Int|Bool|List)\('([A-Z][A-Z0-9_]*)'\)/g)].map(
     (match) => match[1] as string,
   );

@@ -532,6 +532,12 @@ describe("tests/support/pds-email-token.ts", () => {
       "env.js reads a key in a form this check does not parse",
     ]);
     expect(outboundDrift("export {}\n")).toEqual(["env.js reads a key in a form this check does not parse"]);
+    // Codex on #803: a helper call spaced or wrapped before its parenthesis, or a name in double quotes, is a read too.
+    for (const spaced of ["envStr ('PDS_X_URL')", "envStr\n      ('PDS_X_URL')", 'envStr("PDS_X_URL")']) {
+      expect(outboundDrift(reads(current).replace("  };", `  x: ${spaced},\n  };`)), spaced).toEqual([
+        "env.js reads a key in a form this check does not parse",
+      ]);
+    }
   });
 
   test("email_token_fetch_errors_are_fixed_reasons", async () => {
