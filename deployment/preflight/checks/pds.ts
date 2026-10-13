@@ -83,16 +83,16 @@ export const c7: Check = {
  */
 const PLC_URL = { dev: "https://plc.directory", prod: "https://plc.directory", local: "http://plc:2582" } as const;
 
-/** C28: PDS_DID_PLC_URL is set and is exactly its env's PLC. Unset or empty, the PDS uses https://plc.directory
- * (@atproto/pds 0.5.37 dist/config/config.js:99), which a local stack must never do. */
+/**
+ * C28: PDS_DID_PLC_URL is set and is exactly its env's PLC. Unset or empty, the PDS uses https://plc.directory
+ * (@atproto/pds 0.5.37 dist/config/config.js:99), which a local stack must never do.
+ */
 export const c28: Check = {
   id: "C28",
   run: withPds((env, { env: stage }) => {
     if (!env.has("PDS_DID_PLC_URL")) return fail("PDS_DID_PLC_URL missing");
     if (equals(env, "PDS_DID_PLC_URL", PLC_URL[stage])) return pass();
-    return fail(
-      stage === "local" ? "PDS_DID_PLC_URL is not the local PLC" : `PDS_DID_PLC_URL is not ${PLC_URL[stage]}`,
-    );
+    return fail(stage === "local" ? "PDS_DID_PLC_URL is not the local PLC" : "PDS_DID_PLC_URL is not the public PLC");
   }),
 };
 

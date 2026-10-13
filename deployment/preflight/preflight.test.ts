@@ -1371,6 +1371,12 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     );
     const half = '{"retirement_part_a_complete": false}';
     await expectOnly("C21", { compose: DEV, pdsEnv: DEV_ENV, report: half }, "dev");
+    for (const name of ["pds.localhost", "dev.example.test", "0x40.space"]) {
+      const compose = host(name).replace("name: unset-prod", "name: unset-dev");
+      expect(failed((await check({ compose, pdsEnv: DEV_ENV, report: undefined }, "dev")).lines), name).toContain(
+        "C21",
+      );
+    }
     expect((await check()).lines).toContain("PASS C21 skipped: PDS_HOSTNAME is unset or a different host");
   });
 
@@ -1389,13 +1395,16 @@ describe("preflight C13 to C24 (P1.30s)", () => {
         "http://plc.directory",
         "https://plc.directory.example.test",
         "https://PLC.directory",
+        "https://evil.example/https://plc.directory",
+        "'https://plc.directory '",
+        "https://user@plc.directory",
+        "https://plc.directory:443",
+        "https://plc%2Edirectory",
       ]) {
         expect(
           await expectOnly("C28", { ...base, pdsEnv: { ...pdsEnv, PDS_DID_PLC_URL: value } }, env),
           `${env} ${value}`,
-        ).toBe(
-          value === null ? "FAIL C28 PDS_DID_PLC_URL missing" : "FAIL C28 PDS_DID_PLC_URL is not https://plc.directory",
-        );
+        ).toBe(value === null ? "FAIL C28 PDS_DID_PLC_URL missing" : "FAIL C28 PDS_DID_PLC_URL is not the public PLC");
       }
     }
   });
@@ -2313,6 +2322,9 @@ secrets:
       "https://plc:2582",
       "http://plc.localhost:2582",
       "http://plc:2582.example.test",
+      "http://evil.example/http://plc:2582",
+      "'http://plc:2582 '",
+      "http://user@plc:2582",
     ]) {
       expect(await c28(value), value).toBe("FAIL C28 PDS_DID_PLC_URL is not the local PLC");
     }
