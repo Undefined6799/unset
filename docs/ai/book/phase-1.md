@@ -7879,7 +7879,8 @@ P1.29t depends on it.
     `sites/enabled`; today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77` refuses
     file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged. (Book edit
     2026-10-13-p127l-verify-owners, point 2: local-gaps Amendment 3 S2's C18 half, product, so SE-6 holds.) The reader's
-    fix for dev's directory mount is P1.34q's (point 1).
+    fix for dev's directory mount is P1.34q's (point 1). A test runs the preflight on the real `compose.dev.yaml` under
+    `--env dev` and passes once P1.34q's reader fix is in (book edit 2026-10-13-p134o-after-791, Amendment 1).
 13. A CI integration run: the local stack starts and the edge serves both names with the leaf. If a file mount on the
     read-only root fails, stop and report; never add a writable layer or a placeholder.
 
@@ -12492,7 +12493,7 @@ proved he can recover it from the console.
 
 ### P1.33p — Open the home server to the public internet (Alex)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.34, P1.34t · **Plan:** §5.7; decision 20
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34, P1.34t · **Plan:** §5.7; decision 20
 
 Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-public-opening, from architecture's
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
@@ -12729,7 +12730,9 @@ sequenceDiagram
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
 2026-10-12-p133p-public-opening, from architecture's amendment 4 of 2026-10-12-refocus-local-signin-rulings and
 2026-10-12-p133-p133a-tailnet-gates):**
-- This step runs on Alex's home server, tailnet only until P1.33p opens it. It moves the same compose stack used
+- This step runs on Alex's home server, tailnet only, as a dev stack that is never opened: at the public opening
+  (P1.33p) the home server's public stack is a prod stack (`--env prod`, its own prod env; architecture's Amendment 2
+  of 2026-10-13-local-plc, point 1). It moves the same compose stack used
   for local sign-in there, right after P2.13a's scenario passes locally. The paused P1.34f, P1.34r (#735) and P1.34l
   (#754) resume first (refocus order, section 8).
 - Alex's hands-on items, added to the checklist: install Docker (the native Engine on Linux, not Docker Desktop,
@@ -12739,8 +12742,9 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   architecture the exact error and the PDS version. No workaround.
 - Names: non-public only, either the dev root's constrained hosts or names under `int.unset.sh` (then the root's
   `nameConstraints` change to match, P1.34d's runbook). No `*.0x40.me` handles are issued and no public DNS
-  changes. The PLC target stays the one the local stack used (the local PLC, P1.34v; book edit
-  2026-10-13-local-plc-steps); the switch to the public PLC is P1.33p's.
+  changes. The PLC target stays the local PLC (P1.34v; book edit 2026-10-13-local-plc-steps) for good: P1.34t refuses
+  a public PLC under dev permanently, and any change to a public PLC goes to architecture first. Only the prod stack
+  that P1.33p opens uses `https://plc.directory` (architecture's Amendments 1 and 2 of 2026-10-13-local-plc).
 - The `0x40.space` hostname, and so P1.33a, belong to the public opening (P1.33p), not to this tailnet move.
 
 **Decision 20 in one line:** no production PDS in Phase 1. `unset.ac` is registered now (the permanent account
