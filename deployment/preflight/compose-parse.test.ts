@@ -655,6 +655,7 @@ type Theirs = {
       ports?: { target: number; published?: string; host_ip?: string }[];
       networks?: Record<string, unknown>;
       network_mode?: string;
+      profiles?: string[];
       volumes?: { type: string; source?: string; target: string; read_only?: boolean }[];
       read_only?: boolean;
       cap_drop?: string[];
@@ -709,6 +710,7 @@ function oursAsCompose(file: string) {
           ports: service.ports,
           networks: [...service.networks].sort(),
           networkMode: service.networkMode,
+          profiles: service.profiles,
           hardening: service.hardening,
           // One file here, so its directory is the project directory Compose resolves a context from.
           build:
@@ -751,6 +753,7 @@ function theirsAsOurs(theirs: Theirs) {
           })),
           networks: Object.keys(service.networks ?? {}).sort(),
           networkMode: service.network_mode ?? null,
+          profiles: service.profiles ?? [],
           hardening: {
             readOnly: service.read_only ?? null,
             capDrop: service.cap_drop ?? [],
