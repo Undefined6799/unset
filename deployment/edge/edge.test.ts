@@ -436,6 +436,18 @@ describe("edge reader containment (P1.28f)", () => {
     );
   });
 
+  test("edge_reader_reads_sites_itself_as_dev_mounts_it", () => {
+    // compose.dev.yaml mounts ./edge/sites itself at /etc/caddy/sites/enabled (P1.29a), so the enabled directory may be
+    // sites/ as well as a directory inside it (P1.34q; step book record 2026-10-13-p127l-verify-owners, item 1).
+    const config = readEdgeConfig(EDGE, join(EDGE, "sites"), ENV, FILES);
+    expect(config.sites.flatMap((site) => site.placeholders)).toContain("PDS_HOST");
+    // Its parent is not: that would read the Caddyfile's own folder as sites.
+    const tree = edgeTree();
+    expect(load({ edgeDir: tree.edgeDir, sitesDir: tree.edgeDir })).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+  });
+
   test("edge_reader_file_through_symlinked_parent_fails", () => {
     const tree = edgeTree();
     const outside = join(outsideDir(), "snippets");
@@ -493,8 +505,10 @@ describe("edge reader containment (P1.28f)", () => {
     expect(load({ edgeDir: tree.edgeDir, sitesDir: sibling })).toThrow(
       "the enabled sites directory is not inside sites/",
     );
+    // sites/ itself is read since P1.34q (edge_reader_reads_sites_itself_as_dev_mounts_it): its entries are checked as
+    // sites, so this tree's sites/enabled directory fails as a name, not as a bound.
     expect(load({ edgeDir: tree.edgeDir, sitesDir: join(tree.edgeDir, "sites") })).toThrow(
-      "the enabled sites directory is not inside sites/",
+      "enabled: not a .caddy file",
     );
     const notes = edgeTree();
     writeFileSync(join(notes.edgeDir, "sites", "notes.txt"), "other.unset.test {\n\trespond 200\n}\n");

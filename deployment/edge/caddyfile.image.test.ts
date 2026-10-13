@@ -123,7 +123,7 @@ describe("caddyfile reader against caddy adapt", () => {
       ].map((file) => [file, readFileSync(join(EDGE, file), "utf8")]),
     );
     expect(imageConfig(image)).toStrictEqual(repository);
-    const theirs = adapt(image, env);
+    const theirs = adapt(image, env, [PDS_SITE]);
     const ours = shippedConfig(env);
     expect(ours.sites.flatMap((site) => site.addresses.map(hostOf)).sort()).toEqual(adaptedHosts(theirs).sort());
     const route = ours.sites
@@ -151,12 +151,84 @@ describe("caddyfile reader against caddy adapt", () => {
       ).toEqual({ ...pick(limits[name]), matched: limits[name]?.match !== undefined });
     }
   }, 600_000);
+
+  // P1.34q (architecture record 2026-10-13-p127l-local-gaps, Amendment 3 S3): each env's served config, adapted by the
+  // image, gets its certificates only from Let's Encrypt (dev, prod) or the dev leaf's files (local), and no host
+  // falls to Caddy's internal CA. Dev mounts sites/ itself (compose.dev.yaml), prod the PDS site file (P5), and local
+  // every site file, the app site and its tls snippet (Amendment 3 S2). With `tls <cert> <key>` Caddy v2.11.7 adapts a
+  // load_files loader and a connection policy selecting its tag (caddyconfig/httpcaddyfile/builtins.go:154-198,
+  // tlsapp.go:288-320), and at run time skips automating a name a loaded certificate covers (modules/caddyhttp/
+  // autohttps.go:208); the internal issuer it would give a non-public name that is not covered (autohttps.go:318-332)
+  // never appears in adapt output, which is why P1.33t's C18 rule refuses every other source of certificates.
+  test("each_env_gets_certificates_from_acme_or_the_leaf_files", () => {
+    const image = buildEdgeImage();
+    const acme = {
+      automation: {
+        policies: [
+          {
+            subjects: [PDS_HOST],
+            issuers: [{ ca: "https://acme-v02.api.letsencrypt.org/directory", email: env.ACME_EMAIL, module: "acme" }],
+          },
+        ],
+      },
+    };
+    for (const [name, mounts] of [
+      ["prod", [PDS_SITE]],
+      ["dev", [`${join(EDGE, "sites")}:/etc/caddy/sites/enabled:ro`]],
+    ] as const) {
+      const adapted = adapt(image, env, mounts);
+      expect(modules(adapted), name).not.toContain("internal");
+      expect(adapted.apps.tls, name).toStrictEqual(acme);
+    }
+    const local = {
+      PDS_HOST: "pds.unset.localhost",
+      PDS_UPSTREAM: "pds:3000",
+      APP_HOST: "app.unset.localhost",
+      APP_UPSTREAM: "web:8080",
+    };
+    const adapted = adapt(image, local, [
+      PDS_SITE,
+      `${join(EDGE, "local", "app.caddy")}:/etc/caddy/sites/enabled/app.caddy:ro`,
+      `${join(EDGE, "local", "tls.caddy")}:/etc/caddy/snippets/tls.caddy:ro`,
+    ]);
+    expect(modules(adapted)).not.toContain("internal");
+    expect(adapted.apps.tls).toStrictEqual({
+      certificates: {
+        load_files: [
+          { certificate: "/run/secrets/local_tls_cert", key: "/run/secrets/local_tls_key", tags: ["cert0"] },
+        ],
+      },
+    });
+    const https = Object.values(adapted.apps.http.servers).find((server) => server.listen.includes(":443"));
+    expect(https?.automatic_https?.ignore_loaded_certificates).toBeUndefined();
+    expect(https?.tls_connection_policies?.[0]).toStrictEqual({
+      match: { sni: [local.APP_HOST, local.PDS_HOST] },
+      certificate_selection: { any_tag: ["cert0"] },
+    });
+  }, 600_000);
 });
 
 type AdaptedHandler = { handler: string; routes?: AdaptedRoute[]; rate_limits?: Record<string, AdaptedZone> };
 type AdaptedRoute = { match?: { host?: string[] }[]; handle: AdaptedHandler[] };
 type AdaptedZone = { key: string; ipv6_prefix: number; max_events: number; window: number; match?: unknown };
-type Adapted = { apps: { http: { servers: Record<string, { routes: AdaptedRoute[] }> } } };
+type AdaptedServer = {
+  listen: string[];
+  routes: AdaptedRoute[];
+  automatic_https?: { ignore_loaded_certificates?: boolean };
+  tls_connection_policies?: unknown[];
+};
+type Adapted = { apps: { http: { servers: Record<string, AdaptedServer> }; tls?: unknown } };
+
+/** The PDS site's file mount, as P1.29 and P5 enable it. */
+const PDS_SITE = `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`;
+
+/** Every `module` name anywhere in the adapted config. */
+const modules = (value: unknown): string[] =>
+  typeof value !== "object" || value === null
+    ? []
+    : Object.entries(value).flatMap(([key, inner]) =>
+        key === "module" && typeof inner === "string" ? [inner] : modules(inner),
+      );
 
 /** The Caddyfile directive each adapted handler comes from, where the names differ. */
 const HANDLER: Record<string, string> = { respond: "static_response" };
@@ -210,7 +282,8 @@ const FILES: EdgeFiles = {
   read: (path) => readFileSync(path, "utf8"),
 };
 
-function adapt(image: string, env: Record<string, string>): Adapted {
+/** `caddy adapt` of the image's Caddyfile with `mounts` (docker -v specs, each read-only) in place. */
+function adapt(image: string, env: Record<string, string>, mounts: readonly string[]): Adapted {
   const result = docker(
     [
       "run",
@@ -219,8 +292,7 @@ function adapt(image: string, env: Record<string, string>): Adapted {
       "--entrypoint",
       "caddy",
       ...Object.entries(env).flatMap(([name, value]) => ["-e", `${name}=${value}`]),
-      "-v",
-      `${join(EDGE, "sites", "pds.caddy")}:/etc/caddy/sites/enabled/pds.caddy:ro`,
+      ...mounts.flatMap((mount) => ["-v", mount]),
       image,
       "adapt",
       "--config",
