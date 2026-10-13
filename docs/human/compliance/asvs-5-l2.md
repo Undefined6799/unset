@@ -331,7 +331,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V15.1.1 | Application documentation defines risk based remediation time frames for 3rd party … | open |  | — |
 | V15.1.2 | An inventory catalog, such as software bill of materials (SBOM), is maintained of all … | partial | `doc:.github/workflows/ci.yml`, `step:P1.27` | P1.27 |
 | V15.1.3 | The application documentation identifies functionality which is time-consuming or … | open |  | — |
-| V15.2.1 | The application only contains components which have not breached the documented update … | partial | `doc:.github/workflows/images.yml`, `doc:.github/workflows/mirror.yml`, `test:scripts/ci/runtime-pins.test.ts#selects_only_new_or_changed_runtime_pins`, `test:scripts/ci/mirror-scan.test.ts#mirror_scan_reports_every_failing_source` | — |
+| V15.2.1 | The application only contains components which have not breached the documented update … | partial | `doc:.github/workflows/images.yml`, `doc:.github/workflows/mirror.yml`, `test:scripts/ci/runtime-pins.test.ts#selects_only_new_or_changed_runtime_pins`, `test:scripts/ci/pins-job.test.ts#scan_runs_when_the_ghcr_lookup_fails`, `test:scripts/ci/mirror-scan.test.ts#mirror_scan_reports_every_failing_source` | — |
 | V15.2.2 | The application has implemented defenses against loss of availability due to … | open |  | — |
 | V15.2.3 | The production environment only includes functionality that is required for the … | partial | `test:interfaces/http/main.test.ts#prod_entry_imports_no_app_source`, `test:apps/web/render.test.tsx#island_props_too_large_prod` | P1.27 |
 | V15.3.1 | The application only returns the required subset of fields from a data object | open | `step:P2.20` | P2.20 |

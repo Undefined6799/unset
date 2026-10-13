@@ -277,9 +277,10 @@ jobs:
   # findings stay with mirror.yml. Each pin's times are printed: imagetools' `created` is the image config's build
   # time, a lower bound only; for a ghcr.io pin the push time is the GHCR package version's `created_at` (REST
   # "List package versions for a package owned by an organization", docs.github.com/en/rest/packages/packages,
-  # apiVersion 2022-11-28), and the job fails closed when that lookup fails or finds no version with the pin's
-  # digest. Whether GITHUB_TOKEN with `packages: read` may read a public package another account owns is not stated
-  # there, so it is unverified until this job's first run. Pull requests only: on main, mirror.yml scans every pin.
+  # apiVersion 2022-11-28). GitHub's pages disagree on whether GITHUB_TOKEN may read a public package another account
+  # owns, so a 401, 403 or 404 is the fallback: an annotation asks Alex to paste the push time from the package page,
+  # and the job stays red. The scan runs whenever the selection succeeded, so a failed lookup never hides a scan
+  # result (scripts/ci/pins-job.test.ts runs these steps). Pull requests only: on main, mirror.yml scans every pin.
   pins:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
@@ -298,6 +299,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - name: Select the runtime pins this pull request adds or changes
+        id: select
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         shell: bash
@@ -308,53 +310,91 @@ jobs:
           fi
           node scripts/ci/runtime-pins.ts "$RUNNER_TEMP/base.lock.json" "$BASES_LOCK" > "$RUNNER_TEMP/pins.json"
           jq -r 'if length == 0 then "no runtime pin added or changed" else .[].source end' "$RUNNER_TEMP/pins.json"
+      # Every pin is looked up, and each failure is named; the step fails after the last pin.
       - name: Print each pin's build and push time
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          jq -r '.[].source' "$RUNNER_TEMP/pins.json" | while IFS= read -r source; do
-            docker buildx imagetools inspect --format '{{json .Image}}' "$source" > "$RUNNER_TEMP/image.json"
+          failed=0
+          while IFS= read -r source; do
+            if ! docker buildx imagetools inspect --format '{{json .Image}}' "$source" > "$RUNNER_TEMP/image.json" < /dev/null; then
+              echo "::error title=pins::imagetools could not read $source"
+              failed=$((failed + 1))
+              continue
+            fi
             created="$(jq -r 'if has("created") then .created else ([.[] | .created] | join(" ")) end' \
               "$RUNNER_TEMP/image.json")"
             echo "$source: image config created $created (build time, a lower bound only)"
             case "$source" in ghcr.io/*) ;; *) echo "$source: not on ghcr.io, no push time looked up"; continue ;; esac
             image="${source#ghcr.io/}"; image="${image%%@*}"; image="${image%:*}"
             owner="${image%%/*}"; package="$(jq -rn --arg p "${image#*/}" '$p | @uri')"
-            digest="${source#*@}"; pushed=""
+            digest="${source#*@}"; pushed=""; found=""; status=""
             for kind in orgs users; do
-              page=1; found=0
+              page=1
               while [ "$page" -le 50 ]; do
+                # curl prints 000 when it reaches no server; that is a failed lookup, not an end to the step.
                 status="$(curl -sS -o "$RUNNER_TEMP/versions.json" -w '%{http_code}' \
                   -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
                   -H "X-GitHub-Api-Version: 2022-11-28" \
-                  "https://api.github.com/$kind/$owner/packages/container/$package/versions?per_page=100&page=$page")"
+                  "https://api.github.com/$kind/$owner/packages/container/$package/versions?per_page=100&page=$page")" || true
                 if [ "$status" != 200 ]; then break; fi
-                found=1
+                found="$kind"
                 pushed="$(jq -r --arg d "$digest" '.[] | select(.name == $d) | .created_at' "$RUNNER_TEMP/versions.json")"
                 if [ -n "$pushed" ] || [ "$(jq length "$RUNNER_TEMP/versions.json")" -lt 100 ]; then break; fi
                 page=$((page + 1))
               done
-              if [ "$found" = 1 ]; then break; fi
+              if [ -n "$found" ]; then break; fi
             done
-            if [ "$found" != 1 ]; then echo "::error title=pins::GHCR lookup failed for $source (HTTP $status)"; exit 1; fi
-            if [ -z "$pushed" ]; then echo "::error title=pins::no GHCR package version has $digest ($source)"; exit 1; fi
+            if [ -z "$found" ]; then
+              case "$status" in
+                401 | 403 | 404)
+                  echo "::error title=pins::GHCR refused the push-time lookup for $source (HTTP $status). Alex: open https://github.com/orgs/$owner/packages/container/package/$package (a user's package: https://github.com/users/$owner/packages/container/package/$package), find version $digest and paste its published time into the PR" ;;
+                *) echo "::error title=pins::GHCR lookup failed for $source (HTTP $status)" ;;
+              esac
+              failed=$((failed + 1))
+              continue
+            fi
+            if [ -z "$pushed" ]; then
+              echo "::error title=pins::no GHCR package version has $digest ($source)"
+              failed=$((failed + 1))
+              continue
+            fi
             echo "$source: pushed to GHCR at $pushed"
-          done
+          done < <(jq -r '.[].source' "$RUNNER_TEMP/pins.json")
+          if [ "$failed" -gt 0 ]; then
+            echo "$failed pin(s) without a build or push time"
+            exit 1
+          fi
       # The mirror's runtime rule (mirror.yml): HIGH or CRITICAL with a fixed version fails, with the accepted
-      # findings file and the pin's stripped paths left out, each passed to both --skip-dirs and --skip-files.
+      # findings file and the pin's stripped paths left out, each passed to both --skip-dirs and --skip-files. Gated
+      # on the selection alone (docs.github.com, expressions, "Status check functions": an if without one implies
+      # success()), so it runs after a failed lookup. Every pin is scanned, each failure is named, and the step
+      # fails after the last pin.
       - name: Scan each pin
+        if: ${{ !cancelled() && steps.select.outcome == 'success' }}
         shell: bash
         run: |
           cache="$RUNNER_TEMP/trivy-cache"
           mkdir -p "$cache"
-          jq -c '.[]' "$RUNNER_TEMP/pins.json" | while IFS= read -r pin; do
+          failed=0
+          while IFS= read -r pin; do
             source="$(jq -r .source <<< "$pin")"
             skip=()
             while IFS= read -r path; do
               if [ -n "$path" ]; then skip+=(--skip-dirs "$path" --skip-files "$path"); fi
             done <<< "$(jq -r '.stripped[]' <<< "$pin")"
+            status=0
             docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
               image --exit-code 1 --severity HIGH,CRITICAL \
-              --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "${skip[@]}" "$source"
-          done
+              --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "${skip[@]}" "$source" \
+              < /dev/null || status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::error title=pins::scan failed (exit $status) for $source"
+              failed=$((failed + 1))
+            fi
+          done < <(jq -c '.[]' "$RUNNER_TEMP/pins.json")
+          if [ "$failed" -gt 0 ]; then
+            echo "$failed pin(s) failed the scan"
+            exit 1
+          fi
