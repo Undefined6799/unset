@@ -2033,3 +2033,69 @@ describe("compose inputs (P1.30a)", () => {
     });
   });
 });
+
+describe("preflight --env local (P1.27l)", () => {
+  /** web built from the scanned node Dockerfile at the root, with no image: the build-only shape the local stack has. */
+  const WEB_BUILD_ONLY = COMPOSE.replace(
+    `    image: ${WEB}\n`,
+    "    build:\n      context: ..\n      dockerfile: deployment/images/node-app.Dockerfile\n",
+  );
+  const NODE_APP = { "deployment/images/node-app.Dockerfile": "FROM scratch\n" };
+  /** C2 to C5's lines, with the stack's temporary root named as <root>. */
+  async function imageLines(s: Stack, env: string, deps: Partial<Deps> = {}): Promise<string[]> {
+    const { root, file } = stack(s);
+    const { lines } = await preflight(["--env", env, "--compose", file], {
+      root,
+      run: fakeRun().run,
+      ...fakeFs(root),
+      ...deps,
+    });
+    return lines.filter((line) => /^\S+ C[2-5] /.test(line)).map((line) => line.replaceAll(root, "<root>"));
+  }
+
+  // Architecture record 2026-10-12-p129-local-build-preflight, item 2: --env dev and --env prod never take the local
+  // path. Each expected line was printed by main 5961375, before this step, for the same stack.
+  test("c2_to_c5_unchanged_under_dev_and_prod", async () => {
+    const dev = { compose: DEV, pdsEnv: DEV_ENV };
+    const verifyFails = { run: fakeRun({ verify: { code: 1, stderr: "edge: signature does not verify: bad\n" } }).run };
+    const platform = { run: fakeRun({ mediaType: "application/vnd.oci.image.manifest.v1+json" }).run };
+    const cases: [string, Stack, string, Partial<Deps>][] = [
+      ["prod", {}, "prod", {}],
+      ["dev", dev, "dev", {}],
+      ["no lock", { lock: null }, "prod", {}],
+      ["dev no lock", { ...dev, lock: null }, "dev", {}],
+      ["not ours", { compose: COMPOSE.replace(EDGE, `docker.io/library/caddy@${digest("a")}`) }, "prod", {}],
+      ["unsigned", {}, "prod", verifyFails],
+      ["platform", {}, "dev", platform],
+      ["build only", { compose: WEB_BUILD_ONLY, files: NODE_APP }, "prod", {}],
+      [
+        "dev build only",
+        { compose: WEB_BUILD_ONLY.replace("unset-prod", "unset-dev"), files: NODE_APP, pdsEnv: DEV_ENV },
+        "dev",
+        {},
+      ],
+    ];
+    const PASSED = [
+      "PASS C2 ok",
+      "PASS C3 2 first-party images verified",
+      "PASS C4 1 upstream images verified",
+      "PASS C5 ok",
+    ];
+    const NO_LOCK = ["C2", "C3", "C4", "C5"].map(
+      (id) => `FAIL ${id} input missing: <root>/deployment/images.lock.json`,
+    );
+    const seen: Record<string, string[]> = {};
+    for (const [name, s, env, deps] of cases) seen[name] = await imageLines(s, env, deps);
+    expect(seen).toEqual({
+      prod: PASSED,
+      dev: PASSED,
+      "no lock": NO_LOCK,
+      "dev no lock": NO_LOCK,
+      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      unsigned: [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
+      platform: [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
+      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+    });
+  });
+});
