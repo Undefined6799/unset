@@ -11,6 +11,8 @@ export type Call = {
   /** Required: how long this one call may take before it is killed. */
   readonly timeoutMs: number;
   readonly input?: string;
+  /** The child's whole environment when set, inherited from this process otherwise (P1.29h pins the daemon this way). */
+  readonly env?: Readonly<Record<string, string>>;
 };
 
 const MARGIN_MS = 5_000;
@@ -56,12 +58,13 @@ export function subcommand(args: readonly string[]): string {
 }
 
 /** Runs `file args` to completion or to `timeoutMs`; a kill throws `<file> <subcommand> killed after <ms> ms`. */
-export function runOrKill(file: string, args: readonly string[], { timeoutMs, input }: Call): Ran {
+export function runOrKill(file: string, args: readonly string[], { timeoutMs, input, env }: Call): Ran {
   // spawnSync reads a zero timeout as none at all, so only a positive one keeps the kill.
   if (!(timeoutMs > 0)) throw new RangeError(`timeoutMs must be positive, got ${timeoutMs}`);
   const result = spawnSync(file, args, {
     encoding: "utf8",
     input,
+    ...(env === undefined ? {} : { env: { ...env } }),
     maxBuffer: 64 * 1024 * 1024,
     timeout: timeoutMs,
     killSignal: "SIGKILL",

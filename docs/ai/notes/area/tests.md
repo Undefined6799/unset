@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-12
+checked: 2026-10-13
 ---
 # tests
 
@@ -24,7 +24,8 @@ Unit tests sit beside the file they test, not here.
   the call with SIGKILL at its timeout and throws a message naming it (P1.27k). A blocked `spawnSync` cannot be
   interrupted by vitest's test timeout, so without this a hung daemon held the event loop until `scripts/test/run.ts`
   killed the whole run at 600 s, naming nothing. `killBefore(budget)` sets a call's timeout 5 s under the test's
-  budget; `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g) and refuses
+  budget. A call's `env`, when set, is the child's whole environment (P1.29h pins the daemon with it);
+  `withCleanup(body, cleanup)` keeps the body's failure when a removal is killed too (P1.27g) and refuses
   an async body (P1.27i). An async setup uses `failAfterCleanup(error, cleanup)` from its catch, and a hook with
   several cleanups uses `cleanUpAll`, so a killed removal never hides the setup error or skips a folder (P1.11c).
   Both refuse a cleanup that returns a promise, and their combined message never throws on an odd thrown value
