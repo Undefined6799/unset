@@ -18,7 +18,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
-import { type EdgeFiles, type EdgeMode, edgeSiteProblems, readEdgeConfig } from "./caddyfile.ts";
+import { CaddyfileError, type EdgeFiles, type EdgeMode, edgeSiteProblems, readEdgeConfig } from "./caddyfile.ts";
 
 const EDGE = import.meta.dirname;
 const ENV = {
@@ -56,8 +56,9 @@ afterAll(() => {
 });
 
 /**
- * A copy of the shipped edge files plus local/ holding `local` (file name to text), and local/enabled linking to the
- * shipped PDS site and to each local site; `edits` overwrite files in the copy.
+ * A copy of the shipped edge files with sites/enabled linking to the shipped PDS site, as every stack enables it, and
+ * local/ holding `local` (file name to text) beside the two local files; `edits` overwrite files in the copy. The local
+ * stack mounts local/app.caddy into the enabled sites and local/tls.caddy over the shipped snippet (P1.34o).
  */
 function localTree(local: Record<string, string> = {}, edits: Record<string, string> = {}) {
   const edgeDir = mkdtempSync(join(tmpdir(), "edge-local-"));
@@ -65,13 +66,12 @@ function localTree(local: Record<string, string> = {}, edits: Record<string, str
   for (const part of ["Caddyfile", "snippets", "sites"]) {
     cpSync(join(EDGE, part), join(edgeDir, part), { recursive: true });
   }
-  const files = { "tls.caddy": LOCAL_TLS, "app.caddy": APP_SITE, ...local };
-  const sitesDir = join(edgeDir, "local", "enabled");
-  mkdirSync(sitesDir, { recursive: true });
-  for (const [name, text] of Object.entries(files)) {
+  mkdirSync(join(edgeDir, "local"));
+  for (const [name, text] of Object.entries({ "tls.caddy": LOCAL_TLS, "app.caddy": APP_SITE, ...local })) {
     writeFileSync(join(edgeDir, "local", name), text);
-    if (name !== "tls.caddy") symlinkSync(join(edgeDir, "local", name), join(sitesDir, name));
   }
+  const sitesDir = join(edgeDir, "sites", "enabled");
+  mkdirSync(sitesDir);
   symlinkSync(join(edgeDir, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
   for (const [file, text] of Object.entries(edits)) writeFileSync(join(edgeDir, file), text);
   return { edgeDir, sitesDir };
@@ -90,27 +90,18 @@ describe("edge reader, local app site (P1.34a)", () => {
     expect(read(tree, "local").snippet("tls")).toMatchObject([
       { name: "tls", args: ["/run/secrets/local_tls_cert", "/run/secrets/local_tls_key"] },
     ]);
-    // The default call never reads local/: not as the enabled directory, not through a link from sites/.
-    expect(() => read(tree)).toThrow("the enabled sites directory is not inside sites/");
-    const shipped = { edgeDir: tree.edgeDir, sitesDir: join(tree.edgeDir, "sites", "enabled") };
-    mkdirSync(shipped.sitesDir);
-    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(shipped.sitesDir, "pds.caddy"));
-    symlinkSync(join(tree.edgeDir, "local", "app.caddy"), join(shipped.sitesDir, "app.caddy"));
-    expect(() => read(shipped)).toThrow("app.caddy: the link leaves sites/");
+    // The default call never reads local/: not the app site, and not through a link from sites/.
+    expect(addresses(read(tree))).toEqual([["{$PDS_HOST}"]]);
+    symlinkSync(join(tree.edgeDir, "local", "app.caddy"), join(tree.sitesDir, "web.caddy"));
+    expect(() => read(tree)).toThrow("web.caddy: the link leaves sites/");
   });
 
   test("app_host_and_upstream_are_refused_outside_local", () => {
     // An app site in sites/ fails whichever mode reads it.
     for (const mode of [undefined, "local"] as const) {
-      const tree = localTree({}, { "sites/app.caddy": APP_SITE });
-      const sitesDir = join(tree.edgeDir, "sites", "enabled");
-      mkdirSync(sitesDir);
-      for (const name of ["app.caddy", "pds.caddy"]) {
-        symlinkSync(join(tree.edgeDir, "sites", name), join(sitesDir, name));
-      }
-      expect(() => read({ ...tree, sitesDir }, mode), String(mode)).toThrow(
-        "app.caddy: {$APP_HOST} is allowed only in local/",
-      );
+      const tree = localTree({}, { "sites/web.caddy": APP_SITE });
+      symlinkSync(join(tree.edgeDir, "sites", "web.caddy"), join(tree.sitesDir, "web.caddy"));
+      expect(() => read(tree, mode), String(mode)).toThrow("web.caddy: {$APP_HOST} is allowed only in local/");
     }
     const upstream = localTree({}, { "sites/pds.caddy": APP_SITE.replace("{$APP_HOST}", "{$PDS_HOST}") });
     expect(() => read(upstream, "local")).toThrow("pds.caddy: {$APP_UPSTREAM} is allowed only in local/");
@@ -123,11 +114,9 @@ describe("edge reader, local app site (P1.34a)", () => {
       "pds.caddy: /run/secrets/local_tls_cert is allowed only in local/",
     );
     // In a shipped snippet, read by every default call.
-    const tree = localTree({}, { "snippets/tls.caddy": LOCAL_TLS });
-    const shipped = { edgeDir: tree.edgeDir, sitesDir: join(tree.edgeDir, "sites", "enabled") };
-    mkdirSync(shipped.sitesDir);
-    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(shipped.sitesDir, "pds.caddy"));
-    expect(() => read(shipped)).toThrow("tls.caddy: /run/secrets/local_tls_cert is allowed only in local/");
+    expect(() => read(localTree({}, { "snippets/tls.caddy": LOCAL_TLS }))).toThrow(
+      "tls.caddy: /run/secrets/local_tls_cert is allowed only in local/",
+    );
   });
 
   test("app_host_and_upstream_differ_from_the_pds_ones", () => {
@@ -166,13 +155,16 @@ describe("edge reader, local app site (P1.34a)", () => {
   });
 
   test("local_dir_is_contained_like_sites", () => {
-    const tree = localTree();
+    // local/app.caddy is read as the one regular file its mount names, never through a link, inside local/ or out.
     const outside = mkdtempSync(join(tmpdir(), "outside-"));
     trees.push(outside);
     writeFileSync(join(outside, "app.caddy"), APP_SITE);
-    rmSync(join(tree.sitesDir, "app.caddy"));
-    symlinkSync(join(outside, "app.caddy"), join(tree.sitesDir, "app.caddy"));
-    expect(() => read(tree, "local")).toThrow("app.caddy: the link leaves sites/ and local/");
+    for (const target of [join(outside, "app.caddy"), "web.caddy"]) {
+      const tree = localTree({ "web.caddy": APP_SITE });
+      rmSync(join(tree.edgeDir, "local", "app.caddy"));
+      symlinkSync(target, join(tree.edgeDir, "local", "app.caddy"));
+      expect(() => read(tree, "local"), target).toThrow("app.caddy: not a regular file");
+    }
     const moved = localTree();
     cpSync(join(moved.edgeDir, "local"), join(outside, "local"), { recursive: true, verbatimSymlinks: true });
     rmSync(join(moved.edgeDir, "local"), { recursive: true });
@@ -181,13 +173,14 @@ describe("edge reader, local app site (P1.34a)", () => {
   });
 });
 
-/** The same tree read the shipped way: sites/enabled linking only to the shipped PDS site. */
-function shippedOf(tree: { edgeDir: string }) {
-  const sitesDir = join(tree.edgeDir, "sites", "enabled");
-  mkdirSync(sitesDir);
-  symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(sitesDir, "pds.caddy"));
-  return { edgeDir: tree.edgeDir, sitesDir };
-}
+/** The same tree, read the shipped way: its sites/enabled links only to the shipped PDS site. */
+const shippedOf = (tree: { edgeDir: string; sitesDir: string }) => tree;
+
+/** The placeholder addresses of each site that has one, in order: the Caddyfile's own loopback site is left out. */
+const addresses = (config: { sites: { placeholders: (string | null)[] }[] }) =>
+  config.sites
+    .map((site) => site.placeholders.flatMap((name) => (name === null ? [] : [`{$${name}}`])))
+    .filter((names) => names.length > 0);
 
 // P1.34b (record 2026-10-12-p134b-edge-local-follow-ups; findings from the verify of #755 on main, and Amendment 6 of
 // the refocus rulings): every file read from outside local/, the Caddyfile included, is checked, a leaf path is caught
@@ -273,10 +266,70 @@ describe("edge reader, local-only words everywhere else (P1.34b)", () => {
     for (const sibling of ["local-x", "sites-x"]) {
       const tree = localTree();
       mkdirSync(join(tree.edgeDir, sibling));
-      writeFileSync(join(tree.edgeDir, sibling, "app.caddy"), APP_SITE);
-      rmSync(join(tree.sitesDir, "app.caddy"));
-      symlinkSync(join(tree.edgeDir, sibling, "app.caddy"), join(tree.sitesDir, "app.caddy"));
-      expect(() => read(tree, "local"), sibling).toThrow("app.caddy: the link leaves sites/ and local/");
+      writeFileSync(join(tree.edgeDir, sibling, "web.caddy"), APP_SITE);
+      symlinkSync(join(tree.edgeDir, sibling, "web.caddy"), join(tree.sitesDir, "web.caddy"));
+      expect(() => read(tree, "local"), sibling).toThrow("web.caddy: the link leaves sites/");
     }
+  });
+});
+
+// P1.34o (architecture record 2026-10-13-p127l-local-gaps, item 1, option (c)): under the local mode the reader takes
+// sites/ plus exactly one more file, local/app.caddy, where its read-only mount places it in sites/enabled. Nothing
+// else in local/ is a site, the enabled directory is inside sites/ only, and the shipped mode reads no local file.
+describe("edge reader, app.caddy as one local file mount (P1.34o)", () => {
+  const BROKEN = "this is { not caddy\n";
+
+  test("local_mode_adds_app_caddy_to_the_enabled_sites", () => {
+    // In byte order with the enabled sites, as Caddy's glob over the mounted directory reads them.
+    expect(addresses(read(localTree(), "local"))).toEqual([["{$APP_HOST}"], ["{$PDS_HOST}"]]);
+    const later = localTree();
+    symlinkSync(join(later.edgeDir, "sites", "pds.caddy"), join(later.sitesDir, "0first.caddy"));
+    expect(addresses(read(later, "local", { ...ENV }))).toHaveLength(3);
+  });
+
+  test("no_other_local_file_is_a_site", () => {
+    // Another file in local/ is never read, whatever it holds.
+    const tree = localTree({ "other.caddy": BROKEN, "enabled.caddy": BROKEN });
+    mkdirSync(join(tree.edgeDir, "local", "enabled"));
+    writeFileSync(join(tree.edgeDir, "local", "enabled", "x.caddy"), BROKEN);
+    expect(problems(tree)).toEqual([]);
+    // Nor reached through a link from the enabled sites, nor as the enabled directory itself.
+    symlinkSync(join(tree.edgeDir, "local", "other.caddy"), join(tree.sitesDir, "other.caddy"));
+    expect(() => read(tree, "local")).toThrow("other.caddy: the link leaves sites/");
+    const inLocal = localTree();
+    expect(() => read({ ...inLocal, sitesDir: join(inLocal.edgeDir, "local") }, "local")).toThrow(
+      "the enabled sites directory is not inside sites/",
+    );
+  });
+
+  test("app_caddy_is_mounted_once", () => {
+    // An enabled site named app.caddy would sit under the mount: Caddy would read the mounted file, the reader both.
+    const tree = localTree();
+    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), join(tree.sitesDir, "app.caddy"));
+    expect(() => read(tree, "local")).toThrow("app.caddy: an enabled site has the mounted app site's name");
+    // The shipped mode reads it as any other enabled site.
+    expect(addresses(read(tree))).toEqual([["{$PDS_HOST}"], ["{$PDS_HOST}"]]);
+  });
+
+  test("shipped_mode_reads_no_local_file", () => {
+    // local/app.caddy unreadable as a site and local/tls.caddy broken: the shipped mode opens neither.
+    const tree = localTree({ "app.caddy": BROKEN, "tls.caddy": BROKEN });
+    expect(addresses(read(tree))).toEqual([["{$PDS_HOST}"]]);
+    expect(() => read(tree, "local")).toThrow(CaddyfileError);
+  });
+
+  test("app_caddy_must_be_a_regular_file", () => {
+    // A link would point the mount at a file outside local/, and in the container it would dangle.
+    const tree = localTree();
+    const app = join(tree.edgeDir, "local", "app.caddy");
+    rmSync(app);
+    symlinkSync(join(tree.edgeDir, "sites", "pds.caddy"), app);
+    expect(() => read(tree, "local")).toThrow("app.caddy: not a regular file");
+  });
+
+  test("a_missing_app_caddy_fails_closed", () => {
+    const tree = localTree();
+    rmSync(join(tree.edgeDir, "local", "app.caddy"));
+    expect(() => read(tree, "local")).toThrow(CaddyfileError);
   });
 });
