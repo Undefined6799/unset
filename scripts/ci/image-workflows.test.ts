@@ -43,7 +43,10 @@ describe("image workflows", () => {
       const signs = (job.steps ?? []).some((step) => /\bcosign\s+(sign|attest)\b/.test(step.run ?? ""));
       // Only a job that signs may use the `signing` environment; until the sign job lands, none may write.
       if (job.environment !== undefined) expect(signs && job.environment === "signing", `${file} job ${id}`).toBe(true);
-      if (!signs) expect(job.permissions, `${file} job ${id}`).toEqual({ contents: "read" });
+      // P1.34m: images.yml's pins job alone also reads packages, for the GHCR push time of a newly pinned base.
+      const reads =
+        file === "images.yml" && id === "pins" ? { contents: "read", packages: "read" } : { contents: "read" };
+      if (!signs) expect(job.permissions, `${file} job ${id}`).toEqual(reads);
     }
   });
 
