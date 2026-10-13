@@ -95,6 +95,29 @@ describe("postgres image", () => {
     ]);
   });
 
+  test("postgres_image_has_no_sample_key_pair", { timeout: CONTAINER_MS }, () => {
+    // The base's ssl-cert package generates a "snakeoil" key pair at upstream build time, so every copy of the official
+    // image holds the same private key; it is listed as root so the 0710 private folder can be read.
+    const run = docker(
+      [
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--user",
+        "0:0",
+        "--entrypoint",
+        "sh",
+        image,
+        "-c",
+        "ls -A /etc/ssl/private; find /etc/ssl -name '*snakeoil*'",
+      ],
+      { timeoutMs: CONTAINER_CALL_MS },
+    );
+    expect(run.code, run.err.slice(-2000)).toBe(0);
+    expect(run.out).toBe("");
+  });
+
   test("postgres_image_runs_as_postgres_uid", { timeout: CONTAINER_MS }, async () => {
     expect(
       docker(["image", "inspect", "--format", "{{.Config.User}}", image], {
