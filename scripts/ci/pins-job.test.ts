@@ -36,12 +36,15 @@ case "$1" in
   *) exit 9 ;;
 esac
 `;
-// docker buildx imagetools inspect prints an image config; docker run stands in for Trivy and exits with
+// docker buildx imagetools inspect prints an image config, or fails for a source in $FAKE_UNREADABLE; docker run stands in for Trivy and exits with
 // --exit-code when $FAKE_FINDINGS names the source (the last argument). Every call is logged.
 const FAKE_DOCKER = `#!/bin/bash
 args=("$@"); source="\${args[-1]}"
 echo "docker $1 $source" >> "$FAKE_CALLS"
-if [ "$1" = buildx ]; then echo '{"created":"2026-10-01T00:00:00Z"}'; exit 0; fi
+if [ "$1" = buildx ]; then
+  grep -qxF "$source" "$FAKE_UNREADABLE" && exit 1
+  echo '{"created":"2026-10-01T00:00:00Z"}'; exit 0
+fi
 code=0
 for ((i = 0; i < \${#args[@]}; i++)); do [ "\${args[i]}" = --exit-code ] && code="\${args[i+1]}"; done
 grep -qxF "$source" "$FAKE_FINDINGS" && exit "$code"
@@ -66,7 +69,12 @@ const HUB = `docker.io/library/r1:1@${sha(1)}`;
 const HUB2 = `docker.io/library/r2:1@${sha(2)}`;
 
 type Run = { code: number | null; out: string; calls: string[]; dir: string };
-type Setup = { pins?: { source: string; stripped: string[] }[]; findings?: string[]; status?: Record<string, string> };
+type Setup = {
+  pins?: { source: string; stripped: string[] }[];
+  findings?: string[];
+  unreadable?: string[];
+  status?: Record<string, string>;
+};
 
 function sandbox(setup: Setup): { dir: string; env: Record<string, string> } {
   const dir = mkdtempSync(join(tmpdir(), "pins-job-"));
@@ -85,6 +93,7 @@ function sandbox(setup: Setup): { dir: string; env: Record<string, string> } {
   for (const [file, body] of Object.entries(setup.status ?? {})) writeFileSync(join(fakes, file), body);
   if (setup.pins !== undefined) writeFileSync(join(dir, "pins.json"), JSON.stringify(setup.pins));
   writeFileSync(join(dir, "findings"), (setup.findings ?? []).map((line) => `${line}\n`).join(""));
+  writeFileSync(join(dir, "unreadable"), (setup.unreadable ?? []).map((line) => `${line}\n`).join(""));
   writeFileSync(join(dir, "calls"), "");
   const env = {
     PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`,
@@ -94,6 +103,7 @@ function sandbox(setup: Setup): { dir: string; env: Record<string, string> } {
     TRIVY_IMAGE: "trivy",
     FAKE_CALLS: join(dir, "calls"),
     FAKE_FINDINGS: join(dir, "findings"),
+    FAKE_UNREADABLE: join(dir, "unreadable"),
     FAKE_STATUS: fakes,
     FAKE_BASE: join(dir, "base.json"),
   };
@@ -166,6 +176,33 @@ describe("pins job", () => {
     const looked = runStep(times, dir, env);
     expect(looked.code, looked.out).toBe(1);
     expect(looked.out).toContain(`::error title=pins::no GHCR package version has ${sha(3)} (${GHCR})`);
+  });
+
+  test("an_unreadable_image_is_named_and_the_rest_are_looked_up", () => {
+    const { dir, env } = sandbox({ pins: [pin(HUB), pin(HUB2)], unreadable: [HUB] });
+    const looked = runStep(times, dir, env);
+    expect(looked.code, looked.out).toBe(1);
+    expect(looked.out).toContain(`::error title=pins::imagetools could not read ${HUB}`);
+    expect(looked.out).toContain(`${HUB2}: image config created 2026-10-01T00:00:00Z`);
+  });
+
+  test("a_ghcr_answer_that_is_not_a_list_is_named", () => {
+    // A 200 whose body is not a version list (an error object) is a failed lookup for that pin, never a jq exit that
+    // ends the step before the next pin.
+    const { dir, env } = sandbox({ pins: [pin(GHCR), pin(HUB)], status: { "page1.json": '{"message":"x"}' } });
+    const looked = runStep(times, dir, env);
+    expect(looked.code, looked.out).toBe(1);
+    expect(looked.out).toContain(`::error title=pins::GHCR lookup failed for ${GHCR} (HTTP 200, not a version list)`);
+    expect(looked.out).toContain(`${HUB}: not on ghcr.io, no push time looked up`);
+  });
+
+  test("no_changed_pin_runs_nothing", () => {
+    const { dir, env } = sandbox({ pins: [] });
+    for (const step of [times, scanStep]) {
+      const ran = runStep(step, dir, env);
+      expect(ran.code, ran.out).toBe(0);
+      expect(ran.calls).toEqual([]);
+    }
   });
 
   test("a_docker_hub_pin_makes_no_ghcr_call", () => {

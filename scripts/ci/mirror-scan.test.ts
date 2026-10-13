@@ -206,6 +206,8 @@ describe("mirror scan per stage", () => {
     for (const [id, ignore] of [
       ["images", "/dev/null"],
       ["edge", "/dev/null"],
+      // P1.34m: the PR-time scan of a newly pinned runtime base keeps the mirror's runtime rule and ignore file.
+      ["pins", ".github/trivyignore.yaml"],
     ] as const) {
       const runs = (jobs[id]?.steps ?? []).map((step) => step.run ?? "").join("\n");
       expect(runs, id).toMatch(
