@@ -44,6 +44,12 @@ type Lock = Record<string, Base>;
 const LIBRARY_IMAGES = new Set(["docker.io/library/node", "docker.io/library/caddy", "docker.io/library/postgres"]);
 const OWN_NAMESPACE = /^ghcr\.io\/undefined6799\/[a-z0-9._/-]+$/;
 const allowed = (ref: string): boolean => LIBRARY_IMAGES.has(ref) || OWN_NAMESPACE.test(ref);
+/**
+ * Vendor images we run as shipped, each by its exact name, never a host or namespace, and never a base: Bluesky's PDS
+ * (Alex, "Allow pinned", 2026-10-07T13:00:19Z; P1.29a). Each is a run-only lock entry, scanned by the mirror workflow
+ * at the shipped gate (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
+ */
+const VENDOR_IMAGES = new Set(["ghcr.io/bluesky-social/pds"]);
 const FROM = /^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$/i;
 const PINNED = /^([a-z0-9.-]+(?::\d+)?\/[a-z0-9._/-]+)(?::([\w][\w.-]{0,127}))?@(sha256:[0-9a-f]{64})$/;
 
@@ -1026,7 +1032,7 @@ describe("base images", () => {
   });
 
   test("lock_records_the_index_digest", () => {
-    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres"]);
+    expect(Object.keys(lock)).toEqual(["node", "caddy-builder", "caddy", "postgres", "pds"]);
     // Exact keys only: toStrictEqual refuses any key the record does not name.
     expect(NODE).toStrictEqual({
       ref: "docker.io/library/node",
@@ -1062,6 +1068,33 @@ describe("base images", () => {
       buildStage: false,
       stripped: ["/usr/local/bin/gosu"],
     });
+    // Bluesky's PDS image (P1.29a), run as shipped: a runtime entry no Dockerfile builds on.
+    expect(lock.pds).toStrictEqual({
+      ref: "ghcr.io/bluesky-social/pds",
+      tag: expect.stringMatching(/^0\.4\.\d+$/),
+      digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      source: "upstream",
+      stage: "runtime",
+      buildStage: false,
+    });
+  });
+
+  test("vendor_images_are_run_only", () => {
+    // Every lock entry comes from the allowlist, a vendor image only by its exact name, and no Dockerfile builds on one.
+    for (const [name, base] of Object.entries(lock)) {
+      expect(allowed(base.ref) || VENDOR_IMAGES.has(base.ref), name).toBe(true);
+      if (VENDOR_IMAGES.has(base.ref)) expect([base.stage, base.buildStage], name).toEqual(["runtime", false]);
+    }
+    const pds = lock.pds as Base;
+    const image = `${pds.ref}:${pds.tag}@${pds.digest}`;
+    expect(baseProblems(`FROM ${image}`, lock)).toEqual([`FROM ${image} is not from an allowed host`]);
+    for (const ref of [
+      "ghcr.io/bluesky-social/other",
+      "ghcr.io/bluesky-social/pds-x",
+      "docker.io/bluesky-social/pds",
+    ]) {
+      expect(VENDOR_IMAGES.has(ref), ref).toBe(false);
+    }
   });
 
   // P1.29c (record 2026-10-12-p129c-p129l-build-stage-scan): the mirror scans a base a build stage runs at the build

@@ -1,10 +1,11 @@
-# The development stack without the PDS (P1.29; plan section 8 Phase 1; step book phase-1.md P1.29 item 6): postgres,
-# migrate and web. The edge joins with the PDS and the site it serves in P1.29a (architecture record
-# 2026-10-12-p129-tls-override-and-edge-sites). One file for both env files, `dev` (the homelab) and `local` (an
+# The development stack (P1.29, P1.29a; plan section 8 Phase 1; step book phase-1.md P1.29 items 6 and 7): postgres,
+# migrate, the PDS, the edge in front of it, and web. One file for both env files, `dev` (the homelab) and `local` (an
 # agent's throwaway stack), chosen by the single interpolation file the wrapper (deployment/preflight/stack.ts,
 # P1.27w) passes to the preflight and to Compose alike. Every image is built here from a Dockerfile images.yml scans;
 # none is pulled, so the preflight's signed-image checks (C2 to C5) refuse this stack until P1.27s publishes signed
-# images (architecture record 2026-10-12-p129-local-build-preflight).
+# images (architecture record 2026-10-12-p129-local-build-preflight). The one exception is the PDS, Bluesky's own image
+# run as shipped (Alex, "Allow pinned", 2026-10-07T13:00:19Z): named here exactly as its run-only lock entry, which the
+# mirror workflow scans (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
 #
 # Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
 # `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
@@ -77,6 +78,79 @@ services:
     pids_limit: 64
     restart: "no"
 
+  # Bluesky's PDS, unmodified (@atproto/pds 0.5.37 in image 0.4.5037). Its image sets no USER, so it runs here as the
+  # base's node user (uid 1000, nodejs/docker-node 24/alpine3.23/Dockerfile:5-6), with its data in a named volume at
+  # that user's home: a fresh volume takes the owner of the directory it mounts over, and /home/node is node's, where a
+  # new path would be root's. The PDS reads its settings from its environment only (dist/config/env.js); the pinned
+  # ones are literals here, which Compose prefers over env_file, and pds.env holds only its secrets and recovery key
+  # (deployment/env/pds.example.env). Not set, on purpose: PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25),
+  # PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, the AppView and report service (optional,
+  # dist/config/config.js:162-189), and on local the mail URLs (mail is dropped; pds_mail_unset_only_with_logging_off).
+  pds:
+    image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - pdsdata:/home/node
+    env_file: ../../unset-dev-env/pds.env
+    environment:
+      PDS_HOSTNAME: ${PDS_HOSTNAME}
+      PDS_SERVICE_HANDLE_DOMAINS: ${PDS_SERVICE_HANDLE_DOMAINS}
+      PDS_PORT: "3000"
+      PDS_DATA_DIRECTORY: /home/node/pds
+      PDS_BLOBSTORE_DISK_LOCATION: /home/node/pds/blocks
+      PDS_DID_PLC_URL: https://plc.directory
+      PDS_INVITE_REQUIRED: "true"
+      PDS_CRAWLERS: ""
+      PDS_RATE_LIMITS_ENABLED: "false"
+      PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true"
+      LOG_ENABLED: "false"
+      NODE_OPTIONS: --max-old-space-size=768
+    networks: [edge, pds_egress]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  # The edge (P1.28 image), the only service that publishes, and on loopback only: the homelab's own address is P1.34's.
+  # Its sites are the repository's deployment/edge/sites, mounted read-only where the image imports them, as C18 reads
+  # them; /data (ACME state) and /config are named volumes the image seeds as caddy's, 0700 (P1.27o).
+  edge:
+    # A file named Dockerfile builds from its own folder, as images.yml builds it (C26).
+    build:
+      context: ./edge
+      dockerfile: Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    volumes:
+      - ./edge/sites:/etc/caddy/sites/enabled:ro
+      - edgedata:/data
+      - edgeconfig:/config
+    environment:
+      PDS_HOST: ${PDS_HOSTNAME}
+      PDS_UPSTREAM: pds:3000
+      ACME_EMAIL: ${EDGE_ACME_EMAIL}
+    ports:
+      - 127.0.0.1:80:80
+      - 127.0.0.1:443:443
+    depends_on:
+      pds:
+        condition: service_started
+    networks: [edge]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    restart: unless-stopped
+
   web:
     build:
       context: ..
@@ -111,9 +185,16 @@ services:
 networks:
   db:
     internal: true
+  # Only the edge shares a network with the PDS's HTTP port: the PDS trusts every private address as a proxy (step book
+  # P1.29, "Networks"). pds_egress is the PDS's own way out (PLC, DID and handle resolution, client metadata).
+  edge:
+  pds_egress:
 
 volumes:
   pgdata:
+  pdsdata:
+  edgedata:
+  edgeconfig:
 
 secrets:
   pg_superuser_password:

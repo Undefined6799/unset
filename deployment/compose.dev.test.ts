@@ -1,4 +1,4 @@
-// P1.29: what the development stack's compose file must say, read with the preflight's own parser (no Docker). The
+// P1.29, P1.29a: what the development stack's compose file must say, read with the preflight's own parser (no Docker). The
 // running stack is P1.29t's; Compose's own reading of this file is compared in compose-parse.test.ts
 // (preflight_matches_compose_config walks every compose*.yaml).
 import { spawnSync } from "node:child_process";
@@ -6,6 +6,7 @@ import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type 
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { c26 } from "./preflight/checks/build.ts";
+import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
@@ -47,6 +48,19 @@ function limitProblems(s: Service, nodeBuilt: boolean): string[] {
 const nodeBuilt = (s: Service): boolean =>
   s.build !== null &&
   NODE_DOCKERFILES.has(join("deployment", s.build.context, s.build.dockerfile).replace(/^\.\.\//, ""));
+/** A Node service: one built from our Node image, or the PDS, which runs Node too (findings F-32 covers both). */
+const runsNode = (s: Service): boolean => nodeBuilt(s) || s.name === "pds";
+
+type LockEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
+const readLock = (): Record<string, LockEntry> =>
+  JSON.parse(read("images/bases.lock.json")) as Record<string, LockEntry>;
+/** A lock entry run as shipped: a runtime image no Dockerfile builds on (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2). */
+const runOnlyImages = (): Set<string> =>
+  new Set(
+    Object.values(readLock())
+      .filter((b) => b.stage === "runtime" && !b.buildStage)
+      .map((b) => `${b.ref}:${b.tag}@${b.digest}`),
+  );
 
 describe("compose.dev.yaml (P1.29)", () => {
   test("compose_dev_name_pinned", () => {
@@ -55,11 +69,8 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_images_match_lock", () => {
-    const lock = JSON.parse(read("images/bases.lock.json")) as Record<
-      string,
-      { ref: string; tag: string; digest: string }
-    >;
-    const locked = new Set(Object.values(lock).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
+    const locked = new Set(Object.values(readLock()).map((b) => `${b.ref}:${b.tag}@${b.digest}`));
+    const runOnly = runOnlyImages();
     // Every compose file under deployment/ (P1.29 item 6), not only this one: a second file would add services too.
     const files = readdirSync(DEPLOYMENT, { recursive: true, encoding: "utf8" }).filter(
       (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
@@ -68,8 +79,9 @@ describe("compose.dev.yaml (P1.29)", () => {
     for (const file of files) {
       for (const s of parseCompose(read(file), file).services) {
         if (s.image !== null) expect(locked.has(s.image) || OWN_IMAGES.has(s.image), `${file} ${s.name}`).toBe(true);
-        // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile.
-        expect(s.build, `${file} ${s.name}`).not.toBeNull();
+        // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile, except a
+        // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
+        if (s.build === null) expect(runOnly.has(s.image ?? ""), `${file} ${s.name}`).toBe(true);
       }
     }
   });
@@ -98,7 +110,8 @@ describe("compose.dev.yaml (P1.29)", () => {
     for (const s of dev().services) {
       const h = s.hardening;
       expect(h.capDrop, s.name).toEqual(["ALL"]);
-      expect(h.capAdd, s.name).toEqual([]);
+      // Only the edge binds below 1024 (80 and 443), as its non-root user (P1.28 setcap; plan section 8).
+      expect(h.capAdd, s.name).toEqual(s.name === "edge" ? ["NET_BIND_SERVICE"] : []);
       expect(h.securityOpt, s.name).toEqual(["no-new-privileges:true"]);
       expect(h.readOnly, s.name).toBe(true);
       // Every service names its numeric non-root user: a mounted secret is owned by that uid (C9 record (vi)).
@@ -112,12 +125,12 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_dev_limits", () => {
-    for (const s of dev().services) expect(limitProblems(s, nodeBuilt(s)), s.name).toEqual([]);
+    for (const s of dev().services) expect(limitProblems(s, runsNode(s)), s.name).toEqual([]);
     expect(
       dev()
-        .services.filter(nodeBuilt)
+        .services.filter(runsNode)
         .map((s) => s.name),
-    ).toEqual(["migrate", "web"]);
+    ).toEqual(["migrate", "pds", "web"]);
     // Fixtures: a Node service without a heap cap, and one at 90 % of its limit, both fail.
     const web = service(dev(), "web");
     const without = { ...web, environment: web.environment.filter(([key]) => key !== "NODE_OPTIONS") };
@@ -140,8 +153,15 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_dev_only_edge_publishes", () => {
-    // The edge, the only service that may publish, joins in P1.29a; until then nothing does.
-    for (const s of dev().services) expect(s.ports, s.name).toEqual([]);
+    // Only the edge publishes, 80 and 443 on loopback (P1.29a); the homelab's own address is P1.34's.
+    for (const s of dev().services) {
+      if (s.name === "edge") continue;
+      expect(s.ports, s.name).toEqual([]);
+    }
+    expect(service(dev(), "edge").ports).toEqual([
+      { hostIp: "127.0.0.1", published: "80", target: "80" },
+      { hostIp: "127.0.0.1", published: "443", target: "443" },
+    ]);
   });
 
   test("compose_dev_secrets_have_one_reader_uid", () => {
@@ -241,6 +261,140 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 });
 
+/** A service's environment as written: a literal's text, or `${NAME}` for a value taken from the interpolation file. */
+const envOf = (s: Service): Map<string, string> =>
+  new Map(s.environment.map(([key, value]) => [key, "ref" in value ? `\${${value.ref}}` : value.literal]));
+
+/** Pino's levels at info or above, and silent (P1.30 C12): debug and trace would log mail tokens (below). */
+const LOG_LEVELS = new Set(["info", "warn", "error", "fatal", "silent"]);
+const SMTP = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_ADDRESS"];
+
+/**
+ * Why mail could reach the PDS's logs. With no SMTP URL the PDS's mailer sends nothing and logs the whole message, its
+ * recipient and its tokens, at debug level: @atproto/pds 0.5.37 dist/mailer/index.js:80 ("No SMTP URL has been
+ * configured. Intended to send email") and dist/mailer/moderation.js:17. Re-read on every PDS bump; if that log moves to
+ * info, the rule becomes LOG_ENABLED=false alone (record 2026-10-07-pds-mail-se7-and-local-verification, point 1).
+ */
+function mailLogProblems(env: Map<string, string>): string[] {
+  if (SMTP.every((name) => env.has(name))) return [];
+  const problems: string[] = [];
+  if (env.get("LOG_ENABLED") !== "false") problems.push("mail is unset but LOG_ENABLED is not exactly false");
+  const level = env.get("LOG_LEVEL");
+  if (level !== undefined && !LOG_LEVELS.has(level)) problems.push("mail is unset but LOG_LEVEL is not allowlisted");
+  return problems;
+}
+
+describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
+  test("pds_runs_the_locked_image", () => {
+    // Alex, "Allow pinned" (2026-10-07T13:00:19Z): Bluesky's image, by the lock's exact ref, tag and digest.
+    const pds = readLock().pds;
+    expect(pds).toBeDefined();
+    expect(service(dev(), "pds").image).toBe(`${pds?.ref}:${pds?.tag}@${pds?.digest}`);
+    expect(service(dev(), "pds").build).toBeNull();
+  });
+
+  test("pds_env_pinned", () => {
+    // Step book P1.29 "Services": every PDS setting written out, never left to a default, and the dangerous ones absent.
+    const env = envOf(service(dev(), "pds"));
+    expect(Object.fromEntries(env)).toEqual({
+      PDS_HOSTNAME: "${PDS_HOSTNAME}",
+      PDS_SERVICE_HANDLE_DOMAINS: "${PDS_SERVICE_HANDLE_DOMAINS}",
+      PDS_PORT: "3000",
+      PDS_DATA_DIRECTORY: "/home/node/pds",
+      PDS_BLOBSTORE_DISK_LOCATION: "/home/node/pds/blocks",
+      PDS_DID_PLC_URL: "https://plc.directory",
+      PDS_INVITE_REQUIRED: "true",
+      PDS_CRAWLERS: "",
+      PDS_RATE_LIMITS_ENABLED: "false",
+      PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
+      LOG_ENABLED: "false",
+      NODE_OPTIONS: "--max-old-space-size=768",
+    });
+  });
+
+  test("pds_env_file_holds_only_its_secrets", () => {
+    // The env file carries what the PDS cannot take from /run/secrets, and nothing that could shadow a pinned value
+    // (compose.dev.yaml's literals win over env_file anyway; this keeps the template honest).
+    const names = read("env/pds.example.env")
+      .split("\n")
+      .filter((line) => line !== "" && !line.startsWith("#"))
+      .map((line) => line.slice(0, line.indexOf("=")));
+    expect(names).toEqual([
+      "PDS_JWT_SECRET",
+      "PDS_ADMIN_PASSWORD",
+      "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
+      "PDS_RECOVERY_DID_KEY",
+    ]);
+    expect(service(dev(), "pds").envFiles).toEqual(["../../unset-dev-env/pds.env"]);
+  });
+
+  test("pds_rate_limits_disabled_explicitly", () => {
+    // Plan section 5.2: the PDS sees only the edge's address, so its per-IP limit is off, set explicitly, with no
+    // bypass (book edit 2026-10-07-p128-rate-limit-test-to-p129). P1.30 C7 and C8 check the deployed env.
+    const env = envOf(service(dev(), "pds"));
+    expect(env.get("PDS_RATE_LIMITS_ENABLED")).toBe("false");
+    expect([...env.keys()].filter((name) => name.startsWith("PDS_RATE_LIMIT_BYPASS_"))).toEqual([]);
+  });
+
+  test("pds_mail_unset_only_with_logging_off", () => {
+    expect(mailLogProblems(envOf(service(dev(), "pds")))).toEqual([]);
+    const off = new Map([["LOG_ENABLED", "false"]]);
+    for (const level of ["info", "warn", "error", "fatal", "silent"]) {
+      expect(mailLogProblems(new Map([...off, ["LOG_LEVEL", level]])), level).toEqual([]);
+    }
+    for (const level of ["debug", "trace", "DEBUG", "Info", "10", ""]) {
+      expect(mailLogProblems(new Map([...off, ["LOG_LEVEL", level]])), level).toEqual([
+        "mail is unset but LOG_LEVEL is not allowlisted",
+      ]);
+    }
+    for (const enabled of ["true", "", "False", "0"]) {
+      expect(mailLogProblems(new Map([["LOG_ENABLED", enabled]])), enabled).toEqual([
+        "mail is unset but LOG_ENABLED is not exactly false",
+      ]);
+    }
+    expect(mailLogProblems(new Map())).toEqual(["mail is unset but LOG_ENABLED is not exactly false"]);
+    // One SMTP name unset is enough; with all three set the rule does not apply (C11, C12 and C19 take over).
+    const partial = new Map([["PDS_EMAIL_SMTP_URL", "smtps://mail.example.test"]]);
+    expect(mailLogProblems(partial)).toEqual(["mail is unset but LOG_ENABLED is not exactly false"]);
+    expect(mailLogProblems(new Map(SMTP.map((name) => [name, "x"])))).toEqual([]);
+  });
+
+  test("pds_data_is_its_users_named_volume", () => {
+    // A fresh named volume takes the owner of the directory it mounts over: /home/node is the node user's (uid 1000,
+    // nodejs/docker-node 24/alpine3.23/Dockerfile:5-6), so the PDS can write its data there without running as root.
+    const pds = service(dev(), "pds");
+    expect(pds.hardening.user).toBe("1000:1000");
+    expect(pds.mounts).toEqual([{ type: "volume", source: "pdsdata", target: "/home/node", readOnly: false }]);
+    const env = envOf(pds);
+    for (const name of ["PDS_DATA_DIRECTORY", "PDS_BLOBSTORE_DISK_LOCATION"]) {
+      expect(env.get(name)?.startsWith("/home/node/"), name).toBe(true);
+    }
+  });
+
+  test("edge_serves_the_repository_sites", () => {
+    // C18's own reading of the mount: a read-only bind of deployment/edge/sites at the directory the image imports.
+    const compose = dev();
+    const resolved: Compose = {
+      ...compose,
+      services: compose.services.map((s) => ({
+        ...s,
+        mounts: s.mounts.map((m) =>
+          m.type === "bind" && m.source !== null ? { ...m, source: resolve(DEPLOYMENT, m.source) } : m,
+        ),
+      })),
+    };
+    expect(edgeSitesDir(resolved, join(DEPLOYMENT, "edge"))).toEqual({
+      dir: realpathSync.native(join(DEPLOYMENT, "edge", "sites")),
+    });
+    const edge = envOf(service(compose, "edge"));
+    expect(Object.fromEntries(edge)).toEqual({
+      PDS_HOST: "${PDS_HOSTNAME}",
+      PDS_UPSTREAM: "pds:3000",
+      ACME_EMAIL: "${EDGE_ACME_EMAIL}",
+    });
+  });
+});
+
 /**
  * C9 and C26 as the preflight runs them on this checkout's compose.dev.yaml, the stack's folders beside it as the
  * runbook lays them out (docs/human/runbooks/dev-stack-secrets.md). The file stats are injected, so the result does not
@@ -278,6 +432,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     [SECRETS, made("dir", 0o700, DEPLOY_UID, 1)],
     [ENV, made("dir", 0o700, DEPLOY_UID, 2)],
     [ENV_FILE, made("file", 0o600, DEPLOY_UID, 3)],
+    [join(ENV, "pds.env"), made("file", 0o600, DEPLOY_UID, 4)],
     ...Object.entries(SECRET_OWNERS).map(([name, uid], at): [string, Stats] => [
       join(SECRETS, name),
       made("file", 0o400, uid, 10 + at),
@@ -314,7 +469,12 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
       readText: (path) => (path === file ? edit(read(FILE)) : null),
-      readEnv: (path) => (path === ENV_FILE ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` } : null),
+      readEnv: (path) =>
+        path === ENV_FILE
+          ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
+          : path === join(ENV, "pds.env")
+            ? { text: read("env/pds.example.env"), id: `${DEV}:4` }
+            : null,
       lstat: look(lstatSync),
       stat: look(statSync),
       realpath,
@@ -329,7 +489,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "1 files, 7 mounted secrets" },
+      { pass: true, reason: "2 files, 7 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });
