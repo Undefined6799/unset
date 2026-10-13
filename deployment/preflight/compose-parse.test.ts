@@ -91,6 +91,37 @@ describe("compose subset", () => {
       /network a: name is refused/,
     );
   });
+  // P1.29a Amendment 1 (/mnt/project-files/unset-plan/book-edits/2026-10-13-p129a-pds-and-edge-in-compose.md): an
+  // alias makes a container answer to a name on that network, so only the edge may carry aliases, and only its two
+  // hosts, each a whole interpolation. Any other alias could let a container claim the PDS's or the app's name.
+  test("aliases_only_on_the_edge_with_its_two_hosts", () => {
+    const hosts = '["${APP_HOST}", "${PDS_HOSTNAME}"]';
+    const stack = (service: string, aliases: string) =>
+      `name: unset-prod\nservices:\n  ${service}:\n    image: x\n    networks:\n      front:\n        aliases: ${aliases}\nnetworks:\n  front: {}\n`;
+    expect(parseCompose(stack("edge", hosts), "c.yaml").services[0]?.networks).toEqual(["front"]);
+    expect(() => parseCompose(stack("edge", '["${PDS_HOSTNAME}", "${APP_HOST}"]'), "c.yaml")).not.toThrow();
+    expect(() => parseCompose(stack("pds", hosts), "c.yaml")).toThrow(
+      new ParseError("c.yaml:7: aliases on pds: only the edge carries aliases"),
+    );
+    const wrong = "c.yaml:7: the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}";
+    for (const aliases of [
+      "[edge]",
+      "[pds.unset.localhost, app.example.test]",
+      '["${PDS_HOSTNAME}"]',
+      '["${APP_HOST}", "${PDS_HOSTNAME}", edge]',
+      '["${APP_HOST}", "${APP_HOST}"]',
+      '["${APP_HOST}", "${PDS_UPSTREAM}"]',
+      '["${APP_HOST}x", "${PDS_HOSTNAME}"]',
+      "${APP_HOST}",
+      "[]",
+    ]) {
+      expect(() => parseCompose(stack("edge", aliases), "c.yaml"), aliases).toThrow(new ParseError(wrong));
+    }
+    // Any other `$` under networks is still refused.
+    expect(() =>
+      parseCompose(stack("edge", hosts).replace("front:\n        aliases", "${N}:\n        aliases"), "c.yaml"),
+    ).toThrow(/\$ in networks/);
+  });
   // P1.30u: the edge service's mounts decide which Caddy config runs (C18), so `volumes` is read in a strict subset:
   // short `SOURCE:TARGET[:ro|rw]` with a path source starting /, ./ or ../ or a plain volume name, or long syntax with
   // only type (bind, volume, tmpfs), source, target and read_only. Compose-spec 05-services.md "volumes".
@@ -505,7 +536,7 @@ services:
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     networks:
       front:
-        aliases: [edge]
+        aliases: ["\${APP_HOST}", "\${PDS_HOSTNAME}"]
       inner:
     volumes:
       - ./sites:/etc/caddy/sites/enabled:ro

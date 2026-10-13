@@ -1457,7 +1457,7 @@ describe("preflight C17 (P1.30t)", () => {
   // Two declared networks and the implicit default, in both service forms (compose-spec 05-services.md "networks").
   const NETWORKED = COMPOSE.replace(
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
-    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: [edge]\n      inner:',
+    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n      inner:',
   )
     .replace(
       "    env_file: ../../unset-dev-env/pds.env",
@@ -1514,7 +1514,10 @@ describe("preflight C17 (P1.30t)", () => {
     const outer = { ...NETWORKED_TABLE, inner: { internal: false, members: ["edge", "pds"] } };
     expect(await expectOnly("C17", { compose: NETWORKED, networks: outer })).toContain("inner: internal differs");
     // An attachment key outside the four the subset reads, an empty list, and a network no file defines are refused.
-    const mac = NETWORKED.replace("        aliases: [edge]", "        mac_address: 02:42:ac:11:00:02");
+    const mac = NETWORKED.replace(
+      '        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]',
+      "        mac_address: 02:42:ac:11:00:02",
+    );
     await cannotRun({ compose: mac, networks: NETWORKED_TABLE }, /mac_address/);
     const empty = NETWORKED.replace("networks: [inner]", "networks: []");
     await cannotRun({ compose: empty, networks: NETWORKED_TABLE }, /empty/);

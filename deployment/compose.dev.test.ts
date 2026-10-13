@@ -5,12 +5,13 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, readdirSync, readFileSync, readlinkSync, realpathSync, type Stats, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
+import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
-import { type Compose, parseCompose, type Service } from "./preflight/compose-parse.ts";
+import { type Compose, parseCompose, parseStrictData, type Service } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -54,11 +55,15 @@ const runsNode = (s: Service): boolean => nodeBuilt(s) || s.name === "pds";
 type LockEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
 const readLock = (): Record<string, LockEntry> =>
   JSON.parse(read("images/bases.lock.json")) as Record<string, LockEntry>;
-/** A lock entry run as shipped: a runtime image no Dockerfile builds on (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2). */
+/**
+ * A lock entry run as shipped: a vendor image (deployment/images/vendor.ts) locked as a runtime image no Dockerfile
+ * builds on (record 2026-10-07-p129-migrate-image-and-run-only-images, point 2). The runtime bases we harden in our own
+ * Dockerfiles, caddy and postgres, are never one (Codex on #774).
+ */
 const runOnlyImages = (): Set<string> =>
   new Set(
     Object.values(readLock())
-      .filter((b) => b.stage === "runtime" && !b.buildStage)
+      .filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage)
       .map((b) => `${b.ref}:${b.tag}@${b.digest}`),
   );
 
@@ -83,6 +88,30 @@ describe("compose.dev.yaml (P1.29)", () => {
         // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
         if (s.build === null) expect(runOnly.has(s.image ?? ""), `${file} ${s.name}`).toBe(true);
       }
+    }
+  });
+
+  test("run_only_image_is_exactly_a_runtime_lock_entry", () => {
+    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, point 2: an image with no build must equal a
+    // `stage: runtime` lock entry with `buildStage: false` byte for byte.
+    const lock = readLock();
+    const exact = (key: string) => `${lock[key]?.ref}:${lock[key]?.tag}@${lock[key]?.digest}`;
+    const runOnly = runOnlyImages();
+    expect(runOnly.has(exact("pds"))).toBe(true);
+    const otherDigest = `sha256:${"0".repeat(64)}`;
+    for (const image of [
+      `${lock.pds?.ref}:${lock.pds?.tag}@${otherDigest}`,
+      `${lock.pds?.ref}:${lock.pds?.tag}`,
+      `${lock.pds?.ref}@${lock.pds?.digest}`,
+      ` ${exact("pds")}`,
+      exact("caddy-builder"),
+      exact("node"),
+      // Codex on #774: buildStage false means no Dockerfile stage builds on the entry, not that we run it as shipped,
+      // so the runtime bases we harden in our own Dockerfiles must never stand in for their builds.
+      exact("caddy"),
+      exact("postgres"),
+    ]) {
+      expect(runOnly.has(image), image).toBe(false);
     }
   });
 
@@ -265,6 +294,22 @@ describe("compose.dev.yaml (P1.29)", () => {
 const envOf = (s: Service): Map<string, string> =>
   new Map(s.environment.map(([key, value]) => [key, "ref" in value ? `\${${value.ref}}` : value.literal]));
 
+/** The settings an env template writes, comments and blank lines left out. */
+const envSettings = (text: string): [string, string][] =>
+  text
+    .split("\n")
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]);
+/**
+ * A setting that turns a PDS protection off or puts it in development mode. The one exemption, by exact name and value,
+ * is the confirmation-link switch C16 requires (architecture record 2026-10-13-p129a-pds-and-edge-in-compose,
+ * Amendment 2; plan section 5.3).
+ */
+const switchesProtectionOff = (name: string, value: string): boolean => {
+  if (name === "PDS_EMAIL_DISABLE_CONFIRMATION_LINK" && value === "true") return false;
+  return name.includes("DEV_MODE") || (name.startsWith("PDS_") && name.includes("DISABLE"));
+};
+
 /** Pino's levels at info or above, and silent (P1.30 C12): debug and trace would log mail tokens (below). */
 const LOG_LEVELS = new Set(["info", "warn", "error", "fatal", "silent"]);
 const SMTP = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_ADDRESS"];
@@ -369,6 +414,49 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     for (const name of ["PDS_DATA_DIRECTORY", "PDS_BLOBSTORE_DISK_LOCATION"]) {
       expect(env.get(name)?.startsWith("/home/node/"), name).toBe(true);
     }
+  });
+
+  test("no_pds_disable_or_dev_mode_variable", () => {
+    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose ("Also"), the fail-closed twin of F-25: no
+    // PDS_DISABLE_SSRF_PROTECTION, no PDS_DEV_MODE and no other PDS switch that turns a protection off, in this file's
+    // services or in any env template a stack copies from.
+    const templates = readdirSync(join(DEPLOYMENT, "env")).filter((file) => file.endsWith(".example.env"));
+    expect(templates).toContain("pds.example.env");
+    const settings: [string, string][] = [
+      ...dev().services.flatMap((s) => [...envOf(s)]),
+      ...templates.flatMap((file) => envSettings(read(join("env", file)))),
+    ];
+    expect(settings.map(([name]) => name)).toContain("PDS_HOSTNAME");
+    expect(settings.filter(([name, value]) => switchesProtectionOff(name, value))).toEqual([]);
+    const off: [string, string][] = [
+      ["PDS_DISABLE_SSRF_PROTECTION", "true"],
+      ["PDS_DISABLE_SSRF_PROTECTION", "false"],
+      ["PDS_DEV_MODE", "true"],
+      ["DEV_MODE", "1"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "false"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "1"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "${X}"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINKS", "true"],
+      ["PDS_X_DISABLE_Y", "true"],
+    ];
+    for (const [name, value] of off) expect(switchesProtectionOff(name, value), `${name}=${value}`).toBe(true);
+    const on: [string, string][] = [
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "true"],
+      ["PDS_HOSTNAME", "${PDS_HOSTNAME}"],
+      ["PDS_INVITE_REQUIRED", "true"],
+      ["LOG_ENABLED", "false"],
+    ];
+    for (const [name, value] of on) expect(switchesProtectionOff(name, value), `${name}=${value}`).toBe(false);
+  });
+
+  test("edge_answers_for_the_app_and_pds_hosts", () => {
+    // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1: the PDS reaches both hosts (it fetches
+    // the app's client metadata) through the edge's aliases on the network they share, never extra_hosts or a fixed
+    // address. compose-parse refuses aliases anywhere else or with other values (aliases_only_on_the_edge_with_its_two_hosts).
+    const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
+    expect(raw.services.edge?.networks).toEqual({ edge: { aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"] } });
+    expect(service(dev(), "pds").networks).toContain("edge");
+    expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
   });
 
   test("edge_serves_the_repository_sites", () => {

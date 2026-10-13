@@ -581,20 +581,37 @@ const ATTACHMENT_KEYS = new Set(["aliases", "ipv4_address", "ipv6_address", "pri
 const NETWORK_KEYS = new Set(["internal", "driver"]);
 const isEmpty = (node: unknown): boolean => node === null || (isScalar(node) && node.value === null);
 
+/**
+ * The only aliases there are: the edge's own two hosts, each a whole interpolation (P1.29a Amendment 1, architecture
+ * record 2026-10-13-p129a-pds-and-edge-in-compose). An alias makes a container answer to that name on the network, so
+ * any other one could let a container claim the PDS's or the app's host.
+ */
+const EDGE_ALIASES = ["${APP_HOST}", "${PDS_HOSTNAME}"];
+
+function aliases(r: Reader, node: unknown, service: string): void {
+  if (service !== "edge") r.fail(node, `aliases on ${service}: only the edge carries aliases`);
+  const values = isSeq(node) ? node.items.map((item) => r.text(item, "alias")) : [];
+  const exact = values.length === EDGE_ALIASES.length && EDGE_ALIASES.every((host) => values.includes(host));
+  if (!exact) r.fail(node, "the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}");
+}
+
 /** `networks:` on a service, as a list of keys or a map of key to attachment; with neither it is on `default`. */
 function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: string): string[] {
   if (node === undefined) return hasMode ? [] : ["default"];
   if (hasMode) return r.fail(node, `${service} sets both networks and network_mode`);
-  r.noDollar(node, "networks");
   let names: string[];
   if (isSeq(node)) {
+    r.noDollar(node, "networks");
     names = node.items.map((n) => r.text(n, "network"));
   } else if (isMap(node)) {
     names = node.items.map((pair) => {
+      r.noDollar(pair.key, "networks");
       if (!isEmpty(pair.value) && !isMap(pair.value)) r.fail(pair.value, "network attachment is not a mapping");
       for (const key of isMap(pair.value) ? pair.value.items : []) {
         const field = r.text(key.key, "attachment key");
         if (!ATTACHMENT_KEYS.has(field)) r.fail(key.key, `network attachment key ${field}`);
+        if (field === "aliases") aliases(r, key.value, service);
+        else r.noDollar(key.value, "networks");
       }
       return r.text(pair.key, "network");
     });

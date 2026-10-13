@@ -83,9 +83,10 @@ services:
   # that user's home: a fresh volume takes the owner of the directory it mounts over, and /home/node is node's, where a
   # new path would be root's. The PDS reads its settings from its environment only (dist/config/env.js); the pinned
   # ones are literals here, which Compose prefers over env_file, and pds.env holds only its secrets and recovery key
-  # (deployment/env/pds.example.env). Not set, on purpose: PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25),
-  # PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, the AppView and report service (optional,
-  # dist/config/config.js:162-189), and on local the mail URLs (mail is dropped; pds_mail_unset_only_with_logging_off).
+  # (deployment/env/pds.example.env). Not set, on purpose: PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25) or any
+  # other PDS DISABLE switch but C16's (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any
+  # PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, the AppView and report service (optional, dist/config/config.js:162-189),
+  # and on local the mail URLs (mail is dropped; pds_mail_unset_only_with_logging_off).
   pds:
     image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
     user: "1000:1000"
@@ -145,7 +146,11 @@ services:
     depends_on:
       pds:
         condition: service_started
-    networks: [edge]
+    # The PDS reaches the app's host and its own through these names on the network it shares with the edge, never
+    # extra_hosts or a fixed address (architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1).
+    networks:
+      edge:
+        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
     mem_limit: 256m
     cpus: 0.5
     pids_limit: 128
