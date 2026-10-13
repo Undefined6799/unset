@@ -10,7 +10,7 @@ importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-12
+checked: 2026-10-13
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
@@ -36,3 +36,5 @@ Re-checked at P1.34p (#704), which reads env files through an `O_NOFOLLOW|O_NONB
 above still hold, and the reader never loads a file into a Node process.
 P1.34s lists the wrapper's own flags in `WRAPPER_OPTIONS`, and `stack.test.ts` bans any starting `env-file`, `require`
 or `import`, as `cli.test.ts` does for the preflight's.
+Re-checked at P1.27l, which adds `local` to `--env`'s values and the usage text; no flag changed, and the rules
+above still hold.
