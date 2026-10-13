@@ -52,6 +52,11 @@ jobs:
           # CRITICAL; a build-only base fails on CRITICAL and only reports HIGH, as a warning and in the job summary,
           # because what ships is gated by the image jobs' own scans. Trivy v0.74.0 exits with --exit-code when it
           # finds anything at --severity, so exit 2 below means HIGH findings and any other non-zero is a failure.
+          # P1.34m (record unset-plan/book-edits/2026-10-13-p134m-pr-scan-new-runtime-pins.md, Amendment 2): a failing
+          # scan no longer stops the loop, so one red base cannot hide the ones after it. Each failing source gets an
+          # error annotation naming it (docs.github.com workflow commands, "Setting an error message"), and the step
+          # fails after the last source. A list or lock problem still fails at once.
+          failed=0
           while IFS=$'\t' read -r source stage; do
             case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
             # P1.29v (Alex's card "Skip stripped files", 2026-10-07T18:56:42Z): the paths a runtime entry's lock entry
@@ -83,12 +88,21 @@ jobs:
                 case "$status" in
                   0) ;;
                   2) echo "::warning title=mirror::HIGH findings in build-only base $source (reported, not failing)" ;;
-                  *) exit "$status" ;;
+                  *) echo "::error title=mirror::scan failed (exit $status) for $source"; failed=$((failed + 1)); continue ;;
                 esac
                 ;;
               *) echo "no known stage for $source: $stage"; exit 1 ;;
             esac
+            status=0
             docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
               image --exit-code 1 --severity "$severity" \
-              --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "${skip[@]}" "$source"
+              --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "${skip[@]}" "$source" || status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::error title=mirror::scan failed (exit $status) for $source"
+              failed=$((failed + 1))
+            fi
           done < "$RUNNER_TEMP/entries"
+          if [ "$failed" -gt 0 ]; then
+            echo "$failed upstream source(s) failed the scan"
+            exit 1
+          fi
