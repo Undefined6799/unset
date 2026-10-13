@@ -289,6 +289,8 @@ flowchart LR
   P1_33j["P1.33j token reader uses the shared pin"]
   P1_33k["P1.33k node base for the token reader"]
   P1_29i["P1.29i token reader judges every outbound key"]
+  P1_34c["P1.34c local app site with a dev leaf"]
+  P1_34d["P1.34d PDS trusts one dev root"]
   P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_11c["P1.11c keep the setup error on cleanup"]
   P1_11i["P1.11i edge tag removal and test labels"]
@@ -548,6 +550,13 @@ flowchart LR
   P1_33i --> P1_33h
   P1_33h --> P1_33j
   P1_33j --> P1_33k
+  P1_34c --> P1_34d
+  P1_29a --> P1_34d
+  P1_27l --> P1_34d
+  P1_34q --> P1_34d
+  P1_33t --> P1_34d
+  P1_33k --> P1_34d
+  P1_34d --> P1_29t
   P1_28 --> P1_29a
   P1_27y --> P1_27n
   P1_30o --> P1_27a
