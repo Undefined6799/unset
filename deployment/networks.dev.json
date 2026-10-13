@@ -1,3 +1,5 @@
 {
-  "db": { "internal": true, "members": ["postgres", "migrate", "web"] }
+  "db": { "internal": true, "members": ["postgres", "migrate", "web"] },
+  "edge": { "internal": false, "members": ["pds", "edge"] },
+  "pds_egress": { "internal": false, "members": ["pds"] }
 }

@@ -32,5 +32,13 @@
     "stage": "runtime",
     "buildStage": false,
     "stripped": ["/usr/local/bin/gosu"]
+  },
+  "pds": {
+    "ref": "ghcr.io/bluesky-social/pds",
+    "tag": "0.4.5037",
+    "digest": "sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    "source": "upstream",
+    "stage": "runtime",
+    "buildStage": false
   }
 }

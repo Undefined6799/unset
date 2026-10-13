@@ -18,5 +18,10 @@
     "source": "docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
     "mirror": "ghcr.io/undefined6799/mirror/postgres",
     "stage": "runtime"
+  },
+  {
+    "source": "ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4",
+    "mirror": "ghcr.io/undefined6799/mirror/pds",
+    "stage": "runtime"
   }
 ]

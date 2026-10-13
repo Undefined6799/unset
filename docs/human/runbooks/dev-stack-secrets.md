@@ -1,7 +1,7 @@
 # Development stack secrets
 
-**Never run `docker compose down -v` on this stack.** It deletes the Postgres data volume, and from P1.35 on the dev
-PDS holds the lexicon authority's account; recovery is P1.34's restore runbook. `npm run dev:down` never passes `-v`.
+**Never run `docker compose down -v` on this stack.** It deletes the Postgres and PDS data volumes, and from P1.35 on
+the dev PDS holds the lexicon authority's account; recovery is P1.34's restore runbook. `npm run dev:down` never passes `-v`.
 
 `deployment/compose.dev.yaml` mounts each file below at `/run/secrets/<name>` in the services listed, and nothing else
 reads them.
@@ -62,6 +62,23 @@ lists the folder, so a stray file here passes (P1.34l (#754) adds that listing).
 mode `0600` and owned by you (Amendment 7 of the bind-ancestors record). Nothing in a container reads it.
 
 Each password is at least 16 bytes (`PG_PASSWORD` and the role files are read as `secretFile({ minBytes: 16 })`).
+
+## The PDS's env file (P1.29a)
+
+The PDS reads its settings only from its environment (`@atproto/pds` 0.5.37, `dist/config/env.js`), so its secrets
+cannot be mounted files. They go in `unset-dev-env/pds.env`, yours, mode `0600`, which the preflight checks like
+`dev-public.env`. Start it from `deployment/env/pds.example.env`; it holds exactly these four names, and every other PDS
+setting is written out in `compose.dev.yaml`:
+
+| Name | Make it with |
+| --- | --- |
+| `PDS_JWT_SECRET` | `openssl rand -hex 32` |
+| `PDS_ADMIN_PASSWORD` | `openssl rand -hex 32` (the preflight's C7 wants at least 32 characters) |
+| `PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX` | `openssl ecparam --name secp256k1 --genkey --noout --outform DER \| tail --bytes=+8 \| head --bytes=32 \| xxd --plain --cols 32` (the PDS installer's own command, bluesky-social/pds v0.4.5037 `installer.sh:16`) |
+| `PDS_RECOVERY_DID_KEY` | the public `did:key` of a recovery key whose private half stays offline; set it before the first account, because it cannot be added to existing DID documents later (C6) |
+
+Write the file under `umask 077` so it is never readable by others, even for a moment. The PDS's data, its SQLite
+databases and blobs, is the named volume `pdsdata`, which Docker keeps; nothing in your folders holds it.
 
 ## Creating or rotating a file
 
