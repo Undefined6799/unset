@@ -1,6 +1,9 @@
 // The mirror scan per stage (P1.28v; architecture record 2026-10-07-p128-edge-bases-and-ratelimit-adr, "Mirror scan
 // of build-only images"): a `build` entry fails only on CRITICAL and reports HIGH as a warning, a `runtime` entry
-// fails on HIGH and CRITICAL, an entry without a stage fails, and the loop stops at the first failing image. The
+// fails on HIGH and CRITICAL, and an entry without a stage fails. P1.34m (record
+// unset-plan/book-edits/2026-10-13-p134m-pr-scan-new-runtime-pins.md, Amendment 2): a failing image no longer stops
+// the loop; every source is scanned, each failing one gets an error annotation naming it, and the step still fails
+// at the end. The
 // test runs mirror.yml's own scan script, under the shell the step declares (P1.28w), with a stand-in `docker` that
 // answers from a findings table, on mirror lists written here (generated, because a real digest is long hex). The
 // shipped-image jobs in images.yml are only asserted.
@@ -127,10 +130,10 @@ describe("mirror scan per stage", () => {
       `scan ${SOURCE.builder} CRITICAL`,
       `scan ${SOURCE.runtime} HIGH,CRITICAL`,
     ]);
-    // A CRITICAL finding in a build-only base fails, and the scan stops there.
+    // A CRITICAL finding in a build-only base fails, and the runtime base after it is still scanned.
     const critical = scan([builder, runtime], [[SOURCE.builder, "CRITICAL"]]);
     expect(critical.code).not.toBe(0);
-    expect(critical.calls.some((call) => call.includes(SOURCE.runtime))).toBe(false);
+    expect(critical.calls).toContain(`scan ${SOURCE.runtime} HIGH,CRITICAL`);
     // A runtime base still fails on HIGH.
     expect(scan([runtime], [[SOURCE.runtime, "HIGH"]]).code).not.toBe(0);
     // An entry without a stage, or with an unknown one, fails before anything is scanned.
@@ -151,9 +154,36 @@ describe("mirror scan per stage", () => {
 
   test("build_stage_trivy_error_fails", () => {
     const builder = { source: SOURCE.builder, stage: "build" };
-    const errored = scan([builder], [[SOURCE.builder, "ERROR"]]);
-    expect(errored.code, errored.out).toBe(3);
-    expect(errored.calls).toEqual([`scan ${SOURCE.builder} HIGH`]);
+    const runtime = { source: SOURCE.runtime, stage: "runtime" };
+    const errored = scan([builder, runtime], [[SOURCE.builder, "ERROR"]]);
+    expect(errored.code, errored.out).not.toBe(0);
+    expect(errored.out).toContain(`::error title=mirror::scan failed (exit 3) for ${SOURCE.builder}`);
+    // The errored base gets no CRITICAL run of its own; the next source is still scanned.
+    expect(errored.calls).toEqual([`scan ${SOURCE.builder} HIGH`, `scan ${SOURCE.runtime} HIGH,CRITICAL`]);
+  });
+
+  test("mirror_scan_reports_every_failing_source", () => {
+    const third = `docker.io/library/t${digest(3)}`;
+    const entries = [
+      { source: SOURCE.builder, stage: "build" },
+      { source: SOURCE.runtime, stage: "runtime" },
+      { source: third, stage: "runtime" },
+    ];
+    // Two failing sources are both annotated by name, and the step is red.
+    const both = scan(entries, [
+      [SOURCE.builder, "CRITICAL"],
+      [SOURCE.runtime, "HIGH"],
+    ]);
+    expect(both.code, both.out).not.toBe(0);
+    expect(both.out).toContain(`::error title=mirror::scan failed (exit 1) for ${SOURCE.builder}`);
+    expect(both.out).toContain(`::error title=mirror::scan failed (exit 1) for ${SOURCE.runtime}`);
+    expect(both.out).not.toContain(`for ${third}`);
+    // A passing source after a failing one is still scanned.
+    expect(both.calls.at(-1)).toBe(`scan ${third} HIGH,CRITICAL`);
+    // With nothing failing, nothing is annotated and the step passes.
+    const clean = scan(entries, []);
+    expect(clean.code, clean.out).toBe(0);
+    expect(clean.out).not.toContain("::error");
   });
 
   test("trivy_runs_share_one_cache_dir", () => {
@@ -176,6 +206,8 @@ describe("mirror scan per stage", () => {
     for (const [id, ignore] of [
       ["images", "/dev/null"],
       ["edge", "/dev/null"],
+      // P1.34m: the PR-time scan of a newly pinned runtime base keeps the mirror's runtime rule and ignore file.
+      ["pins", ".github/trivyignore.yaml"],
     ] as const) {
       const runs = (jobs[id]?.steps ?? []).map((step) => step.run ?? "").join("\n");
       expect(runs, id).toMatch(
