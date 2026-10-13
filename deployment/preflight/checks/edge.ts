@@ -197,8 +197,8 @@ const flatten = (directives: Directive[]): Directive[] =>
  * Why some site could get a certificate other than the env's own (tls) snippet gives it (P1.33t; architecture's
  * Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md). Every site but the image's health site
  * imports tls, and no tls directive in it comes from anywhere else; the (tls) served reads the same as the one the
- * env's own file defines (snippets/tls.caddy, or local/tls.caddy under local), whatever file defined it. This closes
- * Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
+ * env's own file defines (snippets/tls.caddy, or local/tls.caddy under local); a (tls) from any other file fails. This
+ * closes Caddy's internal CA, which refocus Amendment 1 forbids. The global options that would change the issuer
  * (local_certs, skip_install_trust, pki, auto_https) are already outside the reader's global allowlist.
  */
 function certificateProblems(

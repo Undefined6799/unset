@@ -2360,7 +2360,7 @@ secrets:
     );
     // Md (book edit 2026-10-13-p127l-verify-owners, item 3): the right Dockerfile, but a build C26 refuses (here its
     // context), counts for neither check.
-    const offContext = built.replace("      context: ..\n", "      context: ./images\n");
+    const offContext = "    build:\n      context: ./images\n      dockerfile: postgres.Dockerfile\n";
     expect(await lines(postgres(offContext))).toContain(
       "FAIL C27 postgres mounts the socket-directory tmpfs but is not built from deployment/images/postgres.Dockerfile",
     );

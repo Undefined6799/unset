@@ -413,10 +413,17 @@ describe("C18 certificates (P1.33t)", () => {
       reason: NO_TLS("http://127.0.0.1:8081"),
     });
     expect(
-      withExtra(null, (text) => text.replace("\trespond 404\n", "\troute {\n\t\treverse_proxy 127.0.0.1:9\n\t}\n")),
+      withExtra(null, (text) =>
+        text.replace("\trespond 404\n", "\trespond 404\n\troute {\n\t\treverse_proxy 127.0.0.1:9\n\t}\n"),
+      ),
     ).toMatchObject({
       pass: false,
       reason: NO_TLS("http://127.0.0.1:8081"),
+    });
+    // A tls added after the two respond lines: the block must be exactly the image's, not start like it.
+    expect(withExtra(null, (text) => text.replace("\trespond 404\n", "\trespond 404\n\ttls internal\n"))).toEqual({
+      pass: false,
+      reason: "http://127.0.0.1:8081: does not import tls; http://127.0.0.1:8081: has its own tls directive",
     });
     // An http:// site with a public name, and loopback sites with no scheme.
     expect(withExtra("http://www.unset.test {\n\trespond 204\n}\n")).toMatchObject({
@@ -465,8 +472,12 @@ describe("C18 certificates (P1.33t)", () => {
     unlinkSync(join(gone.edgeDir, "snippets", "tls.caddy"));
     writeFileSync(join(gone.edgeDir, "snippets", "z.caddy"), "(tls) {\n\ttls internal\n}\n");
     expect(zones(gone)).toEqual({ pass: false, reason: "the (tls) snippet served is not snippets/tls.caddy" });
-    // The same body under its own name passes: identity is by what Caddy reads, not by the file's name alone.
-    const same = repository();
-    expect(zones(same)).toEqual({ pass: true, reason: "ok" });
+    // The same ACME body in another file fails too: the env's own file must define the (tls) that is served.
+    const moved = repository();
+    const body = readFileSync(join(moved.edgeDir, "snippets", "tls.caddy"), "utf8");
+    writeFileSync(join(moved.edgeDir, "snippets", "tls.caddy"), body.replace("(tls) {", "(tls-acme) {"));
+    writeFileSync(join(moved.edgeDir, "snippets", "z.caddy"), body);
+    expect(zones(moved)).toEqual({ pass: false, reason: "the (tls) snippet served is not snippets/tls.caddy" });
+    expect(zones(repository())).toEqual({ pass: true, reason: "ok" });
   });
 });
