@@ -9,7 +9,7 @@
 //
 // The schema is @atproto/pds 0.5.37's (dist/account-manager/db/migrations/001-init.js:85-95); the database is
 // `account.sqlite` under PDS_DATA_DIRECTORY (dist/config/config.js:37), here /data/pds. The PDS keeps it in WAL mode
-// (dist/account-manager/db/index.js:33), and a read-only connection over a read-only mount opens only while the PDS
+// (dist/db/db.js:32-33, ensureWal), and a read-only connection over a read-only mount opens only while the PDS
 // holds it open: a stopped PDS leaves no -shm file, and SQLite then answers SQLITE_CANTOPEN (14), measured on the node
 // lock base. Never `immutable=1`, which could read stale pages while the PDS writes (the record, point 2).
 import { DatabaseSync } from "node:sqlite";
@@ -29,6 +29,8 @@ export const READER_REASONS = {
   usage: "usage: read.ts <did>",
   notDid: "the argument is not a DID",
   cannotOpen: "cannot open the PDS account database read-only: the local PDS must be running",
+  notDatabase: "the PDS account database is not a SQLite database",
+  unreadable: "the PDS account database could not be read",
   schema: `email_token is not the schema of ${PINNED}`,
   noToken: "no confirm_email token for this account",
   shape: `the token is not in the shape of ${PINNED}`,
@@ -36,6 +38,9 @@ export const READER_REASONS = {
 
 /** A refusal whose message is one of READER_REASONS, safe to print. */
 export class ReaderRefusal extends Error {}
+
+/** SQLite's primary result codes the open step names apart (sqlite.org/rescode.html); any other is `unreadable`. */
+const OPEN_REASONS: Record<number, string> = { 14: READER_REASONS.cannotOpen, 26: READER_REASONS.notDatabase };
 
 /** The account database, opened read-only; a missing file or a stopped PDS is refused, never created. */
 export function openAccountDb(path: string): DatabaseSync {
@@ -46,9 +51,11 @@ export function openAccountDb(path: string): DatabaseSync {
     // pds-email-token-read.image.test.ts): read the schema here so it is refused with the reason, not as a failure.
     db.prepare("SELECT count(*) FROM sqlite_schema").get();
     return db;
-  } catch {
+  } catch (error) {
     db?.close();
-    throw new ReaderRefusal(READER_REASONS.cannotOpen);
+    // node:sqlite puts the extended result code in `errcode`; its low byte is the primary code.
+    const code = ((error as { errcode?: unknown }).errcode as number | undefined) ?? -1;
+    throw new ReaderRefusal(OPEN_REASONS[code & 0xff] ?? READER_REASONS.unreadable);
   }
 }
 

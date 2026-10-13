@@ -2,7 +2,7 @@
 // volume. Each case builds an account database in a temporary folder with the schema of @atproto/pds 0.5.37
 // (dist/account-manager/db/migrations/001-init.js:85-95) and a token shaped as that release makes them
 // (dist/api/com/atproto/server/util.js:20-23, upper-cased by dist/account-manager/helpers/email-token.js).
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -69,6 +69,10 @@ describe("tests/support/pds-email-token-read.ts", () => {
     }
     expect(() => readConfirmToken(path, OTHER)).toThrow(new Error("no confirm_email token for this account"));
     writer.close();
+    // Only the confirm_email purpose: the same account's other tokens are never returned.
+    const other = accountDb([["reset_password", DID, TOKEN]]);
+    expect(() => readConfirmToken(other.path, DID)).toThrow(new Error("no confirm_email token for this account"));
+    other.writer.close();
   });
 
   test("email_token_reader_read_only", () => {
@@ -84,5 +88,9 @@ describe("tests/support/pds-email-token-read.ts", () => {
       new Error("cannot open the PDS account database read-only: the local PDS must be running"),
     );
     expect(existsSync(absent)).toBe(false);
+    // A file that is not a database is named as such, not as a stopped PDS.
+    const garbage = join(dir, "garbage.sqlite");
+    writeFileSync(garbage, "not a database, long enough to fill the SQLite header and more ".repeat(4));
+    expect(() => openAccountDb(garbage)).toThrow(new Error("the PDS account database is not a SQLite database"));
   });
 });
