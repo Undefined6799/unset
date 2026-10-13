@@ -7867,11 +7867,16 @@ P1.29t depends on it.
     ports (still on 127.0.0.1). The allowed differences are exactly: `name`; `env_file` paths; `image` replaced by
     `build`; the edge's per-file site mounts (item 12) and the leaf mount; the dev-root mount and `NODE_EXTRA_CA_CERTS`
     on pds and web only; and the local-name network aliases. Anything else fails with the key named. Until this step
-    lands, `local:up` does not exist.
+    lands, `local:up` does not exist. If P1.34v has landed first, the local file carries the PLC service, its database
+    wiring and its network, and the drift test proves they match (architecture's Amendment 2 of 2026-10-13-local-plc,
+    point 3).
 12. The local edge mounts each `sites/*.caddy` file and `local/app.caddy` read-only at
     `/etc/caddy/sites/enabled/<name>.caddy`, with no directory mount (book edit 2026-10-13-p134o-after-791, Amendment
-    1). A test runs the preflight on the real `compose.dev.yaml`; if the reader refuses dev's directory mount today, the
-    fix rides here.
+    1). C18 under local accepts exactly those per-file read-only site mounts and refuses a directory mount at
+    `sites/enabled`; today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77` refuses
+    file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged. (Book edit
+    2026-10-13-p127l-verify-owners, point 2: local-gaps Amendment 3 S2's C18 half, product, so SE-6 holds.) The reader's
+    fix for dev's directory mount is P1.34q's (point 1).
 13. A CI integration run: the local stack starts and the edge serves both names with the leaf. If a file mount on the
     read-only root fails, stop and report; never add a writable layer or a placeholder.
 
@@ -8158,8 +8163,8 @@ with one file mount per site under local.
 Tags: [SEC] trusted            Depends on: P1.34o
 Slice 1, issue #792, trusted base (`deployment/edge/` and its tests; the ASVS row rides under SE-6's docs rule), lane
 the third thread after #791; book edit 2026-10-13-p134o-after-791 (Amendment 1), from architecture's Amendment 3 of
-2026-10-13-p127l-local-gaps (S2, S3). Not paused: it closes a test gap in a sign-in-path guard. Nothing from Alex.
-P1.34d depends on it.
+2026-10-13-p127l-local-gaps (S2, S3). Not paused: it closes a test gap in a sign-in-path guard and fixes a hole on main
+(item 4). Nothing from Alex. P1.34d depends on it.
 
 **What:**
 1. S2, the reader: under local it takes a list of file mounts, not a sitesDir. The list is exactly every `sites/*.caddy`
@@ -8171,8 +8176,12 @@ P1.34d depends on it.
    the old-layout mutant); the "Why this works" citations pinned (Caddy v2.11.7 parse.go:445 and :455-468, Go 1.27.2
    match.go:320-336); the dead `shippedOf` helper removed; and the V13 configuration row in
    `docs/human/compliance/asvs-5-l2.md`, or the PR body says the Threats section names none.
+4. The dev sites mount (book edit 2026-10-13-p127l-verify-owners, point 1): under `--env dev`, the `./edge/sites` mount
+   at `compose.dev.yaml:136` (from P1.29a, #774) is refused today by `deployment/edge/caddyfile.ts:481` (from P1.28f,
+   #541) with "the enabled sites directory is not inside sites/". The fix is in the reader, which is trusted base, so it
+   is this step's under SE-6, and it is exempt from the pause.
 
-Done when each fixture fails without its fix (red first), dev's directory mount still passes, and check is green.
+Done when each fixture fails without its fix (red first), dev's directory mount passes, and check is green.
 
 ---
 
@@ -8194,7 +8203,20 @@ P1.33 letter ("t" for TLS) because P1.27, P1.28, P1.30 and P1.34 have none free.
 This closes Caddy's automatic internal CA for non-public names (Caddy v2.11.7 autohttps.go:318-332 and 749-778), whether
 or not `.localhost` counts as non-public there.
 
-Done when each refused form fails with a red fixture, the real dev config passes, and check is green.
+**The image's health site** (architecture's Amendment 5 of 2026-10-13-p127l-local-gaps, from Codex on #800):
+`deployment/edge/Caddyfile:48-53` serves `http://127.0.0.1:8081` with `bind 127.0.0.1`, `respond /health 200` and
+`respond 404`. C18 exempts exactly that block: the address is exactly `http://127.0.0.1:8081`, it sits in the image's
+Caddyfile (not in any `sites/` or `local/` file), it holds exactly the bind and the two respond lines, and it has no
+reverse_proxy, upstream import or tls. Red fixtures: the same block in a sites file, another loopback port,
+`bind 0.0.0.0`, an added reverse_proxy, and an `http://` site with a public name.
+
+**Two surviving #789 mutants** (book edit 2026-10-13-p127l-verify-owners, point 3):
+- Md: C25 and C27 run "after C26 passes" (`deployment/preflight` `build.ts:119`). A fixture where C26 fails while the
+  path is fine asserts that C25 and C27 are not run or not credited.
+- Mj: C15's own `.localhost` check on `PDS_HOSTNAME` (`settings.ts:56`) gets a direct fixture, not one reached only
+  through L2.
+
+Done when each refused form fails with a red fixture, the real dev and local configs pass, and check is green.
 
 ---
 
@@ -8227,12 +8249,19 @@ Done when the existing role and grant tests cover the new role, red first, and c
 
 ### P1.34v — Run a local PLC directory in the dev stack
 Tags: [SEC] [ALEX]            Depends on: P1.34u, Alex's card
-Slice 1, issue #782, product (`deployment/compose.dev.yaml`, `networks.dev.json`, the image lock, the PDS env), lane the
-third thread; book edit 2026-10-13-local-plc-steps.
+Slice 1, issue #782, product (`deployment/compose.dev.yaml` and `compose.local.yaml`, `networks.dev.json`, the image
+lock, the PDS env, `deployment/env/dev-public.example.env`), lane the third thread; book edit
+2026-10-13-local-plc-steps, with architecture's Amendment 2 of 2026-10-13-local-plc (points 2, 3 and 5).
 
 **What:**
-- The PLC service sits on an internal network shared only with the PDS (and tap, if tap resolves DIDs), with no host
-  port. `PDS_DID_PLC_URL` is its internal URL, and P1.34t's allowance names that exact URL.
+- The PLC service sits on an `internal: true` network with no host port. Its members are exactly the PLC and every
+  service P1.34z points at it: pds, web, appview, and tap if tap resolves DIDs. No other service joins it, and C17's
+  network table lists exactly those members. Red fixture: any other service on the PLC network.
+- `PDS_DID_PLC_URL` is its internal URL, and P1.34t's allowance names that exact URL. The URL goes into
+  `dev-public.example.env` too, the tailnet dev stack's template.
+- This step owns the PLC in both compose files. If P1.34d has landed, it adds the service, database wiring and network
+  to `compose.local.yaml` as well, and the local PDS env names the same internal URL; if this step lands first, P1.34d's
+  local file carries them. The drift test proves the two match.
 - The image, by Alex's card (the coordinator asks; recommended: the upstream image, dev only): either the upstream
   did-method-plc image pinned by digest, with a `devOnly: true` lock entry, pre-merge scan and age evidence, and the
   dev-only test keeping it out of non-dev compose files; or a build from pinned upstream source on our node base.
@@ -12499,9 +12528,12 @@ copies cover logins.
 is the private names and dev-root certificates, the re-run tailnet probe and the C-checks; every public gate and its
 evidence lives here.
 - The edge obtains its Let's Encrypt certificate (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
-- `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no
-  bypass key or IPs), public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit);
-  the provider is set up before P1.34 — Notes, SMTP provider.
+- The public stack is a prod stack (architecture's Amendment 2 of 2026-10-13-local-plc, point 1): it runs as
+  `--env prod` with its own prod env, prod hostnames, the prod env template and every prod check (C23, C11 and C19 as
+  for prod). A dev stack is never opened, and `dev-public.env` is not part of this step's checks: it stays the tailnet
+  dev stack's env (P1.34). The prod env keeps P1.29's policy (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate
+  limits off with edge limits on, no bypass key or IPs), with public edge ports. Mail: real SMTP from the start (no
+  Mailpit, book edit 2026-10-07-no-mailpit); the provider is set up before P1.34 — Notes, SMTP provider.
 - **Probe (P1b-A2 default, provisional):** a separate **public** repo `unset-probe` containing only a scheduled
   workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
   are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
@@ -12517,8 +12549,8 @@ evidence lives here.
   outage. Runs that did not execute (GitHub schedule delays) are counted separately as "probe gap", never as up or
   down: each run writes its timestamp to a workflow artefact, and a weekly job reports gaps over 45 minutes and the
   measured availability. Nothing about outages is written to public issues.
-- Threats: E the PDS admin API or a debug setting exposed → P1.30's checks with `dev-public.env`, and the outside
-  probe tries admin (`dev_public_env_matches_policy`, `probe_checks_present`); S a substituted repository served under
+- Threats: E the PDS admin API or a debug setting exposed → P1.30's prod checks on the prod env, and the outside
+  probe tries admin (`prod_env_matches_policy`, `probe_checks_present`); S a substituted repository served under
   our name → the probe verifies `sync.getRecord` proofs (`probe_proof_verification_fails_on_wrong_key`); D probe gaps
   never counted as up (`probe_gap_not_counted_as_up`).
 - P1.29h's reader (book edit 2026-10-13-p129h-book-lines, Amendment 1): a check refuses the `tools` profile and the
@@ -12527,7 +12559,9 @@ evidence lives here.
   dev and local for good, and neither ever switches. This step adds the prod arm to P1.34t's check: under `--env prod`,
   `PDS_DID_PLC_URL` must be exactly `https://plc.directory`, and the check fails until the P1.33a retirement report and
   the recovery-key evidence the preflight already reads are both present. P1.34t's red fixtures stay unchanged, and one
-  added fixture shows the public URL is still refused under dev and local.
+  added fixture shows the public URL is still refused under dev and local. There is no gated dev-to-public transition
+  (Amendment 2, point 1): a fixture shows `dev-public.env` with `https://plc.directory` still fails under dev after
+  this step.
 - Edge cases:
   - Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
     the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
@@ -12536,7 +12570,7 @@ evidence lives here.
   - ISP blocks inbound 443 → as CGNAT. Blocks only 80 → fine (TLS-ALPN-01).
   - Probe repo's schedule stops (GitHub disables schedules in repos without activity for 60 days) → the weekly gap
     report notices; the runbook says to re-enable it.
-- Done when (tests): `dev_public_env_matches_policy` (reuses P1.30's checks); `probe_checks_present` (health,
+- Done when (tests): `prod_env_matches_policy` (reuses P1.30's prod checks); `probe_checks_present` (health,
   sync.getRecord with proof, admin, TLS); `probe_proof_verification_fails_on_wrong_key` (fixture CAR signed by another
   key); `probe_gap_not_counted_as_up`; the outside probe green.
 
@@ -12743,18 +12777,20 @@ grant at the next refresh, P1.31). Hence the requirements below.
   by deleting the volume. Phase 2's P2.25 wipe script must refuse while the authority is hosted here (recorded in
   Notes for the Phase 2 file).
 
-**Where:** `deployment/env/local.example.env` (committed placeholders; the live files sit in `unset-dev-env/`, P1.27u
-amendment 4); `deployment/edge/sites/pds.caddy` enabled in dev; `deployment/backup/dev-pds.sh`;
+**Where:** `deployment/env/dev-public.example.env` (committed placeholders, no secrets: "public" means only that; this
+step sets the tailnet hostnames in it and P1.34v the internal PLC URL; the live files sit in `unset-dev-env/`, P1.27u
+amendment 4; `local.example.env` stays the laptop-only template; architecture's Amendment 2 of 2026-10-13-local-plc,
+point 5); `deployment/edge/sites/pds.caddy` enabled in dev; `deployment/backup/dev-pds.sh`;
 `deployment/backup/restore-test.sh`; `docs/human/runbooks/{dev-pds-on-login-path.md, secrets-bundle.md,
-dev-pds-admin-custody.md}`; `docs/human/domains.md` updated. The dev-public env, `deployment/ddns/` and the probe are
-P1.33p's.
+dev-pds-admin-custody.md}`; `docs/human/domains.md` updated. `deployment/ddns/`, the probe and the public stack's prod
+env are P1.33p's.
 
 **Size:** ~200 lines of config, scripts and workflow, ~220 lines of runbooks, ~150 test lines.
 
 **Goal:** `unset.ac` is owned and locked down, and the dev PDS on the home server is reachable on the tailnet only,
 through the edge, under non-public names with dev-root certificates, invite-only, with its admin surface
 unreachable, a recovery key set, no client address stored or logged, and backed up with a passing restore test.
-Every public gate and its evidence (the public env, the Let's Encrypt certificate, the outside probe and its tests)
+Every public gate and its evidence (the prod env, the Let's Encrypt certificate, the outside probe and its tests)
 is P1.33p's (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5).
 
 **Checklist (Alex):**
@@ -12777,7 +12813,8 @@ D. Dev PDS fit for the authority
  9. (Moved to P1.33p: the public A record or DDNS updater; G-1.)
 10. (Merged into step 11; book edit 2026-10-12-p130a-p130l-compose-inputs-booked.)
 11. Run P1.27w's wrapper with `compose.dev.yaml` and
-    `--interpolation-env <absolute path of the tailnet env file in unset-dev-env/>` (`dev-public.env` is P1.33p's),
+    `--interpolation-env <absolute path of unset-dev-env/dev-public.env>` (the tailnet dev stack's env; Amendment 2,
+    point 5, of 2026-10-13-local-plc),
     the env folder beside the checkout (0700;
     file 0600, owned by the deploy user). The flag is required (P1.34f
     amendment 1). It runs the preflight (P1.30, all PASS), stops on any failure, then runs
@@ -12791,8 +12828,9 @@ D. Dev PDS fit for the authority
 ```
 
 **Agent prepares and verifies:**
-- `dev-public.env` and the outside probe moved to P1.33p (book edit 2026-10-13-batch-47-after-771, Amendment 1,
-  finding 5).
+- The outside probe moved to P1.33p (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5). `dev-public.env`
+  stays here as the tailnet dev stack's env, with the tailnet hostnames; the public stack is a prod stack with its own
+  env (architecture's Amendment 2 of 2026-10-13-local-plc, points 1 and 5).
 - `pds.env` gains the SMTP names on deployed dev (C11 and C19 require them there); the values come with the SMTP card
   before P1.34 (book edit 2026-10-13-p134n-p129a-follow-up, from Codex's #774 P1).
 - Hairpin: the stack reaches its own hosts through P1.29a's edge network aliases for `APP_HOST` and `PDS_HOST`, not
