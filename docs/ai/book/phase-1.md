@@ -8560,6 +8560,12 @@ Slice 1, issue (pending), product (`deployment/preflight/`), lane the third thre
 the tap is enough; if the build finds it must touch one, it stops and asks for his typed line. It can start now: the
 preflight parses `--env` itself (`inputs.ts:138`), so it does not wait on P1.34z.
 
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- the local-only loosening reaching dev or prod: `c11_required_dev`, `c19_required_dev`, `c11_required_prod`,
+  `c19_required_prod`, and an unknown or missing `--env` refused before any check (below);
+- local half-configuring mail: `local_any_smtp_key_refused`;
+- confirmation tokens in logs: P1.29a's existing `pds_mail_unset_only_with_logging_off`.
+
 **Where:** `deployment/preflight/checks/pds.ts` (C11), `deployment/preflight/checks/settings.ts` (C19), the local
 stage's check list (P1.27l), `deployment/preflight/preflight.test.ts`.
 
@@ -8579,9 +8585,10 @@ adapter's step when P3.00 names it.
 
 Size: ~40 source lines, ~120 test lines.
 
-Done when, red first: `c11_required_dev`, `c19_required_dev`, `c11_required_prod` and `c19_required_prod` (each
-refused with the variable unset); `local_without_mail_passes`; `local_any_smtp_key_refused` (one case per key); and
-`unknown_env_takes_strict_path` (an unknown or unset `--env` runs C11 and C19) pass, and check is green.
+Done when, red first: `c11_required_dev`, `c19_required_dev`, `c11_required_prod` and `c19_required_prod` (each refused
+with the variable unset); `local_without_mail_passes`; `local_any_smtp_key_refused` (one case per key); and
+`unknown_env_refused_before_checks` (an unknown or missing `--env` exits with `CannotRun`, code 2, in `parseCli` before
+any check runs, so it can never take local's path; `inputs.ts:155`) pass, and check is green.
 
 ---
 
@@ -8593,6 +8600,12 @@ steps, P1.33s); book edit 2026-10-13-pds-0.4.5037-findings, architecture's rulin
 mapping. Authority: Alex's tap "Accept for now" at 2026-10-14T20:34:16Z on the card "Accept the PDS image's 30 known
 security issues while it runs only on your machine?" (#774's pin is kept). It needs his typed line "yes PDS exceptions
 .github/trivyignore.pds.yaml .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci".
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- an exception silencing a finding in our own images: `pds_ignorefile_wired_to_pds_scan_only`,
+  `shared_ignorefile_never_names_pds`;
+- an exception outliving its acceptance: `pds_ignorefile_max_30_days` and the `expired_at` on every entry;
+- the accepted image leaving the local stack: P1.33e.
 
 **What:**
 - A new `.github/trivyignore.pds.yaml`, passed (`--ignorefile`) only to the scan of `ghcr.io/bluesky-social/pds` in
@@ -8621,6 +8634,9 @@ Slice 1, issue #833, product (`deployment/preflight`), lane the third thread; bo
 2026-10-13-pds-0.4.5037-findings, architecture's ruling of 2026-10-14 20:40Z and its step-book mapping. It only reads
 the file, so it lands as soon as P1.33c does, never waiting for the re-pin. The ruling let this ride P1.34 or P1.33d;
 P1.34 is an [ALEX] step with no code and P1.33d is check class, so it is its own product step.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the accepted PDS
+image running on dev or prod while exceptions remain, answered by the tests below.
 
 **What:** a dev and prod preflight check: under `--env dev` or `prod` the preflight refuses to start while
 `.github/trivyignore.pds.yaml` has any entry; `--env local` ignores the file. So the accepted image never reaches the
@@ -13007,6 +13023,9 @@ Slice 2, issue #832, check path (`.github/trivyignore.pds.yaml`, `scripts/ci`), 
 the re-pin to a PDS release newer than 0.4.5037 (a Renovate PR or a lane PR on `images.lock`, product, merged first so
 the scan stays green). With no upstream fix it cannot be built, and P1.34 waits for Alex's choice (patch or wait). It
 needs his typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): an accepted
+finding carried past the re-pin, answered by `pds_ignorefile_empty` and a new card for any finding that remains.
 
 **What:** delete every entry of `.github/trivyignore.pds.yaml` and add `pds_ignorefile_empty`. Any finding the new image
 still reports goes back to Alex as a card; nothing is carried over.
