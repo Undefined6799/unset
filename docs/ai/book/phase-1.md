@@ -8100,6 +8100,8 @@ Done when the red tests fail on main and pass with the change, and check is gree
 
 ### P1.33x — Check the local leaf names and expiry
 Tags: [SEC]            Depends on: P1.33w (same files; avoids conflicts)
+As built: #869 at 8e3a8f2, merged as 116b8dc. verify-869's S1 and S2 were not on it; they ride P1.33y (#876) (book edit
+2026-10-14-verify-868-fixes, "Correction (23:55Z)").
 Slice 1, issue #854, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
 2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
