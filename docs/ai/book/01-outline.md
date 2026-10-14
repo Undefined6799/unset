@@ -1978,7 +1978,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
 - **P1.33m:** a typed line, "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
-- **P1.33f:** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
+- **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
 - **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
   LEAF_SHARED".
 - **P1.33s (#835):** a typed line, "yes P1.33s .github/workflows exported-filesystem secret scan in images.yml".

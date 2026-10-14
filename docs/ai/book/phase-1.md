@@ -8521,7 +8521,7 @@ edited, nothing else is in the PR, the PR body lists every line that is not a mo
 
 ### P1.33f — Anchor the depcruise exclude to our outputs
 Tags: [SEC] [ALEX] (typed line)            Depends on: —
-Slice 1, issue (pending), check path (`scripts/lint/.dependency-cruiser.cjs` and its tests), kind/build, lane Cursor
+Slice 1, issue #846, check path (`scripts/lint/.dependency-cruiser.cjs` and its tests), kind/build, lane Cursor
 (Alex's 20:24:47Z choice); book edit 2026-10-14-verify-829-host-pin-leaf, architecture on verify-840-7e8bbba S2 and the
 step-book mapping after it. The exclude at `.dependency-cruiser.cjs:357-358`, `(^|/)(dist|coverage|…)/`, also matches
 resolved npm paths such as `node_modules/yaml/dist/…`, so those edges drop out of the graph and no boundary row ever
