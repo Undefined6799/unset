@@ -2688,6 +2688,11 @@ section, so `scripts/workspace/codeowners.test.ts` gains two cases. N1: the `ini
 `init/` line; today moving it to the end of the section stays green. N2: a later line for the same path with a
 different owner is refused; that case also stays green today.
 
+Also (P1.33o's item 7, re-homed: book edit 2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6 and
+7"; verify-842-e4f6e94 S2): `/shared/host-pin/ @Undefined6799` joins CODEOWNERS' security-review list, in the Supply
+chain block near `/deployment/`, because the preflight imports it (verify-840-7e8bbba S4). It does not join the
+trusted-base section: the preflight itself is product under `/deployment/`. The codeowners test pins the line.
+
 Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y
 .github/CODEOWNERS scripts/guards scripts/workspace" (book edit 2026-10-14-verify-843-notes; it replaces "yes P0.09y
 migration guard", which Alex had not typed), relayed by id to that lane. Without his line, P4.07 waits; nothing is

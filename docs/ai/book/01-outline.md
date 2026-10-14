@@ -420,7 +420,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
 | P1.33f | Anchor the depcruise exclude to our outputs (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
-| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h, P1.33f | `phase-1.md` |
+| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h | `phase-1.md` |
 | P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
 | P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
@@ -1065,7 +1065,6 @@ flowchart TD
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33o
-  P1_33f --> P1_33o
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_33k --> P1_34d
@@ -1999,16 +1998,15 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.27r (#347):** his typed words allowing the guard-file edit, then his ruleset setting adding `scan`; deferred
   until after launch.
 - **P1.27s (#184):** a typed line, "yes P1.27s packages: write .github/workflows/publish-images.yml
-  .github/workflows/mirror.yml scripts/guards/workflows.ts scripts/ci .github/CODEOWNERS deployment/sigstore", and the
-  `signing` environment (branch rule and reviewer). Signing is keyless (ADR 0023, "Keyless", 2026-10-14T21:16:36Z), so
-  there is no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers").
+  .github/workflows/mirror.yml .github/workflows/sigstore-root.yml scripts/guards/workflows.ts scripts/ci
+  .github/CODEOWNERS deployment/sigstore" (it replaces the earlier line), and the `signing` environment (branch rule
+  and reviewer). Signing is keyless (ADR 0023, written by P1.27s and accepted when Alex merges it; Alex's "Keyless",
+  2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?"), so there is
+  no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers").
 - **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
   .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
-- **P1.33m:** a typed line, "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
 - **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
-- **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
-  LEAF_SHARED".
 - **P1.33u (#848):** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
   scan gate".
 - **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy

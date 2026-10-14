@@ -3995,7 +3995,9 @@ Diagram: see the three sequence diagrams at the top of this file.
 ### P2.26e — Commit the Sigstore trusted root
 Tags: [SEC] trusted            Depends on: P1.27s
 Pulled forward (Q3 B), issue #844, trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
-edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. Order: right after
+edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. It exists because of
+Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you
+keep?" (ADR 0023, written by P1.27s; accepted when Alex merges it). Order: right after
 P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
@@ -4003,11 +4005,14 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
   root version and the file's sha256;
 - trust material fetched at deploy time: the preflight reads only this committed file (P2.26b).
 
-Where: `deployment/sigstore/trusted_root.json` and its test.
+Where: `deployment/sigstore/trusted_root.json` and its test, `deployment/sigstore/trusted_root.test.ts`.
 
-**What:** the file is fetched once through Sigstore's TUF client in a CI job, from the Sigstore public-good root. The PR
-body shows the TUF root version and the file's sha256. Later refreshes are reviewed PRs. Nothing from Alex beyond the
-existing gates.
+**What:** the file comes from a manual run of P1.27s's `sigstore-root.yml`, which fetches it through Sigstore's pinned
+TUF client from the Sigstore public-good root and uploads it as a run artifact (architecture on verify-842-e4f6e94 S5,
+last two sections of book edit 2026-10-13-verify-819-fixes). Order: P1.27s, then that run, then this step. The PR body
+cites the run id, the TUF root version and the file's sha256; the verifier fetches the root independently through the
+same pinned TUF client and confirms the sha256 matches before calling the PR safe. Later refreshes repeat the run plus
+a trusted PR. Nothing from Alex beyond the existing gates.
 
 Size: one data file and about 40 test lines.
 
@@ -4029,7 +4034,9 @@ Where:
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
 - the first `deployment/images.lock.json`, every entry with `"verify": "cosign-keyless"`; there is no `cosign.pub`
-  (ADR 0023; book edit 2026-10-13-verify-819-fixes, the keyless mapping);
+  (ADR 0023, written by P1.27s and accepted when Alex merges it, from Alex's "Keyless", 2026-10-14T21:16:36Z, on
+  "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book edit 2026-10-13-verify-819-fixes,
+  the keyless mapping);
 - the preflight (`deployment/preflight/checks/images.ts`, `types.ts`): `cosignKeyPath` becomes the trusted-root path
   (`deployment/sigstore/trusted_root.json`, P2.26e), and C3 and C4 verify keyless, offline, with the identity per
   workflow (P1.27s);
@@ -4038,7 +4045,12 @@ Where:
   mismatch. The preflight runs on the deploy host with Node, so the deploy runbook's install step matches the
   constants; bumping cosign is a reviewed PR that changes them;
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
-- the preflight real-file test in `deployment/preflight/`.
+- the preflight real-file test in `deployment/preflight/`;
+- the leftover key path (verify-842-e4f6e94 N8): `deployment/preflight/inputs.ts:344`, where `cosignKeyPath` is set to
+  `deployment/cosign.pub`, and the `cosign.pub` fixtures at `preflight.test.ts:177`, `:2157` and `:2207`.
+
+Its trusted-root fixtures live outside `deployment/sigstore/` (trusted base); a product PR touching that folder fails
+isolation (verify-842-e4f6e94 N9).
 
 `base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json` at
 the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only with
