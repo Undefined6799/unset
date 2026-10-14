@@ -2612,6 +2612,32 @@ finds them drifting.
 Done when each test has a planted failing fixture (an unknown id, a three-step cycle, a heading whose dependency differs
 from its row), all three pass on main as it stands when built, and check is green. Any real drift
 found on main goes in the same PR's record as a P0.09 book fix, never as an allowlist entry.
+As built: #847, merged as 8dda293. Its 17 direct alignments of outline rows and headings are written up and accepted in
+book edit 2026-10-14-verify-847-outline-fixes, S1.
+
+---
+
+### P0.09z — Pin the outline check's comparisons
+Tags: [ALEX] (typed line)            Depends on: P0.09w (merged), P2.26f
+Check class (`scripts/docs/outline.ts` and `scripts/docs/docs.test.ts`), kind/build; issue #858; lane routed by the
+coordinator; book edit 2026-10-14-verify-847-outline-fixes, from verify-847-afbc77f S2-S4 and N2. It depends on the
+P2.26f rename (batch 55): without it, item 3 would refuse the book. It needs Alex's typed line "yes P0.09z scripts/docs
+outline check equality ids".
+
+**What:**
+1. S2: the heading comparison is set equality in both directions. Red fixtures: the heading names an extra id, the row
+   names an extra id, and both share some ids.
+2. S3: red tests for the four untested refusals: a duplicate row (`outline.ts:97`), a duplicate heading (`:206`), a
+   heading with no row (`:212`), and a heading with no Depends line (`:216`).
+3. S4: one id pattern, `^P[0-6]\.\d{2}[a-z]?$`, used at `outline.ts:12`, `:38` and `:77`. A token that looks like an id
+   but fails the pattern is refused, never skipped. Red fixtures: `P0.090`, `P7.01` and `P1.23rr`.
+4. N2: a row with no heading is reported, and launch-gate headings and en-dash headings are read, each with a red
+   fixture. If N2 surfaces book drift, the step stops and reports it; the fixes go to a book batch first.
+
+Size: about 60 source lines and 200 test lines.
+
+Done when every red fixture fails before the change and passes after it, the check passes on the current book, and
+check is green.
 
 ---
 
@@ -2637,12 +2663,13 @@ Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `tr
 
 ### P0.09y — Guard the legal-hold tables in migrations
 Tags: [ALEX] (typed line)            Depends on: P4.07c            Plan: rule SE-6
-Check class (`scripts/guards/`, `.github/CODEOWNERS`), kind/build; issue #826; book edit
-2026-10-13-codex-813-close-expired-hold, architecture amendment 3 of 2026-10-14 00:03Z and its step-book mapping, from
-the verifier of #824 (verify-824-414343c, "Observation for architecture"). Product migrations run as migrator, and
-P0.09c treats DML as neutral, so a product migration could copy the cleanup key somewhere `web` can read, delete the
-sealed transmission and fingerprint rows directly, or rewrite audit rows; review is the only barrier. That is acceptable
-while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a tightening.
+Check class (`scripts/guards/`, `.github/CODEOWNERS`, `scripts/workspace/codeowners.test.ts`), kind/build; issue #826;
+book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment 3 of 2026-10-14 00:03Z and its step-book
+mapping, from the verifier of #824 (verify-824-414343c, "Observation for architecture"). Product migrations run as
+migrator, and P0.09c treats DML as neutral, so a product migration could copy the cleanup key somewhere `web` can read,
+delete the sealed transmission and fingerprint rows directly, or rewrite audit rows; review is the only barrier. That is
+acceptable while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a
+tightening.
 
 **Deferred (2026-10-14).** This step's design is under architecture review after verify-824-e2d6dbd.md (G1: dynamic
 SQL and built-ins that run query strings; G2 and G3: tables the list's rule covers but the list omitted). Its goal
@@ -2656,8 +2683,20 @@ first, P4.07c would name guarded tables and stop being product; after P4.07c the
 the first step that opens a hold (P4.07 depends on it), and before any key is provisioned on a stack. Its outline row
 therefore sits in Phase 4, below P4.07c.
 
-Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y migration
-guard", relayed by id to that lane. Without his line, P4.07 waits; nothing is reworded around the guard.
+Also (verify-843-10ab68c N1 and N2; book edit 2026-10-14-verify-843-notes): this step already edits CODEOWNERS' last
+section, so `scripts/workspace/codeowners.test.ts` gains two cases. N1: the `init-local/` line is pinned beside the
+`init/` line; today moving it to the end of the section stays green. N2: a later line for the same path with a
+different owner is refused; that case also stays green today.
+
+Also (P1.33o's item 7, re-homed: book edit 2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6 and
+7"; verify-842-e4f6e94 S2): `/shared/host-pin/ @Undefined6799` joins CODEOWNERS' security-review list, in the Supply
+chain block near `/deployment/`, because the preflight imports it (verify-840-7e8bbba S4). It does not join the
+trusted-base section: the preflight itself is product under `/deployment/`. The codeowners test pins the line.
+
+Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y
+.github/CODEOWNERS scripts/guards scripts/workspace" (book edit 2026-10-14-verify-843-notes; it replaces "yes P0.09y
+migration guard", which Alex had not typed), relayed by id to that lane. Without his line, P4.07 waits; nothing is
+reworded around the guard.
 
 ---
 

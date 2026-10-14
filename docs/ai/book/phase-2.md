@@ -3995,7 +3995,9 @@ Diagram: see the three sequence diagrams at the top of this file.
 ### P2.26e — Commit the Sigstore trusted root
 Tags: [SEC] trusted            Depends on: P1.27s
 Pulled forward (Q3 B), issue #844, trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
-edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. Order: right after
+edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. It exists because of
+Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you
+keep?" (ADR 0023, written by P1.27s; accepted when Alex merges it). Order: right after
 P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
@@ -4003,11 +4005,14 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
   root version and the file's sha256;
 - trust material fetched at deploy time: the preflight reads only this committed file (P2.26b).
 
-Where: `deployment/sigstore/trusted_root.json` and its test.
+Where: `deployment/sigstore/trusted_root.json` and its test, `deployment/sigstore/trusted_root.test.ts`.
 
-**What:** the file is fetched once through Sigstore's TUF client in a CI job, from the Sigstore public-good root. The PR
-body shows the TUF root version and the file's sha256. Later refreshes are reviewed PRs. Nothing from Alex beyond the
-existing gates.
+**What:** the file comes from a manual run of P1.27s's `sigstore-root.yml`, which fetches it through Sigstore's pinned
+TUF client from the Sigstore public-good root and uploads it as a run artifact (architecture on verify-842-e4f6e94 S5,
+last two sections of book edit 2026-10-13-verify-819-fixes). Order: P1.27s, then that run, then this step. The PR body
+cites the run id, the TUF root version and the file's sha256; the verifier fetches the root independently through the
+same pinned TUF client and confirms the sha256 matches before calling the PR safe. Later refreshes repeat the run plus
+a trusted PR. Nothing from Alex beyond the existing gates.
 
 Size: one data file and about 40 test lines.
 
@@ -4029,7 +4034,9 @@ Where:
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
 - the first `deployment/images.lock.json`, every entry with `"verify": "cosign-keyless"`; there is no `cosign.pub`
-  (ADR 0023; book edit 2026-10-13-verify-819-fixes, the keyless mapping);
+  (ADR 0023, written by P1.27s and accepted when Alex merges it, from Alex's "Keyless", 2026-10-14T21:16:36Z, on
+  "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book edit 2026-10-13-verify-819-fixes,
+  the keyless mapping);
 - the preflight (`deployment/preflight/checks/images.ts`, `types.ts`): `cosignKeyPath` becomes the trusted-root path
   (`deployment/sigstore/trusted_root.json`, P2.26e), and C3 and C4 verify keyless, offline, with the identity per
   workflow (P1.27s);
@@ -4038,7 +4045,12 @@ Where:
   mismatch. The preflight runs on the deploy host with Node, so the deploy runbook's install step matches the
   constants; bumping cosign is a reviewed PR that changes them;
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
-- the preflight real-file test in `deployment/preflight/`.
+- the preflight real-file test in `deployment/preflight/`;
+- the leftover key path (verify-842-e4f6e94 N8): `deployment/preflight/inputs.ts:344`, where `cosignKeyPath` is set to
+  `deployment/cosign.pub`, and the `cosign.pub` fixtures at `preflight.test.ts:177`, `:2157` and `:2207`.
+
+Its trusted-root fixtures live outside `deployment/sigstore/` (trusted base); a product PR touching that folder fails
+isolation (verify-842-e4f6e94 N9).
 
 `base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json` at
 the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only with
@@ -4104,11 +4116,11 @@ Done when, red first, `mirror_entry_refuses_upstream_spelling` shows the upstrea
 
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
 `scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
-`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26aq** holds that
+`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26f** holds that
 test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`
