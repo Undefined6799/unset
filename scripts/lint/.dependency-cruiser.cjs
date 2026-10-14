@@ -52,7 +52,7 @@ const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|t
 const { TOOLING_PATTERN } = require("./tooling.ts");
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
-const LEAF_SHARED = "^shared/(ui|ui-build|lexicons|admin-envelope)/";
+const LEAF_SHARED = "^shared/(ui|ui-build|lexicons|admin-envelope|host-pin)/";
 // A module under infrastructure/ or shared/ and the one file others may import from it (rule DC-2).
 const WORKSPACE_WITH_INDEX = "(?:infrastructure|shared)/[^/]+/";
 const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
@@ -127,6 +127,11 @@ const MATRIX = [
     to: [{ path: "^shared/ui-build/" }, { path: "^shared/ui/index\\.ts$", dependencyTypes: ["type-only"] }, NPM],
   },
   { name: "shared-admin-envelope", from: { path: "^(shared/admin-envelope/)" }, to: [{ path: "^$1" }, CORE] },
+  // shared/host-pin (P1.33o): a leaf, the same shape as shared-admin-envelope. Only its own files and Node
+  // built-ins. No npm package and no other shared module. A *.test.ts stays on the tooling row, so its vitest
+  // import is not this row. dependency-cruiser 18.5.0 substitutes $1 from the from path (doc/rules-reference.md,
+  // group matching) and matches `path` as a regular expression.
+  { name: "shared-host-pin", from: { path: "^(shared/host-pin/)" }, to: [{ path: "^$1" }, CORE] },
   // The deploy preflight (P1.30; architecture record 2026-10-07-p130-preflight-location-and-yaml): product code under
   // deployment/, a leaf that reaches only itself, Node built-ins and the yaml parser. It runs verify-images as a
   // child process, never by import, so no edge to scripts/. Outside itself it may import two files: the edge reader
