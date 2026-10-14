@@ -7938,6 +7938,10 @@ P1.29t depends on it.
 13. A CI integration run: the local stack starts and the edge serves both names with the leaf. If a file mount on the
     read-only root fails, stop and report; never add a writable layer or a placeholder. If the run needs a `.github/`
     change, that change is its own check step (P1.34d's check part, first), and it needs Alex's typed line.
+14. Mail-off logging on local: the pds_mail_unset_only_with_logging_off assertion (compose.dev.test.ts:466) also runs on
+    compose.local.yaml's pds service, red first with LOG_LEVEL=debug in a fixture; the drift test does not compare
+    environment, and local's preflight no longer checks this rule since P1.33b refuses mail there (verify-836-7f7582a
+    N1).
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
