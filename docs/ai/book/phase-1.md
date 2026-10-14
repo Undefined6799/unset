@@ -8038,6 +8038,19 @@ judges the public, cert-only copy `unset-dev-env/local-leaf.pem`, written by the
 never reads the secret. The SAN, IP SAN, 14-day expiry and `APP_HOST` checks run on the copy. A missing or unreadable
 copy fails with `input missing: unset-dev-env/local-leaf.pem`; red fixture: copy absent.
 
+Also (verify-851-cabc9e3 on P1.33k, #851; last section of book edit 2026-10-14-p134d-split), all product in
+`deployment/preflight/`:
+- S1: three red fixtures in the token-reader preflight test, so the three surviving mutants die: the reader with a
+  wrong digest; the reader as `ref@digest` with no tag; and a different `*-reader` service (`token-reader`, profiles
+  `[tools]`, `network_mode: none`). This mirrors the dev twin at `compose.dev.test.ts:125`.
+- N1 and N3, in a separate refactor commit with no behaviour change: bring `checks/images.ts:90` back under Biome's
+  cognitive-complexity limit (19 against a maximum of 15) by extracting a helper, and define `TOKEN_READER` once and
+  import it at the other two sites.
+- N2 is noted only: local C2 picks the node entry from `bases.lock.json` and dev from `images.lock.json` on purpose
+  until P2.26b brings the images lock.
+
+This adds about 20 source lines and 60 test lines.
+
 Done when each fixture fails on main for its own reason and passes with the change, and check is green.
 
 ---
