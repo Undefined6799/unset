@@ -137,12 +137,13 @@ describe("list dockerfiles", () => {
     expect(built).toMatch(/image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "\$IGNOREFILE"/);
     expect(built.includes(GH_OPEN)).toBe(false);
     const scan = wf.jobs.scan;
-    expect(scan?.needs).toEqual(["discover", "scan-image"]);
+    expect(scan?.needs).toEqual(["discover", "scan-image", "scan-export"]);
     expect(scan?.if).toContain("always()");
     expect(scan?.if).toContain("github.event.pull_request.draft == false");
     const gate = (scan?.steps ?? []).map((step) => step.run ?? "").join("\n");
     expect(gate).toContain('"$DISCOVER" != success');
     expect(gate).toContain('"$SCAN_RESULT" != success');
+    expect(gate).toContain('"$EXPORT_RESULT" != success');
     expect(gate.includes(GH_OPEN)).toBe(false);
   });
 });
