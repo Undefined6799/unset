@@ -143,6 +143,33 @@ ALTER TABLE app.x ENABLE ROW LEVEL SECURITY;`;
     expect(verdict({ sql, others: [GRANTS_TEST] })).toEqual({ ok: true, touched: true });
   });
 
+  test("retention_execute_on_cleanup_definers_is_trusted", () => {
+    // P0.09x. P4.07g will create these SECURITY DEFINER functions and grant retention EXECUTE.
+    // Without the names on the trusted-functions line the definer is trusted and the grant is
+    // feature, so the file is mixed_grant_change. With the names, both are trusted_function.
+    const names = ["core.close_expired_hold", "core.unanswered_expired_permits", "core.recorded_unused_receipts"];
+    const sql = names
+      .map(
+        (name) =>
+          `CREATE FUNCTION ${name}() RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;\nGRANT EXECUTE ON FUNCTION ${name}() TO retention;`,
+      )
+      .join("\n");
+    expect(verdict({ sql, others: [] })).toEqual({ ok: true, touched: true });
+    const side = (migrations: GrantSide["migrations"]): GrantSide => ({
+      migrations,
+      grantMatrix: null,
+      erasureRegistry: null,
+    });
+    const base = [{ path: `${MIG}/0001_base.sql`, sql: BASE_SQL }];
+    const reasons = classifyGrantChanges({
+      base: side(base),
+      head: side([...base, { path: NEW_SQL, sql }]),
+      changed: [{ path: NEW_SQL, status: "A" }],
+      trustedFunctions,
+    }).map((finding) => finding.reason);
+    expect(reasons).toEqual(names.flatMap(() => ["trusted_function", "trusted_function"]));
+  });
+
   test("grant_parse_add_column", () => {
     const sql = "ALTER TABLE app.account ADD COLUMN bio text;";
     expect(verdict({ sql, others: [FEATURE], baseMatrix: tables(true) })).toEqual({ ok: true, touched: false });
