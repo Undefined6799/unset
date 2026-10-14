@@ -1987,9 +1987,9 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
 - **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
   LEAF_SHARED".
-- **P1.33u:** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
+- **P1.33u (#848):** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
   scan gate".
-- **P1.33v:** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
+- **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
   allow rules".
 - P1.33s is done: merged as 7c56327 (#835).
 - P1.33i is done: merged as 6f32ae3 (#829).

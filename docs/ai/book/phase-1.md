@@ -7657,11 +7657,11 @@ PR shows both runs, and check is green.
 
 ### P1.33u — Make the image secret scan gate
 Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33s (merged, 7c56327)
-Slice 1, issue (pending), check path (`.github/workflows/images.yml`, the comment at
-`.github/workflows/mirror.yml:62-66` and a new test in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family
-(Alex's 20:24:47Z choice; directive `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit
-2026-10-14-verify-835-secret-scan, step 1 (verify-835-5a57467 S1-S4, N1-N6). It does not wait on P1.27r. Typed line:
-"yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret scan gate".
+Slice 1, issue #848, check path (`.github/workflows/images.yml`, the comment at `.github/workflows/mirror.yml:62-66` and
+a new test in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family (Alex's 20:24:47Z choice; directive
+`/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-835-secret-scan, step 1
+(verify-835-5a57467 S1-S4, N1-N6). It does not wait on P1.27r. Typed line: "yes P1.33u .github/workflows/images.yml
+.github/workflows/mirror.yml scripts/ci secret scan gate".
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
 - a skipped or cancelled secret scan reading as green: S1;
@@ -7690,10 +7690,10 @@ green.
 
 ### P1.33v — Scan shipped mirrors with no allow rules
 Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33u
-Slice 1, issue (pending), check path (`.github/workflows/mirror.yml`, `.github/workflows/images.yml`, a committed
-trivy-secret config under `.github/`, and tests in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family;
-book edit 2026-10-14-verify-835-secret-scan, step 2 (verify-835-5a57467 S5, S6). It does not wait on P1.27r. Typed
-line: "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy allow rules".
+Slice 1, issue #849, check path (`.github/workflows/mirror.yml`, `.github/workflows/images.yml`, a committed
+trivy-secret config under `.github/`, and tests in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family; book
+edit 2026-10-14-verify-835-secret-scan, step 2 (verify-835-5a57467 S5, S6). It does not wait on P1.27r. Typed line: "yes
+P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy allow rules".
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
 - a key inside an upstream image we run unmodified: S6;
