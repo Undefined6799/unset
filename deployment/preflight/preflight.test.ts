@@ -2317,7 +2317,8 @@ services:
     ports: ["127.0.0.1:80:80", "127.0.0.1:443:443"]
     secrets: [local_tls_cert, local_tls_key]
     volumes:
-      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
+      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
+      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
     environment:
       PDS_HOST: pds.localhost
@@ -2825,13 +2826,7 @@ secrets:
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
     );
-    // The app site's mount waits for P1.34o's reader (book edit 2026-10-13-p127l-to-third-lane, Amendment 1): until the
-    // reader reads local/app.caddy with the enabled sites, C18 refuses it as any other mount over the sites.
-    const app = "./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro";
-    expect(await c18(volume(app))).toBe("FAIL C18 the edge mounts over /etc/caddy/sites/enabled/app.caddy");
-    expect(await c18(volume("./edge/local/app.caddy:/etc/caddy/sites/enabled/second.caddy:ro"))).toBe(
-      "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/second.caddy",
-    );
+    // The app site is one of the site file mounts now (P1.33y); local_c18_mounts_each_site_file judges those.
     // A volume at the snippet's target is not the file it names, however it is filled.
     const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
     expect(
@@ -2877,6 +2872,48 @@ secrets:
         ),
       ),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
+  test("local_c18_mounts_each_site_file", async () => {
+    // P1.33y (book edit 2026-10-13-p134o-after-791, Amendment 1; local-gaps Amendment 3 S2): under local the edge mounts
+    // every sites/*.caddy and local/app.caddy as its own read-only file, never the sites directory.
+    const c18 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C18 /.test(line));
+    const pds = "      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
+    const app = "      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n";
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    const cases: [string, (text: string) => string][] = [
+      [
+        "FAIL C18 the local edge mounts a directory at /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n"),
+      ],
+      [
+        "FAIL C18 the local edge mounts a directory at /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, `${pds}      - ./edge/sites/enabled:/etc/caddy/sites/enabled/:ro\n`),
+      ],
+      ["FAIL C18 the site pds.caddy is not mounted read-only", (text) => text.replace(pds, pds.replace(":ro\n", "\n"))],
+      [
+        "FAIL C18 the site pds.caddy is not a bind mount",
+        (text) =>
+          text
+            .replace(pds, "      - sites:/etc/caddy/sites/enabled/pds.caddy:ro\n")
+            .replace("\nsecrets:", "\nvolumes:\n  sites: {}\nsecrets:"),
+      ],
+      [
+        "FAIL C18 input missing: the edge's site mounts in /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, "").replace(app, ""),
+      ],
+      ["FAIL C18 the edge config is unreadable: app.caddy: not mounted", (text) => text.replace(app, "")],
+      ["FAIL C18 the edge config is unreadable: pds.caddy: not mounted", (text) => text.replace(pds, "")],
+      [
+        "FAIL C18 the edge config is unreadable: second.caddy: not a site the local stack mounts",
+        (text) => text.replace(app, `${app}${app.replace("enabled/app", "enabled/second")}`),
+      ],
+      [
+        "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/more/pds.caddy",
+        (text) => text.replace(pds, `${pds}${pds.replace("enabled/pds", "enabled/more/pds")}`),
+      ],
+    ];
+    for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
   });
 
   // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local
