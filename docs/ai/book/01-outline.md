@@ -663,6 +663,7 @@ flowchart TD
   P1_33u["P1.33u Image secret scan gates"]
   P1_33v["P1.33v Shipped mirrors scanned, no allow rules"]
   P1_33c["P1.33c PDS scan findings accepted"]
+  P1_35b["P1.35b Host-pin security review owner"]
   P1_33e["P1.33e Dev refused while exceptions remain"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
@@ -1043,7 +1044,6 @@ flowchart TD
   P1_35a["P1.35a Dev CA folder rule gaps closed"]
   P1_33y --> P1_35a
   P1_35a --> P1_34d
-  P1_35b["P1.35b Host-pin security review owner"]
   P1_34d --> P1_33z
   P1_34a --> P1_34o
   P1_34o --> P1_34q
