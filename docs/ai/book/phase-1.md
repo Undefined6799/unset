@@ -8102,6 +8102,11 @@ accepts exactly the per-file read-only site mounts at `/etc/caddy/sites/enabled/
 mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77`
 refuses file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged.
 
+Root path (book edit 2026-10-14-p134d-split, "P1.33y root path mapping confirmed", following P1.34d item 5): under
+local, C18 reads the dev root from `unset-dev-trust/root.pem`, not `unset-dev-env/dev-root-ca.pem`. The folder-content
+checks stay with P1.34d (or P1.33g if it splits); P1.34d depends on this step, so local is never usable with the path
+change alone.
+
 Done when a per-file local fixture passes, a local directory mount is refused, the dev fixtures are unchanged, and
 check is green.
 
@@ -8124,7 +8129,11 @@ book before opening it.
    command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The recipe also writes
    `local-leaf.pem`, the certificate only, beside the env files in `unset-dev-env/`: the copy P1.33x's C18 judges
    (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split). It also copies the root into
-   `unset-dev-trust/` (item 5).
+   `unset-dev-trust/root.pem` (item 5) with `cp`, never `ln`, so nlink stays 1, at mode 0644 (which meets "not group-
+   or other-writable"), and writes nothing else into that folder. The token reader's dev-root fixture
+   (`tests/integration/pds-email-token.test.ts:25`, `/srv/unset-dev-env/dev-root-ca.pem`) and whatever passes the real
+   path move to `unset-dev-trust/root.pem` here, not in P1.33y (book edit 2026-10-14-p134d-split, "P1.33y root path
+   mapping confirmed").
 2. The root: `basicConstraints=critical,CA:TRUE,pathlen:0`, `keyUsage=critical,keyCertSign,cRLSign` and
    `nameConstraints=critical,permitted;DNS:<local app host>,permitted;DNS:<local PDS host>`, exact names with no
    wildcard parent (one suffix only if the PDS needs per-account subdomains).
