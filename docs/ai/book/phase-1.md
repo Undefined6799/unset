@@ -89,9 +89,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   module into the EN/FR catalogs) and **P1.22b** (the locale half of P1.22, and French in P1.26's matrix). P1.19's text
   stays where it is below so ids and links hold; P1.22b sits after P1.37. No French page ships before this slice lands.
   It may run before, beside or after slice 2's steps; P1.38 waits for it, because the Phase 1 exit needs both languages.
-- **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode), P1.33
-  (server baseline, Tailscale), P1.33a, P1.34, P1.35 (lexicon authority), P1.37a, P1.27v (Renovate managers for
-  the image locks), then the Phase 1 exit P1.38.
+- **Slice 2** (after P2.13a is merged): P1.14a (`sealTo`), P1.15a (audit retention), P1.18b (egress proxy mode),
+  P1.33q, P1.33 (server baseline, Tailscale), P1.33a, P1.27s, P2.26e, P2.26b, P2.26c, P2.26d (pulled forward, Q3 B),
+  P1.33d, P1.34, P1.33p, P1.35q, P1.35 (lexicon authority), P1.27v (Renovate managers for the image locks), P1.37a,
+  then the Phase 1 exit P1.38 (book edit 2026-10-14-verify-834-fixes, S4).
 - Then the rest of Phase 2 (`phase-2.md`, "Slices").
 
 Why some pieces the plan lists for later stay in slice 1 (each is a security or dependency reason; none adds scope):
@@ -568,7 +569,6 @@ flowchart LR
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33i --> P1_33o
-  P1_33o --> P1_33h
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_34c --> P1_34d
@@ -6634,6 +6634,11 @@ image build and scan jobs, with P0.07's Alex tail; phase-0 note 1). This is the 
 was scanned, carries an SBOM and SLSA provenance, and is signed with our key without publishing anything about
 the private repository.
 
+**Superseded by ADR 0023 (keyless signing).** Alex tapped "Keyless" at 2026-10-14T21:16:36Z on the card "Sign our
+images with GitHub's identity (keyless), or with a key you keep?" (book edit 2026-10-13-verify-819-fixes). The key-pair
+text below (the signing design, `cosign.pub`, the key custody, `--tlog-upload=false`, `--insecure-ignore-tlog`, Alex's
+key checklist and the `no_tlog_upload` tests) is history; P1.27s, P2.26e and P2.26b carry the keyless design.
+
 **Signing design (provisional — Alex question P1b-A3; recommendation (a)):** while the repo is private, sign with
 **cosign using a key pair and no transparency log**. Why not the alternatives:
 - keyless cosign writes a Fulcio certificate to the public Rekor log; it names the workflow
@@ -8486,13 +8491,21 @@ Done when both fixtures are red without the row change, the import passes with i
 ---
 
 ### P1.33o — Keep shared/host-pin a leaf in depcruise
-Tags: [SEC]            Depends on: P1.33i
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33i
 Slice 1, issue #841, check path (`scripts/lint/.dependency-cruiser.cjs` and `scripts/lint/depcruise.test.ts`),
 kind/build, lane Cursor with the P1.33i family (Alex's 20:24:47Z choice; directive
 `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-829-host-pin-leaf, from
 verify-829-f0a94ca-r2 S1 and S2. The preflight's allowance to import `shared/host-pin/index.ts` is only as narrow as
 host-pin's own imports: under the generic shared row, a later product-only PR could make host-pin import any shared
-module or npm package. P1.33h depends on it and merges after it; the two cannot share a PR (SE-6).
+module or npm package. P1.33h (#840) merged first, as 98ca4b4, so it no longer waits for this step; the step still
+applies afterwards. On 98ca4b4 host-pin's source files import only `node:fs`, `node:path` and their own siblings, and
+`index.test.ts` imports vitest (book edit 2026-10-14-verify-829-host-pin-leaf, 21:17Z note; architecture, 21:27Z, in
+book edit 2026-10-13-verify-819-fixes). If the red fixtures fail on main, the step fixes the import, never widens the
+row.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- host-pin gaining an import that the preflight then loads with no typed line: the red fixtures in item 3;
+- the preflight row's host-pin path matching outside `shared/`: the S2 fixture in item 4.
 
 **What:**
 1. `host-pin` joins LEAF_SHARED (`.dependency-cruiser.cjs:55`).
@@ -8513,7 +8526,7 @@ Done when each red fixture fails before the change and passes after it, and chec
 ---
 
 ### P1.33h — Move the host pin into shared/host-pin
-Tags: [SEC]            Depends on: P1.33i, P1.33o
+Tags: [SEC]            Depends on: P1.33i
 Slice 1, issue #795, product, kind/refactor (move only), lane the third thread; book edit 2026-10-13-host-pin-steps
 (Amendment 2), from architecture's Amendments 3 and 4 of 2026-10-13-p129h-local-token-reader. P1.33j depends on it.
 
@@ -8590,20 +8603,24 @@ Done when each fixture fails on main (red first) and check is green.
 
 ### P1.33b — Let local stacks run without mail
 Tags: [SEC] [ALEX] (card answered 20:28:12Z)            Depends on: P1.27l
-Slice 1, issue (pending), product (`deployment/preflight/`), lane the third thread, before P1.29s; book edit
+Slice 1, issue #830, product (`deployment/preflight/`), lane the third thread, before P1.29s; book edit
 2026-10-13-p127l-local-gaps, Amendment 6 and its step-book mapping (2026-10-14). Authority: Alex's tap "Local only" at
 2026-10-14T20:28:12Z on the card "Let the local test stack run without email?". The step touches no SE-6 check path, so
 the tap is enough; if the build finds it must touch one, it stops and asks for his typed line. It can start now: the
 preflight parses `--env` itself (`inputs.ts:138`), so it does not wait on P1.34z.
+As built: #836, merged as 2e965d6; the unknown-env test is `unknown_env_refused_before_checks` in
+`deployment/preflight/cli.test.ts` (book edit 2026-10-14-verify-834-fixes, S1).
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
 - the local-only loosening reaching dev or prod: `c11_required_dev`, `c19_required_dev`, `c11_required_prod`,
   `c19_required_prod`, and an unknown or missing `--env` refused before any check (below);
 - local half-configuring mail: `local_any_smtp_key_refused`;
-- confirmation tokens in logs: P1.29a's existing `pds_mail_unset_only_with_logging_off`.
+- confirmation tokens in logs: P1.29a's `pds_mail_unset_only_with_logging_off` reads only `compose.dev.yaml`. Until
+  P1.34d item 14 extends it to `compose.local.yaml`, the local control is C12 (book edit 2026-10-13-p127l-local-gaps,
+  section "Step-book mapping of verify-836-7f7582a N1 and N2").
 
 **Where:** `deployment/preflight/checks/pds.ts` (C11), `deployment/preflight/checks/settings.ts` (C19), the local
-stage's check list (P1.27l), `deployment/preflight/preflight.test.ts`.
+stage's check list (P1.27l), `deployment/preflight/preflight.test.ts`, `deployment/preflight/cli.test.ts`.
 
 **What:**
 - Under `--env local` only, C11 (SMTP) and C19 (moderation mail) are not required. Under dev and prod both stay
@@ -8612,12 +8629,13 @@ stage's check list (P1.27l), `deployment/preflight/preflight.test.ts`.
   set is refused, so local cannot half-configure mail. If P1.27l's local checks already refuse them, this step only
   pins it.
 
-What still holds on local: P1.29a's `pds_mail_unset_only_with_logging_off` keeps the PDS's `jsonTransport` from
-logging tokens, and P1.29h's reader is the only way to read a confirmation. The app-side rules of Amendment 6 (a
-disabled mail adapter that refuses every send and logs only the event kind; nothing marked sent or verified; moderation
-notices visible in admin; the adapter reachable only when `UNSET_ENV` is local) are not part of this step: the app sends
-mail only through the PDS's `sendEmail`, behind the Phase 3 mail adapter, and they ride as book lines on that
-adapter's step when P3.00 names it.
+What still holds on local: C12 keeps the PDS's `jsonTransport` from logging tokens (P1.29a's
+`pds_mail_unset_only_with_logging_off` reads only `compose.dev.yaml` until P1.34d item 14 extends it to
+`compose.local.yaml`; book edit 2026-10-14-verify-834-fixes, N3), and P1.29h's reader is the only way to read a
+confirmation. The app-side rules of Amendment 6 (a disabled mail adapter that refuses every send and logs only the event
+kind; nothing marked sent or verified; moderation notices visible in admin; the adapter reachable only when `UNSET_ENV`
+is local) are not part of this step: the app sends mail only through the PDS's `sendEmail`, behind the Phase 3 mail
+adapter, and they ride as book lines on that adapter's step when P3.00 names it.
 
 Size: ~40 source lines, ~120 test lines.
 
@@ -8647,7 +8665,8 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
 - A new `.github/trivyignore.pds.yaml`, passed (`--ignorefile`) only to the scan of `ghcr.io/bluesky-social/pds` in
   `images.yml` and `mirror.yml`. Every other scan keeps `/dev/null` or the shared file, and the shared
   `.github/trivyignore.yaml` stays empty: a shared entry for, say, the libssl CVE would also silence it in our own
-  images.
+  images. That rule also admits #835's `scan-export` job (`images.yml:261`, P1.33s): a secret-only `trivy rootfs` scan
+  of our own images with no `--ignorefile`, never given the PDS file (book edit 2026-10-14-verify-834-fixes, N7).
 - One entry per id that CI's scan of the real image reports, taken from the red run's annotations; nothing from the
   record's reconstruction that CI did not report. Each entry has `id`, `expired_at: 2026-11-13` (30 days from the tap)
   and a `statement` naming the PDS digest `sha256:3a8feb34…`: "newest upstream release, local stack only, accepted by
@@ -8741,52 +8760,89 @@ the workflow job name agree).
 
 ### P1.27s — Publish, sign and attest images (contingent split from P1.27q)
 Tags: [SEC] [ALEX]            Depends on: P1.27q, P1.27, Alex's typed approval of the guard change, the `signing`
-  environment and key ([ALEX] tick-list item)            Plan: §8 ("images signed with cosign"); decision 41
-Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy job in
-  `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests, and
-  `scripts/ci/image-workflows.test.ts`. No product file rides with it.
+  environment ([ALEX] tick-list item)            Plan: §8 ("images signed with cosign"); decision 41
+Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the mirror copy-and-sign job in
+  `.github/workflows/mirror.yml`, the allowance in `scripts/guards/workflows.ts` and its tests,
+  `scripts/ci/image-workflows.test.ts`, `scripts/ci/verify-images.ts` and its test (the exact identity and issuer, and
+  the red cases below), and `/deployment/sigstore/` joining CODEOWNERS' last section (trusted base: the trusted root
+  decides which signatures count). The ADR `docs/human/decisions/0023-image-signing-keyless.md` rides as docs (0021
+  is reserved, 0022 is guarded schemas). No product file rides with it.
+Typed line (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers"): "yes P1.27s
+  packages: write .github/workflows/publish-images.yml .github/workflows/mirror.yml scripts/guards/workflows.ts
+  scripts/ci .github/CODEOWNERS deployment/sigstore".
 Interim base: the base flip back to the mirror is P2.26b (product), then P2.26c (edge, trusted), which run after this
   step's first mirror run on main (book edit 2026-10-13-p127s-split and its Amendment 1; the struck paragraph edited
-  product and trusted files, which SE-6 keeps out of a check-path PR). This step keeps the ADR "image signing: key or
-  keyless", re-decided from current documentation now the repository is public (if keyless wins, Alex's signing-key tick
-  item lapses; the environment, the reviewer and GATE_IF stay).
-Size: about 250 lines.
+  product and trusted files, which SE-6 keeps out of a check-path PR). The trusted root is placed by P2.26e (trusted
+  base) after this step.
+Size: about 300 source lines. If it goes over 400, `verify-images` splits out as a check step before it.
 
 Lapses if Alex approves the guard change before P1.27q opens; the same shape then lands in P1.27q.
+
+Signing, keyless (Alex tapped "Keyless" at 2026-10-14T21:16:36Z on the card "Sign our images with GitHub's identity
+(keyless), or with a key you keep?"; architecture's ruling, its answers to Q1-Q3 and the step-book mapping, book edit
+2026-10-13-verify-819-fixes; it supersedes P1.27's key-pair design and is no looser: every image without a valid
+signature from our exact workflow is refused):
+  - Sign: `cosign sign` and `cosign attest` (provenance, SBOM) with no key, uploading to Rekor and storing the bundle
+    with the image: in publish-images.yml's `publish` job for first-party images, and in mirror.yml's copy-and-sign
+    job for mirrors. Both run in the `signing` environment, with `id-token: write` on those two jobs alone.
+    `images.yml` stays the unprivileged PR check and never gets `id-token: write`. No signing runs on pull requests.
+  - Verify, exact match only: `verify-images` passes `--certificate-identity
+    https://github.com/Undefined6799/unset/.github/workflows/publish-images.yml@refs/heads/main`
+    (`.../mirror.yml@refs/heads/main` for mirror entries) and `--certificate-oidc-issuer
+    https://token.actions.githubusercontent.com`, never a `-regexp` form, and checks the certificate's repository and
+    ref extensions where cosign exposes them. Anything else fails closed.
+  - Offline: the deploy preflight verifies with the stored bundle and the committed trusted root
+    `deployment/sigstore/trusted_root.json` (P2.26e), and never fetches trust material at deploy time. The Rekor
+    inclusion proof in the bundle is required; no `--insecure-ignore-tlog` anywhere. The trusted root changes only by a
+    reviewed PR. A scheduled refresh job is not booked; when someone asks for it, it is a check step with a typed line,
+    which may open the PR but never merges it.
+  - Lock file: `verify` is `"cosign-keyless"` for every entry, with the identity fixed per workflow; no entry may name
+    another identity.
+  - Removed: `deployment/cosign.pub`, `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, the KMS option and Alex's key-generation
+    item. Alex's setup is only the `signing` environment (branch rule and reviewer), which the agent checks with a
+    read-only GitHub API GET.
+  - ADR 0023 records the answer with its question, option and time, and the attestation-availability finding for
+    public repositories, and says that moving back to a key needs a new ADR.
+  - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
 
 Shape (architecture ruling 2026-10-06-p127q-packages-write-shape, amended 03:15Z for the separate file):
   - `publish-images.yml` is triggered by `push` to `main` and `workflow_dispatch` only, and has one job, `publish`. A
     `pull_request` trigger anywhere in that file fails the guard. It is not a required check, since it never runs on a
     PR. `images.yml` stays the unprivileged required check `images` on PRs.
-  - The gate: `publish` declares `environment: signing` (main-only deployment branches; required reviewer: Alex,
-    prevent self-review off) and its job-level `if:` is exactly `GATE_IF` (push to `refs/heads/main`).
-    `packages: write` joins `id-token: write` in `ungated()`'s privileged test. The required reviewer (architecture
-    Amendment 22:20Z, available since the repository went public) adds a human gate on top of the branch rule,
-    `GATE_IF` and the fail-closed key check and replaces none of them; it is a settings click on Alex's P1.27s list
-    (recommended on). If he declines, the earlier fail-closed shape stands and no code changes. Each publish run
-    waits for his approval in the Actions tab.
+  - The gate: `publish` declares `environment: signing` (main-only deployment branches; required reviewer: Alex, prevent
+    self-review off) and its job-level `if:` is exactly `GATE_IF` (push to `refs/heads/main`). `packages: write` joins
+    `id-token: write` in `ungated()`'s privileged test. The required reviewer (architecture Amendment 22:20Z, available
+    since the repository went public) adds a human gate on top of the branch rule, `GATE_IF` and the fail-closed
+    signature check and replaces none of them; it is a settings click on Alex's P1.27s list (recommended on). If he
+    declines, the earlier fail-closed shape stands and no code changes. Each publish run waits for his approval in the
+    Actions tab.
   - `lineProblems` accepts `packages: write` only in `publish-images.yml`, inside the job `publish`, at job level
     (top-level permissions stay `{}`). Any other file or job wanting it is a guard change, a check-path PR and a
     reviewed decision. Every other write scope is still refused, and `contents: write` is never paired with it.
   - Build what you sign: `publish` builds the image from the checked-out `main` commit, then pushes by digest and signs
-    and attests that digest with `--tlog-upload=false`, then runs `verify-images`. It never pushes or signs an artifact
+    and attests that digest keylessly (above), then runs `verify-images`. It never pushes or signs an artifact
     from another job or run.
   - No cache from untrusted runs: no `actions/cache`, no `setup-*` cache option, no `cache-from`.
   - SHA-pinned actions and the image-variable rules are unchanged.
 
 Done when (tests):
   - guard fixtures: `packages_write_ungated_fails`, `packages_write_other_job_fails`, `packages_write_other_file_fails`,
-    `publish_images_pull_request_trigger_fails`, `publish_job_cache_fails`, `packages_write_gated_publish_passes`;
-  - `image-workflows.test.ts`: `no_tlog_upload_flag_present` (every cosign sign or attest call carries the flag, so no
-    private-repository metadata reaches the public Rekor log) and `workflow_permissions_minimal` for `publish`;
+    `publish_images_pull_request_trigger_fails`, `publish_job_cache_fails`, `packages_write_gated_publish_passes`, and
+    `id_token_write_only_on_signing_jobs` (`id-token: write` appears only on publish-images.yml's `publish` and on
+    mirror.yml's copy-and-sign job);
+  - `image-workflows.test.ts`: `tlog_upload_never_disabled` (no cosign call in any workflow carries
+    `--tlog-upload=false` or `--insecure-ignore-tlog`; it replaces `no_tlog_upload_flag_present`) and
+    `workflow_permissions_minimal` for `publish`;
+  - `verify-images.test.ts` (cosign through the injected runner), red cases: a wrong identity, a wrong issuer, a regexp
+    identity, a missing bundle and a missing tlog entry;
   - `mirrored_digest_equals_lock`: the mirror copy job keeps the digests; if it cannot, that goes back to architecture.
     `compose_dev_images_by_digest` moves to P2.26b (book edit 2026-10-13-p127s-split).
 
 Order: after P1.27, before P2.26a, which depends on it (a deploy by verified digest needs signed images); pulled forward
-after P2.13a and before P1.34, then P2.26b, P2.26c and P2.26d (Alex, "Set up now", 2026-10-14T20:45:26Z; book edit
-2026-10-13-verify-819-fixes, Q3). P1.30 does not depend on it: the preflight is tested against an injected verifier and
-fails closed on unsigned images. The slice 1 exit (P2.13a) is unchanged: nothing in slice 1 pushes or deploys an image,
-and P1.29 builds locally.
+after P2.13a and before P1.34, then P2.26e, P2.26b, P2.26c and P2.26d (Alex, "Set up now", 2026-10-14T20:45:26Z; book
+edit 2026-10-13-verify-819-fixes, Q3 and the keyless mapping). P1.30 does not depend on it: the preflight is tested
+against an injected verifier and fails closed on unsigned images. The slice 1 exit (P2.13a) is unchanged: nothing in
+slice 1 pushes or deploys an image, and P1.29 builds locally.
 
 ---
 
@@ -9696,8 +9752,8 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
 | C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
-| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it |
-| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature) |
+| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by ADR 0023: keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
+| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023: keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
 | C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
 | C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
 | C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
@@ -13080,9 +13136,10 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
 2026-10-12-p133p-public-opening, from architecture's amendment 4 of 2026-10-12-refocus-local-signin-rulings and
 2026-10-12-p133-p133a-tailnet-gates):**
-- This step runs on Alex's home server, tailnet only until P1.33p opens it. It moves the same compose stack used
-  for local sign-in there, right after P2.13a's scenario passes locally. The paused P1.34f, P1.34r (#735) and P1.34l
-  (#754) resume first (refocus order, section 8).
+- This step runs on Alex's home server, tailnet only until P1.33p opens it. It moves the same compose stack used for
+  local sign-in there, right after P2.13a's scenario passes locally and its Depends merge: the pulled-forward signing
+  steps (P1.27s, P2.26e, P2.26b, P2.26c, P2.26d) and the PDS-exception gate (P1.33e, P1.33d). The paused P1.34f, P1.34r
+  (#735) and P1.34l (#754) resume first (refocus order, section 8).
 - Alex's hands-on items, added to the checklist: install Docker (the native Engine on Linux, not Docker Desktop,
   P1.34s), install Tailscale, and open a Remote Control session there for the agent.
 - First check: check the dev stack with read-only calls only (describeServer, health), no account and no probe

@@ -112,16 +112,20 @@ Phase 2's first steps belong to **slice 1, "sign in with an atproto account and 
 Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the
 slice exit **P2.13a**, in that order, once their own dependencies merge, ahead of the paused Phase 1 hardening steps
 (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
-file (P2.09, P2.10, P2.14, P2.16b–P2.26a) is built after slice 2 and the i18n slice (the rest of Phase 1, ending at
-P1.38). Step ids did not change; the file is in build order.
+file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
+i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
+four (book edit 2026-10-14-verify-834-fixes, S5).
 Pulled forward after P2.13a and before P1.34 (Alex, "Set up now", 2026-10-14T20:45:26Z; book edit
-2026-10-13-verify-819-fixes, Q3): P1.27s, then P2.26b, P2.26c and P2.26d, so the home-server stack runs only signed,
-mirrored images.
+2026-10-13-verify-819-fixes, Q3 and the keyless mapping): P1.27s, then P2.26e, P2.26b, P2.26c and P2.26d, so the
+home-server stack runs only signed, mirrored images.
 
 **The slice order binds (Alex, 2026-10-05 23:29Z, "ok but then maybe we should stick to the plan then").** A Phase 2
 step whose dependencies are merged still waits for its slice: P2.01k (slice 1) ran early, while P2.09k, P2.16b and
 P2.18k wait for the slice 1 review after P2.13a. Building a later step early needs Alex's own typed word naming each
 step id (book edits 2026-10-05-early-phase-2-steps and the slice-gate ruling).
+The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. Alex chose it on the card ("Set up now",
+2026-10-14T20:45:26Z), and the steps still run after P2.13a's review (slice-gate ruling, Exceptions; book edit
+2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
 (P2.01–P2.08, P2.11, P2.15, P2.12, P2.13, P2.13a) keep their user-facing English text in one `messages.ts` per feature
@@ -3988,8 +3992,31 @@ Diagram: see the three sequence diagrams at the top of this file.
 
 ---
 
+### P2.26e — Commit the Sigstore trusted root
+Tags: [SEC] trusted            Depends on: P1.27s
+Pulled forward (Q3 B), issue (pending), trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
+edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. Order: right after
+P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- a swapped or forged trusted root letting any signature pass: the file is trusted base, and the PR shows the TUF
+  root version and the file's sha256;
+- trust material fetched at deploy time: the preflight reads only this committed file (P2.26b).
+
+Where: `deployment/sigstore/trusted_root.json` and its test.
+
+**What:** the file is fetched once through Sigstore's TUF client in a CI job, from the Sigstore public-good root. The PR
+body shows the TUF root version and the file's sha256. Later refreshes are reviewed PRs. Nothing from Alex beyond the
+existing gates.
+
+Size: one data file and about 40 test lines.
+
+Done when the test shows the file parses as a trusted root and names a Fulcio and a Rekor entry, and check is green.
+
+---
+
 ### P2.26b — Pin service images to the mirror by digest
-Tags: [SEC]            Depends on: P1.27s, P1.34t
+Tags: [SEC]            Depends on: P1.27s, P2.26e, P1.34t
 Pulled forward (Q3 B), issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split (and its
 Amendment 1, which puts this step first), which takes the product half of P1.27s's struck "Interim base" paragraph.
 P1.34t is a dependency for C28 and the C21-under-dev fixtures the real-file test must meet.
@@ -4001,9 +4028,15 @@ Where:
   the mirror list's `source`, `mirror.yml:71-72`) is unchanged and no check path moves. This step never writes the
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
-- the first `deployment/images.lock.json`, and `deployment/cosign.pub` beside it (the first publish's verifying key;
-  if P1.27s's ADR chooses keyless, there is no `cosign.pub` and the lock carries the keyless identity instead;
-  book edit 2026-10-13-verify-819-fixes, S1);
+- the first `deployment/images.lock.json`, every entry with `"verify": "cosign-keyless"`; there is no `cosign.pub`
+  (ADR 0023; book edit 2026-10-13-verify-819-fixes, the keyless mapping);
+- the preflight (`deployment/preflight/checks/images.ts`, `types.ts`): `cosignKeyPath` becomes the trusted-root path
+  (`deployment/sigstore/trusted_root.json`, P2.26e), and C3 and C4 verify keyless, offline, with the identity per
+  workflow (P1.27s);
+- the cosign pin, in code: the expected cosign version and the sha256 of its linux-amd64 and linux-arm64 binaries as
+  constants. Before it verifies anything, the preflight hashes the cosign binary it is about to run and refuses on a
+  mismatch. The preflight runs on the deploy host with Node, so the deploy runbook's install step matches the
+  constants; bumping cosign is a reviewed PR that changes them;
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
 - the preflight real-file test in `deployment/preflight/`.
 
@@ -4022,6 +4055,7 @@ Done when (tests, red first):
 - `dual_spelling_exactly_caddy`: the tolerance covers exactly the two caddy entries, keyed by ref and tag, not by a
   pattern, and only at the lock digest;
 - `compose_dev_images_by_digest` (moved from P1.27s);
+- a cosign binary whose hash does not match the constants is refused;
 - the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture
   (moved from P1.34d item 12; book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
   2026-10-13-p127s-split; architecture's Amendment 7 of 2026-10-13-local-plc, Q1). This step makes the test passable:
