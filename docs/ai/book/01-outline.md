@@ -462,7 +462,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P1.33r | Share in-flight DID lookups (after P2.02, which it depends on) | [SEC] | P2.01, P2.02 | `phase-1.md` |
 | P1.32b | Share in-flight handle checks (trusted base, split from P1.33r) | [SEC] trusted | P1.33r | `phase-1.md` |
-| P1.32c | Replace the real-looking DID in fixtures | — | P1.32b | `phase-1.md` |
+| P1.32c | Replace the real-looking DID in fixtures | — | — | `phase-1.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
 | P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
@@ -697,7 +697,6 @@ flowchart TD
   P1_32b["P1.32b In-flight handle checks shared"]
   P1_33r --> P1_32b
   P1_32c["P1.32c Fixture DIDs replaced"]
-  P1_32b --> P1_32c
   P1_33w["P1.33w Binds to the dev CA folder refused"]
   P1_33x["P1.33x Local leaf names and expiry"]
   P1_33y["P1.33y Per-file site mounts on local"]

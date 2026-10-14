@@ -2669,6 +2669,11 @@ Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `tr
 Where, as built: the probe test `scripts/guards/grant-isolation.test.ts`, which #867 added under the directive's rules 3
 and 4 and the Done-when (book edit 2026-10-14-verify-867-notes, N3).
 
+Under ADR 0022 the definers live in `migrations-trusted/`, trusted by path; the trusted-functions list is the second
+lock, refusing the same names in the product `migrations/` stream, so a product migration cannot shadow or redefine a
+trusted function even though migrator lacks the owner role (book edit 2026-10-14-verify-867-notes, "Architecture's
+answer").
+
 ---
 
 ### P0.09y — Guard the legal-hold tables in migrations

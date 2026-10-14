@@ -306,7 +306,6 @@ flowchart LR
   P1_32b["P1.32b in-flight handle checks shared"]
   P1_33r --> P1_32b
   P1_32c["P1.32c fixture DIDs replaced"]
-  P1_32b --> P1_32c
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -8050,10 +8049,11 @@ Done when the seven tests fail on main and pass with the change, the ASVS V6.8.1
 ---
 
 ### P1.32c — Replace the real-looking DID in fixtures
-Tags: —            Depends on: P1.32b
-Slice 1, issue #870, product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`),
-kind/fix, lane Phase 1 after P1.32b; book edit 2026-10-14-verify-864-fixture-did, item 1, from verify-864-b700f05.
-Nothing from Alex. The DID itself is quoted in the record, not here, so this page never matches the grep below.
+Tags: —            Depends on: —
+Slice 1, issue #870, product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`), kind/fix,
+lane Phase 1 after P1.32b (lane order only: no file is shared, so no Depends; book edit 2026-10-14-verify-868-fixes,
+Addendum N7); book edit 2026-10-14-verify-864-fixture-did, item 1, from verify-864-b700f05. Nothing from Alex. The DID
+itself is quoted in the record, not here, so this page never matches the grep below.
 
 **What:** the real-looking `did:plc:` value that verify-864 found breaks the fixture rule (`did:plc:` plus 24 copies of
 one letter, or `did:web:` on an RFC 2606 host). Measured on main at 23:37Z (book edit 2026-10-14-verify-868-fixes, S4):
@@ -8068,10 +8068,10 @@ one letter, or `did:web:` on an RFC 2606 host). Measured on main at 23:37Z (book
 meaning: the logger tests must still see the DID redacted.
 
 Done when a case-insensitive grep of the repo for the DID's first 23 characters (the value is in book edit
-2026-10-14-verify-864-fixture-did, never quoted here) returns nothing, which catches every near-copy; the touched tests
-pass; and check is green. P1.32c depends on P1.32b, which replaces the `net-guard` line; if #865 merges without it, that
-line gets its own trusted step, and the grep may return only it until then (N2). No guard enforces the fixture rule for
-DIDs; one would be a check-path step with Alex's typed line, and is not booked.
+2026-10-14-verify-864-fixture-did, never quoted here) returns nothing outside `infrastructure/net-guard/`, which catches
+every near-copy; the touched tests pass; and check is green. The `net-guard` line belongs to P1.32b, or to its own
+trusted step if #865 merges without it (Addendum, replacing N2). No guard enforces the fixture rule for DIDs; one would
+be a check-path step with Alex's typed line, and is not booked.
 
 ---
 
