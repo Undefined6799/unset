@@ -12,7 +12,7 @@ import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/ima
 import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
-import { type Compose, parseCompose, parseStrictData, type Service } from "./preflight/compose-parse.ts";
+import { type Compose, parseCompose, parseStrictData, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -68,8 +68,6 @@ const runOnlyImages = (): Set<string> =>
       .map((b) => `${b.ref}:${b.tag}@${b.digest}`),
   );
 
-/** The token reader's name: the one service that runs the Node base unbuilt, and only in this file (P1.29h). */
-const TOKEN_READER = "pds-token-reader";
 /**
  * The locked Node runtime base, run as shipped by the token reader alone, under the tools profile with no network
  * (architecture record 2026-10-13-p129h-local-token-reader, Amendment 1 point 3). Every other Node service is built
