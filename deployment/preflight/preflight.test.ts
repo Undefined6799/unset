@@ -2380,7 +2380,6 @@ secrets:
       exact("caddy-builder"),
       exact("postgres"),
       exact("caddy"),
-      exact("node"),
       pds.ref,
       `${pds.ref}:${pds.tag}`,
       `${pds.ref}@${pds.digest}`,
@@ -2406,6 +2405,55 @@ secrets:
       },
     );
     expect(unscanned.lines.find((line) => / C2 /.test(line))).toBe("FAIL C2 web builds from a Dockerfile C26 refuses");
+  });
+
+  test("local_c2_admits_the_node_base_on_the_token_reader_only", async () => {
+    // Architecture record 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4: the node runtime base
+    // runs unbuilt only as pds-token-reader, with no network and only in the tools profile, by exact ref:tag@digest.
+    const node = (JSON.parse(BASES) as Record<string, { ref: string; tag: string; digest: string }>).node as {
+      ref: string;
+      tag: string;
+      digest: string;
+    };
+    const NODE = `${node.ref}:${node.tag}@${node.digest}`;
+    const reader = (image: string, lines: string) =>
+      `  pds-token-reader:\n    image: ${image}\n${lines}    logging:\n      driver: none\nsecrets:`;
+    const TOOLS = "    profiles: [tools]\n    network_mode: none\n";
+    const c2 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C2 /.test(line));
+    expect(await c2((text) => text.replace("secrets:\n  db_password", `${reader(NODE, TOOLS)}\n  db_password`))).toBe(
+      "PASS C2 ok",
+    );
+    const refused: [string, (text: string) => string][] = [
+      ["FAIL C2 pds runs the node base, which only pds-token-reader may", (text) => text.replace(LOCKED_PDS, NODE)],
+      [
+        "FAIL C2 pds-token-reader runs the node base outside the tools profile",
+        (text) => text.replace("secrets:\n  db_password", `${reader(NODE, "    network_mode: none\n")}\n  db_password`),
+      ],
+      [
+        "FAIL C2 pds-token-reader runs the node base with a network",
+        (text) => text.replace("secrets:\n  db_password", `${reader(NODE, "")}\n  db_password`),
+      ],
+      [
+        "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+        (text) => text.replace("secrets:\n  db_password", `${reader(`${node.ref}:${node.tag}`, TOOLS)}\n  db_password`),
+      ],
+    ];
+    for (const [line, edit] of refused) expect(await c2(edit), line).toBe(line);
+    // Only the runtime entry: a node builder stage in the lock is never run unbuilt, even as the reader.
+    const builder = BASES.replace(
+      '"stage": "runtime",\n    "buildStage": true',
+      '"stage": "build",\n    "buildStage": true',
+    );
+    expect(builder).not.toBe(BASES);
+    const asBuilder = await local(
+      (text) => text.replace("secrets:\n  db_password", `${reader(NODE, TOOLS)}\n  db_password`),
+      {
+        files: { "deployment/images/bases.lock.json": builder },
+      },
+    );
+    expect(asBuilder.lines.find((line) => / C2 /.test(line))).toBe(
+      "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+    );
   });
 
   test("local_guards_loopback_ports_and_localhost_pds", async () => {
