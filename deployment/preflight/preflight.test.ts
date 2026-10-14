@@ -136,6 +136,8 @@ afterAll(() => {
 const secretsOf = (root: string) => join(dirname(root), "unset-dev-secrets");
 /** The folder of the env files Compose reads: `unset-dev-env` beside the checkout. */
 const envOf = (root: string) => join(dirname(root), "unset-dev-env");
+/** The dev root CA's key folder: `unset-dev-ca` beside the checkout (P1.33w). */
+const devCaOf = (root: string) => join(dirname(root), "unset-dev-ca");
 
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
@@ -677,6 +679,56 @@ describe("preflight", () => {
     expect(twice.lines).toContain(`FAIL C9 ${secret(hard.root)} has more than one hard link`);
   });
 
+  // P1.33w, P1.34d item 6 (record 2026-10-12-p134c-p134d-local-dev-root-ca, point 6): nothing ever binds the dev root
+  // CA's key folder, `unset-dev-ca` beside the checkout, whether it exists yet or not.
+  test("c9_bind_mount_reaching_dev_ca_fails", async () => {
+    const binding = (source: string) =>
+      COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env",
+        `    env_file: ../../unset-dev-env/pds.env\n    volumes:\n      - ${source}:/srv:ro`,
+      );
+    const reaches = "FAIL C9 pds binds a path that reaches the dev CA folder";
+    const bind = async (source: string, setUp: (root: string) => void = () => undefined) => {
+      const s = stack({ compose: binding(source) });
+      setUp(s.root);
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    const made = (root: string) => {
+      mkdirSync(devCaOf(root), { mode: 0o700 });
+      writeFileSync(join(devCaOf(root), "root.key"), "fixture\n", { mode: 0o400 });
+    };
+    for (const source of ["../../unset-dev-ca", "../../unset-dev-ca/root.key", "../../unset-dev-ca/newdir"]) {
+      expect((await bind(source, made)).lines, source).toContain(reaches);
+    }
+    // Before the folder exists: Compose would create it as root, and the root key would land in a bound folder.
+    expect((await bind("../../unset-dev-ca")).lines).toContain(reaches);
+    // A link in the project that resolves into it.
+    const linked = (root: string) => {
+      made(root);
+      symlinkSync(devCaOf(root), join(root, "deployment/alias"));
+    };
+    expect((await bind("./alias", linked)).lines).toContain(reaches);
+    // A second name no link explains (a host bind mount), by (dev, ino).
+    const s = stack({ compose: binding("/srv/alias") });
+    made(s.root);
+    const folder = devCaOf(s.root);
+    const alias = await preflight(["--env", "prod", "--compose", s.file], {
+      root: s.root,
+      run: fakeRun().run,
+      ...fakeFs(s.root),
+      realpath: (path) => path,
+      stat: (path) =>
+        path === "/srv/alias" ? statSync(folder) : path.startsWith(dirname(folder)) ? statOrNull(path) : null,
+    });
+    expect(alias.lines).toContain(reaches);
+    // A sibling whose name only starts with the folder's name is not inside it.
+    const old = await bind("../../unset-dev-ca-old", (root) => {
+      mkdirSync(`${devCaOf(root)}-old`);
+      chmodSync(`${devCaOf(root)}-old`, 0o755);
+    });
+    expect(failed(old.lines)).toEqual([]);
+  });
+
   // P1.27a (architecture, Amendment 2): secrets reach containers only through `secrets:`. A bind mount whose real
   // source is the secrets folder, lies inside it, or contains it would hand the files over with no owner check.
   test("c9_bind_mount_reaching_secrets_fails", async () => {
@@ -787,7 +839,7 @@ describe("preflight", () => {
     // A second name for the folder that no link explains (a host bind mount): matched by (dev, ino), both ways.
     const aliased = stack({ compose: binding("/srv/alias") });
     const folder = secretsOf(aliased.root);
-    const asFolder = (path: string) => statSync(path === "/srv/alias" ? folder : path);
+    const asFolder = (path: string) => statOrNull(path === "/srv/alias" ? folder : path);
     const alias = await preflight(["--env", "prod", "--compose", aliased.file], {
       root: aliased.root,
       run: fakeRun().run,
@@ -813,7 +865,7 @@ describe("preflight", () => {
         realpath: (path) => path,
         stat: (path) => {
           const to = path in named ? named[path] : path;
-          return to === null || to === undefined ? null : statSync(to);
+          return to === null || to === undefined ? null : statOrNull(to);
         },
       });
     };
@@ -1863,6 +1915,28 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (b)): a build context is sent to the
   // daemon whole, so none may hold, be or sit inside the secrets folder. .dockerignore is a file in the context that
   // any edit can change, so it never counts.
+  // P1.33w, P1.34d item 6 (record 2026-10-12-p134c-p134d-local-dev-root-ca, point 6): the dev root CA's key folder,
+  // beside the checkout like the secrets folder, is never sent to the daemon either.
+  test("c26_build_context_reaching_dev_ca_fails", async () => {
+    const reaches = "FAIL C26 web builds from a context that reaches the dev CA folder";
+    const run = async (context: string, dockerfile: string, setUp: (root: string) => void = () => undefined) => {
+      const s = stack({ compose: webBuilds(context, dockerfile), files: DOCKERFILES });
+      mkdirSync(devCaOf(s.root), { mode: 0o700 });
+      setUp(s.root);
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    expect((await run("../../unset-dev-ca", "../repo/deployment/images/node-app.Dockerfile")).lines).toContain(reaches);
+    const within = (root: string) => mkdirSync(join(devCaOf(root), "sub"), { mode: 0o700 });
+    expect(
+      (await run("../../unset-dev-ca/sub", "../../repo/deployment/images/node-app.Dockerfile", within)).lines,
+    ).toContain(reaches);
+    // Reached only through a link to the folder.
+    const link = (root: string) => void symlinkSync(devCaOf(root), join(dirname(root), "calink"));
+    expect((await run("../../calink", "../repo/deployment/images/node-app.Dockerfile", link)).lines).toContain(reaches);
+    // The usual root context does not reach it: the folder sits beside the checkout, not in it.
+    expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).not.toContain("C26");
+  });
+
   test("c26_build_context_reaching_secrets_fails", async () => {
     const reaches = "FAIL C26 web builds from a context that reaches the secrets folder";
     const run = async (context: string, dockerfile: string, setUp: (root: string) => void = () => undefined) => {

@@ -125,6 +125,15 @@ export function reachesSecretsFolder(path: string, inputs: Inputs): boolean {
   return [...dirs].some((dir) => reaches(path, dir, inputs));
 }
 
+/**
+ * Whether `path` is the dev root CA's key folder, lies inside it or contains it, by the same tests. The folder is
+ * `unset-dev-ca` beside the checkout, like the secrets and env folders, and nothing ever binds it or sends it to the
+ * daemon, whether or not it exists yet (P1.33w; record 2026-10-12-p134c-p134d-local-dev-root-ca, points 3 and 6).
+ */
+export function reachesDevCaFolder(path: string, inputs: Inputs): boolean {
+  return reaches(path, join(dirname(inputs.root), "unset-dev-ca"), inputs);
+}
+
 /** Whether `path` is or contains a file Compose reads values from (an env file or the `.env`), by the same tests. */
 export function holdsEnvFile(path: string, inputs: Inputs): boolean {
   return inputs.secretPaths.some((file) => reaches(path, file, inputs));
@@ -172,6 +181,7 @@ function bindReason(source: string, inputs: Inputs): string | null {
   // Secrets reach containers only through `secrets:` (architecture, Amendment 2 of
   // 2026-10-12-c9-secret-file-owner): a source that is the secrets folder, lies inside it or contains it fails.
   if (reachesSecretsFolder(source, inputs)) return "that reaches the secrets folder";
+  if (reachesDevCaFolder(source, inputs)) return "that reaches the dev CA folder";
   if (reachesEnvInput(source, inputs)) return "that reaches an env file or the env folder";
   const walked = resolveChecked(source, inputs);
   return walked === null ? null : WALK_REASONS[walked];

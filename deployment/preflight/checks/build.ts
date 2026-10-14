@@ -6,7 +6,7 @@ import { basename, dirname, join, relative, sep } from "node:path";
 import { resolveChecked, WALK_REASONS } from "../../../shared/host-pin/index.ts";
 import type { Service } from "../compose-parse.ts";
 import { lockOrNone } from "./lock.ts";
-import { holdsEnvFile, reachesSecretsFolder } from "./secrets.ts";
+import { holdsEnvFile, reachesDevCaFolder, reachesSecretsFolder } from "./secrets.ts";
 import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
@@ -60,11 +60,13 @@ function namesakes(root: string, name: string): number {
 
 /**
  * The whole context goes to the daemon, whatever .dockerignore says (P1.27u, architecture record
- * 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder and every env file stay out of it. It
- * is walked hop by hop like a bind source (Amendment 6): whoever can swap an entry on it chooses what is sent.
+ * 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder, the dev CA folder (P1.33w) and every
+ * env file stay out of it. It is walked hop by hop like a bind source (Amendment 6): whoever can swap an entry on it
+ * chooses what is sent.
  */
 function contextProblem(context: string, inputs: Inputs): string | null {
   if (reachesSecretsFolder(context, inputs)) return "that reaches the secrets folder";
+  if (reachesDevCaFolder(context, inputs)) return "that reaches the dev CA folder";
   if (holdsEnvFile(context, inputs)) return "that holds an env file";
   const walked = resolveChecked(context, inputs);
   return walked === null ? null : WALK_REASONS[walked];
