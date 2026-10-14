@@ -22,6 +22,7 @@ export const c9: Check = {
   id: "C9",
   run: (inputs) =>
     insideProjectProblem(inputs) ??
+    devCaInputProblem(inputs) ??
     mountedProblem(inputs) ??
     bindSourceProblem(inputs) ??
     composeReadProblem(inputs) ??
@@ -39,6 +40,17 @@ function insideProjectProblem(inputs: Inputs): Outcome | null {
   const files = [...inputs.secretPaths.filter((path) => path !== dotEnv), ...inputs.mountedSecrets.map((s) => s.path)];
   if (files.some((path) => reaches(path, inputs.projectDir, inputs)))
     return fail("an env or secret file is inside the Compose project directory");
+  return null;
+}
+
+/**
+ * No file secret or env file lies in the dev root CA's key folder: Compose bind-mounts the one and reads the other, so
+ * either would carry the key past the bind rule, whoever owns it (P1.33w, verify-861 S1). The reason names no path.
+ */
+function devCaInputProblem(inputs: Inputs): Outcome | null {
+  const files = [...inputs.secretPaths, ...inputs.mountedSecrets.map((secret) => secret.path)];
+  if (files.some((path) => reachesDevCaFolder(path, inputs)))
+    return fail("a secret or env file is in the dev CA folder");
   return null;
 }
 
@@ -131,8 +143,10 @@ export function reachesSecretsFolder(path: string, inputs: Inputs): boolean {
  * daemon, whether or not it exists yet (P1.33w; record 2026-10-12-p134c-p134d-local-dev-root-ca, points 3 and 6).
  */
 export function reachesDevCaFolder(path: string, inputs: Inputs): boolean {
-  return reaches(path, join(dirname(inputs.root), "unset-dev-ca"), inputs);
+  return reaches(path, devCaFolder(inputs), inputs);
 }
+
+export const devCaFolder = ({ root }: Inputs): string => join(dirname(root), "unset-dev-ca");
 
 /** Whether `path` is or contains a file Compose reads values from (an env file or the `.env`), by the same tests. */
 export function holdsEnvFile(path: string, inputs: Inputs): boolean {

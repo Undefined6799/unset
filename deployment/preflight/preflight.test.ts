@@ -700,8 +700,36 @@ describe("preflight", () => {
     for (const source of ["../../unset-dev-ca", "../../unset-dev-ca/root.key", "../../unset-dev-ca/newdir"]) {
       expect((await bind(source, made)).lines, source).toContain(reaches);
     }
-    // Before the folder exists: Compose would create it as root, and the root key would land in a bound folder.
+    // Before the folder exists: Compose would create it as root, and the root key would land in a bound folder. A child
+    // of the missing folder too.
     expect((await bind("../../unset-dev-ca")).lines).toContain(reaches);
+    expect((await bind("../../unset-dev-ca/newdir")).lines).toContain(reaches);
+    // A parent of the folder, with no secrets folder or env file that would be refused first.
+    const bare = (source: string) =>
+      binding(source)
+        .replace("    env_file: ../../unset-dev-env/pds.env\n", "")
+        .replace("    secrets: [db_password]\n", "")
+        .replace("secrets:\n  db_password:\n    file: ../../unset-dev-secrets/db_password\n", "");
+    for (const made of [false, true]) {
+      const s = stack({ compose: bare("../..") });
+      if (made) mkdirSync(devCaOf(s.root), { mode: 0o700 });
+      const parent = await preflight(["--env", "prod", "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+      });
+      expect(
+        parent.lines.filter((line) => / C9 /.test(line)),
+        String(made),
+      ).toEqual([reaches]);
+    }
+    // The folder itself a link to another place: a bind of that place reaches it by its real path.
+    const moved = (root: string) => {
+      mkdirSync(join(dirname(root), "store/ca"), { recursive: true, mode: 0o700 });
+      chmodSync(join(dirname(root), "store"), 0o755);
+      symlinkSync("store/ca", devCaOf(root));
+    };
+    expect((await bind("../../store", moved)).lines).toContain(reaches);
     // A link in the project that resolves into it.
     const linked = (root: string) => {
       made(root);
@@ -727,6 +755,25 @@ describe("preflight", () => {
       chmodSync(`${devCaOf(root)}-old`, 0o755);
     });
     expect(failed(old.lines)).toEqual([]);
+  });
+
+  // P1.33w (verify-861 S1): a file secret or env file in the dev CA folder is bind-mounted or read like any other, so
+  // the folder is refused there too, whoever owns the file.
+  test("c9_secret_or_env_file_in_dev_ca_fails", async () => {
+    const inCa = "FAIL C9 a secret or env file is in the dev CA folder";
+    const run = async (compose: string, file: string) => {
+      const s = stack({ compose });
+      mkdirSync(devCaOf(s.root), { mode: 0o700 });
+      writeFileSync(join(devCaOf(s.root), file), "fixture=1\n", { mode: 0o400 });
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    const secret = await run(
+      COMPOSE.replace("../../unset-dev-secrets/db_password", "../../unset-dev-ca/root.key"),
+      "root.key",
+    );
+    expect(secret.lines.filter((line) => / C9 /.test(line))).toEqual([inCa]);
+    const env = await run(COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-ca/pds.env"), "pds.env");
+    expect(env.lines.filter((line) => / C9 /.test(line))).toEqual([inCa]);
   });
 
   // P1.27a (architecture, Amendment 2): secrets reach containers only through `secrets:`. A bind mount whose real
@@ -1912,9 +1959,6 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     }
   });
 
-  // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (b)): a build context is sent to the
-  // daemon whole, so none may hold, be or sit inside the secrets folder. .dockerignore is a file in the context that
-  // any edit can change, so it never counts.
   // P1.33w, P1.34d item 6 (record 2026-10-12-p134c-p134d-local-dev-root-ca, point 6): the dev root CA's key folder,
   // beside the checkout like the secrets folder, is never sent to the daemon either.
   test("c26_build_context_reaching_dev_ca_fails", async () => {
@@ -1933,10 +1977,24 @@ describe("preflight C26 and C27 (P1.30y)", () => {
     // Reached only through a link to the folder.
     const link = (root: string) => void symlinkSync(devCaOf(root), join(dirname(root), "calink"));
     expect((await run("../../calink", "../repo/deployment/images/node-app.Dockerfile", link)).lines).toContain(reaches);
+    // Before the folder exists too: a context that names it would send whatever lands there later.
+    const s = stack({
+      compose: webBuilds("../../unset-dev-ca", "../repo/deployment/images/node-app.Dockerfile"),
+      files: DOCKERFILES,
+    });
+    const missingFolder = await preflight(["--env", "prod", "--compose", s.file], {
+      root: s.root,
+      run: fakeRun().run,
+      ...fakeFs(s.root),
+    });
+    expect(missingFolder.lines).toContain(reaches);
     // The usual root context does not reach it: the folder sits beside the checkout, not in it.
     expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).not.toContain("C26");
   });
 
+  // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (b)): a build context is sent to the
+  // daemon whole, so none may hold, be or sit inside the secrets folder. .dockerignore is a file in the context that
+  // any edit can change, so it never counts.
   test("c26_build_context_reaching_secrets_fails", async () => {
     const reaches = "FAIL C26 web builds from a context that reaches the secrets folder";
     const run = async (context: string, dockerfile: string, setUp: (root: string) => void = () => undefined) => {
@@ -2419,12 +2477,14 @@ secrets:
       remove = [],
       leaf = LEAF,
       devRoot = DEV_ROOT,
+      setUp = () => undefined,
       ...s
     }: Stack & {
       links?: Record<string, string>;
       remove?: string[];
       leaf?: string | null;
       devRoot?: string | null;
+      setUp?: (root: string) => void;
     } = {},
   ) {
     const { root, file } = stack({
@@ -2443,6 +2503,7 @@ secrets:
     if (devRoot !== null) writeFileSync(join(envOf(root), "dev-root-ca.pem"), devRoot);
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     for (const path of remove) rmSync(join(root, path));
+    setUp(root);
     const result = await preflight(["--env", "local", "--compose", file], {
       root,
       run: fakeRun().run,
@@ -2498,6 +2559,33 @@ secrets:
     // Crawling stays off on local as on dev.
     const crawled = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_CRAWLERS: "https://bsky.network" } });
     expect(failed(crawled.lines)).toEqual(["C7"]);
+  });
+
+  test("local_c26_dev_ca_files_have_one_link", async () => {
+    // P1.33w (architecture on verify-861; book edit 2026-10-14-p134d-split, last section): a second name for a CA file,
+    // inside the checkout above all, is where a build context or a bind would carry the key; the path and identity
+    // tests cannot see it, so every regular file in unset-dev-ca has exactly one link.
+    const run = async (link: (root: string) => string | null) => {
+      let key = "";
+      const result = await local((text) => text, {
+        setUp: (root: string) => {
+          mkdirSync(devCaOf(root), { mode: 0o700 });
+          key = join(devCaOf(root), "root.key");
+          writeFileSync(key, "fixture\n", { mode: 0o400 });
+          const to = link(root);
+          if (to !== null) linkSync(key, to);
+        },
+      });
+      return { line: result.lines.find((line) => / C26 /.test(line)), key };
+    };
+    expect((await run(() => null)).line).toBe("PASS C26 ok");
+    for (const where of [
+      (root: string) => join(root, "deployment/ca-copy"),
+      (root: string) => join(dirname(root), "ca-copy"),
+    ]) {
+      const { line, key } = await run(where);
+      expect(line).toBe(`FAIL C26 dev CA file has extra hard links: ${key}`);
+    }
   });
 
   test("local_c2_admits_builds_and_run_only_vendor_images", async () => {
