@@ -8010,7 +8010,7 @@ Done when the DID-resolution tests fail on main and pass with the change, and ch
 
 ### P1.32b — Share in-flight handle checks
 Tags: [SEC] trusted            Depends on: P1.33r
-Slice 1, issue (pending), trusted base (`domains/identity/verify-handle.ts` and its tests), kind/feature, lane Phase 1
+Slice 1, issue #865, trusted base (`domains/identity/verify-handle.ts` and its tests), kind/feature, lane Phase 1
 right after P1.33r's PR merges; book edit 2026-10-14-outside-review-lows, "P1.33r split under SE-6". P1.33 has no free
 letters, so the id comes from P1.32. Like any trusted-base PR it touches nothing outside trusted base, and Alex reviews
 it as code owner; it needs no typed line, because it is not a check path and tightens nothing he decided.
