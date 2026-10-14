@@ -78,7 +78,7 @@ describe("preflight CLI", () => {
     expect(await preflight([...args, "--env-file", join(dir, "deploy.env")], deps)).toEqual(usage);
   });
 
-  test("unknown_env_takes_strict_path", async () => {
+  test("unknown_env_refused_before_checks", async () => {
     // Local's mail exemption (record 2026-10-13-p127l-local-gaps, Amendment 6) must never be reached by an unknown or
     // missing --env: either is refused before any check runs.
     const deps = { root: dir, run: async () => ({ code: 0, stdout: "", stderr: "" }), environment: {}, checks: [] };
