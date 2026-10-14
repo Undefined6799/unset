@@ -2651,14 +2651,31 @@ strings, as `grant-parse.test.ts` does, or files under `scripts/guards/fixtures/
 trusted-functions line (`trusted-base.ts:349-355`), and "names" covers quoted identifiers and string literals, such as a
 `'schema.table'::regclass` cast.
 
-**What:** the guarded-table list names the cleanup-key table, `legal_hold_transmission`, the hold fingerprint table,
-`core.erase_pending_hold` and the audit tables, by the exact names P4.07c, P3.07 and 0009 create. A migration that names
-a listed table in any statement, DML included, is trusted base: isolated, CODEOWNERS-reviewed and never mixed with
-product work. A migration with dynamic SQL (a `DO` block, or a PL/pgSQL `EXECUTE` of a string or `format(` result in any
-routine body the migration creates; `GRANT`/`REVOKE EXECUTE` and a trigger's `EXECUTE FUNCTION` are not dynamic SQL) is
-trusted base too, because it cannot be read for table names. The guard classifies new or changed migrations only, so
-0009, which creates the audit tables and their `EXECUTE FUNCTION` triggers, is not reclassified; a later product
-migration that named those tables would be trusted base.
+**What** (architecture amendment 4 of 2026-10-14 00:29Z and its step-book mapping, from verify-824-436ab8e F1 and
+F2): the guarded-table list has two modes.
+- Fully guarded (any statement in a migration naming the table is trusted base, DML and ALTER included): the
+  cleanup-key table, `legal_hold_transmission` and the hold fingerprint table (P4.07c); `app.legal_hold` (P4.07c; the
+  only input to `core.is_held`, and it holds `media_key`); `core.erase_pending_hold` (P3.07); `audit.chain` and
+  `audit.event_body` (0009_audit_tables.sql:54, :73).
+- Closed lists, guarded except INSERT: `audit.actions`, `audit.reasons` and `audit.retention_classes`
+  (0009_audit_tables.sql:22, :47, :9). INSERT of a new value stays product, so P4.07's `csam.suspected` and the
+  Phase 5 and 6 additions (phase-5.md:3009-3010, phase-6.md:3270) stay product steps. UPDATE, DELETE, TRUNCATE,
+  ALTER and DROP on them are trusted base: adding a name only lets the app record a new kind of event, while removing
+  or renaming one could hide events.
+
+A guarded migration is trusted base: isolated, CODEOWNERS-reviewed and never mixed with product work. A migration with
+dynamic SQL (a `DO` block, or a PL/pgSQL `EXECUTE` of a string or `format(` result in any routine body the migration
+creates; `GRANT`/`REVOKE EXECUTE` and a trigger's `EXECUTE FUNCTION` are not dynamic SQL) is trusted base too, because
+it cannot be read for table names. The guard classifies new or changed migrations only, so 0009, which creates the audit
+tables and their `EXECUTE FUNCTION` triggers, is not reclassified; a later product migration that named those tables
+would be trusted base.
+
+**The list's rule**, stated in the guard's header comment and in the PR body with a citation per table (its defining
+migration or book line): the list holds every table `core.is_held` reads; every table holding key material or a sealed
+record (the cleanup key, `media_key`, the sealed transmission and fingerprint rows); `core.erase_pending_hold`; and the
+audit tables as above. A later step that creates a qualifying table adds it to the list. The list is a check path, so
+that addition is a check-class step with Alex's typed line, placed right after the creating step and before any step
+that writes real data to the table; the step book books one whenever a qualifying table appears.
 
 Why it depends on P4.07c: P4.07c creates the key, sealed and fingerprint tables as a product step. If the guard landed
 first, P4.07c would name guarded tables and stop being product; after P4.07c the names are fixed, so the list holds
@@ -2668,12 +2685,19 @@ provisioned on a stack. Its outline row therefore sits in Phase 4, below P4.07c.
 Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y migration
 guard", relayed by id to that lane. Without his line, P4.07 waits; nothing is reworded around the guard.
 
-Size: ~120 source lines, ~150 test lines.
+Size: ~150 source lines, ~220 test lines.
 
-Done when three red fixtures (an INSERT … SELECT from the key table in a product migration; a DELETE on the sealed rows;
-a trigger function whose body runs `EXECUTE format(...)` on a hidden table name, fired by an `INSERT` in the same
-migration (a `DO` block is already refused today)) are each refused as a product file, the 12 migrations on main are not
-reclassified (the guard reads only new or changed migrations), and check is green.
+Done when seven red fixtures classify as stated:
+1. an INSERT … SELECT from the key table in a product migration is refused as a product file;
+2. a DELETE on the sealed rows is refused as a product file;
+3. a trigger function whose body runs `EXECUTE format(...)` on a hidden table name, fired by an `INSERT` in the same
+   migration, is refused as a product file (a `DO` block is already refused today);
+4. `INSERT INTO audit.actions` classifies as product;
+5. `DELETE FROM audit.actions` is trusted;
+6. any statement on `audit.chain` is trusted;
+7. `UPDATE app.legal_hold SET state = 'closed'` is trusted.
+
+The 12 migrations on main are not reclassified (the guard reads only new or changed migrations), and check is green.
 
 ---
 
