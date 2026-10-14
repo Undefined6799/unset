@@ -8121,7 +8121,8 @@ book before opening it.
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
    command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The recipe also writes
    `local-leaf.pem`, the certificate only, beside the env files in `unset-dev-env/`: the copy P1.33x's C18 judges
-   (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split).
+   (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split). It also copies the root into
+   `unset-dev-trust/` (item 5).
 2. The root: `basicConstraints=critical,CA:TRUE,pathlen:0`, `keyUsage=critical,keyCertSign,cRLSign` and
    `nameConstraints=critical,permitted;DNS:<local app host>,permitted;DNS:<local PDS host>`, exact names with no
    wildcard parent (one suffix only if the PDS needs per-account subdomains).
@@ -8129,8 +8130,20 @@ book before opening it.
    binds it.
 4. The leaf: `CA:FALSE`, `extendedKeyUsage=serverAuth`, SANs exactly the two local hosts, 397 days, EC P-256. Its key is
    a C9 secret (0400, uid 65532), mounted only into the edge.
-5. The public root cert sits in `unset-dev-env/`, bind-mounted read-only into the PDS and web only, with
-   `NODE_EXTRA_CA_CERTS` pointing at it.
+5. The public root cert sits in a sibling folder, `unset-dev-trust/`, bind-mounted read-only into pds and web only,
+   with `NODE_EXTRA_CA_CERTS` pointing at it. It is an ordinary bind source: never an env or secrets folder, and still
+   refused by C9 and C26 if it reaches `unset-dev-ca`, `unset-dev-env` or the secrets folder. The preflight requires,
+   under local:
+   - the folder holds exactly `root.pem`, a regular file with nlink 1, not group- or other-writable;
+   - `root.pem` is byte-identical to `unset-dev-ca`'s root cert, and a mismatch fails naming both paths;
+   - `root.pem` holds a single CA:true certificate carrying the item 2 name constraints, and any PRIVATE KEY header is
+     a refusal.
+
+   `local-leaf.pem` stays in `unset-dev-env/`, because the preflight reads it and nothing binds it. Red tests: an extra
+   file in the folder; nlink 2; group-writable; a cert that differs from the CA's; a non-CA cert; a cert without the
+   name constraints; a PRIVATE KEY block. If this step measures over 400 source lines, these preflight checks join the
+   P1.33g split with the runbook and the throwaway-root tests. (Book edit 2026-10-14-p134d-split, "Item 5 settled:
+   unset-dev-trust/", architecture's confirmation with no exception to C9.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
 7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
    of the record and no amendment removed it; without it `local/app.caddy` cannot reach web).
@@ -8147,13 +8160,13 @@ book before opening it.
     user, read_only, cap_drop, cap_add, security_opt, tmpfs, logging, profiles, network_mode, networks with their
     internal flags, and ports (still on 127.0.0.1). The allowed differences are exactly: `name`; `env_file` paths;
     `image` replaced by `build` (judged by C2 to C5, C18, C25 and C27 under the card); the edge's per-file site mounts
-    (item 12) and the leaf mount; the dev-root mount and `NODE_EXTRA_CA_CERTS` on pds and web only; the local-name
-    network aliases; and the PLC service, its network and its database wiring, which exist in the local file only, with
-    the local pds, web and appview on that network (tap only once P3.02 confirms it resolves DIDs; architecture's
-    Amendments 4 and 5 of 2026-10-13-local-plc); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local file,
-    `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps), and the
-    same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes, S4);
-    `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
+    (item 12) and the leaf mount; the `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only;
+    the local-name network aliases; and the PLC service, its network and its database wiring, which exist in the local
+    file only, with the local pds, web and appview on that network (tap only once P3.02 confirms it resolves DIDs;
+    architecture's Amendments 4 and 5 of 2026-10-13-local-plc); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local
+    file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps),
+    and the same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes,
+    S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
     2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
     P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
     key named. Preflight still runs in full on the local file; the drift test catches a weakening that preflight would
