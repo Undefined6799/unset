@@ -129,6 +129,8 @@
 /infrastructure/postgres/roles.ts @Undefined6799
 # Cluster bootstrap: creates migrator and tap, revokes PUBLIC (runs at initdb)
 /deployment/postgres/init/ @Undefined6799
+# Local-only init. The PLC role and database land here (P1.34u); dev and prod do not mount it.
+/deployment/postgres/init-local/ @Undefined6799
 # audit/ append
 /infrastructure/audit/ @Undefined6799
 # eraseDid
