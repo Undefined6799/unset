@@ -70,10 +70,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
   P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.33w, P1.33x, P1.33y, P1.34d, P1.33z, P1.33n,
-  P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d,
-  P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's
-  P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.33w, P1.33x, P1.33y, P1.34d,
+  P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
+  P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
+  phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -301,7 +301,9 @@ flowchart LR
   P1_33l["P1.33l token reader pinned to the local stack"]
   P1_29i["P1.29i token reader judges every outbound key"]
   P1_34c["P1.34c local app site with a dev leaf"]
-  P1_33r["P1.33r in-flight identity lookups shared"]
+  P1_33r["P1.33r in-flight DID lookups shared"]
+  P1_32b["P1.32b in-flight handle checks shared"]
+  P1_33r --> P1_32b
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -7967,12 +7969,17 @@ As built: merged at 2026-10-12T23:23:08Z as `07be43b` (#750, head 6f21020) (merg
 
 ---
 
-### P1.33r — Share in-flight identity lookups
+### P1.33r — Share in-flight DID lookups
 Tags: [SEC]            Depends on: P2.01, P2.02 (both merged)
-Slice 1, issue #860, product (`domains/identity/`: `resolve-did.ts`, `verify-handle.ts` and their tests), kind/feature,
-on the sign-in path; lane routed by the coordinator, not the third thread. Book edit 2026-10-14-outside-review-lows,
-item 2 (architecture's ruling on the outside review Alex relayed at 2026-10-14T22:12:07Z). Nothing from Alex: a product
-path, and the review was his ask. Security review required.
+Slice 1, issue #860, product (`domains/identity/`: `in-flight.ts`, `resolve-did.ts` and their tests, plus ASVS
+V16.5.3), kind/feature, on the sign-in path; lane routed by the coordinator, not the third thread. Book edit
+2026-10-14-outside-review-lows, item 2 (architecture's ruling on the outside review Alex relayed at
+2026-10-14T22:12:07Z). Nothing from Alex: a product path, and the review was his ask. Security review required.
+Split under SE-6 (book edit 2026-10-14-outside-review-lows, "P1.33r split under SE-6"):
+`domains/identity/verify-handle.ts` is trusted base (CODEOWNERS:114), so verifyHandle's flight (rule 2's verifyHandle
+half, rule 6's `invalidateHandle`) moves to **P1.32b**. This step carries `drop` and the epoch check in `in-flight.ts`,
+tested directly, because the trusted half cannot touch that file; rules 1, 3, 4, 5 and 6's resolver refresh apply to DID
+resolution.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): one caller's
 lookup poisoning what other callers receive, and coalescing shifting where DoS amplification lands, answered by the
@@ -7997,7 +8004,25 @@ exceeds the cap; an aborted first caller does not fail the others; an invalidate
 
 Size: about 80 source lines and 200 test lines.
 
-Done when the six tests fail on main and pass with the change, and check is green.
+Done when the DID-resolution tests fail on main and pass with the change, and check is green.
+
+---
+
+### P1.32b — Share in-flight handle checks
+Tags: [SEC] trusted            Depends on: P1.33r
+Slice 1, issue (pending), trusted base (`domains/identity/verify-handle.ts` and its tests), kind/feature, lane Phase 1
+right after P1.33r's PR merges; book edit 2026-10-14-outside-review-lows, "P1.33r split under SE-6". P1.33 has no free
+letters, so the id comes from P1.32. Like any trusted-base PR it touches nothing outside trusted base, and Alex reviews
+it as code owner; it needs no typed line, because it is not a check path and tightens nothing he decided.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): as P1.33r's, for
+handle checks: one caller's check poisoning what others receive, and a shift in DoS amplification.
+
+**What:** verifyHandle's flight, keyed by DID (P1.33r rule 2), built on P1.33r's `in-flight.ts`, which this step imports
+and never edits. `invalidateHandle` drops the DID's in-flight entry (rule 6).
+
+Done when seven tests fail on main and pass with the change (red first), the ASVS V6.8.1 rows are updated, and check is
+green.
 
 ---
 
