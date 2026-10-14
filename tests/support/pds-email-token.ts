@@ -4,12 +4,13 @@
 // logged, thrown or written down (SE-7). An admin "mark confirmed" and real SMTP on a developer machine stay refused.
 //
 // Local only (architecture record 2026-10-13-p129h-local-token-reader, point 4 and Amendment 1, guard (ii)): before
-// anything reaches the PDS it refuses unless the Docker daemon is this machine's, the edge's PDS_HOST is one of the
+// anything reaches the PDS it refuses unless the caller names the local env, and the compose file's project name is
+// unset-local (P1.33l; record 2026-10-13-local-plc, Amendment 4 follow-up, 13:36Z: dev is the public PDS, and no tool
+// reads its email tokens), the Docker daemon is this machine's, the edge's PDS_HOST is one of the
 // dev root's constrained names (P1.34d), PDS_HOSTNAME and every handle domain are local, the PDS sends no mail, every
 // outbound key set in the PDS's environment names the local stack (an unset PDS_DID_PLC_URL is the public directory;
-// Amendment 3, S2'), and the PDS's data volume is the one Compose made for `unset-dev`'s `pdsdata`, by its labels and
-// not its name. P1.27l's local label joins these when it lands, and P1.33p refuses the tools profile on any public
-// stack. Every reason is fixed text, never a value.
+// Amendment 3, S2'), and the PDS's data volume is the one Compose made for `unset-local`'s `pdsdata`, by its labels
+// and not its name. P1.33p refuses the tools profile on any public stack. Every reason is fixed text, never a value.
 //
 // The daemon, as the stack wrapper pins its children's (deployment/preflight/stack.ts childEnv and
 // refuseRemoteDaemon; tests/ cannot import it, since deployment's project references tests'): every docker call runs
@@ -23,6 +24,7 @@ import { lookup } from "node:dns/promises";
 import { request } from "node:https"; // guard-allow: egress local PDS only, to a vetted loopback address
 import { isAbsolute, normalize } from "node:path";
 import { localDockerHost, UsageError, type WalkInputs } from "@unset/shared-host-pin";
+import { parseDocument } from "yaml";
 import type { Call, Ran } from "./docker.ts";
 import { READER_REASONS } from "./pds-email-token-read.ts";
 
@@ -45,6 +47,8 @@ export type LocalStack = {
   hostname: string;
   /** The dev root's public certificate (P1.34d; `unset-dev-env/` beside the checkout), an absolute path. */
   devRootCert: string;
+  /** The env the caller names: only `local` runs, and there is no default. */
+  env: string | undefined;
   composeFile: string;
   interpolationEnv: string;
 };
@@ -61,7 +65,7 @@ export type PinnedPost = {
   timeoutMs: number;
 };
 
-const PROJECT = "unset-dev";
+const PROJECT = "unset-local";
 const COMMAND_MS = 30_000;
 const REQUEST_MS = 10_000;
 const RESOLVE_MS = 5_000;
@@ -277,6 +281,7 @@ type Docker = (args: readonly string[]) => Ran;
 
 /** Runs requestEmailConfirmation, reads the token on the local stack, and sends it to confirmEmail. */
 export async function confirmLocalEmail(stack: LocalStack, account: LocalAccount): Promise<void> {
+  checkLocalProject(stack);
   const docker = localDaemon(stack);
   const pds = await pinnedPds(stack, checkLocalStack(stack, docker));
   stack.log("local stack checked");
@@ -441,6 +446,19 @@ function devRootNames(stack: LocalStack, pem: string): Set<string> {
   return names;
 }
 
+/**
+ * The local env, named by the caller, and a compose file whose project is unset-local: one YAML document whose
+ * top-level `name` is exactly the project every docker call below pins. yaml 2.9.1's parseDocument records a duplicate
+ * key and a second document as errors (dist/compose/resolve-block-map.js:64, dist/public-api.js:50).
+ */
+function checkLocalProject(stack: LocalStack): void {
+  if (stack.env === undefined) refuse("the token reader needs an explicit env");
+  if (stack.env !== "local") refuse("the token reader runs on the local stack only");
+  const compose = parseDocument(stack.readFile(stack.composeFile));
+  if (compose.errors.length > 0) refuse("the compose file is not one YAML document");
+  if (compose.get("name") !== PROJECT) refuse(`the compose project name is not ${PROJECT}`);
+}
+
 /** The running containers of `service` in the pinned project, found by Compose's labels. */
 function stackContainers(docker: Docker, service: string): string[] {
   return ok(
@@ -489,7 +507,7 @@ export const envFormat = (keys: readonly string[]): string =>
   `{{range .Config.Env}}{{if eq (index (split . "=") 0) ${keys.map((key) => JSON.stringify(key)).join(" ")}}}` +
   "{{json .}}{{println}}{{end}}{{end}}";
 
-/** The volume at the PDS's /home/node must be the one Compose labelled as unset-dev's pdsdata. */
+/** The volume at the PDS's /home/node must be the one Compose labelled as unset-local's pdsdata. */
 function checkPdsVolume(docker: Docker, pds: string): void {
   const mounts = JSON.parse(ok(docker(["inspect", "--format", "{{json .Mounts}}", pds]), "inspect")) as {
     Type: string;

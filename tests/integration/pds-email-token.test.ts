@@ -19,12 +19,13 @@ const JWT = "eyJhbGciOiJFUzI1NksifQ.access.signature";
 const TOKEN = "ABCDE-23456";
 const PDS_ID = "1".repeat(64);
 const EDGE_ID = "2".repeat(64);
-const VOLUME = "unset-dev_pdsdata";
+const VOLUME = "unset-local_pdsdata";
 const PLC_ID = "3".repeat(64);
 const MACHINE = "devbox";
 const ROOT_PATH = "/srv/unset-dev-env/dev-root-ca.pem";
 const ROOT_PEM = "-----BEGIN CERTIFICATE-----\nMIIBfixture+/=\n-----END CERTIFICATE-----\n";
 const SOCKET = "/var/run/docker.sock";
+const COMPOSE_PATH = "/srv/unset/deployment/compose.local.yaml";
 
 const NAME_CONSTRAINTS = [
   "X509v3 Name Constraints: critical",
@@ -59,6 +60,12 @@ type World = {
   edgeEnv: Record<string, string>;
   mounts: { Type: string; Name?: string; Destination: string }[];
   volumes: string[];
+  /** The project label Compose set on the PDS's volume. */
+  volumeProject: string;
+  /** The env the caller names; the reader has no default. */
+  env: string | undefined;
+  /** The compose file's text. */
+  compose: string;
   reader: Ran;
   /** What resolving the edge's PDS_HOST answers, "fails" for a resolver error, "hangs" for one that never answers. */
   resolved: { address: string }[] | "fails" | "hangs";
@@ -91,6 +98,9 @@ const local = (): World => ({
   edgeEnv: { PDS_HOST: "pds.example.test", PDS_UPSTREAM: "pds:3000" },
   mounts: [{ Type: "volume", Name: VOLUME, Destination: "/home/node" }],
   volumes: [VOLUME],
+  volumeProject: "unset-local",
+  env: "local",
+  compose: "name: unset-local\nservices:\n  pds-token-reader:\n    profiles: [tools]\n",
   reader: { code: 0, out: TOKEN, err: "" },
   resolved: [{ address: "127.0.0.1" }, { address: "::1" }],
   status: [200, 200],
@@ -138,7 +148,8 @@ async function attempt(world: World) {
     if (args[0] === "info") return ok(`${world.daemon}\n`);
     const ids = (list: string[]) => ok(list.map((id) => `${id}\n`).join(""));
     // A ps without the project filter would see other projects' containers too; the stand-in answers so.
-    if (args[0] === "ps" && !line.includes("label=com.docker.compose.project=unset-dev")) return ids([PDS_ID, EDGE_ID]);
+    if (args[0] === "ps" && !line.includes("label=com.docker.compose.project=unset-local"))
+      return ids([PDS_ID, EDGE_ID]);
     if (line.includes("label=com.docker.compose.service=pds")) return ids(world.pds);
     if (line.includes("label=com.docker.compose.service=edge")) return ids(world.edge);
     const service = /label=com\.docker\.compose\.service=(\S+)/.exec(line)?.[1];
@@ -160,8 +171,9 @@ async function attempt(world: World) {
     }
     if (line.includes(".Mounts")) return ok(JSON.stringify(world.mounts));
     if (args[0] === "volume") {
-      // Without both label filters every project's volumes would match.
-      const filtered = line.includes("project=unset-dev") && line.includes("volume=pdsdata");
+      // Without both label filters every project's volumes would match; the volumes carry world.volumeProject's label.
+      const filtered =
+        line.includes(`label=com.docker.compose.project=${world.volumeProject} `) && line.includes("volume=pdsdata");
       return ids(filtered ? world.volumes : [...world.volumes, "other_pdsdata"]);
     }
     if (args.includes("pds-token-reader")) return world.reader;
@@ -216,12 +228,13 @@ async function attempt(world: World) {
       uid: 1000,
     },
     readFile: (path) => {
-      expect(path).toBe(ROOT_PATH);
-      return world.rootPem;
+      expect([ROOT_PATH, COMPOSE_PATH]).toContain(path);
+      return path === COMPOSE_PATH ? world.compose : world.rootPem;
     },
     hostname: MACHINE,
     devRootCert: world.devRoot ?? ROOT_PATH,
-    composeFile: "/srv/unset/deployment/compose.dev.yaml",
+    env: world.env,
+    composeFile: COMPOSE_PATH,
     interpolationEnv: "/srv/unset-dev-env/dev-public.env",
   };
   let error: unknown = null;
@@ -266,9 +279,9 @@ describe("tests/support/pds-email-token.ts", () => {
       "docker",
       "compose",
       "--project-name",
-      "unset-dev",
+      "unset-local",
       "--file",
-      "/srv/unset/deployment/compose.dev.yaml",
+      COMPOSE_PATH,
       "--env-file",
       "/srv/unset-dev-env/dev-public.env",
       "--profile",
@@ -372,9 +385,12 @@ describe("tests/support/pds-email-token.ts", () => {
         "the dev root's name constraints are not critical",
         (w) => ({ ...w, constraints: { code: 0, out: NAME_CONSTRAINTS.replace(": critical", ":"), err: "" } }),
       ],
-      ["expected exactly one running pds container of the unset-dev project", (w) => ({ ...w, pds: [] })],
-      ["expected exactly one running pds container of the unset-dev project", (w) => ({ ...w, pds: [PDS_ID, PDS_ID] })],
-      ["expected exactly one running edge container of the unset-dev project", (w) => ({ ...w, edge: [] })],
+      ["expected exactly one running pds container of the unset-local project", (w) => ({ ...w, pds: [] })],
+      [
+        "expected exactly one running pds container of the unset-local project",
+        (w) => ({ ...w, pds: [PDS_ID, PDS_ID] }),
+      ],
+      ["expected exactly one running edge container of the unset-local project", (w) => ({ ...w, edge: [] })],
       [
         "the edge's PDS_HOST is not one of the dev root's names",
         (w) => ({ ...w, edgeEnv: { PDS_HOST: "pds.unset.ac" } }),
@@ -510,13 +526,13 @@ describe("tests/support/pds-email-token.ts", () => {
         "the PDS does not keep its data in a named volume at /home/node",
         (w) => ({ ...w, mounts: [{ Type: "bind", Destination: "/home/node" }] }),
       ],
-      // Another project's volume, or one whose labels were not set by Compose for unset-dev's pdsdata.
-      ["the PDS volume is not the unset-dev project's pdsdata", (w) => ({ ...w, volumes: [] })],
-      ["the PDS volume is not the unset-dev project's pdsdata", (w) => ({ ...w, volumes: ["other_pdsdata"] })],
+      // Another project's volume, or one whose labels were not set by Compose for unset-local's pdsdata.
+      ["the PDS volume is not the unset-local project's pdsdata", (w) => ({ ...w, volumes: [] })],
+      ["the PDS volume is not the unset-local project's pdsdata", (w) => ({ ...w, volumes: ["other_pdsdata"] })],
       // Exactly one labelled volume, and it is the one mounted.
       [
-        "the PDS volume is not the unset-dev project's pdsdata",
-        (w) => ({ ...w, volumes: [VOLUME, "unset-dev_pdsdata2"] }),
+        "the PDS volume is not the unset-local project's pdsdata",
+        (w) => ({ ...w, volumes: [VOLUME, "unset-local_pdsdata2"] }),
       ],
       // The mount at /home/node is judged, not the first volume.
       [
@@ -530,7 +546,7 @@ describe("tests/support/pds-email-token.ts", () => {
         }),
       ],
       [
-        "the PDS volume is not the unset-dev project's pdsdata",
+        "the PDS volume is not the unset-local project's pdsdata",
         (w) => ({ ...w, mounts: [{ Type: "volume", Name: "other_pdsdata", Destination: "/home/node" }] }),
       ],
     ];
@@ -567,6 +583,36 @@ describe("tests/support/pds-email-token.ts", () => {
     const { NODE_OPTIONS: _, ...noOptions } = local().pdsEnv;
     const bare = await attempt({ ...local(), pdsEnv: noOptions });
     expect(bare.error).toBeNull();
+  });
+
+  test("email_token_reader_runs_on_the_local_stack_only", async () => {
+    // P1.33l (record 2026-10-13-local-plc, Amendment 4 follow-up, 13:36Z): local only, named by the caller with no
+    // default, and the project is unset-local in the compose file's name and on the PDS volume's label.
+    const cases: [string, (w: World) => World][] = [
+      ["the token reader needs an explicit env", (w) => ({ ...w, env: undefined })],
+      ["the token reader runs on the local stack only", (w) => ({ ...w, env: "dev" })],
+      ["the token reader runs on the local stack only", (w) => ({ ...w, env: "prod" })],
+      ["the token reader runs on the local stack only", (w) => ({ ...w, env: "LOCAL" })],
+      ["the compose project name is not unset-local", (w) => ({ ...w, compose: "name: unset-dev\nservices: {}\n" })],
+      ["the compose project name is not unset-local", (w) => ({ ...w, compose: "services: {}\n" })],
+      ["the compose project name is not unset-local", (w) => ({ ...w, compose: "name: unset-local-2\n" })],
+      // Duplicate keys and a second document are refused, never read as the first or last value.
+      ["the compose file is not one YAML document", (w) => ({ ...w, compose: "name: unset-dev\nname: unset-local\n" })],
+      ["the compose file is not one YAML document", (w) => ({ ...w, compose: "name: unset-local\n---\nname: x\n" })],
+    ];
+    for (const [reason, edit] of cases) {
+      const result = await attempt(edit(local()));
+      expect(result.error, reason).toEqual(new Error(reason));
+      // Refused before any docker call, lookup or request.
+      expect(result.commands, reason).toEqual([]);
+      expect(result.requests, reason).toEqual([]);
+    }
+    // The volume the PDS keeps its data in carries another project's label.
+    const labelled = await attempt({ ...local(), volumeProject: "unset-dev" });
+    expect(labelled.error).toEqual(new Error("the PDS volume is not the unset-local project's pdsdata"));
+    expect(labelled.requests).toEqual([]);
+    // A quoted name is the same YAML string.
+    expect((await attempt({ ...local(), compose: 'name: "unset-local"\n' })).error).toBeNull();
   });
 
   test("email_token_docker_runs_on_this_machine_only", async () => {
