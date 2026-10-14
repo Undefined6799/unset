@@ -12,9 +12,12 @@ import { dirname, join } from "node:path";
 import { ENV_NAMES } from "../../edge/caddyfile.ts";
 import { fail, type Inputs, missing, type Outcome } from "./types.ts";
 
-/** Beside the checkout, like the secrets folder: the leaf copy and the dev root's public certificate (P1.34d). */
+/**
+ * Beside the checkout, like the secrets folder: the leaf copy, and the dev root's public certificate in its own folder,
+ * which P1.34d binds into pds and web (record 2026-10-14-p134d-split, "Item 5 settled").
+ */
 const LEAF = "unset-dev-env/local-leaf.pem";
-const ROOT = "unset-dev-env/dev-root-ca.pem";
+const ROOT = "unset-dev-trust/root.pem";
 const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$/;
 const DNS = /^DNS:([a-z0-9.-]+)$/;
 const DAY_MS = 86_400_000;
