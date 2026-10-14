@@ -273,8 +273,12 @@ const PDS_KEYS = [
 const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$/;
 const KNOWN_READER_REASONS = new Set<string>(Object.values(READER_REASONS));
 
-/** What a docker call may see of the caller's environment (stack.ts CHILD_ENV_NAMES). */
-const CHILD_ENV = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
+/**
+ * What a docker call may see of the caller's environment: the stack wrapper's CHILD_ENV_NAMES, which this file cannot
+ * import (deployment's project references tests', not the reverse), so stack.test.ts keeps the two equal (book edit
+ * 2026-10-13-host-pin-steps, Departure 2).
+ */
+export const CHILD_ENV = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
 
 /** Docker on this machine's daemon only: every call carries the pinned environment and a kill timeout. */
 type Docker = (args: readonly string[]) => Ran;

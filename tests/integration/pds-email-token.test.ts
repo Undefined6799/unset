@@ -66,6 +66,8 @@ type World = {
   env: string | undefined;
   /** The compose file's text. */
   compose: string;
+  /** A path whose lstat throws this error, as an unreadable folder does. */
+  lstatThrows?: { path: string; error: Error };
   reader: Ran;
   /** What resolving the edge's PDS_HOST answers, "fails" for a resolver error, "hangs" for one that never answers. */
   resolved: { address: string }[] | "fails" | "hangs";
@@ -199,6 +201,7 @@ async function attempt(world: World) {
   const folder = (path: string) =>
     Object.keys(world.files).some((file) => file.startsWith(path === "/" ? "/" : `${path}/`));
   const kinds = (path: string) => {
+    if (world.lstatThrows?.path === path) throw world.lstatThrows.error;
     const kind = world.files[path] ?? (folder(path) ? "dir" : undefined);
     const { uid = 0, mode = 0o755, nlink = 1 } = world.owners?.[path] ?? {};
     return kind === undefined
@@ -613,6 +616,16 @@ describe("tests/support/pds-email-token.ts", () => {
     expect(labelled.requests).toEqual([]);
     // A quoted name is the same YAML string.
     expect((await attempt({ ...local(), compose: 'name: "unset-local"\n' })).error).toBeNull();
+  });
+
+  test("email_token_host_pin_errors_are_not_swallowed", async () => {
+    // P1.33l, S1 (verify-845): the host pin's walk failing for any reason but a refusal is thrown as it is, never read
+    // as "no socket" or replaced by a default host, and nothing runs.
+    const error = Object.assign(new Error("EACCES: permission denied, lstat '/var/run'"), { code: "EACCES" });
+    const result = await attempt({ ...local(), lstatThrows: { path: "/var/run", error } });
+    expect(result.error).toBe(error);
+    expect(result.commands).toEqual([]);
+    expect(result.requests).toEqual([]);
   });
 
   test("email_token_docker_runs_on_this_machine_only", async () => {
