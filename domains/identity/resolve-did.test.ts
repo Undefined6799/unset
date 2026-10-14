@@ -247,3 +247,94 @@ describe("resolveDid", () => {
     expect(calls.map((c) => new URL(c.url).origin)).toEqual([PLC_URL.origin, PLC_URL.origin]);
   });
 });
+
+/** A resolver whose PLC answers wait until the test releases them, so lookups overlap (P1.33r). */
+function heldResolver(cacheMax = 10) {
+  const held: { url: string; release: (outcome: HttpOutcome) => void }[] = [];
+  const network: IdentityNetwork = {
+    get: (url) => new Promise((release) => held.push({ url: url.href, release })),
+    txt: async () => ({ kind: "unavailable" }),
+  };
+  const resolve = createDidResolver({ network, plcUrl: PLC_URL, cacheTtlS: 300, cacheMax, now: () => 0 });
+  return { resolve, held };
+}
+
+const tick = () => new Promise((settled) => setTimeout(settled, 0));
+const plcDid = (letter: string) => parseDid(`did:plc:${letter.repeat(24)}`) as Did;
+const A = plcDid("a");
+const withPds = (did: string, pds: string) =>
+  doc(did, { service: [{ id: "#atproto_pds", type: "AtprotoPersonalDataServer", serviceEndpoint: pds }] });
+
+describe("resolveDid shares in-flight lookups", () => {
+  test("cached_callers_share_one_lookup", async () => {
+    const { resolve, held } = heldResolver();
+    const waiting = Array.from({ length: 50 }, () => resolve(A, { consistency: "cached" }));
+    await tick();
+    expect(held).toHaveLength(1);
+    held[0]?.release(ok(doc(A)));
+    const resolved = await Promise.all(waiting);
+    expect(new Set(resolved.map((r) => r.did))).toEqual(new Set([A]));
+    expect(held).toHaveLength(1);
+  });
+
+  test("fresh_never_joins_an_earlier_flight", async () => {
+    const { resolve, held } = heldResolver();
+    const early = resolve(A, { consistency: "cached" });
+    const fresh = resolve(A, { consistency: "fresh" });
+    const late = resolve(A, { consistency: "cached" });
+    await tick();
+    expect(held).toHaveLength(2);
+    held[1]?.release(ok(withPds(A, "https://new.example.com")));
+    held[0]?.release(ok(withPds(A, "https://old.example.com")));
+    expect((await early).pds?.href).toBe("https://old.example.com/");
+    expect((await fresh).pds?.href).toBe("https://new.example.com/");
+    expect((await late).pds?.href).toBe("https://new.example.com/");
+    // The earlier flight finished last, but it no longer owned the A, so it did not overwrite the fresher entry.
+    expect((await resolve(A, { consistency: "cached" })).pds?.href).toBe("https://new.example.com/");
+    expect(held).toHaveLength(2);
+  });
+
+  test("outage_is_one_lookup_per_wave", async () => {
+    const { resolve, held } = heldResolver();
+    const wave = Array.from({ length: 20 }, () => kindOf(resolve(A, { consistency: "cached" })));
+    await tick();
+    held[0]?.release(status(503));
+    expect(new Set(await Promise.all(wave))).toEqual(new Set(["unavailable"]));
+    expect(held).toHaveLength(1);
+    const next = kindOf(resolve(A, { consistency: "cached" }));
+    await tick();
+    expect(held).toHaveLength(2); // never cached: the next wave asks again
+    held[1]?.release(status(503));
+    expect(await next).toBe("unavailable");
+  });
+
+  test("in_flight_map_is_capped", async () => {
+    const { resolve, held } = heldResolver(2);
+    const [a, b, c] = [plcDid("a"), plcDid("b"), plcDid("c")];
+    const calls = [a, a, b, b, c, c].map((did) => resolve(did, { consistency: "cached" }));
+    await tick();
+    // a and b share a flight each; the map is full, so c's callers each make their own call, as before P1.33r.
+    expect(held.map((h) => h.url.slice(-1))).toEqual(["a", "b", "c", "c"]);
+    for (const h of held) h.release(ok(doc(`did:plc:${h.url.slice(-1).repeat(24)}`)));
+    expect((await Promise.all(calls)).map((r) => r.did)).toEqual([a, a, b, b, c, c]);
+  });
+
+  test("aborted_caller_detaches", async () => {
+    const { resolve, held } = heldResolver();
+    const controller = new AbortController();
+    const first = kindOf(resolve(A, { consistency: "cached", signal: controller.signal }));
+    const second = resolve(A, { consistency: "cached" });
+    await tick();
+    controller.abort();
+    expect(await first).toBe("unavailable");
+    held[0]?.release(ok(doc(A)));
+    expect((await second).did).toBe(A);
+    expect(held).toHaveLength(1);
+  });
+
+  test("already_aborted_caller_makes_no_request", async () => {
+    const { resolve, held } = heldResolver();
+    expect(await kindOf(resolve(A, { consistency: "cached", signal: AbortSignal.abort() }))).toBe("unavailable");
+    expect(held).toHaveLength(0);
+  });
+});
