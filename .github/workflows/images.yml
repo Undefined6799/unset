@@ -279,35 +279,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Throwaway red evidence (removed once the run link exists): a scratch image whose only file is a generated
-      # RSA key at /ci-key.pem. Trivy 0.75.0's allow rule "tests" skips a path that starts with "test"
-      # (pkg/fanal/secret/builtin-allow-rules.go:12-14), so the file is not named that way. The export and
-      # rootfs command match the shipped images.
-      - name: Scan a throwaway image that carries a test key
-        run: |
-          set -o pipefail
-          {
-            echo 'FROM debian:bookworm-slim AS gen'
-            echo 'RUN apt-get update && apt-get install -y --no-install-recommends openssl && openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /ci-key.pem && rm -rf /var/lib/apt/lists/*'
-            echo 'FROM scratch'
-            echo 'COPY --from=gen /ci-key.pem /ci-key.pem'
-            echo 'CMD ["/ci-key.pem"]'
-          } > "$RUNNER_TEMP/fixture.Dockerfile"
-          FIXTURE_IMAGE="fixture-key:local"
-          docker build -t "$FIXTURE_IMAGE" -f "$RUNNER_TEMP/fixture.Dockerfile" "$RUNNER_TEMP"
-          rootfs="$RUNNER_TEMP/fixture-rootfs"
-          rm -rf "$rootfs"
-          mkdir -p "$rootfs"
-          cid="$(docker create "$FIXTURE_IMAGE")"
-          status=0
-          docker export "$cid" | tar -C "$rootfs" -xf - || status=$?
-          docker rm "$cid" > /dev/null
-          if [ "$status" -ne 0 ]; then
-            echo "docker export failed"
-            exit "$status"
-          fi
-          docker run --rm -v "$rootfs:/rootfs:ro" "$TRIVY_IMAGE" \
-            rootfs --scanners secret --exit-code 1 --timeout 10m /rootfs
       - name: Build
         env:
           DOCKERFILE: ${{ matrix.dockerfile }}
