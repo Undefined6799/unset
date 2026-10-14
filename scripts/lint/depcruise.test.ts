@@ -144,6 +144,8 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("deployment/preflight/a.ts", "yaml"),
     edge("deployment/preflight/a.ts", "node:child_process"),
     edge("deployment/preflight/checks/a.ts", "../../edge/caddyfile.ts"),
+    // P1.33i: the index only. The row-alone cruise fails until the allow path is exactly this file.
+    edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts"),
   ],
   tooling: [
     edge("tests/integration/a.test.ts", "../../scripts/guards/files.ts"),
@@ -498,9 +500,11 @@ describe("allowlist matrix", () => {
 
   test("deployment_preflight_is_a_leaf", async () => {
     // P1.30q: the preflight reaches only itself, Node built-ins and the yaml parser; it runs verify-images as a child
-    // process, never by import, and nothing outside it imports it. The one exception is the edge reader file
-    // deployment/edge/caddyfile.ts (P1.30u, Alex's "Allow import" 2026-10-12T02:16:16Z): never its tests, a sibling,
-    // or a file whose name only starts the same.
+    // process, never by import, and nothing outside it imports it. Two files outside itself are allowed: the edge
+    // reader deployment/edge/caddyfile.ts (P1.30u, Alex's "Allow import" 2026-10-12T02:16:16Z), and shared/host-pin's
+    // index only (P1.33i, DC-2; Alex's typed line 2026-10-14). Never a test, a sibling, or a file whose name only
+    // starts the same.
+    await expectPass(edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts"));
     await expectFail(
       "not-in-allowed",
       edge("deployment/preflight/a.ts", "../edge/caddyfile.test.ts"),
@@ -512,7 +516,12 @@ describe("allowlist matrix", () => {
       // Only the preflight gains the edge reader: no other deployment/ file may import it (P1.30r).
       edge("deployment/images/a.ts", "../edge/caddyfile.ts"),
       edge("deployment/preflight/a.ts", "../../scripts/ci/verify-images.ts"),
+      // P1.33i red fixtures: any other shared module, and a non-index file of shared/host-pin/.
       edge("deployment/preflight/a.ts", "../../shared/config/index.ts"),
+      edge("deployment/preflight/a.ts", "../../shared/errors/index.ts"),
+      edge("deployment/preflight/a.ts", "../../shared/host-pin/walk.ts"),
+      edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts.bak.ts"),
+      edge("deployment/preflight/a.ts", "../../shared/host-pin/lib/index.ts"),
       edge("deployment/preflight/a.ts", "../images/b.ts"),
       edge("deployment/preflight/a.ts", "pg"),
       edge("deployment/images/a.ts", "../preflight/b.ts"),
