@@ -2693,10 +2693,9 @@ section, so `scripts/workspace/codeowners.test.ts` gains two cases. N1: the `ini
 `init/` line; today moving it to the end of the section stays green. N2: a later line for the same path with a
 different owner is refused; that case also stays green today.
 
-Also (P1.33o's item 7, re-homed: book edit 2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6 and
-7"; verify-842-e4f6e94 S2): `/shared/host-pin/ @Undefined6799` joins CODEOWNERS' security-review list, in the Supply
-chain block near `/deployment/`, because the preflight imports it (verify-840-7e8bbba S4). It does not join the
-trusted-base section: the preflight itself is product under `/deployment/`. The codeowners test pins the line.
+P1.33o's item 7 (the `/shared/host-pin/` security-review CODEOWNERS line) does not ride this step: it cannot wait for
+Phase 4, so it is P1.35b (book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" and "Mapping:
+item 7 becomes P1.35b"). This step's CODEOWNERS edit stays the guarded-schema paths only.
 
 This book text lags #826 on purpose: the guarded-schemas rewrite enters the book only after the plan thread's ADR 0022
 docs PR merges, which waits on Alex's typed line "yes guarded schemas ADR docs/ai/PLAN.md docs/human/decisions" (book

@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
   P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
   P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w, P1.33x, P1.33y,
-  P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
-  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice
-  2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
-  P2.13a.
+  P1.35a, P1.35b, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
+  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
+  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the
+  slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -598,6 +598,7 @@ flowchart LR
   P1_35a["P1.35a dev CA folder rule gaps closed"]
   P1_33y --> P1_35a
   P1_35a --> P1_34d
+  P1_35b["P1.35b host-pin security review owner"]
   P1_34d --> P1_33z
   P1_28 --> P1_29a
   P1_27y --> P1_27n
@@ -8049,7 +8050,7 @@ Done when the seven tests fail on main and pass with the change, the ASVS V6.8.1
 
 ### P1.32c — Replace the real-looking DID in fixtures
 Tags: —            Depends on: P1.32b
-Slice 1, issue (pending), product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`),
+Slice 1, issue #870, product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`),
 kind/fix, lane Phase 1 after P1.32b; book edit 2026-10-14-verify-864-fixture-did, item 1, from verify-864-b700f05.
 Nothing from Alex. The DID itself is quoted in the record, not here, so this page never matches the grep below.
 
@@ -8112,13 +8113,14 @@ copy fails with `input missing: unset-dev-env/local-leaf.pem`; red fixture: copy
 
 Chain check (book edit 2026-10-14-verify-857-fixes, S2(a), restoring architecture's ~22:20Z point 1 in
 2026-10-12-p134c-p134d-local-dev-root-ca): C18 under local also requires that `unset-dev-env/local-leaf.pem` chains to
-the local dev root, read from `unset-dev-trust/root.pem` (item 5's path, confirmed for C18 at 23:08Z; if this step
-reads the old `unset-dev-env/dev-root-ca.pem`, P1.33y moves the path). An absent root fails as `input missing`. Red
-fixture: a leaf with the right names, issued by another CA.
+the local dev root, by both issuer name and signature. C18 reads the root from `unset-dev-trust/root.pem` (item 5's
+path, confirmed for C18 at 23:08Z); an absent root fails with "input missing: unset-dev-trust/root.pem". Red fixtures:
+a foreign CA, the same name with another key, and the same key with another name. As built on #869 at 8e3a8f2
+("Updates (23:23Z)" of book edit 2026-10-14-verify-857-fixes), which also moves the root path, so P1.33y moves nothing.
 
 Runbook (S2(c), point 4): the `local-leaf.pem` lines of `docs/human/runbooks/dev-stack-secrets.md` (the openssl run
-writes the cert-only copy beside the env files in `unset-dev-env/`) ride this step as docs (SE-6), because it lands
-before P1.34d.
+writes the cert-only copy beside the env files in `unset-dev-env/`, copying with `install`, never a link) ride this
+step as docs (SE-6), because it lands before P1.34d.
 
 Also (verify-851-cabc9e3 on P1.33k, #851; last section of book edit 2026-10-14-p134d-split), all product in
 `deployment/preflight/`:
@@ -8154,10 +8156,10 @@ mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requ
 refuses file mounts, and the per-file site fixtures at `preflight.test.ts:2625-2628` change with it (lines on ee55b68;
 book edit 2026-10-14-verify-857-fixes, N4). C18 under dev is unchanged.
 
-Root path (book edit 2026-10-14-p134d-split, "P1.33y root path mapping confirmed", following P1.34d item 5): under
-local, C18 reads the dev root from `unset-dev-trust/root.pem`, not `unset-dev-env/dev-root-ca.pem`. The folder-content
-checks stay with P1.34d (or P1.33g if it splits); P1.34d depends on this step, so local is never usable with the path
-change alone.
+Root path: this step moves nothing. P1.33x (#869) carries the move to `unset-dev-trust/root.pem` as built ("Updates
+(23:23Z)" of book edit 2026-10-14-verify-857-fixes; book edit 2026-10-14-p134d-split, "P1.33y root path mapping
+confirmed", which now reads as P1.33x for the path). The folder-content checks stay with P1.34d (or P1.33g if it
+splits).
 
 Done when a per-file local fixture passes, a local directory mount is refused, the dev fixtures are unchanged, and
 check is green.
@@ -8166,7 +8168,7 @@ check is green.
 
 ### P1.35a — Close the dev CA folder rule's gaps
 Tags: [SEC]            Depends on: P1.33y
-Slice 1, issue (pending), product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before
+Slice 1, issue #871, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before
 P1.34d (it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
 2026-10-14-p134d-split, "P1.35a" section, carrying architecture's ruling on verify-861-9ae3539 (S1, S2, S3, N1; last
 section of 2026-10-12-p134c-p134d-local-dev-root-ca) word for word. P1.33w merged as #861, so the ruling is its own
@@ -8187,6 +8189,26 @@ prod, answered by the rules and red cases below.
   with the folder present, and dev with a hard-linked key. The symlinked-folder fixture turns red.
 
 Done when each red case fails on main and passes with the change, and check is green.
+
+---
+
+### P1.35b — Give host-pin a security review owner
+Tags: [SEC] [ALEX] (typed line)            Depends on: —
+Slice 1, issue #872, check path (`.github/CODEOWNERS` and `scripts/workspace/codeowners.test.ts`), kind/fix, lane
+Cursor; book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" (word for word) and "Mapping:
+item 7 becomes P1.35b". P1.33o's item 7 cannot wait for P0.09y (Phase 4): until it lands, a product-only PR can change
+`shared/host-pin`, which the preflight imports, without security-review ownership. P1.33o (#850), P1.33f (#863) and
+P1.33u (#866) have merged, so none can carry it. Every P1.33 and P1.34 letter is taken; the id means nothing about
+P1.35's lexicon authority. Typed line: "yes P1.35b .github/CODEOWNERS scripts/workspace shared/host-pin security
+review" (`scripts/workspace` is added to the ruling's line because the test lives there; architecture is told).
+
+**What:** add `/shared/host-pin/ @Undefined6799` to CODEOWNERS' Supply chain block, not the trusted-base section. A
+test asserts that the line exists and sits outside the trusted-base section; the existing CODEOWNERS parser tests
+cover the format.
+
+Size: one CODEOWNERS line and one test.
+
+Done when the test fails without the line and passes with it, and check is green.
 
 ---
 
@@ -8223,18 +8245,20 @@ book before opening it.
    `NODE_EXTRA_CA_CERTS` pointing at it. It is an ordinary bind source: never an env or secrets folder, and still
    refused by C9 and C26 if it reaches `unset-dev-ca`, `unset-dev-env` or the secrets folder. The preflight requires,
    under local:
-   - the folder holds exactly `root.pem`, a regular file with nlink 1, not group- or other-writable;
+   - the folder is a real directory (lstat) and holds exactly `root.pem`, a regular file with nlink 1, not group- or
+     other-writable (architecture's recorded confirmation, following its 23:20Z nlink ruling; "Updates (23:23Z)" of book
+     edit 2026-10-14-verify-857-fixes);
    - `root.pem` is byte-identical to `unset-dev-ca`'s root cert, and a mismatch fails naming both paths;
    - `root.pem` holds a single CA:true certificate carrying the item 2 name constraints, and any PRIVATE KEY header is
      a refusal.
 
-   `local-leaf.pem` stays in `unset-dev-env/`, because the preflight reads it and nothing binds it. Red tests: an extra
-   file in the folder; nlink 2; group-writable; a cert that differs from the CA's; a non-CA cert; a cert without the
-   name constraints; a PRIVATE KEY block. If this step measures over 400 source lines, these preflight checks join the
-   P1.33g split with the runbook and the throwaway-root tests. (Book edit 2026-10-14-p134d-split, "Item 5 settled:
-   unset-dev-trust/"; architecture's confirmation with no exception to C9 is the section "Architecture confirmation
-   (2026-10-14 ~22:50Z, recorded here 23:21Z)" of 2026-10-12-p134c-p134d-local-dev-root-ca; book edit
-   2026-10-14-verify-857-fixes, S3.)
+   `local-leaf.pem` stays in `unset-dev-env/`, because the preflight reads it and nothing binds it. Red tests: a
+   symlinked `unset-dev-trust/`; an extra file in the folder; nlink 2; group-writable; a cert that differs from the
+   CA's; a non-CA cert; a cert without the name constraints; a PRIVATE KEY block. If this step measures over 400 source
+   lines, these preflight checks join the P1.33g split with the runbook and the throwaway-root tests. (Book edit
+   2026-10-14-p134d-split, "Item 5 settled: unset-dev-trust/"; architecture's confirmation with no exception to C9 is
+   the section "Architecture confirmation (2026-10-14 ~22:50Z, recorded here 23:21Z)" of
+   2026-10-12-p134c-p134d-local-dev-root-ca; book edit 2026-10-14-verify-857-fixes, S3.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
 7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
    of the record and no amendment removed it; without it `local/app.caddy` cannot reach web).
