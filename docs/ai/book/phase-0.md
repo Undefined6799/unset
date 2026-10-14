@@ -2635,6 +2635,41 @@ Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `tr
 
 ---
 
+### P0.09y — Guard the legal-hold tables in migrations
+Tags: [ALEX] (typed line)            Depends on: P4.07c            Plan: rule SE-6
+Check class (`scripts/guards/`, `.github/CODEOWNERS`), kind/build; book edit 2026-10-13-codex-813-close-expired-hold,
+architecture amendment 3 of 2026-10-14 00:03Z and its step-book mapping, from the verifier of #824 (verify-824-414343c,
+"Observation for architecture"). Product migrations run as migrator, and P0.09c treats DML as neutral, so a product
+migration could copy the cleanup key somewhere `web` can read, delete the sealed transmission and fingerprint rows
+directly, or rewrite audit rows; review is the only barrier. That is acceptable while no guarded table holds real data
+and no key is provisioned, and not once holds exist. This is a tightening.
+
+**Where:** `scripts/guards/` (the P0.09c classifier: `grant-parse.ts` and `trusted-base.ts`, or a sibling module); a
+guarded-table list beside the `# trusted functions:` line in `.github/CODEOWNERS`; red fixtures and tests.
+
+**What:** the guarded-table list names the cleanup-key table, `legal_hold_transmission`, the hold fingerprint table,
+`core.erase_pending_hold` and the audit tables, by the exact names P4.07c, P3.07 and 0009 create. A migration that
+names a listed table in any statement, DML included, is trusted base: isolated, CODEOWNERS-reviewed and never mixed
+with product work. A migration with dynamic SQL (`EXECUTE`, `format(`, a `DO` block) is trusted base too, because it
+cannot be read for table names. The guard classifies new or changed migrations only, so 0009, which creates the audit
+tables with a `DO` block, is unaffected; a later product step that followed the 0009 pattern would now be trusted base.
+
+Why it depends on P4.07c: P4.07c creates the key, sealed and fingerprint tables as a product step. If the guard landed
+first, P4.07c would name guarded tables and stop being product; after P4.07c the names are fixed, so the list holds
+exact names. It lands before P4.07, the first step that opens a hold (P4.07 depends on it), and before any key is
+provisioned on a stack. Its outline row therefore sits in Phase 4, below P4.07c.
+
+Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y migration
+guard", relayed by id to that lane. Without his line, P4.07 waits; nothing is reworded around the guard.
+
+Size: ~120 source lines, ~150 test lines.
+
+Done when three red fixtures (an INSERT … SELECT from the key table in a product migration; a DELETE on the sealed
+rows; an `EXECUTE format(...)` that hides the name) are each refused as a product file, the 12 migrations on main still
+classify as they do today, and check is green.
+
+---
+
 ### P0.09o — Bar trusted code from untrusted packages (folded into P0.09n)
 Retired 2026-10-12 21:12Z: book edit 2026-10-12-p009o-trusted-product-imports, amendment 1, from architecture's
 Amendment 1 item 4 of 2026-10-12-workspace-imports-and-remote-daemon. The resolver, the product-file boundary and the
