@@ -223,7 +223,7 @@ describe("logger", () => {
   test("logger_migrate_failure_keeps_no_row_values", () => {
     // A failing statement's driver error echoes row values in message, detail, hint, where and constraint. Logged
     // the way the runner logs it (version, SQLSTATE, then logError), none of that text reaches the line.
-    const did = "did:plc:ewvi7nxzyoun6zhxrhs64oiz";
+    const did = "did:plc:eeeeeeeeeeeeeeeeeeeeeeee";
     const handle = "alice.example.com";
     const failure = Object.assign(new Error(`duplicate key value violates unique constraint "accounts_${handle}"`), {
       code: "23505",
@@ -240,7 +240,7 @@ describe("logger", () => {
     expect(text).toContain('"sqlstate":"23505"');
     expect(text).not.toContain(did);
     expect(text).not.toContain(handle);
-    expect(text).not.toContain("ewvi7n");
+    expect(text).not.toContain("eeeeee");
   });
 
   test("unknown_event_kind_placeholder", () => {
@@ -252,7 +252,7 @@ describe("logger", () => {
   test("word_fields_refuse_identifiers", () => {
     const identifiers = [
       "alice.0x40.me",
-      "did:plc:ewvi7nxzyoun6zhxrhs64oiz",
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeeee",
       "alice@example.com",
       "203.0.113.7",
       "2001:db8::1",
