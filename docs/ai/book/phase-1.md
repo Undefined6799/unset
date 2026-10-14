@@ -2388,7 +2388,7 @@ p111-test-db-and-pg-config and p111g-postgres-test-mechanism). This text stays t
     (book edit 2026-10-06-p111-as-built).
   Until P1.11t lands, P1.11 and P1.11p tests that need a database use `tests/support/postgres.ts` (P1.11h) directly
   from their own test files under `tests/integration/postgres/`.
-Tags: —            Depends on: P1.11e, P1.11g, P1.11q, P1.02 (P1.11h comes in through P1.11g)            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5
+Tags: —            Depends on: P1.11e, P1.11g, P1.11q, P1.02            Plan: §5.2 (database, `migrate` one-shot, expand-then-contract), §6.1 (`statement_timeout` 2 s on `web`), review 02 SERIOUS-5. P1.11h comes in through P1.11g.
 Where (all five parts, per the split above): `infrastructure/postgres/{pool.ts,tx.ts,migrate.ts,migrate-cli.ts,sqlLint.ts}`
   and `infrastructure/postgres/package.json` (`pg` pinned exactly, never `pg-native`), `infrastructure/postgres/migrations/0001_init.sql`,
   `docs/human/db/migrations.md`, `docs/human/decisions/0014-*.md`, the database tests in `tests/integration/postgres/`,
@@ -3233,7 +3233,7 @@ Diagram: none.
 ---
 
 ### P1.14d — Sealed type and column registry (split from P1.14)
-Tags: [SEC]            Depends on: P1.14, P1.13 (or P1.14m, if split)            Plan: §5.3
+Tags: [SEC]            Depends on: P1.14, P1.13            Plan: §5.3. Or P1.14m, if that step is split.
 Where: `infrastructure/postgres/migrations/0007_sealed_type.sql` (`types.sealed`; built as 0007 in #376, merged
   2026-10-07 00:43Z),
   `infrastructure/postgres/sealed-columns.json`, `SealedColumnId` (`keyof` that JSON, no generator) and the mapping
@@ -5278,7 +5278,7 @@ the full suite is green.
 
 ### P1.24 — UI kit, part 1: the "is it on the sheet?" gate and the static and form components
 
-**Tags:** — (every sheet piece is approved, final in sheet v45, 2026-10-04; no design stop remains) · **Depends on:** P1.22, P1.23r · **Plan:** §8 Phase 1 (every UI piece is on the sheet; anything missing is a stop item for Alex), §7 (icon wrapper), §6.1 WCAG row; review 08
+**Tags:** — (every sheet piece is approved, final in sheet v45, 2026-10-04; no design stop remains) · **Depends on:** P1.24i, P1.24h, P1.23c · **Plan:** §8 Phase 1 (every UI piece is on the sheet; anything missing is a stop item for Alex), §7 (icon wrapper), §6.1 WCAG row; review 08
 
 **Answered by Alex 2026-10-03 (#12 P1b-A5 at 11:53Z; #13 at 11:53Z; icons superseded by #12b at 18:00Z):** icons are
 **Iconoir** (7.12.1, regular, MIT): the design session's Icon draft on the sheet lists 36 Iconoir icons whose SVG files are
@@ -6254,7 +6254,7 @@ tightening: nothing becomes unowned.
 
 ### P1.25 — App shell and error pages
 
-**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h (and P1.25j if that splits), P1.25p (P1.25 then exports components from shared/ui's index; book edit 2026-10-07-p125l-islands-lazy-chunks) · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts)
+**Tags:** — (every sheet piece it uses is approved, sheet v45, 2026-10-04; no design wait) · **Depends on:** P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25p · **Plan:** §8 Phase 1, §5.1, §5.4 (no cookie variation on public pages), §2 rule 15 (error codes), §6.1 (fonts). P1.25j if that splits. P1.25 then exports components from shared/ui's index (book edit 2026-10-07-p125l-islands-lazy-chunks).
 
 **Where:** `apps/web/src/shell/{AppShell.tsx, head.tsx}`; `interfaces/http/routes/{home.tsx, legal.tsx}`;
 `apps/web/src/errors/{NotFound.tsx, ServerError.tsx, Unavailable.tsx}`;
@@ -6834,7 +6834,8 @@ book; it does not split itself.
 ---
 
 ### P1.27e — Give edge image test hooks an explicit budget
-Tags: trusted            Depends on: P1.29z (merged, #649); after P1.29o (#655), whose `CONTAINER_MS` it shares
+Tags: trusted            Depends on: P1.29z (merged, #649)
+After P1.29o (#655), whose `CONTAINER_MS` it shares.
 As built: merged by Alex at 2026-10-12T16:41:00Z as `def148f` (#661, head e923d12): each of the two files declares
 `CONTAINER_MS = 120_000` (the coordinator's post-merge read of #660, 16:45Z).
 Slice 1, issue #658, trusted base (`deployment/edge/`, CODEOWNERS' last section; kind/feature), lane Phase 1; book edit
@@ -8900,9 +8901,10 @@ below (every stage, no allowlist, `ADD` local only).
 
 ### P1.28u — Refuse image references outside FROM
 
-**Tags:** [SEC] · **Depends on:** P1.28v (merged, #430); independent of P1.28w · **Class:** product (feature),
+**Tags:** [SEC] · **Depends on:** P1.28v (merged, #430) · **Class:** product (feature),
 `deployment/images/images.test.ts` only, under the `/deployment/` security-review line (not trusted base, not a check
-path, no `.github/` file) · **Slice:** 1, after P1.28v · **Owner:** Phase 1 (it touches no file P1.29 touches)
+path, no `.github/` file) · **Slice:** 1, after P1.28v · **Owner:** Phase 1 (it touches no file P1.29 touches).
+Independent of P1.28w.
 
 As built: merged by Alex at 2026-10-07T12:38:32Z as `5fcbb38` (#449).
 
@@ -9324,8 +9326,8 @@ Issue #415. Trusted base (book edit 2026-10-07-p128b-edge-leftovers): `/deployme
 the PR carries only `deployment/edge/**`, edge-path tests (`tests/integration/deployment/edge/`) and the ADR status
 line; docs never change its class. If pr-shape reports mixed, the PR stops and asks the step book.
 
-**Tags:** [SEC] · **Depends on:** P1.28 (merged; in Phase 2's lane it follows P1.28d and P1.30p, lane order only) ·
-**Size:** small
+**Tags:** [SEC] · **Depends on:** P1.28 · **Size:** small
+In Phase 2's lane it follows P1.28d and P1.30p, lane order only (merged).
 
 **Contents:**
 1. `pds_route_without_zone_fails`, the negative twin of `every_pds_route_has_a_zone`: a fixture PDS route with no
@@ -11311,7 +11313,7 @@ P1.29h, P1.29s, P1.29t.
 run the net-guard resolve-and-pin tests once inside the built runtime image before the first deploy, and once per base
 bump. If P1.29t cannot run it, it moves to the preflight.
 
-**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29 itself: P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27a, P1.27u, P1.27y, P1.27w) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
+**Tags:** [SEC] (secrets, the PDS admin credential, network trust; proposed in round 1, accepted) · **Depends on:** the parts above (P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27a, P1.27u, P1.27y, P1.27w) · **Plan:** §5.2 (edge-only rate limiting; PDS per-IP limits off, no bypass), §5.3 (dev PDS), §8 Phase 1; decision 20
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev-public.example.env`; `docs/human/runbooks/dev-stack-secrets.md`;

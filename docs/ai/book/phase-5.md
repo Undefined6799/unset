@@ -2745,7 +2745,7 @@ Not in this step: per-country rules (later); an EU representative (not needed wh
 Diagram: none.
 
 ### P5.13 — Phase 5 exit
-Tags: [STOP]            Depends on: every P5 step (P5.00–P5.12, P5.07b included)            Plan: §8 Phase 5 exit; §7 (dependency counts); §6.1 (keyboard pass); §8 launch gate (estimate re-measured)
+Tags: [STOP]            Depends on: every P5 step (P5.00–P5.12, P5.07b, P5.08d, P5.08e, P5.08f)            Plan: §8 Phase 5 exit; §7 (dependency counts); §6.1 (keyboard pass); §8 launch gate (estimate re-measured)
 Where: `deployment/exit/phase-5-check` (read-only script), `docs/human/exits/phase-5.md`
 Size: ~170 source lines, ~120 test lines
 
