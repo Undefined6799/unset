@@ -70,7 +70,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
   P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33w, P1.33x, P1.33y, P1.34d, P1.33z, P1.33n,
+  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.33w, P1.33x, P1.33y, P1.34d, P1.33z, P1.33n,
   P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d,
   P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's
   P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
@@ -301,6 +301,7 @@ flowchart LR
   P1_33l["P1.33l token reader pinned to the local stack"]
   P1_29i["P1.29i token reader judges every outbound key"]
   P1_34c["P1.34c local app site with a dev leaf"]
+  P1_33r["P1.33r in-flight identity lookups shared"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -7961,6 +7962,40 @@ As built: merged at 2026-10-12T23:23:08Z as `07be43b` (#750, head 6f21020) (merg
 
 ---
 
+### P1.33r — Share in-flight identity lookups
+Tags: [SEC]            Depends on: P2.01, P2.02 (both merged)
+Slice 1, issue #860, product (`domains/identity/`: `resolve-did.ts`, `verify-handle.ts` and their tests), kind/feature,
+on the sign-in path; lane routed by the coordinator, not the third thread. Book edit 2026-10-14-outside-review-lows,
+item 2 (architecture's ruling on the outside review Alex relayed at 2026-10-14T22:12:07Z). Nothing from Alex: a product
+path, and the review was his ask. Security review required.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): one caller's
+lookup poisoning what other callers receive, and coalescing shifting where DoS amplification lands, answered by the
+rules and tests below.
+
+**What:** concurrent uncached lookups for one DID share one network call.
+1. Only `consistency: "cached"` calls coalesce. A `fresh` call never joins a flight that started before it (fresh
+   means "read after now": after an identity event, P3.05; after login, P2.06). A `cached` call may join a fresh flight.
+2. Flights are keyed by DID, verifyHandle's too.
+3. A flight keeps the resolver's existing network timeout and is never tied to the first caller's abort signal. A caller
+   that aborts detaches without cancelling the flight for the others.
+4. Every joiner gets the same outcome: success, or the same IdentityError kind. `unavailable` is still never cached
+   (`verify-handle.ts:5`), and the entry is removed in `finally`, so an outage is shared only with callers already
+   waiting.
+5. The in-flight map is capped at the cache max (`DID_DOC_CACHE_MAX`, `HANDLE_CACHE_MAX`). When it is full, a new DID
+   makes its own call without coalescing, as today; nothing is refused.
+6. `invalidateHandle` and the resolver's refresh drop the DID's in-flight entry, so the next call starts a new flight.
+
+Tests, each red first: 50 concurrent cached calls for one DID make one network call; a fresh call during a cached
+flight makes its own call; a PLC outage is one call per DID per wave and every waiter gets `unavailable`; the map never
+exceeds the cap; an aborted first caller does not fail the others; an invalidate during a flight starts a new one.
+
+Size: about 80 source lines and 200 test lines.
+
+Done when the six tests fail on main and pass with the change, and check is green.
+
+---
+
 ### P1.33w — Refuse binds that reach the dev CA folder
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k
 Slice 1, issue #853, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
@@ -7992,6 +8027,12 @@ with no IP SAN, and fails if the leaf expires within 14 days. Reasons are fixed 
 #779.) Beside it, `APP_HOST` must be a valid hostname equal to `new URL(WEB_PUBLIC_ORIGIN).hostname`. Red fixtures:
 missing, stale (another host) and invalid, each with a fixed-word reason.
 
+Leaf copy (architecture's ruling, last section of 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the last
+section of 2026-10-14-p134d-split): the preflight cannot read the leaf secret (0400, uid 65532), so under local C18
+judges the public, cert-only copy `unset-dev-env/local-leaf.pem`, written by the same openssl run as the leaf, and
+never reads the secret. The SAN, IP SAN, 14-day expiry and `APP_HOST` checks run on the copy. A missing or unreadable
+copy fails with `input missing: unset-dev-env/local-leaf.pem`; red fixture: copy absent.
+
 Done when each fixture fails on main for its own reason and passes with the change, and check is green.
 
 ---
@@ -8021,7 +8062,7 @@ Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/p
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
 P1.29t depends on it. Split by size (book edit 2026-10-14-p134d-split): items 6, 9, 12's C18 half and 13 moved to
-P1.33w, P1.33x, P1.33y and P1.33z; this step keeps items 1-5, 7, 8, 10, 11, 14 and item 12's per-file mounts and
+P1.33w, P1.33x, P1.33y and P1.33z; this step keeps items 1-5, 7, 8, 10, 11, 14, 15 and item 12's per-file mounts and
 real-file test. Its dependents (P1.33n, P1.34u, P1.34v, P1.29s, P1.29t and others) keep depending on it, so they also
 wait for the three new steps. If it still measures over 400 source lines, the lane splits the runbook and throwaway-root
 tests into **P1.33g, "Document and test the local dev root"** (product, before this step, reserved), and tells the step
@@ -8029,7 +8070,9 @@ book before opening it.
 
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
-   command), with the expiry check `openssl x509 -enddate`. Expiry fails closed.
+   command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The recipe also writes
+   `local-leaf.pem`, the certificate only, beside the env files in `unset-dev-env/`: the copy P1.33x's C18 judges
+   (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split).
 2. The root: `basicConstraints=critical,CA:TRUE,pathlen:0`, `keyUsage=critical,keyCertSign,cRLSign` and
    `nameConstraints=critical,permitted;DNS:<local app host>,permitted;DNS:<local PDS host>`, exact names with no
    wildcard parent (one suffix only if the PDS needs per-account subdomains).
@@ -8087,12 +8130,17 @@ book before opening it.
     compose.local.yaml's pds service, red first with LOG_LEVEL=debug in a fixture; the drift test does not compare
     environment, and local's preflight no longer checks this rule since P1.33b refuses mail there (verify-836-7f7582a
     N1).
+15. Handshake check (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split): after start, `local:up`
+    checks that the leaf the edge serves for each local host has the same SHA-256 as `unset-dev-env/local-leaf.pem`.
+    On a mismatch it takes the stack down and exits non-zero with a fixed-word reason. Red test: a served leaf that
+    differs from the copy brings the stack down. The drift test is unaffected: the copy is not a compose mount.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
 
 Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
-tests pass, the real `compose.local.yaml` test under `--env local` (item 12) passes, and check is green.
+tests and item 15's handshake red test pass, the real `compose.local.yaml` test under `--env local` (item 12) passes,
+and check is green.
 
 ---
 
@@ -8110,7 +8158,14 @@ If a file mount on the read-only root fails, stop and report; never add a writab
 needs a `.github/` change, that change is its own check step before this one (id from the step book on request), and
 it needs Alex's typed line.
 
-Done when the run is green in CI on this step's PR and check is green.
+README, as docs riding this product step (SE-6; book edit 2026-10-14-outside-review-lows, item 3): a "Run it locally"
+section, written here because this step's run proves `compose.local.yaml` starts. It covers installing Node 26 (nvm
+reading `.nvmrc`); the sibling folders `../unset-dev-env` and `../unset-dev-secrets`, what each holds and that they
+are never committed, pointing to `docs/human/runbooks/dev-stack-secrets.md` to create them; the one compose command;
+and the local origin to open. No secret values and no example values that look like real keys. The wipe line waits for
+P2.25's local arm: until then the section says the wipe is not built yet and documents no command that fails.
+
+Done when the run is green in CI on this step's PR, the README section is in, and check is green.
 
 ---
 

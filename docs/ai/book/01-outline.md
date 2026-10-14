@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 289 steps: 265 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 290 steps: 266 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -458,6 +458,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18, P1.34z | `phase-2.md` |
 | P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
+| P1.33r | Share in-flight identity lookups (after P2.02, which it depends on) | [SEC] | P2.01, P2.02 | `phase-1.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
 | P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
@@ -688,6 +689,7 @@ flowchart TD
   P1_29i["P1.29i Token reader judges every outbound key"]
   P1_34c["P1.34c Local app site with a dev leaf"]
   P1_34a["P1.34a Edge reader accepts local app site"]
+  P1_33r["P1.33r In-flight identity lookups shared"]
   P1_33w["P1.33w Binds to the dev CA folder refused"]
   P1_33x["P1.33x Local leaf names and expiry"]
   P1_33y["P1.33y Per-file site mounts on local"]
