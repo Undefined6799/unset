@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 279 steps: 255 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 281 steps: 257 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -382,6 +382,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11n | Name test helpers apart; keep them out of images | — | P0.09n | `phase-1.md` |
 | P1.11k | Strip the snakeoil key from the postgres image | [SEC] | — | `phase-1.md` |
 | P1.33s | Scan each image's exported filesystem (check, SE-6) | [SEC] [ALEX] (typed line) | P1.11k | `phase-1.md` |
+| P1.33c | Accept the PDS scan findings until 2026-11-13 (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.33e | Refuse dev while PDS exceptions remain | [SEC] | P1.33c | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
 | P1.34w | Tighten the wrapper's argument handling | [SEC] | — | `phase-1.md` |
@@ -640,6 +642,8 @@ flowchart TD
   P1_11n["P1.11n Test helpers out of images"]
   P1_11k["P1.11k Snakeoil key stripped from postgres"]
   P1_33s["P1.33s Exported filesystem secret scan"]
+  P1_33c["P1.33c PDS scan findings accepted"]
+  P1_33e["P1.33e Dev refused while exceptions remain"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
   P1_34l["P1.34l Secrets folder listing"]
@@ -1025,6 +1029,7 @@ flowchart TD
   P1_33k --> P1_29s
   P1_33l --> P1_29s
   P1_27l --> P1_33b
+  P1_33c --> P1_33e
   P1_33b --> P1_29s
   P1_33j --> P1_33l
   P1_34z --> P1_29t
@@ -1166,7 +1171,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 15 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 16 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -1180,7 +1185,8 @@ Arachnid application, and the Phase 1 exit.
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before going public (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a | `phase-1.md` |
+| P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
@@ -1196,6 +1202,7 @@ flowchart TD
   P1_33["P1.33 Server baseline"]
   P1_33a["P1.33a Retire the 0x40 prototype before going public"]
   P1_33p["P1.33p Open the home server to the public"]
+  P1_33d["P1.33d PDS scan exceptions cleared"]
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
   P1_27s["P1.27s publish and sign images"]
@@ -1205,6 +1212,7 @@ flowchart TD
   P1_33 --> P1_33a
   P1_33 --> P1_34
   P1_33a --> P1_34
+  P1_33d --> P1_34
   P1_34 --> P1_33p
   P1_33a --> P1_33p
   P1_33p --> P1_35

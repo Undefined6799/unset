@@ -8585,6 +8585,52 @@ refused with the variable unset); `local_without_mail_passes`; `local_any_smtp_k
 
 ---
 
+### P1.33c — Accept the PDS scan findings until 2026-11-13
+Tags: [SEC] [ALEX] (typed line)            Depends on: —
+Slice 1, issue #831, check path (`.github/trivyignore.pds.yaml`, `.github/workflows/images.yml`,
+`.github/workflows/mirror.yml`, `scripts/ci/trivyignore.ts`), kind/fix, lane the third thread (it owns the image scan
+steps, P1.33s); book edit 2026-10-13-pds-0.4.5037-findings, architecture's ruling of 2026-10-14 20:40Z and its step-book
+mapping. Authority: Alex's tap "Accept for now" at 2026-10-14T20:34:16Z on the card "Accept the PDS image's 30 known
+security issues while it runs only on your machine?" (#774's pin is kept). It needs his typed line "yes PDS exceptions
+.github/trivyignore.pds.yaml .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci".
+
+**What:**
+- A new `.github/trivyignore.pds.yaml`, passed (`--ignorefile`) only to the scan of `ghcr.io/bluesky-social/pds` in
+  `images.yml` and `mirror.yml`. Every other scan keeps `/dev/null` or the shared file, and the shared
+  `.github/trivyignore.yaml` stays empty: a shared entry for, say, the libssl CVE would also silence it in our own
+  images.
+- One entry per id that CI's scan of the real image reports, taken from the red run's annotations; nothing from the
+  record's reconstruction that CI did not report. Each entry has `id`, `expired_at: 2026-11-13` (30 days from the tap)
+  and a `statement` naming the PDS digest `sha256:3a8feb34…`: "newest upstream release, local stack only, accepted by
+  Alex 2026-10-14T20:34:16Z, removed on re-pin or before P1.34". Each is scoped to the PDS image's path or PURL where
+  Trivy allows it.
+- `scripts/ci/trivyignore.ts` holds the PDS file to the shared file's rules, with a 30-day maximum in place of 90.
+
+On 2026-11-13 the checker turns CI red: the choice goes back to Alex (re-pin if Bluesky has released a fix, otherwise a
+new card to extend, patch or revert). Nothing is extended without him. The re-pin is watched by the mirror check-in (the
+coordinator's), which also reads `ghcr.io/v2/bluesky-social/pds/tags/list`, and by Renovate on the pin.
+
+Done when `pds_ignorefile_max_30_days`, `pds_ignorefile_wired_to_pds_scan_only` (images.yml and mirror.yml) and
+`shared_ignorefile_never_names_pds` pass, the mirror and images runs go green on the pinned digest, and check is green.
+
+---
+
+### P1.33e — Refuse dev while PDS exceptions remain
+Tags: [SEC]            Depends on: P1.33c
+Slice 1, issue #833, product (`deployment/preflight`), lane the third thread; book edit
+2026-10-13-pds-0.4.5037-findings, architecture's ruling of 2026-10-14 20:40Z and its step-book mapping. It only reads
+the file, so it lands as soon as P1.33c does, never waiting for the re-pin. The ruling let this ride P1.34 or P1.33d;
+P1.34 is an [ALEX] step with no code and P1.33d is check class, so it is its own product step.
+
+**What:** a dev and prod preflight check: under `--env dev` or `prod` the preflight refuses to start while
+`.github/trivyignore.pds.yaml` has any entry; `--env local` ignores the file. So the accepted image never reaches the
+home server or the 0x40.space stack.
+
+Done when, red first, tests show dev and prod with one entry refused, local with entries passing, and an absent file
+treated as empty, and check is green.
+
+---
+
 ### P1.29i — Judge every outbound PDS key in the token reader
 Tags: [SEC]            Depends on: —
 Slice 1, issue #798, product (`tests/support/`, `tests/integration/`), lane the third thread; book edit
@@ -12954,9 +13000,24 @@ sequenceDiagram
 
 ---
 
+### P1.33d — Clear the PDS scan exceptions
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33c (and the re-pin)
+Slice 2, issue #832, check path (`.github/trivyignore.pds.yaml`, `scripts/ci`), lane the third thread; book edit
+2026-10-13-pds-0.4.5037-findings, architecture's ruling of 2026-10-14 20:40Z and its step-book mapping. It lands after
+the re-pin to a PDS release newer than 0.4.5037 (a Renovate PR or a lane PR on `images.lock`, product, merged first so
+the scan stays green). With no upstream fix it cannot be built, and P1.34 waits for Alex's choice (patch or wait). It
+needs his typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
+
+**What:** delete every entry of `.github/trivyignore.pds.yaml` and add `pds_ignorefile_empty`. Any finding the new image
+still reports goes back to Alex as a card; nothing is carried over.
+
+Done when `pds_ignorefile_empty` passes on the re-pinned image and check is green.
+
+---
+
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
