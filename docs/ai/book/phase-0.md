@@ -2637,12 +2637,13 @@ Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `tr
 
 ### P0.09y — Guard the legal-hold tables in migrations
 Tags: [ALEX] (typed line)            Depends on: P4.07c            Plan: rule SE-6
-Check class (`scripts/guards/`, `.github/CODEOWNERS`), kind/build; issue #826; book edit
-2026-10-13-codex-813-close-expired-hold, architecture amendment 3 of 2026-10-14 00:03Z and its step-book mapping, from
-the verifier of #824 (verify-824-414343c, "Observation for architecture"). Product migrations run as migrator, and
-P0.09c treats DML as neutral, so a product migration could copy the cleanup key somewhere `web` can read, delete the
-sealed transmission and fingerprint rows directly, or rewrite audit rows; review is the only barrier. That is acceptable
-while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a tightening.
+Check class (`scripts/guards/`, `.github/CODEOWNERS`, `scripts/workspace/codeowners.test.ts`), kind/build; issue #826;
+book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment 3 of 2026-10-14 00:03Z and its step-book
+mapping, from the verifier of #824 (verify-824-414343c, "Observation for architecture"). Product migrations run as
+migrator, and P0.09c treats DML as neutral, so a product migration could copy the cleanup key somewhere `web` can read,
+delete the sealed transmission and fingerprint rows directly, or rewrite audit rows; review is the only barrier. That is
+acceptable while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a
+tightening.
 
 **Deferred (2026-10-14).** This step's design is under architecture review after verify-824-e2d6dbd.md (G1: dynamic
 SQL and built-ins that run query strings; G2 and G3: tables the list's rule covers but the list omitted). Its goal
@@ -2656,8 +2657,15 @@ first, P4.07c would name guarded tables and stop being product; after P4.07c the
 the first step that opens a hold (P4.07 depends on it), and before any key is provisioned on a stack. Its outline row
 therefore sits in Phase 4, below P4.07c.
 
-Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y migration
-guard", relayed by id to that lane. Without his line, P4.07 waits; nothing is reworded around the guard.
+Also (verify-843-10ab68c N1 and N2; book edit 2026-10-14-verify-843-notes): this step already edits CODEOWNERS' last
+section, so `scripts/workspace/codeowners.test.ts` gains two cases. N1: the `init-local/` line is pinned beside the
+`init/` line; today moving it to the end of the section stays green. N2: a later line for the same path with a
+different owner is refused; that case also stays green today.
+
+Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y
+.github/CODEOWNERS scripts/guards scripts/workspace" (book edit 2026-10-14-verify-843-notes; it replaces "yes P0.09y
+migration guard", which Alex had not typed), relayed by id to that lane. Without his line, P4.07 waits; nothing is
+reworded around the guard.
 
 ---
 
