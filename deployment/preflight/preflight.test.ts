@@ -1988,8 +1988,10 @@ describe("preflight C26 and C27 (P1.30y)", () => {
       ...fakeFs(s.root),
     });
     expect(missingFolder.lines).toContain(reaches);
-    // The usual root context does not reach it: the folder sits beside the checkout, not in it.
-    expect(failed((await run("..", "deployment/images/node-app.Dockerfile")).lines)).not.toContain("C26");
+    // The usual root context does not reach it: the folder sits beside the checkout, not in it. Only P1.35a's rule that
+    // a prod host has no dev CA folder at all refuses.
+    const usual = (await run("..", "deployment/images/node-app.Dockerfile")).lines;
+    expect(usual.filter((line) => / C26 /.test(line))).toEqual(["FAIL C26 dev CA folder present on a prod host"]);
   });
 
   // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (b)): a build context is sent to the
@@ -2478,6 +2480,7 @@ secrets:
       leaf = LEAF,
       devRoot = DEV_ROOT,
       setUp = () => undefined,
+      deps = {},
       ...s
     }: Stack & {
       links?: Record<string, string>;
@@ -2485,6 +2488,7 @@ secrets:
       leaf?: string | null;
       devRoot?: string | null;
       setUp?: (root: string) => void;
+      deps?: Partial<Deps>;
     } = {},
   ) {
     const { root, file } = stack({
@@ -2504,6 +2508,9 @@ secrets:
       mkdirSync(join(dirname(root), "unset-dev-trust"), { recursive: true });
       writeFileSync(join(dirname(root), "unset-dev-trust/root.pem"), devRoot);
     }
+    // Local needs the dev CA (P1.35a): the folder with its key, one link each.
+    mkdirSync(devCaOf(root), { mode: 0o700 });
+    writeFileSync(join(devCaOf(root), "root.key"), "fixture\n", { mode: 0o400 });
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     for (const path of remove) rmSync(join(root, path));
     setUp(root);
@@ -2511,6 +2518,7 @@ secrets:
       root,
       run: fakeRun().run,
       ...fakeFs(root),
+      ...deps,
     });
     return { ...result, root };
   }
@@ -2572,9 +2580,7 @@ secrets:
       let key = "";
       const result = await local((text) => text, {
         setUp: (root: string) => {
-          mkdirSync(devCaOf(root), { mode: 0o700 });
           key = join(devCaOf(root), "root.key");
-          writeFileSync(key, "fixture\n", { mode: 0o400 });
           const to = link(root);
           if (to !== null) linkSync(key, to);
         },
@@ -2589,6 +2595,106 @@ secrets:
       const { line, key } = await run(where);
       expect(line).toBe(`FAIL C26 dev CA file has extra hard links: ${key}`);
     }
+  });
+
+  test("c26_dev_ca_folder_is_judged_by_lstat_in_every_env", async () => {
+    // P1.35a (architecture on verify-861-9ae3539, record 2026-10-12-p134c-p134d-local-dev-root-ca, last sections): the
+    // folder is a real directory, walked by our own lstat recursion that follows no link; every error refuses, local
+    // needs the folder, dev judges it when present, and prod refuses it outright.
+    const c26 = (lines: string[]) => lines.find((line) => /^[A-Z]+ C26 /.test(line));
+    const onLocal = async (setUp: (root: string) => void, deps: Partial<Deps> = {}) =>
+      c26((await local((text) => text, { setUp, deps })).lines);
+    const onEnv = async (env: "dev" | "prod", setUp: (root: string) => void) => {
+      const s = stack();
+      setUp(s.root);
+      const result = await preflight(["--env", env, "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+      });
+      return c26(result.lines);
+    };
+    const folder = (root: string) => devCaOf(root);
+    const made = (root: string) => {
+      mkdirSync(folder(root), { mode: 0o700 });
+      writeFileSync(join(folder(root), "root.key"), "fixture\n", { mode: 0o400 });
+    };
+    let seen = "";
+    const note = (path: string) => {
+      seen = path;
+      return path;
+    };
+    expect(await onLocal(() => undefined)).toBe("PASS C26 ok");
+    // S1: local needs the folder; a link or a file in its place is not one.
+    expect(await onLocal((root) => rmSync(folder(root), { recursive: true }))).toBe(
+      "FAIL C26 input missing: unset-dev-ca",
+    );
+    const moved = (root: string) => {
+      renameSync(folder(root), join(dirname(root), "store-ca"));
+      symlinkSync("store-ca", note(folder(root)));
+    };
+    expect(await onLocal(moved)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    const file = (root: string) => {
+      rmSync(folder(root), { recursive: true });
+      writeFileSync(note(folder(root)), "fixture\n");
+    };
+    expect(await onLocal(file)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    // S3: root.pem at the top and sub/x below, each hard-linked into the checkout on its own, are each refused.
+    for (const entry of ["root.pem", "sub/x"]) {
+      const linked = (root: string) => {
+        mkdirSync(join(folder(root), "sub"), { mode: 0o700 });
+        for (const name of ["root.pem", "sub/x"]) writeFileSync(join(folder(root), name), "fixture\n");
+        linkSync(note(join(folder(root), entry)), join(root, "deployment/ca-copy"));
+      };
+      expect(await onLocal(linked), entry).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    }
+    // N1: a link inside the folder, here to a folder outside it, is never followed.
+    const pointing = (root: string) => {
+      mkdirSync(join(dirname(root), "outside"));
+      symlinkSync(join(dirname(root), "outside"), note(join(folder(root), "out")));
+    };
+    expect(await onLocal(pointing)).toBe(`FAIL C26 dev CA folder holds a link: ${seen}`);
+    // An entry the walk cannot read (mode 000, under any uid): a listing that throws and an entry lstat cannot see.
+    const sub = (root: string) => mkdirSync(note(join(folder(root), "sub")), { mode: 0o700 });
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const unlisted = await onLocal(sub, {
+      readdir: (path) => {
+        if (path.endsWith("/unset-dev-ca/sub")) throw denied;
+        return readdirSync(path);
+      },
+    });
+    expect(unlisted).toBe(`FAIL C26 dev CA folder entry cannot be read: ${seen}`);
+    // The fixture's own lstat, which reads the secrets as the web uid's, for every path but the one it cannot see.
+    let at = "";
+    const blind = (hide: (root: string) => string) => (path: string) =>
+      path === hide(at) ? null : (fakeFs(at).lstat?.(path) ?? null);
+    const unseen = await onLocal(
+      (root) => {
+        at = root;
+        sub(root);
+      },
+      { lstat: blind((root) => join(folder(root), "sub")) },
+    );
+    expect(unseen).toBe(`FAIL C26 dev CA folder entry cannot be read: ${seen}`);
+    // The folder itself unreadable: lstat sees nothing, but it is there, so it is not absent either. (A realpath that
+    // throws already fails C26 in the context checks that run first.)
+    const hidden = await onLocal(
+      (root) => {
+        at = root;
+      },
+      { lstat: blind(folder) },
+    );
+    expect(hidden).toMatch(/^FAIL C26 dev CA folder cannot be read: \/.+\/unset-dev-ca$/);
+    // S2: dev passes without the folder and judges it when present; prod refuses its presence.
+    expect(await onEnv("dev", () => undefined)).toBe("PASS C26 ok");
+    expect(await onEnv("dev", made)).toBe("PASS C26 ok");
+    const hardLinked = (root: string) => {
+      made(root);
+      linkSync(note(join(folder(root), "root.key")), join(root, "deployment/ca-copy"));
+    };
+    expect(await onEnv("dev", hardLinked)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    expect(await onEnv("prod", () => undefined)).toBe("PASS C26 ok");
+    expect(await onEnv("prod", made)).toBe("FAIL C26 dev CA folder present on a prod host");
   });
 
   test("local_c2_admits_builds_and_run_only_vendor_images", async () => {

@@ -7,6 +7,7 @@ import {
   fstatSync,
   lstatSync,
   openSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   realpathSync,
@@ -42,6 +43,8 @@ export type Deps = {
   lstat?: (path: string) => Stats | null;
   realpath?: (path: string) => string | null;
   readlink?: (path: string) => string;
+  /** The names in a folder, throwing on any error (P1.35a); `readdirSync` unless a test passes one. */
+  readdir?: (path: string) => string[];
   statfs?: (path: string) => { type: number };
   uid?: number;
   checks?: readonly Check[];
@@ -353,6 +356,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     lstat: deps.lstat ?? lstatOrNull,
     realpath: deps.realpath ?? realpathOrNull,
     readlink: deps.readlink ?? ((path) => readlinkSync(path)),
+    readdir: deps.readdir ?? ((path) => readdirSync(path)),
     statfs: deps.statfs ?? ((path) => statfsSync(path)),
     uid: deps.uid ?? process.getuid?.() ?? -1,
   };

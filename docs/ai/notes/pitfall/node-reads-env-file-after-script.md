@@ -40,3 +40,5 @@ Re-checked at P1.27l, which adds `local` to `--env`'s values and the usage text;
 above still hold.
 Re-checked at P1.33k, which drops `stack.ts`'s unused `node:fs` and `node:path` imports left by P1.33h's move to
 `shared/host-pin`; no flag, argv form or child environment changed, and the rules above still hold.
+Re-checked at P1.35a, which adds a `readdir` input to `inputs.ts` for the dev CA folder walk; no flag, argv form or
+env-file read changed, and the rules above still hold.
