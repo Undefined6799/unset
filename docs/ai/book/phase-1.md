@@ -8374,7 +8374,7 @@ and check is green.
 ---
 
 ### P1.34v — Run a local PLC directory in the local stack
-Tags: [SEC] [ALEX]            Depends on: P1.34u, P1.34d, Alex's card
+Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d
 Slice 1, issue #782, product (`deployment/compose.local.yaml`, its network table, the image lock, the local PDS env),
 lane the third thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 4 of 2026-10-13-local-plc;
 book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 and 3 to
@@ -8398,11 +8398,12 @@ the local file).
   `dev-public.example.env`) has no PLC service and uses `https://plc.directory`.
 - This step adds the service, database wiring and network to P1.34d's `compose.local.yaml`, with the db service's
   one read-only mount of P1.34u's `init-local/`; the drift test allows exactly those differences.
-- The image, by Alex's card (the coordinator asks; recommended: the upstream image, **local** stack only): either the
-  upstream did-method-plc image pinned by digest, with a `localOnly: true` lock entry, pre-merge scan and age evidence;
-  or a build from pinned upstream source on our node base. A local-only test fails the PLC image, service, network or
-  database in any compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml`
-  mounts `init-local/`.
+- The image (Alex tapped "Allow pinned" at 2026-10-14T20:43:34Z on the card "Allow Bluesky's PLC directory server
+  image, pinned by digest, on the local stack only?"; book edit 2026-10-13-local-plc-steps, "Alex's PLC image card
+  answered"): the upstream did-method-plc image pinned by digest, with a `localOnly: true` lock entry; the PR carries
+  its age and pre-merge scan evidence. A local-only test fails the PLC image, service, network or database in any
+  compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml` mounts
+  `init-local/`.
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
