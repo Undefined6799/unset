@@ -1312,7 +1312,35 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   test("c14_dev_mode_fails", async () => {
     await expectOnly("C14", { pdsEnv: { PDS_DEV_MODE: "true" } });
     await expectOnly("C14", { pdsEnv: { PDS_DEV_MODE: "1" } });
-    expect(failed((await check({ pdsEnv: { PDS_DEV_MODE: "false" } })).lines)).toEqual([]);
+  });
+
+  test("c14_safety_off_keys_fail", async () => {
+    // P1.34k: the same list as the compose test. Each denied key fails C14, and the reason names the key only.
+    for (const [name, value] of [
+      ["PDS_DISABLE_SSRF_PROTECTION", "true"],
+      ["PDS_DISABLE_SSRF_PROTECTION", "false"],
+      ["PDS_DEV_MODE", "false"],
+      ["DEV_MODE", "1"],
+      ["PDS_X_DISABLE_Y", "true"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINKS", "true"],
+    ] as const) {
+      const line = await expectOnly("C14", { pdsEnv: { [name]: value } });
+      const reason = line?.slice("FAIL C14 ".length) ?? "";
+      expect(reason, `${name}=${value}`).toContain(name);
+      expect(reason, `${name}=${value}`).not.toContain(value);
+    }
+  });
+
+  test("c14_confirmation_link_exemption_is_exact", async () => {
+    // The one exemption is the exact pair. false, TRUE and 1 are denied; C16 still requires the exact value too.
+    for (const value of ["false", "TRUE", "1"]) {
+      const result = await check({ pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: value } });
+      expect(failed(result.lines), value).toEqual(["C14", "C16"]);
+      const reason = result.lines.find((entry) => entry.startsWith("FAIL C14 "))?.slice("FAIL C14 ".length);
+      expect(reason, value).toContain("PDS_EMAIL_DISABLE_CONFIRMATION_LINK");
+      expect(reason, value).not.toContain(value);
+    }
+    expect(failed((await check()).lines)).toEqual([]);
   });
 
   test("c15_handle_domain_0x40_me_fails", async () => {
@@ -1324,7 +1352,9 @@ describe("preflight C13 to C24 (P1.30s)", () => {
 
   test("c16_confirmation_link_required", async () => {
     await expectOnly("C16", { pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: null } });
-    await expectOnly("C16", { pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "false" } });
+    // A wrong value is also a safety-off key, so C14 fails with C16 (P1.34k). Absence is C16 alone.
+    const wrong = await check({ pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "false" } });
+    expect(failed(wrong.lines)).toEqual(["C14", "C16"]);
   });
 
   test("c19_moderation_mail_missing_fails", async () => {
