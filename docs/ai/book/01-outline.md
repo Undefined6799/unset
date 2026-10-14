@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 281 steps: 257 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 282 steps: 258 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -411,7 +411,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34y | Add an inert local PLC policy to net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
-| P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
+| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] | P1.33i | `phase-1.md` |
+| P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i, P1.33o | `phase-1.md` |
 | P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
 | P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
@@ -664,6 +665,7 @@ flowchart TD
   P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z Identity resolves through the local PLC"]
   P1_33i["P1.33i Preflight may import shared/host-pin"]
+  P1_33o["P1.33o Host-pin kept a leaf"]
   P1_33h["P1.33h Host pin moved to shared/host-pin"]
   P1_33j["P1.33j Token reader uses the shared pin"]
   P1_33k["P1.33k Node base for the token reader"]
@@ -1034,6 +1036,8 @@ flowchart TD
   P1_33j --> P1_33l
   P1_34z --> P1_29t
   P1_33i --> P1_33h
+  P1_33i --> P1_33o
+  P1_33o --> P1_33h
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_33k --> P1_34d

@@ -67,12 +67,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z,
   P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
-  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.34f, P1.34p,
-  P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a,
-  P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33j,
-  P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.29s, P1.29t, P1.34g, P1.34i,
-  P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
-  23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33c, P1.33e,
+  P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m,
+  P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i,
+  P1.33o, P1.33h, P1.33j, P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b,
+  P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36
+  (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit
+  P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -291,6 +292,7 @@ flowchart LR
   P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z identity resolves through the local PLC"]
   P1_33i["P1.33i preflight may import shared/host-pin ALEX"]
+  P1_33o["P1.33o host-pin kept a leaf"]
   P1_33h["P1.33h host pin moved to shared/host-pin"]
   P1_33j["P1.33j token reader uses the shared pin"]
   P1_33k["P1.33k node base for the token reader"]
@@ -565,6 +567,8 @@ flowchart LR
   P1_33j --> P1_33l
   P1_34z --> P1_29t
   P1_33i --> P1_33h
+  P1_33i --> P1_33o
+  P1_33o --> P1_33h
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_34c --> P1_34d
@@ -8481,8 +8485,35 @@ Done when both fixtures are red without the row change, the import passes with i
 
 ---
 
-### P1.33h — Move the host pin into shared/host-pin
+### P1.33o — Keep shared/host-pin a leaf in depcruise
 Tags: [SEC]            Depends on: P1.33i
+Slice 1, issue #841, check path (`scripts/lint/.dependency-cruiser.cjs` and `scripts/lint/depcruise.test.ts`),
+kind/build, lane Cursor with the P1.33i family (Alex's 20:24:47Z choice; directive
+`/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-829-host-pin-leaf, from
+verify-829-f0a94ca-r2 S1 and S2. The preflight's allowance to import `shared/host-pin/index.ts` is only as narrow as
+host-pin's own imports: under the generic shared row, a later product-only PR could make host-pin import any shared
+module or npm package. P1.33h depends on it and merges after it; the two cannot share a PR (SE-6).
+
+**What:**
+1. `host-pin` joins LEAF_SHARED (`.dependency-cruiser.cjs:55`).
+2. A new row `shared-host-pin`: from `^(shared/host-pin/)`, to `^$1` and CORE only, with no NPM and no other shared
+   module (the shape of shared-admin-envelope, `:129`).
+3. Red fixtures: host-pin importing `../config`, a shared sibling, and an npm package (fast-check), each refused.
+   Green fixtures: a Node built-in, a file inside host-pin, and a `*.test.ts` file inside host-pin that imports vitest
+   (test files stay under TOOLING, `:48`).
+4. S2: a fixture pins the leading ^ of the preflight row's host-pin path (`:145`), so
+   `deployment/images/shared/host-pin/index.ts` is refused.
+5. Escape the dot at `:145` (`index\\.ts$`), and fix the comment at `depcruise.test.ts:147`.
+
+Widening the row later is a loosening and needs Alex's typed line. Typed line for this step: "yes P1.33o scripts/lint
+depcruise shared-host-pin row LEAF_SHARED".
+
+Done when each red fixture fails before the change and passes after it, and check is green.
+
+---
+
+### P1.33h — Move the host pin into shared/host-pin
+Tags: [SEC]            Depends on: P1.33i, P1.33o
 Slice 1, issue #795, product, kind/refactor (move only), lane the third thread; book edit 2026-10-13-host-pin-steps
 (Amendment 2), from architecture's Amendments 3 and 4 of 2026-10-13-p129h-local-token-reader. P1.33j depends on it.
 
