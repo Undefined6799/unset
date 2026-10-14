@@ -390,6 +390,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33u | Make the image secret scan gate (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33s | `phase-1.md` |
 | P1.33v | Scan shipped mirrors with no allow rules (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33u | `phase-1.md` |
 | P1.33c | Accept the PDS scan findings until 2026-11-13 (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35b | Give host-pin a security review owner (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33e | Refuse dev while PDS exceptions remain | [SEC] | P1.33c | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
@@ -429,7 +430,6 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33x | Check the local leaf names and expiry (split from P1.34d) | [SEC] | P1.33w | `phase-1.md` |
 | P1.33y | Accept per-file site mounts on local (split from P1.34d) | [SEC] | P1.33x | `phase-1.md` |
 | P1.35a | Close the dev CA folder rule's gaps (after P1.33y) | [SEC] | P1.33y | `phase-1.md` |
-| P1.35b | Give host-pin a security review owner (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a | `phase-1.md` |
 | P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.34d, P1.34q | `phase-1.md` |

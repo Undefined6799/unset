@@ -68,13 +68,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
-  P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
-  P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w, P1.33x, P1.33y,
-  P1.35a, P1.35b, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
-  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
-  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the
-  slice exit P2.13a.
+  P1.33c, P1.35b, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y,
+  P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q,
+  P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w,
+  P1.33x, P1.33y, P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s,
+  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled
+  forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13
+  and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -8019,7 +8019,8 @@ Done when the DID-resolution tests fail on main and pass with the change, and ch
 
 ### P1.32b — Share in-flight handle checks
 Tags: [SEC] trusted            Depends on: P1.33r
-Slice 1, issue #865, trusted base (`domains/identity/verify-handle.ts` and its tests), kind/feature, lane Phase 1
+Slice 1, issue #865, trusted base (`domains/identity/verify-handle.ts` and its tests, and
+`infrastructure/net-guard/src/dns.test.ts`), kind/feature, lane Phase 1
 right after P1.33r's PR merges; book edit 2026-10-14-outside-review-lows, "P1.33r split under SE-6". P1.33 has no free
 letters, so the id comes from P1.32. Like any trusted-base PR it touches nothing outside trusted base, and Alex reviews
 it as code owner; it needs no typed line, because it is not a check path and tightens nothing he decided.
@@ -8055,15 +8056,22 @@ kind/fix, lane Phase 1 after P1.32b; book edit 2026-10-14-verify-864-fixture-did
 Nothing from Alex. The DID itself is quoted in the record, not here, so this page never matches the grep below.
 
 **What:** the real-looking `did:plc:` value that verify-864 found breaks the fixture rule (`did:plc:` plus 24 copies of
-one letter, or `did:web:` on an RFC 2606 host). Replace it with `did:plc:` plus 24 copies of one letter in
-`domains/identity/syntax.test.ts:6,12,26,27`, `domains/identity/resolve-did.test.ts:12`,
-`shared/log/logger.test.ts:226,255`, `shared/log/logger.hardening.test.ts:45` and `shared/ui/showcase/Showcase.tsx:144`.
-The 25-character negative case at `syntax.test.ts:12` becomes 25 copies of the same letter, so it stays one character
-too long. Every assertion keeps its meaning: the logger tests must still see the DID redacted.
+one letter, or `did:web:` on an RFC 2606 host). Measured on main at 23:37Z (book edit 2026-10-14-verify-868-fixes, S4):
+- the value itself at `domains/identity/syntax.test.ts:6`, `:26`, `:27` and `:28` (`:28` with `#atproto`) becomes
+  `did:plc:` plus 24 copies of one letter; the 25-character negative case at `:12` becomes 25 copies of the same letter,
+  so it stays one character too long;
+- the near-copies at `:11` (23 characters), `:13` (upper case) and `:14` (ends in `1`) become 23 copies, 24 upper-case
+  copies, and 23 copies followed by `1`. Each keeps its comment and stays invalid for the same reason;
+- `shared/log/logger.test.ts:226`, `:255` and `shared/log/logger.hardening.test.ts:45` (test fixtures), and
+  `shared/ui/showcase/Showcase.tsx:144` (UI showcase sample data; product either way, N3).
+`domains/identity/resolve-did.test.ts:12` is not in the list: #864 already replaces it. Every assertion keeps its
+meaning: the logger tests must still see the DID redacted.
 
-Done when a grep of the repo for the old value returns only the `net-guard` line (until P1.32b lands), the touched
-tests pass, and check is green. No guard enforces the fixture rule for DIDs; one would be a check-path step with Alex's
-typed line, and is not booked.
+Done when a case-insensitive grep of the repo for the DID's first 23 characters (the value is in book edit
+2026-10-14-verify-864-fixture-did, never quoted here) returns nothing, which catches every near-copy; the touched tests
+pass; and check is green. P1.32c depends on P1.32b, which replaces the `net-guard` line; if #865 merges without it, that
+line gets its own trusted step, and the grep may return only it until then (N2). No guard enforces the fixture rule for
+DIDs; one would be a check-path step with Alex's typed line, and is not booked.
 
 ---
 
@@ -8168,25 +8176,59 @@ check is green.
 
 ### P1.35a — Close the dev CA folder rule's gaps
 Tags: [SEC]            Depends on: P1.33y
-Slice 1, issue #871, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before
-P1.34d (it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
+Slice 1, issue #871, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before P1.34d
+(it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
 2026-10-14-p134d-split, "P1.35a" section, carrying architecture's ruling on verify-861-9ae3539 (S1, S2, S3, N1; last
-section of 2026-10-12-p134c-p134d-local-dev-root-ca) word for word. P1.33w merged as #861, so the ruling is its own
-step; every P1.33 and P1.34 letter is taken, and the id means nothing about P1.35's lexicon authority. A tightening:
-nothing from Alex.
+section of 2026-10-12-p134c-p134d-local-dev-root-ca), quoted below (book edit 2026-10-14-verify-868-fixes, S2). P1.33w
+merged as #861, so the ruling is its own step; P1.33 has no free letters, and P1.34's only unused letter (P1.34h) was
+released and is still named in history; the id means nothing about P1.35's lexicon authority. A tightening: nothing from
+Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the dev root key
 reaching a container through a symlinked or hard-linked path, an unreadable folder passing, or the folder present on
 prod, answered by the rules and red cases below.
 
-**What:**
-- S1: the folder is judged by lstat and must be a real directory. Under local, an absent folder is input missing. Every
-  lstat, readdir or realpath error refuses (`build.ts:166`, `:170`).
-- N1: our own lstat recursion, with no recursive readdir. Any symlink inside refuses, and nlink 1 holds at every depth.
-- S2: the rule runs under every env. Dev checks the folder when it exists. Prod refuses if the folder is present. The env
-  comparisons stay positive allowlists.
-- S3: the `root.pem` plus `sub/x` fixture, and red cases for a symlinked folder, a symlink pointing out, mode 000, prod
-  with the folder present, and dev with a hard-linked key. The symlinked-folder fixture turns red.
+**What:** architecture's ruling (~23:20Z), quoted:
+
+> All of these are tightenings and land as one follow-up product step (deployment/preflight; the step book gives the
+> letter).
+>
+> **S1: fail closed on shape and on every error.**
+> - The folder `unset-dev-ca` is judged by `lstat`, never `stat`. It must be a real directory. A symlink, or any other
+>   non-directory, is a refusal: "dev CA folder is not a real directory: <path>".
+> - Under local, an absent folder fails as `input missing`, because local needs the CA. Under dev, an absent folder
+>   passes. Under prod, see S2.
+> - Every `lstat`, `readdir` or `realpath` error inside the rule is a refusal naming the path, never a skip. Lines
+>   build.ts:166 and :170 change accordingly.
+> - The PR's fixture that treats a symlinked folder as valid becomes a red case.
+>
+> **N1: no following links.**
+> - The walk is our own recursion using `lstat` and `readdirSync(..., { withFileTypes: true })` without `recursive`.
+>   Node 26's recursive readdir follows symlinked directories.
+> - Any symlink anywhere inside the folder is a refusal. The folder holds only regular files and real subdirectories.
+> - Every regular file at any depth must have nlink 1.
+>
+> **S2: run under every env.**
+> - **local:** as ruled, folder required.
+> - **dev:** the same checks whenever the folder exists, because compose.dev.yaml's three builds use the checkout root
+>   as context, so a hard link there would reach an image.
+> - **prod:** the dev CA folder must not exist next to the checkout at all. Its presence is a refusal: "dev CA folder
+>   present on a prod host". A prod host never needs the dev root, and finding it there means a host was set up from the
+>   wrong runbook.
+> - The local-only env guard is removed. `UNSET_ENV` comparisons stay positive allowlists (P1.34z).
+>
+> **S3: tests that kill the three surviving mutants.**
+> - A fixture with `root.pem` at the top and `sub/x`, each hard-linked into the checkout, must refuse on each of them.
+>   That catches "no recursion", "only root.key" and "only the first entry".
+> - Add red cases for:
+>   - a symlinked folder;
+>   - a symlink inside the folder pointing to a directory outside it;
+>   - an unreadable entry (mode 000);
+>   - prod with the folder present;
+>   - dev with a hard-linked key.
+
+Also a red case: a FIFO inside the folder (the folder holds only regular files and real subdirectories; book edit
+2026-10-14-verify-868-fixes, S2).
 
 Done when each red case fails on main and passes with the change, and check is green.
 
@@ -8195,11 +8237,12 @@ Done when each red case fails on main and passes with the change, and check is g
 ### P1.35b — Give host-pin a security review owner
 Tags: [SEC] [ALEX] (typed line)            Depends on: —
 Slice 1, issue #872, check path (`.github/CODEOWNERS` and `scripts/workspace/codeowners.test.ts`), kind/fix, lane
-Cursor; book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" (word for word) and "Mapping:
-item 7 becomes P1.35b". P1.33o's item 7 cannot wait for P0.09y (Phase 4): until it lands, a product-only PR can change
+Cursor; book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" (quoted) and "Mapping: item 7
+becomes P1.35b". P1.33o's item 7 cannot wait for P0.09y (Phase 4): until it lands, a product-only PR can change
 `shared/host-pin`, which the preflight imports, without security-review ownership. P1.33o (#850), P1.33f (#863) and
-P1.33u (#866) have merged, so none can carry it. Every P1.33 and P1.34 letter is taken; the id means nothing about
-P1.35's lexicon authority. Typed line: "yes P1.35b .github/CODEOWNERS scripts/workspace shared/host-pin security
+P1.33u (#866) have merged, so none can carry it. P1.33 has no free letters, and P1.34's only unused letter (P1.34h) was
+released and is still named in history; the id means nothing about P1.35's lexicon authority (book edit
+2026-10-14-verify-868-fixes, N4). Typed line: "yes P1.35b .github/CODEOWNERS scripts/workspace shared/host-pin security
 review" (`scripts/workspace` is added to the ruling's line because the test lives there; architecture is told).
 
 **What:** add `/shared/host-pin/ @Undefined6799` to CODEOWNERS' Supply chain block, not the trusted-base section. A
@@ -8227,10 +8270,11 @@ book before opening it.
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
    command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The `local-leaf.pem` lines (the
-   cert-only copy P1.33x's C18 judges) are already in the runbook from P1.33x; this item points to them
-   (book edit 2026-10-14-verify-857-fixes, S2(c)). It copies the root into
-   `unset-dev-trust/root.pem` (item 5) with `cp`, never `ln`, so nlink stays 1, at mode 0644 (which meets "not group-
-   or other-writable"), and writes nothing else into that folder. The token reader's dev-root fixture
+   cert-only copy P1.33x's C18 judges) are already in the runbook from P1.33x; this item points to them (book edit
+   2026-10-14-verify-857-fixes, S2(c)). It copies the root into `unset-dev-trust/root.pem` (item 5) with P1.33x's root
+   line, `install -D -m 0644 root.pem unset-dev-trust/root.pem`, never a link, so nlink stays 1 and the mode meets "not
+   group- or other-writable"; it writes nothing else into that folder (book edit 2026-10-14-verify-868-fixes, S1,
+   superseding "cp" in the split record). The token reader's dev-root fixture
    (`tests/integration/pds-email-token.test.ts:25`, `/srv/unset-dev-env/dev-root-ca.pem`) and whatever passes the real
    path move to `unset-dev-trust/root.pem` here, not in P1.33y (book edit 2026-10-14-p134d-split, "P1.33y root path
    mapping confirmed").

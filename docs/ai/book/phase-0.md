@@ -2618,11 +2618,11 @@ book edit 2026-10-14-verify-847-outline-fixes, S1.
 ---
 
 ### P0.09z — Pin the outline check's comparisons
-Tags: [ALEX] (typed line)            Depends on: P0.09w (merged) Check class (`scripts/docs/outline.ts` and
-`scripts/docs/docs.test.ts`), kind/build; issue #858; lane routed by the coordinator; book edit
-2026-10-14-verify-847-outline-fixes, from verify-847-afbc77f S2-S4 and N2. The P2.26aq to P2.26f rename it needed landed
-in batch 55 (#857), so it no longer depends on P2.26f (book edit 2026-10-14-verify-857-fixes, S1). It needs Alex's typed
-line "yes P0.09z scripts/docs outline check equality ids".
+Tags: [ALEX] (typed line)            Depends on: P0.09w (merged)
+Check class (`scripts/docs/outline.ts` and `scripts/docs/docs.test.ts`), kind/build; issue #858; lane routed by the
+coordinator; book edit 2026-10-14-verify-847-outline-fixes, from verify-847-afbc77f S2-S4 and N2. The P2.26aq to P2.26f
+rename it needed landed in batch 55 (#857), so it no longer depends on P2.26f (book edit 2026-10-14-verify-857-fixes,
+S1). It needs Alex's typed line "yes P0.09z scripts/docs outline check equality ids".
 
 **What:**
 1. S2: the heading comparison is set equality in both directions. Red fixtures: the heading names an extra id, the row
@@ -2634,7 +2634,9 @@ line "yes P0.09z scripts/docs outline check equality ids".
    the pattern is refused, never skipped. Red fixtures: `P0.090`, `P7.01` and `P1.23rr`.
 4. N2: a row with no heading of its own passes when its parent (the id with its trailing letter dropped) has a heading
    and the row's id appears in that section's body; only rows that fail both are reported. Launch-gate headings and
-   en-dash headings are read, each with a red fixture (book edit 2026-10-14-verify-857-fixes, S5). The stop rule stays:
+   en-dash headings are read, each with a red fixture (book edit 2026-10-14-verify-857-fixes, S5). A row marked
+   "*(outline row only; no body yet)*" passes (P4.00 and P4.14a today); the checker reads that exact marker, and
+   nothing else exempts a row (book edit 2026-10-14-verify-868-fixes, S3). The stop rule stays:
    the first run must report zero rows on the batch-56 book, or the step reports the rows and stops; the fixes go to a
    book batch first.
 
@@ -2663,6 +2665,9 @@ Lane: Phase 2, which handles check paths, like P0.09w. It needs Alex's typed lin
 functions", relayed by id to that lane. Without his line, P4.07g waits; nothing is reworded to pass the classifier.
 
 Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `trusted_function`, and check is green.
+
+Where, as built: the probe test `scripts/guards/grant-isolation.test.ts`, which #867 added under the directive's rules 3
+and 4 and the Done-when (book edit 2026-10-14-verify-867-notes, N3).
 
 ---
 
@@ -2696,6 +2701,11 @@ different owner is refused; that case also stays green today.
 P1.33o's item 7 (the `/shared/host-pin/` security-review CODEOWNERS line) does not ride this step: it cannot wait for
 Phase 4, so it is P1.35b (book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" and "Mapping:
 item 7 becomes P1.35b"). This step's CODEOWNERS edit stays the guarded-schema paths only.
+
+Also (verify-867-649c77a N1; book edit 2026-10-14-verify-867-notes): the probe at
+`scripts/guards/grant-isolation.test.ts:146-171` stays green if the three trusted-function names become glob forms
+(`core.*`, `core.close_*`, `*close_expired_hold`). This step adds one `arrayContaining` assertion on the exact names. It
+is a tightening in `scripts/guards`, which this step already touches, and the typed line below covers it.
 
 This book text lags #826 on purpose: the guarded-schemas rewrite enters the book only after the plan thread's ADR 0022
 docs PR merges, which waits on Alex's typed line "yes guarded schemas ADR docs/ai/PLAN.md docs/human/decisions" (book
