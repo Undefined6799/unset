@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 283 steps: 259 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 285 steps: 261 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -382,6 +382,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11n | Name test helpers apart; keep them out of images | — | P0.09n | `phase-1.md` |
 | P1.11k | Strip the snakeoil key from the postgres image | [SEC] | — | `phase-1.md` |
 | P1.33s | Scan each image's exported filesystem (check, SE-6) | [SEC] [ALEX] (typed line) | P1.11k | `phase-1.md` |
+| P1.33u | Make the image secret scan gate (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33s | `phase-1.md` |
+| P1.33v | Scan shipped mirrors with no allow rules (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33u | `phase-1.md` |
 | P1.33c | Accept the PDS scan findings until 2026-11-13 (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33e | Refuse dev while PDS exceptions remain | [SEC] | P1.33c | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
@@ -644,6 +646,8 @@ flowchart TD
   P1_11n["P1.11n Test helpers out of images"]
   P1_11k["P1.11k Snakeoil key stripped from postgres"]
   P1_33s["P1.33s Exported filesystem secret scan"]
+  P1_33u["P1.33u Image secret scan gates"]
+  P1_33v["P1.33v Shipped mirrors scanned, no allow rules"]
   P1_33c["P1.33c PDS scan findings accepted"]
   P1_33e["P1.33e Dev refused while exceptions remain"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
@@ -1016,6 +1020,8 @@ flowchart TD
   P1_34d --> P1_33n
   P1_34q --> P1_33n
   P1_11k --> P1_33s
+  P1_33s --> P1_33u
+  P1_33u --> P1_33v
   P1_27l --> P1_33t
   P1_33t --> P1_34d
   P1_34t --> P1_34u
@@ -1947,7 +1953,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1981,7 +1987,11 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
 - **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
   LEAF_SHARED".
-- **P1.33s (#835):** a typed line, "yes P1.33s .github/workflows exported-filesystem secret scan in images.yml".
+- **P1.33u:** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
+  scan gate".
+- **P1.33v:** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
+  allow rules".
+- P1.33s is done: merged as 7c56327 (#835).
 - P1.33i is done: merged as 6f32ae3 (#829).
 - **P1.29a (#442):** his card answer "Allow pinned" (2026-10-07T13:00:19Z), already given and quoted in the body.
 - **P1.29y:** a typed line, "yes P1.29y images.yml".

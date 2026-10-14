@@ -67,13 +67,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z,
   P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
-  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33c, P1.33e,
-  P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m,
-  P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i,
-  P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z,
-  P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b,
-  P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice
-  exit P2.13a.
+  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
+  P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
+  P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
+  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v,
+  P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
+  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12,
+  P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -7641,6 +7641,8 @@ Slice 1, issue #807, check path (`.github/workflows/images.yml`, and the coverag
 lane the third thread; book edit 2026-10-13-p133s-exported-fs-secret-scan, from architecture's
 2026-10-13-image-secret-scan-gap. Not paused: it fixes a hole on main. It needs Alex's typed line "yes P1.33s
 .github/workflows exported-filesystem secret scan in images.yml".
+As built: #835, merged as 7c56327 (Cursor). P1.33u and P1.33v follow from its verify (book edit
+2026-10-14-verify-835-secret-scan).
 
 **What:** for each image `images.yml` builds, create a container without starting it, `docker export` its filesystem,
 and run `trivy rootfs --scanners secret --exit-code 1` on it, with the same Trivy pin, no ignore file and no skip. It
@@ -7650,6 +7652,74 @@ runs beside the existing per-image scan; the vuln scan is unchanged. The coverag
 
 Done when the new job is green on a branch with P1.11k merged and red on a fixture image that carries a test key, the
 PR shows both runs, and check is green.
+
+---
+
+### P1.33u — Make the image secret scan gate
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33s (merged, 7c56327)
+Slice 1, issue (pending), check path (`.github/workflows/images.yml`, the comment at
+`.github/workflows/mirror.yml:62-66` and a new test in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family
+(Alex's 20:24:47Z choice; directive `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit
+2026-10-14-verify-835-secret-scan, step 1 (verify-835-5a57467 S1-S4, N1-N6). It does not wait on P1.27r. Typed line:
+"yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret scan gate".
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- a skipped or cancelled secret scan reading as green: S1;
+- the scan job edited away or weakened unnoticed: S2's mutants;
+- an empty export scanning "0 files" and passing: S3.
+
+**What:**
+- S1: `scan-export` joins the `scan` aggregate's `needs` (`images.yml:319`). The aggregate fails when any need's result
+  is anything but `success` (failure, cancelled or skipped). P1.27r is not amended; it will require a `scan` that now
+  covers the export.
+- S2: a test in the pattern of `scripts/ci/mirror-scan.test.ts` and `pins-job.test.ts` pins the job's existence, its
+  needs edge, the scanner flags and the failure exit.
+- S3: an export with zero files, or without the image's expected entry file (`/etc/os-release` plus the image's
+  ENTRYPOINT target), fails before Trivy runs.
+- S4: the `mirror.yml:62-66` comment says what is true after P1.33v.
+- N1-N6 ride along: the stale v0.74.0 comments become 0.75.0, and the rest follow the report. N6 (node:26-trixie-slim
+  running unmodified at `compose.dev.yaml:197`) is covered by P1.33v's mirror export scan, not by a comment.
+
+Size: about 60 source lines and 150 test lines.
+
+Done when, red first: all 15 of the verifier's mutants die; an export with zero files, or one missing `/etc/os-release`
+or the ENTRYPOINT target, fails before Trivy runs; `scan` fails on a skipped or cancelled `scan-export`; and check is
+green.
+
+---
+
+### P1.33v — Scan shipped mirrors with no allow rules
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33u
+Slice 1, issue (pending), check path (`.github/workflows/mirror.yml`, `.github/workflows/images.yml`, a committed
+trivy-secret config under `.github/`, and tests in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family;
+book edit 2026-10-14-verify-835-secret-scan, step 2 (verify-835-5a57467 S5, S6). It does not wait on P1.27r. Typed
+line: "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy allow rules".
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- a key inside an upstream image we run unmodified: S6;
+- a key under a shipped `node_modules` or `usr/share` hidden by Trivy's built-in allow rules: S5;
+- a later allow rule widening the scan unseen: each needs a recorded reason, a test and Alex's typed line.
+
+**What:**
+- S6: `mirror.yml` gains the same export secret scan for every mirrored image that runs unmodified (pds, caddy, the
+  node base where it runs as-is, and any other `mirror.list.json` entry compose runs directly), with P1.33u's gating.
+- S5: the image secret scans disable Trivy's built-in allow rules: the `disable-allow-rules` list in a committed
+  trivy-secret config names every built-in rule id for the pinned 0.75.0, with a test that the list matches that
+  version's rule set. Any narrower allow rule added later gets a recorded reason and a test; adding one is a loosening
+  and needs Alex's typed line.
+- Measure first: the PR runs the tightened scans on current main's images and mirrors and lists every finding. If
+  there are none, it lands. If there are any, it stops and reports them: a real secret goes to Alex at once (rotation
+  is his); a false positive gets a proposed narrow allow rule, under his typed line. A pds finding joins
+  `/mnt/project-files/unset-plan/book-edits/2026-10-13-pds-0.4.5037-findings.md` (`.github/trivyignore.pds.yaml`
+  covers vulnerabilities, not secrets) and is not waved through.
+
+Main's red mirror scan (pds 0.4.5037 and caddy CVEs) is unchanged by P1.33u and P1.33v.
+
+Size: about 80 source lines and 120 test lines.
+
+Done when the disable list matches Trivy 0.75.0's built-in rule ids (tested), each mirror that runs unmodified has a
+gated export scan, the PR lists the tightened scans' findings on current main (stopping as above if any appear), and
+check is green.
 
 ---
 
