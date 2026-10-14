@@ -38,3 +38,5 @@ P1.34s lists the wrapper's own flags in `WRAPPER_OPTIONS`, and `stack.test.ts` b
 or `import`, as `cli.test.ts` does for the preflight's.
 Re-checked at P1.27l, which adds `local` to `--env`'s values and the usage text; no flag changed, and the rules
 above still hold.
+Re-checked at P1.33k, which drops `stack.ts`'s unused `node:fs` and `node:path` imports left by P1.33h's move to
+`shared/host-pin`; no flag, argv form or child environment changed, and the rules above still hold.

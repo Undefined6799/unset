@@ -15,9 +15,8 @@
 // preflight under that folder's import row (P1.27w), and runs the preflight as a process, never by import, so its exit
 // code is the gate.
 import { spawnSync } from "node:child_process";
-import { lstatSync, readlinkSync, statfsSync } from "node:fs";
 import { hostname } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { hostWalk, localDockerHost, UsageError, type WalkInputs } from "../../shared/host-pin/index.ts";
 
