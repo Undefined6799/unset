@@ -980,7 +980,7 @@ Size: ~150 source lines, ~220 test lines
 ---
 
 ### P4.07c — Legal-hold cleanup tables (split from P4.07, SE-6)
-Tags: [SEC]            Depends on: P4.03, P3.07, P3.16c, P1.14a (P4.00 confirms the list)            Plan: §5.8 "Abuse-material law (decision 9)"; §9 trusted base (rule SE-6: new tables and the grants on them are feature work); book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment of 22:16Z and its step-book mapping
+Tags: [SEC]            Depends on: P4.03, P3.07, P3.16c, P1.14a            Plan: §5.8 "Abuse-material law (decision 9)"; §9 trusted base (rule SE-6: new tables and the grants on them are feature work); book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment of 22:16Z and its step-book mapping. P4.00 confirms the list.
 Where: one migration with the tables P4.07's feature migration used to create, moved unchanged: `legal_hold` (with its
   closed state), `legal_hold_transmission`, the hold fingerprint rows, and `admin`'s insert-only permit and receipt
   tables (no "verified" column); the cleanup-key table, owned by migrator, with no grants and no rows; their registry
@@ -2946,7 +2946,7 @@ Diagram: none.
 
 ### P4.21a — Bluesky pictures through our media server (fetch, verify, fingerprint, re-encode, serve)
 
-Tags: [SEC] [MOD]            Depends on: P3.09, P2.16, P2.16b, P2.17, P2.01, P1.18a, P4.07 (the labels step is a soft link only: until labels land, P4.21's "any label → hide" applies; the editor pass of 2026-10-04 removed it from this list because it closed a cycle through P4.21)            Plan: §2 rule 9 (never raw `getBlob` to browsers), §5.2 media proxy, §5.8 "Fingerprints" (every picture the app processes); Alex 16:41Z, P4b-E5 option C (answer 33; plan change relayed by the coordinator); vault note `atproto-blob-serving-security`
+Tags: [SEC] [MOD]            Depends on: P3.09, P2.16, P2.16b, P2.17, P2.01, P1.18a, P4.07            Plan: §2 rule 9 (never raw `getBlob` to browsers), §5.2 media proxy, §5.8 "Fingerprints" (every picture the app processes); Alex 16:41Z, P4b-E5 option C (answer 33; plan change relayed by the coordinator); vault note `atproto-blob-serving-security`. The labels step is a soft link only: until labels land, P4.21's "any label → hide" applies; the editor pass of 2026-10-04 removed it from this list because it closed a cycle through P4.21.
 Where: `interfaces/media/routes/bsky-image.ts`, `domains/content/media/bsky-image.ts` (URL minting in `web`, fetch and verify in `media`), the `bsky-cache/` object prefix and its lifecycle rule; tests beside them
 Size: ~260 source lines, ~300 test lines
 

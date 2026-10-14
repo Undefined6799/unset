@@ -37,11 +37,11 @@ Depth: **build-ready**. 47 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.06 | Repo guards as Vitest tests, each with a planted failing fixture (includes the `pds-admin` file exemption and the `ip-columns` check) | [SEC] | P0.05 | `phase-0.md` |
 | P0.07 | CI workflow: pinned images and actions, full gate set, secrets and OIDC bound to `main` | [SEC] [ALEX] (tail: required checks) | P0.06 | `phase-0.md` |
 | P0.08 | Renovate replaces Dependabot; exact pins; lockfile and workspace-link guard | [SEC] [ALEX] (tail: app install) | P0.07 | `phase-0.md` |
-| P0.09 | Repository docs: slim CLAUDE.md/AGENTS.md, SECURITY.md, licence line, ADR index, the book | — | P0.03 | `phase-0.md` |
+| P0.09 | Repository docs: slim CLAUDE.md/AGENTS.md, SECURITY.md, licence line, ADR index, the book | — | P0.03, P0.05 | `phase-0.md` |
 | P0.09a | ~~Carried-over notes from the prototype~~ **Retired** (plan §8 Phase 0: no old note carried wholesale; `.00` steps port what they need) | — | P0.09 | `phase-0.md` |
 | P0.09b | Severity definitions, labels, bug template and triage form | [ALEX] | P0.03, P0.07 | `phase-0.md` |
 | P0.09e | Classify grant changes for the trusted base (split from P0.09c) | [SEC] | P0.03 | `phase-0.md` |
-| P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b, P0.09e | `phase-0.md` |
+| P0.09c | Change-shape checks: commit messages and PR title, PR size, PR template headings (added, decision 35) | [ALEX] (tail: required check) | P0.07, P0.08, P0.09, P0.09b, P0.09e, P0.03 | `phase-0.md` |
 | P0.09f | Let the root lockfile ride with a trusted package's dependency change (SE-6 ruling 2026-10-05 02:50Z) | [SEC] | P0.09c | `phase-0.md` |
 | P0.09g | Repo-root tidy (config files out of the root) | — | P0.09f, P0.13 | `phase-0.md` |
 | P0.09h | Size guard counts a pure rename once | — | P0.09g, P0.09i | `phase-0.md` |

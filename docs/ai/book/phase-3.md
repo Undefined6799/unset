@@ -356,7 +356,7 @@ sequenceDiagram
 ## Steps
 
 ### P3.00 — Refine Phase 3
-Tags: [STOP]            Depends on: P2 exit (every Phase 0–2 step merged)            Plan: §8 Phase 3; README "Depth of detail"; architecture principles 13–16
+Tags: [STOP]            Depends on: P2.26 (Phase 2 exit; every Phase 0–2 step merged)            Plan: §8 Phase 3; README "Depth of detail"; architecture principles 13–16
 Where: `breakdown/phase-3.md` (this file) through the book's review process; `docs/human/decisions/` for any boundary change
 Size: no source; one revision of this file and one review round
 

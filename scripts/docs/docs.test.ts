@@ -24,6 +24,7 @@ import {
   testNames,
   top15Problems,
 } from "./docs.ts";
+import { cycleProblems, headingMismatchProblems, readPhaseTexts, unknownDependencyProblems } from "./outline.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (file: string): string => readFileSync(join(ROOT, file), "utf8");
@@ -204,5 +205,71 @@ describe("architecture rule table", () => {
     ]);
     expect(architectureTableProblems([...all, row("U", "checked: `README.md`")], known)).toHaveLength(1);
     expect(architectureTableProblems([], known)).toEqual(["the architecture rule table has no rows"]);
+  });
+});
+
+describe("outline", () => {
+  const outline = read("docs/ai/book/01-outline.md");
+  const phases = readPhaseTexts(ROOT);
+  const table = (rows: string): string => `| Id | Step | Tags | Deps | Owner file |\n|---|---|---|---|---|\n${rows}`;
+
+  test("outline_dependency_ids_exist", () => {
+    expect(unknownDependencyProblems(outline)).toEqual([]);
+    const planted = table(
+      [
+        "| P0.91 | live | — | P0.90 | `phase-0.md` |",
+        "| P0.92 | ~~old~~ **Retired** | — | P0.89 | `phase-0.md` |",
+        "| P0.93 | ~~old~~ **Folded** into P0.92 | — | P0.88 | `phase-0.md` |",
+        "| P0.94 | live | — | P0.92 | `phase-0.md` |",
+      ].join("\n"),
+    );
+    expect(unknownDependencyProblems(`${outline}\n${planted}`)).toEqual([
+      "P0.91 depends on P0.90, which has no outline row",
+    ]);
+  });
+
+  test("outline_graph_acyclic", () => {
+    expect(cycleProblems(outline)).toEqual([]);
+    const cycle = table(
+      [
+        "| P0.91 | a | — | P0.92 | `phase-0.md` |",
+        "| P0.92 | b | — | P0.93 | `phase-0.md` |",
+        "| P0.93 | c | — | P0.91 | `phase-0.md` |",
+      ].join("\n"),
+    );
+    expect(cycleProblems(`${outline}\n${cycle}`)).toEqual(["cycle P0.91 -> P0.92 -> P0.93 -> P0.91"]);
+    const retired = table(
+      [
+        "| P0.94 | ~~old~~ **Retired** | — | P0.95 | `phase-0.md` |",
+        "| P0.95 | live | — | P0.94 | `phase-0.md` |",
+      ].join("\n"),
+    );
+    expect(cycleProblems(`${outline}\n${retired}`)).toEqual([]);
+  });
+
+  test("heading_matches_row", () => {
+    expect(headingMismatchProblems(outline, phases)).toEqual([]);
+    const plantedOutline = table(
+      "| P0.91 | title | — | P0.92 | `phase-9.md` |\n| P0.92 | other | — | — | `phase-9.md` |",
+    );
+    const plantedPhase = {
+      file: "phase-9.md",
+      text: [
+        "### P0.91 — Title",
+        "Tags: —            Depends on: P0.93, Alex's typed approval            Plan: x",
+        "",
+        "### P0.92 — Other",
+        "Depends on: —",
+      ].join("\n"),
+    };
+    expect(headingMismatchProblems(`${outline}\n${plantedOutline}`, [...phases, plantedPhase])).toEqual([
+      "P0.91: heading depends on P0.93; row depends on P0.92",
+    ]);
+    const implied = table("| P0.91 | title | — | P0.92\\* | `phase-9.md` |\n| P0.92 | refine | — | — | `phase-9.md` |");
+    const impliedPhase = {
+      file: "phase-9.md",
+      text: "### P0.91 — Title\nDepends on: —\n\n### P0.92 — Refine\nDepends on: —\n",
+    };
+    expect(headingMismatchProblems(implied, [impliedPhase])).toEqual([]);
   });
 });

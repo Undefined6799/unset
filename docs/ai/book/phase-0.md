@@ -2154,7 +2154,7 @@ Not in this step: P0.09h (pure renames count once in the size guard), which foll
 ---
 
 ### P0.09l — Checks skip draft PRs (Alex, 2026-10-05 20:34Z)
-Tags: —            Depends on: P0.09i (the last step touching pr-shape.yml); any order with P0.09k            Plan: decision 41 (CI advisory on the free plan), DL rules on hand-off
+Tags: —            Depends on: P0.09i (the last step touching pr-shape.yml)            Plan: decision 41 (CI advisory on the free plan), DL rules on hand-off. Any order with P0.09k.
 Where: one check PR. `.github/workflows/ci.yml`, `.github/workflows/pr-shape.yml`, `scripts/guards/workflow-pins.test.ts`
   and `scripts/guards/change-shape-wiring.test.ts`. `required-checks.json` is unchanged. No ADR.
 
@@ -2666,6 +2666,8 @@ Retired 2026-10-12 21:12Z: book edit 2026-10-12-p009o-trusted-product-imports, a
 Amendment 1 item 4 of 2026-10-12-workspace-imports-and-remote-daemon. The resolver, the product-file boundary and the
 CODEOWNERS move only go green together, so all of this step now lives in P0.09n (its amendment 4). Issue #707 is
 folded into #692. The id is not reused.
+
+Depends on: —
 
 ---
 

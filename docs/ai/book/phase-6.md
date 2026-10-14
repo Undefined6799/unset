@@ -190,7 +190,7 @@ Steps added by this file (reasons in each step): **P6.00** (README rule), **P6.0
 ---
 
 ### P6.00 — Refine Phase 6
-Tags: [CHAT] (behaves as a [SPIKE]: a contradiction stops the steps it touches)            Depends on: Phase 5 exit (P5.13); P6.01 runs after this step (it depends on P6.00)            Plan: README "Depth of detail"; architecture principles 13–16
+Tags: [CHAT] (behaves as a [SPIKE]: a contradiction stops the steps it touches)            Depends on: P5.13 (Phase 5 exit)            Plan: README "Depth of detail"; architecture principles 13–16. P6.01 runs after this step (it depends on P6.00).
 Parked for this refine: `MATRIX_SERVER_NAME` is P1.32's permanent constant, so Phase 6 reads it rather than
 adding a config key of that name (P1.32's As built, phase-1.md).
 Where: `docs/ai/phase-6-refine.md` (the delta report); a PR against this book file through the editor (the agent never
