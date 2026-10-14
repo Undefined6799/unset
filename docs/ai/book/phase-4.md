@@ -129,8 +129,8 @@ transition is made by exactly one step, named in the diagram.
 | `review_job(id, subject_kind video\|bsky_post\|comment, subject_ref, kind, state, attempts, run_after, lease_until, worker, last_error_code)` | P4.04 | queue (one per `ReviewJob` kind, P4.11) |
 | `video_fingerprint(upload_id, kind pdq, frame_ms, value, quality)` | P4.06 | PDQ only; deleted with the upload unless held |
 | `fingerprint_result(upload_id pk, verdict, classification, match_type, checked_at, provider_ref)` | P4.06 | |
-| `legal_hold(hold_id pk, did, subject_kind video\|image\|suspected, item_kind NULL, subject_ref, kind report\|analyst, created_at, notified_at, state, case_id, media_key)` (`item_kind` = `video\|bsky_post\|comment\|image\|chat_evidence`, set only for `suspected`, Alex 16:39Z) | P4.07 | the one hold table (P5.07b adds image holds); display copy, `pds-admin` is authoritative; `media_key` names the held media object and is registered in `sealed-columns.json` as a `sealToStream` object column (row key `subject_ref`) |
-| `legal_hold_transmission(hold_id pk, sealed text)` (the `a1.` envelope moved unchanged, so it keeps the context `app.transmission_buffer.sealed\|<subjectRef>`; registered in `sealed-columns.json` with `form: "sealTo"`) | P4.07 | moved from the buffer; never decrypted on any server, only exported as ciphertext by a named owner's own `legal_hold_reader` login (P4.07's offline CLI) |
+| `legal_hold(hold_id pk, did, subject_kind video\|image\|suspected, item_kind NULL, subject_ref, kind report\|analyst, created_at, notified_at, state, case_id, media_key)` (`item_kind` = `video\|bsky_post\|comment\|image\|chat_evidence`, set only for `suspected`, Alex 16:39Z) | P4.07 (created by P4.07c) | the one hold table (P5.07b adds image holds); display copy, `pds-admin` is authoritative; `media_key` names the held media object and is registered in `sealed-columns.json` as a `sealToStream` object column (row key `subject_ref`) |
+| `legal_hold_transmission(hold_id pk, sealed text)` (the `a1.` envelope moved unchanged, so it keeps the context `app.transmission_buffer.sealed\|<subjectRef>`; registered in `sealed-columns.json` with `form: "sealTo"`) | P4.07 (created by P4.07c) | moved from the buffer; never decrypted on any server, only exported as ciphertext by a named owner's own `legal_hold_reader` login (P4.07's offline CLI) |
 | `nudity_result(subject_kind, subject_ref, verdict, max_score, frames_checked, model_sha256, gore_verdict clear\|hold, gore_max_score, gore_model_sha256)` (pk `(subject_kind, subject_ref)`) | P4.08 | gore is hold-only (answer 30) |
 | `text_result(subject_kind, subject_ref, verdict allow\|hold\|block, categories[], max_scores jsonb, rule_hits[], hit_sources[], model_shas jsonb, mode, created_at)` (pk `(subject_kind, subject_ref)`) | P4.09a | scores only, never a copy of the text; deleted with the draft or pending comment |
 | `transcript(upload_id pk, lang, text, segments_json, engine_version)` | P4.09 | |
@@ -4117,6 +4117,9 @@ Plan gaps, outline errors and contradictions found while writing P4.16–P4.28, 
   `fingerprint_match`) and P4.07 defines `legal_hold` (display copy keyed by `upload_id`, `pds-admin` authoritative).
   P4.25's `app.is_held` reads P4.07's table only; image matches never reach the draft store, so P2.16's rows are not
   needed by expiry. The editor should reconcile them into one table or name them apart.
+  *[Superseded 2026-10-14: P2.16 creates no hold table (phase-2.md:2704-2709; test `gate.no_hold_table` at :2801); the
+  one `legal_hold` table is P4.07's design, created by P4.07c (phase-4.md:984-985), and P4.25 reads it through
+  `core.is_held` (:3614-3615), not `app.is_held`.]*
 - **E24 (product choice for Alex; new).** P4.24 forwards a Bluesky report to Bluesky only when the reporter ticks a box,
   unticked by default, because the forward reveals the reporter's account to Bluesky (the same opt-in default as
   decision 4's "also post to Bluesky"). The plan's wording ("so reports about Bluesky posts reach Bluesky") could also
