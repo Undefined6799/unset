@@ -8,7 +8,7 @@
 //   parents no other user can change (P1.27a). A uid that collides with a host account then still cannot reach it.
 
 import type { Stats } from "node:fs";
-import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { dirname, join } from "node:path";
 import {
   FILESYSTEM_NAMES,
   foreignFilesystem,
