@@ -991,13 +991,13 @@ Why a separate step (letter suffix): P0.09e classifies every new SECURITY DEFINE
 definers (P4.07g) and the body of `core.is_held` (P4.07h) cannot share a PR with the tables they read. The tables land
 first, in a product PR (architecture amendment of 22:16Z, "How P4.00 splits the work", step 1).
 Goal: the legal-hold tables exist before anything trusted reads them.
-Inputs: the table definitions P4.07 states; `core.erase_pending_hold` stays P3.07's. Outputs: the tables above, with
-only each table's own column-list grants as P4.07 states them (DELETE as `rowPrivileges`). No definers, no roles, no
-grants on existing objects. The cleanup-key table has no grants at all: P4.07g grants `cleanup_owner` SELECT on it. The
-key value never appears in a migration or in the repo: it is inserted at provisioning, by migrator or the bootstrap
-superuser, from the secret `pds-admin` reads from env, and its rotation (two overlapping keys) is a provisioning action
-recorded in the P3.16c ADR (book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment 2 of 23:42Z and
-its step-book mapping).
+Inputs: the table definitions P4.07 states; `core.erase_pending_hold` stays P3.07's.
+Outputs: the tables above, with only each table's own column-list grants as P4.07 states them (DELETE as
+  `rowPrivileges`). No definers, no roles, no grants on existing objects. The cleanup-key table has no grants at all:
+  P4.07g grants `cleanup_owner` SELECT on it. The key value never appears in a migration or in the repo: it is inserted
+  at provisioning, by migrator or the bootstrap superuser, from the secret `pds-admin` reads from env, and its rotation
+  (two overlapping keys) is a provisioning action recorded in the P3.16c ADR (book edit
+  2026-10-13-codex-813-close-expired-hold, architecture amendment 2 of 23:42Z and its step-book mapping).
 Algorithm: the `CREATE TABLE` statements.
 Edge cases and failures: an UPDATE or DELETE on `admin`'s receipt table → refused (insert-only).
 Threats: the cleanup boundary.
@@ -1041,8 +1041,11 @@ Outputs: per owner, role `lh_<owner>` (class `human`, `LOGIN`, `connectionLimit`
   FUNCTION core.erase_did(…) TO cleanup_owner`; SELECT on `admin`'s permit and receipt tables, DELETE on the sealed
   transmission and fingerprint rows and UPDATE on the hold's closed state (all P4.07c's tables); `GRANT SELECT` on
   P4.07c's cleanup-key table to `cleanup_owner` and nothing else on it; the three definers below, in `core`, with their
-  bodies and pinned `search_path`; `retention`'s EXECUTE on those three only; its `roles.json` entry and matrix `roles`
-  row:
+  bodies and pinned `search_path`, created as `cleanup_owner` (`SET ROLE cleanup_owner`) under a `GRANT CREATE ON SCHEMA
+  core TO cleanup_owner` that the same migration revokes after the last `CREATE FUNCTION` (PostgreSQL 18 ddl-priv and
+  sql-alterfunction: a function's owner needs CREATE on its schema), after `ALTER DEFAULT PRIVILEGES FOR ROLE
+  cleanup_owner REVOKE EXECUTE ON ROUTINES FROM PUBLIC` run as `cleanup_owner` (0003:76-81; phase-1.md:2700-2702; as
+  0008:14-18); `retention`'s EXECUTE on those three only; its `roles.json` entry and matrix `roles` row:
   - `close_expired_hold(hold_id)` (owner `cleanup_owner`, SECURITY DEFINER; `retention` has EXECUTE; called by jobs'
     daily task with a hold id from `recorded_unused_receipts()` only): it never acts on expiry alone. As `cleanup_owner`
     it reads the receipt `admin` recorded for `hold_id`, bytes and tag exactly as received, from `admin`'s insert-only
@@ -1073,8 +1076,8 @@ Outputs: per owner, role `lh_<owner>` (class `human`, `LOGIN`, `connectionLimit`
     DELETE on the sealed transmission and fingerprint rows; UPDATE on the hold's closed state; EXECUTE on `erase_did`.
     `retention` has EXECUTE on the three functions only, with no SELECT on the key table or on `admin`'s tables.
     migrator is its only member (`GRANT cleanup_owner TO migrator WITH SET TRUE, INHERIT FALSE`, as at 0003:65); the
-    bootstrap superuser and migrator are the trusted base outside this boundary (the P3.16c ADR records it). Algorithm:
-    the statements, idempotent like P1.12's.
+    bootstrap superuser and migrator are the trusted base outside this boundary (the P3.16c ADR records it).
+Algorithm: the statements, idempotent like P1.12's.
 Edge cases and failures: a service or job role made a member, directly or through another role → P1.12's
   `class_assertions` fails the build.
 Threats: the legal-hold export and the cleanup boundary.
@@ -1090,7 +1093,7 @@ Threats: the legal-hold export and the cleanup boundary.
 Done when (tests): `roster_complete` and `class_assertions` (P1.12) with the new roles; an `lh_<owner>` has no
   password; the cleanup definers' database tests, moved from P4.07 (forgery, binding and once-only):
   - `close-without-receipt-refused` (a hold id with no recorded receipt → refused, even after expiry; it replaces `close-needs-receipt`); `close-wrong-receipt` (another hold's receipt → refused); `close-with-receipt` (a valid receipt, closed by a call made after the permit has expired as jobs' daily task does, deletes the row and runs any pending erase); `close-untagged-receipt` (an `admin`-role insert of a receipt `pds-admin` did not tag → refused); `close-wrong-permit` (a permit id, or an epoch, that is not `admin`'s recorded permit for that hold → refused; one case each); `close-twice-refused` (the second call, or a duplicate receipt row `admin` inserts for the same hold → refused; it replaces `close-receipt-reused`); `close-receipt-after-permit-expiry` (a receipt whose own time is at or after the recorded permit's expiry → refused; the check compares the receipt's time, never the call time); `close-other-hold-tag` (a valid tag for another hold → refused).
-  - `cleanup-key-acl-exact`: the cleanup-key table's ACL is exactly migrator as owner and `cleanup_owner=r`, with no PUBLIC entry; `cleanup-key-login-roles-refused`: every login role except migrator, enumerated from `pg_roles`, is refused SELECT on the cleanup-key table; `cleanup-owner-no-key-write`: `cleanup_owner` is refused INSERT, UPDATE and DELETE on it; `cleanup-owner-members`: `pg_auth_members`, read transitively, shows exactly migrator's two membership rows in `cleanup_owner` (PostgreSQL's own ADMIN row from creating the role and the migration's SET grant, both with `inherit_option = false`, as `audit_owner_membership` at grants.test.ts:256-271 checks), and no other login role reaches it; `retention-cannot-read-admin-tables` (no SELECT on `admin`'s receipt or permit tables).
+  - `cleanup-key-acl-exact`: the cleanup-key table's ACL is exactly migrator as owner and `cleanup_owner=r`, with no PUBLIC entry; `cleanup-key-login-roles-refused`: every login role except migrator and the bootstrap superuser, enumerated from `pg_roles`, is refused SELECT on the cleanup-key table; `cleanup-owner-no-key-write`: `cleanup_owner` is refused INSERT, UPDATE and DELETE on it; `cleanup-owner-no-schema-create`: `cleanup_owner` holds CREATE on no schema after its migration; `cleanup-owner-members`: `pg_auth_members`, read transitively, shows exactly migrator's two membership rows in `cleanup_owner` (PostgreSQL's own ADMIN row from creating the role and the migration's SET grant, both with `inherit_option = false`, as `audit_owner_membership` at grants.test.ts:256-271 checks), and no other login role reaches it; `retention-cannot-read-admin-tables` (no SELECT on `admin`'s receipt or permit tables).
   - `cleanup-definers-pinned`: a catalog check that the three definers are SECURITY DEFINER, owned by `cleanup_owner`, with `proconfig` `search_path=pg_catalog, <owning schema>` (as P4.25's `expiry_is_held_definer_pinned_search_path`).
 Reuse: none. Not in this step: `core.export_sealed_record`, `app.legal_hold_reader_login`, `pg_hba.conf`, the CLI
   (P4.07); the tables (P4.07c); jobs' callers (P4.07). Diagram: none.

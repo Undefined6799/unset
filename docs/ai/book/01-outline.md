@@ -1434,7 +1434,7 @@ Depth: **detail by risk; P4.00 refines** (contract parts in full, algorithms a r
 | P4.05 | Probe, limits and transcode: ffprobe validation, stripped 1080p master, 360p and 720p faststart renditions, posters | [SEC] | P4.04, P4.03 | `phase-4.md` |
 | P4.06 | Video fingerprints: PDQ on sampled frames, checked through the `FingerprintCheck` stage from the egress step | [SEC] [MOD] | P4.05, P2.16 (`FingerprintCheck` stage, fake), P2.16b (PDQ) | `phase-4.md` |
 | P4.07c | Legal-hold cleanup tables (split from P4.07, SE-6) | [SEC] | P4.03, P3.07, P3.16c, P1.14a | `phase-4.md` |
-| P4.07g | Legal-hold reader logins and the cleanup owner (SE-6) | [SEC] | P4.00\*, P1.12, P4.07c, P3.07, P0.09x | `phase-4.md` |
+| P4.07g | Legal-hold reader logins and the cleanup owner (SE-6) | [SEC] | P1.12, P4.07c, P3.07, P0.09x | `phase-4.md` |
 | P4.07k | Legal-hold domain and the offline export CLI (split from P4.07, SE-6) | [SEC] [MOD] | P4.07g, P4.06, P3.16c, P1.14a | `phase-4.md` |
 | P4.07h | The body of `core.is_held` (split from P4.07, SE-6) | [SEC] [MOD] | P4.07c | `phase-4.md` |
 | P4.07 | Match path: block, sealed per-case legal hold on `pds-admin`'s clock, transmission data held unread, Cybertip.ca report by an owner, no moderator view; the suspected-abuse emergency path (answer 30c) | [SEC] [MOD] | P4.07k, P4.07c, P4.07g, P4.07h, P4.06, P3.16, P3.16c, P4.03, P3.20, P1.14a, P3.07 | `phase-4.md` |
@@ -1561,7 +1561,6 @@ flowchart TD
   P4_27 --> P4_28
   P4_03 --> P4_04g
   P4_04g --> P4_04
-  P4_00 --> P4_07g
   P4_14 --> P4_16g
   P4_16g --> P4_16
   P4_17 --> P4_25g
@@ -1572,7 +1571,6 @@ flowchart TD
   P4_03 --> P4_07c
   P4_07c --> P4_07g
   P4_07c --> P4_07h
-  P4_07g --> P4_07
   P4_07h --> P4_07
   P4_07h --> P4_25
 ```
