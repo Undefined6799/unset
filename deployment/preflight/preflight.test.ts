@@ -2654,6 +2654,9 @@ secrets:
       symlinkSync(join(dirname(root), "outside"), note(join(folder(root), "out")));
     };
     expect(await onLocal(pointing)).toBe(`FAIL C26 dev CA folder holds a link: ${seen}`);
+    // Only regular files and real folders: a FIFO refuses even with one link.
+    const fifo = (root: string) => void execFileSync("mkfifo", [note(join(folder(root), "pipe"))]);
+    expect(await onLocal(fifo)).toBe(`FAIL C26 dev CA folder holds something other than files and folders: ${seen}`);
     // An entry the walk cannot read (mode 000, under any uid): a listing that throws and an entry lstat cannot see.
     const sub = (root: string) => mkdirSync(note(join(folder(root), "sub")), { mode: 0o700 });
     const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
