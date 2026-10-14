@@ -3,9 +3,10 @@
 // the postgres image.
 import { readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
+import { resolveChecked, WALK_REASONS } from "../../../shared/host-pin/index.ts";
 import type { Service } from "../compose-parse.ts";
 import { lockOrNone } from "./lock.ts";
-import { holdsEnvFile, reachesSecretsFolder, resolveChecked, WALK_REASONS } from "./secrets.ts";
+import { holdsEnvFile, reachesSecretsFolder } from "./secrets.ts";
 import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */

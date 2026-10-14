@@ -13,13 +13,11 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import type { WalkInputs } from "./checks/secrets.ts";
+import { DEFAULT_DOCKER_HOST, localDockerHost, type WalkInputs } from "../../shared/host-pin/index.ts";
 import {
   CHILD_ENV_NAMES,
   childEnv,
-  DEFAULT_DOCKER_HOST,
   DOCKER_INFO_DEADLINE_MS,
-  localDockerHost,
   main,
   plan as planStack,
   processRunner,

@@ -1,6 +1,7 @@
 // What every check sees and answers (P1.30). Inputs are read once by index.ts; a check never prints a value from a
 // SecretMap, only a variable name, a path or an image reference.
 import type { Stats } from "node:fs";
+import type { WalkInputs } from "../../../shared/host-pin/index.ts";
 import type { Compose, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 
@@ -20,7 +21,7 @@ export type Run = (
   signal: AbortSignal,
 ) => Promise<{ code: number; stdout: string; stderr: string; missing?: boolean }>;
 
-export type Inputs = {
+export type Inputs = WalkInputs & {
   env: Env;
   /** The repository root: the build context of every *.Dockerfile (C26), and where the Dockerfiles live. */
   root: string;
@@ -49,15 +50,8 @@ export type Inputs = {
   /** Each env file's `dev:ino` as it was read (P1.34p): C9 fails a file it then finds as another file. */
   envReads: ReadonlyMap<string, string>;
   stat: (path: string) => Stats | null;
-  /** Like `stat`, but a symlink is reported as itself (C9 refuses a link anywhere on a mounted secret's path). */
-  lstat: (path: string) => Stats | null;
   /** The path with every link resolved, null when it does not exist, throwing on any other error (C9 fails closed). */
   realpath: (path: string) => string | null;
-  /** A link's target as written (`fs.readlinkSync`), throwing on any error (C9 fails closed). */
-  readlink: (path: string) => string;
-  /** The filesystem a path is on (`fs.statfsSync`), throwing on any error (C9 fails closed). */
-  statfs: (path: string) => { type: number };
-  uid: number;
 };
 
 /** `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED. */
