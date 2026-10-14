@@ -2656,6 +2656,28 @@ secrets:
         "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
         (text) => text.replace("secrets:\n  db_password", `${reader(`${node.ref}:${node.tag}`, TOOLS)}\n  db_password`),
       ],
+      // verify-851 S1: any other digest, digest with no tag, and another *-reader service are all refused.
+      [
+        "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+        (text) =>
+          text.replace(
+            "secrets:\n  db_password",
+            `${reader(`${node.ref}:${node.tag}@sha256:${"0".repeat(64)}`, TOOLS)}\n  db_password`,
+          ),
+      ],
+      [
+        "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+        (text) =>
+          text.replace("secrets:\n  db_password", `${reader(`${node.ref}@${node.digest}`, TOOLS)}\n  db_password`),
+      ],
+      [
+        "FAIL C2 token-reader runs the node base, which only pds-token-reader may",
+        (text) =>
+          text.replace(
+            "secrets:\n  db_password",
+            `  token-reader:\n    image: ${NODE}\n${TOOLS}secrets:\n  db_password`,
+          ),
+      ],
     ];
     for (const [line, edit] of refused) expect(await c2(edit), line).toBe(line);
     // Only the runtime entry: a node builder stage in the lock is never run unbuilt, even as the reader.
