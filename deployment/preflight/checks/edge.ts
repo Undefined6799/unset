@@ -25,6 +25,7 @@ import {
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
+import { appHostProblem, localLeafProblem } from "./local-leaf.ts";
 import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
@@ -279,6 +280,11 @@ function localEdgeZones(inputs: Inputs): Outcome {
   if (files !== null) return files;
   const env = inputs.serviceEnv.get("edge");
   if (env === undefined) return missing("the edge service's environment");
+  const appHost = env.use("APP_HOST", (value) => value);
+  const host = appHostProblem(inputs, appHost);
+  if (host !== null) return host;
+  const leaf = localLeafProblem(inputs, appHost ?? "", env.use("PDS_HOST", (value) => value) ?? "");
+  if (leaf !== null) return leaf;
   return readZones(inputs.edgeDir, sites.dir, env, "local");
 }
 

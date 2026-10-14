@@ -626,6 +626,10 @@ describe("tests/support/pds-email-token.ts", () => {
     expect(result.error).toBe(error);
     expect(result.commands).toEqual([]);
     expect(result.requests).toEqual([]);
+    // verify-852 O4: the local check runs first, so a missing env is refused before the walk is ever reached.
+    const unnamed = await attempt({ ...local(), env: undefined, lstatThrows: { path: "/var/run", error } });
+    expect(unnamed.error).toEqual(new Error("the token reader needs an explicit env"));
+    expect(unnamed.commands).toEqual([]);
   });
 
   test("email_token_docker_runs_on_this_machine_only", async () => {

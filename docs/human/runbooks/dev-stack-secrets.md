@@ -111,6 +111,25 @@ The scratch copy stays inside the locked folder, so no other account can read it
 Rootless Docker is not supported yet: its container uids map to other host uids, so the owners above would be wrong
 and the preflight fails closed.
 
+## The local stack's leaf (P1.33x)
+
+The local edge serves a leaf certificate signed by your dev root (P1.34d writes the full openssl recipe). The preflight
+runs as you and cannot read the leaf secret, which belongs to the edge's uid, so it judges a public copy instead. Write
+both from the one `leaf.pem` that openssl made, in the same step, and never copy the key:
+
+```sh
+sudo install -o 65532 -g 65532 -m 0400 leaf.pem unset-dev-secrets/local_tls_cert
+install -m 0600 leaf.pem unset-dev-env/local-leaf.pem
+install -D -m 0644 root.pem unset-dev-trust/root.pem
+```
+
+`unset-dev-trust/` holds only the dev root's public certificate, which P1.34d binds into pds and web; it is never the
+CA folder, the env folder or the secrets folder. Under `--env local`, C18 fails unless `local-leaf.pem` is one
+certificate issued by `unset-dev-trust/root.pem`, is not a CA, names exactly `APP_HOST` and `PDS_HOST` with no IP
+address, and has at least 14 days left. It also fails unless `APP_HOST` is the host of web's `PUBLIC_ORIGIN`. Renew by
+rerunning the leaf command and all three lines above. From P1.34d on, a stale copy is caught after start: `local:up`
+compares the leaf the edge serves with the copy and takes the stack down on a mismatch.
+
 ## Starting and stopping
 
 Docker Desktop is not supported; use the native Docker Engine on Linux. The wrapper talks only to a Docker socket on

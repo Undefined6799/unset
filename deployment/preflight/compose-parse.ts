@@ -358,8 +358,11 @@ function profiles(r: Reader, spec: YAMLMap): string[] {
   return ["tools"];
 }
 
-/** The one service that may set `logging`, and must: its stdout is the email token (P1.29h). */
-const TOKEN_READER = "pds-token-reader";
+/**
+ * The one service that may set `logging`, and must: its stdout is the email token (P1.29h). It is also the one service
+ * that may run the node base unbuilt (C2 under local, and compose.dev.test.ts).
+ */
+export const TOKEN_READER = "pds-token-reader";
 
 /**
  * `logging` exactly `{driver: none}`, on the token reader only, which must set it: with driver none Docker keeps no
