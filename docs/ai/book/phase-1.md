@@ -8038,6 +8038,12 @@ reaching a container through a bind source or build context, answered by the red
 **What** (P1.34d item 6): C9 and C26 refuse any bind source or build context that reaches `unset-dev-ca`, as they do
 the secrets folder (it joins that list, with red tests).
 
+Also (architecture on verify-861, last section of 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in "Architecture's
+nlink rule rides P1.33w" of book edit 2026-10-14-p134d-split): every regular file in `unset-dev-ca` must have nlink 1,
+checked with lstat; otherwise C26 refuses under local and names the path. Tests: a hard link inside the checkout (red),
+a hard link outside it (red), and nlink 1 (green). The rule is not generalized to everything C9 and C26 walk. If #861
+merges first, the rule becomes its own small product step, with an id from the step book.
+
 Done when the red tests fail on main and pass with the change, and check is green.
 
 ---
