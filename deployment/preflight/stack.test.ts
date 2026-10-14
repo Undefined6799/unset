@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
 import { DEFAULT_DOCKER_HOST, localDockerHost, type WalkInputs } from "../../shared/host-pin/index.ts";
+import { CHILD_ENV as READER_CHILD_ENV } from "../../tests/support/pds-email-token.ts";
 import {
   CHILD_ENV_NAMES,
   childEnv,
@@ -84,6 +85,9 @@ describe("stack wrapper (P1.27w)", () => {
     // Architecture records 2026-10-12-preflight-compose-inputs, F3.3, and 2026-10-12-workspace-imports-and-remote-daemon
     // (2): these names and nothing else; DOCKER_HOST is always set by the wrapper, and DOCKER_CONTEXT never passes.
     expect(CHILD_ENV_NAMES).toEqual(["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"]);
+    // The email-token reader keeps the same list as its own copy (P1.33l, N7; book edit 2026-10-13-host-pin-steps,
+    // Departure 2): one rule, held equal here.
+    expect(READER_CHILD_ENV).toEqual(CHILD_ENV_NAMES);
     const caller = {
       PATH: "/usr/bin",
       HOME: "/home/dev",
