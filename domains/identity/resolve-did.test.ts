@@ -9,7 +9,7 @@ import {
   parseDid,
 } from "./index.ts";
 
-const DID = parseDid("did:plc:ewvi7nxzyoun6zhxrhs64oiz") as Did;
+const DID = parseDid("did:plc:eeeeeeeeeeeeeeeeeeeeeeee") as Did;
 const WEB = parseDid("did:web:example.com") as Did;
 const PLC_URL = new URL("https://plc.directory");
 const ACCEPT = "application/did+ld+json, application/json";
@@ -292,6 +292,22 @@ describe("resolveDid shares in-flight lookups", () => {
     // The earlier flight finished last, but it no longer owned the A, so it did not overwrite the fresher entry.
     expect((await resolve(A, { consistency: "cached" })).pds?.href).toBe("https://new.example.com/");
     expect(held).toHaveLength(2);
+  });
+
+  test("older_fresh_success_refreshes_when_a_newer_fresh_read_fails", async () => {
+    const { resolve, held } = heldResolver();
+    const prime = resolve(A, { consistency: "cached" });
+    await tick();
+    held[0]?.release(ok(withPds(A, "https://zero.example.com")));
+    await prime;
+    const older = resolve(A, { consistency: "fresh" });
+    const newer = kindOf(resolve(A, { consistency: "fresh" }));
+    await tick();
+    held[1]?.release(ok(withPds(A, "https://one.example.com")));
+    held[2]?.release(status(503));
+    expect((await older).pds?.href).toBe("https://one.example.com/");
+    expect(await newer).toBe("unavailable");
+    expect((await resolve(A, { consistency: "cached" })).pds?.href).toBe("https://one.example.com/");
   });
 
   test("outage_is_one_lookup_per_wave", async () => {
