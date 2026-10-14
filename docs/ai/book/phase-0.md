@@ -2612,6 +2612,32 @@ finds them drifting.
 Done when each test has a planted failing fixture (an unknown id, a three-step cycle, a heading whose dependency differs
 from its row), all three pass on main as it stands when built, and check is green. Any real drift
 found on main goes in the same PR's record as a P0.09 book fix, never as an allowlist entry.
+As built: #847, merged as 8dda293. Its 17 direct alignments of outline rows and headings are written up and accepted in
+book edit 2026-10-14-verify-847-outline-fixes, S1.
+
+---
+
+### P0.09z — Pin the outline check's comparisons
+Tags: [ALEX] (typed line)            Depends on: P0.09w (merged), P2.26f
+Check class (`scripts/docs/outline.ts` and `scripts/docs/docs.test.ts`), kind/build; issue #858; lane routed by the
+coordinator; book edit 2026-10-14-verify-847-outline-fixes, from verify-847-afbc77f S2-S4 and N2. It depends on the
+P2.26f rename (batch 55): without it, item 3 would refuse the book. It needs Alex's typed line "yes P0.09z scripts/docs
+outline check equality ids".
+
+**What:**
+1. S2: the heading comparison is set equality in both directions. Red fixtures: the heading names an extra id, the row
+   names an extra id, and both share some ids.
+2. S3: red tests for the four untested refusals: a duplicate row (`outline.ts:97`), a duplicate heading (`:206`), a
+   heading with no row (`:212`), and a heading with no Depends line (`:216`).
+3. S4: one id pattern, `^P[0-6]\.\d{2}[a-z]?$`, used at `outline.ts:12`, `:38` and `:77`. A token that looks like an id
+   but fails the pattern is refused, never skipped. Red fixtures: `P0.090`, `P7.01` and `P1.23rr`.
+4. N2: a row with no heading is reported, and launch-gate headings and en-dash headings are read, each with a red
+   fixture. If N2 surfaces book drift, the step stops and reports it; the fixes go to a book batch first.
+
+Size: about 60 source lines and 200 test lines.
+
+Done when every red fixture fails before the change and passes after it, the check passes on the current book, and
+check is green.
 
 ---
 

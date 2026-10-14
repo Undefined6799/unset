@@ -3248,7 +3248,8 @@ Diagram: none.
 ---
 
 ### P1.14d — Sealed type and column registry (split from P1.14)
-Tags: [SEC]            Depends on: P1.14, P1.13            Plan: §5.3. Or P1.14m, if that step is split.
+Tags: [SEC]            Depends on: P1.14, P1.13            Plan: §5.3
+If P1.14m is split out, it joins Depends.
 Where: `infrastructure/postgres/migrations/0007_sealed_type.sql` (`types.sealed`; built as 0007 in #376, merged
   2026-10-07 00:43Z),
   `infrastructure/postgres/sealed-columns.json`, `SealedColumnId` (`keyof` that JSON, no generator) and the mapping
@@ -6855,7 +6856,7 @@ book; it does not split itself.
 
 ### P1.27e — Give edge image test hooks an explicit budget
 Tags: trusted            Depends on: P1.29z (merged, #649)
-After P1.29o (#655), whose `CONTAINER_MS` it shares.
+Built after P1.29o (#655), whose `CONTAINER_MS` it shares (lane order; both merged).
 As built: merged by Alex at 2026-10-12T16:41:00Z as `def148f` (#661, head e923d12): each of the two files declares
 `CONTAINER_MS = 120_000` (the coordinator's post-merge read of #660, 16:45Z).
 Slice 1, issue #658, trusted base (`deployment/edge/`, CODEOWNERS' last section; kind/feature), lane Phase 1; book edit
@@ -9631,8 +9632,8 @@ Issue #415. Trusted base (book edit 2026-10-07-p128b-edge-leftovers): `/deployme
 the PR carries only `deployment/edge/**`, edge-path tests (`tests/integration/deployment/edge/`) and the ADR status
 line; docs never change its class. If pr-shape reports mixed, the PR stops and asks the step book.
 
-**Tags:** [SEC] · **Depends on:** P1.28 · **Size:** small
-In Phase 2's lane it follows P1.28d and P1.30p, lane order only (merged).
+**Tags:** [SEC] · **Depends on:** P1.28 (merged) · **Size:** small
+In Phase 2's lane it follows P1.28d and P1.30p, lane order only.
 
 **Contents:**
 1. `pds_route_without_zone_fails`, the negative twin of `every_pds_route_has_a_zone`: a fixture PDS route with no

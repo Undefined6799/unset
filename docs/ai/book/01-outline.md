@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 47 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n; P0.09w and P0.09x added 2026-10-13; P0.09y added 2026-10-14, its row in Phase 4 below P4.07c, which it depends on).
+Depth: **build-ready**. 48 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n; P0.09w and P0.09x added 2026-10-13; P0.09y added 2026-10-14, its row in Phase 4 below P4.07c, which it depends on; P0.09z added 2026-10-14).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -62,6 +62,7 @@ Depth: **build-ready**. 47 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09v | Contain Dockerfiles with the native realpath | [SEC] | — | `phase-0.md` |
 | P0.09w | Check the outline: cycles, unknown ids, headings | [ALEX] (typed line) | — | `phase-0.md` |
 | P0.09x | List the cleanup definers as trusted functions | [ALEX] (typed line) | — | `phase-0.md` |
+| P0.09z | Pin the outline check's comparisons (check, SE-6) | [ALEX] (typed line) | P0.09w, P2.26f | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -111,6 +112,7 @@ flowchart TD
   P0_09u["P0.09u Pin the syntax subpath"]
   P0_09v["P0.09v Dockerfiles by native realpath"]
   P0_09w["P0.09w Outline graph check"]
+  P0_09z["P0.09z Outline check comparisons pinned"]
   P0_09x["P0.09x Cleanup definers trusted"]
   P0_09y["P0.09y Legal-hold tables guarded"]
   P0_10["P0.10 Secret scanning"]
@@ -134,6 +136,9 @@ flowchart TD
   P0_06 --> P0_07
   P0_07 --> P0_08
   P0_03 --> P0_09
+  P0_05 --> P0_09
+  P0_03 --> P0_09c
+  P0_09w --> P0_09z
   P0_09 --> P0_09a
   P0_07 --> P0_09b
   P0_08 --> P0_09c
@@ -1286,8 +1291,8 @@ Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.23 | Publish and unpublish | [SEC] | P2.21, P2.22, P1.31, P2.07 | `phase-2.md` |
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
-| P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
+| P2.26f | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
@@ -1888,6 +1893,7 @@ flowchart LR
 
 | Id | Status |
 |---|---|
+| P2.26aq | Renamed **P2.26f** (#859; 2026-10-14, book edit 2026-10-14-verify-847-outline-fixes): it broke the one-trailing-letter rule (`00-README.md:65-68`). Same content, class and place. |
 | P2.16a | Retired. The Arachnid Shield API spike moved to **P5.07b** with the real check (decision 23, global resolution 2). |
 | L.01 part A | Now **P1.33a** in Phase 1, before going public (global resolution 8; P1.33p since 2026-10-13). L.01 keeps part B. |
 | L.02's severity definitions | Now **P0.09b**; L.02 keeps only the gate. |
@@ -1966,7 +1972,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1982,6 +1988,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   "yes docs cycle check scripts/docs").
 - **P0.09x (#825):** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
   it.
+- **P0.09z (#858):** a typed line, "yes P0.09z scripts/docs outline check equality ids".
 - **P0.09y (#826):** a typed line, "yes P0.09y .github/CODEOWNERS scripts/guards scripts/workspace", for the
   `scripts/guards/`, CODEOWNERS and `scripts/workspace/` check paths; P4.07 waits on it.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
