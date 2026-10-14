@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 282 steps: 258 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 283 steps: 259 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -412,7 +412,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
-| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h | `phase-1.md` |
+| P1.33f | Anchor the depcruise exclude to our outputs (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h, P1.33f | `phase-1.md` |
 | P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
 | P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
@@ -665,6 +666,7 @@ flowchart TD
   P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z Identity resolves through the local PLC"]
   P1_33i["P1.33i Preflight may import shared/host-pin"]
+  P1_33f["P1.33f Depcruise exclude anchored"]
   P1_33o["P1.33o Host-pin kept a leaf"]
   P1_33h["P1.33h Host pin moved to shared/host-pin"]
   P1_33j["P1.33j Token reader uses the shared pin"]
@@ -1037,6 +1039,7 @@ flowchart TD
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33o
+  P1_33f --> P1_33o
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_33k --> P1_34d
@@ -1944,7 +1947,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33i, P1.33m, P1.33o, P1.33s, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1975,7 +1978,9 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
 - **P1.33m:** a typed line, "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
-- **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint depcruise shared-host-pin row LEAF_SHARED".
+- **P1.33f:** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
+- **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
+  LEAF_SHARED".
 - **P1.33s (#835):** a typed line, "yes P1.33s .github/workflows exported-filesystem secret scan in images.yml".
 - P1.33i is done: merged as 6f32ae3 (#829).
 - **P1.29a (#442):** his card answer "Allow pinned" (2026-10-07T13:00:19Z), already given and quoted in the body.
