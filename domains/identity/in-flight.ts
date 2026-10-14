@@ -3,40 +3,67 @@
 // to keep its own. The flight runs on its own: the network's timeout bounds it, and no caller's abort cancels it for
 // the others.
 
-/** Tells a running task whether it still owns its DID, so a flight that was superseded never writes its cache. */
-export type StillCurrent = () => boolean;
+/**
+ * Asked by a running task just before it writes its cache: true when no lookup for the DID that started later has
+ * written, and no drop came since this one started. A true answer records the write, so call it only to write.
+ */
+export type MayWrite = () => boolean;
 
 export function createInFlight<K, T>(max: number) {
   const flights = new Map<K, Promise<T>>();
-  // A task that found the map full owns no entry; it may write only if no fresh call or drop happened since it began.
-  let epoch = 0;
+  // Cache writes are ordered by when each lookup started, not by which one holds the map entry: an older lookup's
+  // success still lands when a newer one fails (verify-864-3048c2f B1). Per DID, only while any lookup for it runs:
+  // how many run, the start number of the latest-started lookup that wrote, and the start number at the last drop.
+  const order = new Map<K, { running: number; written: number; dropped: number }>();
+  let started = 0;
+
+  const begin = (key: K): number => {
+    const entry = order.get(key) ?? { running: 0, written: 0, dropped: 0 };
+    entry.running += 1;
+    order.set(key, entry);
+    started += 1;
+    return started;
+  };
+
+  const end = (key: K): void => {
+    const entry = order.get(key);
+    if (entry === undefined) return;
+    entry.running -= 1;
+    if (entry.running === 0) order.delete(key);
+  };
 
   return {
     /**
      * Joins the DID's flight, or starts `task` as a new one. A `fresh` call never joins: it must read after now, so it
      * starts its own flight, which later callers join. When the map is full, a new DID runs `task` alone, as before.
      */
-    share(key: K, fresh: boolean, task: (stillCurrent: StillCurrent) => Promise<T>): Promise<T> {
+    share(key: K, fresh: boolean, task: (mayWrite: MayWrite) => Promise<T>): Promise<T> {
       const joined = fresh ? undefined : flights.get(key);
       if (joined !== undefined) return joined;
-      if (fresh) epoch += 1;
-      const registered = flights.has(key) || flights.size < max;
-      const began = epoch;
-      const stillCurrent = registered ? () => flights.get(key) === flight : () => epoch === began;
-      const flight: Promise<T> = task(stillCurrent).finally(() => {
+      const startedAt = begin(key);
+      const mayWrite: MayWrite = () => {
+        const entry = order.get(key);
+        if (entry === undefined || startedAt <= entry.written || startedAt <= entry.dropped) return false;
+        entry.written = startedAt;
+        return true;
+      };
+      let flight: Promise<T>;
+      flight = task(mayWrite).finally(() => {
+        end(key);
         if (flights.get(key) === flight) flights.delete(key);
       });
       flight.catch(() => {
         // Each caller handles the outcome it awaits; this keeps a flight whose callers all detached from becoming an
         // unhandled rejection.
       });
-      if (registered) flights.set(key, flight);
+      if (flights.has(key) || flights.size < max) flights.set(key, flight);
       return flight;
     },
-    /** The next call starts a new flight, and the running one no longer writes its result. */
+    /** The next call starts a new flight, and no lookup already running for the DID writes its result. */
     drop(key: K): void {
-      epoch += 1;
       flights.delete(key);
+      const entry = order.get(key);
+      if (entry !== undefined) entry.dropped = started;
     },
   };
 }

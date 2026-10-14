@@ -5,7 +5,7 @@
 
 import type { HttpOutcome, IdentityNetwork } from "./contract.ts";
 import { parseDidDoc, type ResolvedDid } from "./did-doc.ts";
-import { awaitFlight, createInFlight, type StillCurrent } from "./in-flight.ts";
+import { awaitFlight, createInFlight, type MayWrite } from "./in-flight.ts";
 import { type Did, parseDid } from "./syntax.ts";
 
 export type IdentityErrorKind = "not_found" | "invalid_doc" | "unavailable";
@@ -91,12 +91,12 @@ export function createDidResolver(options: DidResolverOptions) {
     return entry.resolved;
   };
 
-  /** One network lookup; it caches its result only while it still owns the DID (a fresh lookup supersedes it). */
-  const lookup = async (did: Did, stillCurrent: StillCurrent): Promise<ResolvedDid> => {
+  /** One network lookup; it caches its result unless a lookup for the DID that started later already has. */
+  const lookup = async (did: Did, mayWrite: MayWrite): Promise<ResolvedDid> => {
     const { url, target } = documentUrl(did, options.plcUrl);
     const outcome = await options.network.get(url, { target, maxBytes: MAX_DOC_BYTES, accept: ACCEPT });
     const resolved = documentOf(outcome, did);
-    if (stillCurrent()) remember(resolved);
+    if (mayWrite()) remember(resolved);
     return resolved;
   };
 
@@ -110,7 +110,7 @@ export function createDidResolver(options: DidResolverOptions) {
     if (signal?.aborted) detached();
     const hit = consistency === "cached" ? cached(did) : null;
     if (hit !== null) return hit;
-    const flight = inFlight.share(did, consistency === "fresh", (stillCurrent) => lookup(did, stillCurrent));
+    const flight = inFlight.share(did, consistency === "fresh", (mayWrite) => lookup(did, mayWrite));
     return awaitFlight(flight, signal, detached);
   };
 }
