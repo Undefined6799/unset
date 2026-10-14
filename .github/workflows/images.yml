@@ -21,8 +21,9 @@
 # (scripts/guards/workflows.ts refuses an expression inside run:).
 #
 # P1.33s adds scan-export beside scan-image, for those same images. It creates a container without starting it,
-# exports the filesystem, and runs trivy rootfs --scanners secret. scan still needs only discover and scan-image,
-# so this does not make scan a required check (that stays P1.27r).
+# exports the filesystem, and runs trivy rootfs --scanners secret. P1.33u puts scan-export on scan's needs, so
+# scan is green only when discover, scan-image and scan-export all succeeded. Making scan a required check
+# stays P1.27r.
 
 name: images
 
@@ -156,7 +157,7 @@ jobs:
           export SOURCE_DATE_EPOCH
           docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
             --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" deployment/edge
-      # Trivy v0.74.0: HIGH or CRITICAL with a fixed version fails, and no accepted finding applies (--ignorefile
+      # Trivy v0.75.0: HIGH or CRITICAL with a fixed version fails, and no accepted finding applies (--ignorefile
       # /dev/null, so neither .trivyignore nor .github/trivyignore.yaml is read); the gobinary analyser covers the
       # built Caddy binary.
       - name: Scan
@@ -211,10 +212,10 @@ jobs:
   # name. A custom if without a status function still requires success(), so this job does not run when
   # discover failed (expressions, "Status check functions"). Dockerfile and ignore file reach the shell only
   # as env. A file named Dockerfile is built from its own directory (the edge image); a *.Dockerfile is built
-  # from the repository root (node-app and migrate COPY the repo). Trivy v0.74.0 image:
+  # from the repository root (node-app and migrate COPY the repo). Trivy v0.75.0 image:
   # --severity HIGH,CRITICAL, --ignore-unfixed, --ignorefile (default .trivyignore, so /dev/null reads no
   # ignore file), --exit-code, and --timeout from the parent command (default 5m; 10m matches the other jobs).
-  # https://github.com/aquasecurity/trivy/blob/v0.74.0/docs/guide/references/configuration/cli/trivy_image.md
+  # https://github.com/aquasecurity/trivy/blob/v0.75.0/docs/guide/references/configuration/cli/trivy_image.md
   scan-image:
     name: scan ${{ matrix.name }}
     needs: discover
@@ -258,9 +259,13 @@ jobs:
   # 2026-10-14). Trivy 0.75.0 skips secret analysis on layers guessBaseLayers treats as the base
   # (pkg/fanal/artifact/image/image.go:401-405). docker create does not start the container; docker export writes
   # the flattened filesystem, which `trivy rootfs` scans (docs/guide/references/configuration/cli/trivy_rootfs.md,
-  # tag v0.75.0, the export example). --scanners secret leaves vulnerabilities to the image steps. No --ignorefile,
-  # --skip-dirs or --skip-files. --timeout 10m because the parent default is 5m0s. Same TRIVY_IMAGE pin. fail-fast
-  # is off, as in scan-image, so one image cannot hide another. scan's needs stay discover and scan-image.
+  # tag v0.75.0, the export example). --scanners secret leaves vulnerabilities to the image steps. --ignorefile
+  # /dev/null, so no repo ignore file is read (trivy_rootfs.md, --ignorefile). No --skip-dirs or --skip-files.
+  # --timeout 10m because the parent default is 5m0s. Same TRIVY_IMAGE pin. fail-fast is off, as in scan-image,
+  # so one image cannot hide another. P1.33u (Alex's typed line "yes P1.33u .github/workflows/images.yml
+  # .github/workflows/mirror.yml scripts/ci secret scan gate", 2026-10-14): an export with no files, or without
+  # /etc/os-release or the ENTRYPOINT's first element, fails before Trivy, and "0 files scanned" is not green.
+  # scan's needs are discover, scan-image and scan-export.
   scan-export:
     name: scan-export ${{ matrix.name }}
     needs: discover
@@ -308,15 +313,73 @@ jobs:
             echo "docker export failed"
             exit "$status"
           fi
+          if [ -z "$(find "$rootfs" -type f -print -quit)" ]; then
+            echo "export contains 0 files"
+            exit 1
+          fi
+          if [ ! -f "$rootfs/etc/os-release" ]; then
+            echo "export is missing /etc/os-release"
+            exit 1
+          fi
+          # First ENTRYPOINT element (docs.docker.com/reference/cli/docker/inspect/, Go template).
+          # A bare name is looked up on the image PATH (docs.docker.com/reference/dockerfile/#entrypoint).
+          # -L counts a symlink without following an absolute target onto the runner.
+          entrypoint=$(docker inspect --format '{{if .Config.Entrypoint}}{{index .Config.Entrypoint 0}}{{end}}' "$APP_IMAGE")
+          imagepath=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$APP_IMAGE")
+          pathlist=$(printf '%s\n' "$imagepath" | sed -n 's/^PATH=//p')
+          pathlist=${pathlist%%$'\n'*}
+          if [ -z "$pathlist" ]; then
+            pathlist="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          fi
+          case "$entrypoint" in
+            "")
+              echo "image has no ENTRYPOINT"
+              exit 1
+              ;;
+            /*) entryfile="$rootfs$entrypoint" ;;
+            *)
+              entryfile=""
+              oldifs=$IFS
+              IFS=:
+              for dir in $pathlist; do
+                case "$dir" in
+                  /*) candidate="$rootfs$dir/$entrypoint" ;;
+                  *) candidate="$rootfs/$dir/$entrypoint" ;;
+                esac
+                if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+                  entryfile="$candidate"
+                  break
+                fi
+              done
+              IFS=$oldifs
+              ;;
+          esac
+          if [ -z "${entryfile:-}" ] || { [ ! -e "$entryfile" ] && [ ! -L "$entryfile" ]; }; then
+            echo "export is missing the ENTRYPOINT target"
+            exit 1
+          fi
+          # A report that scanned nothing is a failed scan even when Trivy exits 0.
+          report="$RUNNER_TEMP/trivy-secret.txt"
+          status=0
           docker run --rm -v "$rootfs:/rootfs:ro" "$TRIVY_IMAGE" \
-            rootfs --scanners secret --exit-code 1 --timeout 10m /rootfs
+            rootfs --scanners secret --exit-code 1 --ignorefile /dev/null --timeout 10m /rootfs \
+            | tee "$report" || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "trivy rootfs failed"
+            exit "$status"
+          fi
+          if grep -F -q "0 files scanned" "$report"; then
+            echo "trivy scanned 0 files"
+            exit 1
+          fi
 
   # The one stable name (P1.27r requires `scan`, not the per-image names). always() runs this job when
-  # discover or scan-image failed, was skipped or was cancelled (workflow-syntax, jobs.<job_id>.needs;
-  # expressions, always()). needs.<job_id>.result is success, failure, cancelled or skipped
-  # (contexts reference). Anything but success is red. Drafts stay skipped, same as the other jobs.
+  # discover, scan-image or scan-export failed, was skipped or was cancelled (workflow-syntax,
+  # jobs.<job_id>.needs; expressions, always()). needs.<job_id>.result is success, failure, cancelled or
+  # skipped (contexts reference). Anything but success is red, so a skipped export cannot read as green
+  # (P1.33u). Drafts stay skipped, same as the other jobs. Making `scan` a required check stays P1.27r.
   scan:
-    needs: [discover, scan-image]
+    needs: [discover, scan-image, scan-export]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -327,9 +390,10 @@ jobs:
         env:
           DISCOVER: ${{ needs.discover.result }}
           SCAN_RESULT: ${{ needs.scan-image.result }}
+          EXPORT_RESULT: ${{ needs.scan-export.result }}
         run: |
-          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ]; then
-            echo "discover=$DISCOVER scan-image=$SCAN_RESULT"
+          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ] || [ "$EXPORT_RESULT" != success ]; then
+            echo "discover=$DISCOVER scan-image=$SCAN_RESULT scan-export=$EXPORT_RESULT"
             exit 1
           fi
 
