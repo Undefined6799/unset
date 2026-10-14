@@ -70,10 +70,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
   P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v,
-  P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
-  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12,
-  P2.13 and the slice exit P2.13a.
+  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33w, P1.33x, P1.33y, P1.34d, P1.33z, P1.33n,
+  P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d,
+  P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's
+  P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -301,7 +301,11 @@ flowchart LR
   P1_33l["P1.33l token reader pinned to the local stack"]
   P1_29i["P1.29i token reader judges every outbound key"]
   P1_34c["P1.34c local app site with a dev leaf"]
+  P1_33w["P1.33w binds to the dev CA folder refused"]
+  P1_33x["P1.33x local leaf names and expiry"]
+  P1_33y["P1.33y per-file site mounts on local"]
   P1_34d["P1.34d PDS trusts one dev root"]
+  P1_33z["P1.33z local stack in CI"]
   P1_33n["P1.33n site reader per-file only"]
   P1_27j["P1.27j preflight comment and tilde tidy"]
   P1_11c["P1.11c keep the setup error on cleanup"]
@@ -582,6 +586,11 @@ flowchart LR
   P1_33t --> P1_34d
   P1_33k --> P1_34d
   P1_34d --> P1_29t
+  P1_33k --> P1_33w
+  P1_33w --> P1_33x
+  P1_33x --> P1_33y
+  P1_33y --> P1_34d
+  P1_34d --> P1_33z
   P1_28 --> P1_29a
   P1_27y --> P1_27n
   P1_30o --> P1_27a
@@ -7951,12 +7960,71 @@ As built: merged at 2026-10-12T23:23:08Z as `07be43b` (#750, head 6f21020) (merg
 
 ---
 
-### P1.34d — Trust one dev root CA on the local stack
+### P1.33w — Refuse binds that reach the dev CA folder
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k
+Slice 1, issue #853, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
+2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
+2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the dev root key
+reaching a container through a bind source or build context, answered by the red tests below.
+
+**What** (P1.34d item 6): C9 and C26 refuse any bind source or build context that reaches `unset-dev-ca`, as they do
+the secrets folder (it joins that list, with red tests).
+
+Done when the red tests fail on main and pass with the change, and check is green.
+
+---
+
+### P1.33x — Check the local leaf names and expiry
+Tags: [SEC]            Depends on: P1.33w (same files; avoids conflicts)
+Slice 1, issue #854, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
+2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
+2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a local leaf that
+names other hosts or an IP, or that is about to expire, and a stale `APP_HOST` giving the edge the wrong alias,
+answered by the fixtures below.
+
+**What** (P1.34d item 9): C18 under `--env local` fails unless the leaf's DNS SANs equal exactly {APP_HOST, PDS_HOST}
+with no IP SAN, and fails if the leaf expires within 14 days. Reasons are fixed words. (Amendment 3, from Codex's P2 on
+#779.) Beside it, `APP_HOST` must be a valid hostname equal to `new URL(WEB_PUBLIC_ORIGIN).hostname`. Red fixtures:
+missing, stale (another host) and invalid, each with a fixed-word reason.
+
+Done when each fixture fails on main for its own reason and passes with the change, and check is green.
+
+---
+
+### P1.33y — Accept per-file site mounts on local
+Tags: [SEC]            Depends on: P1.33x
+Slice 1, issue #855, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
+2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
+2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a writable or
+directory site mount on the local edge, answered by the refusal below; dev keeps its directory mount unchanged.
+
+**What** (P1.34d item 12's C18 half; book edit 2026-10-13-p127l-verify-owners, point 2): under `--env local`, C18
+accepts exactly the per-file read-only site mounts at `/etc/caddy/sites/enabled/<name>.caddy` and refuses a directory
+mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77`
+refuses file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged.
+
+Done when a per-file local fixture passes, a local directory mount is refused, the dev fixtures are unchanged, and
+check is green.
+
+---
+
+### P1.34d — Trust one dev root CA on the local stack
+Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y
 Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/preflight/`, and
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
-P1.29t depends on it.
+P1.29t depends on it. Split by size (book edit 2026-10-14-p134d-split): items 6, 9, 12's C18 half and 13 moved to
+P1.33w, P1.33x, P1.33y and P1.33z; this step keeps items 1-5, 7, 8, 10, 11, 14 and item 12's per-file mounts and
+real-file test. Its dependents (P1.33n, P1.34u, P1.34v, P1.29s, P1.29t and others) keep depending on it, so they also
+wait for the three new steps. If it still measures over 400 source lines, the lane splits the runbook and throwaway-root
+tests into **P1.33g, "Document and test the local dev root"** (product, before this step, reserved), and tells the step
+book before opening it.
 
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
@@ -7970,19 +8038,14 @@ P1.29t depends on it.
    a C9 secret (0400, uid 65532), mounted only into the edge.
 5. The public root cert sits in `unset-dev-env/`, bind-mounted read-only into the PDS and web only, with
    `NODE_EXTRA_CA_CERTS` pointing at it.
-6. The preflight: C9 and C26 refuse any bind source or build context that reaches `unset-dev-ca`, as they do the
-   secrets folder (it joins that list, with red tests).
+6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
 7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
    of the record and no amendment removed it; without it `local/app.caddy` cannot reach web).
 8. (Amendment 2, architecture's amendment 5 of 2026-10-12-refocus-local-signin-rulings.) The root also excludes the
    IPv4 and IPv6 all-addresses ranges and is valid for at most 825 days; subdomain admission is accepted. Tests use
    a throwaway root: an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf are refused;
    the two exact hosts pass.
-9. C18 under `--env local` fails unless the leaf's DNS SANs equal exactly {APP_HOST, PDS_HOST} with no IP SAN, and
-   fails if the leaf expires within 14 days. Reasons are fixed words. (Amendment 3, from Codex's P2 on #779.) Beside
-   it, `APP_HOST` must be a valid hostname equal to `new URL(WEB_PUBLIC_ORIGIN).hostname`; a missing or stale
-   `APP_HOST` gives the edge the wrong alias. Red fixtures: missing, stale (another host) and invalid, each with a
-   fixed-word reason.
+9. Moved to P1.33x (C18's local leaf names and expiry, and `APP_HOST`).
 10. The ratelimit zone is shared for local only; a prod app site gets its own zone.
 11. `deployment/compose.local.yaml` and the `local:up` script land here, as a separate file with a drift test (book edit
     2026-10-13-p127l-to-third-lane, Amendment 4; architecture's Amendment 1 of 2026-10-13-p127l-local-gaps; running
@@ -8012,18 +8075,13 @@ P1.29t depends on it.
     confirmed by architecture 19:31Z). Until this step lands, `local:up` does not exist.
 12. The local edge mounts each `sites/*.caddy` file and `local/app.caddy` read-only at
     `/etc/caddy/sites/enabled/<name>.caddy`, with no directory mount (book edit 2026-10-13-p134o-after-791, Amendment
-    1). C18 under local accepts exactly those per-file read-only site mounts and refuses a directory mount at
-    `sites/enabled`; today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77` refuses
-    file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged. (Book edit
-    2026-10-13-p127l-verify-owners, point 2: local-gaps Amendment 3 S2's C18 half, product, so SE-6 holds.) The reader's
+    1). C18's half (accepting exactly those per-file mounts under local) moved to P1.33y. The reader's
     fix for dev's directory mount is P1.34q's (point 1). A test runs the preflight on the real `compose.local.yaml`
     under `--env local`, which admits builds, and must pass. The real `compose.dev.yaml` test under `--env dev` moves to
     P2.26b, the step that makes it passable (it needs `deployment/images.lock.json` and an edge that is not `build:`);
     no test is skipped or left red (book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
     2026-10-13-p127s-split; P1.27s is check paths only, so the product test cannot ride it).
-13. A CI integration run: the local stack starts and the edge serves both names with the leaf. If a file mount on the
-    read-only root fails, stop and report; never add a writable layer or a placeholder. If the run needs a `.github/`
-    change, that change is its own check step (P1.34d's check part, first), and it needs Alex's typed line.
+13. Moved to P1.33z (the CI integration run), after this step.
 14. Mail-off logging on local: the pds_mail_unset_only_with_logging_off assertion (compose.dev.test.ts:466) also runs on
     compose.local.yaml's pds service, red first with LOG_LEVEL=debug in a fixture; the drift test does not compare
     environment, and local's preflight no longer checks this rule since P1.33b refuses mail there (verify-836-7f7582a
@@ -8034,6 +8092,24 @@ Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open
 
 Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
 tests pass, the real `compose.local.yaml` test under `--env local` (item 12) passes, and check is green.
+
+---
+
+### P1.33z — Run the local stack in CI
+Tags: [SEC]            Depends on: P1.34d
+Slice 1, issue #856, product, kind/feature, lane the third thread; book edit 2026-10-14-p134d-split, a split of P1.34d
+(#742) by size: no item's content changes, and the record 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments
+still govern the text. Not paused. Nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the local stack's
+trust (the leaf, the per-file mounts, the read-only root) untested end to end, answered by the run below.
+
+**What** (P1.34d item 13): a CI integration run: the local stack starts and the edge serves both names with the leaf.
+If a file mount on the read-only root fails, stop and report; never add a writable layer or a placeholder. If the run
+needs a `.github/` change, that change is its own check step before this one (id from the step book on request), and
+it needs Alex's typed line.
+
+Done when the run is green in CI on this step's PR and check is green.
 
 ---
 

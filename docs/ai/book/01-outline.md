@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 285 steps: 261 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 289 steps: 265 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -420,7 +420,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
 | P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
 | P1.29i | Judge every outbound PDS key in the token reader | [SEC] | — | `phase-1.md` |
-| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
+| P1.33w | Refuse binds that reach the dev CA folder (split from P1.34d) | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
+| P1.33x | Check the local leaf names and expiry (split from P1.34d) | [SEC] | P1.33w | `phase-1.md` |
+| P1.33y | Accept per-file site mounts on local (split from P1.34d) | [SEC] | P1.33x | `phase-1.md` |
+| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y | `phase-1.md` |
+| P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.34d, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
@@ -679,7 +683,11 @@ flowchart TD
   P1_29i["P1.29i Token reader judges every outbound key"]
   P1_34c["P1.34c Local app site with a dev leaf"]
   P1_34a["P1.34a Edge reader accepts local app site"]
+  P1_33w["P1.33w Binds to the dev CA folder refused"]
+  P1_33x["P1.33x Local leaf names and expiry"]
+  P1_33y["P1.33y Per-file site mounts on local"]
   P1_34d["P1.34d PDS trusts one dev root"]
+  P1_33z["P1.33z Local stack in CI"]
   P1_33n["P1.33n Site reader per-file only"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27w["P1.27w Compose only through the wrapper"]
@@ -1014,6 +1022,11 @@ flowchart TD
   P1_34n --> P1_34k
   P1_34k --> P1_29t
   P1_34d --> P1_29t
+  P1_33k --> P1_33w
+  P1_33w --> P1_33x
+  P1_33x --> P1_33y
+  P1_33y --> P1_34d
+  P1_34d --> P1_33z
   P1_34a --> P1_34o
   P1_34o --> P1_34q
   P1_34q --> P1_34d
