@@ -62,7 +62,7 @@ Depth: **build-ready**. 48 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09v | Contain Dockerfiles with the native realpath | [SEC] | — | `phase-0.md` |
 | P0.09w | Check the outline: cycles, unknown ids, headings | [ALEX] (typed line) | — | `phase-0.md` |
 | P0.09x | List the cleanup definers as trusted functions | [ALEX] (typed line) | — | `phase-0.md` |
-| P0.09z | Pin the outline check's comparisons (check, SE-6) | [ALEX] (typed line) | P0.09w, P2.26f | `phase-0.md` |
+| P0.09z | Pin the outline check's comparisons (check, SE-6) | [ALEX] (typed line) | P0.09w | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 292 steps: 268 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 293 steps: 269 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -428,7 +428,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33w | Refuse binds that reach the dev CA folder (split from P1.34d) | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
 | P1.33x | Check the local leaf names and expiry (split from P1.34d) | [SEC] | P1.33w | `phase-1.md` |
 | P1.33y | Accept per-file site mounts on local (split from P1.34d) | [SEC] | P1.33x | `phase-1.md` |
-| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y | `phase-1.md` |
+| P1.35a | Close the dev CA folder rule's gaps (after P1.33y) | [SEC] | P1.33y | `phase-1.md` |
+| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a | `phase-1.md` |
 | P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.34d, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
@@ -1039,6 +1040,9 @@ flowchart TD
   P1_33w --> P1_33x
   P1_33x --> P1_33y
   P1_33y --> P1_34d
+  P1_35a["P1.35a Dev CA folder rule gaps closed"]
+  P1_33y --> P1_35a
+  P1_35a --> P1_34d
   P1_34d --> P1_33z
   P1_34a --> P1_34o
   P1_34o --> P1_34q
@@ -1900,6 +1904,7 @@ flowchart LR
 
 | Id | Status |
 |---|---|
+| P1.33g | Reserved: conditional split of P1.34d (record 2026-10-14-p134d-split). |
 | P2.26aq | Renamed **P2.26f** (#859; 2026-10-14, book edit 2026-10-14-verify-847-outline-fixes): it broke the one-trailing-letter rule (`00-README.md:65-68`). Same content, class and place. |
 | P2.16a | Retired. The Arachnid Shield API spike moved to **P5.07b** with the real check (decision 23, global resolution 2). |
 | L.01 part A | Now **P1.33a** in Phase 1, before going public (global resolution 8; P1.33p since 2026-10-13). L.01 keeps part B. |
@@ -1993,8 +1998,6 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P0.09r (#722):** a typed line, "yes P0.09r scripts/guards git-env diagnostics", for the classifier path.
 - **P0.09w (#816):** a typed line, "yes P0.09w scripts/docs outline checks", for the classifier path (it supersedes
   "yes docs cycle check scripts/docs").
-- **P0.09x (#825):** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
-  it.
 - **P0.09z (#858):** a typed line, "yes P0.09z scripts/docs outline check equality ids".
 - **P0.09y (#826):** a typed line, "yes P0.09y .github/CODEOWNERS scripts/guards scripts/workspace", for the
   `scripts/guards/`, CODEOWNERS and `scripts/workspace/` check paths; P4.07 waits on it.
@@ -2012,9 +2015,6 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
   .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
-- **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
-- **P1.33u (#848):** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
-  scan gate".
 - **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
   allow rules".
 - P1.33s is done: merged as 7c56327 (#835).

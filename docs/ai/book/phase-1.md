@@ -70,10 +70,11 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
   P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w, P1.33x, P1.33y, P1.34d,
-  P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
-  P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
-  phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w, P1.33x, P1.33y,
+  P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
+  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice
+  2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
+  P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -594,6 +595,9 @@ flowchart LR
   P1_33w --> P1_33x
   P1_33x --> P1_33y
   P1_33y --> P1_34d
+  P1_35a["P1.35a dev CA folder rule gaps closed"]
+  P1_33y --> P1_35a
+  P1_35a --> P1_34d
   P1_34d --> P1_33z
   P1_28 --> P1_29a
   P1_27y --> P1_27n
@@ -7676,6 +7680,7 @@ PR shows both runs, and check is green.
 
 ### P1.33u — Make the image secret scan gate
 Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33s (merged, 7c56327)
+As built: #866, merged as af44fc7.
 Slice 1, issue #848, check path (`.github/workflows/images.yml`, the comment at `.github/workflows/mirror.yml:62-66` and
 a new test in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family (Alex's 20:24:47Z choice; directive
 `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-835-secret-scan, step 1
@@ -7990,7 +7995,7 @@ rules and tests below.
 **What:** concurrent uncached lookups for one DID share one network call.
 1. Only `consistency: "cached"` calls coalesce. A `fresh` call never joins a flight that started before it (fresh
    means "read after now": after an identity event, P3.05; after login, P2.06). A `cached` call may join a fresh flight.
-2. Flights are keyed by DID, verifyHandle's too.
+2. Flights are keyed by DID.
 3. A flight keeps the resolver's existing network timeout and is never tied to the first caller's abort signal. A caller
    that aborts detaches without cancelling the flight for the others.
 4. Every joiner gets the same outcome: success, or the same IdentityError kind. `unavailable` is still never cached
@@ -7998,11 +8003,12 @@ rules and tests below.
    waiting.
 5. The in-flight map is capped at the cache max (`DID_DOC_CACHE_MAX`, `HANDLE_CACHE_MAX`). When it is full, a new DID
    makes its own call without coalescing, as today; nothing is refused.
-6. `invalidateHandle` and the resolver's refresh drop the DID's in-flight entry, so the next call starts a new flight.
+6. The resolver's refresh drops the DID's in-flight entry, so the next call starts a new flight.
 
 Tests, each red first: 50 concurrent cached calls for one DID make one network call; a fresh call during a cached
 flight makes its own call; a PLC outage is one call per DID per wave and every waiter gets `unavailable`; the map never
-exceeds the cap; an aborted first caller does not fail the others; an invalidate during a flight starts a new one.
+exceeds the cap; an aborted first caller does not fail the others; a resolver refresh during a flight starts a new one
+(book edit 2026-10-14-verify-857-fixes, N2).
 
 Size: about 80 source lines and 200 test lines.
 
@@ -8028,8 +8034,16 @@ Also (book edit 2026-10-14-verify-864-fixture-did, item 2): replace the real-loo
 holds) with `did:plc:` plus 24 copies of one letter. If this step has already merged, that line becomes its own small
 trusted step, with an id from the step book.
 
-Done when seven tests fail on main and pass with the change (red first), the ASVS V6.8.1 rows are updated, and check is
-green.
+Tests, red first (book edit 2026-10-14-verify-857-fixes, N2):
+1. 50 concurrent verifyHandle calls for one DID make one network call.
+2. A fresh call during a cached flight makes its own call.
+3. A PLC outage is one call per DID per wave, and every waiter gets `unavailable`.
+4. `unavailable` is not cached after the flight ends.
+5. The in-flight map never exceeds `HANDLE_CACHE_MAX`.
+6. An aborted first caller does not fail the others.
+7. `invalidateHandle` during a flight starts a new one.
+
+Done when the seven tests fail on main and pass with the change, the ASVS V6.8.1 rows are updated, and check is green.
 
 ---
 
@@ -8054,6 +8068,7 @@ typed line, and is not booked.
 
 ### P1.33w — Refuse binds that reach the dev CA folder
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k
+As built: #861, merged as 4da9d02. Architecture's ruling on verify-861-9ae3539 is P1.35a.
 Slice 1, issue #853, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
 2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
@@ -8067,8 +8082,8 @@ the secrets folder (it joins that list, with red tests).
 Also (architecture on verify-861, last section of 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in "Architecture's
 nlink rule rides P1.33w" of book edit 2026-10-14-p134d-split): every regular file in `unset-dev-ca` must have nlink 1,
 checked with lstat; otherwise C26 refuses under local and names the path. Tests: a hard link inside the checkout (red),
-a hard link outside it (red), and nlink 1 (green). The rule is not generalized to everything C9 and C26 walk. If #861
-merges first, the rule becomes its own small product step, with an id from the step book.
+a hard link outside it (red), and nlink 1 (green). The rule is not generalized to everything C9 and C26 walk. #861
+merged first, so the follow-up rules are P1.35a (book edit 2026-10-14-p134d-split, "P1.35a" section).
 
 Done when the red tests fail on main and pass with the change, and check is green.
 
@@ -8094,6 +8109,16 @@ section of 2026-10-14-p134d-split): the preflight cannot read the leaf secret (0
 judges the public, cert-only copy `unset-dev-env/local-leaf.pem`, written by the same openssl run as the leaf, and
 never reads the secret. The SAN, IP SAN, 14-day expiry and `APP_HOST` checks run on the copy. A missing or unreadable
 copy fails with `input missing: unset-dev-env/local-leaf.pem`; red fixture: copy absent.
+
+Chain check (book edit 2026-10-14-verify-857-fixes, S2(a), restoring architecture's ~22:20Z point 1 in
+2026-10-12-p134c-p134d-local-dev-root-ca): C18 under local also requires that `unset-dev-env/local-leaf.pem` chains to
+the local dev root, read from `unset-dev-trust/root.pem` (item 5's path, confirmed for C18 at 23:08Z; if this step
+reads the old `unset-dev-env/dev-root-ca.pem`, P1.33y moves the path). An absent root fails as `input missing`. Red
+fixture: a leaf with the right names, issued by another CA.
+
+Runbook (S2(c), point 4): the `local-leaf.pem` lines of `docs/human/runbooks/dev-stack-secrets.md` (the openssl run
+writes the cert-only copy beside the env files in `unset-dev-env/`) ride this step as docs (SE-6), because it lands
+before P1.34d.
 
 Also (verify-851-cabc9e3 on P1.33k, #851; last section of book edit 2026-10-14-p134d-split), all product in
 `deployment/preflight/`:
@@ -8125,8 +8150,9 @@ directory site mount on the local edge, answered by the refusal below; dev keeps
 
 **What** (P1.34d item 12's C18 half; book edit 2026-10-13-p127l-verify-owners, point 2): under `--env local`, C18
 accepts exactly the per-file read-only site mounts at `/etc/caddy/sites/enabled/<name>.caddy` and refuses a directory
-mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77`
-refuses file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged.
+mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:82`
+refuses file mounts, and the per-file site fixtures at `preflight.test.ts:2625-2628` change with it (lines on ee55b68;
+book edit 2026-10-14-verify-857-fixes, N4). C18 under dev is unchanged.
 
 Root path (book edit 2026-10-14-p134d-split, "P1.33y root path mapping confirmed", following P1.34d item 5): under
 local, C18 reads the dev root from `unset-dev-trust/root.pem`, not `unset-dev-env/dev-root-ca.pem`. The folder-content
@@ -8138,8 +8164,34 @@ check is green.
 
 ---
 
+### P1.35a — Close the dev CA folder rule's gaps
+Tags: [SEC]            Depends on: P1.33y
+Slice 1, issue (pending), product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before
+P1.34d (it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
+2026-10-14-p134d-split, "P1.35a" section, carrying architecture's ruling on verify-861-9ae3539 (S1, S2, S3, N1; last
+section of 2026-10-12-p134c-p134d-local-dev-root-ca) word for word. P1.33w merged as #861, so the ruling is its own
+step; every P1.33 and P1.34 letter is taken, and the id means nothing about P1.35's lexicon authority. A tightening:
+nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the dev root key
+reaching a container through a symlinked or hard-linked path, an unreadable folder passing, or the folder present on
+prod, answered by the rules and red cases below.
+
+**What:**
+- S1: the folder is judged by lstat and must be a real directory. Under local, an absent folder is input missing. Every
+  lstat, readdir or realpath error refuses (`build.ts:166`, `:170`).
+- N1: our own lstat recursion, with no recursive readdir. Any symlink inside refuses, and nlink 1 holds at every depth.
+- S2: the rule runs under every env. Dev checks the folder when it exists. Prod refuses if the folder is present. The env
+  comparisons stay positive allowlists.
+- S3: the `root.pem` plus `sub/x` fixture, and red cases for a symlinked folder, a symlink pointing out, mode 000, prod
+  with the folder present, and dev with a hard-linked key. The symlinked-folder fixture turns red.
+
+Done when each red case fails on main and passes with the change, and check is green.
+
+---
+
 ### P1.34d — Trust one dev root CA on the local stack
-Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y
+Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a
 Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/preflight/`, and
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
@@ -8152,9 +8204,9 @@ book before opening it.
 
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
-   command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The recipe also writes
-   `local-leaf.pem`, the certificate only, beside the env files in `unset-dev-env/`: the copy P1.33x's C18 judges
-   (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split). It also copies the root into
+   command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The `local-leaf.pem` lines (the
+   cert-only copy P1.33x's C18 judges) are already in the runbook from P1.33x; this item points to them
+   (book edit 2026-10-14-verify-857-fixes, S2(c)). It copies the root into
    `unset-dev-trust/root.pem` (item 5) with `cp`, never `ln`, so nlink stays 1, at mode 0644 (which meets "not group-
    or other-writable"), and writes nothing else into that folder. The token reader's dev-root fixture
    (`tests/integration/pds-email-token.test.ts:25`, `/srv/unset-dev-env/dev-root-ca.pem`) and whatever passes the real
@@ -8167,8 +8219,8 @@ book before opening it.
    binds it.
 4. The leaf: `CA:FALSE`, `extendedKeyUsage=serverAuth`, SANs exactly the two local hosts, 397 days, EC P-256. Its key is
    a C9 secret (0400, uid 65532), mounted only into the edge.
-5. The public root cert sits in a sibling folder, `unset-dev-trust/`, bind-mounted read-only into pds and web only,
-   with `NODE_EXTRA_CA_CERTS` pointing at it. It is an ordinary bind source: never an env or secrets folder, and still
+5. The public root cert sits in a sibling folder, `unset-dev-trust/`, bind-mounted read-only into pds and web only, with
+   `NODE_EXTRA_CA_CERTS` pointing at it. It is an ordinary bind source: never an env or secrets folder, and still
    refused by C9 and C26 if it reaches `unset-dev-ca`, `unset-dev-env` or the secrets folder. The preflight requires,
    under local:
    - the folder holds exactly `root.pem`, a regular file with nlink 1, not group- or other-writable;
@@ -8180,7 +8232,9 @@ book before opening it.
    file in the folder; nlink 2; group-writable; a cert that differs from the CA's; a non-CA cert; a cert without the
    name constraints; a PRIVATE KEY block. If this step measures over 400 source lines, these preflight checks join the
    P1.33g split with the runbook and the throwaway-root tests. (Book edit 2026-10-14-p134d-split, "Item 5 settled:
-   unset-dev-trust/", architecture's confirmation with no exception to C9.)
+   unset-dev-trust/"; architecture's confirmation with no exception to C9 is the section "Architecture confirmation
+   (2026-10-14 ~22:50Z, recorded here 23:21Z)" of 2026-10-12-p134c-p134d-local-dev-root-ca; book edit
+   2026-10-14-verify-857-fixes, S3.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
 7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
    of the record and no amendment removed it; without it `local/app.caddy` cannot reach web).
@@ -8234,7 +8288,9 @@ book before opening it.
     with the local file), red first by setting `LOG_LEVEL=debug` in a fixture.
 15. Handshake check (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split): after start, `local:up`
     checks that the leaf the edge serves for each local host has the same SHA-256 as `unset-dev-env/local-leaf.pem`.
-    On a mismatch it takes the stack down and exits non-zero with a fixed-word reason. Red test: a served leaf that
+    On a mismatch it takes the stack down, exits non-zero with a fixed-word reason, and names the file to regenerate
+    (`unset-dev-env/local-leaf.pem`). It logs only the fingerprint comparison result, never a certificate body (SE-7;
+    book edit 2026-10-14-verify-857-fixes, S2(b), architecture's ~22:20Z point 2). Red test: a served leaf that
     differs from the copy brings the stack down. The drift test is unaffected: the copy is not a compose mount.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
@@ -8832,6 +8888,7 @@ edited, nothing else is in the PR, the PR body lists every line that is not a mo
 
 ### P1.33f — Anchor the depcruise exclude to our outputs
 Tags: [SEC] [ALEX] (typed line)            Depends on: —
+As built: #863, merged as 4bb4d36.
 Slice 1, issue #846, check path (`scripts/lint/.dependency-cruiser.cjs` and its tests), kind/build, lane Cursor
 (Alex's 20:24:47Z choice); book edit 2026-10-14-verify-829-host-pin-leaf, architecture on verify-840-7e8bbba S2 and the
 step-book mapping after it. The exclude at `.dependency-cruiser.cjs:357-358`, `(^|/)(dist|coverage|…)/`, also matches
@@ -8968,6 +9025,7 @@ Done when every fixture is red for its own reason, Biome reports no `noUnusedImp
 
 ### P1.33l — Pin the token reader to the local stack
 Tags: [SEC]            Depends on: P1.33j
+As built: #852, merged as df655b0.
 Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
 P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
 of 2026-10-13-local-plc (Codex on #800), and 2026-10-13-local-plc-a4-steps (13:38Z, which retitles it and makes it
@@ -10167,7 +10225,7 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C1 | `name:` present and equals `unset-<env>` |
 | C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
 | C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
-| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it): keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
+| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
 | C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
 | C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
 | C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
