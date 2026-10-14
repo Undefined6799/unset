@@ -8609,7 +8609,8 @@ Done when both fixtures fail on main and pass with the change, and check is gree
 
 ### P1.33k — Admit the node base for the token reader
 Tags: [SEC]            Depends on: P1.33j
-Slice 1, issue #802, product (`deployment/preflight/checks/images.ts` and its tests), kind/fix, lane the third thread
+Slice 1, issue #802, product (`deployment/preflight/checks/images.ts` and its tests, plus the import-only edit to
+`deployment/preflight/stack.ts` and `deployment/preflight/checks/secrets.ts` below), kind/fix, lane the third thread
 after P1.33j and before P1.34d; book edit 2026-10-13-p133k-node-base-local-c2, from architecture's Amendment 4 of
 2026-10-13-p127l-local-gaps. #789 did not carry Amendment 2 §2(b) of that record, so local C2 refuses the node base
 unbuilt on every service; that is fail-closed but blocks P1.34d's local stack, which needs the reader. Not a new
@@ -8620,7 +8621,13 @@ loosening: §2(b) already ruled this scope, and this step adds nothing beyond it
 3). Red fixtures, each refused for its own reason: the node base on any other service, without the profile, with a
 network, and as a tag-only reference.
 
-Done when every fixture is red for its own reason and check is green.
+**Also (verify-840-7e8bbba S3; book edit 2026-10-13-host-pin-steps, "Step-book mapping of verify-840-7e8bbba S3 and
+nits"):** remove the imports P1.33h's move left unused: `lstatSync`, `readlinkSync` and `statfsSync` at `stack.ts:18`,
+`dirname` and `isAbsolute` at `stack.ts:20`, and `isAbsolute`, `relative` and `sep` at `checks/secrets.ts:11`. Import
+only; it is product, the same class as this step.
+
+Done when every fixture is red for its own reason, Biome reports no `noUnusedImports` in `stack.ts` or
+`checks/secrets.ts`, and check is green.
 
 ---
 
