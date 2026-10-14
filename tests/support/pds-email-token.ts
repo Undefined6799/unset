@@ -15,12 +15,14 @@
 // refuseRemoteDaemon; tests/ cannot import it, since deployment's project references tests'): every docker call runs
 // with only CHILD_ENV and DOCKER_HOST, always set to a unix socket on this machine, which overrides a stored
 // currentContext (Docker CLI 29.8.2, stack.test.ts a_stored_remote_context_never_reaches_the_children); DOCKER_CONTEXT
-// and every other variable are dropped, and tcp://, ssh:// or any other scheme is refused. Then `docker info` must
-// name this host, so a socket forwarded from another machine is refused too.
+// and every other variable are dropped. The socket passes the same host pin as the stack wrapper's (shared/host-pin
+// localDockerHost, P1.33j): tcp://, ssh:// or any other scheme, a folder another user can change (a sticky /tmp too),
+// a link and a second hard link are refused. Then `docker info` must name this host, so a socket forwarded from
+// another machine is refused too.
 import { lookup } from "node:dns/promises";
-import type { Stats } from "node:fs";
 import { request } from "node:https"; // guard-allow: egress local PDS only, to a vetted loopback address
 import { isAbsolute, normalize } from "node:path";
+import { localDockerHost, UsageError, type WalkInputs } from "@unset/shared-host-pin";
 import type { Call, Ran } from "./docker.ts";
 import { READER_REASONS } from "./pds-email-token-read.ts";
 
@@ -35,8 +37,9 @@ export type LocalStack = {
   log: (line: string) => void;
   /** The caller's environment (process.env), narrowed to CHILD_ENV and DOCKER_HOST before any docker call. */
   caller: Readonly<Record<string, string | undefined>>;
-  /** node:fs lstat, null when nothing is there: for the daemon's socket and the dev root. */
-  lstat: (path: string) => Stats | null;
+  /** This machine's file system as the host pin walks it (shared/host-pin hostWalk in a real run): for the daemon's
+   * socket, and lstat for the dev root. */
+  walk: WalkInputs;
   readFile: (path: string) => string;
   /** This machine's name (node:os hostname()), which the daemon must give back. */
   hostname: string;
@@ -268,7 +271,6 @@ const KNOWN_READER_REASONS = new Set<string>(Object.values(READER_REASONS));
 
 /** What a docker call may see of the caller's environment (stack.ts CHILD_ENV_NAMES). */
 const CHILD_ENV = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
-const DEFAULT_DOCKER_HOST = "unix:///var/run/docker.sock";
 
 /** Docker on this machine's daemon only: every call carries the pinned environment and a kill timeout. */
 type Docker = (args: readonly string[]) => Ran;
@@ -325,11 +327,7 @@ async function pinnedPds(stack: LocalStack, { host, ca }: { host: string; ca: st
 
 /** Docker pinned to this machine's daemon, once `docker info` names this host. */
 function localDaemon(stack: LocalStack): Docker {
-  const host = stack.caller.DOCKER_HOST ?? DEFAULT_DOCKER_HOST;
-  const socket = host.startsWith("unix://") ? host.slice("unix://".length) : "";
-  if (!isAbsolute(socket) || stack.lstat(socket)?.isSocket() !== true) {
-    refuse("DOCKER_HOST must be a Docker socket on this machine");
-  }
+  const host = pinnedDockerHost(stack);
   const env: Record<string, string> = { DOCKER_HOST: host };
   for (const name of CHILD_ENV) {
     const value = stack.caller[name];
@@ -340,6 +338,16 @@ function localDaemon(stack: LocalStack): Docker {
   if (info.code !== 0) refuse("docker info failed");
   if (info.out.trim() !== stack.hostname) refuse("the Docker daemon is not on this machine");
   return docker;
+}
+
+/** The caller's DOCKER_HOST once the shared host pin accepts it; its fixed reason otherwise, any other error as is. */
+function pinnedDockerHost(stack: LocalStack): string {
+  try {
+    return localDockerHost(stack.caller, stack.walk);
+  } catch (error) {
+    if (error instanceof UsageError) refuse(error.message);
+    throw error;
+  }
 }
 
 /** The PDS's host on the edge and the dev root's PEM, once every local-only check holds. */
@@ -411,7 +419,7 @@ function checkOutbound(docker: Docker, env: Map<string, string>, isLocal: (name:
 function devRootPem(stack: LocalStack): string {
   const path = stack.devRootCert;
   if (!isAbsolute(path) || normalize(path) !== path) refuse("the dev root certificate path is not absolute");
-  if (stack.lstat(path)?.isFile() !== true) refuse("the dev root certificate is not a regular file");
+  if (stack.walk.lstat(path)?.isFile() !== true) refuse("the dev root certificate is not a regular file");
   const pem = stack.readFile(path);
   if (!PEM.test(pem)) refuse("the dev root certificate is not one PEM certificate");
   return pem;

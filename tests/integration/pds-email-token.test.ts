@@ -41,6 +41,8 @@ type World = {
   caller: Record<string, string>;
   /** What lstat finds, by path. */
   files: Record<string, "file" | "socket" | "dir" | "link">;
+  /** Owner, mode and link count where they differ from root's 0755 with one name; folders above a file are root's. */
+  owners?: Record<string, { uid?: number; mode?: number; nlink?: number }>;
   rootPem: string;
   /** The name `docker info` gives. */
   daemon: string;
@@ -181,17 +183,38 @@ async function attempt(world: World) {
     if (status === 0) throw new Error(`connect ECONNREFUSED ${request.address}:443 (${request.host})`);
     return status;
   };
-  const kinds = (kind: string | undefined) =>
-    kind === undefined
+  // Every folder above a listed path exists (root's, 0755), so the host pin's walk reaches the socket (P1.33j).
+  const folder = (path: string) =>
+    Object.keys(world.files).some((file) => file.startsWith(path === "/" ? "/" : `${path}/`));
+  const kinds = (path: string) => {
+    const kind = world.files[path] ?? (folder(path) ? "dir" : undefined);
+    const { uid = 0, mode = 0o755, nlink = 1 } = world.owners?.[path] ?? {};
+    return kind === undefined
       ? null
-      : ({ isFile: () => kind === "file", isSocket: () => kind === "socket" } as unknown as Stats);
+      : ({
+          uid,
+          mode,
+          nlink,
+          isFile: () => kind === "file",
+          isSocket: () => kind === "socket",
+          isDirectory: () => kind === "dir",
+          isSymbolicLink: () => kind === "link",
+        } as unknown as Stats);
+  };
   const stack: LocalStack = {
     run,
     resolve,
     post,
     log: (line) => logged.push(line),
     caller: world.caller,
-    lstat: (path) => kinds(world.files[path]),
+    walk: {
+      lstat: kinds,
+      readlink: () => {
+        throw new Error("no links in this world");
+      },
+      statfs: () => ({ type: 0 }),
+      uid: 1000,
+    },
     readFile: (path) => {
       expect(path).toBe(ROOT_PATH);
       return world.rootPem;
@@ -299,7 +322,25 @@ describe("tests/support/pds-email-token.ts", () => {
       ]),
       [
         "DOCKER_HOST must be a Docker socket on this machine",
-        (w) => ({ ...w, caller: { ...w.caller, DOCKER_HOST: "unix:///tmp/not-a-socket" } }),
+        (w) => ({
+          ...w,
+          caller: { ...w.caller, DOCKER_HOST: "unix:///tmp/not-a-socket" },
+          files: { ...w.files, "/tmp": "dir" },
+        }),
+      ],
+      // The shared host pin (P1.33j, B2'): a socket in a folder another user can write, and a second name for it.
+      [
+        "DOCKER_HOST must be a Docker socket on this machine: its folder is a path that another user can change",
+        (w) => ({
+          ...w,
+          caller: { ...w.caller, DOCKER_HOST: "unix:///tmp/docker.sock" },
+          files: { ...w.files, "/tmp/docker.sock": "socket" },
+          owners: { "/tmp": { mode: 0o1777 } },
+        }),
+      ],
+      [
+        "DOCKER_HOST must be a Docker socket on this machine: it has another name (a hard link)",
+        (w) => ({ ...w, owners: { [SOCKET]: { nlink: 2 } } }),
       ],
       // The daemon's name exactly: never a prefix, a longer name or another case.
       ...["homelab", "devbox2", "devbox.example.test", "dev", "DEVBOX", "Devbox", "", "devbox devbox"].map(
