@@ -7101,10 +7101,8 @@ PDS with no real accounts. What it gives up: local images are not the signed CI 
 Notes (book edits 2026-10-12-batch-46-hold-lines and 2026-10-13-p134a-as-built-and-p127l-notes):
 - P1.29h's token-reader wrapper gains this step's local label as an extra required check (book edit
   2026-10-13-p129h-book-lines, Amendment 1).
-- C11 and C19 (SMTP and moderation mail) stay required under `--env local` until Alex's local-mail card: on main the
-  stage was only dev or prod and both ran them, so skipping them under local is a new loosening (book edit
-  2026-10-13-p134n-p129a-follow-up, withdrawn at 04:50Z; architecture's 2026-10-13-p127l-local-gaps, item 2). If he says
-  yes, it becomes a follow-up step.
+- C11 and C19 (SMTP and moderation mail) under `--env local`: Alex answered the local-mail card "Local only" at
+  2026-10-14T20:28:12Z, and the loosening is P1.33b (book edit 2026-10-13-p127l-local-gaps, Amendment 6).
 - Update ASVS V13.3.2 (`docs/human/compliance/asvs-5-l2.md`): #746 (P1.27o) left the row as it was, because the
   deployed volume belongs here, and P1.29 marked it partial.
 - The local edge's sites: P1.34o reads `local/app.caddy` as one extra file mount; P1.34q replaces that with one
@@ -7960,6 +7958,11 @@ is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps
 **What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, once P1.34d
 moves C18 to the `SiteMount` list. Only the per-file `SiteMount` form remains.
 
+Also (Amendment 1 of the same book edit, from verify-809-664b242): N1, the comment at `caddyfile.ts:456` ("`sitesDir`
+stays inside sites/ in both modes") becomes local-only, since the shipped mode may be `sites/` itself (:447-448), with
+:456-458 reflowed; N3, the B1 fixture comment in `a_directory_mount_fails` drops its opening "Nor". (N2 was a fix to
+#809's PR body, not to the book.)
+
 Done when, red first, a test shows the reader itself refuses a directory mount under local (not only C18), and check
 is green.
 
@@ -8546,6 +8549,39 @@ reads; this replaces P1.29h's interim guard on the `unset-dev` labels. Red fixtu
 name mismatch, and a label mismatch.
 
 Done when each fixture fails on main (red first) and check is green.
+
+---
+
+### P1.33b — Let local stacks run without mail
+Tags: [SEC] [ALEX] (card answered 20:28:12Z)            Depends on: P1.27l
+Slice 1, issue (pending), product (`deployment/preflight/`), lane the third thread, before P1.29s; book edit
+2026-10-13-p127l-local-gaps, Amendment 6 and its step-book mapping (2026-10-14). Authority: Alex's tap "Local only" at
+2026-10-14T20:28:12Z on the card "Let the local test stack run without email?". The step touches no SE-6 check path, so
+the tap is enough; if the build finds it must touch one, it stops and asks for his typed line. It can start now: the
+preflight parses `--env` itself (`inputs.ts:138`), so it does not wait on P1.34z.
+
+**Where:** `deployment/preflight/checks/pds.ts` (C11), `deployment/preflight/checks/settings.ts` (C19), the local
+stage's check list (P1.27l), `deployment/preflight/preflight.test.ts`.
+
+**What:**
+- Under `--env local` only, C11 (SMTP) and C19 (moderation mail) are not required. Under dev and prod both stay
+  required exactly as now.
+- Under `--env local`, any of `PDS_EMAIL_SMTP_URL`, `PDS_MODERATION_EMAIL_SMTP_URL` or `PDS_MODERATION_EMAIL_ADDRESS`
+  set is refused, so local cannot half-configure mail. If P1.27l's local checks already refuse them, this step only
+  pins it.
+
+What still holds on local: P1.29a's `pds_mail_unset_only_with_logging_off` keeps the PDS's `jsonTransport` from
+logging tokens, and P1.29h's reader is the only way to read a confirmation. The app-side rules of Amendment 6 (a
+disabled mail adapter that refuses every send and logs only the event kind; nothing marked sent or verified; moderation
+notices visible in admin; the adapter reachable only when `UNSET_ENV` is local) are not part of this step: the app sends
+mail only through the PDS's `sendEmail`, behind the Phase 3 mail adapter, and they ride as book lines on that
+adapter's step when P3.00 names it.
+
+Size: ~40 source lines, ~120 test lines.
+
+Done when, red first: `c11_required_dev`, `c19_required_dev`, `c11_required_prod` and `c19_required_prod` (each
+refused with the variable unset); `local_without_mail_passes`; `local_any_smtp_key_refused` (one case per key); and
+`unknown_env_takes_strict_path` (an unknown or unset `--env` runs C11 and C19) pass, and check is green.
 
 ---
 
@@ -11054,9 +11090,10 @@ P1.29h, P1.29s, P1.29t.
    Amendments 3 and 4).
 9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i,
    P1.33j, P1.33k, P1.33l and P1.34d, book edits 2026-10-13-local-plc-steps, 2026-10-13-host-pin-steps Amendment 5 and
-   2026-10-13-local-plc-a3-steps, so the seed never runs the token reader before its holes are closed; and the step that
-   carries Alex's mail-card answer (named when he answers), because local C11 and C19 and the reader's SMTP refusal
-   cannot both hold until then (architecture's Amendment 3 of 2026-10-13-local-plc, point 2)): `scripts/dev-seed.ts` and
+   2026-10-13-local-plc-a3-steps, so the seed never runs the token reader before its holes are closed; and P1.33b, which
+   carries Alex's mail-card answer, because local C11 and C19 and the reader's SMTP refusal cannot both hold until then
+   (architecture's Amendment 3 of 2026-10-13-local-plc, point 2; book edit 2026-10-13-p127l-local-gaps, Amendment
+   6)): `scripts/dev-seed.ts` and
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring of `dev-precheck`,
    the seed's `local:up` wiring (P1.34d) and their tests below. It adds the `seed` service to `compose.local.yaml`
    itself, with the drift allowance P1.34d prepared (book edit 2026-10-13-verify-814-fixes, Amendments 1 and 2).

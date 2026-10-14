@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 278 steps: 254 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 279 steps: 255 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -424,7 +424,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.27o | Edge /data and /config owned by caddy (trusted base) | [SEC] | P1.34e | `phase-1.md` |
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k, P1.33l, P1.34d | `phase-1.md` |
+| P1.33b | Let local stacks run without mail | [SEC] [ALEX] (card answered 20:28:12Z) | P1.27l | `phase-1.md` |
+| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k, P1.33l, P1.34d, P1.33b | `phase-1.md` |
 | P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v, P1.34z | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
@@ -676,6 +677,7 @@ flowchart TD
   P1_29["P1.29 Development stack, no PDS"]
   P1_29a["P1.29a PDS and edge in the dev stack"]
   P1_29h["P1.29h Local email-token reader"]
+  P1_33b["P1.33b Local stacks without mail"]
   P1_29s["P1.29s Dev seed and precheck"]
   P1_29t["P1.29t Running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
@@ -1022,6 +1024,8 @@ flowchart TD
   P1_33j --> P1_29s
   P1_33k --> P1_29s
   P1_33l --> P1_29s
+  P1_27l --> P1_33b
+  P1_33b --> P1_29s
   P1_33j --> P1_33l
   P1_34z --> P1_29t
   P1_33i --> P1_33h
