@@ -1150,9 +1150,12 @@ Outputs (contract):
     `kept_held`. **`core.is_held` is the one hold predicate** (lead decision 2026-10-03; P4.07, P5.04 and P5.09 call
     the same SQL function; there is no TypeScript twin). This step declares it in two forms, both definer
     with `search_path` pinned and returning `boolean`: `core.is_held(did text)` (the DID has an open hold) and
-    `core.is_held(subject_kind text, subject_ref text)` (that subject has an open hold). In Phase 3 both return false
-    (no held table exists yet); P4.07 writes the body and registers its own tables (`legal_hold`, `legal_hold_transmission`, the
-    matched upload row and its case) as `retain_legal_hold`. An error inside `core.is_held` aborts the whole call:
+    `core.is_held(subject_kind text, subject_ref text)` (that subject has an open hold). Both are a temporary
+    placeholder that returns false until **P4.07h** replaces the body; P4.07h lands right after P4.07c, which creates
+    `legal_hold`, and before P4.07, the first step that can open a hold (P4.07 depends on P4.07h in the outline), so the
+    placeholder never answers while a hold can exist and is never deployed as the only body once one can. P4.07c
+    registers `legal_hold` and `legal_hold_transmission`, and P4.07 the matched upload row and its case, as
+    `retain_legal_hold`. An error inside `core.is_held` aborts the whole call:
     nothing is deleted and the caller retries (the hold state is never guessed).
   - `mod.erase_foreign_did(did, case_id, jti, actor_did, reason_code)` (definer, EXECUTE to `admin` only): refuses
     unless a completed `adm.db_hold` exists for the DID (P3.20a) **and** `idx.account.pds_endpoint` is not our PDS;
@@ -1286,9 +1289,9 @@ Done when (tests):
 
 Reuse:
   - Prototype `appview/src/db.ts:376` `purgeDid` → LESSON, provisional: one function so a table cannot be forgotten; here enforced by the coverage test.
-Not in this step: the PDS-side delete (P3.16a); the body of `core.is_held`, the held tables and the cleanup
-re-run (P4.07); the erasure case screen and statement (P5.08b); the chat hook (P6.04a); PLC tombstone (runbook,
-Phase 5); backups (P5.04).
+Not in this step: the PDS-side delete (P3.16a); the body of `core.is_held` (P4.07h); the held tables (P4.07c); the
+cleanup re-run (`close_expired_hold`, P4.07g, called by P4.07's daily task); the erasure case screen and statement
+(P5.08b); the chat hook (P6.04a); PLC tombstone (runbook, Phase 5); backups (P5.04).
 Diagram: none.
 
 ### P3.08 — Handle registry rule
@@ -2269,7 +2272,8 @@ the extender and destroyer credentials, on its own internal network `pdsadmin-ho
   `destroyed` row keeps only holdId, permit id, epoch, time and tags, with no PII, retained for [lawyer to confirm].
 - **The receipt** carries two tags over one canonical encoding of (holdId, permit id, epoch, time, "destroyed"): an
   Ed25519 signature by `pds-admin`'s receipt key, for `admin`'s audit record only, and an HMAC-SHA256 tag under the
-  cleanup key, which only `pds-admin` (from env, never logged) and P4.07's `cleanup_owner` table hold.
+  cleanup key, which only `pds-admin` (from env, never logged) and the cleanup-key table (P4.07c; owned by migrator,
+  SELECT for P4.07g's `cleanup_owner` only) hold.
 - **A lost receipt.** A destroy on a hold already `destroyed` returns the stored receipt unchanged, signs no
   instruction, makes no S3 request, and consumes the new permit. It still needs a valid moderator envelope and a fresh,
   single-use permit.
@@ -2287,10 +2291,12 @@ is the next free one when written, 0021 being Q3). It covers:
   error, a timeout or no reply is not an answer;
 - the clocks: the instruction expires 10 s before the permit, `admin`'s call deadline is the permit's expiry, there are
   no SDK retries, and every lapse is computed on the database clock;
-- the keys: the permit key, the receipt key and the cleanup key, each with its custody, provisioning, rotation with a
-  two-key overlap, and revocation, never logged; pgcrypto present in `postgres:18-trixie`; and that the cleanup tag's
-  comparison in PL/pgSQL is not constant-time, acceptable because only `retention` can call it;
-- `cleanup_owner` (P4.07): why it exists, what it owns, its grants, and migrator's SET-only membership (`GRANT
+- the keys: the permit key, the receipt key and the cleanup key (inserted at provisioning by migrator or the bootstrap
+  superuser, never in a migration or the repo; book edit 2026-10-13-codex-813-close-expired-hold, architecture amendment
+  2 of 23:42Z and its step-book mapping), each with its custody, provisioning, rotation with a two-key overlap, and
+  revocation, never logged; pgcrypto present in `postgres:18-trixie`; and that the cleanup tag's comparison in PL/pgSQL
+  is not constant-time, acceptable because only `retention` can call it;
+- `cleanup_owner` (P4.07g): why it exists, what it owns, its grants, and migrator's SET-only membership (`GRANT
   cleanup_owner TO migrator WITH SET TRUE, INHERIT FALSE`, as at 0003:65). The bootstrap superuser and migrator are the
   trusted base outside this boundary;
 - the fail-closed paths.
@@ -2377,8 +2383,9 @@ Done when (tests):
 
 Reuse: none.
 Not in this step: the match path, the sealed record, owner export, `admin`'s regime, permit and "destroy due" action,
-jobs' daily preservation task and the cleanup (P4.07); holds-agent and the holds bucket (P5.04); the review egress step
-(P4.06); the body of `core.is_held` and the erasure re-run when a hold closes (P4.07).
+jobs' daily preservation task (P4.07); the cleanup definers (P4.07g); holds-agent and the holds bucket (P5.04); the
+review egress step (P4.06); the body of `core.is_held` (P4.07h) and the erasure re-run when a hold closes
+(`close_expired_hold`, P4.07g).
 Diagram: none (phase 4 part 1's P4.07 sequence shows the callers).
 
 ### P3.17 — `admin` skeleton

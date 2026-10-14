@@ -347,9 +347,9 @@ Algorithm:
      Otherwise it becomes its own process, with an ADR naming its driver (rule AB-3). Apply the test to each job this
      revision confirms and record one line per job in the revision. Today's jobs all pass: drafts and upload expiry
      (P4.25), the daily preservation task (P4.07: `preserve.listExpired` and `preserve.extendOpen` through
-     `jobs-pdsadmin`, and EXECUTE on the three `cleanup_owner` definers), the Ozone 6-month purge (`ozone_retention`),
-     the P5.09 classes, and P4.27 metrics through the `SECURITY DEFINER` `metrics_compute`. A job that fails the test →
-     **stop** and ask before building it inside `jobs`.
+     `jobs-pdsadmin`, and EXECUTE on the three `cleanup_owner` definers, granted by P4.07g), the Ozone 6-month purge
+     (`ozone_retention`), the P5.09 classes, and P4.27 metrics through the `SECURITY DEFINER` `metrics_compute`. A job
+     that fails the test → **stop** and ask before building it inside `jobs`.
   3a. Settle the step-book findings routed here (`reviews/step-book-findings-triage.md`, editor pass 2026-10-04):
      F-31 (scheduled jobs and the indexer refuse to run
      twice: a Postgres advisory lock taken at start, exit if held, with a two-instance test; P2.18's sweeper, P4.25 and
@@ -2384,8 +2384,8 @@ Inputs:
   (P4.27); sessions and nonces (P2.03, P1.16); the OAuth state store (P2.04).
 - **The hold predicate from P4.07**: the SQL function `core.is_held` (lead decision; owned by P4.07), the same
   predicate `eraseDid` uses (round 1 F10). Two forms: `core.is_held(did)` and `core.is_held(subject_kind, subject_ref)`
-  (P3.07 declares it, P4.07 writes the body). When a hold closes, P4.07's `close_expired_hold` re-runs `erase_did` with
-  `why = legal_hold_closed` from `core.erase_pending_hold`.
+  (P3.07 declares it, P4.07h writes the body). When a hold closes, P4.07g's `close_expired_hold` re-runs `erase_did`
+  with `why = legal_hold_closed` from `core.erase_pending_hold`.
 - The read key for the locked buckets and the mirror (`egress-retention`, P5.02; `ListObjectVersions` and
   `GetObjectRetention` only).
 

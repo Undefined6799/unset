@@ -2615,6 +2615,52 @@ found on main goes in the same PR's record as a P0.09 book fix, never as an allo
 
 ---
 
+### P0.09x — List the cleanup definers as trusted functions
+Tags: [ALEX] (typed line)            Depends on: —            Plan: rule SE-6
+Check class (`.github/CODEOWNERS`), kind/build; issue #825; book edit 2026-10-13-codex-813-close-expired-hold,
+architecture amendment 2 of 23:42Z and its step-book mapping, from the verifier of #824 (verify-824-6ec1d8c, B1). P4.07g
+creates three new SECURITY DEFINER functions in `core` and grants `retention` EXECUTE on them. Unless their names are
+already on the CODEOWNERS `# trusted functions:` line, P0.09c classifies those grants as a feature grant in a trusted PR
+(`mixed_grant_change`), and P4.07g cannot add the names itself, because a PR that touches `/.github/` may touch no
+`infrastructure/` path. Precedent: P0.03 (`c37c980`) listed today's names before the steps that create them. This is a
+tightening: the names become trusted base, so only isolated trusted PRs can change them.
+
+**What:** `.github/CODEOWNERS` line 107 only. It appends `core.close_expired_hold core.unanswered_expired_permits
+core.recorded_unused_receipts` to the `# trusted functions:` line, plus any CODEOWNERS fixture the check tests need.
+
+Lane: Phase 2, which handles check paths, like P0.09w. It needs Alex's typed line "yes P0.09x CODEOWNERS trusted
+functions", relayed by id to that lane. Without his line, P4.07g waits; nothing is reworded to pass the classifier.
+
+Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `trusted_function`, and check is green.
+
+---
+
+### P0.09y — Guard the legal-hold tables in migrations
+Tags: [ALEX] (typed line)            Depends on: P4.07c            Plan: rule SE-6
+Check class (`scripts/guards/`, `.github/CODEOWNERS`), kind/build; issue #826; book edit
+2026-10-13-codex-813-close-expired-hold, architecture amendment 3 of 2026-10-14 00:03Z and its step-book mapping, from
+the verifier of #824 (verify-824-414343c, "Observation for architecture"). Product migrations run as migrator, and
+P0.09c treats DML as neutral, so a product migration could copy the cleanup key somewhere `web` can read, delete the
+sealed transmission and fingerprint rows directly, or rewrite audit rows; review is the only barrier. That is acceptable
+while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a tightening.
+
+**Deferred (2026-10-14).** This step's design is under architecture review after verify-824-e2d6dbd.md (G1: dynamic
+SQL and built-ins that run query strings; G2 and G3: tables the list's rule covers but the list omitted). Its goal
+stands: before P4.07 opens a hold and before any key is provisioned, no product migration may read or change the
+legal-hold, key, sealed or audit tables. Its mechanism, list and fixtures are not booked. It is not buildable until a
+later batch carries architecture's ruling (book edit 2026-10-13-codex-813-close-expired-hold). P4.07 stays unbuildable
+until then.
+
+Why it depends on P4.07c: P4.07c creates the key, sealed and fingerprint tables as a product step. If the guard landed
+first, P4.07c would name guarded tables and stop being product; after P4.07c the names are fixed. It lands before P4.07,
+the first step that opens a hold (P4.07 depends on it), and before any key is provisioned on a stack. Its outline row
+therefore sits in Phase 4, below P4.07c.
+
+Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y migration
+guard", relayed by id to that lane. Without his line, P4.07 waits; nothing is reworded around the guard.
+
+---
+
 ### P0.09o — Bar trusted code from untrusted packages (folded into P0.09n)
 Retired 2026-10-12 21:12Z: book edit 2026-10-12-p009o-trusted-product-imports, amendment 1, from architecture's
 Amendment 1 item 4 of 2026-10-12-workspace-imports-and-remote-daemon. The resolver, the product-file boundary and the
