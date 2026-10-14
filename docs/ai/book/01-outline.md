@@ -173,7 +173,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 281 steps: 257 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 285 steps: 261 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -382,6 +382,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.11n | Name test helpers apart; keep them out of images | — | P0.09n | `phase-1.md` |
 | P1.11k | Strip the snakeoil key from the postgres image | [SEC] | — | `phase-1.md` |
 | P1.33s | Scan each image's exported filesystem (check, SE-6) | [SEC] [ALEX] (typed line) | P1.11k | `phase-1.md` |
+| P1.33u | Make the image secret scan gate (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33s | `phase-1.md` |
+| P1.33v | Scan shipped mirrors with no allow rules (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33u | `phase-1.md` |
 | P1.33c | Accept the PDS scan findings until 2026-11-13 (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33e | Refuse dev while PDS exceptions remain | [SEC] | P1.33c | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
@@ -412,6 +414,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
+| P1.33f | Anchor the depcruise exclude to our outputs (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h, P1.33f | `phase-1.md` |
 | P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
 | P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
@@ -642,6 +646,8 @@ flowchart TD
   P1_11n["P1.11n Test helpers out of images"]
   P1_11k["P1.11k Snakeoil key stripped from postgres"]
   P1_33s["P1.33s Exported filesystem secret scan"]
+  P1_33u["P1.33u Image secret scan gates"]
+  P1_33v["P1.33v Shipped mirrors scanned, no allow rules"]
   P1_33c["P1.33c PDS scan findings accepted"]
   P1_33e["P1.33e Dev refused while exceptions remain"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
@@ -664,6 +670,8 @@ flowchart TD
   P1_34y["P1.34y inert local PLC policy in net-guard"]
   P1_34z["P1.34z Identity resolves through the local PLC"]
   P1_33i["P1.33i Preflight may import shared/host-pin"]
+  P1_33f["P1.33f Depcruise exclude anchored"]
+  P1_33o["P1.33o Host-pin kept a leaf"]
   P1_33h["P1.33h Host pin moved to shared/host-pin"]
   P1_33j["P1.33j Token reader uses the shared pin"]
   P1_33k["P1.33k Node base for the token reader"]
@@ -1012,6 +1020,8 @@ flowchart TD
   P1_34d --> P1_33n
   P1_34q --> P1_33n
   P1_11k --> P1_33s
+  P1_33s --> P1_33u
+  P1_33u --> P1_33v
   P1_27l --> P1_33t
   P1_33t --> P1_34d
   P1_34t --> P1_34u
@@ -1034,6 +1044,8 @@ flowchart TD
   P1_33j --> P1_33l
   P1_34z --> P1_29t
   P1_33i --> P1_33h
+  P1_33h --> P1_33o
+  P1_33f --> P1_33o
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_33k --> P1_34d
@@ -1171,8 +1183,9 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 19 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
-and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
+Depth: **build-ready**. 20 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+and keyless signing pulled forward before P1.34 (P1.27s, contingent on Alex's guard approval, then P2.26e, P2.26b,
+P2.26c and P2.26d; Q3 B), clearing the PDS scan exceptions (P1.33d), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
 | Id | Step | Tags | Deps | Owner file |
@@ -1184,13 +1197,14 @@ Arachnid application, and the Phase 1 exit.
 | P1.33q | Outside-probe workflow (check part of P1.33; SE-6 `q`) | [SEC] | P1.32 | `phase-1.md` |
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before going public (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
-| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
-| P1.27s | Publish, sign and attest images (contingent split from P1.27q; pulled forward, Q3 B) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
-| P2.26b | Pin service images to the mirror by digest (pulled forward, Q3 B) | [SEC] | P1.27s, P1.34t | `phase-2.md` |
+| P1.27s | Publish, sign and attest images, keyless (contingent split from P1.27q; pulled forward, Q3 B) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
+| P2.26e | Commit the Sigstore trusted root (trusted base; pulled forward, Q3 B) | [SEC] trusted | P1.27s | `phase-2.md` |
+| P2.26b | Pin service images to the mirror by digest (pulled forward, Q3 B) | [SEC] | P1.27s, P2.26e, P1.34t | `phase-2.md` |
 | P2.26c | Pull the edge bases from the mirror (trusted base; pulled forward, Q3 B) | [SEC] trusted | P2.26b | `phase-2.md` |
 | P2.26d | Drop the edge dual spelling from the lock test (pulled forward, Q3 B) | [SEC] | P2.26c | `phase-2.md` |
 | P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
+| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
@@ -1205,6 +1219,7 @@ flowchart TD
   P1_33["P1.33 Server baseline"]
   P1_33a["P1.33a Retire the 0x40 prototype before going public"]
   P1_33p["P1.33p Open the home server to the public"]
+  P2_26e["P2.26e Sigstore trusted root"]
   P2_26b["P2.26b Service images by digest"]
   P2_26c["P2.26c Edge bases from the mirror"]
   P2_26d["P2.26d Strict lock test again"]
@@ -1219,6 +1234,8 @@ flowchart TD
   P1_33 --> P1_34
   P1_33a --> P1_34
   P1_33d --> P1_34
+  P1_27s --> P2_26e
+  P2_26e --> P2_26b
   P1_27s --> P2_26b
   P2_26b --> P2_26c
   P2_26c --> P2_26d
@@ -1235,7 +1252,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26d in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
+Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1936,7 +1953,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1959,8 +1976,23 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).
 - **P1.27r (#347):** his typed words allowing the guard-file edit, then his ruleset setting adding `scan`; deferred
   until after launch.
-- **P1.27s (#184):** his typed approval of the guard change, and the `signing` environment and key. If the ADR "image
-  signing: key or keyless" chooses keyless, the signing-key item lapses; the environment, the reviewer and GATE_IF stay.
+- **P1.27s (#184):** a typed line, "yes P1.27s packages: write .github/workflows/publish-images.yml
+  .github/workflows/mirror.yml scripts/guards/workflows.ts scripts/ci .github/CODEOWNERS deployment/sigstore", and the
+  `signing` environment (branch rule and reviewer). Signing is keyless (ADR 0023, "Keyless", 2026-10-14T21:16:36Z), so
+  there is no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers").
+- **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
+  .github/workflows/mirror.yml scripts/ci".
+- **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
+- **P1.33m:** a typed line, "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
+- **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
+- **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
+  LEAF_SHARED".
+- **P1.33u (#848):** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
+  scan gate".
+- **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
+  allow rules".
+- P1.33s is done: merged as 7c56327 (#835).
+- P1.33i is done: merged as 6f32ae3 (#829).
 - **P1.29a (#442):** his card answer "Allow pinned" (2026-10-07T13:00:19Z), already given and quoted in the body.
 - **P1.29y:** a typed line, "yes P1.29y images.yml".
 - **P1.30l (#657):** a typed line, "yes P1.30l images.yml/ci.yml compose pin".
