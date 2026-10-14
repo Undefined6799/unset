@@ -7660,7 +7660,8 @@ Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33s (merged, 7c56327)
 Slice 1, issue #848, check path (`.github/workflows/images.yml`, the comment at `.github/workflows/mirror.yml:62-66` and
 a new test in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family (Alex's 20:24:47Z choice; directive
 `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-835-secret-scan, step 1
-(verify-835-5a57467 S1-S4, N1-N6). It does not wait on P1.27r. Typed line: "yes P1.33u .github/workflows/images.yml
+(verify-835-5a57467 S1-S4, N1-N6). It does not wait on P1.27r. It lands before P1.33c (preferred, not required);
+whichever lands second merges main in (21:56Z note). Typed line: "yes P1.33u .github/workflows/images.yml
 .github/workflows/mirror.yml scripts/ci secret scan gate".
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
@@ -7676,7 +7677,9 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
   needs edge, the scanner flags and the failure exit.
 - S3: an export with zero files, or without the image's expected entry file (`/etc/os-release` plus the image's
   ENTRYPOINT target), fails before Trivy runs.
-- S4: the `mirror.yml:62-66` comment says what is true after P1.33v.
+- S4: the `mirror.yml:62-66` comment says what is true after this step: no export secret scan on mirrors yet, even
+  though pds ships unmodified. P1.33v adds that scan and rewrites the comment.
+- `scan-export` gets an explicit `--ignorefile /dev/null` (P1.33c's wiring test admits it only with that flag).
 - N1-N6 ride along: the stale v0.74.0 comments become 0.75.0, and the rest follow the report. N6 (node:26-trixie-slim
   running unmodified at `compose.dev.yaml:197`) is covered by P1.33v's mirror export scan, not by a comment.
 
@@ -7702,7 +7705,8 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
 
 **What:**
 - S6: `mirror.yml` gains the same export secret scan for every mirrored image that runs unmodified (pds, caddy, the
-  node base where it runs as-is, and any other `mirror.list.json` entry compose runs directly), with P1.33u's gating.
+  node base where it runs as-is, and any other `mirror.list.json` entry compose runs directly), with P1.33u's gating,
+  and rewrites the `mirror.yml:62-66` comment P1.33u left.
 - S5: the image secret scans disable Trivy's built-in allow rules: the `disable-allow-rules` list in a committed
   trivy-secret config names every built-in rule id for the pinned 0.75.0, with a test that the list matches that
   version's rule set. Any narrower allow rule added later gets a recorded reason and a test; adding one is a loosening
@@ -8785,8 +8789,9 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
 - A new `.github/trivyignore.pds.yaml`, passed (`--ignorefile`) only to the scan of `ghcr.io/bluesky-social/pds` in
   `images.yml` and `mirror.yml`. Every other scan keeps `/dev/null` or the shared file, and the shared
   `.github/trivyignore.yaml` stays empty: a shared entry for, say, the libssl CVE would also silence it in our own
-  images. That rule also admits #835's `scan-export` job (`images.yml:261`, P1.33s): a secret-only `trivy rootfs` scan
-  of our own images with no `--ignorefile`, never given the PDS file (book edit 2026-10-14-verify-834-fixes, N7).
+  images. The wiring test admits #835's `scan-export` job (`images.yml:261`, P1.33s), a secret-only `trivy rootfs`
+  scan of our own images, only with P1.33u's explicit `--ignorefile /dev/null`, so the PDS ignore file never reaches a
+  secret scan (book edit 2026-10-14-verify-835-secret-scan, 21:56Z note; it replaces verify-834 N7's wording).
 - One entry per id that CI's scan of the real image reports, taken from the red run's annotations; nothing from the
   record's reconstruction that CI did not report. Each entry has `id`, `expired_at: 2026-11-13` (30 days from the tap)
   and a `statement` naming the PDS digest `sha256:3a8feb34…`: "newest upstream release, local stack only, accepted by
