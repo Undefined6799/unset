@@ -2,7 +2,7 @@
 // `internal` flag and their members are exactly the reviewed table in deployment/networks.<env>.json, in both
 // directions, so no service joins a network, and no network opens up, without a reviewed change to the table. The
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
-import { type Compose, networksOf, ParseError, parseStrictData, type Service } from "../compose-parse.ts";
+import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
 import { type Check, fail, missing, pass } from "./types.ts";
 
 export type NetworkTable = ReadonlyMap<string, { internal: boolean; members: readonly string[] }>;
@@ -68,7 +68,7 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * architecture record 2026-10-13-p129h-local-token-reader, Amendment 1, and its 04:17Z answer on C17).
  */
 const noNetworkReader = (service: Service): boolean =>
-  service.name === "pds-token-reader" && service.networkMode === "none" && service.profiles.includes("tools");
+  service.name === TOKEN_READER && service.networkMode === "none" && service.profiles.includes("tools");
 
 export const c17: Check = {
   id: "C17",
