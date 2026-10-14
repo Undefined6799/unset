@@ -28,7 +28,14 @@ export const config: Config = createRequire(import.meta.url)(CONFIG_PATH);
  * `unresolved` specifier gets no target: no stub package for a bare one, no file for a relative one, so
  * dependency-cruiser cannot resolve it.
  */
-export type Edge = { from: string; spec: string; kind?: "type" | "dynamic"; unresolved?: true };
+export type Edge = {
+  from: string;
+  spec: string;
+  kind?: "type" | "dynamic";
+  unresolved?: true;
+  /** Package `main`, when a bare specifier must resolve under that file (yaml's is `dist/index.js`). */
+  packageEntry?: string;
+};
 export type Outcome = { exitCode: number; rules: string[] };
 
 const temps: string[] = [];
@@ -65,7 +72,7 @@ export function target(edge: Edge): string | undefined {
 export function fixture(edges: Edge[]): string {
   const root = tempDir();
   const targets = new Set<string>();
-  const packages = new Set<string>();
+  const packages = new Map<string, string>();
   edges.forEach((edge, n) => {
     write(root, edge.from, importLine(edge, n));
     if (edge.unresolved) return;
@@ -74,12 +81,16 @@ export function fixture(edges: Edge[]): string {
       if (!targets.has(file)) write(root, file, "export const x = 1;\n");
       targets.add(file);
     } else if (!edge.spec.startsWith("node:")) {
-      packages.add(edge.spec);
+      packages.set(edge.spec, edge.packageEntry ?? packages.get(edge.spec) ?? "index.js");
     }
   });
-  for (const name of packages) {
-    write(root, `node_modules/${name}/package.json`, JSON.stringify({ name, main: "index.js" }));
-    write(root, `node_modules/${name}/index.js`, "module.exports = {};\n");
+  for (const [name, entry] of packages) {
+    write(
+      root,
+      `node_modules/${name}/package.json`,
+      JSON.stringify({ name, main: entry, exports: { ".": `./${entry}` } }),
+    );
+    write(root, `node_modules/${name}/${entry}`, "module.exports = {};\n");
   }
   // A subpath specifier (react/jsx-runtime) is declared by its package name, as a real package.json would.
   const packageName = (spec: string) =>
@@ -87,7 +98,7 @@ export function fixture(edges: Edge[]): string {
       .split("/")
       .slice(0, spec.startsWith("@") ? 2 : 1)
       .join("/");
-  const dependencies = Object.fromEntries([...packages].map((name) => [packageName(name), "1.0.0"]));
+  const dependencies = Object.fromEntries([...packages.keys()].map((name) => [packageName(name), "1.0.0"]));
   write(root, "package.json", JSON.stringify({ name: "fixture", private: true, dependencies }));
   return root;
 }

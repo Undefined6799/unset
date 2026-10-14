@@ -359,8 +359,19 @@ module.exports = {
   options: {
     parser: "swc",
     doNotFollow: { path: "node_modules" },
+    // Own build outputs and fixture folders only (P1.33f). A `(^|/)` prefix also matched
+    // node_modules/yaml/dist, and dependency-cruiser 18.5.0 then drops that module
+    // (types/filter-types.d.mts, IExcludeType.path), so no row ever saw the import.
+    // yaml 2.9.1 resolves to dist/index.js (node_modules/yaml/package.json, `main`).
+    // `deployment/dist` has no extra segment; scripts and tests emit a dist too.
     exclude: {
-      path: "(^|/)(dist|coverage|\\.worktrees|graphify-out|scripts/guards/fixtures|scripts/lint/semgrep/fixtures)/",
+      path: [
+        "^(dist|coverage|\\.worktrees|graphify-out)/",
+        "^(apps|interfaces|domains|infrastructure|shared|deployment|scripts|tests)/(dist|coverage)/",
+        "^(apps|interfaces|domains|infrastructure|shared|deployment|scripts|tests)/.+/((dist|coverage)/)",
+        "^scripts/guards/fixtures/",
+        "^scripts/lint/semgrep/fixtures/",
+      ],
     },
   },
 };
