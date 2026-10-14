@@ -3,5 +3,5 @@
   "compilerOptions": { "composite": true, "outDir": "dist" },
   "include": ["**/*.ts"],
   "exclude": ["dist"],
-  "references": [{ "path": "../tests" }]
+  "references": [{ "path": "../shared/host-pin" }, { "path": "../tests" }]
 }

@@ -20,6 +20,7 @@
     { "path": "interfaces/review" },
     { "path": "shared/config" },
     { "path": "shared/errors" },
+    { "path": "shared/host-pin" },
     { "path": "shared/http" },
     { "path": "shared/log" },
     { "path": "shared/ui" },
