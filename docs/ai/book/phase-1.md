@@ -8669,6 +8669,7 @@ Done when each red fixture fails before the change and passes after it, the new 
 
 ### P1.33j — Use the shared host pin in the token reader
 Tags: [SEC]            Depends on: P1.33h
+As built: #845, merged as 1096d60 (verify-845-200b534's findings ride P1.33l and P1.29s).
 Slice 1, issue #799, product (`tests/support/`, `tests/integration/`), lane the third thread; book edit
 2026-10-13-host-pin-steps (Amendments 3 and 4), from architecture's Amendment 3 of 2026-10-13-p129h-local-token-reader
 (B2'). Not paused: it fixes a hole on main (#786 merged before the ruling). It does not fold into P1.33h, which is move
@@ -8721,7 +8722,16 @@ lookup it refuses unless `unset-local` equals both the compose project `name:` a
 reads; this replaces P1.29h's interim guard on the `unset-dev` labels. Red fixtures: a missing env, `dev`, `prod`, a
 name mismatch, and a label mismatch.
 
-Done when each fixture fails on main (red first) and check is green.
+**Also (verify-845-200b534; book edit 2026-10-13-host-pin-steps, "Step-book mapping of verify-845-200b534"):**
+- S1 (fail-open): the "any other error propagates" branch (`pds-email-token.ts:348-349`) has no test, so mutant R8,
+  which accepts the caller's DOCKER_HOST instead of rethrowing, survives; `DOCKER_HOST=unix:///etc/passwd/x` (ENOTDIR)
+  reaches it. A red fixture where the fake walk throws EACCES asserts `toBe` on the thrown error and that no command
+  ran.
+- N7: the child-env list exists twice, `CHILD_ENV` at `pds-email-token.ts:273` and `CHILD_ENV_NAMES` at
+  `deployment/preflight/stack.ts:25`. Keep one copy: the reader imports the preflight's list. If the two differ on
+  purpose, keep both, with a comment and a test pinning the difference.
+
+Done when each fixture fails on main (red first), R8 dies, and check is green.
 
 ---
 
@@ -11386,7 +11396,9 @@ P1.29h, P1.29s, P1.29t.
    `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one `logging` entry: exactly
    `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
    also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
-   2026-10-12-p134l-secrets-folder-listing, rider).
+   2026-10-12-p134l-secrets-folder-listing, rider), and a test that the token reader passes `hostWalk` to the pin
+   unchanged, so mutant R12 (statfs blind) dies (verify-845-200b534 N3; book edit 2026-10-13-host-pin-steps, "Step-book
+   mapping of verify-845-200b534").
 10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v and
     P1.34z): it runs on the local stack only (`local:up`); no probe runs under dev (architecture's Amendment 4 of
     2026-10-13-local-plc, point 1, and Amendment 6, S3). Its first assertion, before any browser flow, is a probe from
