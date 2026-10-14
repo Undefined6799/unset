@@ -198,6 +198,19 @@ describe("scan-export gates the secret scan", () => {
     expect(ran.code, ran.out).toBe(0);
     expect(ran.calls).toContain(`create ${ran.image}`);
     expect(trivy(ran.calls)).toContain("ignore=/dev/null");
+    // node, caddy and docker-entrypoint.sh are bare names on the image PATH.
+    const bare = scanExport({
+      files: { "etc/os-release": "ID=unset\n", "usr/local/bin/node": "#!/bin/sh\n" },
+      entrypoint: "node",
+    });
+    expect(bare.code, bare.out).toBe(0);
+    const bareMissing = scanExport({
+      files: { "etc/os-release": "ID=unset\n", "usr/bin/other": "x\n" },
+      entrypoint: "node",
+    });
+    expect(bareMissing.code, bareMissing.out).not.toBe(0);
+    expect(bareMissing.out).toContain("export is missing the ENTRYPOINT target");
+    expect(trivy(bareMissing.calls)).toBe("");
   });
 
   test("export_failure_is_red_before_trivy", () => {

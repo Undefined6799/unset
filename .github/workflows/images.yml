@@ -322,16 +322,39 @@ jobs:
             exit 1
           fi
           # First ENTRYPOINT element (docs.docker.com/reference/cli/docker/inspect/, Go template).
+          # A bare name is looked up on the image PATH (docs.docker.com/reference/dockerfile/#entrypoint).
+          # -L counts a symlink without following an absolute target onto the runner.
           entrypoint=$(docker inspect --format '{{if .Config.Entrypoint}}{{index .Config.Entrypoint 0}}{{end}}' "$APP_IMAGE")
+          imagepath=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$APP_IMAGE")
+          pathlist=$(printf '%s\n' "$imagepath" | sed -n 's/^PATH=//p')
+          pathlist=${pathlist%%$'\n'*}
+          if [ -z "$pathlist" ]; then
+            pathlist="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          fi
           case "$entrypoint" in
-            /*) entryfile="$rootfs$entrypoint" ;;
-            ?*) entryfile="$rootfs/$entrypoint" ;;
-            *)
+            "")
               echo "image has no ENTRYPOINT"
               exit 1
               ;;
+            /*) entryfile="$rootfs$entrypoint" ;;
+            *)
+              entryfile=""
+              oldifs=$IFS
+              IFS=:
+              for dir in $pathlist; do
+                case "$dir" in
+                  /*) candidate="$rootfs$dir/$entrypoint" ;;
+                  *) candidate="$rootfs/$dir/$entrypoint" ;;
+                esac
+                if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+                  entryfile="$candidate"
+                  break
+                fi
+              done
+              IFS=$oldifs
+              ;;
           esac
-          if [ ! -e "$entryfile" ]; then
+          if [ -z "${entryfile:-}" ] || { [ ! -e "$entryfile" ] && [ ! -L "$entryfile" ]; }; then
             echo "export is missing the ENTRYPOINT target"
             exit 1
           fi
