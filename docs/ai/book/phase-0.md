@@ -2637,12 +2637,12 @@ Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `tr
 
 ### P0.09y — Guard the legal-hold tables in migrations
 Tags: [ALEX] (typed line)            Depends on: P4.07c            Plan: rule SE-6
-Check class (`scripts/guards/`, `.github/CODEOWNERS`), kind/build; book edit 2026-10-13-codex-813-close-expired-hold,
-architecture amendment 3 of 2026-10-14 00:03Z and its step-book mapping, from the verifier of #824 (verify-824-414343c,
-"Observation for architecture"). Product migrations run as migrator, and P0.09c treats DML as neutral, so a product
-migration could copy the cleanup key somewhere `web` can read, delete the sealed transmission and fingerprint rows
-directly, or rewrite audit rows; review is the only barrier. That is acceptable while no guarded table holds real data
-and no key is provisioned, and not once holds exist. This is a tightening.
+Check class (`scripts/guards/`, `.github/CODEOWNERS`), kind/build; issue #826; book edit
+2026-10-13-codex-813-close-expired-hold, architecture amendment 3 of 2026-10-14 00:03Z and its step-book mapping, from
+the verifier of #824 (verify-824-414343c, "Observation for architecture"). Product migrations run as migrator, and
+P0.09c treats DML as neutral, so a product migration could copy the cleanup key somewhere `web` can read, delete the
+sealed transmission and fingerprint rows directly, or rewrite audit rows; review is the only barrier. That is acceptable
+while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a tightening.
 
 **Where:** `scripts/guards/` (the P0.09c classifier: `grant-parse.ts` and `trusted-base.ts`, or a sibling module); a
 guarded-table list beside the `# trusted functions:` line in `.github/CODEOWNERS`; red fixtures and tests.

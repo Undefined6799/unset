@@ -1939,8 +1939,8 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   "yes docs cycle check scripts/docs").
 - **P0.09x (#825):** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
   it.
-- **P0.09y:** a typed line, "yes P0.09y migration guard", for the `scripts/guards/` and CODEOWNERS check paths; P4.07
-  waits on it.
+- **P0.09y (#826):** a typed line, "yes P0.09y migration guard", for the `scripts/guards/` and CODEOWNERS check
+  paths; P4.07 waits on it.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
 - **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
 - **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).
