@@ -575,6 +575,35 @@ describe("allowlist matrix", () => {
     );
   });
 
+  test("depcruise_exclude_anchors_to_our_outputs", async () => {
+    // P1.33f: `(^|/)dist/` also matched node_modules/yaml/dist, so that edge never reached a row. yaml 2.9.1's
+    // package.json main is ./dist/index.js. host-pin's row does not allow it, so the cruise must refuse it.
+    const yaml: Edge = { from: "shared/host-pin/a.ts", spec: "yaml", packageEntry: "dist/index.js" };
+    const seen = await cruiseResult([yaml], RULES);
+    const resolved = seen.modules
+      .find((mod) => mod.source === yaml.from)
+      ?.dependencies.find((dep) => dep.module === "yaml");
+    expect(resolved?.resolved).toBe("node_modules/yaml/dist/index.js");
+    expect(outcome(seen).rules).toContain("not-in-allowed");
+    // A workspace build output stays out of the graph, so a forbidden import there is not a violation.
+    const dist = await cruiseResult(
+      [edge("apps/web/src/a.ts", "./b.ts"), edge("apps/web/dist/a.ts", "../../admin/b.ts")],
+      RULES,
+    );
+    expect(dist.modules.map((mod) => mod.source)).not.toContain("apps/web/dist/a.ts");
+    expect(dist.summary.error).toBe(0);
+    // tsc emits deployment/dist directly, and scripts/dist and tests/dist; none of those is a node_modules path.
+    const excludePath = (config.options as { exclude?: { path?: string | string[] } }).exclude?.path;
+    const patterns = typeof excludePath === "string" ? [excludePath] : (excludePath ?? []);
+    const excluded = (file: string) => patterns.some((pattern) => new RegExp(pattern).test(file));
+    expect(excluded("node_modules/yaml/dist/index.js")).toBe(false);
+    expect(excluded("deployment/dist/preflight/checks/index.d.ts")).toBe(true);
+    expect(excluded("apps/web/dist/a.ts")).toBe(true);
+    expect(excluded("scripts/dist/a.js")).toBe(true);
+    expect(excluded("tests/dist/a.js")).toBe(true);
+    expect(excluded("scripts/guards/fixtures/a.ts")).toBe(true);
+  });
+
   test("depcruise_matrix_rows_have_fixtures", async () => {
     expect(Object.keys(ROW_FIXTURES).sort()).toEqual(config.MATRIX.map((row) => row.name).sort());
     for (const row of config.MATRIX) {
