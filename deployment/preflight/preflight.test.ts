@@ -1409,6 +1409,27 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     }
   });
 
+  // Alex's "Local only" answer keeps mail required off local, pinned here (record p127l-local-gaps, Amendment 6).
+  const offLocal = (env: "dev" | "prod", unset: Record<string, null>): Stack =>
+    env === "dev" ? { compose: DEV, pdsEnv: { ...DEV_ENV, ...unset } } : { pdsEnv: unset };
+
+  for (const env of ["dev", "prod"] as const) {
+    test(`c11_required_${env}`, async () => {
+      expect(await expectOnly("C11", offLocal(env, { PDS_EMAIL_SMTP_URL: null }), env)).toBe(
+        "FAIL C11 PDS_EMAIL_SMTP_URL missing",
+      );
+    });
+
+    test(`c19_required_${env}`, async () => {
+      expect(await expectOnly("C19", offLocal(env, { PDS_MODERATION_EMAIL_SMTP_URL: null }), env)).toBe(
+        "FAIL C19 PDS_MODERATION_EMAIL_SMTP_URL missing",
+      );
+      expect(await expectOnly("C19", offLocal(env, { PDS_MODERATION_EMAIL_ADDRESS: null }), env)).toBe(
+        "FAIL C19 PDS_MODERATION_EMAIL_ADDRESS missing",
+      );
+    });
+  }
+
   test("c15_subdomain_entry_refused", async () => {
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,x.0x40.me" } });
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".x.0x40.me" } });
@@ -2250,10 +2271,16 @@ secrets:
     file: ../../unset-dev-secrets/local_tls_key
 `;
   /**
-   * The handle domain is the PDS's own. Mail stays set: C11 and C19 stay required under local until Alex answers the
-   * local-mail card (architecture record 2026-10-13-p127l-local-gaps, item 2).
+   * The handle domain is the PDS's own, and local runs without email: no SMTP URL is set (Alex's "Local only" mail card,
+   * 2026-10-14T20:28:12Z; architecture record 2026-10-13-p127l-local-gaps, Amendment 6).
    */
-  const LOCAL_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".pds.localhost", PDS_DID_PLC_URL: "http://plc:2582" };
+  const LOCAL_ENV = {
+    PDS_SERVICE_HANDLE_DOMAINS: ".pds.localhost",
+    PDS_DID_PLC_URL: "http://plc:2582",
+    PDS_EMAIL_SMTP_URL: null,
+    PDS_MODERATION_EMAIL_SMTP_URL: null,
+    PDS_MODERATION_EMAIL_ADDRESS: null,
+  };
   const LOCAL_FILES = {
     ...NODE_APP,
     "deployment/edge/Dockerfile": "FROM scratch\n",
@@ -2476,21 +2503,29 @@ secrets:
     }
   });
 
-  test("local_still_requires_mail_until_alex_answers", async () => {
-    // Architecture record 2026-10-13-p127l-local-gaps, item 2: dropping C11 and C19 under local is Alex's card.
-    const noMail = {
-      PDS_EMAIL_SMTP_URL: null,
-      PDS_MODERATION_EMAIL_SMTP_URL: null,
-      PDS_MODERATION_EMAIL_ADDRESS: null,
-    };
-    const { lines, code } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, ...noMail } });
-    expect(failed(lines)).toEqual(["C11", "C19"]);
-    expect(code).toBe(1);
-    // Mailpit stays dev's alone: local is held to prod's mail rule.
-    const mailpit = await local((text) => text, {
-      pdsEnv: { ...LOCAL_ENV, PDS_EMAIL_SMTP_URL: "smtp://mailpit:1025" },
-    });
-    expect(failed(mailpit.lines)).toEqual(["C11"]);
+  test("local_without_mail_passes", async () => {
+    // Alex's "Local only" mail card (2026-10-14T20:28:12Z; record 2026-10-13-p127l-local-gaps, Amendment 6).
+    const { lines, code } = await local((text) => text);
+    expect(failed(lines)).toEqual([]);
+    expect(lines).toContain("PASS C11 skipped: local runs without email");
+    expect(lines).toContain("PASS C19 skipped: local runs without email");
+    expect(code).toBe(0);
+  });
+
+  test("local_any_smtp_key_refused", async () => {
+    // So local cannot half-configure mail: any mail key, even a valid or empty value, fails its check.
+    const keys = [
+      ["C11", "PDS_EMAIL_SMTP_URL"],
+      ["C19", "PDS_MODERATION_EMAIL_SMTP_URL"],
+      ["C19", "PDS_MODERATION_EMAIL_ADDRESS"],
+    ] as const;
+    for (const [id, name] of keys) {
+      for (const value of ["smtps://mail.example.test:465", "smtp://mailpit:1025", "moderation@example.test", ""]) {
+        const { lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, [name]: value } });
+        expect(failed(lines), `${name}=${value}`).toEqual([id]);
+        expect(lines).toContain(`FAIL ${id} ${name} is set; local runs without email`);
+      }
+    }
   });
 
   test("local_c7_applies_in_full", async () => {

@@ -3,7 +3,7 @@
 // packages/common/src/env.ts: envStr treats an empty value as unset, envList splits on commas, envInt parses an
 // integer. A reason names the variable, never its value.
 import type { SecretMap } from "../secret-map.ts";
-import { smtpProblem, withPds } from "./pds.ts";
+import { localMail, smtpProblem, withPds } from "./pds.ts";
 import { type Check, fail, type Inputs, pass } from "./types.ts";
 
 const present = (env: SecretMap, name: string): boolean => env.has(name);
@@ -67,10 +67,12 @@ export const c16: Check = {
   ),
 };
 
-/** C19: moderation mail configured, under C11's TLS rule; without it the PDS drops every moderation receipt. */
+/** C19: moderation mail configured, under C11's TLS rule; without it the PDS drops every moderation receipt. A local
+ * stack sends no mail, so there both keys must be absent (see localMail). */
 export const c19: Check = {
   id: "C19",
   run: withPds((env, { env: stage }) => {
+    if (stage === "local") return localMail(env, "PDS_MODERATION_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_ADDRESS");
     const problem = env.use("PDS_MODERATION_EMAIL_SMTP_URL", (v) =>
       smtpProblem(v, stage, "PDS_MODERATION_EMAIL_SMTP_URL"),
     );
