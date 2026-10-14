@@ -33,6 +33,40 @@ describe("createInFlight", () => {
     expect(started[1]?.mayWrite()).toBe(true);
   });
 
+  test("an_older_lookup_writes_when_the_newer_one_fails_first", async () => {
+    const inFlight = createInFlight<string, string>(10);
+    const { task, started } = heldTasks();
+    inFlight.share("k", true, task);
+    const newer = inFlight.share("k", true, task);
+    started[1]?.release("failed, so it never asks to write");
+    await newer;
+    expect(started[0]?.mayWrite()).toBe(true);
+  });
+
+  test("a_lookup_from_before_a_drop_stays_silent_after_others_end", async () => {
+    const inFlight = createInFlight<string, string>(10);
+    const { task, started } = heldTasks();
+    inFlight.share("k", false, task);
+    inFlight.drop("k");
+    const between = inFlight.share("k", false, task);
+    started[1]?.release("done");
+    await between;
+    inFlight.share("k", false, task); // the DID's order must have outlived the lookup that ended
+    expect(started[0]?.mayWrite()).toBe(false);
+    expect(started[2]?.mayWrite()).toBe(true);
+  });
+
+  test("a_task_that_throws_at_once_rejects_its_flight", async () => {
+    const inFlight = createInFlight<string, string>(10);
+    const { task, started } = heldTasks();
+    const thrown = inFlight.share("k", false, () => {
+      throw new Error("bad input");
+    });
+    await expect(thrown).rejects.toThrow("bad input");
+    inFlight.share("k", false, task);
+    expect(started).toHaveLength(1); // a new flight: the failed one left the map
+  });
+
   test("drop_starts_a_new_flight_and_silences_the_old_one", async () => {
     const inFlight = createInFlight<string, string>(10);
     const { task, started } = heldTasks();
