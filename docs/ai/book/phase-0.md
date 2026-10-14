@@ -2645,14 +2645,20 @@ sealed transmission and fingerprint rows directly, or rewrite audit rows; review
 while no guarded table holds real data and no key is provisioned, and not once holds exist. This is a tightening.
 
 **Where:** `scripts/guards/` (the P0.09c classifier: `grant-parse.ts` and `trusted-base.ts`, or a sibling module); a
-guarded-table list beside the `# trusted functions:` line in `.github/CODEOWNERS`; red fixtures and tests.
+guarded-table list beside the `# trusted functions:` line in `.github/CODEOWNERS`; red fixtures and tests (inline SQL
+strings, as `grant-parse.test.ts` does, or files under `scripts/guards/fixtures/`: a fixture file under
+`infrastructure/` would mix check and product paths); the list is read from base and head and unioned, like the
+trusted-functions line (`trusted-base.ts:349-355`), and "names" covers quoted identifiers and string literals, such as a
+`'schema.table'::regclass` cast.
 
 **What:** the guarded-table list names the cleanup-key table, `legal_hold_transmission`, the hold fingerprint table,
-`core.erase_pending_hold` and the audit tables, by the exact names P4.07c, P3.07 and 0009 create. A migration that
-names a listed table in any statement, DML included, is trusted base: isolated, CODEOWNERS-reviewed and never mixed
-with product work. A migration with dynamic SQL (`EXECUTE`, `format(`, a `DO` block) is trusted base too, because it
-cannot be read for table names. The guard classifies new or changed migrations only, so 0009, which creates the audit
-tables with a `DO` block, is unaffected; a later product step that followed the 0009 pattern would now be trusted base.
+`core.erase_pending_hold` and the audit tables, by the exact names P4.07c, P3.07 and 0009 create. A migration that names
+a listed table in any statement, DML included, is trusted base: isolated, CODEOWNERS-reviewed and never mixed with
+product work. A migration with dynamic SQL (a `DO` block, or a PL/pgSQL `EXECUTE` of a string or `format(` result in any
+routine body the migration creates; `GRANT`/`REVOKE EXECUTE` and a trigger's `EXECUTE FUNCTION` are not dynamic SQL) is
+trusted base too, because it cannot be read for table names. The guard classifies new or changed migrations only, so
+0009, which creates the audit tables and their `EXECUTE FUNCTION` triggers, is not reclassified; a later product
+migration that named those tables would be trusted base.
 
 Why it depends on P4.07c: P4.07c creates the key, sealed and fingerprint tables as a product step. If the guard landed
 first, P4.07c would name guarded tables and stop being product; after P4.07c the names are fixed, so the list holds
@@ -2664,9 +2670,10 @@ guard", relayed by id to that lane. Without his line, P4.07 waits; nothing is re
 
 Size: ~120 source lines, ~150 test lines.
 
-Done when three red fixtures (an INSERT … SELECT from the key table in a product migration; a DELETE on the sealed
-rows; an `EXECUTE format(...)` that hides the name) are each refused as a product file, the 12 migrations on main still
-classify as they do today, and check is green.
+Done when three red fixtures (an INSERT … SELECT from the key table in a product migration; a DELETE on the sealed rows;
+a trigger function whose body runs `EXECUTE format(...)` on a hidden table name, fired by an `INSERT` in the same
+migration (a `DO` block is already refused today)) are each refused as a product file, the 12 migrations on main are not
+reclassified (the guard reads only new or changed migrations), and check is green.
 
 ---
 
