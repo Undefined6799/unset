@@ -139,12 +139,13 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("shared/admin-envelope/a.ts", "node:crypto"),
     edge("shared/admin-envelope/a.ts", "./b.ts"),
   ],
+  "shared-host-pin": [edge("shared/host-pin/a.ts", "node:fs"), edge("shared/host-pin/a.ts", "./b.ts")],
   "deployment-preflight": [
     edge("deployment/preflight/a.ts", "./checks/b.ts"),
     edge("deployment/preflight/a.ts", "yaml"),
     edge("deployment/preflight/a.ts", "node:child_process"),
     edge("deployment/preflight/checks/a.ts", "../../edge/caddyfile.ts"),
-    // P1.33i: the index only. The row-alone cruise fails until the allow path is exactly this file.
+    // P1.33i: the index only. The row-alone cruise fails until the row allows this file.
     edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts"),
   ],
   tooling: [
@@ -159,6 +160,8 @@ const REAL_FILES = [
   "apps/web/render.tsx",
   "domains/identity/index.ts",
   "shared/errors/index.ts",
+  "shared/host-pin/index.ts",
+  "shared/host-pin/index.test.ts",
   "infrastructure/net-guard/index.ts",
   "interfaces/http/main.ts",
   "deployment/preflight/index.ts",
@@ -522,6 +525,10 @@ describe("allowlist matrix", () => {
       edge("deployment/preflight/a.ts", "../../shared/host-pin/walk.ts"),
       edge("deployment/preflight/a.ts", "../../shared/host-pin/index.ts.bak.ts"),
       edge("deployment/preflight/a.ts", "../../shared/host-pin/lib/index.ts"),
+      // P1.33o: the allow path is anchored at shared/, so the same suffix under deployment/images is refused.
+      edge("deployment/preflight/a.ts", "../images/shared/host-pin/index.ts"),
+      // P1.33o: the dot in index.ts is escaped, so a file named index-ts is not that file.
+      edge("deployment/preflight/a.ts", "../../shared/host-pin/index-ts"),
       edge("deployment/preflight/a.ts", "../images/b.ts"),
       edge("deployment/preflight/a.ts", "pg"),
       edge("deployment/images/a.ts", "../preflight/b.ts"),
@@ -540,6 +547,32 @@ describe("allowlist matrix", () => {
     await expectFail("not-in-allowed", unresolved("interfaces/http/web/page.ts", module));
     await expectFail("not-in-allowed", unresolved(from, "@unset/apps-web/other"), unresolved(from, `${module}x`));
     await expectFail("app-render-entry-only", edge(from, "../../../apps/web/src/document.tsx", "dynamic"));
+  });
+
+  test("shared_host_pin_is_a_leaf", async () => {
+    // P1.33o: host-pin joins LEAF_SHARED. dependency-cruiser 18.5.0 allows a dependency that satisfies any
+    // allowed rule (doc/rules-reference.md, `allowed`). This row is only its own files and Node built-ins.
+    // A test file stays on the tooling row, so index.test.ts may import vitest even though the row refuses it.
+    await expectPass(
+      edge("shared/host-pin/a.ts", "node:fs"),
+      edge("shared/host-pin/a.ts", "./walk.ts"),
+      edge("shared/host-pin/index.test.ts", "vitest"),
+    );
+    const row = config.MATRIX.find((entry) => entry.name === "shared-host-pin");
+    if (!row) throw new Error("shared-host-pin row is missing");
+    const allowed = row.to.map((to) => ({ from: row.from, to }));
+    const rowAlone = await cruiseFixture([edge("shared/host-pin/index.test.ts", "vitest")], {
+      allowed,
+      allowedSeverity: "error",
+      forbidden: [],
+    });
+    expect(rowAlone.exitCode, "the host-pin row itself does not allow vitest").not.toBe(0);
+    await expectFail(
+      "not-in-allowed",
+      edge("shared/host-pin/a.ts", "../config/index.ts"),
+      edge("shared/host-pin/a.ts", "../errors/index.ts"),
+      edge("shared/host-pin/a.ts", "fast-check"),
+    );
   });
 
   test("depcruise_matrix_rows_have_fixtures", async () => {
