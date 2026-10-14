@@ -265,3 +265,145 @@ describe("verifyHandle", () => {
     expect(reports).toBe(1);
   });
 });
+
+/**
+ * A verifier whose TXT answers wait until the test releases them, so checks overlap (P1.33r). PLC answers at once with
+ * a document for whichever DID was asked, claiming alice.example.com; the resolver keeps no cache, so only the
+ * verifier's sharing is counted.
+ */
+function heldVerifier(cacheMax = 10) {
+  const held: ((outcome: TxtOutcome) => void)[] = [];
+  const calls = { plc: 0, txt: [] as string[] };
+  const network: IdentityNetwork = {
+    get: async (url, request) => {
+      if (request.target !== "plc") return status(404);
+      calls.plc += 1;
+      return json(doc(url.pathname.slice(1), ["at://alice.example.com"]));
+    },
+    txt: (name) => {
+      calls.txt.push(name);
+      return new Promise((release) => held.push(release));
+    },
+  };
+  const resolveDid = createDidResolver({ network, plcUrl: PLC_URL, cacheTtlS: 0, cacheMax: 10, now: () => 0 });
+  const verifier = createHandleVerifier({ network, resolveDid, verifyTtlS: 600, invalidTtlS: 60, cacheMax });
+  return { ...verifier, held, calls };
+}
+
+const tick = () => new Promise((settled) => setTimeout(settled, 0));
+const C = parseDid("did:plc:cccccccccccccccccccccccc") as Did;
+const VERIFIED_A = records(`did=${A}`);
+
+describe("verifyHandle shares in-flight checks", () => {
+  test("cached_callers_share_one_check", async () => {
+    const w = heldVerifier();
+    const { verifyHandle } = w;
+    const waiting = Array.from({ length: 50 }, () => verifyHandle(A));
+    await tick();
+    expect(w.calls).toEqual({ plc: 1, txt: ["_atproto.alice.example.com"] });
+    w.held[0]?.(VERIFIED_A);
+    expect(new Set((await Promise.all(waiting)).map((v) => v.status))).toEqual(new Set(["verified"]));
+    expect(w.calls.txt).toHaveLength(1);
+  });
+
+  test("fresh_never_joins_an_earlier_check", async () => {
+    const w = heldVerifier();
+    const { verifyHandle } = w;
+    const early = verifyHandle(A);
+    const fresh = verifyHandle(A, { consistency: "fresh" });
+    await tick();
+    expect(w.calls.txt).toHaveLength(2);
+    w.held[1]?.(records(`did=${B}`));
+    w.held[0]?.(VERIFIED_A);
+    expect((await early).status).toBe("verified");
+    expect((await fresh).status).toBe("invalid");
+    // The earlier check finished last but no longer owned the DID, so the fresh verdict stays cached.
+    expect((await verifyHandle(A)).status).toBe("invalid");
+    expect(w.calls.txt).toHaveLength(2);
+  });
+
+  test("older_verdict_lands_when_a_newer_fresh_check_fails", async () => {
+    const w = heldVerifier();
+    const { verifyHandle } = w;
+    const older = verifyHandle(A, { consistency: "fresh" });
+    const newer = verifyHandle(A, { consistency: "fresh" });
+    await tick();
+    w.held[1]?.({ kind: "unavailable" });
+    expect((await newer).status).toBe("unavailable");
+    w.held[0]?.(VERIFIED_A);
+    expect((await older).status).toBe("verified");
+    // Nothing that started later wrote, so the older verdict is cached: no new check.
+    expect((await verifyHandle(A)).status).toBe("verified");
+    expect(w.calls.txt).toHaveLength(2);
+  });
+
+  test("outage_is_one_check_per_wave", async () => {
+    const w = heldVerifier();
+    const { verifyHandle } = w;
+    const wave = Array.from({ length: 20 }, () => verifyHandle(A));
+    await tick();
+    w.held[0]?.({ kind: "unavailable" });
+    expect(new Set((await Promise.all(wave)).map((v) => v.status))).toEqual(new Set(["unavailable"]));
+    expect(w.calls.txt).toHaveLength(1);
+  });
+
+  test("in_flight_map_is_capped", async () => {
+    const w = heldVerifier(1);
+    const { verifyHandle } = w;
+    const calls = [A, A, C, C].map((did) => verifyHandle(did));
+    await tick();
+    // A shares one check; the map is full, so C's callers each run their own check, as before P1.33r.
+    expect(w.calls.txt).toHaveLength(3);
+    for (const release of w.held) release(VERIFIED_A);
+    expect((await Promise.all(calls)).map((v) => v.status)).toEqual(["verified", "verified", "invalid", "invalid"]);
+  });
+
+  test("invalidate_reaches_a_check_the_full_map_left_unshared", async () => {
+    const w = heldVerifier(1);
+    const occupying = w.verifyHandle(A);
+    const unshared = w.verifyHandle(C);
+    await tick();
+    w.invalidateHandle(C);
+    w.held[1]?.(records(`did=${C}`));
+    expect((await unshared).status).toBe("verified");
+    // The check began before the invalidation, so its verdict is not cached: the next call checks again.
+    const again = w.verifyHandle(C);
+    await tick();
+    expect(w.calls.txt).toHaveLength(3);
+    w.held[0]?.(VERIFIED_A);
+    w.held[2]?.(records(`did=${C}`));
+    expect([(await occupying).status, (await again).status]).toEqual(["verified", "verified"]);
+  });
+
+  test("aborted_caller_detaches", async () => {
+    const w = heldVerifier();
+    const { verifyHandle } = w;
+    const controller = new AbortController();
+    const first = verifyHandle(A, { signal: controller.signal });
+    const second = verifyHandle(A);
+    await tick();
+    controller.abort();
+    expect(await first).toEqual({ status: "unavailable" });
+    w.held[0]?.(VERIFIED_A);
+    expect((await second).status).toBe("verified");
+    expect(w.calls.txt).toHaveLength(1);
+  });
+
+  test("invalidate_during_a_check_starts_a_new_one", async () => {
+    const w = heldVerifier();
+    const { verifyHandle, invalidateHandle } = w;
+    const before = verifyHandle(A);
+    await tick();
+    invalidateHandle(A);
+    const after = verifyHandle(A);
+    await tick();
+    expect(w.calls.txt).toHaveLength(2);
+    w.held[1]?.(records(`did=${B}`));
+    w.held[0]?.(VERIFIED_A);
+    expect((await before).status).toBe("verified");
+    expect((await after).status).toBe("invalid");
+    // The check that started before the invalidation does not write its verdict back.
+    expect((await verifyHandle(A)).status).toBe("invalid");
+    expect(w.calls.txt).toHaveLength(2);
+  });
+});
