@@ -1,7 +1,7 @@
 // DID → DID document (P2.01; plan §2 rules 1, 13, §5.2). The outcome keeps "does not exist" (not_found) apart from
 // "could not tell right now" (unavailable), so an outage is never read as a missing account. Only successes are
-// cached, and a fresh read always replaces the cached entry. Callers asking about the same DID at once share one
-// lookup (P1.33r, in-flight.ts).
+// cached, and a fresh read replaces the cached entry unless a later-started lookup already wrote. Callers asking about
+// the same DID at once share one lookup (P1.33r, in-flight.ts).
 
 import type { HttpOutcome, IdentityNetwork } from "./contract.ts";
 import { parseDidDoc, type ResolvedDid } from "./did-doc.ts";

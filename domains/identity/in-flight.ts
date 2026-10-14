@@ -9,6 +9,15 @@
  */
 export type MayWrite = () => boolean;
 
+/** The task's promise; one that throws before returning a promise rejects instead, so its cleanup still runs. */
+function run<T>(task: (mayWrite: MayWrite) => Promise<T>, mayWrite: MayWrite): Promise<T> {
+  try {
+    return task(mayWrite);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+}
+
 export function createInFlight<K, T>(max: number) {
   const flights = new Map<K, Promise<T>>();
   // Cache writes are ordered by when each lookup started, not by which one holds the map entry: an older lookup's
@@ -48,7 +57,7 @@ export function createInFlight<K, T>(max: number) {
         return true;
       };
       let flight: Promise<T>;
-      flight = task(mayWrite).finally(() => {
+      flight = run(task, mayWrite).finally(() => {
         end(key);
         if (flights.get(key) === flight) flights.delete(key);
       });
