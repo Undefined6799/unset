@@ -70,7 +70,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
   P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.33w, P1.33x, P1.33y, P1.34d,
+  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w, P1.33x, P1.33y, P1.34d,
   P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
   P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
   phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
@@ -304,6 +304,8 @@ flowchart LR
   P1_33r["P1.33r in-flight DID lookups shared"]
   P1_32b["P1.32b in-flight handle checks shared"]
   P1_33r --> P1_32b
+  P1_32c["P1.32c fixture DIDs replaced"]
+  P1_32b --> P1_32c
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -8021,8 +8023,32 @@ handle checks: one caller's check poisoning what others receive, and a shift in 
 **What:** verifyHandle's flight, keyed by DID (P1.33r rule 2), built on P1.33r's `in-flight.ts`, which this step imports
 and never edits. `invalidateHandle` drops the DID's in-flight entry (rule 6).
 
+Also (book edit 2026-10-14-verify-864-fixture-did, item 2): replace the real-looking DID in
+`infrastructure/net-guard/src/dns.test.ts:44` (trusted base, test-only, the same class as `verify-handle.ts`, so SE-6
+holds) with `did:plc:` plus 24 copies of one letter. If this step has already merged, that line becomes its own small
+trusted step, with an id from the step book.
+
 Done when seven tests fail on main and pass with the change (red first), the ASVS V6.8.1 rows are updated, and check is
 green.
+
+---
+
+### P1.32c — Replace the real-looking DID in fixtures
+Tags: —            Depends on: P1.32b
+Slice 1, issue (pending), product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`),
+kind/fix, lane Phase 1 after P1.32b; book edit 2026-10-14-verify-864-fixture-did, item 1, from verify-864-b700f05.
+Nothing from Alex. The DID itself is quoted in the record, not here, so this page never matches the grep below.
+
+**What:** the real-looking `did:plc:` value that verify-864 found breaks the fixture rule (`did:plc:` plus 24 copies of
+one letter, or `did:web:` on an RFC 2606 host). Replace it with `did:plc:` plus 24 copies of one letter in
+`domains/identity/syntax.test.ts:6,12,26,27`, `domains/identity/resolve-did.test.ts:12`,
+`shared/log/logger.test.ts:226,255`, `shared/log/logger.hardening.test.ts:45` and `shared/ui/showcase/Showcase.tsx:144`.
+The 25-character negative case at `syntax.test.ts:12` becomes 25 copies of the same letter, so it stays one character
+too long. Every assertion keeps its meaning: the logger tests must still see the DID redacted.
+
+Done when a grep of the repo for the old value returns only the `net-guard` line (until P1.32b lands), the touched
+tests pass, and check is green. No guard enforces the fixture rule for DIDs; one would be a check-path step with Alex's
+typed line, and is not booked.
 
 ---
 
