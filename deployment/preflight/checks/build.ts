@@ -6,7 +6,7 @@ import { basename, dirname, join, relative, sep } from "node:path";
 import { resolveChecked, WALK_REASONS } from "../../../shared/host-pin/index.ts";
 import type { Service } from "../compose-parse.ts";
 import { lockOrNone } from "./lock.ts";
-import { holdsEnvFile, reachesSecretsFolder } from "./secrets.ts";
+import { devCaFolder, holdsEnvFile, reachesDevCaFolder, reachesSecretsFolder } from "./secrets.ts";
 import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
@@ -60,11 +60,13 @@ function namesakes(root: string, name: string): number {
 
 /**
  * The whole context goes to the daemon, whatever .dockerignore says (P1.27u, architecture record
- * 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder and every env file stay out of it. It
- * is walked hop by hop like a bind source (Amendment 6): whoever can swap an entry on it chooses what is sent.
+ * 2026-10-12-p127u-bind-ancestors-and-build-context, (b)), so the secrets folder, the dev CA folder (P1.33w) and every
+ * env file stay out of it. It is walked hop by hop like a bind source (Amendment 6): whoever can swap an entry on it
+ * chooses what is sent.
  */
 function contextProblem(context: string, inputs: Inputs): string | null {
   if (reachesSecretsFolder(context, inputs)) return "that reaches the secrets folder";
+  if (reachesDevCaFolder(context, inputs)) return "that reaches the dev CA folder";
   if (holdsEnvFile(context, inputs)) return "that holds an env file";
   const walked = resolveChecked(context, inputs);
   return walked === null ? null : WALK_REASONS[walked];
@@ -74,11 +76,18 @@ function contextProblem(context: string, inputs: Inputs): string | null {
  * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context that
  * workflow uses (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any other from
  * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
- * scanned image holds. A context that reaches the secrets folder is refused first.
+ * scanned image holds. A context that reaches the secrets folder or the dev CA folder is refused first. Under local,
+ * every regular file in the dev CA folder has one link: a second name, in the checkout above all, is where a context
+ * or a bind would carry the key, and neither the path nor the identity tests can see it (P1.33w; architecture on
+ * verify-861, book edit 2026-10-14-p134d-split, last section).
  */
 export const c26: Check = {
   id: "C26",
   run: (inputs) => {
+    if (inputs.env === "local") {
+      const linked = devCaLinkProblem(inputs);
+      if (linked !== null) return fail(`dev CA file has extra hard links: ${linked}`);
+    }
     for (const { name, build } of inputs.compose.services) {
       if (build === null) continue;
       const problem = buildProblem(build, inputs);
@@ -150,3 +159,15 @@ export const c27: Check = {
     return pass();
   },
 };
+
+/** The first regular file in the dev CA folder, by lstat, with more than one link; null when none or no folder. */
+function devCaLinkProblem(inputs: Inputs): string | null {
+  const folder = devCaFolder(inputs);
+  if (inputs.lstat(folder)?.isDirectory() !== true) return null;
+  for (const entry of readdirSync(folder, { recursive: true, encoding: "utf8" })) {
+    const path = join(folder, entry);
+    const info = inputs.lstat(path);
+    if (info?.isFile() === true && info.nlink !== 1) return path;
+  }
+  return null;
+}
