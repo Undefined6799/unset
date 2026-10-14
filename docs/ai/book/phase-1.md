@@ -8079,6 +8079,8 @@ Also (verify-851-cabc9e3 on P1.33k, #851; last section of book edit 2026-10-14-p
   import it at the other two sites.
 - N2 is noted only: local C2 picks the node entry from `bases.lock.json` and dev from `images.lock.json` on purpose
   until P2.26b brings the images lock.
+- verify-852-0d39420 O4 (book edit 2026-10-13-host-pin-steps, last section): a test proves `checkLocalProject` runs
+  before the host-pin walk: when the project check fails, the walk is never called. About 4 lines.
 
 This adds about 20 source lines and 60 test lines.
 
@@ -8951,10 +8953,10 @@ name mismatch, and a label mismatch.
   reaches it. A red fixture where the fake walk throws EACCES asserts `toBe` on the thrown error and that no command
   ran.
 - N7: the child-env list exists twice, `CHILD_ENV` at `pds-email-token.ts:273` and `CHILD_ENV_NAMES` at
-  `deployment/preflight/stack.ts:25`. The reader exports its `CHILD_ENV`, and `deployment/preflight/stack.test.ts`
-  pins `expect(CHILD_ENV).toEqual(CHILD_ENV_NAMES)`, so the two lists stay separate but cannot drift. An import the
-  other way fails: `deployment/` references `tests/`, not the reverse, so importing the preflight's list into the reader
-  fails with TS6059 and TS6307 (book edit 2026-10-13-host-pin-steps, "Departure 2", from verify-852-e8da002 B2).
+  `deployment/preflight/stack.ts:25`. The reader exports its `CHILD_ENV`, and `deployment/preflight/stack.test.ts` pins
+  `expect(CHILD_ENV).toEqual(CHILD_ENV_NAMES)`, so the two lists stay separate but cannot drift. An import the other way
+  fails: `deployment/` references `tests/`, not the reverse, so an import of `deployment/preflight/stack.ts` into the
+  reader fails with TS6059 and TS6307 (book edit 2026-10-13-host-pin-steps, "Departure 2", from verify-852-e8da002 B2).
 
 Done when each fixture fails on main (red first), R8 dies, and check is green.
 
