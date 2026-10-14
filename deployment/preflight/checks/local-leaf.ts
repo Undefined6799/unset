@@ -22,7 +22,10 @@ const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE
 const DNS = /^DNS:([a-z0-9.-]+)$/;
 const DAY_MS = 86_400_000;
 
-/** Why the local leaf copy is not one certificate for exactly APP_HOST and PDS_HOST, issued by the dev root. */
+/**
+ * Why the local leaf copy is not one certificate for exactly APP_HOST and PDS_HOST, issued by the dev root, with both in
+ * their validity dates.
+ */
 export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: string): Outcome | null {
   const leaf = certificate(inputs, LEAF);
   if (leaf === null) return missing(LEAF);
@@ -30,6 +33,9 @@ export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: strin
   const root = certificate(inputs, ROOT);
   if (root === null) return missing(ROOT);
   if (root === "invalid") return fail("the dev root is not one certificate");
+  const now = Date.now();
+  if (root.validFromDate.getTime() > now) return fail("the dev root is not yet valid");
+  if (root.validToDate.getTime() <= now) return fail("the dev root has expired");
   if (leaf.ca) return fail("the local leaf is a CA");
   if (!leaf.checkIssued(root) || !leaf.verify(root.publicKey))
     return fail("the local leaf is not issued by the dev root");
@@ -40,14 +46,16 @@ export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: strin
   if (hosts.length !== 2 || !wanted.every((host) => hosts.includes(host))) {
     return fail("the local leaf's names are not exactly APP_HOST and PDS_HOST");
   }
-  if (leaf.validToDate.getTime() - Date.now() < 14 * DAY_MS) return fail("the local leaf expires within 14 days");
+  if (leaf.validFromDate.getTime() > now) return fail("the local leaf is not yet valid");
+  if (leaf.validToDate.getTime() - now < 14 * DAY_MS) return fail("the local leaf expires within 14 days");
   return null;
 }
 
 /** APP_HOST is a hostname and exactly the host web's PUBLIC_ORIGIN names (Amendment 3); reasons are fixed words. */
 export function appHostProblem(inputs: Inputs, appHost: string | undefined): Outcome | null {
   if (appHost === undefined || appHost === "") return fail("APP_HOST is missing");
-  if (!ENV_NAMES.APP_HOST.test(appHost)) return fail("APP_HOST is not a hostname");
+  // An all-digit last label is an IPv4 address the hostname pattern also admits (verify-869 S1).
+  if (!ENV_NAMES.APP_HOST.test(appHost) || /\.\d+$/.test(appHost)) return fail("APP_HOST is not a hostname");
   const origin = inputs.serviceEnv.get("web")?.use("PUBLIC_ORIGIN", (value) => value);
   if (origin === undefined || !URL.canParse(origin)) return fail("web's PUBLIC_ORIGIN is not a URL");
   if (new URL(origin).hostname !== appHost) return fail("APP_HOST is not the host of web's PUBLIC_ORIGIN");
