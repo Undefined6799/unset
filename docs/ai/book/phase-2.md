@@ -114,6 +114,9 @@ slice exit **P2.13a**, in that order, once their own dependencies merge, ahead o
 (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a) is built after slice 2 and the i18n slice (the rest of Phase 1, ending at
 P1.38). Step ids did not change; the file is in build order.
+Pulled forward after P2.13a and before P1.34 (Alex, "Set up now", 2026-10-14T20:45:26Z; book edit
+2026-10-13-verify-819-fixes, Q3): P1.27s, then P2.26b, P2.26c and P2.26d, so the home-server stack runs only signed,
+mirrored images.
 
 **The slice order binds (Alex, 2026-10-05 23:29Z, "ok but then maybe we should stick to the plan then").** A Phase 2
 step whose dependencies are merged still waits for its slice: P2.01k (slice 1) ran early, while P2.09k, P2.16b and
@@ -3987,9 +3990,9 @@ Diagram: see the three sequence diagrams at the top of this file.
 
 ### P2.26b — Pin service images to the mirror by digest
 Tags: [SEC]            Depends on: P1.27s, P1.34t
-Slice 2, issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split (and its Amendment 1, which
-puts this step first), which takes the product half of P1.27s's struck "Interim base" paragraph. P1.34t is a
-dependency for C28 and the C21-under-dev fixtures the real-file test must meet.
+Pulled forward (Q3 B), issue #818, product (`deployment/`), kind/build; book edit 2026-10-13-p127s-split (and its
+Amendment 1, which puts this step first), which takes the product half of P1.27s's struck "Interim base" paragraph.
+P1.34t is a dependency for C28 and the C21-under-dev fixtures the real-file test must meet.
 
 Where:
 - `deployment/images/{node-app,postgres,migrate}.Dockerfile`;
@@ -4029,11 +4032,11 @@ Done when (tests, red first):
 
 ### P2.26c — Pull the edge bases from the mirror (trusted base)
 Tags: [SEC] trusted            Depends on: P2.26b
-Slice 2, issue #817, trusted base (`deployment/edge/`), kind/build; book edit 2026-10-13-p127s-split, which takes the
-edge half of P1.27s's struck "Interim base" paragraph (SE-6: a check-path step cannot edit trusted files). It runs after
-P2.26b (book edit 2026-10-13-p127s-split, Amendment 1), whose lock already names the caddy entries as mirrored, and
-after P1.27s's first mirror run on main has published both edge bases (a check with nothing from Alex: the digests
-resolve on the mirror).
+Pulled forward (Q3 B), issue #817, trusted base (`deployment/edge/`), kind/build; book edit 2026-10-13-p127s-split,
+which takes the edge half of P1.27s's struck "Interim base" paragraph (SE-6: a check-path step cannot edit trusted
+files). It runs after P2.26b (book edit 2026-10-13-p127s-split, Amendment 1), whose lock already names the caddy entries
+as mirrored, and after P1.27s's first mirror run on main has published both edge bases (a check with nothing from Alex:
+the digests resolve on the mirror).
 
 Where: `deployment/edge/Dockerfile` and `deployment/edge/edge.test.ts`.
 
@@ -4047,9 +4050,9 @@ Done when (tests, red first): `edge_from_mirror_by_digest` and `edge_no_dl3026_i
 
 ### P2.26d — Drop the edge dual spelling from the lock test
 Tags: [SEC]            Depends on: P2.26c
-Slice 2, issue #821, product (`deployment/images/images.test.ts`), kind/build; book edit
-2026-10-13-p127s-split, Amendment 2: the strict cleanup architecture requires (21:02Z), so P2.26b's caddy-only
-tolerance does not outlive its reason.
+Pulled forward (Q3 B), issue #821, product (`deployment/images/images.test.ts`), kind/build; book edit
+2026-10-13-p127s-split, Amendment 2: the strict cleanup architecture requires (21:02Z), so P2.26b's caddy-only tolerance
+does not outlive its reason.
 
 Where: `deployment/images/images.test.ts`.
 

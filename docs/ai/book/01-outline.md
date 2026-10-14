@@ -1171,7 +1171,7 @@ flowchart TD
 
 ## Phase 1, slice 2 — Lexicon authority, server baseline and platform completion
 
-Depth: **build-ready**. 16 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
+Depth: **build-ready**. 19 steps, after slice 1: `sealTo`, audit retention, the egress proxy mode, image publishing
 and signing (P1.27s, contingent on Alex's guard approval), Renovate managers for the image locks (P1.27v), the server baseline with Tailscale, retiring the prototype, `unset.ac` and the lexicon authority (compliance skeletons pulled forward into slice 1, Alex 23:08Z), the
 Arachnid application, and the Phase 1 exit.
 
@@ -1185,11 +1185,14 @@ Arachnid application, and the Phase 1 exit.
 | P1.33 | Server baseline (Alex) | [ALEX] [SEC] | P1.33q, P1.32, P1.28 (only for the outside probe through the edge) | `phase-1.md` |
 | P1.33a | Retire the 0x40 prototype before going public (formerly L.01 part A; decision 24) | [ALEX] [SEC] | P1.33 | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
+| P1.27s | Publish, sign and attest images (contingent split from P1.27q; pulled forward, Q3 B) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
+| P2.26b | Pin service images to the mirror by digest (pulled forward, Q3 B) | [SEC] | P1.27s, P1.34t | `phase-2.md` |
+| P2.26c | Pull the edge bases from the mirror (trusted base; pulled forward, Q3 B) | [SEC] trusted | P2.26b | `phase-2.md` |
+| P2.26d | Drop the edge dual spelling from the lock test (pulled forward, Q3 B) | [SEC] | P2.26c | `phase-2.md` |
 | P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
-| P1.27s | Publish, sign and attest images (contingent split from P1.27q) | [SEC] [ALEX] | P1.27q, P1.27 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.33p, P1.34, P1.36, P1.37, P1.37a, P1.15s | `phase-1.md` |
@@ -1202,6 +1205,9 @@ flowchart TD
   P1_33["P1.33 Server baseline"]
   P1_33a["P1.33a Retire the 0x40 prototype before going public"]
   P1_33p["P1.33p Open the home server to the public"]
+  P2_26b["P2.26b Service images by digest"]
+  P2_26c["P2.26c Edge bases from the mirror"]
+  P2_26d["P2.26d Strict lock test again"]
   P1_33d["P1.33d PDS scan exceptions cleared"]
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
@@ -1213,6 +1219,10 @@ flowchart TD
   P1_33 --> P1_34
   P1_33a --> P1_34
   P1_33d --> P1_34
+  P1_27s --> P2_26b
+  P2_26b --> P2_26c
+  P2_26c --> P2_26d
+  P2_26d --> P1_34
   P1_34 --> P1_33p
   P1_33a --> P1_33p
   P1_33p --> P1_35
@@ -1225,7 +1235,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 23 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above.
+Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26d in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1247,9 +1257,6 @@ Depth: **build-ready**. 23 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26b | Pin service images to the mirror by digest | [SEC] | P1.27s, P1.34t | `phase-2.md` |
-| P2.26c | Pull the edge bases from the mirror (trusted base) | [SEC] trusted | P2.26b | `phase-2.md` |
-| P2.26d | Drop the edge dual spelling from the lock test | [SEC] | P2.26c | `phase-2.md` |
 | P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
@@ -1272,9 +1279,6 @@ flowchart TD
   P2_23["P2.23 Publish and unpublish"]
   P2_24["P2.24 §5.3 go/no-go spike"]
   P2_26["P2.26 Phase 2 exit"]
-  P2_26b["P2.26b Service images by digest"]
-  P2_26c["P2.26c Edge bases from the mirror"]
-  P2_26d["P2.26d Strict lock test again"]
   P2_26a["P2.26a Minimal deploy for the test host"]
   P2_25["P2.25 Closed test track"]
   P2_16b --> P2_16
@@ -1288,9 +1292,6 @@ flowchart TD
   P2_23 --> P2_26
   P2_24 --> P2_26
   P2_26 --> P2_26a
-  P2_26b --> P2_26c
-  P2_26c --> P2_26d
-  P2_26d --> P2_26a
   P2_26a --> P2_25
   P2_10 --> P2_25
   P2_18k --> P2_18

@@ -8747,9 +8747,11 @@ Done when (tests):
   - `mirrored_digest_equals_lock`: the mirror copy job keeps the digests; if it cannot, that goes back to architecture.
     `compose_dev_images_by_digest` moves to P2.26b (book edit 2026-10-13-p127s-split).
 
-Order: after P1.27, before P2.26a, which depends on it (a deploy by verified digest needs signed images). P1.30 does not
-depend on it: the preflight is tested against an injected verifier and fails closed on unsigned images. The slice 1 exit
-(P2.13a) is unchanged: nothing in slice 1 pushes or deploys an image, and P1.29 builds locally.
+Order: after P1.27, before P2.26a, which depends on it (a deploy by verified digest needs signed images); pulled forward
+after P2.13a and before P1.34, then P2.26b, P2.26c and P2.26d (Alex, "Set up now", 2026-10-14T20:45:26Z; book edit
+2026-10-13-verify-819-fixes, Q3). P1.30 does not depend on it: the preflight is tested against an injected verifier and
+fails closed on unsigned images. The slice 1 exit (P2.13a) is unchanged: nothing in slice 1 pushes or deploys an image,
+and P1.29 builds locally.
 
 ---
 
@@ -13037,7 +13039,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
