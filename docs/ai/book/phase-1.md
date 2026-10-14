@@ -8764,14 +8764,27 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
   any violation.
 
 **What:** the exclude matches only our own build outputs and fixture folders, never a resolved `node_modules/` path. The
-lane picks one of architecture's two forms, and a test pins it: a top-level `^(dist|coverage|\.worktrees|graphify-out)/`
-plus the workspace output form `^(apps|interfaces|domains|infrastructure|shared|deployment)/.+/(dist|coverage)/`, with
-the fixture folders kept, or a negative lookahead for `node_modules/`.
+lane picks one of the two forms verified by verify-850-fecfe6d, and a test pins it (book edit
+2026-10-14-verify-829-host-pin-leaf, "Verify-850 ... mirrored into P1.33f"):
+- A3: `^(dist|coverage|\.worktrees|graphify-out|scripts/guards/fixtures|scripts/lint/semgrep/fixtures)/|^(deployment|scripts|tests)/(dist|coverage)/|^(apps|interfaces|domains|infrastructure|shared|deployment|scripts)/.+/(dist|coverage)/`
+- B2: `^(?!node_modules/).*(^|/)(dist|coverage|\.worktrees|graphify-out|scripts/guards/fixtures|scripts/lint/semgrep/fixtures)/`
+
+The record's earlier "form A" misses `deployment/`, `scripts/` and `tests/dist/` and fails lint with 82 errors, and
+dependency-cruiser 18.5.0 refuses a lookahead with `(.*/)?`; neither is used.
 
 Also (P1.33o's item 6, re-homed: book edit 2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6
 and 7"; verify-842-e4f6e94 S2): a red fixture of `shared/host-pin` importing `yaml`. It belongs here because until this
 step anchors the exclude, the `yaml` edge under `dist/` is invisible and the fixture could not go red. It is a
-`scripts/lint` test, inside this step's typed line.
+`scripts/lint` test, inside this step's typed line. Its stub package has its entry under `dist/`; without that it does
+not test the hole.
+
+Also (verify-850-fecfe6d):
+- Once the exclude is anchored, an edge from host-pin's test files to `vitest` is allowed only by the tooling row,
+  never by the shared-host-pin row; a fixture shows that row alone refuses it.
+- N1: fixtures go red if `^` is dropped from either the `from` or the `to` of the host-pin row
+  (`.dependency-cruiser.cjs:134`).
+- N2: the step asserts that the real cruise now sees `shared/host-pin/index.test.ts -> vitest` and that the tooling row
+  allows it; on main that edge is dropped by the exclude (`depcruise.test.ts:163-164`).
 
 Size: about 10 source lines and 50 test lines.
 
@@ -8789,8 +8802,9 @@ Done when:
 
 ### P1.33o — Keep shared/host-pin a leaf in depcruise
 Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33i, P1.33h (both merged)
-As built: #850, merged at 21:56:32Z as e0cd0c0, without items 6 and 7, which moved to P1.33f and P0.09y (book edit
-2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6 and 7"; verify-842-e4f6e94 S2).
+As built: #850, merged at 21:56:32Z as e0cd0c0. Items 6 and 7 moved to P1.33f and P0.09y (book edit
+2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6 and 7"; verify-842-e4f6e94 S2). The dot
+fixture is named `index-ts` (the book said `indexXts`; same check; verify-850-fecfe6d N3 and N4).
 Slice 1, issue #841, check path (`scripts/lint/.dependency-cruiser.cjs`, `scripts/lint/depcruise.test.ts` and
 `.github/CODEOWNERS`), kind/build, lane Cursor with the P1.33i family (Alex's 20:24:47Z choice; directive
 `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-829-host-pin-leaf, from
