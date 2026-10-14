@@ -2499,7 +2499,10 @@ secrets:
     }
     chmodSync(join(root, "deployment/edge/local"), 0o755);
     if (leaf !== null) writeFileSync(join(envOf(root), "local-leaf.pem"), leaf);
-    if (devRoot !== null) writeFileSync(join(envOf(root), "dev-root-ca.pem"), devRoot);
+    if (devRoot !== null) {
+      mkdirSync(join(dirname(root), "unset-dev-trust"), { recursive: true });
+      writeFileSync(join(dirname(root), "unset-dev-trust/root.pem"), devRoot);
+    }
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     for (const path of remove) rmSync(join(root, path));
     setUp(root);
@@ -2735,7 +2738,7 @@ secrets:
     // The order of the names does not matter.
     expect(await c18({ leaf: leafPem("DNS:pds.localhost,DNS:app.localhost") })).toBe("PASS C18 ok");
     expect(await c18({ leaf: null })).toMatch(/^FAIL C18 input missing: unset-dev-env\/local-leaf\.pem$/);
-    expect(await c18({ devRoot: null })).toMatch(/^FAIL C18 input missing: unset-dev-env\/dev-root-ca\.pem$/);
+    expect(await c18({ devRoot: null })).toMatch(/^FAIL C18 input missing: unset-dev-trust\/root\.pem$/);
     const names = "FAIL C18 the local leaf's names are not exactly APP_HOST and PDS_HOST";
     const cases: [string, { leaf?: string; devRoot?: string }][] = [
       // An unrelated DNS leaf, a leaf missing one host, one with a third, and a CN-only leaf with no SAN at all.
