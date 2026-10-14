@@ -19,6 +19,10 @@
 # the stable aggregate: it is green only when discover and scan-image both succeeded. The images and edge jobs stay,
 # so hadolint, the SBOM and the health checks are unchanged. Values from the matrix reach run: only through env
 # (scripts/guards/workflows.ts refuses an expression inside run:).
+#
+# P1.33s adds scan-export beside scan-image, for those same images. It creates a container without starting it,
+# exports the filesystem, and runs trivy rootfs --scanners secret. scan still needs only discover and scan-image,
+# so this does not make scan a required check (that stays P1.27r).
 
 name: images
 
@@ -71,9 +75,11 @@ jobs:
           export SOURCE_DATE_EPOCH
           docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
             --build-arg APP="$APP" --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" .
-      # Trivy v0.74.0: HIGH or CRITICAL with a fixed version fails (--ignore-unfixed); a DB download failure or the
-      # timeout exits non-zero. No accepted finding applies (--ignorefile /dev/null): the shipped image is scanned in
-      # full (P1.29v; Alex's card "Skip stripped files", 2026-10-07T18:56:42Z).
+      # Vulnerability scan, Trivy 0.75.0 `image`: HIGH or CRITICAL with a fixed version fails (--ignore-unfixed); a DB
+      # download failure or the timeout exits non-zero. --ignorefile /dev/null and no --skip-dirs or --skip-files, so
+      # vulnerabilities are covered in every layer (P1.29v; Alex's card "Skip stripped files", 2026-10-07T18:56:42Z).
+      # Secrets are not: inspect disables the secret analyzer on layers guessBaseLayers treats as the base
+      # (pkg/fanal/artifact/image/image.go:401-405, tag v0.75.0). Those files are scan-export (P1.33s).
       - name: Scan
         if: steps.dockerfile.outputs.present == 'true'
         run: |
@@ -247,6 +253,63 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" -w /repo "$TRIVY_IMAGE" \
             image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$IGNOREFILE" \
             --timeout 10m "$APP_IMAGE"
+
+  # P1.33s (Alex's typed line "yes P1.33s .github/workflows exported-filesystem secret scan in images.yml",
+  # 2026-10-14). Trivy 0.75.0 skips secret analysis on layers guessBaseLayers treats as the base
+  # (pkg/fanal/artifact/image/image.go:401-405). docker create does not start the container; docker export writes
+  # the flattened filesystem, which `trivy rootfs` scans (docs/guide/references/configuration/cli/trivy_rootfs.md,
+  # tag v0.75.0, the export example). --scanners secret leaves vulnerabilities to the image steps. No --ignorefile,
+  # --skip-dirs or --skip-files. --timeout 10m because the parent default is 5m0s. Same TRIVY_IMAGE pin. fail-fast
+  # is off, as in scan-image, so one image cannot hide another. scan's needs stay discover and scan-image.
+  scan-export:
+    name: scan-export ${{ matrix.name }}
+    needs: discover
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.discover.outputs.images) }}
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+        run: |
+          case "$DOCKERFILE" in
+            */Dockerfile) CONTEXT="${DOCKERFILE%/*}" ;;
+            *) CONTEXT="." ;;
+          esac
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          docker buildx build --platform linux/amd64 --load --iidfile "$RUNNER_TEMP/iid" \
+            --build-arg SOURCE_DATE_EPOCH -f "$DOCKERFILE" "$CONTEXT"
+      # `bash -e` (Actions' default when shell is unset) does not enable pipefail, so the export sets it
+      # (docs.github.com workflow syntax, "jobs.<job_id>.steps[*].shell"; mirror.yml's scan step).
+      - name: Scan exported filesystem for secrets
+        run: |
+          set -o pipefail
+          APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
+          rootfs="$RUNNER_TEMP/rootfs"
+          rm -rf "$rootfs"
+          mkdir -p "$rootfs"
+          cid="$(docker create "$APP_IMAGE")"
+          status=0
+          docker export "$cid" | tar -C "$rootfs" -xf - || status=$?
+          docker rm "$cid" > /dev/null
+          if [ "$status" -ne 0 ]; then
+            echo "docker export failed"
+            exit "$status"
+          fi
+          docker run --rm -v "$rootfs:/rootfs:ro" "$TRIVY_IMAGE" \
+            rootfs --scanners secret --exit-code 1 --timeout 10m /rootfs
 
   # The one stable name (P1.27r requires `scan`, not the per-image names). always() runs this job when
   # discover or scan-image failed, was skipped or was cancelled (workflow-syntax, jobs.<job_id>.needs;
