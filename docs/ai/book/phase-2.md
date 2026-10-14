@@ -3994,7 +3994,7 @@ Diagram: see the three sequence diagrams at the top of this file.
 
 ### P2.26e — Commit the Sigstore trusted root
 Tags: [SEC] trusted            Depends on: P1.27s
-Pulled forward (Q3 B), issue (pending), trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
+Pulled forward (Q3 B), issue #844, trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
 edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. Order: right after
 P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
 
@@ -4056,7 +4056,9 @@ Done when (tests, red first):
   pattern, and only at the lock digest;
 - `compose_dev_images_by_digest` (moved from P1.27s);
 - a cosign binary whose hash does not match the constants is refused;
-- the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture
+- the preflight on the real `compose.dev.yaml` under `--env dev` passes, with a complete retirement-report fixture and
+  an empty-list `.github/trivyignore.pds.yaml` fixture, plus a one-entry fixture on the same real `compose.dev.yaml`
+  that must refuse (P1.33e; book edit 2026-10-14-verify-834-fixes, S3)
   (moved from P1.34d item 12; book edits 2026-10-13-p127l-verify-owners, Amendments 1 and 2, and
   2026-10-13-p127s-split; architecture's Amendment 7 of 2026-10-13-local-plc, Q1). This step makes the test passable:
   it needs the published images and the lock, not the edge's `FROM` spelling;

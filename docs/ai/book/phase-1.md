@@ -70,7 +70,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33c, P1.33e,
   P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m,
   P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i,
-  P1.33o, P1.33h, P1.33j, P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b,
+  P1.33h, P1.33o, P1.33j, P1.33k, P1.33l, P1.34d, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b,
   P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36
   (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit
   P2.13a.
@@ -568,7 +568,7 @@ flowchart LR
   P1_33j --> P1_33l
   P1_34z --> P1_29t
   P1_33i --> P1_33h
-  P1_33i --> P1_33o
+  P1_33h --> P1_33o
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_34c --> P1_34d
@@ -8490,43 +8490,10 @@ Done when both fixtures are red without the row change, the import passes with i
 
 ---
 
-### P1.33o — Keep shared/host-pin a leaf in depcruise
-Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33i
-Slice 1, issue #841, check path (`scripts/lint/.dependency-cruiser.cjs` and `scripts/lint/depcruise.test.ts`),
-kind/build, lane Cursor with the P1.33i family (Alex's 20:24:47Z choice; directive
-`/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-829-host-pin-leaf, from
-verify-829-f0a94ca-r2 S1 and S2. The preflight's allowance to import `shared/host-pin/index.ts` is only as narrow as
-host-pin's own imports: under the generic shared row, a later product-only PR could make host-pin import any shared
-module or npm package. P1.33h (#840) merged first, as 98ca4b4, so it no longer waits for this step; the step still
-applies afterwards. On 98ca4b4 host-pin's source files import only `node:fs`, `node:path` and their own siblings, and
-`index.test.ts` imports vitest (book edit 2026-10-14-verify-829-host-pin-leaf, 21:17Z note; architecture, 21:27Z, in
-book edit 2026-10-13-verify-819-fixes). If the red fixtures fail on main, the step fixes the import, never widens the
-row.
-
-Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
-- host-pin gaining an import that the preflight then loads with no typed line: the red fixtures in item 3;
-- the preflight row's host-pin path matching outside `shared/`: the S2 fixture in item 4.
-
-**What:**
-1. `host-pin` joins LEAF_SHARED (`.dependency-cruiser.cjs:55`).
-2. A new row `shared-host-pin`: from `^(shared/host-pin/)`, to `^$1` and CORE only, with no NPM and no other shared
-   module (the shape of shared-admin-envelope, `:129`).
-3. Red fixtures: host-pin importing `../config`, a shared sibling, and an npm package (fast-check), each refused.
-   Green fixtures: a Node built-in, a file inside host-pin, and a `*.test.ts` file inside host-pin that imports vitest
-   (test files stay under TOOLING, `:48`).
-4. S2: a fixture pins the leading ^ of the preflight row's host-pin path (`:145`), so
-   `deployment/images/shared/host-pin/index.ts` is refused.
-5. Escape the dot at `:145` (`index\\.ts$`), and fix the comment at `depcruise.test.ts:147`.
-
-Widening the row later is a loosening and needs Alex's typed line. Typed line for this step: "yes P1.33o scripts/lint
-depcruise shared-host-pin row LEAF_SHARED".
-
-Done when each red fixture fails before the change and passes after it, and check is green.
-
----
-
 ### P1.33h — Move the host pin into shared/host-pin
 Tags: [SEC]            Depends on: P1.33i
+As built: #840, merged at 21:15:33Z as 98ca4b4, before P1.33o (book edit 2026-10-14-verify-829-host-pin-leaf,
+Amendment 1).
 Slice 1, issue #795, product, kind/refactor (move only), lane the third thread; book edit 2026-10-13-host-pin-steps
 (Amendment 2), from architecture's Amendments 3 and 4 of 2026-10-13-p129h-local-token-reader. P1.33j depends on it.
 
@@ -8549,6 +8516,43 @@ edited, nothing else is in the PR, the PR body lists every line that is not a mo
 
 ---
 
+
+### P1.33o — Keep shared/host-pin a leaf in depcruise
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33i, P1.33h (both merged)
+Slice 1, issue #841, check path (`scripts/lint/.dependency-cruiser.cjs` and `scripts/lint/depcruise.test.ts`),
+kind/build, lane Cursor with the P1.33i family (Alex's 20:24:47Z choice; directive
+`/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-829-host-pin-leaf, from
+verify-829-f0a94ca-r2 S1 and S2. The preflight's allowance to import `shared/host-pin/index.ts` is only as narrow as
+host-pin's own imports: under the generic shared row, a later product-only PR could make host-pin import any shared
+module or npm package. P1.33h (#840) merged first, at 21:15:33Z as 98ca4b4, so this step lands after it and blocks
+nothing (book edit 2026-10-14-verify-829-host-pin-leaf, 21:28Z note and Amendment 1). On 98ca4b4 host-pin's source files
+import only `node:fs`, `node:path` and their own siblings, and `index.test.ts` imports vitest (book edit
+2026-10-14-verify-829-host-pin-leaf, 21:17Z note; architecture, 21:27Z, in book edit 2026-10-13-verify-819-fixes). If
+the red fixtures fail on main, the step fixes the import, never widens the row.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
+- host-pin gaining an import that the preflight then loads with no typed line: the red fixtures in item 3;
+- the preflight row's host-pin path matching outside `shared/`: the S2 fixture in item 4.
+
+**What:**
+1. `host-pin` joins LEAF_SHARED (`.dependency-cruiser.cjs:55`).
+2. A new row `shared-host-pin`: from `^(shared/host-pin/)`, to `^$1` and CORE only, with no NPM and no other shared
+   module (the shape of shared-admin-envelope, `:129`).
+3. Red fixtures: host-pin importing `../config`, a shared sibling, and an npm package (fast-check), each refused.
+   Green fixtures: a Node built-in, a file inside host-pin, and a `*.test.ts` file inside host-pin that imports vitest
+   (test files stay under TOOLING, `:48`).
+4. S2: a fixture pins the leading ^ of the preflight row's host-pin path (`:145`), so
+   `deployment/images/shared/host-pin/index.ts` is refused.
+5. The dot at `:145` is already escaped on main (`index\\.ts$`; verify-829-f0a94ca-r2 N2), so a fixture pins it:
+   `shared/host-pin/indexXts` is refused. Fix the comment at `depcruise.test.ts:147`.
+
+Widening the row later is a loosening and needs Alex's typed line. Typed line for this step: "yes P1.33o scripts/lint
+depcruise shared-host-pin row LEAF_SHARED".
+
+Done when each red fixture fails before the change and passes after it, the new row passes against the real
+`shared/host-pin/` files on main, and check is green.
+
+---
 
 ### P1.33j — Use the shared host pin in the token reader
 Tags: [SEC]            Depends on: P1.33h
@@ -8695,10 +8699,13 @@ image running on dev or prod while exceptions remain, answered by the tests belo
 
 **What:** a dev and prod preflight check: under `--env dev` or `prod` the preflight refuses to start while
 `.github/trivyignore.pds.yaml` has any entry; `--env local` ignores the file. So the accepted image never reaches the
-home server or the 0x40.space stack.
+home server or the 0x40.space stack. An absent or unreadable `.github/trivyignore.pds.yaml` fails with `input missing:
+.github/trivyignore.pds.yaml` (P1.30's missing-input rule). P1.33d empties the file to `vulnerabilities: []` and never
+deletes it (architecture withdrew "an absent file is treated as empty" as a fail-open; book edit
+2026-10-14-verify-834-fixes, S2). P1.30's skip list stays closed.
 
-Done when, red first, tests show dev and prod with one entry refused, local with entries passing, and an absent file
-treated as empty, and check is green.
+Done when, red first, tests show dev and prod with one entry refused, local with entries passing, and
+`pds_ignore_file_absent_refuses_dev`, and check is green.
 
 ---
 
@@ -13121,7 +13128,9 @@ needs his typed line when built, for example "yes P1.33d .github/trivyignore.pds
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): an accepted
 finding carried past the re-pin, answered by `pds_ignorefile_empty` and a new card for any finding that remains.
 
-**What:** delete every entry of `.github/trivyignore.pds.yaml` and add `pds_ignorefile_empty`. Any finding the new image
+**What:** delete every entry of `.github/trivyignore.pds.yaml`, leaving `vulnerabilities: []`, and add
+`pds_ignorefile_empty`. It never deletes the file: P1.33e refuses dev when the file is absent (book edit
+2026-10-14-verify-834-fixes, S2). Any finding the new image
 still reports goes back to Alex as a card; nothing is carried over.
 
 Done when `pds_ignorefile_empty` passes on the re-pinned image and check is green.
