@@ -8893,8 +8893,10 @@ name mismatch, and a label mismatch.
   reaches it. A red fixture where the fake walk throws EACCES asserts `toBe` on the thrown error and that no command
   ran.
 - N7: the child-env list exists twice, `CHILD_ENV` at `pds-email-token.ts:273` and `CHILD_ENV_NAMES` at
-  `deployment/preflight/stack.ts:25`. Keep one copy: the reader imports the preflight's list. If the two differ on
-  purpose, keep both, with a comment and a test pinning the difference.
+  `deployment/preflight/stack.ts:25`. The reader exports its `CHILD_ENV`, and `deployment/preflight/stack.test.ts`
+  pins `expect(CHILD_ENV).toEqual(CHILD_ENV_NAMES)`, so the two lists stay separate but cannot drift. An import the
+  other way fails: `deployment/` references `tests/`, not the reverse, so importing the preflight's list into the reader
+  fails with TS6059 and TS6307 (book edit 2026-10-13-host-pin-steps, "Departure 2", from verify-852-e8da002 B2).
 
 Done when each fixture fails on main (red first), R8 dies, and check is green.
 
