@@ -110,8 +110,8 @@ export const c8: Check = {
 
 /** C11: mail leaves over TLS, never through Mailpit in prod. Nodemailer reads the URL's query as transport options
  * (nodemailer 10.0.15 shared/index.js parseConnectionUrl), so `requireTLS=true` makes STARTTLS mandatory. */
-// Mailpit stays dev's alone: a local stack is held to prod's rule here until Alex's local-mail card (architecture
-// record 2026-10-13-p127l-local-gaps, item 2).
+// Mailpit stays dev's alone. A local stack sends no mail at all (Alex's "Local only" card, 2026-10-14T20:28:12Z;
+// record 2026-10-13-p127l-local-gaps, Amendment 6), so localMail below refuses any SMTP key there instead.
 export function smtpProblem(raw: string | undefined, stage: Env, name: string): string | null {
   if (raw === undefined) return `${name} missing`;
   let url: URL;
@@ -130,9 +130,18 @@ export function smtpProblem(raw: string | undefined, stage: Env, name: string): 
   return `${name} is neither smtps nor smtp with requireTLS=true`;
 }
 
+/** Under --env local: every mail key must be absent, even empty, so the local stack can never half-configure mail. */
+export function localMail(env: SecretMap, ...names: string[]): Outcome {
+  const name = names.find((n) => env.has(n));
+  return name === undefined
+    ? pass("skipped: local runs without email")
+    : fail(`${name} is set; local runs without email`);
+}
+
 export const c11: Check = {
   id: "C11",
   run: withPds((env, { env: stage }) => {
+    if (stage === "local") return localMail(env, "PDS_EMAIL_SMTP_URL");
     const problem = env.use("PDS_EMAIL_SMTP_URL", (v) => smtpProblem(v, stage, "PDS_EMAIL_SMTP_URL"));
     return problem === null ? pass() : fail(problem);
   }),

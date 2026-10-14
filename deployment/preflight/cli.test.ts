@@ -78,6 +78,17 @@ describe("preflight CLI", () => {
     expect(await preflight([...args, "--env-file", join(dir, "deploy.env")], deps)).toEqual(usage);
   });
 
+  test("unknown_env_takes_strict_path", async () => {
+    // Local's mail exemption (record 2026-10-13-p127l-local-gaps, Amendment 6) must never be reached by an unknown or
+    // missing --env: either is refused before any check runs.
+    const deps = { root: dir, run: async () => ({ code: 0, stdout: "", stderr: "" }), environment: {}, checks: [] };
+    const usage = { code: 2, lines: [expect.stringMatching(/^ERROR (usage: |--env must be dev, prod or local$)/)] };
+    for (const env of ["staging", "LOCAL", "local ", "", "test"]) {
+      expect(await preflight(["--env", env, "--compose", compose], deps), env).toEqual(usage);
+    }
+    expect(await preflight(["--compose", compose], deps)).toEqual(usage);
+  });
+
   test("usage_names_absolute_paths", async () => {
     // Every path flag takes only an absolute, normalised path (#689, #677), so the usage line says so (#677 N-D).
     const deps = { root: dir, run: async () => ({ code: 0, stdout: "", stderr: "" }), environment: {}, checks: [] };
