@@ -1,9 +1,11 @@
 // DID → DID document (P2.01; plan §2 rules 1, 13, §5.2). The outcome keeps "does not exist" (not_found) apart from
 // "could not tell right now" (unavailable), so an outage is never read as a missing account. Only successes are
-// cached, and a fresh read always replaces the cached entry.
+// cached, and a fresh read replaces the cached entry unless a later-started lookup already wrote. Callers asking about
+// the same DID at once share one lookup (P1.33r, in-flight.ts).
 
 import type { HttpOutcome, IdentityNetwork } from "./contract.ts";
 import { parseDidDoc, type ResolvedDid } from "./did-doc.ts";
+import { awaitFlight, createInFlight, type MayWrite } from "./in-flight.ts";
 import { type Did, parseDid } from "./syntax.ts";
 
 export type IdentityErrorKind = "not_found" | "invalid_doc" | "unavailable";
@@ -31,10 +33,11 @@ export type DidResolverOptions = {
 };
 
 /**
- * `cached` may answer from the cache; `fresh` always asks the network (and refreshes the cache). Phase 2 has no PLC
- * replica, so both read PLC_URL; a later replica may serve `cached` reads only.
+ * `cached` may answer from the cache or join a lookup already running; `fresh` always starts its own lookup (and
+ * refreshes the cache). Phase 2 has no PLC replica, so both read PLC_URL; a later replica may serve `cached` reads
+ * only. A caller whose `signal` aborts stops waiting with `unavailable`; the lookup carries on for anyone else.
  */
-export type Consistency = { readonly consistency: "fresh" | "cached" };
+export type Consistency = { readonly consistency: "fresh" | "cached"; readonly signal?: AbortSignal };
 
 const MAX_DOC_BYTES = 64 * 1024;
 const ACCEPT = "application/did+ld+json, application/json";
@@ -78,6 +81,8 @@ export function createDidResolver(options: DidResolverOptions) {
     }
   };
 
+  const inFlight = createInFlight<Did, ResolvedDid>(options.cacheMax);
+
   const cached = (did: Did): ResolvedDid | null => {
     const entry = cache.get(did);
     if (entry === undefined || now() - entry.at >= options.cacheTtlS * 1000) return null;
@@ -86,15 +91,26 @@ export function createDidResolver(options: DidResolverOptions) {
     return entry.resolved;
   };
 
-  /** Throws IdentityError: `invalid_doc` (also for a malformed DID, before any request), `not_found`, `unavailable`. */
-  return async function resolveDid(did: Did, { consistency }: Consistency): Promise<ResolvedDid> {
-    if (parseDid(did) === null) throw new IdentityError("invalid_doc");
-    const hit = consistency === "cached" ? cached(did) : null;
-    if (hit !== null) return hit;
+  /** One network lookup; it caches its result unless a lookup for the DID that started later already has. */
+  const lookup = async (did: Did, mayWrite: MayWrite): Promise<ResolvedDid> => {
     const { url, target } = documentUrl(did, options.plcUrl);
     const outcome = await options.network.get(url, { target, maxBytes: MAX_DOC_BYTES, accept: ACCEPT });
     const resolved = documentOf(outcome, did);
-    remember(resolved);
+    if (mayWrite()) remember(resolved);
     return resolved;
+  };
+
+  const detached = (): never => {
+    throw new IdentityError("unavailable");
+  };
+
+  /** Throws IdentityError: `invalid_doc` (also for a malformed DID, before any request), `not_found`, `unavailable`. */
+  return async function resolveDid(did: Did, { consistency, signal }: Consistency): Promise<ResolvedDid> {
+    if (parseDid(did) === null) throw new IdentityError("invalid_doc");
+    if (signal?.aborted) detached();
+    const hit = consistency === "cached" ? cached(did) : null;
+    if (hit !== null) return hit;
+    const flight = inFlight.share(did, consistency === "fresh", (mayWrite) => lookup(did, mayWrite));
+    return awaitFlight(flight, signal, detached);
   };
 }

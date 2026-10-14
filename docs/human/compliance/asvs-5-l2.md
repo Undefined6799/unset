@@ -361,7 +361,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V16.4.3 | Logs are securely transmitted to a logically separate system for analysis, detection … | open |  | — |
 | V16.5.1 | A generic message is returned to the consumer when an unexpected or security-sensitive … | covered | `test:shared/http/server.test.ts#error_hides_exception`, `test:shared/http/server.test.ts#not_found_404_no_reflection`, `test:shared/errors/errors.test.ts#app_error_message_is_code`, `test:shared/http/server.test.ts#fixed_page_refuses_request_id_not_uuid_shaped` | — |
 | V16.5.2 | The application continues to operate securely when external resource access fails, for … | partial | `test:shared/http/server.test.ts#request_deadline_503`, `test:infrastructure/postgres/pool.test.ts#unreachable_server_is_db_busy`, `test:apps/web/src/islands/runtime/hydrate.test.tsx#bootstrap_isolates_failure_unit` | P2.07 |
-| V16.5.3 | The application fails gracefully and securely, including when an exception occurs … | covered | `test:shared/http/csrf/gate.test.ts#exception_denies`, `test:shared/http/limits/rateLimit.test.ts#exception_denies`, `test:domains/identity/verify-handle.test.ts#never_throws` | — |
+| V16.5.3 | The application fails gracefully and securely, including when an exception occurs … | covered | `test:shared/http/csrf/gate.test.ts#exception_denies`, `test:shared/http/limits/rateLimit.test.ts#exception_denies`, `test:domains/identity/verify-handle.test.ts#never_throws`, `test:domains/identity/resolve-did.test.ts#aborted_caller_detaches` | — |
 
 ## V17 WebRTC
 
