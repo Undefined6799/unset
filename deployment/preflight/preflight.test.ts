@@ -2336,6 +2336,8 @@ services:
       dockerfile: deployment/images/node-app.Dockerfile
     user: "65532:65532"
     secrets: [db_password]
+    environment:
+      PUBLIC_ORIGIN: https://app.localhost
 secrets:
   db_password:
     file: ../../unset-dev-secrets/db_password
@@ -2364,12 +2366,65 @@ secrets:
     "deployment/mirror.list.json": MIRROR,
   };
   const LOCAL_LAST = "LOCAL unsigned, local-only stack: never deploy it";
+  /**
+   * A throwaway dev root and leaves it signs, made by openssl as the runbook does (P1.33x): the root name-constrained to
+   * the two local hosts, each leaf with `san` as its subjectAltName.
+   */
+  const pki = mkdtempSync(join(tmpdir(), "local-leaf-"));
+  dirs.push(pki);
+  const openssl = (...args: string[]) => execFileSync("openssl", args, { cwd: pki, stdio: ["ignore", "pipe", "pipe"] });
+  openssl(
+    ..."req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout root.key -out root.pem -days 30".split(
+      " ",
+    ),
+    ...["-subj", "/CN=throwaway root", "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0"],
+    ...["-addext", "keyUsage=critical,keyCertSign,cRLSign"],
+    ...["-addext", "nameConstraints=critical,permitted;DNS:app.localhost,permitted;DNS:pds.localhost"],
+  );
+  const DEV_ROOT = readFileSync(join(pki, "root.pem"), "utf8");
+  /** Another root under the same name with its own key, and the same key under another name: each signature check alone. */
+  const rootLike = (out: string, key: string, subject: string) => {
+    openssl(...`req -x509 -nodes -days 30 -out ${out} -subj`.split(" "), subject, ...key.split(" "));
+    return readFileSync(join(pki, out), "utf8");
+  };
+  // Without key identifiers, so only the signature tells this root from the real one (OpenSSL's issuer check also
+  // compares the leaf's authority key id with the root's subject key id when both are present).
+  const SAME_NAME_ROOT = rootLike(
+    "same-name.pem",
+    "-newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout other.key -addext subjectKeyIdentifier=none",
+    "/CN=throwaway root",
+  );
+  const SAME_KEY_ROOT = rootLike("same-key.pem", "-key root.key", "/CN=another root");
+  let leaves = 0;
+  const leafPem = (san: string | null, { days = 30, ca = false, issuer = "root", akid = true } = {}): string => {
+    const name = `leaf${leaves++}`;
+    openssl(
+      ...`req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ${name}.key -out ${name}.pem`.split(" "),
+      ...["-days", String(days), "-subj", "/CN=app.localhost", "-CA", `${issuer}.pem`, "-CAkey", `${issuer}.key`],
+      ...["-addext", `basicConstraints=critical,CA:${ca ? "TRUE" : "FALSE"}`],
+      ...(san === null ? [] : ["-addext", `subjectAltName=${san}`]),
+      ...(akid ? [] : ["-addext", "authorityKeyIdentifier=none"]),
+    );
+    return readFileSync(join(pki, `${name}.pem`), "utf8");
+  };
+  const LEAF = leafPem("DNS:app.localhost,DNS:pds.localhost");
   /** The edge Dockerfile itself, built from the root: the path is right, but C26 refuses the context. */
   const OFF_CONTEXT_EDGE = "      context: ..\n      dockerfile: deployment/edge/Dockerfile\n";
   /** The local stack after `edit`, with its leaf secret files written beside the other secrets. */
   async function local(
     edit: (text: string) => string = (text) => text,
-    { links = {}, remove = [], ...s }: Stack & { links?: Record<string, string>; remove?: string[] } = {},
+    {
+      links = {},
+      remove = [],
+      leaf = LEAF,
+      devRoot = DEV_ROOT,
+      ...s
+    }: Stack & {
+      links?: Record<string, string>;
+      remove?: string[];
+      leaf?: string | null;
+      devRoot?: string | null;
+    } = {},
   ) {
     const { root, file } = stack({
       compose: edit(LOCAL),
@@ -2383,6 +2438,8 @@ secrets:
       chmodSync(join(secretsOf(root), name), 0o400);
     }
     chmodSync(join(root, "deployment/edge/local"), 0o755);
+    if (leaf !== null) writeFileSync(join(envOf(root), "local-leaf.pem"), leaf);
+    if (devRoot !== null) writeFileSync(join(envOf(root), "dev-root-ca.pem"), devRoot);
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     for (const path of remove) rmSync(join(root, path));
     const result = await preflight(["--env", "local", "--compose", file], {
@@ -2528,6 +2585,80 @@ secrets:
     expect(asBuilder.lines.find((line) => / C2 /.test(line))).toBe(
       "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
     );
+  });
+
+  test("local_c18_app_host_is_the_web_origins_host", async () => {
+    // P1.33x (record 2026-10-12-p134c-p134d-local-dev-root-ca, Amendment 3): a missing or stale APP_HOST gives the edge
+    // the wrong alias, so it must be a hostname and exactly the host of web's PUBLIC_ORIGIN. Reasons are fixed words.
+    const c18 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C18 /.test(line));
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    const appHost = "      APP_HOST: app.localhost\n";
+    const origin = "      PUBLIC_ORIGIN: https://app.localhost\n";
+    const cases: [string, (text: string) => string][] = [
+      ["FAIL C18 APP_HOST is missing", (text) => text.replace(appHost, "")],
+      ["FAIL C18 APP_HOST is missing", (text) => text.replace(appHost, '      APP_HOST: ""\n')],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: app_localhost\n")],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: app.localhost:443\n")],
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://old.localhost\n"),
+      ],
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://app.localhost.example.test\n"),
+      ],
+      ["FAIL C18 web's PUBLIC_ORIGIN is not a URL", (text) => text.replace(`    environment:\n${origin}`, "")],
+      [
+        "FAIL C18 web's PUBLIC_ORIGIN is not a URL",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: app.localhost\n"),
+      ],
+    ];
+    for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+  });
+
+  test("local_c18_judges_the_leaf_copy", async () => {
+    // P1.33x (record 2026-10-12-p134c-p134d-local-dev-root-ca, Amendment 2 and the 2026-10-14 ruling): the public copy
+    // of the leaf names exactly APP_HOST and PDS_HOST, no IP, is no CA, comes from the dev root and has 14 days left.
+    const c18 = async (options: { leaf?: string | null; devRoot?: string | null }) =>
+      (await local((text) => text, options)).lines.find((line) => / C18 /.test(line));
+    expect(await c18({})).toBe("PASS C18 ok");
+    // The order of the names does not matter.
+    expect(await c18({ leaf: leafPem("DNS:pds.localhost,DNS:app.localhost") })).toBe("PASS C18 ok");
+    expect(await c18({ leaf: null })).toMatch(/^FAIL C18 input missing: unset-dev-env\/local-leaf\.pem$/);
+    expect(await c18({ devRoot: null })).toMatch(/^FAIL C18 input missing: unset-dev-env\/dev-root-ca\.pem$/);
+    const names = "FAIL C18 the local leaf's names are not exactly APP_HOST and PDS_HOST";
+    const cases: [string, { leaf?: string; devRoot?: string }][] = [
+      // An unrelated DNS leaf, a leaf missing one host, one with a third, and a CN-only leaf with no SAN at all.
+      [names, { leaf: leafPem("DNS:other.localhost,DNS:pds.localhost") }],
+      [names, { leaf: leafPem("DNS:app.localhost") }],
+      [names, { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost,DNS:x.app.localhost") }],
+      [names, { leaf: leafPem(null) }],
+      [names, { leaf: leafPem("DNS:app.localhost,email:a@example.test") }],
+      // IP names, alone or beside the two hosts.
+      ["FAIL C18 the local leaf has an IP name", { leaf: leafPem("IP:127.0.0.1") }],
+      ["FAIL C18 the local leaf has an IP name", { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost,IP:::1") }],
+      // A sub-CA, and a leaf from another root.
+      ["FAIL C18 the local leaf is a CA", { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { ca: true }) }],
+      [
+        "FAIL C18 the local leaf is not issued by the dev root",
+        { leaf: LEAF, devRoot: leafPem("DNS:app.localhost,DNS:pds.localhost", { ca: true }) },
+      ],
+      [
+        "FAIL C18 the local leaf is not issued by the dev root",
+        { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { akid: false }), devRoot: SAME_NAME_ROOT },
+      ],
+      ["FAIL C18 the local leaf is not issued by the dev root", { devRoot: SAME_KEY_ROOT }],
+      [
+        "FAIL C18 the local leaf expires within 14 days",
+        { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { days: 13 }) },
+      ],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: `${LEAF}${LEAF}` }],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: readFileSync(join(pki, "root.key"), "utf8") }],
+      ["FAIL C18 the dev root is not one certificate", { devRoot: "" }],
+    ];
+    for (const [line, options] of cases) expect(await c18(options), line).toBe(line);
+    // Fifteen days left passes.
+    expect(await c18({ leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { days: 15 }) })).toBe("PASS C18 ok");
   });
 
   test("local_guards_loopback_ports_and_localhost_pds", async () => {
