@@ -66,7 +66,7 @@ describe("logger hardening", () => {
   test("logger_route_rejects_raw_paths", () => {
     const { log, records } = capture();
     const routes = [
-      "/@alice.bsky.social",
+      "/@alice.example.com",
       "/profile/did:plc:abc",
       "/u/10.0.0.1",
       `/reset/${"a1".repeat(20)}`,

@@ -91,6 +91,7 @@ const LOCK = {
   web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
 };
 const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
+// The dev PDS's own handle domain (0x40.space): the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".0x40.space" };
 const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"].concat([
   "C13",
@@ -1530,6 +1531,8 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   }
 
   test("c15_subdomain_entry_refused", async () => {
+    // About our own suffix: C15 refuses handle domains under the profile domain (0x40.me), so the test needs it. The
+    // label is a one-letter placeholder (P1.35i), reserved when handle registration lands (P2.09).
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,x.0x40.me" } });
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".x.0x40.me" } });
   });

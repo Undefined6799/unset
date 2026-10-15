@@ -40,28 +40,32 @@ describe("parseDid", () => {
 describe("parseHandle", () => {
   test("normalises_and_rejects", () => {
     const cases: [string, string | null][] = [
-      ["alice.0x40.me", "alice.0x40.me"],
-      ["Alice.0x40.ME", "alice.0x40.me"],
-      ["@alice.0x40.me", "alice.0x40.me"],
-      ["  alice.0x40.me\t", "alice.0x40.me"],
-      ["8.cn", "8.cn"],
+      ["alice.example.com", "alice.example.com"],
+      ["example.com", "example.com"],
+      // 0x40.me is our own handle domain and the only two-letter TLD a test may use (RFC 2606 and 6761 name none);
+      // the one-letter label x is listed for P2.09's reserved handles (P1.35i).
+      ["x.0x40.me", "x.0x40.me"],
+      ["Alice.Example.COM", "alice.example.com"],
+      ["@alice.example.com", "alice.example.com"],
+      ["  alice.example.com\t", "alice.example.com"],
+      ["8.example.org", "8.example.org"],
       ["xn--ls8h.example.org", "xn--ls8h.example.org"],
-      ["XX.LCS.MIT.EDU", "xx.lcs.mit.edu"],
-      ["@@alice.0x40.me", null], // only one leading @ is stripped
-      ["alice..0x40.me", null],
-      ["-a.0x40.me", null],
-      ["a-.0x40.me", null],
+      ["XX.LCS.EXAMPLE.ORG", "xx.lcs.example.org"],
+      ["@@alice.example.com", null], // only one leading @ is stripped
+      ["alice..example.com", null],
+      ["-a.example.com", null],
+      ["a-.example.com", null],
       ["org", null],
-      ["name.org.", null],
+      ["name.example.org.", null],
       ["john.0", null],
       ["jo@hn.example.com", null],
       ["💩.example.com", null],
-      ["Kelvin.com", null], // KELVIN SIGN lowercases to an ASCII k; non-ASCII input is refused first
+      ["Kelvin.example.com", null], // KELVIN SIGN lowercases to an ASCII k; non-ASCII input is refused first
       ["a.b\u0000.com", null],
       [`${"a".repeat(64)}.com`, null],
     ];
     for (const [raw, expected] of cases) expect(parseHandle(raw), raw).toBe(expected);
-    const longest = `${"a.".repeat(125)}com`; // 253 characters
+    const longest = `${"a.".repeat(121)}example.com`; // 253 characters
     expect(parseHandle(longest)).toBe(longest);
     expect(parseHandle(`a${longest}`)).toBeNull();
   });
