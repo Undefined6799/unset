@@ -26,7 +26,7 @@ import {
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
-import { appHostProblem, localLeafProblem } from "./local-leaf.ts";
+import { appHostProblem, localLeafProblem, pdsHostProblem } from "./local-leaf.ts";
 import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
@@ -277,6 +277,8 @@ function localEdgeZones(inputs: Inputs): Outcome {
   }
   const sites = localSiteMounts(edge);
   if (!Array.isArray(sites)) return sites;
+  const absent = sites.find((site) => !sourceExists(site.source));
+  if (absent !== undefined) return missing(absent.source);
   const files = localFileMounts(edge, inputs.edgeDir);
   if (files !== null) return files;
   const env = inputs.serviceEnv.get("edge");
@@ -284,7 +286,10 @@ function localEdgeZones(inputs: Inputs): Outcome {
   const appHost = env.use("APP_HOST", (value) => value);
   const host = appHostProblem(inputs, appHost);
   if (host !== null) return host;
-  const leaf = localLeafProblem(inputs, appHost ?? "", env.use("PDS_HOST", (value) => value) ?? "");
+  const pdsHost = env.use("PDS_HOST", (value) => value);
+  const pds = pdsHostProblem(inputs, pdsHost);
+  if (pds !== null) return pds;
+  const leaf = localLeafProblem(inputs, appHost ?? "", pdsHost ?? "");
   if (leaf !== null) return leaf;
   return readZones(inputs.edgeDir, sites, env, "local");
 }
@@ -312,6 +317,17 @@ function localSiteMounts(edge: Service): SiteMount[] | Outcome {
     }
   }
   return sites.length > 0 ? sites : missing(`the edge's site mounts in ${SITES_TARGET}`);
+}
+
+/** Whether `path` names anything at all, a dangling link included; the reader then judges what it is (verify-876 N5). */
+function sourceExists(path: string): boolean {
+  try {
+    EDGE_FILES.kind(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 /** One enabled site's mount: a read-only bind of its file, named `name` in the enabled sites directory. */
