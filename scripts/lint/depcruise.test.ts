@@ -511,7 +511,11 @@ describe("allowlist matrix", () => {
       "not-in-allowed",
       edge("shared/islands/a.ts", "node:fs"),
       edge("shared/islands/a.ts", "../ui/index.ts"),
+      edge("shared/islands/a.ts", "../ui/index.ts", "type"),
       edge("shared/ui/a.ts", "../islands/props.ts"),
+      // The kit's edge to the runtime adds the index alone: no Node built-in for the kit, and no other leaf gains it.
+      edge("shared/ui/a.ts", "node:fs"),
+      edge("shared/lexicons/a.ts", "../islands/index.ts"),
     );
   });
 

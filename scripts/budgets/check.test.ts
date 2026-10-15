@@ -170,6 +170,16 @@ test("ui_build_plan_default_pinned", () => {
   );
 });
 
+test("islands_plan_default_pinned", () => {
+  // P1.25o: the plan defaults carry shared/islands at 300, so raising it without a reason warns.
+  const root = tree({ "scripts/budgets/budgets.json": JSON.stringify({ "shared/islands": 400 }) });
+  const out: string[] = [];
+  expect(main(root, (line) => out.push(line))).toBe(0);
+  expect(out).toContain(
+    "::warning title=line-budget::shared/islands raised to 400 above the plan's 300 without a reason",
+  );
+});
+
 test("summary_unwritable_still_exits_zero", () => {
   const root = tree({
     "interfaces/media/a.ts": lines(12),
