@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t,
-  P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d,
-  P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's
-  P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.34d, P1.33z, P1.33n,
+  P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
+  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
+  phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -588,7 +588,7 @@ flowchart LR
   P1_29a --> P1_34d
   P1_27l --> P1_34d
   P1_34q --> P1_34d
-  P1_34d --> P1_33n
+  P1_33y --> P1_33n
   P1_34q --> P1_33n
   P1_33t --> P1_34d
   P1_33k --> P1_34d
@@ -600,6 +600,9 @@ flowchart LR
   P1_35a["P1.35a dev CA folder rule gaps closed"]
   P1_33y --> P1_35a
   P1_35a --> P1_34d
+  P1_33g["P1.33g local dev root documented and tested"]
+  P1_35a --> P1_33g
+  P1_33g --> P1_34d
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35b["P1.35b host-pin security review owner"]
@@ -8030,6 +8033,7 @@ Done when the DID-resolution tests fail on main and pass with the change, and ch
 
 ### P1.32b — Share in-flight handle checks
 Tags: [SEC] trusted            Depends on: P1.33r
+As built: #874 at 89b22b2, merged as 3c46a33.
 Slice 1, issue #865, trusted base (`domains/identity/verify-handle.ts` and its tests, and
 `infrastructure/net-guard/src/dns.test.ts`), kind/feature, lane Phase 1
 right after P1.33r's PR merges; book edit 2026-10-14-outside-review-lows, "P1.33r split under SE-6". P1.33 has no free
@@ -8062,6 +8066,7 @@ Done when the seven tests fail on main and pass with the change, the ASVS V6.8.1
 
 ### P1.32c — Replace the real-looking DID in fixtures
 Tags: —            Depends on: —
+As built: #875 at 4099940, merged as 8e046b8.
 Slice 1, issue #870, product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`), kind/fix,
 lane Phase 1 after P1.32b (lane order only: no file is shared, so no Depends; book edit 2026-10-14-verify-868-fixes,
 Addendum N7); book edit 2026-10-14-verify-864-fixture-did, item 1, from verify-864-b700f05. Nothing from Alex. The DID
@@ -8094,6 +8099,7 @@ rule for DIDs (SE-7a, verifier review); one would be a check-path step with Alex
 
 ### P1.35h — Test the in-flight rejection path
 Tags: [SEC]            Depends on: —
+As built: #883 at 4bc5992, merged as 2fc681e.
 
 Slice 1, issue #882, product (`domains/identity/`, tests only), kind/fix, lane Phase 1 after P1.32c (#875; lane
 order only); book edit 2026-10-15-verify-874-followups, section 1, from verify-874-b614e15 (P1.32b, #874, no blockers).
@@ -8200,10 +8206,12 @@ path, confirmed for C18 at 23:08Z); an absent root fails with "input missing: un
 a foreign CA, the same name with another key, and the same key with another name. As built on #869 at 8e3a8f2
 ("Updates (23:23Z)" of book edit 2026-10-14-verify-857-fixes), which also moves the root path, so P1.33y moves nothing.
 
+Moved to P1.33y and built there (#876; book edit 2026-10-14-verify-868-fixes, "Correction (23:55Z)").
 Runbook (S2(c), point 4): the `local-leaf.pem` lines of `docs/human/runbooks/dev-stack-secrets.md` (the openssl run
 writes the cert-only copy beside the env files in `unset-dev-env/`, copying with `install`, never a link) ride this
 step as docs (SE-6), because it lands before P1.34d.
 
+Moved to P1.33y and built there (#876; book edit 2026-10-14-verify-868-fixes, "Correction (23:55Z)").
 Also (verify-851-cabc9e3 on P1.33k, #851; last section of book edit 2026-10-14-p134d-split), all product in
 `deployment/preflight/`:
 - S1: three red fixtures in the token-reader preflight test, so the three surviving mutants die: the reader with a
@@ -8225,6 +8233,9 @@ Done when each fixture fails on main for its own reason and passes with the chan
 
 ### P1.33y — Accept per-file site mounts on local
 Tags: [SEC]            Depends on: P1.33x
+As built: #876 at aef02b9, merged as da49edf. It also carries verify-869's S1 and S2, the verify-851 S1 fixtures, the
+N1/N3 `TOKEN_READER` refactor and the runbook folder tree (book edit 2026-10-14-verify-868-fixes, "Correction
+(23:55Z)").
 Slice 1, issue #855, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
 2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
@@ -8240,8 +8251,8 @@ book edit 2026-10-14-verify-857-fixes, N4). C18 under dev is unchanged.
 
 Root path: this step moves nothing. P1.33x (#869) carries the move to `unset-dev-trust/root.pem` as built ("Updates
 (23:23Z)" of book edit 2026-10-14-verify-857-fixes; book edit 2026-10-14-p134d-split, "P1.33y root path mapping
-confirmed", which now reads as P1.33x for the path). The folder-content checks stay with P1.34d (or P1.33g if it
-splits).
+confirmed", which now reads as P1.33x for the path). The folder-content checks moved with the split to P1.33g
+(book edit 2026-10-14-p134d-split, "P1.33g taken").
 
 Done when a per-file local fixture passes, a local directory mount is refused, the dev fixtures are unchanged, and
 check is green.
@@ -8310,6 +8321,7 @@ Done when each red case fails on main and passes with the change, and check is g
 
 ### P1.35f — Root-cause the compose version probe stall
 Tags: —            Depends on: —
+As built: #881 at 6d9e210, merged as ae2c69d.
 
 Slice 1, issue #879, product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread after
 P1.33y, next in its queue (lane order only); book edit 2026-10-15-verify-862-c14-and-compose-probe, section 2, its
@@ -8412,7 +8424,8 @@ checks".
   a test red.
 - Nits: item 4 gains a real-cruise `shared/<x>/dist` case; the fixture stubs (`depcruise-fixture.ts:91`) drop the
   `exports` field unless a test needs it.
-- #588's two open nits, both still on main: the `depcruise.test.ts:507` comment says P1.30r, not P1.30u; a red fixture
+- #588's two open nits, both still on main: the `depcruise.test.ts:507` comment says P1.30u and should say P1.30r; a red
+  fixture
   such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
 
 **What, image scan gate (#866):**
@@ -8460,17 +8473,51 @@ Done when each test is red without its change and green with it, and check is gr
 
 ---
 
+### P1.33g — Document and test the local dev root
+Tags: [SEC]            Depends on: P1.35a
+
+Slice 1, issue (pending), product (`deployment/preflight/`, its tests, and `docs/human/runbooks/dev-stack-secrets.md`
+as docs), kind/feature, lane the third thread after P1.35a (both edit C26 in `deployment/preflight/checks/build.ts`; the
+lane stacks it on P1.35a's PR); book edit 2026-10-14-p134d-split, "P1.33g taken: the split of item 4", a split of
+P1.34d (#742) by size: no item's content changes, and the record 2026-10-12-p134c-p134d-local-dev-root-ca and its
+amendments still govern the text. It is a split of booked work, so it needs nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev root that can
+sign for other hosts or IPs, and a trust folder the stack reads that holds something other than that one root, answered
+by the tests below.
+
+**What:**
+- P1.34d item 1's openssl recipe in `docs/human/runbooks/dev-stack-secrets.md`: the root per items 2-3 and Amendment 2
+  (name constraints with the two exact hosts, the IPv4 and IPv6 all-addresses ranges excluded, at most 825 days), the
+  leaf per item 4, and the root copied with `install` (never a link) into `unset-dev-trust/root.pem`. The
+  `local-leaf.pem` lines already there stay.
+- The throwaway-root tests (Amendment 2): the recipe runs from the runbook text in a temp dir; `openssl verify` passes
+  the two exact hosts and refuses an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf.
+- P1.34d item 5's `unset-dev-trust` preflight checks under C26 local: exactly `root.pem`, lstat regular, nlink 1, not
+  group- or other-writable, a real folder; byte-identical to `unset-dev-ca/root.pem`, naming both paths in the reason;
+  one CA:true certificate with item 2's name constraints; PRIVATE KEY refused. Seven red tests.
+
+Class: product only. The tests live beside the preflight or under `tests/`, never under a check path
+(`scripts/{test,docs,...}`, SE-6), and the runbook rides as docs. If this step measures over 400 source lines, the lane
+tells the step book before opening; P1.34d's letters for a further split come from the next free family, as for P1.35a.
+
+Done when each red test fails on main for its own reason and passes with the change, and check is green.
+
+---
+
 ### P1.34d — Trust one dev root CA on the local stack
-Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a
+Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a,
+P1.33g
 Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/preflight/`, and
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
 P1.29t depends on it. Split by size (book edit 2026-10-14-p134d-split): items 6, 9, 12's C18 half and 13 moved to
 P1.33w, P1.33x, P1.33y and P1.33z; this step keeps items 1-5, 7, 8, 10, 11, 14, 15 and item 12's per-file mounts and
-real-file test. Its dependents (P1.33n, P1.34u, P1.34v, P1.29s, P1.29t and others) keep depending on it, so they also
-wait for the three new steps. If it still measures over 400 source lines, the lane splits the runbook and throwaway-root
-tests into **P1.33g, "Document and test the local dev root"** (product, before this step, reserved), and tells the step
-book before opening it.
+real-file test. Its dependents (P1.34u, P1.34v, P1.29s, P1.29t and others) keep depending on it, so they also
+wait for the three new steps. It still measured over 400 source lines, so item 4's split is taken: item 1's openssl
+recipe, the throwaway-root tests and item 5's `unset-dev-trust` preflight checks moved to **P1.33g, "Document and test
+the local dev root"**, before this step (book edit 2026-10-14-p134d-split, "P1.33g taken"). This step keeps the
+compose and `local:up` items.
 
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
@@ -8504,7 +8551,8 @@ book before opening it.
    `local-leaf.pem` stays in `unset-dev-env/`, because the preflight reads it and nothing binds it. Red tests: a
    symlinked `unset-dev-trust/`; an extra file in the folder; nlink 2; group-writable; a cert that differs from the
    CA's; a non-CA cert; a cert without the name constraints; a PRIVATE KEY block. If this step measures over 400 source
-   lines, these preflight checks join the P1.33g split with the runbook and the throwaway-root tests. (Book edit
+   lines, these preflight checks join the P1.33g split with the runbook and the throwaway-root tests (taken: they are
+   P1.33g's). (Book edit
    2026-10-14-p134d-split, "Item 5 settled: unset-dev-trust/"; architecture's confirmation with no exception to C9 is
    the section "Architecture confirmation (2026-10-14 ~22:50Z, recorded here 23:21Z)" of
    2026-10-12-p134c-p134d-local-dev-root-ca; book edit 2026-10-14-verify-857-fixes, S3.)
@@ -8601,12 +8649,14 @@ Done when the run is green in CI on this step's PR, the README section is in, an
 ---
 
 ### P1.33n — Drop the directory form from the site reader
-Tags: [SEC] trusted            Depends on: P1.34d, P1.34q
+Tags: [SEC] trusted            Depends on: P1.33y, P1.34q
 Slice 1, issue #810, trusted base (`deployment/edge/`), kind/refactor (kind/fix if the verifier finds it reachable),
-lane the third thread after P1.34d; book edit 2026-10-13-p133n-drop-sites-directory-form, from the coordinator's relay
-at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps Amendment 3 S2). The
-verifier found the directory form reachable in #809 only through a missing mode gate, which #809 fixes, so what remains
-is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out of #809.
+lane the third thread (P1.34d was a dependency only for the C18 move, which P1.33y made; book edit
+2026-10-15-verify-868-postmerge-followups, O2); book edit 2026-10-13-p133n-drop-sites-directory-form, from the
+coordinator's relay at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps
+Amendment 3 S2). The verifier found the directory form reachable in #809 only through a missing mode gate, which #809
+fixes, so what remains is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out
+of #809.
 
 **What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
 P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
@@ -9667,7 +9717,9 @@ failing on CRITICAL and keeping every shipped image at fail-on-HIGH?" (architect
 
 **Why:** `caddy:2.11.7-builder-alpine` carries eight fixable HIGH Go standard library findings (Go 1.26.5) in
 `/usr/bin/xcaddy`, fixed in 1.26.6, while `caddy:2.11.7-alpine` and the shipped edge image scan clean (Trivy 0.74.0,
-HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). xcaddy is a build-time CLI fed only our pinned versions and
+HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). That was true when relayed; since then main's `mirror` run fails on
+`caddy:2.11.7-alpine` and `pds:0.4.5037` (none of the last 40 runs on main green, verify-868-fd7be32-postmerge O3);
+P1.33c's exceptions and the P1.27r scan step answer it. xcaddy is a build-time CLI fed only our pinned versions and
 checksum-verified modules, in an unprivileged job; the edge image's own Trivy scan reads the built binary's Go build
 info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE ignore entries (the alternative) recur on
 every Go point release and waive a CVE id globally unless scoped by path.

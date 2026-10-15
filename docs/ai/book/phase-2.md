@@ -2344,11 +2344,10 @@ Done when (tests):
   - `routes.only_two`: GET `/v1/invite.issue`, POST `/v1/anything`, `/xrpc/com.atproto.admin.getAccountInfo` → 404.
   - `boot.missing_secret`: no password file → exit code 1, no secret in stderr.
   - `zero_dependency`: `interfaces/pds-admin/package.json` has no `dependencies` (dev dependencies only for tests).
-  - `reserved.list`: `reserved-labels.json` contains exactly `www, api, admin, account, mail, mta-sts, autoconfig, status`
-    plus the rule "any label starting with `_`"; `check-reserved` against the fake PDS prints one line per label. It
-    also lists the one-letter test labels kept on our own suffixes, as named in P1.35i's and P1.35j's PR bodies, so no
-    real user can hold one (book edit 2026-10-15-verify-875-fixture-wording, "Mapping of architecture's N5 and F2
-    ruling").
+  - `reserved.list`: `reserved-labels.json` contains exactly `www, api, admin, account, mail, mta-sts, autoconfig,
+    status`, the one-letter test labels kept on our own suffixes (as named in P1.35i's and P1.35j's PR bodies, so no
+    real user can hold one; book edit 2026-10-15-verify-875-fixture-wording), and the rule "any label starting with
+    `_`"; `check-reserved` against the fake PDS prints one line per label.
   - `web.issueInvite_mapping`: each pds-admin status → the matching `issueInvite` kind; a NetGuardError → `unavailable`.
 
 Reuse (provisional — for reuse review):
@@ -4222,7 +4221,7 @@ written inside P2.26a):
 Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
 `scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
 `postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26f** holds that
-test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
+test and `docs/human/runbooks/postmortem-template.md`; P2.26a holds the deploy change and
 `rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
 ---
