@@ -73,9 +73,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
   P1.34d, P1.35p, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
-  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
-  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the
-  slice exit P2.13a.
+  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.37, P1.37b, P1.36 (pulled
+  forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13
+  and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -361,6 +361,7 @@ flowchart LR
   P1_31d["P1.31d exports and lexicon scripts rules"]
   P1_31["P1.31 lexicons package"]
   P1_31c["P1.31c NSID cross-pin"]
+  P1_31g["P1.31g lexicons breaking-change check"]
   P1_31e["P1.31e unset-source condition"]
   P1_31f["P1.31f web server via unset-source"]
   P1_32["P1.32 permanent choices STOP"]
@@ -508,6 +509,7 @@ flowchart LR
   P1_01 --> P1_31
   P1_31d --> P1_31
   P1_31 --> P1_31c
+  P1_31 --> P1_31g
   P1_31c --> P1_31e
   P1_31e --> P1_31f
   P1_32 -.-> P1_31
@@ -672,6 +674,7 @@ flowchart LR
   P0_11 -.-> P1_34
   P1_29t -.-> P1_34
   P1_31 --> P1_35
+  P1_31g --> P1_35
   P1_34 --> P1_35
   P1_18 -.-> P1_35
   P0_12 -.-> P1_35
@@ -13280,18 +13283,20 @@ Build choices (architecture's 2026-10-12-p131-depcruise-and-lexicon-choices; boo
 - Generated code goes in `generated/`, whose own tsconfig sets `exactOptionalPropertyTypes: false`; hand-written
   code keeps it true. `biome-ignore-all noExplicitAny` on generated files only, and a regenerate-and-diff test
   requires the build output to equal the committed files.
-- The breaking-check runs as a test. An absent `listed` means not listed (fails closed).
 - The NSID cross-pin test is P1.31c's own PR.
 
 **Tags:** [PERMANENT] [SEC] [ALEX] [STOP] (Alex reviews the schemas' fields and the permission set's EN/FR consent text in this step's PR; nothing is published until he approves it: answered by Alex 2026-10-03 11:48Z) · **Depends on:** P1.01, P1.32 (Q4, the permission-set NSID), P1.31d · **Plan:** §3 (lexicons, scope string), §5.2, §5.3; fable 01
 
 **Where:** `shared/lexicons/{schemas/sh.unset.*.json, vendor/app.bsky/*, src/{validate.ts, scope.ts, index.ts},
-published.lock.json, published/<nsid>.json, scripts/{build.ts, breaking-check.ts}, test/}`.
+published.lock.json, published/<nsid>.json, scripts/build.ts, test/}`; `scripts/breaking-check.ts` is P1.31g's.
 
-**Size:** ~200 source lines plus schemas, ~350 test lines.
+**Size:** about 400 source lines (`build.ts`, `src/` limits, scope and validate, `index.ts`, LICENSE) plus schemas,
+with their tests and `generated_types_current`. The breaking-check moved to P1.31g (book edit
+2026-10-15-p131-size-split: 539 lines per pr-shape as built at 4e59bf6, split at the clean seam).
 
 **Goal:** The `sh.unset.*` schemas, the permission set and the OAuth scope string exist in one package, are
-strictly validated, generate types with `@atproto/lex`, and cannot change in a breaking way once published.
+strictly validated and generate types with `@atproto/lex`; P1.31g adds the check that they cannot change in a
+breaking way once published.
 
 **Inputs:** plan §3's record list and scope string; `@atproto/lex` 0.3.13 (pinned exactly; the agent rechecks the
 latest patch at start); the vendored `app.bsky` schemas the records reference.
@@ -13322,7 +13327,7 @@ latest patch at start); the vendored `app.bsky` schemas the records reference.
   - new collections (Phase 4's P4.01 and later) are **added to the same set**, never a new set NSID (a new set
     NSID forces every user to consent again);
   - each addition is its own PR, tagged `[ALEX]`, because it silently expands every user's token; the
-    breaking-check refuses it without the flag `--approved-by-alex=<PR number>`;
+    breaking-check (P1.31g) refuses it without the flag `--approved-by-alex=<PR number>`;
   - removing a permission breaks running features → refused (a feature is retired first, then a reviewed
     removal PR with the same flag);
   - an unexpected change of the published set's CID is a **security incident** (P1.35 monitor and runbook);
@@ -13345,11 +13350,6 @@ latest patch at start); the vendored `app.bsky` schemas the records reference.
   the granular-scope list for PDSes that do not support permission sets.
 - `published.lock.json`: `{ "<nsid>": { "cid": "…", "schemaRecordCid": "…", "publishedAt": "…" } }` (filled by
   P1.35); `published/<nsid>.json` snapshots of what was published.
-- `breaking-check`: for each **record or query** NSID in the lock, compares the current schema with its
-  snapshot; any of: removed field, changed type, new required field, narrowed constraint (maxLength down, enum
-  value removed; knownValues is fine), changed `key` type → exit 1 "breaking: publish a new NSID". For the
-  **permission set** the rules above apply instead (add with Alex's flag; never remove; never a new NSID).
-  Consent-text edits also need the flag (users see them).
 - Limits (maxLength, maxGraphemes, array lengths) per record from §3, centralised in one constants file.
 
 **Algorithm:**
@@ -13360,28 +13360,22 @@ build:
 3. lex build → generated types into src/generated (checked in; --check mode in CI).
 4. Permission-set checks: every permission is repo: or rpc: under sh.unset.; no rpc: entry has a fixed aud;
    title and detail exist in en and fr. Any failure → exit 1.
-5. breaking-check against published.lock.json (record/query rules, or permission-set rules).
 scopeString:
 1. Return the exact string from §3 built from constants; a test pins it byte for byte.
 ```
 
 **Edge cases and failures:**
-- A record schema change after publication → breaking-check fails; the fix is a new record NSID (e.g.
-  `sh.unset.profileV2`) — never an edit (permanent, `[PERMANENT]`). This does **not** apply to the permission set
-  (see Outputs).
 - A PDS without permission-set support → the OAuth client (Phase 2) requests the fallback scope; this step only
   provides both strings.
 - A record with a `$type` mismatch → validateRecord fails.
 - Unknown fields on read → accepted and ignored (forward compatibility); on write → refused.
 
-**Threats:** the record formats and the permission set that other apps and users' PDSes rely on.
+**Threats:** the record formats and the permission set that other apps and users' PDSes rely on. The breaking-check's
+threats (a published schema changing under existing records; a set widening every grant without Alex's flag) are
+P1.31g's.
+  - E The permission set grants beyond our prefix → refused (`permission_set_scope_prefix_only`).
   - T A write carries fields the schema does not define → refused on write (`validate_write_rejects_unknown_field`,
     `limits_enforced`).
-  - E The permission set widens every user's grant at the next token refresh → additions need Alex's flag, removals
-    fail, only our prefix (`breaking_check_permission_set_add_requires_flag`,
-    `breaking_check_permission_set_removal_fails`, `permission_set_scope_prefix_only`).
-  - T A published schema changes under existing records → breaking check (`breaking_check_detects_removed_field`,
-    `…_new_required`, `…_narrowed_maxlength`).
   - S The scope string drifts from plan line 126 → pinned (`scope_string_pinned`, `scope_fallback_pinned`).
 
 **Done when (tests):**
@@ -13390,10 +13384,6 @@ scopeString:
 - `validate_write_rejects_unknown_field`; `validate_read_accepts_unknown_field`.
 - `limits_enforced`: one over-limit fixture per limited field → error.
 - `scope_string_pinned`; `scope_fallback_pinned`.
-- `breaking_check_detects_removed_field`, `…_new_required`, `…_narrowed_maxlength`; `breaking_check_allows_new_optional`.
-- `breaking_check_permission_set_add_requires_flag`: adding a permission without `--approved-by-alex` → exit 1;
-  with it → exit 0.
-- `breaking_check_permission_set_removal_fails`.
 - `permission_set_has_en_fr_title_detail`.
 - `follow_schema_in_first_set` (answer 29b): the set lists `repo:sh.unset.follow`; `sh.unset.follow` validates
   `{subject: <did>, createdAt}` and rejects a missing or non-DID `subject`; the fallback scope pins it.
@@ -13409,8 +13399,56 @@ scopeString:
 - get/putPreferences lexicons → REJECT (preferences are not ours to define).
 - Vault note `atproto-lexicon-authoring` → LESSON.
 
-**Not in this step:** publishing (P1.35); Phase 4 collections (P4.01 adds them to the same set through an
-`[ALEX]` PR), except `sh.unset.follow`, which is here from the first publication (answer 29b).
+**Not in this step:** the breaking-check (P1.31g); publishing (P1.35); Phase 4 collections (P4.01 adds them to the same
+set through an `[ALEX]` PR), except `sh.unset.follow`, which is here from the first publication (answer 29b).
+
+---
+
+### P1.31g — Lexicons breaking-change check
+
+**Tags:** [SEC] · **Depends on:** P1.31
+
+Slice 1, issue #907, product (`shared/lexicons/scripts/breaking-check.ts` and its tests), Phase 1 lane, after
+P1.31. Book edit 2026-10-15-p131-size-split: P1.31 measured 539 source lines as built, and the breaking-check is the
+clean seam, since it has no input until P1.35 publishes the first schema (no `published/` folder before then). It
+carries `scripts/breaking-check.ts` and its tests unchanged from 4e59bf6. P1.35 depends on it as well as P1.31, so
+nothing is published before the check exists.
+
+**Goal:** a published schema or the published permission set cannot change in a breaking way, or widen every user's
+grant, without the reviewed path.
+
+**Outputs:**
+- `breaking-check`: for each **record or query** NSID in the lock, compares the current schema with its
+  snapshot; any of: removed field, changed type, new required field, narrowed constraint (maxLength down, enum
+  value removed; knownValues is fine), changed `key` type → exit 1 "breaking: publish a new NSID". For the
+  **permission set** P1.31's rules apply instead (add with Alex's flag; never remove; never a new NSID).
+  Consent-text edits also need the flag (users see them).
+- The breaking-check runs as a test. An absent `listed` means not listed (fails closed).
+- The permission-set rules are P1.31's Outputs ("How the permission set evolves"): an addition needs
+  `--approved-by-alex=<PR number>`, a removal is refused, never a new set NSID.
+
+**Algorithm:** breaking-check against `published.lock.json` (record/query rules, or permission-set rules), run as a
+test.
+
+**Edge cases and failures:**
+- A record schema change after publication → breaking-check fails; the fix is a new record NSID (e.g.
+  `sh.unset.profileV2`) — never an edit (permanent, `[PERMANENT]`). This does **not** apply to the permission set
+  (see Outputs).
+
+**Threats:**
+  - E The permission set widens every user's grant at the next token refresh → additions need Alex's flag, removals
+    fail, only our prefix (`breaking_check_permission_set_add_requires_flag`,
+    `breaking_check_permission_set_removal_fails`).
+  - T A published schema changes under existing records → breaking check (`breaking_check_detects_removed_field`,
+    `…_new_required`, `…_narrowed_maxlength`).
+
+**Done when (tests):**
+- `breaking_check_detects_removed_field`, `…_new_required`, `…_narrowed_maxlength`; `breaking_check_allows_new_optional`.
+- `breaking_check_permission_set_add_requires_flag`: adding a permission without `--approved-by-alex` → exit 1;
+  with it → exit 0.
+- `breaking_check_permission_set_removal_fails`.
+
+**Not in this step:** the schemas, the build, validation and the scope strings (P1.31); publishing (P1.35).
 
 ---
 
@@ -14461,7 +14499,7 @@ schedules a monitor holds the repository token, its permissions and a runner. **
 `.github/workflows/lexicon-monitor.yml` and `scripts/ci/lexicon-monitor.ts` (moved under a check folder); this step
 holds `shared/lexicons/` and the runbooks.
 
-**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.34, P1.33p (G-1: public lexicon resolution fetches from the public PDS), P1.33a (creating its account on `https://0x40.space` is when the dev PDS takes that name; decision 24 retires the prototype first),
+**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.31g (its breaking-check), P1.34, P1.33p (G-1: public lexicon resolution fetches from the public PDS), P1.33a (creating its account on `https://0x40.space` is when the dev PDS takes that name; decision 24 retires the prototype first),
 P0.12 (rows K1 and K1b), P0.13 (licence ADR: the lexicons are MIT), P1.18 · **Plan:** §3, §5.2, §5.3 ("published never from CI or agents"), §10 (nightly PLC log check); decision 20
 
 **Where:** `docs/human/runbooks/{lexicon-authority.md, plc-nullification.md, permission-set-changed.md,

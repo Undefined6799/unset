@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 308 steps: 284 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 309 steps: 285 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -461,6 +461,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.31c | Pin the lexicon NSID to the permanent value | — | P1.31 | `phase-1.md` |
 | P1.31e | Admit the private unset-source condition | — | P1.31c | `phase-1.md` |
 | P1.31f | Export the web server through unset-source | — | P1.31e | `phase-1.md` |
+| P1.31g | Lexicons breaking-change check | [SEC] | P1.31 | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.37b | Harden the legal marker docs check | — | P1.37 | `phase-1.md` |
 | P1.36 | Compliance skeletons (pulled forward from slice 2, Alex 23:08Z; test in `scripts/docs/`, check class) | — | P0.07 | `phase-1.md` |
@@ -767,6 +768,7 @@ flowchart TD
   P1_31c["P1.31c NSID cross-pin"]
   P1_31e["P1.31e unset-source condition"]
   P1_31f["P1.31f Web server via unset-source"]
+  P1_31g["P1.31g Lexicons breaking-change check"]
   P1_37["P1.37 Legal paperwork"]
   P1_37b["P1.37b Legal marker check hardening"]
   P1_36["P1.36 Compliance skeletons"]
@@ -935,6 +937,7 @@ flowchart TD
   P1_31 --> P1_31c
   P1_31c --> P1_31e
   P1_31e --> P1_31f
+  P1_31 --> P1_31g
   P1_32 --> P1_32a
   P1_18 --> P2_01
   P2_01 --> P2_02
@@ -1274,7 +1277,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
-| P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
+| P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.31g, P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.33p, P1.34, P1.36, P1.37, P1.37a, P1.15s | `phase-1.md` |
@@ -1313,6 +1316,7 @@ flowchart TD
   P1_33p --> P1_35
   P1_33a --> P1_35
   P1_33p --> P1_38
+  P1_31g --> P1_35
   P1_34 --> P1_35
   P1_35 --> P1_38
   P1_37a --> P1_38
