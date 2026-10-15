@@ -613,6 +613,7 @@ flowchart LR
   P1_35p["P1.35p dev CA preflight and runbook gaps closed"]
   P1_33g --> P1_35p
   P1_35m --> P1_35p
+  P1_34d --> P1_35p
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
   P1_35o["P1.35o app network pinned in the dev compose tests"]
@@ -8197,6 +8198,7 @@ on our handle suffix, or a hostname other than an A1 own host (unset.sh and its 
 
 ### P1.35k — Move net-guard test hosts to reserved names
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+As built: #900 at ee82825, merged as 89de4e0.
 
 Slice 1, issue #891, trusted base (`infrastructure/net-guard/` tests only), kind/fix, lane Phase 1 after P1.35j (lane
 order only); book edit 2026-10-15-verify-886-fixture-scope, architecture's 01:55Z ruling (c) and its step-book mapping.
@@ -8539,7 +8541,9 @@ Done when each test is red without its change and green with it, and check is gr
 
 ### P1.33g — Document and test the local dev root
 Tags: [SEC]            Depends on: P1.35a
-As built: #896 at 742568a, merged as 8a49712.
+As built: #896 at 742568a, merged as 8a49712. The runbook copies the root with `cp` and `chmod 0644`, where the step
+text books `install` (verify-896 N1; P1.35p moves the runbook to `install`). Item 5's conditions 2 and 3 sit in C18,
+where the root is already read, not in C26 (verify-896 N2).
 
 Slice 1, issue #889, product (`deployment/preflight/`, its tests, and `docs/human/runbooks/dev-stack-secrets.md` as
 docs), kind/feature, lane the third thread after P1.35a (both edit C26 in `deployment/preflight/checks/build.ts`; the
@@ -8574,6 +8578,9 @@ Done when each red test fails on main for its own reason and passes with the cha
 
 ### P1.35m — Pin the dev CA folder walk's edges
 Tags: [SEC]            Depends on: P1.35a
+As built note (verify-901-9996fec N1): a self-loop symlink at the folder reads "not a real directory: <folder>"; an
+lstat that cannot see the folder still reads "dev CA folder cannot be read" (#887's message). The merge line follows
+when #901 merges.
 
 Slice 1, issue #893, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
 C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
@@ -8847,19 +8854,23 @@ P1.29t's client_id probe red and green move to P1.33z (session containers cannot
 ---
 
 ### P1.35p — Close the dev CA preflight and runbook gaps
-Tags: [SEC]            Depends on: P1.33g, P1.35m
+Tags: [SEC]            Depends on: P1.33g, P1.35m, P1.34d (#742: N4/N5 need its bind)
 
 Slice 1, issue #904, product (`deployment/preflight/`, including `deployment/preflight/stack.ts`, its tests, and
 `docs/human/runbooks/dev-stack-secrets.md`), kind/fix, lane the third thread after P1.34d (the record keeps it there for
 the C9 rules). Book edit 2026-10-15-verify-896-901-followups, from verify-896-742568a (P1.33g, #896) and
 verify-901-9996fec (P1.35m, #901), with architecture's 03:50Z ruling (section "Architecture on verify-896-742568a and
-verify-901-9996fec" of book edit 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the record's last section). Every
+verify-901-9996fec" of book edit 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the record's section "Mapping of
+architecture's ruling"). Every
 item is a tightening, so nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev root whose
 name constraints are forged or hidden from a byte search; a root that may sign further CAs or carries key usages beyond
 certificate and CRL signing; a trust folder another user can write; preflight hung by a FIFO; a printed filesystem or
-environment string forging a PASS line; and a folder swapped during the walk.
+environment string forging a PASS line; a folder swapped and left swapped during the walk (one swapped and reverted
+within the walk stays a residual); an APP_HOST outside `.localhost` or equal to PDS_HOST, so the leaf and site name
+the wrong host; an env value outside the allowlist turning on the trust folder (N9); and the runbook writing through a
+symlink.
 
 **What, C18 and the root (verify-896):**
 - S1: a strict DER walk from Certificate to tbsCertificate to extensions, not a byte search. DER only (minimal lengths,
@@ -8882,7 +8893,7 @@ environment string forging a PASS line; and a folder swapped during the walk.
 - S3 and N1: the runbook (`dev-stack-secrets.md:136-138`) uses `install -d` for the folder and `install -m 0644` for the
   root, as the step text books (not `cp`). That fixes `mkdir -m 0755` failing on rerun, the `install -D` line dropped
   from main, and `cp` writing through a symlink.
-- N2: P1.33g's As built says items 2 and 3 live in C18, not C26. N6: red cases for the four survivors that exist only on
+- N6: red cases for the four survivors that exist only on
   disk: a dot-named file beside `root.pem`, a SEC1 key block, `ln -s` in the runbook path, and a CA:TRUE leaf.
 
 **What, the walk and printing (verify-901):**
@@ -8890,23 +8901,27 @@ environment string forging a PASS line; and a folder swapped during the walk.
   the filesystem, the environment or an error, including COMPOSE_* names (`stack.ts:101-105`, `:213`). Red fixture: a
   variable name with `\n` and `\r\e[2K` forging a PASS line.
 - S2: red cases for the six fail-open survivors X1, X5, X12, X13, X4 and X7; X1, X5 and X13 turn a refusal into PASS on
-  disk, so they come first. N1: P1.35m's As built names the lstat-error message.
+  disk, so they come first.
 - N2: record dev and ino for every directory the walk visits, and re-lstat all of them after the walk; any change fails.
   The residual wording becomes "a swap made and reverted entirely within the walk (deploy user or root)".
 - N3: the non-UTF-8 refusal prints the entry's raw bytes through the escape helper (for example `\xff`), with the
   folder.
 
-**What, APP_HOST under local (architecture 04:03Z, the record's last section):**
+**What, APP_HOST under local (architecture 04:03Z, the record's section "APP_HOST value under local"):**
 - Under `--env local`, preflight judges APP_HOST's value three ways: it sits under the constrained `.localhost` names,
   it differs from PDS_HOST, and it is never an IP literal. As of #903 at 8e12639, `local-leaf.ts:86-93` checks that it
   is a hostname (refusing a numeric last label) matching web's PUBLIC_ORIGIN host, and `caddyfile.local` refuses
   equality with PDS_HOST. The builder confirms each of the three on main and adds whichever is missing, each with a red
-  test: `app.example.com`, APP_HOST equal to PDS_HOST, `127.0.0.1`, and `[::1]`.
+  test: `app.example.com`, APP_HOST equal to PDS_HOST, `127.0.0.1`, `[::1]`, bare `localhost` ("under" means a proper
+  subdomain), and `app.notlocalhost` with a comment naming `.localhost` (SE-7a's suffix-boundary rule). The last two
+  kill an `endsWith("localhost")` mutant of the host pattern at `deployment/edge/caddyfile.ts:57` and
+  `deployment/preflight/checks/local-leaf.ts:90`.
 
-Size: if the step measures over about 400 source lines, it splits at the measure into a verify-896 part (C18 DER walk,
-N3, the C9 owner and mode rules, N9) and a verify-901 part (printable module, re-lstat, N3, the X-mutant reds). The
-second part takes the next free id, and the split is recorded in book edit 2026-10-15-verify-896-901-followups before
-the PR is ready.
+Size: if the step measures over about 400 source lines, it splits at the measure, placing every item. The verify-896
+part takes S1 (DER walk), N3, N4/N5, N9, S2 (FIFO reads), S3/N1 (runbook install), N6 (the four on-disk reds) and the
+APP_HOST item (preflight under local). The verify-901 part takes S1 (printable module), N2 (re-lstat), N3 (raw bytes)
+and the S2 X-mutant reds. The second part takes the next free id, and the split is recorded in book edit
+2026-10-15-verify-896-901-followups before the PR is ready.
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
