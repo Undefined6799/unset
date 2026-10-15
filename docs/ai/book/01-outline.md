@@ -417,7 +417,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
 | P1.33m | Own the local Postgres init in CODEOWNERS (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d, P1.33m | `phase-1.md` |
-| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card answered 20:43:34Z) | P1.34u, P1.34d, P1.35o | `phase-1.md` |
+| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card answered 20:43:34Z) | P1.34u, P1.34d, P1.35o, P1.35r | `phase-1.md` |
 | P1.34y | Add an inert local PLC policy to net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -1086,6 +1086,7 @@ flowchart TD
   P1_35o["P1.35o App network pinned in the dev compose tests"]
   P1_35n --> P1_35o
   P1_35o --> P1_34v
+  P1_35r --> P1_34v
   P1_35f["P1.35f Compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]

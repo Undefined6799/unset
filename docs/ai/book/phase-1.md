@@ -621,6 +621,7 @@ flowchart LR
   P1_35o["P1.35o app network pinned in the dev compose tests"]
   P1_35n --> P1_35o
   P1_35o --> P1_34v
+  P1_35r --> P1_34v
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
@@ -9464,7 +9465,7 @@ and check is green.
 ---
 
 ### P1.34v — Run a local PLC directory in the local stack
-Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o
+Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o, P1.35r
 Slice 1, issue #782, product (`deployment/compose.local.yaml`, its network table, the image lock, the local PDS env),
 lane the third thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 4 of 2026-10-13-local-plc;
 book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 and 3 to
