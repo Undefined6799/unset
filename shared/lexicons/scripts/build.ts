@@ -128,6 +128,20 @@ const PERMISSION_KEYS = {
   rpc: ["type", "resource", "lxm", "aud", "inheritAud"],
 } as const satisfies Record<string, readonly string[]>;
 
+const REPO_ACTIONS: readonly string[] = ["create", "update", "delete"];
+
+/**
+ * The entries of a list parameter, after reporting an empty list or a value given twice: the server drops an entry
+ * whose values do not parse (atproto.com/specs/lexicon#permission), which would silently remove a grant.
+ */
+function listProblems(i: number, field: string, value: unknown, found: string[]): string[] {
+  const list = Array.isArray(value) ? value.map(String) : [String(value)];
+  if (list.length === 0) found.push(`permission ${i} has an empty ${field} list`);
+  for (const item of new Set(list.filter((item, at) => list.indexOf(item) !== at)))
+    found.push(`permission ${i} lists "${item}" twice`);
+  return list;
+}
+
 /**
  * A set may grant only repo: and rpc: under its own group prefix, and an rpc: entry must inherit its audience
  * (@atproto/oauth-scopes 0.5.13, dist/scopes/include-scope.js: parseLexPermission, isParentAuthorityOf). Its
@@ -141,10 +155,18 @@ export function permissionSetProblems(set: doc.LexiconPermissionSet): string[] {
     const allowed: readonly string[] = PERMISSION_KEYS[resource];
     const unknown = Object.keys(permission).filter((key) => !allowed.includes(key));
     const found = unknown.map((key) => `permission ${i} has unknown key "${key}"`);
-    const names = (resource === "repo" ? permission.collection : permission.lxm) as unknown;
-    const list = Array.isArray(names) ? names.map(String) : [String(names)];
-    const outside = list.filter((nsid) => !nsid.startsWith(SET_PREFIX) || nsid.length <= SET_PREFIX.length);
-    found.push(...outside.map((nsid) => `permission ${i} names ${nsid} outside ${SET_PREFIX}`));
+    const field = resource === "repo" ? "collection" : "lxm";
+    const list = listProblems(i, field, permission[field], found);
+    for (const nsid of list) {
+      if (!nsid.startsWith(SET_PREFIX) || nsid.length <= SET_PREFIX.length)
+        found.push(`permission ${i} names ${nsid} outside ${SET_PREFIX}`);
+      else if (!FLAT_NSID.test(nsid)) found.push(`permission ${i} names ${nsid}, not a flat sh.unset.<name> NSID`);
+    }
+    if (resource === "repo" && permission.action !== undefined) {
+      for (const action of listProblems(i, "action", permission.action, found))
+        if (!REPO_ACTIONS.includes(action))
+          found.push(`permission ${i} has action "${action}"; only create, update and delete`);
+    }
     if (resource === "rpc" && permission.aud !== undefined)
       found.push(`permission ${i} has a fixed aud; rpc entries use inheritAud`);
     else if (resource === "rpc" && permission.inheritAud !== true)

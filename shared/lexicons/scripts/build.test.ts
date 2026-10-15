@@ -130,6 +130,26 @@ describe("schema build checks", () => {
     expect(planted(rpcExtra)).toEqual(['schemas/sh.unset.authApp.json: permission 2 has unknown key "collection"']);
   });
 
+  test("permission_values_valid", () => {
+    // The server drops an entry whose values do not parse (atproto.com/specs/lexicon#permission), so a typo would
+    // silently remove a grant: actions must be create, update or delete, lists non-empty and unique, NSIDs flat.
+    const cases: [Record<string, unknown>, string][] = [
+      [{ action: ["create", "delet"] }, 'permission 1 has action "delet"; only create, update and delete'],
+      [{ action: [] }, "permission 1 has an empty action list"],
+      [{ action: ["create", "create"] }, 'permission 1 lists "create" twice'],
+      [{ collection: [] }, "permission 1 has an empty collection list"],
+      [{ collection: ["sh.unset.follow", "sh.unset.follow"] }, 'permission 1 lists "sh.unset.follow" twice'],
+      [{ collection: ["sh.unset.foo.bar"] }, "permission 1 names sh.unset.foo.bar, not a flat sh.unset.<name> NSID"],
+    ];
+    for (const [change, problem] of cases) {
+      const file = authApp();
+      const follow = (setOf(file).permissions as Record<string, unknown>[])[1];
+      if (follow === undefined) throw new Error("the set has no second entry");
+      Object.assign(follow, change);
+      expect(planted(file), JSON.stringify(change)).toEqual([`schemas/sh.unset.authApp.json: ${problem}`]);
+    }
+  });
+
   test("schema_file_names_unique", () => {
     // schemas/ and vendor/ are copied into one folder for `lex build`; a shared name would let one silently win.
     const twin = { ...ours("sh.unset.follow"), file: "vendor/sh.unset.follow.json", ours: false };
