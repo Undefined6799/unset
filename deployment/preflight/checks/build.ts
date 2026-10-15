@@ -1,13 +1,13 @@
 // C26 and C27 (P1.30y; architecture record 2026-10-12-p129-compose-service-keys): a build uses a Dockerfile the images
 // workflow scans, from the context it builds that Dockerfile from, and the postgres socket directory is a tmpfs only on
 // the postgres image.
-import { readdirSync, realpathSync } from "node:fs";
+import { readdirSync, realpathSync, type Stats } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { resolveChecked, WALK_REASONS } from "../../../shared/host-pin/index.ts";
 import type { Service } from "../compose-parse.ts";
 import { lockOrNone } from "./lock.ts";
 import { devCaFolder, holdsEnvFile, reachesDevCaFolder, reachesSecretsFolder } from "./secrets.ts";
-import { type Check, fail, type Inputs, missing, pass, runsImage } from "./types.ts";
+import { type Check, fail, type Inputs, missing, type Outcome, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
 const DOCKERFILE = /(^|\/)([\w.-]+\.)?Dockerfile$/;
@@ -73,27 +73,22 @@ function contextProblem(context: string, inputs: Inputs): string | null {
 }
 
 /**
- * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context that
- * workflow uses (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any other from
- * the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files than the
- * scanned image holds. A context that reaches the secrets folder or the dev CA folder is refused first. Under local,
- * every regular file in the dev CA folder has one link: a second name, in the checkout above all, is where a context
- * or a bind would carry the key, and neither the path nor the identity tests can see it (P1.33w; architecture on
- * verify-861, book edit 2026-10-14-p134d-split, last section).
+ * C26: every Dockerfile is one the images workflow discovers, so it ships scanned, and is built from the context it
+ * builds that Dockerfile from (images.yml, scan-image "Build": a file named Dockerfile from its own folder, the edge; any
+ * other from the repository root, as migrate copies shared/ and infrastructure/). Another context builds other files
+ * than the scanned image holds. A context that reaches the secrets folder or the dev CA folder is refused first. Then
+ * the dev CA folder itself: a second name for a CA file, in the checkout above all, is where a context or a bind would
+ * carry the key, and neither the path nor the identity tests can see it (P1.33w, P1.35a).
  */
 export const c26: Check = {
   id: "C26",
   run: (inputs) => {
-    if (inputs.env === "local") {
-      const linked = devCaLinkProblem(inputs);
-      if (linked !== null) return fail(`dev CA file has extra hard links: ${linked}`);
-    }
     for (const { name, build } of inputs.compose.services) {
       if (build === null) continue;
       const problem = buildProblem(build, inputs);
       if (problem !== null) return fail(`${name} ${problem}`);
     }
-    return pass();
+    return devCaFolderProblem(inputs) ?? pass();
   },
 };
 
@@ -160,14 +155,57 @@ export const c27: Check = {
   },
 };
 
-/** The first regular file in the dev CA folder, by lstat, with more than one link; null when none or no folder. */
-function devCaLinkProblem(inputs: Inputs): string | null {
+/**
+ * Why the dev CA folder fails C26, or null (architecture on verify-861-9ae3539, record
+ * 2026-10-12-p134c-p134d-local-dev-root-ca, last sections). It is judged by lstat and must be a real directory. Local
+ * needs it, dev judges it when it is there, and a prod host never has it. Every error refuses, naming the path.
+ */
+function devCaFolderProblem(inputs: Inputs): Outcome | null {
   const folder = devCaFolder(inputs);
-  if (inputs.lstat(folder)?.isDirectory() !== true) return null;
-  for (const entry of readdirSync(folder, { recursive: true, encoding: "utf8" })) {
-    const path = join(folder, entry);
+  const info = inputs.lstat(folder);
+  if (info === null) {
+    if (!isAbsent(folder, inputs)) return fail(`dev CA folder cannot be read: ${folder}`);
+    return inputs.env === "local" ? missing("unset-dev-ca") : null;
+  }
+  if (inputs.env === "prod") return fail("dev CA folder present on a prod host");
+  if (!info.isDirectory()) return fail(`dev CA folder is not a real directory: ${folder}`);
+  const problem = devCaEntryProblem(folder, inputs);
+  return problem === null ? null : fail(problem);
+}
+
+/** True only when nothing is there: realpath answers null for a missing path and throws on any other error. */
+function isAbsent(path: string, inputs: Inputs): boolean {
+  try {
+    return inputs.realpath(path) === null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Why an entry under the dev CA folder is refused, or null. Our own recursion by lstat follows no link (a recursive
+ * readdir follows linked folders, Node v26.10.0 doc/api/fs.md, fs.readdirSync `recursive`): the folder holds only
+ * regular files with one link each and real folders.
+ */
+function devCaEntryProblem(dir: string, inputs: Inputs): string | null {
+  let names: string[];
+  try {
+    names = inputs.readdir(dir).sort();
+  } catch {
+    return `dev CA folder entry cannot be read: ${dir}`;
+  }
+  for (const name of names) {
+    const path = join(dir, name);
     const info = inputs.lstat(path);
-    if (info?.isFile() === true && info.nlink !== 1) return path;
+    if (info === null) return `dev CA folder entry cannot be read: ${path}`;
+    if (info.isSymbolicLink()) return `dev CA folder holds a link: ${path}`;
+    const problem = info.isDirectory() ? devCaEntryProblem(path, inputs) : fileProblem(path, info);
+    if (problem !== null) return problem;
   }
   return null;
 }
+
+const fileProblem = (path: string, info: Stats): string | null => {
+  if (!info.isFile()) return `dev CA folder holds something other than files and folders: ${path}`;
+  return info.nlink === 1 ? null : `dev CA file has extra hard links: ${path}`;
+};
