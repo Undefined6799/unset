@@ -8758,21 +8758,26 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     user, read_only, cap_drop, cap_add, security_opt, tmpfs, logging, profiles, network_mode, networks with their
     internal flags, and ports (still on 127.0.0.1). The allowed differences are exactly: `name`; `env_file` paths;
     `image` replaced by `build` (judged by C2 to C5, C18, C25 and C27 under the card); the edge's per-file site mounts
-    (item 12) and the leaf mount; the `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only;
-    the local-name network aliases; and the PLC service, its per-consumer `plc_*` networks and its database wiring,
-    local only; each consumer joins only its own one; the drift test checks that set exactly (architecture 02:26Z; book
-    edit 2026-10-13-local-plc-a4-steps, "Step-book mapping of the 02:26Z ruling"); `PDS_DID_PLC_URL` on pds
-    (`http://plc:2582` in the local file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of
-    2026-10-13-local-plc-a4-steps), and the same for web and appview once P1.34z gives them a PLC URL in compose (book
-    edit 2026-10-13-verify-814-fixes, S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here
-    first; step-book note 2 of 2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount
-    (P1.34u's files, mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in
-    either direction, fails with the key named. So the drift test compares every service key (verify-903-8b2abfc S1;
-    book edit 2026-10-14-p134d-split, "item 11 holds over item 14"): `environment` per service as a normalized key-value
-    map (list and map forms alike), where only the named keys may differ, on the services named; `env_file` per service
-    as an ordered list whose entries correspond one to one and whose paths differ only in the env directory; and every
-    other key (command, entrypoint, mem_limit and the rest). Red tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0
-    on web and on pds; --use-system-ca in NODE_OPTIONS and in command; env_file pds.env on web and on edge;
+    (item 12), with the two edge keys that item 12's `deployment/edge/local/app.caddy` reads, exactly `APP_HOST:
+    ${APP_HOST}` and `APP_UPSTREAM: web:8080`, on the edge only and in the local file only, present both or neither
+    exactly when the app.caddy mount is (book edit 2026-10-14-p134d-split, 04:03Z section; red tests: APP_UPSTREAM
+    `pds:3000` or any other value such as `web:8081` on the edge, a literal host for APP_HOST, either key on web or pds,
+    either key in the dev file, the keys without the mount, the mount without the keys), and the leaf mount; the
+    `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only; the local-name network aliases; and
+    the PLC service, its per-consumer `plc_*` networks and its database wiring, local only; each consumer joins only its
+    own one; the drift test checks that set exactly (architecture 02:26Z; book edit 2026-10-13-local-plc-a4-steps,
+    "Step-book mapping of the 02:26Z ruling"); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local file,
+    `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps), and the
+    same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes, S4);
+    `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
+    2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
+    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
+    key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit 2026-10-14-p134d-split,
+    "item 11 holds over item 14"): `environment` per service as a normalized key-value map (list and map forms alike),
+    where only the named keys may differ, on the services named; `env_file` per service as an ordered list whose entries
+    correspond one to one and whose paths differ only in the env directory; and every other key (command, entrypoint,
+    mem_limit and the rest). Red tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
+    --use-system-ca in NODE_OPTIONS and in command; env_file pds.env on web and on edge;
     NODE_OPTIONS=--max-old-space-size=4096 on web. Preflight still runs in full on the local file; the drift test
     catches a weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as
     P1.35o does for the dev file (F2 of book edit 2026-10-15-verify-895-followups). This step moves `pds-token-reader`
