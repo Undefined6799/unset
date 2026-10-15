@@ -3106,6 +3106,16 @@ networks:
     );
   });
 
+  test("local_c17_runs_the_pds_neighbour_rule", async () => {
+    // C17 judges the PDS's neighbours under local too (#742 item 11), even where the table admits one. The PLC cases
+    // call pdsNeighbours directly until P1.34v, so this is the case that reaches it through C17 (verify-903-2f7413d).
+    const admitted = { ...TABLE, default: { internal: false, members: ["edge", "pds", "web"] } };
+    const { lines } = await local((text) => text.replace("    networks: [back]", "    networks: [back, default]"), {
+      networks: admitted,
+    });
+    expect(lines.find((line) => / C17 /.test(line))).toBe("FAIL C17 web shares a network with the pds");
+  });
+
   test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
     // P1.33g (record 2026-10-12-p134c-p134d-local-dev-root-ca, "Architecture confirmation", condition 1): the folder
     // pds and web bind is a real directory holding exactly root.pem, a regular file with one link that no group or
