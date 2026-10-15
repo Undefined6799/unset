@@ -8580,9 +8580,9 @@ Done when each red test fails on main for its own reason and passes with the cha
 
 ### P1.35m — Pin the dev CA folder walk's edges
 Tags: [SEC]            Depends on: P1.35a
-As built note (verify-901-9996fec N1): a self-loop symlink at the folder reads "not a real directory: <folder>"; an
-lstat that cannot see the folder still reads "dev CA folder cannot be read" (#887's message). The merge line follows
-when #901 merges.
+As built: #901 at 19cbda0, merged as 152b695. Note (verify-901-9996fec N1): a self-loop symlink at the folder reads
+"not a real directory: <folder>"; an lstat that cannot see the folder still reads "dev CA folder cannot be read"
+(#887's message).
 
 Slice 1, issue #893, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
 C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
@@ -8660,6 +8660,7 @@ Done when each red fixture fails on main for its own reason and passes with the 
 
 ### P1.35o — Pin the app network in the dev compose tests
 Tags: [SEC]            Depends on: P1.35n
+As built: #906 at 3e62ab9, merged as 2170d34.
 
 Slice 1, issue #902, product (`deployment/` compose tests and `deployment/preflight/`), kind/fix, lane the third thread
 after P1.35m, and before P1.34d where possible (a soft order: P1.34d's drift test calls whichever `pdsNeighbours` is on
