@@ -2,7 +2,7 @@
 // Which workspace may reference which is read from the dependency-cruiser MATRIX, so the import
 // boundaries and the tsconfig/package.json references are one list (rule AB-1).
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, posix, relative, sep } from "node:path";
 import { sourceFiles } from "../guards/files.ts";
@@ -232,21 +232,117 @@ export function workspaceProblems(root: string): string[] {
 const TS_SOURCE = /\.(?:ts|tsx|mts|cts)$/;
 const TSC = join(ROOT, "node_modules", ".bin", "tsc");
 
+/** Repo-relative files `tsc --listFilesOnly` reports for one project. */
+function listedFiles(root: string, project: string): string[] {
+  const run = spawnSync(TSC, ["-p", join(project, "tsconfig.json"), "--listFilesOnly"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  return (run.stdout ?? "").split("\n").map((file) => relative(root, file.trim()).split(sep).join("/"));
+}
+
+/** Why a project's effective options (extends resolved, by `tsc --showConfig`) keep it from checking its files, or
+ * null: at every depth it must be composite and must not set noCheck (architecture Amendment 1 condition 3 and
+ * Amendment 2 item 3). */
+function optionProblem(root: string, project: string): string | null {
+  const run = spawnSync(TSC, ["-p", join(project, "tsconfig.json"), "--showConfig"], { cwd: root, encoding: "utf8" });
+  let options: Record<string, unknown>;
+  try {
+    options = (JSON.parse(run.stdout ?? "") as { compilerOptions?: Record<string, unknown> }).compilerOptions ?? {};
+  } catch {
+    return `${project}: tsc --showConfig gave no readable config`;
+  }
+  if (options.composite !== true) return `${project}: a project must set composite`;
+  if (options.noCheck === true) return `${project}: a project may not set noCheck`;
+  return null;
+}
+
+const realpath = (path: string): string | null => {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return null;
+  }
+};
+
+/** Why `ref`, written in `parent`'s tsconfig, may not add a nested project, or null: it must name a folder with a
+ * tsconfig.json strictly inside `parent`, with no `..`, no node_modules and no link out (condition 2). */
+function containmentProblem(root: string, parent: string, ref: string): string | null {
+  const refused = `${parent}: reference ${ref} is not a project inside ${parent}`;
+  if (ref.split(/[\\/]/).includes("..")) return refused;
+  const home = realpath(join(root, parent));
+  const child = realpath(join(root, parent, ref));
+  const config = realpath(join(root, parent, ref, "tsconfig.json"));
+  if (home === null || child === null || config === null) return refused;
+  const inside = (path: string) =>
+    path.startsWith(`${home}${sep}`) && !path.slice(home.length).split(sep).includes("node_modules");
+  return inside(child) && inside(config) ? null : refused;
+}
+
+type Step = { dir: string; real: string | null };
+type Walk = { root: string; tops: Set<string | null>; walked: Set<string>; covered: Set<string>; problems: string[] };
+
 /**
- * TypeScript files no project in the root `tsconfig.json` compiles. `tsc -b` checks only the projects it is given,
- * so a file outside every project (a new `tests/` or `deployment/` folder, a code folder with no `package.json`)
- * would otherwise go unchecked while Vitest still runs it.
+ * Every file some project in the walk lists, and why any project in it fails. The walk starts at the root
+ * `tsconfig.json`'s references and follows each project's own references, as `tsc -b` does (architecture record
+ * 2026-10-12-p131-depcruise-and-lexicon-choices, Amendment 1). A root-referenced project's reference to another is
+ * left to the root walk. Any other reference names a nested project, which must sit inside its parent. Every project
+ * must pass the option rules, or its files do not count. A reference back to a project on the current path is a cycle and a
+ * finding; a project reached twice by different paths is walked once.
+ */
+function typecheckWalk(root: string): Walk {
+  const tops = referencePaths(readJson(root, "tsconfig.json")).map((ref) => resolveReference(".", ref));
+  const walk: Walk = {
+    root,
+    tops: new Set(tops.map((project) => realpath(join(root, project)))),
+    walked: new Set(),
+    covered: new Set(),
+    problems: [],
+  };
+  for (const project of tops) visitProject(walk, project, []);
+  return walk;
+}
+
+/** Counts `project`'s files once it passes, then follows its references; `path` is the chain that reached it. A
+ * nested project counts only files whose real path lies inside its own folder (Amendment 3), so an include that
+ * reaches elsewhere leaves that file to a root-referenced project. */
+function visitProject(walk: Walk, project: string, path: Step[]): void {
+  const real = realpath(join(walk.root, project));
+  if (walk.walked.has(real ?? project)) return;
+  walk.walked.add(real ?? project);
+  const problem = optionProblem(walk.root, project);
+  if (problem !== null) return void walk.problems.push(problem);
+  const counts = (file: string): boolean =>
+    path.length === 0 || (real !== null && (realpath(join(walk.root, file)) ?? "").startsWith(`${real}${sep}`));
+  for (const file of listedFiles(walk.root, project)) if (counts(file)) walk.covered.add(file);
+  const config = `${project}/tsconfig.json`;
+  const refs = existsSync(join(walk.root, config)) ? referencePaths(readJson(walk.root, config)) : [];
+  for (const ref of refs) followReference(walk, [...path, { dir: project, real }], ref);
+}
+
+/** Checks one reference from the last project on `path`, in order: a cycle, a root-to-root reference, containment. */
+function followReference(walk: Walk, path: Step[], ref: string): void {
+  const parent = path.at(-1)?.dir ?? ".";
+  const child = resolveReference(parent, ref);
+  const real = realpath(join(walk.root, child));
+  if (real !== null && path.some((step) => step.real === real)) {
+    const chain = [...path.map((step) => step.dir), child].join(" -> ");
+    return void walk.problems.push(`${child}: tsconfig references form a cycle (${chain})`);
+  }
+  // Only a root-referenced project's references may reach another root-referenced project (MATRIX governs those).
+  if (path.length === 1 && real !== null && walk.tops.has(real)) return;
+  const contained = containmentProblem(walk.root, parent, ref);
+  if (contained !== null) return void walk.problems.push(contained);
+  visitProject(walk, child, path);
+}
+
+/**
+ * TypeScript files no passing project in the walk compiles, after a finding for each project the walk refuses.
+ * `tsc -b` checks only the projects it is given, so a file outside every project (a new `tests/` or `deployment/`
+ * folder, a code folder with no `package.json`) would otherwise go unchecked while Vitest still runs it.
  */
 export function untypecheckedFiles(root: string): string[] {
-  const projects = referencePaths(readJson(root, "tsconfig.json")).map((ref) => resolveReference(".", ref));
-  const covered = new Set(
-    projects.flatMap((project) => {
-      const run = spawnSync(TSC, ["-p", join(project, "tsconfig.json"), "--listFilesOnly"], {
-        cwd: root,
-        encoding: "utf8",
-      });
-      return (run.stdout ?? "").split("\n").map((file) => relative(root, file.trim()).split(sep).join("/"));
-    }),
-  );
-  return sourceFiles(root, ["."]).filter((f) => TS_SOURCE.test(f) && !f.endsWith(".d.ts") && !covered.has(f));
+  const { covered, problems } = typecheckWalk(root);
+  const files = sourceFiles(root, ["."]).filter((f) => TS_SOURCE.test(f) && !f.endsWith(".d.ts") && !covered.has(f));
+  return [...problems.sort(), ...files];
 }

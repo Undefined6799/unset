@@ -1,7 +1,7 @@
 // The one way to start or stop a development stack (P1.27w; architecture records 2026-10-12-preflight-compose-inputs,
 // items F3.1, F3.3 and F3.5 and Amendment 3, and 2026-10-12-stack-wrapper-location):
 //
-//   node deployment/preflight/stack.ts up|down --env dev --compose <file> [--compose <file>...]
+//   node deployment/preflight/stack.ts up|down --env dev|local --compose <file> [--compose <file>...]
 //     --interpolation-env <file>
 //
 // `up` runs the deploy preflight as a child process with exactly these compose files and interpolation env file, all
@@ -14,6 +14,9 @@
 // another (architecture record 2026-10-12-workspace-imports-and-remote-daemon (2)). It lives beside the
 // preflight under that folder's import row (P1.27w), and runs the preflight as a process, never by import, so its exit
 // code is the gate.
+//
+// Under --env local (P1.34d item 15), `up` then runs served-leaf.ts, also as a process, to prove the edge serves the
+// leaf copy the preflight judged; if that check does not pass, the wrapper runs `down` and fails.
 import { spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
@@ -24,9 +27,13 @@ import { hostWalk, localDockerHost, UsageError, type WalkInputs } from "../../sh
 export const CHILD_ENV_NAMES = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
 
 const PREFLIGHT = resolve(import.meta.dirname, "index.ts");
+const SERVED_LEAF = resolve(import.meta.dirname, "served-leaf.ts");
 
-/** A program to run; `name` is the fixed label reasons use, so no reason prints a path (P1.34s, nit 4). */
-export type Command = { name: string; file: string; args: string[] };
+/**
+ * A program to run; `name` is the fixed label reasons use, so no reason prints a path (P1.34s, nit 4). `undo` runs when
+ * this command fails in any way, before the failure is reported.
+ */
+export type Command = { name: string; file: string; args: string[]; undo?: Command };
 /** What spawnSync reports about a finished child: a missing program is `error`, a kill is `signal`. */
 export type Exit = { status: number | null; signal: NodeJS.Signals | null; error?: Error };
 /** How `run` starts a command and asks the daemon its name; the one double in the tests. */
@@ -45,11 +52,11 @@ export const WRAPPER_OPTIONS = {
   compose: { type: "string", multiple: true },
   "interpolation-env": { type: "string", multiple: true },
 } as const;
-type Options = { action: "up" | "down"; env: string; files: string[]; envFile: string };
+type Options = { action: "up" | "down"; env: "dev" | "local"; files: string[]; envFile: string };
 
 export { UsageError };
 
-const USAGE = "usage: up|down --env dev --compose <file> [--compose <file>...] --interpolation-env <file>";
+const USAGE = "usage: up|down --env dev|local --compose <file> [--compose <file>...] --interpolation-env <file>";
 
 /** A child that could not start or was killed: a fixed reason naming the program, never its arguments (DC-4). */
 export class StackError extends Error {}
@@ -87,7 +94,7 @@ function parse(argv: string[]): Options {
   const { values, positionals } = parsed;
   const [action, ...rest] = positionals;
   if ((action !== "up" && action !== "down") || rest.length > 0) throw new UsageError("the action is up or down");
-  if (values.env !== "dev") throw new UsageError("--env must be dev");
+  if (values.env !== "dev" && values.env !== "local") throw new UsageError("--env must be dev or local");
   const files = (values.compose as string[] | undefined) ?? [];
   if (files.length === 0) throw new UsageError("--compose is required");
   const envFiles = (values["interpolation-env"] as string[] | undefined) ?? [];
@@ -113,6 +120,13 @@ export function plan(
   refuseComposeVariables(from);
   const { action, env, files, envFile } = parse(argv);
   const compose = ["compose", ...files.flatMap((f) => ["-f", f]), "--env-file", envFile];
+  const down: Command = { name: "docker", file: "docker", args: [...compose, "down"] };
+  const leafCheck: Command = {
+    name: "the leaf check",
+    file: process.execPath,
+    args: [SERVED_LEAF, "--", "--env", env],
+    undo: down,
+  };
   const commands: Command[] =
     action === "up"
       ? [
@@ -130,8 +144,9 @@ export function plan(
             ],
           },
           { name: "docker", file: "docker", args: [...compose, "up", "-d", "--build"] },
+          ...(env === "local" ? [leafCheck] : []),
         ]
-      : [{ name: "docker", file: "docker", args: [...compose, "down"] }];
+      : [down];
   return { env: childEnv(from, inputs), commands };
 }
 
@@ -156,11 +171,24 @@ function refuseRemoteDaemon(env: Record<string, string>, runner: Runner): number
 export function run({ env, commands }: Plan, runner: Runner): number {
   const daemon = refuseRemoteDaemon(env, runner);
   if (daemon !== 0) return daemon;
-  for (const { name, file, args } of commands) {
-    const code = exitCode(name, runner.spawn(file, args, env));
+  for (const command of commands) {
+    const code = runOrUndo(command, env, runner);
     if (code !== 0) return code;
   }
   return 0;
+}
+
+/** Runs one command; when it fails in any way and has an `undo`, runs that first, then reports the failure. */
+function runOrUndo({ name, file, args, undo }: Command, env: Record<string, string>, runner: Runner): number {
+  let code: number;
+  try {
+    code = exitCode(name, runner.spawn(file, args, env));
+  } catch (error) {
+    if (undo !== undefined) runner.spawn(undo.file, undo.args, env);
+    throw error;
+  }
+  if (code !== 0 && undo !== undefined) runner.spawn(undo.file, undo.args, env);
+  return code;
 }
 
 /**

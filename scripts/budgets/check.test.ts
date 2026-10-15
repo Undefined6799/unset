@@ -141,6 +141,7 @@ test("budgets_match_plan", () => {
     "infrastructure/net-guard": 400,
     "shared/ui": 2500,
     "shared/ui-build": 800,
+    "shared/islands": 300,
   });
 });
 
@@ -166,6 +167,16 @@ test("ui_build_plan_default_pinned", () => {
   expect(main(root, (line) => out.push(line))).toBe(0);
   expect(out).toContain(
     "::warning title=line-budget::shared/ui-build raised to 900 above the plan's 800 without a reason",
+  );
+});
+
+test("islands_plan_default_pinned", () => {
+  // P1.25o: the plan defaults carry shared/islands at 300, so raising it without a reason warns.
+  const root = tree({ "scripts/budgets/budgets.json": JSON.stringify({ "shared/islands": 400 }) });
+  const out: string[] = [];
+  expect(main(root, (line) => out.push(line))).toBe(0);
+  expect(out).toContain(
+    "::warning title=line-budget::shared/islands raised to 400 above the plan's 300 without a reason",
   );
 });
 

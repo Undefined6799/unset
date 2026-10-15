@@ -9,7 +9,7 @@ import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
-import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
+import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
 import { type Compose, parseCompose, parseStrictData, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
@@ -19,6 +19,9 @@ const DEPLOYMENT = import.meta.dirname;
 const read = (file: string): string => readFileSync(join(DEPLOYMENT, file), "utf8");
 const FILE = "compose.dev.yaml";
 const dev = (): Compose => parseCompose(read(FILE), FILE);
+/** The local stack's file, which alone carries the token reader (P1.34d item 11). */
+const LOCAL = "compose.local.yaml";
+const local = (): Compose => parseCompose(read(LOCAL), LOCAL);
 const service = (compose: Compose, name: string): Service => {
   const found = compose.services.find((s) => s.name === name);
   if (found === undefined) throw new Error(`no ${name} service`);
@@ -106,14 +109,16 @@ describe("compose.dev.yaml (P1.29)", () => {
         // Until P1.27s publishes signed images, every service is built here from a scanned Dockerfile, except a
         // run-only image, named exactly as its lock entry, which the mirror workflow scans (P1.29a).
         if (s.build === null) {
-          expect(runOnly.has(s.image ?? "") || (file === FILE && isTokenReaderNode(s)), `${file} ${s.name}`).toBe(true);
+          expect(runOnly.has(s.image ?? "") || (file === LOCAL && isTokenReaderNode(s)), `${file} ${s.name}`).toBe(
+            true,
+          );
         }
       }
     }
   });
 
   test("node_base_runs_unbuilt_only_for_the_token_reader", () => {
-    const reader = service(dev(), TOKEN_READER);
+    const reader = service(local(), TOKEN_READER);
     expect(isTokenReaderNode(reader)).toBe(true);
     // Red fixtures (Amendment 1 point 3): the same image on another service, without the profile, or with a network.
     expect(isTokenReaderNode({ ...reader, name: "web" })).toBe(false);
@@ -127,7 +132,7 @@ describe("compose.dev.yaml (P1.29)", () => {
 
   test("pds_token_reader_reads_only_the_pds_volume", () => {
     // The record, point 1: the volume read-only and the one reader script read-only; no env file, no env, no secret.
-    const reader = service(dev(), TOKEN_READER);
+    const reader = service(local(), TOKEN_READER);
     expect(reader.mounts).toEqual([
       { type: "volume", source: "pdsdata", target: "/data", readOnly: true },
       { type: "bind", source: "../tests/support/pds-email-token-read.ts", target: "/reader/read.ts", readOnly: true },
@@ -142,7 +147,7 @@ describe("compose.dev.yaml (P1.29)", () => {
     // Amendment 2, B1: the token on its stdout reaches no log driver.
     expect(reader.logging).toBe("none");
     // The PDS keeps its database at /home/node/pds/account.sqlite, so the reader finds it at /data/pds.
-    expect(service(dev(), "pds").mounts).toContainEqual(
+    expect(service(local(), "pds").mounts).toContainEqual(
       expect.objectContaining({ type: "volume", source: "pdsdata", target: "/home/node" }),
     );
     expect(readFileSync(join(DEPLOYMENT, "..", "tests/support/pds-email-token-read.ts"), "utf8")).toContain(
@@ -150,14 +155,15 @@ describe("compose.dev.yaml (P1.29)", () => {
     );
   });
 
-  test("pds_token_reader_only_in_the_dev_file", () => {
-    // Never in a non-dev compose file, and no other service carries a profile (the record, point 1).
+  test("pds_token_reader_only_in_the_local_file", () => {
+    // Only in compose.local.yaml (local-plc Amendment 6, Q2; P1.34d item 11), and no other service carries a profile
+    // (the record, point 1).
     const files = readdirSync(DEPLOYMENT, { recursive: true, encoding: "utf8" }).filter(
       (entry) => /(^|\/)compose[^/]*\.ya?ml$/.test(entry) && !entry.includes("node_modules"),
     );
     for (const file of files) {
       for (const s of parseCompose(read(file), file).services) {
-        const allowed = file === FILE && s.name === TOKEN_READER;
+        const allowed = file === LOCAL && s.name === TOKEN_READER;
         expect(s.name === TOKEN_READER && !allowed, `${file} ${s.name}`).toBe(false);
         expect(s.profiles.length > 0 && !allowed, `${file} ${s.name}`).toBe(false);
       }
@@ -215,7 +221,8 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_dev_hardening", () => {
-    for (const s of dev().services) {
+    // Both files' services, so a local-only one (the token reader) is pinned too (verify-903 M2).
+    for (const s of [...dev().services, ...local().services]) {
       const h = s.hardening;
       expect(h.capDrop, s.name).toEqual(["ALL"]);
       // Only the edge binds below 1024 (80 and 443), as its non-root user (P1.28 setcap; plan section 8).
@@ -234,7 +241,9 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_dev_limits", () => {
-    for (const s of dev().services) expect(limitProblems(s, runsNode(s)), s.name).toEqual([]);
+    for (const s of [...dev().services, ...local().services]) {
+      expect(limitProblems(s, runsNode(s)), s.name).toEqual([]);
+    }
     expect(
       dev()
         .services.filter(runsNode)
@@ -259,6 +268,16 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(postgres.networks.length).toBeGreaterThan(0);
     for (const network of postgres.networks) expect(internal.has(network), network).toBe(true);
     expect(postgres.ports).toEqual([]);
+  });
+
+  test("web_only_on_internal_networks", () => {
+    // web has no way out: every network it joins is internal (architecture 02:05Z option C; verify-895 N2).
+    const compose = dev();
+    const internal = new Set(compose.networks.filter((n) => n.internal).map((n) => n.name));
+    const web = service(compose, "web");
+    expect(web.networks.length).toBeGreaterThan(0);
+    for (const network of web.networks) expect(internal.has(network), network).toBe(true);
+    expect(web.ports).toEqual([]);
   });
 
   test("compose_dev_only_edge_publishes", () => {
@@ -435,6 +454,12 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
+    // The local PDS differs only by its PLC and the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1).
+    expect(Object.fromEntries(envOf(service(local(), "pds")))).toEqual({
+      ...Object.fromEntries(env),
+      PDS_DID_PLC_URL: "http://plc:2582",
+      NODE_EXTRA_CA_CERTS: "/etc/unset-dev-trust/root.pem",
+    });
   });
 
   test("pds_env_file_holds_only_its_secrets", () => {
@@ -462,7 +487,10 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
   });
 
   test("pds_mail_unset_only_with_logging_off", () => {
-    expect(mailLogProblems(envOf(service(dev(), "pds")))).toEqual([]);
+    // Both files' PDS (P1.34d item 14): the preflight no longer checks this under local, where mail is refused.
+    for (const file of [FILE, LOCAL]) {
+      expect(mailLogProblems(envOf(service(parseCompose(read(file), file), "pds"))), file).toEqual([]);
+    }
     const off = new Map([["LOG_ENABLED", "false"]]);
     for (const level of ["info", "warn", "error", "fatal", "silent"]) {
       expect(mailLogProblems(new Map([...off, ["LOG_LEVEL", level]])), level).toEqual([]);
@@ -498,12 +526,12 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
 
   test("no_pds_disable_or_dev_mode_variable", () => {
     // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose ("Also"), the fail-closed twin of F-25: no
-    // PDS_DISABLE_SSRF_PROTECTION, no PDS_DEV_MODE and no other PDS switch that turns a protection off, in this file's
-    // services or in any env template a stack copies from.
+    // PDS_DISABLE_SSRF_PROTECTION, no PDS_DEV_MODE and no other PDS switch that turns a protection off, in either
+    // compose file's services (verify-903 M1) or in any env template a stack copies from.
     const templates = readdirSync(join(DEPLOYMENT, "env")).filter((file) => file.endsWith(".example.env"));
     expect(templates).toContain("pds.example.env");
     const settings: [string, string][] = [
-      ...dev().services.flatMap((s) => [...envOf(s)]),
+      ...[...dev().services, ...local().services].flatMap((s) => [...envOf(s)]),
       ...templates.flatMap((file) => envSettings(read(join("env", file)))),
     ];
     expect(settings.map(([name]) => name)).toContain("PDS_HOSTNAME");
@@ -635,13 +663,14 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     }
   };
 
-  /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
-  const outcomes = async (edit: (text: string) => string = (text) => text): Promise<Outcome[]> => {
+  const BASES = join(CHECKOUT, "deployment/images/bases.lock.json");
+  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base lock and no deploy lock. */
+  const devInputs = (edit: (text: string) => string = (text) => text) => {
     const file = join(DEPLOYMENT, FILE);
     const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
-      readText: (path) => (path === file ? edit(read(FILE)) : null),
+      readText: (path) => (path === file ? edit(read(FILE)) : path === BASES ? readFileSync(BASES, "utf8") : null),
       readEnv: (path) =>
         path === ENV_FILE
           ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
@@ -656,9 +685,26 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       uid: DEPLOY_UID,
       environment: {},
     });
+    return inputs;
+  };
+  /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
+  const outcomes = async (edit?: (text: string) => string): Promise<Outcome[]> => {
+    const inputs = devInputs(edit);
     const signal = new AbortController().signal;
     return [await c9.run(inputs, signal), await c26.run(inputs, signal)];
   };
+
+  test("compose_dev_pds_neighbours_pass", () => {
+    // verify-895 F2: the same neighbour check C17 runs at deploy, on the real file, so CI refuses what C17 would. The
+    // PDS is known by the base lock's image and the edge by its Dockerfile (P1.35o, architecture 03:05Z F3).
+    expect(pdsNeighbours(devInputs())).toEqual([]);
+    const webOnEdge = (text: string) => text.replace("    networks: [db, app]\n", "    networks: [db, app, edge]\n");
+    expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
+    const renamed = (text: string) =>
+      text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
+    // Renamed, the PDS is still known by its image.
+    expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
+  });
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([

@@ -52,11 +52,16 @@ const TOOLING = `^(scripts|tests)/|^[^/]+\\.config\\.[cm]?[jt]s$|\\.test\\.(ts|t
 const { TOOLING_PATTERN } = require("./tooling.ts");
 const FAKE = "\\.fake\\.[cm]?tsx?$";
 const ADMIN_SERVICES = "^interfaces/(pds-admin|chat-admin)/";
-const LEAF_SHARED = "^shared/(ui|ui-build|lexicons|admin-envelope|host-pin)/";
+const LEAF_SHARED = "^shared/(ui|ui-build|islands|lexicons|admin-envelope|host-pin)/";
+// The lexicon build scripts and the Node built-ins they may import, each named exactly (P1.31d). Adding one loosens a
+// guard: a check-path PR with an architecture ruling and Alex's typed word.
+const LEXICON_SCRIPTS = "^shared/lexicons/scripts/";
+const LEXICON_SCRIPT_BUILTINS = ["fs", "path", "os", "url", "child_process"];
 // A module under infrastructure/ or shared/ and the one file others may import from it (rule DC-2).
 const WORKSPACE_WITH_INDEX = "(?:infrastructure|shared)/[^/]+/";
 const INDEX_FILE = `^${WORKSPACE_WITH_INDEX}index\\.ts$`;
-// A browser island (P1.23): one component per *.island.tsx under apps/web/src/islands/ or shared/ui/islands/.
+// A browser island (P1.23): one component per *.island.tsx under apps/web/src/islands/ or shared/ui/islands/. It may
+// import the kit and the island runtime, shared/islands (P1.25o, for P1.25i's move).
 const ISLAND = "\\.island\\.tsx$";
 // The npm modules an island may import, each named exactly (architecture ruling 2026-10-06, P1.23q): today only
 // React's JSX runtime (ADR 0015). Adding an entry loosens a guard: a check-path PR naming the module and why the
@@ -118,7 +123,21 @@ const MATRIX = [
     to: [{ path: "^infrastructure/net-guard/" }, { path: npmPackage("undici") }, CORE],
   },
   { name: "shared", from: { path: "^shared/", pathNot: LEAF_SHARED }, to: [{ path: "^shared/" }, CORE, NPM] },
+  // The lexicon build scripts (P1.31d; architecture record 2026-10-12-p131-depcruise-and-lexicon-choices item 2): they
+  // generate code that ships in the trusted lexicons package, so they stay inside it. They read and write files and run
+  // the pinned lex and biome binaries by execFile (P1.31 as-built item 11), so they reach exactly
+  // LEXICON_SCRIPT_BUILTINS and no other built-in; nothing outside them imports one (lexicon-scripts-not-imported).
+  {
+    name: "shared-lexicons-scripts",
+    from: { path: LEXICON_SCRIPTS },
+    to: [{ path: "^shared/lexicons/" }, { ...CORE, path: `^(${LEXICON_SCRIPT_BUILTINS.join("|")})$` }, NPM],
+  },
   { name: "shared-ui-lexicons", from: { path: "^(shared/(ui|lexicons)/)" }, to: [{ path: "^$1" }, NPM] },
+  // The island runtime (define, props, readProps, slot), its own workspace from P1.25i (P1.25o; book edit
+  // 2026-10-07-p125l-islands-lazy-chunks): it ships to the browser, so no Node built-in, and it never imports the
+  // kit, which reaches it only through its index.
+  { name: "shared-ui-islands", from: { path: "^shared/ui/" }, to: [{ path: "^shared/islands/index\\.ts$" }] },
+  { name: "shared-islands", from: { path: "^shared/islands/" }, to: [{ path: "^shared/islands/" }, NPM] },
   // The UI build runners (P1.25h moved them; P1.25w, architecture ruling 2026-10-07-p125h-follow-ups N2): pure by
   // design, IO injected by scripts/ui, so no Node built-in, and shared/ui only as types through its index.
   {
@@ -294,9 +313,18 @@ module.exports = {
     ),
     forbidden(
       "island-import-boundary",
-      "An island ships to the browser: a *.island.tsx imports only shared/ui, the npm modules in ISLAND_NPM_MODULES and type-only modules, never server code (P1.23q; plan §5.1).",
+      "An island ships to the browser: a *.island.tsx imports only shared/ui, shared/islands, the npm modules in ISLAND_NPM_MODULES and type-only modules, never server code (P1.23q, P1.25o; plan §5.1).",
       { path: ISLAND },
-      { pathNot: ["^shared/ui/", ...ISLAND_NPM_MODULES.map(npmModule)], dependencyTypesNot: ["type-only"] },
+      {
+        pathNot: ["^shared/ui/", "^shared/islands/", ...ISLAND_NPM_MODULES.map(npmModule)],
+        dependencyTypesNot: ["type-only"],
+      },
+    ),
+    forbidden(
+      "lexicon-scripts-not-imported",
+      "The lexicon build scripts are tooling inside the lexicons package; no file outside shared/lexicons/scripts/ imports one (P1.31d).",
+      { pathNot: LEXICON_SCRIPTS },
+      { path: LEXICON_SCRIPTS },
     ),
     forbidden(
       "edge-not-preflight",
@@ -359,6 +387,10 @@ module.exports = {
   options: {
     parser: "swc",
     doNotFollow: { path: "node_modules" },
+    // dependency-cruiser 18.5.0 sets exportsFields to [] by default (src/main/resolve-options/normalize.mjs:35), so a
+    // package that publishes only an `exports` map (no `main`) never resolved and escaped every path rule. Read the
+    // map with Node's conditions (types/options.d.mts:310, enhanced-resolve 5.26.0) (P1.31d).
+    enhancedResolveOptions: { exportsFields: ["exports"], conditionNames: ["import", "require", "node", "default"] },
     // Own build outputs and fixture folders only (P1.33f). A `(^|/)` prefix also matched
     // node_modules/yaml/dist, and dependency-cruiser 18.5.0 then drops that module
     // (types/filter-types.d.mts, IExcludeType.path), so no row ever saw the import.
@@ -383,4 +415,5 @@ Object.defineProperties(module.exports, {
   RENDER_BUILD_IMPORT: { value: RENDER_BUILD_IMPORT },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
+  LEXICON_SCRIPT_BUILTINS: { value: LEXICON_SCRIPT_BUILTINS },
 });

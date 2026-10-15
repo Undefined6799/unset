@@ -52,8 +52,8 @@ export type Inputs = WalkInputs & {
   stat: (path: string) => Stats | null;
   /** The path with every link resolved, null when it does not exist, throwing on any other error (C9 fails closed). */
   realpath: (path: string) => string | null;
-  /** The names in a folder, throwing on any error: the dev CA folder's walk refuses on it (C26, P1.35a). */
-  readdir: (path: string) => string[];
+  /** A folder's names as bytes, throwing on any error: the dev CA folder's walk refuses on it (C26, P1.35a, P1.35m). */
+  readdir: (path: string) => Buffer[];
 };
 
 /** `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED. */
