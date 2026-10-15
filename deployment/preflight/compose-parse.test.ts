@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
 import { docker } from "../../tests/support/docker.ts";
 import { fail, pass } from "./checks/types.ts";
@@ -641,18 +641,21 @@ const COMPOSE_TEST_MS = 60_000;
 /**
  * Whether the agreement tests run (P1.35f). Under CI they always do and nothing is probed: CI must have Compose (the
  * architecture record's anti-drift test runs there), and a missing or broken one fails each test at its first call.
- * Off CI, `probe` decides. A probe at module load under CI once failed the whole file before any test ran, when the
- * runner stalled the call past its kill (run 38646729832); the call contacts nothing (strace: three execs, no connect),
- * so the stall was the runner's (unset-plan/book-edits/2026-10-15-p135f-findings.md).
+ * Off CI, `probe` decides. A probe at module load under CI once failed the whole file before any test ran, killed past
+ * its 10 s budget (run 38646729832). No cause was found in the call itself (strace: three execs, no connect); a stall of
+ * the runner is the residual, unconfirmed explanation (unset-plan/book-edits/2026-10-15-p135f-findings.md). CI is read
+ * as scripts/test/run.ts reads it: exactly "true".
  */
 function agreementRuns(env: Readonly<Record<string, string | undefined>>, probe: () => boolean): boolean {
-  return Boolean(env.CI) || probe();
+  return env.CI === "true" || probe();
 }
 
-const composeRuns = agreementRuns(
-  process.env,
-  () => docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0,
-);
+/** How many times this file probed Compose at load: none under CI, one off CI (pinned below, verify-881 S1). */
+let loadProbes = 0;
+const composeRuns = agreementRuns(process.env, () => {
+  loadProbes += 1;
+  return docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
+});
 
 /**
  * `docker compose version --short`, recorded by each agreement test (ruling F4: CI's Compose is accepted, not pinned).
@@ -882,6 +885,11 @@ describe("compose agreement gate", () => {
     expect(probed).toBe(2);
   });
 
+  // Unconditional, so it runs in both modes: this run's own load made no probe under CI and exactly one off it.
+  test("this_run_probed_at_load_only_off_ci", () => {
+    expect(loadProbes).toBe(process.env.CI === "true" ? 0 : 1);
+  });
+
   test("ci_fails_on_a_broken_compose_at_first_call", () => {
     const bin = mkdtempSync(join(tmpdir(), "compose-gate-"));
     try {
@@ -895,8 +903,14 @@ describe("compose agreement gate", () => {
 });
 
 describe("compose agreement", () => {
-  const dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  // Made when a test runs, not at collection: a suite skipped off CI then leaves no folder behind (verify-881 N6).
+  let dir = "";
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
+  });
+  afterAll(() => {
+    if (dir !== "") rmSync(dir, { recursive: true, force: true });
+  });
 
   // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
   // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
