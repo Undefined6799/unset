@@ -1,6 +1,15 @@
 // P1.27w: the dev stack wrapper (deployment/preflight/stack.ts). Its process runner is the one double; nothing here starts Docker.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, type Stats, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  type Stats,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -421,6 +430,13 @@ describe("stack wrapper (P1.27w)", () => {
     expect(plan(["--", ...DOWN], {})).toEqual(plan(DOWN, {}));
     expect(() => plan(["--", "--", ...UP], {})).toThrow(UsageError);
     expect(() => plan([...UP, "--"], {})).toThrow(UsageError);
+    // The npm scripts are those callers (verify-903-2f7413d S-2).
+    const { scripts } = JSON.parse(readFileSync(resolve(import.meta.dirname, "../../package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    const calls = Object.values(scripts).filter((script) => script.includes("deployment/preflight/stack.ts"));
+    expect(calls).toHaveLength(4);
+    for (const call of calls) expect(call, call).toMatch(/^node deployment\/preflight\/stack\.ts -- (up|down) /);
   });
 
   test("the_wrapper_takes_no_flag_node_also_reads", () => {
