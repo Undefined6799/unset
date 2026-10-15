@@ -8281,7 +8281,7 @@ the red test proves a failing compose call fails, check is green, and no timeout
 ### P1.35g — Refuse an IP address as the local PDS host
 Tags: [SEC]            Depends on: —
 
-Slice 1, issue (pending), product (`deployment/preflight/`), kind/fix, lane the third thread after P1.35f (lane order
+Slice 1, issue #880, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.35f (lane order
 only); book edit 2026-10-15-verify-876-followups, from verify-876-aef02b9 S1 (the PDS_HOST half of verify-869 S1; it
 predates #876) and N1-N5, with architecture's ruling on S1 (~00:27Z). A tightening: nothing from Alex. Under local,
 `PDS_HOST` can be an IPv4 address: a leaf carrying `DNS:192.0.2.2` with an edge `PDS_HOST` of `192.0.2.2` passes the
