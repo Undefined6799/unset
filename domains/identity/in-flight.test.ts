@@ -1,6 +1,7 @@
 // The in-flight map's sharing and write-ordering rules (P1.33r; architecture ruling
 // unset-plan/book-edits/2026-10-14-outside-review-lows.md, item 2, rules a, e and f; verify-864-3048c2f B1, S1, S2).
 // The resolver's tests cover the same rules through resolveDid. awaitFlight's rejection path: P1.35h.
+import { getEventListeners } from "node:events";
 import { describe, expect, test } from "vitest";
 import { awaitFlight, createInFlight, type MayWrite } from "./in-flight.ts";
 import { IdentityError } from "./resolve-did.ts";
@@ -146,21 +147,27 @@ describe("awaitFlight", () => {
       return "aborted";
     });
     await tick();
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
     controller.abort();
     expect([outcome, abortedCalls]).toEqual(["done", 0]);
   });
 
-  test("a_rejecting_flight_rejects_a_caller_with_a_live_signal", async () => {
-    const controller = new AbortController();
-    const flight = Promise.reject(new IdentityError("not_found"));
-    const waiting = awaitFlight(flight, controller.signal, () => "aborted").then(
-      () => "resolved",
-      (error: unknown) => error,
+  test("a_rejecting_flight_rejects_every_caller_with_a_live_signal", async () => {
+    const { promise: flight, reject: fail } = Promise.withResolvers<string>();
+    // Two callers share the flight, each with its own signal that never fires.
+    const waiting = [new AbortController(), new AbortController()].map((controller) =>
+      awaitFlight(flight, controller.signal, () => "aborted").then(
+        () => "resolved",
+        (error: unknown) => error,
+      ),
     );
-    // The signal never fires: the rejection alone must settle the caller, before the next timer.
-    const outcome = await Promise.race([waiting, tick().then(() => "still waiting")]);
-    expect(outcome).toBeInstanceOf(IdentityError);
-    expect((outcome as IdentityError).kind).toBe("not_found");
+    fail(new IdentityError("not_found"));
+    // The rejection alone must settle every caller, before the next timer.
+    const outcomes = await Promise.all(waiting.map((w) => Promise.race([w, tick().then(() => "still waiting")])));
+    for (const outcome of outcomes) {
+      expect(outcome).toBeInstanceOf(IdentityError);
+      expect((outcome as IdentityError).kind).toBe("not_found");
+    }
   });
 
   test("a_rejected_flight_stops_listening_for_the_abort", async () => {
@@ -174,6 +181,7 @@ describe("awaitFlight", () => {
       }),
     ).rejects.toMatchObject({ kind: "invalid_doc" });
     await tick();
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
     controller.abort();
     expect(abortedCalls).toBe(0);
   });
