@@ -261,6 +261,16 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(postgres.ports).toEqual([]);
   });
 
+  test("web_only_on_internal_networks", () => {
+    // web has no way out: every network it joins is internal (architecture 02:05Z option C; verify-895 N2).
+    const compose = dev();
+    const internal = new Set(compose.networks.filter((n) => n.internal).map((n) => n.name));
+    const web = service(compose, "web");
+    expect(web.networks.length).toBeGreaterThan(0);
+    for (const network of web.networks) expect(internal.has(network), network).toBe(true);
+    expect(web.ports).toEqual([]);
+  });
+
   test("compose_dev_only_edge_publishes", () => {
     // Only the edge publishes, 80 and 443 on loopback (P1.29a); the homelab's own address is P1.34's.
     for (const s of dev().services) {
