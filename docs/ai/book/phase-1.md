@@ -8540,7 +8540,7 @@ Done when each red test fails on main for its own reason and passes with the cha
 ### P1.35m — Pin the dev CA folder walk's edges
 Tags: [SEC]            Depends on: P1.35a
 
-Slice 1, issue (pending), product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
+Slice 1, issue #893, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
 C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
 verify-887-a7a20cb on P1.35a (#887) and architecture's 02:08Z ruling (last section of
 2026-10-12-p134c-p134d-local-dev-root-ca). A tightening: nothing from Alex.
