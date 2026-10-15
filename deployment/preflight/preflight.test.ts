@@ -91,6 +91,7 @@ const LOCK = {
   web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
 };
 const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
+// The dev PDS's own handle domain (0x40.space): the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".0x40.space" };
 const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"].concat([
   "C13",
@@ -1530,6 +1531,8 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   }
 
   test("c15_subdomain_entry_refused", async () => {
+    // About our own suffix: C15 refuses handle domains under the profile domain (0x40.me), so the test needs it. The
+    // label is a one-letter placeholder (P1.35i), reserved when handle registration lands (P2.09).
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,x.0x40.me" } });
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".x.0x40.me" } });
   });
@@ -1743,6 +1746,8 @@ describe("preflight C17 (P1.30t)", () => {
     const variants: [string, string][] = [
       ["pds-token-reader-2", unlogged(reader.replace("  pds-token-reader:", "  pds-token-reader-2:"))],
       ["pds-token", unlogged(reader.replace("  pds-token-reader:", "  pds-token:"))],
+      // verify-876 N3: another name ending in -reader is not the reader.
+      ["pds-email-reader", unlogged(reader.replace("  pds-token-reader:", "  pds-email-reader:"))],
       // Case counts too: the parser takes any service name as written.
       ["PDS-Token-Reader", unlogged(reader.replace("  pds-token-reader:", "  PDS-Token-Reader:"))],
       ["pds-token-reader", reader.replace("    profiles: [tools]\n", "")],
@@ -2960,6 +2965,38 @@ secrets:
     for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
   });
 
+  test("local_c18_pds_host_is_the_pds_hostname", async () => {
+    // P1.35g (verify-876 S1, architecture ~00:27Z): under local nothing else ties the edge's PDS_HOST to the PDS's own
+    // name (C21 is skipped), so PDS_HOST is a hostname, never an IPv4 address, and equals PDS_HOSTNAME once both are
+    // lower case with no trailing dot and no port. Reasons name the variables and never echo a value.
+    const c18 = async (edit: (text: string) => string, leaf?: string) =>
+      (await local(edit, leaf === undefined ? {} : { leaf })).lines.find((line) => / C18 /.test(line));
+    const pdsHost = "      PDS_HOST: pds.localhost\n";
+    const hostname = "      PDS_HOSTNAME: pds.localhost\n";
+    const named = (value: string) => (text: string) => text.replace(hostname, `      PDS_HOSTNAME: ${value}\n`);
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    for (const value of ["PDS.localhost", "pds.localhost.", "pds.localhost:2583", '"PDS.Localhost.:443"']) {
+      expect(await c18(named(value)), value).toBe("PASS C18 ok");
+    }
+    const cases: [string, (text: string) => string, string?][] = [
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named("other.localhost")],
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named("x.pds.localhost")],
+      [
+        "FAIL C18 input missing: the pds service's PDS_HOSTNAME",
+        (text) => text.replace(`    environment:\n${hostname}`, ""),
+      ],
+      ["FAIL C18 input missing: the edge's PDS_HOST", (text) => text.replace(pdsHost, "")],
+      ["FAIL C18 PDS_HOST is not a hostname", (text) => text.replace(pdsHost, "      PDS_HOST: pds_localhost\n")],
+      // The IPv4 red fixture: a leaf naming the address and an edge serving it, with the PDS named the same.
+      [
+        "FAIL C18 PDS_HOST is not a hostname",
+        (text) => named("192.0.2.2")(text.replace(pdsHost, "      PDS_HOST: 192.0.2.2\n")),
+        leafPem("DNS:app.localhost,DNS:192.0.2.2"),
+      ],
+    ];
+    for (const [line, edit, leaf] of cases) expect(await c18(edit, leaf), line).toBe(line);
+  });
+
   test("local_c18_judges_the_leaf_copy", async () => {
     // P1.33x (record 2026-10-12-p134c-p134d-local-dev-root-ca, Amendment 2 and the 2026-10-14 ruling): the public copy
     // of the leaf names exactly APP_HOST and PDS_HOST, no IP, is no CA, comes from the dev root and has 14 days left.
@@ -3010,10 +3047,17 @@ secrets:
       ["FAIL C18 the local leaf expires within 14 days", { leaf: datedPem("leaf", -1, 13.5) }],
       ["FAIL C18 the dev root has expired", { devRoot: datedPem("root", -60, -1) }],
       ["FAIL C18 the dev root is not yet valid", { devRoot: datedPem("root", 1, 60) }],
+      // verify-876 N4: text before the certificate, and the certificate followed by its key.
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: `note\n${LEAF}` }],
+      [
+        "FAIL C18 the local leaf copy is not one certificate",
+        { leaf: `${LEAF}${readFileSync(join(pki, "leaf0.key"), "utf8")}` },
+      ],
     ];
     for (const [line, options] of cases) expect(await c18(options), line).toBe(line);
-    // Fifteen days left passes.
+    // Fifteen days left passes, and so does an hour past fourteen: the margin is exactly 14 days (verify-876 N2).
     expect(await c18({ leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { days: 15 }) })).toBe("PASS C18 ok");
+    expect(await c18({ leaf: datedPem("leaf", -1, 14 + 1 / 24) })).toBe("PASS C18 ok");
   });
 
   test("local_c18_dev_root_is_the_cas_constrained_root", async () => {
@@ -3321,6 +3365,10 @@ secrets:
       ],
     ];
     for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+    // verify-876 N5: a site whose source is absent names that input, rather than ending in a check error.
+    expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/absent.caddy:"))).toMatch(
+      /^FAIL C18 input missing: \/.+\/edge\/sites\/absent\.caddy$/,
+    );
   });
 
   // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local
