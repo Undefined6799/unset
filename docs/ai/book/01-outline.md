@@ -2020,7 +2020,7 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.35c (#877):** a typed line, "yes P1.35c .github/workflows/images.yml scripts/ci scripts/lint export and
   entry checks".
 - **P1.35e (#878):** a typed line, "yes P1.35e .github/workflows/images.yml scripts/ci scan the built image".
-- **P1.35j (pending):** a typed line, "yes P1.35j shared/http test handles reserved domains".
+- **P1.35j (#885):** a typed line, "yes P1.35j shared/http test handles reserved domains".
 - **P0.09y (#826):** a typed line, "yes P0.09y .github/CODEOWNERS scripts/guards scripts/workspace", for the
   `scripts/guards/`, CODEOWNERS and `scripts/workspace/` check paths; P4.07 waits on it.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.

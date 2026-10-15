@@ -8113,7 +8113,7 @@ Done when a mutant that swallows the rejection, or resolves it, turns a test red
 ### P1.35i — Move test handles to reserved domains
 Tags: [SEC]            Depends on: —
 
-Slice 1, issue (pending), product (`domains/identity/syntax.test.ts`, `deployment/preflight/preflight.test.ts`,
+Slice 1, issue #884, product (`domains/identity/syntax.test.ts`, `deployment/preflight/preflight.test.ts`,
 `shared/log/logger.test.ts` and `shared/log/logger.hardening.test.ts`), kind/fix, lane Phase 1 after P1.35h (lane order
 only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
 step-book mapping. Nothing from Alex. Test handles on registrable domains (`*.bsky.social`, `*.0x40.me`) can belong to
@@ -8134,7 +8134,7 @@ Done when no product test file holds a handle on a registrable domain other than
 ### P1.35j — Move trusted test handles to reserved domains
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
 
-Slice 1, issue (pending), trusted base (the `shared/http` server and config tests), kind/fix, lane Phase 1 after P1.35i
+Slice 1, issue #885, trusted base (the `shared/http` server and config tests), kind/fix, lane Phase 1 after P1.35i
 (lane order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and
 its step-book mapping. Like any trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs
 Alex's typed line: "yes P1.35j shared/http test handles reserved domains".
