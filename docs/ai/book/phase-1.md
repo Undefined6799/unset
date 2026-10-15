@@ -8158,9 +8158,12 @@ shared/http and so still covers the widened file list.
 
 **What:** the same rules as P1.35i for every test file under `shared/http/` (server, config, returnPath, csrf, csp).
 The PR body lists every one-letter label it keeps on our suffixes.
-- Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example`; `config.test.ts:70` `media.example.co.uk` takes the
-  did-columns replacement, `sub.example.com` (the multi-label public-suffix shape is an accepted loss if the test needed
-  it).
+- Rule (architecture 03:01Z): `shared/http` test hostnames use example.com, example.net or example.org, with labels
+  under them; a bare `.example` appears only in a test that means "unknown TLD" (book edit
+  2026-10-15-verify-886-fixture-scope, "Step-book mapping of the returnPath ruling").
+- Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example.com` (a real-shaped TLD keeps the off-site-host case
+  faithful); `config.test.ts:70` `media.example.co.uk` takes the did-columns replacement, `sub.example.com` (the
+  multi-label public-suffix shape is an accepted loss if the test needed it).
 - A1: `alice.0x40.me` (server.test.ts, config.test.ts) becomes `a.0x40.me` or `x.0x40.me`, keeping the port and case
   variants (`A.0x40.me:443`, `a.0x40.me:8443`). `a.b.0x40.me` stays (one-letter labels).
 - A3: `unsetcdn.net` becomes `media.example.net` in `csp/policies.test.ts`, its snapshot and `config.test.ts`
@@ -8748,6 +8751,17 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     (`unset-dev-env/local-leaf.pem`). It logs only the fingerprint comparison result, never a certificate body (SE-7;
     book edit 2026-10-14-verify-857-fixes, S2(b), architecture's ~22:20Z point 2). Red test: a served leaf that
     differs from the copy brings the stack down. The drift test is unaffected: the copy is not a compose mount.
+    The check (`served-leaf.ts`) has one outbound connect, which carries `// guard-allow: egress <reason>` (the guard's
+    booked escape hatch, phase-0.md:929, :983), and the code enforces every fact the reason states: the target is the
+    module constants `127.0.0.1` and `443` (no parameter, env read or DNS lookup); under any env other than local it
+    refuses before connecting; each servername is a DNS SAN read with `X509Certificate` from the leaf file C18 judged
+    and must sit under the constrained `.localhost` names, else it refuses before connecting; it uses `ca` = root.pem
+    only with `rejectUnauthorized: true`, closes right after the handshake, sends no application bytes, and a handshake
+    timeout fails closed. Tests inject the connect function and assert the exact target, a refusal under dev and prod,
+    and a refusal for a SAN outside `.localhost`; the red then green against a real TLS server stays. No net-guard
+    loopback mode, no file exemption, no `openssl s_client` (architecture 02:58Z; book edit 2026-10-14-p134d-split,
+    "Step-book mapping of the 02:58Z served-leaf ruling"). The annotation is a line in product code, not a check-path
+    change.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
