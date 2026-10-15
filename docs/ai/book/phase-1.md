@@ -8161,9 +8161,11 @@ shared/http and so still covers the widened file list.
 
 **What:** the same rules as P1.35i for every test file under `shared/http/` (server, config, returnPath, csrf, csp).
 The PR body lists every one-letter label it keeps on our suffixes.
-- Rule (architecture 03:01Z): `shared/http` test hostnames use example.com, example.net or example.org, with labels
-  under them; a bare `.example` appears only in a test that means "unknown TLD" (book edit
-  2026-10-15-verify-886-fixture-scope, "Step-book mapping of the returnPath ruling").
+- Rule (architecture 03:01Z): the `shared/http` test hostnames this step writes or replaces use example.com, example.net
+  or example.org, with labels under them; a bare `.example` appears only in a test that means "unknown TLD" (book edit
+  2026-10-15-verify-886-fixture-scope, "Step-book mapping of the returnPath ruling"). It is not a sweep: other bare
+  `.example` and `.test` hosts stay, and returnPath.test.ts:17, :21 and :22 move to `evil.example.com` in the next
+  trusted `shared/http` step with verify-899 N1, lettered when it opens (architecture 03:11Z; same record, "Q1 ruled").
 - Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example.com` (a real-shaped TLD keeps the off-site-host case
   faithful); `config.test.ts:70` `media.example.co.uk` takes the did-columns replacement, `sub.example.com` (the
   multi-label public-suffix shape is an accepted loss if the test needed it).
