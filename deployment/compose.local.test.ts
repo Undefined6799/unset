@@ -43,8 +43,7 @@ const ADDED: Record<string, { mounts?: Mount[]; secrets?: string[]; networks?: s
 };
 /**
  * The environment values the local file may set where dev differs, by service and key (item 11): the PLC URL on pds,
- * the trusted root on pds and web, and `UNSET_ENV` once P1.34z writes `local`. The edge's two keys serve item 12's app
- * site, which only the local edge has.
+ * the trusted root on pds and web, and `UNSET_ENV` once P1.34z writes `local`. The edge's app-site keys are APP_SITE's.
  */
 const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
   pds: {
@@ -52,15 +51,32 @@ const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
     NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" },
   },
   web: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
-  edge: { APP_HOST: { ref: "APP_HOST" }, APP_UPSTREAM: { literal: "web:8080" } },
 };
 const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
+/**
+ * Item 12's app site on the local edge, and the two keys its app.caddy reads with no default. They come together: with
+ * the mount the edge needs both keys exactly, without it neither, and no other service or file may set them (step book
+ * 04:03Z, book edit 2026-10-14-p134d-split, last section).
+ */
+const APP_SITE: { mount: Mount; environment: [string, EnvValue][] } = {
+  mount: {
+    type: "bind",
+    source: "./edge/local/app.caddy",
+    target: "/etc/caddy/sites/enabled/app.caddy",
+    readOnly: true,
+  },
+  environment: [
+    ["APP_HOST", { ref: "APP_HOST" }],
+    ["APP_UPSTREAM", { literal: "web:8080" }],
+  ],
+};
+const APP_SITE_KEYS = new Set(APP_SITE.environment.map(([key]) => key));
 /** The edge's sites, each its own read-only file in local (item 12), where dev binds the sites folder. */
 const EDGE_SITES: { dev: Mount[]; local: Mount[] } = {
   dev: [{ type: "bind", source: "./edge/sites", target: "/etc/caddy/sites/enabled", readOnly: true }],
   local: [
     { type: "bind", source: "./edge/sites/pds.caddy", target: "/etc/caddy/sites/enabled/pds.caddy", readOnly: true },
-    { type: "bind", source: "./edge/local/app.caddy", target: "/etc/caddy/sites/enabled/app.caddy", readOnly: true },
+    APP_SITE.mount,
     { type: "bind", source: "./edge/local/tls.caddy", target: "/etc/caddy/snippets/tls.caddy", readOnly: true },
   ],
 };
@@ -78,6 +94,8 @@ function environmentDrift(dev: Service, local: Service): string[] {
     .filter((s) => new Map(s.environment).size !== s.environment.length)
     .map(() => `${dev.name}: environment repeats a key`);
   for (const key of new Set([...devEnv.keys(), ...localEnv.keys()])) {
+    if (devEnv.has(key) && APP_SITE_KEYS.has(key)) problems.push(`${dev.name}: environment ${key} is in the dev file`);
+    if (dev.name === "edge" && APP_SITE_KEYS.has(key)) continue;
     const value = localEnv.get(key);
     const permitted =
       same(devEnv.get(key), value) ||
@@ -85,7 +103,18 @@ function environmentDrift(dev: Service, local: Service): string[] {
       (key === "UNSET_ENV" && devEnv.has(key) && same(UNSET_ENV_LOCAL, value));
     if (!permitted) problems.push(`${dev.name}: environment ${key} differs`);
   }
-  return problems;
+  return dev.name === "edge" ? [...problems, ...appSiteDrift(local)] : problems;
+}
+
+/** Whether the local edge has the app-site mount and its two keys together, or neither (APP_SITE). */
+function appSiteDrift(edge: Service): string[] {
+  const site = edge.mounts.some((m) => same(m, APP_SITE.mount));
+  const keys = edge.environment.filter(([key]) => APP_SITE_KEYS.has(key));
+  const expected = site ? APP_SITE.environment : [];
+  const byKey = (list: [string, EnvValue][]) => [...list].sort(([a], [b]) => a.localeCompare(b));
+  return same(byKey(keys), byKey(expected))
+    ? []
+    : ["edge: the app site and APP_HOST and APP_UPSTREAM do not come together"];
 }
 
 /** Whether the env files correspond one to one, in order, differing at most in their folder (item 11). */
@@ -327,6 +356,52 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
     // Only the folder may differ.
     const moved = editService(local, "pds", (s) => ({ ...s, envFiles: ["../../elsewhere/pds.env"] }));
     expect(drift(dev, moved)).toEqual([]);
+  });
+
+  test("the_app_site_and_its_two_keys_come_together", () => {
+    // Step book 04:03Z: the edge's APP_HOST and APP_UPSTREAM exist only with item 12's app-site mount, and only so.
+    const together = "edge: the app site and APP_HOST and APP_UPSTREAM do not come together";
+    const setEnv = (s: Service, key: string, value: EnvValue): Service => ({
+      ...s,
+      environment: [...s.environment.filter(([k]) => k !== key), [key, value]],
+    });
+    const dropEnv = (s: Service, key: string): Service => ({
+      ...s,
+      environment: s.environment.filter(([k]) => k !== key),
+    });
+    const noSite = (s: Service): Service => ({ ...s, mounts: s.mounts.filter((m) => !same(m, APP_SITE.mount)) });
+    const cases: [Compose, Compose, string][] = [
+      [dev, editService(local, "edge", (s) => setEnv(s, "APP_UPSTREAM", { literal: "pds:3000" })), together],
+      [dev, editService(local, "edge", (s) => setEnv(s, "APP_UPSTREAM", { literal: "web:8081" })), together],
+      [dev, editService(local, "edge", (s) => setEnv(s, "APP_HOST", { literal: "app.unset.localhost" })), together],
+      [dev, editService(local, "edge", (s) => dropEnv(s, "APP_UPSTREAM")), together],
+      [dev, editService(local, "edge", (s) => dropEnv(dropEnv(s, "APP_HOST"), "APP_UPSTREAM")), together],
+      [dev, editService(local, "edge", noSite), together],
+      [
+        dev,
+        editService(local, "web", (s) => setEnv(s, "APP_HOST", { ref: "APP_HOST" })),
+        "web: environment APP_HOST differs",
+      ],
+      [
+        dev,
+        editService(local, "pds", (s) => setEnv(s, "APP_UPSTREAM", { literal: "web:8080" })),
+        "pds: environment APP_UPSTREAM differs",
+      ],
+      [
+        editService(dev, "edge", (s) => setEnv(s, "APP_HOST", { ref: "APP_HOST" })),
+        local,
+        "edge: environment APP_HOST is in the dev file",
+      ],
+      [
+        editService(dev, "web", (s) => setEnv(s, "APP_UPSTREAM", { literal: "web:8080" })),
+        editService(local, "web", (s) => setEnv(s, "APP_UPSTREAM", { literal: "web:8080" })),
+        "web: environment APP_UPSTREAM is in the dev file",
+      ],
+    ];
+    for (const [d, l, problem] of cases) expect(drift(d, l), problem).toContain(problem);
+    // Neither the mount nor the keys is consistent too; the site mount's absence is then the preflight's to judge.
+    const bare = editService(local, "edge", (s) => noSite(dropEnv(dropEnv(s, "APP_HOST"), "APP_UPSTREAM")));
+    expect(drift(dev, bare)).toEqual([]);
   });
 
   test("a_command_with_use_system_ca_is_refused_before_any_comparison", () => {
