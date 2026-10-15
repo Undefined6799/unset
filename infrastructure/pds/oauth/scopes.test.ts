@@ -54,6 +54,14 @@ describe("scopes", () => {
     });
   });
 
+  test("grantCovers_image_wildcard", () => {
+    // Review on #921: a server that narrows blob:image/* to one type leaves the other accepted types unusable.
+    const narrowed = tokens(EXPANDED)
+      .map((token) => (token === "blob:image/*" ? "blob:image/png" : token))
+      .join(" ");
+    expect(grantCovers(narrowed)).toEqual({ ok: false, missing: ["blob:image/*"] });
+  });
+
   test("grantCovers_include_of_another_set_grants_nothing", () => {
     const foreign = tokens(scopeString())
       .map((token) => (token.startsWith("include:") ? "include:com.example.other" : token))

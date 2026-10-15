@@ -30,7 +30,9 @@ checked: 2026-10-15
 - `singleUse/store.ts`: the single-use token store (P1.16, migration 0006). Consuming a token is one UPDATE whose row
   lock lets exactly one caller through; only a SHA-256 of the token is stored, and the retention role sweeps expired rows.
 - `oauthStores.ts`: the OAuth client's state and token-set stores (P2.04, migration 0013), each value sealed with
-  its own row's context; a value that does not open is deleted and reads as missing (`oauth.unseal_failed`).
+  its own row's context; a value that does not open is deleted and reads as missing (`oauth.unseal_failed`). The
+  delete names the ciphertext it read, so a value another replica stored meanwhile stays. Expired states leave
+  through the state store's `sweep()`, run hourly beside the session sweep, never on a login write.
 - `lock.ts`: the per-key advisory lock (P1.17) on its own small pool (`LOCK_POOL_MAX`). A transaction-level lock in the
   two-int4 key space (`LockNamespace`, `hashtext(key)`), apart from the migration runner's bigint lock. The wait raises
   the role's 2 s `statement_timeout` for itself, or Postgres cancels it first with 57014. Never log the key: it is

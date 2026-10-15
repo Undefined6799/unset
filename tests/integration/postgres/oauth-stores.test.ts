@@ -15,8 +15,9 @@ import {
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
+const connection = { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false };
 const web: Pool = createPool({
-  connection: { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false },
+  connection,
   service: "oauth-stores-test",
   max: 4,
   connectTimeoutMs: 5000,
@@ -41,6 +42,7 @@ function setup() {
     state: createOAuthStateStore<{ verifier: string }>({ pool: web, sealer, log }),
     session: createOAuthSessionStore<Saved>({ pool: web, sealer, log }),
     logged,
+    log,
   };
 }
 
@@ -91,8 +93,47 @@ describe("oauth stores", () => {
     );
     expect(row?.left).toBeGreaterThan(590);
     expect(row?.left).toBeLessThanOrEqual(600);
-    // An abandoned login never reaches del; the next write purges it, so the table holds only the last 600 s of logins.
-    expect(await sql("SELECT key FROM app.oauth_state WHERE key = 'state-old'")).toEqual([]);
+    // An abandoned login never reaches del; the hourly sweep removes it and keeps the live one.
+    expect(await state.sweep()).toBe(1);
+    expect(await sql("SELECT key FROM app.oauth_state WHERE key IN ('state-old', 'state-new')")).toEqual([
+      { key: "state-new" },
+    ]);
+  });
+
+  test("stores_unseal_cleanup_spares_a_newer_value", async () => {
+    // Review on #921: between this replica's read of a value that does not open and its cleanup, another replica
+    // stores a fresh token set for the same DID. The cleanup deletes only the ciphertext it read.
+    const { session } = setup();
+    await session.set(DID_B, { authMethod: { method: "private_key_jwt", kid: "A" }, tokenSet: { a: "b" } });
+    await session.set(DID_A, { authMethod: { method: "private_key_jwt", kid: "A" }, tokenSet: { a: "a" } });
+    await sql(
+      "UPDATE app.oauth_session SET sealed = (SELECT sealed FROM app.oauth_session WHERE did = $2) WHERE did = $1",
+      [DID_A, DID_B],
+    );
+    const fresh: Saved = { authMethod: { method: "private_key_jwt", kid: "B" }, tokenSet: { a: "fresh" } };
+    const racing = createPool({ connection, service: "oauth-stores-race", max: 1, connectTimeoutMs: 5000 });
+    let raced = false;
+    const connect = racing.connect.bind(racing);
+    racing.connect = (async () => {
+      const client = await connect();
+      const query = client.query.bind(client) as (text: string, values?: unknown[]) => Promise<unknown>;
+      (client as { query: unknown }).query = async (text: string, values?: unknown[]) => {
+        if (!raced && text.startsWith("DELETE")) {
+          raced = true;
+          await session.set(DID_A, fresh);
+        }
+        return query(text, values);
+      };
+      return client;
+    }) as typeof racing.connect;
+    try {
+      const slow = createOAuthSessionStore<Saved>({ pool: racing, sealer, log: setup().log });
+      expect(await slow.get(DID_A)).toBeUndefined();
+      expect(raced).toBe(true);
+      expect((await session.get(DID_A))?.tokenSet).toEqual({ a: "fresh" });
+    } finally {
+      await racing.end();
+    }
   });
 
   test("stores_client_kid_recorded", async () => {

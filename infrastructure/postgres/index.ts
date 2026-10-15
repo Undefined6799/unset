@@ -21,7 +21,12 @@ export {
   migrate,
   migrateThenSyncPasswords,
 } from "./migrate.ts";
-export { createOAuthSessionStore, createOAuthStateStore, type SealedStore } from "./oauthStores.ts";
+export {
+  createOAuthSessionStore,
+  createOAuthStateStore,
+  type OAuthStateStore,
+  type SealedStore,
+} from "./oauthStores.ts";
 export {
   acquire,
   checkConnectionBudget,
