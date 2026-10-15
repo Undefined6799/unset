@@ -1018,6 +1018,10 @@ Where: one migration with role statements only, and one migration with the three
   CREATE TABLE and no CODEOWNERS change: P0.09x has already listed the three definers on the CODEOWNERS `# trusted
   functions:` line, and P0.09c lets no PR touch `/.github/` and `infrastructure/` together (book edit
   2026-10-13-codex-813-close-expired-hold, architecture amendment 2 of 23:42Z and its step-book mapping)
+Why the list still matters: under ADR 0022 the definers live in `migrations-trusted/`, trusted by path; the
+  trusted-functions list is the second lock, refusing the same names in the product `migrations/` stream, so a product
+  migration cannot shadow or redefine a trusted function even though migrator lacks the owner role (book edit
+  2026-10-14-verify-867-notes, "Architecture's answer").
 Size: ~140 lines SQL, ~300 test lines. If it passes about 400 source lines, only its tests move to a following trusted
   step: the definers and grants are never split (book edit 2026-10-13-codex-813-close-expired-hold, architecture
   amendment of 22:16Z and its step-book mapping). If the P0.09c probe still calls the definers and their grants mixed,

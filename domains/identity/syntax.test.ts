@@ -3,15 +3,20 @@ import { parseDid, parseHandle } from "./index.ts";
 
 describe("parseDid", () => {
   test("accepts_plc_and_web", () => {
-    for (const did of ["did:plc:ewvi7nxzyoun6zhxrhs64oiz", "did:web:example.com", "did:web:user.example.co.uk"]) {
+    for (const did of [
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeeee",
+      "did:plc:777777777777777777777777",
+      "did:web:example.com",
+      "did:web:user.sub.example.com",
+    ]) {
       expect(parseDid(did)).toBe(did);
     }
     for (const bad of [
       "",
-      "did:plc:ewvi7nxzyoun6zhxrhs64oi", // 23 characters
-      "did:plc:ewvi7nxzyoun6zhxrhs64oizz", // 25 characters
-      "did:plc:EWVI7NXZYOUN6ZHXRHS64OIZ", // DIDs are case-sensitive; upper case is invalid
-      "did:plc:ewvi7nxzyoun6zhxrhs64oi1", // 1 is not base32
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeee", // 23 characters
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeeeee", // 25 characters
+      "did:plc:EEEEEEEEEEEEEEEEEEEEEEEE", // DIDs are case-sensitive; upper case is invalid
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeee1", // 1 is not base32
       "did:web:localhost",
       "did:web:pds:3000",
       "did:web:pds%3A3000",
@@ -23,9 +28,9 @@ describe("parseDid", () => {
       "did:web:blah.arpa",
       "did:web:example.com.",
       "did:key:zabc", // an unsupported method
-      " did:plc:ewvi7nxzyoun6zhxrhs64oiz",
-      "did:plc:ewvi7nxzyoun6zhxrhs64oiz\n",
-      "did:plc:ewvi7nxzyoun6zhxrhs64oiz#atproto",
+      " did:plc:eeeeeeeeeeeeeeeeeeeeeeee",
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeeee\n",
+      "did:plc:eeeeeeeeeeeeeeeeeeeeeeee#atproto",
     ]) {
       expect(parseDid(bad), bad).toBeNull();
     }

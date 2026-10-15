@@ -173,7 +173,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V6.6.1 | Authentication mechanisms using the Public Switched Telephone Network (PSTN) to deliver … | n/a | n/a: no phone or SMS codes | — |
 | V6.6.2 | Out-of-band authentication requests, codes, or tokens are bound to the original … | partial | `test:tests/integration/postgres/single-use.test.ts#bind_mismatch_keeps_token`, `test:tests/integration/postgres/single-use.test.ts#purpose_mismatch` | P2.11 |
 | V6.6.3 | A code based out-of-band authentication mechanism is protected against brute force … | open |  | — |
-| V6.8.1 | Verify that, if the application supports multiple identity providers (IdPs), the user's … | partial | `test:domains/identity/verify-handle.test.ts#bidirectional_ok`, `test:domains/identity/verify-handle.test.ts#reverse_mismatch`, `step:P2.06` | P2.06 |
+| V6.8.1 | Verify that, if the application supports multiple identity providers (IdPs), the user's … | partial | `test:domains/identity/verify-handle.test.ts#bidirectional_ok`, `test:domains/identity/verify-handle.test.ts#reverse_mismatch`, `test:domains/identity/verify-handle.test.ts#fresh_never_joins_an_earlier_check`, `test:domains/identity/verify-handle.test.ts#invalidate_during_a_check_starts_a_new_one`, `step:P2.06` | P2.06 |
 | V6.8.2 | The presence and integrity of digital signatures on authentication assertions (for … | open |  | — |
 | V6.8.3 | SAML assertions are uniquely processed and used only once within the validity period to … | n/a | n/a: no SAML | — |
 | V6.8.4 | Verify that, if an application uses a separate Identity Provider (IdP) and expects … | open |  | — |
@@ -361,7 +361,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V16.4.3 | Logs are securely transmitted to a logically separate system for analysis, detection … | open |  | — |
 | V16.5.1 | A generic message is returned to the consumer when an unexpected or security-sensitive … | covered | `test:shared/http/server.test.ts#error_hides_exception`, `test:shared/http/server.test.ts#not_found_404_no_reflection`, `test:shared/errors/errors.test.ts#app_error_message_is_code`, `test:shared/http/server.test.ts#fixed_page_refuses_request_id_not_uuid_shaped` | — |
 | V16.5.2 | The application continues to operate securely when external resource access fails, for … | partial | `test:shared/http/server.test.ts#request_deadline_503`, `test:infrastructure/postgres/pool.test.ts#unreachable_server_is_db_busy`, `test:apps/web/src/islands/runtime/hydrate.test.tsx#bootstrap_isolates_failure_unit` | P2.07 |
-| V16.5.3 | The application fails gracefully and securely, including when an exception occurs … | covered | `test:shared/http/csrf/gate.test.ts#exception_denies`, `test:shared/http/limits/rateLimit.test.ts#exception_denies`, `test:domains/identity/verify-handle.test.ts#never_throws`, `test:domains/identity/resolve-did.test.ts#aborted_caller_detaches` | — |
+| V16.5.3 | The application fails gracefully and securely, including when an exception occurs … | covered | `test:shared/http/csrf/gate.test.ts#exception_denies`, `test:shared/http/limits/rateLimit.test.ts#exception_denies`, `test:domains/identity/verify-handle.test.ts#never_throws`, `test:domains/identity/resolve-did.test.ts#aborted_caller_detaches`, `test:domains/identity/verify-handle.test.ts#aborted_caller_detaches`, `test:domains/identity/verify-handle.test.ts#abort_during_did_resolution_leaves_the_shared_check` | — |
 
 ## V17 WebRTC
 

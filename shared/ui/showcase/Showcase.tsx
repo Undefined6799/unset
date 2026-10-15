@@ -141,7 +141,7 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
     <DescriptionList
       items={[
         { label: "Handle", value: "alex.example" },
-        { label: "DID", value: "did:plc:ewvi7nxzyoun6zhxrhs64oiz", mono: true },
+        { label: "DID", value: "did:plc:eeeeeeeeeeeeeeeeeeeeeeee", mono: true },
         { label: "Joined", value: null },
       ]}
     />

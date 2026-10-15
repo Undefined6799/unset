@@ -62,7 +62,7 @@ Depth: **build-ready**. 48 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09v | Contain Dockerfiles with the native realpath | [SEC] | — | `phase-0.md` |
 | P0.09w | Check the outline: cycles, unknown ids, headings | [ALEX] (typed line) | — | `phase-0.md` |
 | P0.09x | List the cleanup definers as trusted functions | [ALEX] (typed line) | — | `phase-0.md` |
-| P0.09z | Pin the outline check's comparisons (check, SE-6) | [ALEX] (typed line) | P0.09w, P2.26f | `phase-0.md` |
+| P0.09z | Pin the outline check's comparisons (check, SE-6) | [ALEX] (typed line) | P0.09w | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 291 steps: 267 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 301 steps: 277 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -390,6 +390,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33u | Make the image secret scan gate (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33s | `phase-1.md` |
 | P1.33v | Scan shipped mirrors with no allow rules (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33u | `phase-1.md` |
 | P1.33c | Accept the PDS scan findings until 2026-11-13 (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35b | Give host-pin a security review owner (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35c | Pin the depcruise rows and image export checks (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35e | Scan the image we built, not a rebuild (check, SE-6) | [SEC] [ALEX] (typed line) | P1.35c | `phase-1.md` |
 | P1.33e | Refuse dev while PDS exceptions remain | [SEC] | P1.33c | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
@@ -428,7 +431,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33w | Refuse binds that reach the dev CA folder (split from P1.34d) | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
 | P1.33x | Check the local leaf names and expiry (split from P1.34d) | [SEC] | P1.33w | `phase-1.md` |
 | P1.33y | Accept per-file site mounts on local (split from P1.34d) | [SEC] | P1.33x | `phase-1.md` |
-| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y | `phase-1.md` |
+| P1.35a | Close the dev CA folder rule's gaps (after P1.33y) | [SEC] | P1.33y | `phase-1.md` |
+| P1.35f | Root-cause the compose version probe stall | — | — | `phase-1.md` |
+| P1.35g | Refuse an IP address as the local PDS host | [SEC] | — | `phase-1.md` |
+| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a | `phase-1.md` |
 | P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.34d, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
@@ -460,6 +466,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
 | P1.33r | Share in-flight DID lookups (after P2.02, which it depends on) | [SEC] | P2.01, P2.02 | `phase-1.md` |
 | P1.32b | Share in-flight handle checks (trusted base, split from P1.33r) | [SEC] trusted | P1.33r | `phase-1.md` |
+| P1.32c | Replace the real-looking DID in fixtures | — | — | `phase-1.md` |
+| P1.35h | Test the in-flight rejection path | [SEC] | — | `phase-1.md` |
+| P1.35i | Move test handles to reserved domains | [SEC] | — | `phase-1.md` |
+| P1.35j | Move trusted test handles to reserved domains (trusted) | [SEC] trusted [ALEX] (typed line) | — | `phase-1.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
 | P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
@@ -660,6 +670,10 @@ flowchart TD
   P1_33u["P1.33u Image secret scan gates"]
   P1_33v["P1.33v Shipped mirrors scanned, no allow rules"]
   P1_33c["P1.33c PDS scan findings accepted"]
+  P1_35b["P1.35b Host-pin security review owner"]
+  P1_35c["P1.35c Depcruise rows and export checks pinned"]
+  P1_35e["P1.35e Built image scanned, not a rebuild"]
+  P1_35c --> P1_35e
   P1_33e["P1.33e Dev refused while exceptions remain"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
@@ -693,6 +707,10 @@ flowchart TD
   P1_33r["P1.33r In-flight DID lookups shared"]
   P1_32b["P1.32b In-flight handle checks shared"]
   P1_33r --> P1_32b
+  P1_32c["P1.32c Fixture DIDs replaced"]
+  P1_35h["P1.35h In-flight rejection path tested"]
+  P1_35i["P1.35i Test handles on reserved domains"]
+  P1_35j["P1.35j Trusted test handles on reserved domains"]
   P1_33w["P1.33w Binds to the dev CA folder refused"]
   P1_33x["P1.33x Local leaf names and expiry"]
   P1_33y["P1.33y Per-file site mounts on local"]
@@ -1036,6 +1054,11 @@ flowchart TD
   P1_33w --> P1_33x
   P1_33x --> P1_33y
   P1_33y --> P1_34d
+  P1_35a["P1.35a Dev CA folder rule gaps closed"]
+  P1_33y --> P1_35a
+  P1_35a --> P1_34d
+  P1_35f["P1.35f Compose probe stall root-caused"]
+  P1_35g["P1.35g IP refused as local PDS host"]
   P1_34d --> P1_33z
   P1_34a --> P1_34o
   P1_34o --> P1_34q
@@ -1897,6 +1920,8 @@ flowchart LR
 
 | Id | Status |
 |---|---|
+| P1.33g | Reserved: conditional split of P1.34d (record 2026-10-14-p134d-split). |
+| P1.35d | Reserved: conditional split of P1.35c, the depcruise half (record 2026-10-15-verify-863-866-followups). |
 | P2.26aq | Renamed **P2.26f** (#859; 2026-10-14, book edit 2026-10-14-verify-847-outline-fixes): it broke the one-trailing-letter rule (`00-README.md:65-68`). Same content, class and place. |
 | P2.16a | Retired. The Arachnid Shield API spike moved to **P5.07b** with the real check (decision 23, global resolution 2). |
 | L.01 part A | Now **P1.33a** in Phase 1, before going public (global resolution 8; P1.33p since 2026-10-13). L.01 keeps part B. |
@@ -1976,7 +2001,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1990,9 +2015,12 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P0.09r (#722):** a typed line, "yes P0.09r scripts/guards git-env diagnostics", for the classifier path.
 - **P0.09w (#816):** a typed line, "yes P0.09w scripts/docs outline checks", for the classifier path (it supersedes
   "yes docs cycle check scripts/docs").
-- **P0.09x (#825):** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
-  it.
 - **P0.09z (#858):** a typed line, "yes P0.09z scripts/docs outline check equality ids".
+- **P1.35b (#872):** a typed line, "yes P1.35b .github/CODEOWNERS scripts/workspace shared/host-pin security review".
+- **P1.35c (#877):** a typed line, "yes P1.35c .github/workflows/images.yml scripts/ci scripts/lint export and
+  entry checks".
+- **P1.35e (#878):** a typed line, "yes P1.35e .github/workflows/images.yml scripts/ci scan the built image".
+- **P1.35j (#885):** a typed line, "yes P1.35j shared/http test handles reserved domains".
 - **P0.09y (#826):** a typed line, "yes P0.09y .github/CODEOWNERS scripts/guards scripts/workspace", for the
   `scripts/guards/`, CODEOWNERS and `scripts/workspace/` check paths; P4.07 waits on it.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
@@ -2009,9 +2037,6 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
   .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
-- **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
-- **P1.33u (#848):** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
-  scan gate".
 - **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
   allow rules".
 - P1.33s is done: merged as 7c56327 (#835).
