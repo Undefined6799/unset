@@ -1415,7 +1415,9 @@ Algorithm:
      a. `UPSERT app.account(did, first_seen_at = now())` keeping existing columns.
      b. `created = sessions.create(tx, did, {replacingCookie: request cookie __Host-sid})`.
      DB error → deny `login.failed` (no cookie set). After commit, count `auth.login_succeeded` (no DID).
-  10. `invalidateHandle(did)` (the handle may have changed during sign-up or on the PDS).
+  10. `invalidateHandle(did)` (the handle may have changed during sign-up or on the PDS); the next handle check for
+      this DID in this request uses `consistency: "fresh"` (P1.33r rule (a): read after now), so neither a cached nor
+      an in-flight older DID document answers it.
   11. Email read (best effort, 5 s): `pdsCall(did, getSession)` → `ok` → `sessions.setEmailConfirmed(created, value)`;
       any other outcome → leave null (P2.11 reads it).
   12. Response: set `__Host-sid` (Max-Age 30 d); clear `__Host-signed_out`; 303 to the first that applies:
@@ -2343,7 +2345,10 @@ Done when (tests):
   - `boot.missing_secret`: no password file → exit code 1, no secret in stderr.
   - `zero_dependency`: `interfaces/pds-admin/package.json` has no `dependencies` (dev dependencies only for tests).
   - `reserved.list`: `reserved-labels.json` contains exactly `www, api, admin, account, mail, mta-sts, autoconfig, status`
-    plus the rule "any label starting with `_`"; `check-reserved` against the fake PDS prints one line per label.
+    plus the rule "any label starting with `_`"; `check-reserved` against the fake PDS prints one line per label. It
+    also lists the one-letter test labels kept on our own suffixes, as named in P1.35i's and P1.35j's PR bodies, so no
+    real user can hold one (book edit 2026-10-15-verify-875-fixture-wording, "Mapping of architecture's N5 and F2
+    ruling").
   - `web.issueInvite_mapping`: each pds-admin status → the matching `issueInvite` kind; a NetGuardError → `unavailable`.
 
 Reuse (provisional — for reuse review):
@@ -4114,11 +4119,7 @@ Done when, red first, `mirror_entry_refuses_upstream_spelling` shows the upstrea
 
 ### P2.26a — Minimal deploy by verified digest for the test host (added, decision 35 D5)
 
-Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
-`scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
-`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26f** holds that
-test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
-`rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
+Split: P2.26f (its own section below) holds the postmortem test and template.
 
 Tags: [SEC]            Depends on: P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
@@ -4209,6 +4210,20 @@ Reuse: P5.03's planned design → this is its first half, written so P5.03 exten
 Not in this step: zero-downtime `docker rollout`, the pre-migration backup and `backup.lock`, the disk check, the 24-hour
   release-drift alert and the production host (P5.03); signing (P1.27); preflight rules (P1.30).
 Diagram: none.
+
+---
+
+### P2.26f — Postmortem template and its docs check (check part of P2.26a; SE-6 `q`)
+Tags: —            Depends on: P2.26
+
+Moved out of P2.26a's section, text unchanged (book edit 2026-10-14-verify-868-fixes, S3; it was P2.26aq, a sub-step
+written inside P2.26a):
+
+Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
+`scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
+`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26f** holds that
+test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
+`rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
 ---
 

@@ -245,7 +245,7 @@ describe("DID columns", () => {
   test("domain_check", async () => {
     expect(await asWeb(`SELECT '${PLC}'::types.did`)).toBe("ok");
     expect(await asWeb("SELECT 'did:web:example.com'::types.did")).toBe("ok");
-    expect(await asWeb("SELECT 'did:web:sub.example.co.uk'::types.did")).toBe("ok");
+    expect(await asWeb("SELECT 'did:web:sub.example.com'::types.did")).toBe("ok");
     for (const bad of [
       "did:plc:abc",
       `${PLC}a`,

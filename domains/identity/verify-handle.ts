@@ -2,9 +2,11 @@
 // self-asserted, so it is shown only when the handle resolves back to the same DID: https://atproto.com/specs/did
 // ("DID Documents") and https://atproto.com/specs/handle, read from github.com/bluesky-social/atproto-website at
 // 7937e9c. The claimed handle is the first syntactically valid `at://` handle in alsoKnownAs; later ones are ignored.
-// An outage is `unavailable` and never cached, so it neither blocks a login nor sticks.
+// An outage is `unavailable` and never cached, so it neither blocks a login nor sticks. Callers asking about the same
+// DID at once share one check (P1.32b, in-flight.ts).
 import type { IdentityNetwork } from "./contract.ts";
 import type { ResolvedDid } from "./did-doc.ts";
+import { awaitFlight, createInFlight, type MayWrite } from "./in-flight.ts";
 import { type Consistency, IdentityError } from "./resolve-did.ts";
 import { resolveHandle } from "./resolve-handle.ts";
 import { type Did, type Handle, parseHandle } from "./syntax.ts";
@@ -73,23 +75,28 @@ export function createHandleVerifier(options: HandleVerifierOptions) {
     return entry.verdict;
   };
 
-  const invalid = (did: Did) => remember(did, { status: "invalid", checkedAt: now() }, options.invalidTtlS);
+  const inFlight = createInFlight<Did, HandleVerdict>(options.cacheMax);
+
+  /** A verdict and how long it may be cached; `unavailable` never is. */
+  type Checked = { readonly verdict: HandleVerdict; readonly ttlS: number | null };
+  const UNAVAILABLE: Checked = { verdict: { status: "unavailable" }, ttlS: null };
+  const invalid = (): Checked => ({ verdict: { status: "invalid", checkedAt: now() }, ttlS: options.invalidTtlS });
 
   /** The verdict from the network; IdentityError and resolver outcomes are expected, anything else throws. */
-  async function check(did: Did, consistency: Consistency): Promise<HandleVerdict> {
+  async function check(did: Did, consistency: Consistency): Promise<Checked> {
     let resolved: ResolvedDid;
     try {
       resolved = await options.resolveDid(did, consistency);
     } catch (error) {
       if (!(error instanceof IdentityError)) throw error;
-      return error.kind === "unavailable" ? { status: "unavailable" } : invalid(did);
+      return error.kind === "unavailable" ? UNAVAILABLE : invalid();
     }
     const handle = claimedHandle(resolved);
-    if (handle === null) return invalid(did);
+    if (handle === null) return invalid();
     const resolution = await resolveHandle(options.network, handle);
-    if (resolution.status === "unavailable") return { status: "unavailable" };
-    if (resolution.status === "not_found" || resolution.did !== did) return invalid(did);
-    return remember(did, { status: "verified", handle, checkedAt: now() }, options.verifyTtlS);
+    if (resolution.status === "unavailable") return UNAVAILABLE;
+    if (resolution.status === "not_found" || resolution.did !== did) return invalid();
+    return { verdict: { status: "verified", handle, checkedAt: now() }, ttlS: options.verifyTtlS };
   }
 
   /** A reporter that throws must not turn the verdict into a throw (architecture ruling 2026-10-06, SE-7). */
@@ -101,22 +108,42 @@ export function createHandleVerifier(options: HandleVerifierOptions) {
     }
   };
 
+  /**
+   * One check, shared by every caller that joins it. The resolver gets no caller's signal: the check runs to its own
+   * network timeouts. Its verdict is cached unless a check that started later already wrote, or the DID was
+   * invalidated after it started.
+   */
+  async function flight(did: Did, consistency: Consistency["consistency"], mayWrite: MayWrite) {
+    try {
+      const { verdict, ttlS } = await check(did, { consistency });
+      if (ttlS !== null && mayWrite()) remember(did, verdict, ttlS);
+      return verdict;
+    } catch (error) {
+      report(error);
+      return UNAVAILABLE.verdict;
+    }
+  }
+
   return {
-    /** Never throws: an unexpected error is reported through onUnexpected and reads as `unavailable`. */
+    /**
+     * Never throws: an unexpected error is reported through onUnexpected and reads as `unavailable`, and so does a
+     * caller's aborted `signal` (the shared check carries on for the others).
+     */
     async verifyHandle(did: Did, opts: Partial<Consistency> = {}): Promise<HandleVerdict> {
       const consistency = opts.consistency ?? "cached";
+      if (opts.signal?.aborted) return UNAVAILABLE.verdict;
       const hit = consistency === "cached" ? cached(did) : null;
       if (hit !== null) return hit;
-      try {
-        return await check(did, { consistency });
-      } catch (error) {
-        report(error);
-        return { status: "unavailable" };
-      }
+      const shared = inFlight.share(did, consistency === "fresh", (mayWrite) => flight(did, consistency, mayWrite));
+      return awaitFlight(shared, opts.signal, () => UNAVAILABLE.verdict);
     },
-    /** Drops the cached verdict, so the next call resolves again (identity events, P3.05; after login, P2.06). */
+    /**
+     * Drops the cached verdict and any check in flight, so the next call resolves again (identity events, P3.05; after
+     * login, P2.06).
+     */
     invalidateHandle(did: Did): void {
       cache.delete(did);
+      inFlight.drop(did);
     },
   };
 }
