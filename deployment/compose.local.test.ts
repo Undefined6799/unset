@@ -117,12 +117,14 @@ function appSiteDrift(edge: Service): string[] {
     : ["edge: the app site and APP_HOST and APP_UPSTREAM do not come together"];
 }
 
-/** Whether the env files correspond one to one, in order, differing at most in their folder (item 11). */
+/** The env directory beside the checkout (docs/human/runbooks/dev-stack-secrets.md), the only folder item 11 allows. */
+const ENV_DIR = "../../unset-dev-env";
+/** Whether the env files correspond one to one, in order, by name, each in the env directory (item 11). */
 const envFilesAgree = (dev: Service, local: Service): boolean =>
   same(
     dev.envFiles.map((path) => basename(path)),
     local.envFiles.map((path) => basename(path)),
-  );
+  ) && local.envFiles.every((path) => dirname(path) === ENV_DIR);
 
 /** Each key of one service that differs between the files beyond what item 11 allows; every key is compared. */
 function serviceDrift(dev: Service, local: Service): string[] {
@@ -306,6 +308,8 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
       ["edge", "NODE_EXTRA_CA_CERTS", "/etc/unset-dev-trust/root.pem"],
       ["pds", "PDS_DID_PLC_URL", "http://plc:2583"],
       ["web", "UNSET_ENV", "prod"],
+      // UNSET_ENV may become local only where dev sets it.
+      ["edge", "UNSET_ENV", "local"],
     ];
     for (const [service, key, value] of cases) {
       const problem = `${service}: environment ${key} differs`;
@@ -325,6 +329,12 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
       environment: [...s.environment, ...s.environment.slice(0, 1)],
     }));
     expect(drift(dev, repeated)).toContain("web: environment repeats a key");
+    expect(
+      drift(
+        editService(dev, "web", (s) => ({ ...s, environment: [...s.environment, ...s.environment.slice(0, 1)] })),
+        local,
+      ),
+    ).toContain("web: environment repeats a key");
     // UNSET_ENV may become exactly local where dev sets it, as P1.34z will write it.
     expect(
       drift(
@@ -353,9 +363,15 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
     ).toContain("web: env_file differs");
     const renamed = editService(local, "pds", (s) => ({ ...s, envFiles: ["../../unset-dev-env/pds-local.env"] }));
     expect(drift(dev, renamed)).toContain("pds: env_file differs");
-    // Only the folder may differ.
+    // The folder must be the env directory, and the order is compared.
     const moved = editService(local, "pds", (s) => ({ ...s, envFiles: ["../../elsewhere/pds.env"] }));
-    expect(drift(dev, moved)).toEqual([]);
+    expect(drift(dev, moved)).toContain("pds: env_file differs");
+    const two = [`${ENV_DIR}/pds.env`, `${ENV_DIR}/pds-extra.env`];
+    const swapped = drift(
+      editService(dev, "pds", (s) => ({ ...s, envFiles: two })),
+      editService(local, "pds", (s) => ({ ...s, envFiles: [...two].reverse() })),
+    );
+    expect(swapped).toContain("pds: env_file differs");
   });
 
   test("the_app_site_and_its_two_keys_come_together", () => {
