@@ -229,9 +229,9 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 
 | id | requirement (short) | status | evidence | step |
 |---|---|---|---|---|
-| V10.1.1 | Tokens are only sent to components that strictly need them | open | `step:P2.04` | P2.04 |
+| V10.1.1 | Tokens are only sent to components that strictly need them | partial | `test:tests/integration/postgres/oauth-stores.test.ts#stores_sealed_at_rest`, `test:tests/integration/postgres/oauth-stores.test.ts#stores_aad_binding` | P2.06 |
 | V10.1.2 | The client only accepts values from the authorization server (such as the authorization … | open | `step:P2.06` | P2.06 |
-| V10.2.1 | Verify that, if the code flow is used, the OAuth client has protection against … | open | `step:P2.04` | P2.04 |
+| V10.2.1 | Verify that, if the code flow is used, the OAuth client has protection against … | partial | `test:tests/integration/postgres/oauth-stores.test.ts#stores_expiry`, `test:tests/integration/postgres/oauth-stores.test.ts#stores_sealed_at_rest`, `step:P2.06` | P2.06 |
 | V10.2.2 | Verify that, if the OAuth client can interact with more than one authorization server, it … | open | `step:P2.06` | P2.06 |
 | V10.3.1 | The resource server only accepts access tokens that are intended for use with that … | open |  | — |
 | V10.3.2 | The resource server enforces authorization decisions based on claims from the access … | open |  | — |
@@ -250,7 +250,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V10.4.11 | The authorization server configuration only assigns the required scopes to the OAuth … | open |  | — |
 | V10.5.1 | The client (as the relying party) mitigates ID Token replay attacks | open | `step:P2.06` | P2.06 |
 | V10.5.2 | The client uniquely identifies the user from ID Token claims, usually the 'sub' claim … | partial | `test:domains/identity/verify-handle.test.ts#bidirectional_ok`, `step:P2.06` | P2.06 |
-| V10.5.3 | The client rejects attempts by a malicious authorization server to impersonate another … | open | `step:P2.04` | P2.04 |
+| V10.5.3 | The client rejects attempts by a malicious authorization server to impersonate another … | covered | `test:tests/integration/oauth/refresh.test.ts#client_rejects_impersonating_issuer` | P2.04 |
 | V10.5.4 | The client validates that the ID Token is intended to be used for that client (audience) … | open | `step:P2.06` | P2.06 |
 | V10.5.5 | Verify that, when using OIDC back-channel logout, the relying party mitigates denial of … | n/a | n/a: no OIDC back-channel logout; atproto OAuth has none | — |
 | V10.6.1 | The OpenID Provider only allows values 'code', 'ciba', 'id_token', or 'id_token code' for … | open |  | — |
