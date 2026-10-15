@@ -8952,6 +8952,11 @@ local-only service that skips the env drift test picking up a key that changes i
   `env_file` entries in the drift test, so a key outside its list fails (for example APP_* on seed or plc). P1.34v
   adds plc's row. Red tests: APP_HOST on seed, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an unlisted `env_file`
   on seed.
+- The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
+  record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
+  (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
+  or substring match fails; and for both files moved to the same other folder, so a rule that only checks that
+  local's folder equals dev's fails.
 
 Done when each red test fails on main for its own reason and passes with the change, and check is green.
 
