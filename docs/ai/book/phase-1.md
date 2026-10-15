@@ -8163,9 +8163,11 @@ The PR body lists every one-letter label it keeps on our suffixes.
   it).
 - A1: `alice.0x40.me` (server.test.ts, config.test.ts) becomes `a.0x40.me` or `x.0x40.me`, keeping the port and case
   variants (`A.0x40.me:443`, `a.0x40.me:8443`). `a.b.0x40.me` stays (one-letter labels).
-- A3: `unsetcdn.net` becomes `media.example` in `csp/policies.test.ts`, its snapshot and `config.test.ts`. A grep on
-  main (2b53bd5) finds it only in those test files, so no product code changes; product code keeps taking the media
-  origin from config. Tests may switch to the real domain once P0.11 records one as ours.
+- A3: `unsetcdn.net` becomes `media.example.net` in `csp/policies.test.ts`, its snapshot and `config.test.ts`
+  (`media.example` would fail: KNOWN_TLDS in `shared/http/config.ts` has no `.example` and must not gain it;
+  architecture's A3 correction). A grep on main (2b53bd5) finds it only in those test files, so no product code changes;
+  product code keeps taking the media origin from config. Tests may switch to the real domain once P0.11 records one as
+  ours.
 - Stays: `csrf/gate.test.ts:107` `evil.unset.sh` (our suffix, in a test about our origins); `config.test.ts:134`
   `evil0x40.me` (SE-7a's named suffix-boundary allowance); labels `a` and `b` on `.0x40.me` at server.test.ts:112-115
   and config.test.ts:131-132 (own-suffix allowance; listed in the PR body for P2.09).
