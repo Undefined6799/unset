@@ -8247,7 +8247,7 @@ Done when each red case fails on main and passes with the change, and check is g
 ### P1.35f — Root-cause the compose version probe stall
 Tags: —            Depends on: —
 
-Slice 1, issue (pending), product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread
+Slice 1, issue #879, product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread
 after P1.33y, next in its queue (lane order only); book edit 2026-10-15-verify-862-c14-and-compose-probe, section 2,
 from verify-862-d6836ab. Nothing from Alex. In the check job, "docker compose version killed after 10000 ms"
 (`tests/support/docker.ts:73`, raised through the module-level probe at
