@@ -139,6 +139,24 @@ describe("compose subset", () => {
         );
       }
     }
+    // The edge on edge or app with no aliases, in either form, is refused too (verify-895 N3): "each network must carry
+    // exactly both" has no empty case. Other services join both networks bare, and the edge joins others bare.
+    const bare = (networks: string) =>
+      `name: unset-prod\nservices:\n  edge:\n    image: x\n    networks: ${networks}\nnetworks:\n  edge: {}\n  app: {}\n  front: {}\n`;
+    for (const network of ["edge", "app"]) {
+      for (const form of [`[${network}]`, `[front, ${network}]`, `\n      ${network}: {}`, `\n      ${network}:`]) {
+        expect(() => parseCompose(bare(form), "c.yaml"), form).toThrow(
+          new RegExp(`^c\\.yaml:[56]: the edge on network ${network} must carry its aliases$`),
+        );
+      }
+      expect(
+        parseCompose(bare(`[${network}]`).replace("  edge:\n    image", "  web:\n    image"), "c.yaml").services[0]
+          ?.networks,
+      ).toEqual([network]);
+    }
+    const halfBare = both.replace(`      app:\n        aliases: ${hosts}\n`, "      app: {}\n");
+    expect(() => parseCompose(halfBare, "c.yaml")).toThrow(/the edge on network app must carry its aliases/);
+    expect(parseCompose(bare("[front]"), "c.yaml").services[0]?.networks).toEqual(["front"]);
     // Any other `$` under networks is still refused.
     expect(() =>
       parseCompose(stack("edge", "edge", hosts).replace("edge:\n        aliases", "${N}:\n        aliases"), "c.yaml"),

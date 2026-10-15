@@ -8,10 +8,9 @@
 // ref:tag@digest, and the token reader alone may run the node base (record 2026-10-13-p127l-local-gaps, Amendment
 // 2, point 2, and Amendment 4); C3 to C5 print UNSIGNED. --env dev and --env prod never take this path
 // (c2_to_c5_unchanged_under_dev_and_prod).
-import { join } from "node:path";
 import { type Service, TOKEN_READER } from "../compose-parse.ts";
 import { buildProblem } from "./build.ts";
-import { readLock } from "./lock.ts";
+import { exactImage, readBases, readLock } from "./lock.ts";
 import type { VerifyResult } from "./types.ts";
 import { type Check, fail, type Inputs, missing, pass, unsigned } from "./types.ts";
 
@@ -46,8 +45,6 @@ export const c2: Check = {
  */
 export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds"]);
 
-type BaseEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
-
 /** The node runtime base, which the local token reader runs unbuilt (P1.29h). */
 const NODE_BASE = "docker.io/library/node";
 
@@ -58,16 +55,15 @@ const NODE_BASE = "docker.io/library/node";
  * postgres), is never one. `readerOnly` holds the node runtime base, which only the token reader may run (record
  * 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
  */
-function unbuiltImages({ root, readText }: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
-  const bases = readText(join(root, "deployment/images/bases.lock.json"));
+function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
+  const bases = readBases(inputs);
   if (bases === null) return null;
-  const entries = Object.values(JSON.parse(bases) as Record<string, BaseEntry>);
-  const exact = (b: BaseEntry) => `${b.ref}:${b.tag}@${b.digest}`;
+  const entries = Object.values(bases);
   return {
     runOnly: new Set(
-      entries.filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage).map(exact),
+      entries.filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage).map(exactImage),
     ),
-    readerOnly: new Set(entries.filter((b) => b.ref === NODE_BASE && b.stage === "runtime").map(exact)),
+    readerOnly: new Set(entries.filter((b) => b.ref === NODE_BASE && b.stage === "runtime").map(exactImage)),
   };
 }
 

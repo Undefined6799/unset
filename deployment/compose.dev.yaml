@@ -178,8 +178,8 @@ services:
       PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN}
       HTTP_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS}
       MEDIA_ORIGIN: ${WEB_MEDIA_ORIGIN}
-      # Only the edge reaches web, on the app network, and its upstream snippet drops the client's address, so the
-      # address is the socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
+      # Only the edge sends web HTTP, on the app network. Under local and from Phase 2, its app site's upstream snippet
+      # drops the client's address, so the address is the socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
       TRUSTED_PROXY_MODE: socket
       NODE_OPTIONS: --max-old-space-size=384
     depends_on:

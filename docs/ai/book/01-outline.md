@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 307 steps: 283 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 308 steps: 284 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -439,6 +439,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.35n | Give web its own network to the edge (split from P1.34d) | [SEC] | — | `phase-1.md` |
 | P1.35o | Pin the app network in the dev compose tests | [SEC] | P1.35n | `phase-1.md` |
 | P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a, P1.33g, P1.35n | `phase-1.md` |
+| P1.35p | Close the dev CA preflight and runbook gaps | [SEC] | P1.33g, P1.35m | `phase-1.md` |
 | P1.35l | Check the PDS host in every env | [SEC] | P1.35g | `phase-1.md` |
 | P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.33y, P1.34q | `phase-1.md` |
@@ -1069,6 +1070,9 @@ flowchart TD
   P1_33g --> P1_34d
   P1_35m["P1.35m Dev CA folder walk edges pinned"]
   P1_35a --> P1_35m
+  P1_35p["P1.35p Dev CA preflight and runbook gaps closed"]
+  P1_33g --> P1_35p
+  P1_35m --> P1_35p
   P1_35n["P1.35n Web on its own network to the edge"]
   P1_35n --> P1_34d
   P1_35o["P1.35o App network pinned in the dev compose tests"]

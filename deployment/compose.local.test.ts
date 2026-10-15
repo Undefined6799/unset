@@ -27,7 +27,8 @@ import {
   type Service,
   TOKEN_READER,
 } from "./preflight/compose-parse.ts";
-import { preflight } from "./preflight/index.ts";
+import { type Deps, preflight } from "./preflight/index.ts";
+import { loadInputs } from "./preflight/inputs.ts";
 import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS, LOCAL_ONLY_SERVICES } from "./preflight/local-only.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -236,8 +237,6 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
 
   test("compose_local_differs_from_dev_only_as_allowed", () => {
     expect(drift(dev, local)).toEqual([]);
-    // The neighbour rule C17 runs at deploy, on the real local file too (#742 item 11; verify-895 F2).
-    expect(pdsNeighbours(local)).toEqual([]);
   });
 
   test("a_weakening_in_either_file_is_named", () => {
@@ -553,50 +552,55 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
     }
   };
 
+  const realLocalArgs = () => [
+    "--env",
+    "local",
+    "--compose",
+    join(DEPLOYMENT, "compose.local.yaml"),
+    "--interpolation-env",
+    beside("unset-dev-env/dev-public.env"),
+  ];
+  const realLocalDeps = (): Deps => ({
+    root: CHECKOUT,
+    run: async (file) =>
+      file === "timedatectl"
+        ? { code: 0, stdout: "yes\n", stderr: "" }
+        : file === "docker"
+          ? {
+              code: 0,
+              stdout: JSON.stringify({ mediaType: "application/vnd.oci.image.index.v1+json" }),
+              stderr: "",
+            }
+          : { code: 0, stdout: "", stderr: "" },
+    readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
+    readEnv: (path) => {
+      const entry = files.get(path);
+      return entry?.text === undefined
+        ? null
+        : { text: entry.text, id: `${DEV}:${[...files.keys()].indexOf(path) + 1}` };
+    },
+    readdir: (path) => {
+      const names = files.get(path)?.names;
+      if (names !== undefined) return names.map((name) => Buffer.from(name));
+      throw new Error("no such folder");
+    },
+    lstat: look(lstatSync),
+    stat: look(statSync),
+    realpath: (path) => (files.has(path) || aboveCheckout(path) ? path : real(path, () => realpathSync.native(path))),
+    readlink: (path) => readlinkSync(path),
+    statfs: () => ({ type: 0xef53 }),
+    uid: DEPLOY_UID,
+    environment: {},
+  });
+
+  test("compose_local_pds_neighbours_pass", () => {
+    // The neighbour rule C17 runs at deploy, on the real local file with the real base lock (#742 item 11; verify-895
+    // F2), through the inputs form P1.35o gave pdsNeighbours.
+    expect(pdsNeighbours(loadInputs(realLocalArgs(), realLocalDeps()).inputs)).toEqual([]);
+  });
+
   test("preflight_passes_the_real_local_file", async () => {
-    const result = await preflight(
-      [
-        "--env",
-        "local",
-        "--compose",
-        join(DEPLOYMENT, "compose.local.yaml"),
-        "--interpolation-env",
-        beside("unset-dev-env/dev-public.env"),
-      ],
-      {
-        root: CHECKOUT,
-        run: async (file) =>
-          file === "timedatectl"
-            ? { code: 0, stdout: "yes\n", stderr: "" }
-            : file === "docker"
-              ? {
-                  code: 0,
-                  stdout: JSON.stringify({ mediaType: "application/vnd.oci.image.index.v1+json" }),
-                  stderr: "",
-                }
-              : { code: 0, stdout: "", stderr: "" },
-        readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
-        readEnv: (path) => {
-          const entry = files.get(path);
-          return entry?.text === undefined
-            ? null
-            : { text: entry.text, id: `${DEV}:${[...files.keys()].indexOf(path) + 1}` };
-        },
-        readdir: (path) => {
-          const names = files.get(path)?.names;
-          if (names !== undefined) return names.map((name) => Buffer.from(name));
-          throw new Error("no such folder");
-        },
-        lstat: look(lstatSync),
-        stat: look(statSync),
-        realpath: (path) =>
-          files.has(path) || aboveCheckout(path) ? path : real(path, () => realpathSync.native(path)),
-        readlink: (path) => readlinkSync(path),
-        statfs: () => ({ type: 0xef53 }),
-        uid: DEPLOY_UID,
-        environment: {},
-      },
-    );
+    const result = await preflight(realLocalArgs(), realLocalDeps());
     expect(result.lines.filter((line) => !/^(PASS|UNSIGNED) /.test(line))).toEqual([
       "LOCAL unsigned, local-only stack: never deploy it",
     ]);

@@ -1,5 +1,7 @@
 // The deploy lock, deployment/images.lock.json (P1.30): which image each service runs, as C2 to C5, C18, C25 and C27
-// read it.
+// read it. And the base lock, deployment/images/bases.lock.json, which names the upstream images a local stack may run
+// unbuilt (C2 under --env local).
+import { join } from "node:path";
 import type { Inputs } from "./types.ts";
 
 type LockEntry = { ref?: unknown; origin?: unknown };
@@ -19,3 +21,15 @@ export function readLock(inputs: Inputs): Record<string, LockEntry> | null {
  */
 export const lockOrNone = (inputs: Inputs): Record<string, LockEntry> | null =>
   inputs.env === "local" ? {} : readLock(inputs);
+
+/** One entry of the base lock: an upstream image by exact tag and digest. */
+export type BaseEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
+
+/** The base lock's entries by name, or null when the file is missing. */
+export function readBases({ root, readText }: Pick<Inputs, "root" | "readText">): Record<string, BaseEntry> | null {
+  const text = readText(join(root, "deployment/images/bases.lock.json"));
+  return text === null ? null : (JSON.parse(text) as Record<string, BaseEntry>);
+}
+
+/** An entry as a service names it: `ref:tag@digest`. */
+export const exactImage = (entry: BaseEntry): string => `${entry.ref}:${entry.tag}@${entry.digest}`;
