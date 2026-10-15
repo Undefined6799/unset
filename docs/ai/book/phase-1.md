@@ -8093,7 +8093,7 @@ rule for DIDs (SE-7a, verifier review); one would be a check-path step with Alex
 ### P1.35h — Test the in-flight rejection path
 Tags: [SEC]            Depends on: —
 
-Slice 1, issue (pending), product (`domains/identity/`, tests only), kind/fix, lane Phase 1 after P1.32c (#875; lane
+Slice 1, issue #882, product (`domains/identity/`, tests only), kind/fix, lane Phase 1 after P1.32c (#875; lane
 order only); book edit 2026-10-15-verify-874-followups, section 1, from verify-874-b614e15 (P1.32b, #874, no blockers).
 Nothing from Alex. Nothing tests the rejection path of `awaitFlight` (`domains/identity/in-flight.ts:92`, from #864):
 swallowing the rejection there passes all 75 identity tests, and a resolver caller with a live signal whose lookup fails
