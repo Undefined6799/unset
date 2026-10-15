@@ -71,11 +71,11 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.34d,
-  P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i,
-  P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2,
-  Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
-  P2.13a.
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n,
+  P1.34d, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
+  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from
+  slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice
+  exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -607,6 +607,8 @@ flowchart LR
   P1_33g --> P1_34d
   P1_35m["P1.35m dev CA folder walk edges pinned"]
   P1_35a --> P1_35m
+  P1_35n["P1.35n web on its own network to the edge"]
+  P1_35n --> P1_34d
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
@@ -8578,9 +8580,38 @@ Done when each red case fails on main for its own reason (each S1 case kills its
 
 ---
 
+### P1.35n — Give web its own network to the edge
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue #894, product (`deployment/` compose files, `deployment/networks.dev.json`, `deployment/preflight/`),
+kind/feature, lane the third thread before P1.34d (its place among P1.33g, P1.35m and the open PRs follows the lane's
+D4 queue); book edit 2026-10-14-p134d-split, "P1.35n: the app network split out ahead of P1.34d", carrying
+architecture's 02:05Z option C ruling ("Step-book mapping of the 02:05Z option C ruling", which replaces the withdrawn
+01:51Z networks.local.json mapping). Split from P1.34d item 7 by size. Not a loosening (no new host, no new service), so
+nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): web or another
+service reaching the PDS directly instead of through the edge, and an alias that lets a service answer for the app or
+PDS host.
+
+**What:** web reaches the PDS only through the edge. A new network `app` (`internal: true`), members edge and web
+only, goes in compose.dev.yaml and networks.dev.json, and in the local compose file once P1.34d adds it (P1.34d's
+compose.local.yaml carries `app` from its first commit), so one table and the drift test still hold dev and local
+identical (p127l-local-gaps Amendment 2 point 3). The PDS is never on `app`; web reaches the PDS host and the app host
+only by the edge's two aliases on `app`. compose-parse narrows: aliases only on the edge service, only on the networks
+`edge` and `app`, only its two hosts, each network carrying exactly both; this replaces
+`aliases_only_on_the_edge_with_its_two_hosts`, with red fixtures for an alias on any other service (including web), on
+any other network, a third alias, and `app` with only one of the two. A preflight check (C17 or a sibling) pins that
+the edge is the only service sharing any network with the PDS's HTTP port; red fixture: web on `edge`. The local-only
+PLC network keeps its A4 allowlist entry.
+
+Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
+
+---
+
 ### P1.34d — Trust one dev root CA on the local stack
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a,
-P1.33g
+P1.33g, P1.35n
 Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/preflight/`, and
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
@@ -8630,18 +8661,8 @@ compose and `local:up` items.
    the section "Architecture confirmation (2026-10-14 ~22:50Z, recorded here 23:21Z)" of
    2026-10-12-p134c-p134d-local-dev-root-ca; book edit 2026-10-14-verify-857-fixes, S3.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
-7. Web reaches the PDS only through the edge (architecture 02:05Z, option C; book edit 2026-10-14-p134d-split,
-   "Step-book mapping of the 02:05Z option C ruling", which replaces the withdrawn 01:51Z networks.local.json mapping).
-   A new network `app` (`internal: true`), members edge and web only, goes in compose.dev.yaml, the local compose file
-   and networks.dev.json, so one table and the drift test still hold dev and local identical (p127l-local-gaps Amendment
-   2 point 3). The PDS is never on `app`; web reaches the PDS host and the app host only by the edge's two aliases on
-   `app`. compose-parse narrows: aliases only on the edge service, only on the networks `edge` and `app`, only its two
-   hosts, each network carrying exactly both; this replaces `aliases_only_on_the_edge_with_its_two_hosts`, with red
-   fixtures for an alias on any other service (including web), on any other network, a third alias, and `app` with only
-   one of the two. A preflight check (C17 or a sibling) pins that the edge is the only service sharing any network with
-   the PDS's HTTP port; red fixture: web on `edge`. The local-only PLC network keeps its A4 allowlist entry. If this
-   pushes P1.34d over 400 source lines, the lane tells the step book before opening, and the `app` network with its
-   compose-parse and invariant checks becomes its own step ahead of P1.34d.
+7. Now P1.35n (#894; book edit 2026-10-14-p134d-split, "P1.35n: the app network split out ahead of P1.34d");
+   compose.local.yaml carries `app` from its first commit, and the drift test holds it.
 8. (Amendment 2, architecture's amendment 5 of 2026-10-12-refocus-local-signin-rulings.) The root also excludes the
    IPv4 and IPv6 all-addresses ranges and is valid for at most 825 days; subdomain admission is accepted. Tests use
    a throwaway root: an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf are refused;
