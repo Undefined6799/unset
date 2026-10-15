@@ -8582,8 +8582,8 @@ Done when each red test fails on main for its own reason and passes with the cha
 ### P1.35m — Pin the dev CA folder walk's edges
 Tags: [SEC]            Depends on: P1.35a
 As built: #901 at 19cbda0, merged as 152b695. Note (verify-901-9996fec N1): a self-loop symlink at the folder reads
-"not a real directory: <folder>"; an lstat that cannot see the folder still reads "dev CA folder cannot be read"
-(#887's message).
+"not a real directory: <folder>" under local and dev ("present on a prod host" under prod); an lstat that cannot see
+the folder still reads "dev CA folder cannot be read" (#887's message).
 
 Slice 1, issue #893, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
 C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
@@ -8790,9 +8790,10 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit 2026-10-14-p134d-split,
     "item 11 holds over item 14"): `environment` per service as a normalized key-value map (list and map forms alike),
     where only the named keys may differ, on the services named; `env_file` per service as an ordered list of entries,
-    all under `../../unset-dev-env/` in both files, corresponding one to one and compared by basename, any other folder
-    failing (book edit 2026-10-15-verify-903-info-items, last paragraph); and every other key (command, entrypoint,
-    mem_limit and the rest). Red tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
+    each directly in `../../unset-dev-env/` in both files (that folder exactly: a sub-folder or any other folder fails),
+    corresponding one to one and compared by basename (book edit 2026-10-15-verify-903-info-items, section "P1.35r
+    (#908)", its env_file folder paragraph); and every other key (command, entrypoint, mem_limit and the rest). Red
+    tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
     --use-system-ca in NODE_OPTIONS and in command; env_file pds.env on web and on edge;
     NODE_OPTIONS=--max-old-space-size=4096 on web. Preflight still runs in full on the local file; the drift test
     catches a weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as
@@ -13477,7 +13478,7 @@ set through an `[ALEX]` PR), except `sh.unset.follow`, which is here from the fi
 ### P1.31g — Lexicons breaking-change check
 
 **Tags:** [SEC] · **Depends on:** P1.31, P1.31d (#759: its scripts row allows `node:fs` and `node:path`; it already
-holds through P1.31, and the book states it)
+holds through P1.31)
 
 Slice 1, issue #907, product, Phase 1 lane, after
 P1.31. Book edit 2026-10-15-p131-size-split: P1.31 measured 539 source lines as built, and the breaking-check is the

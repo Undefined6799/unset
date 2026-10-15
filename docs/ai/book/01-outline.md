@@ -1303,6 +1303,7 @@ flowchart TD
   P1_33d["P1.33d PDS scan exceptions cleared"]
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
+  P1_31g["P1.31g Lexicons breaking-change check"]
   P1_27s["P1.27s publish and sign images"]
   P1_27v["P1.27v Renovate image-lock managers"]
   P1_37a["P1.37a Apply for Arachnid Shield access"]
