@@ -444,20 +444,19 @@ const LOCAL_ONLY = ["{$APP_HOST}", "{$APP_UPSTREAM}", "local_tls_"];
  * readCaddyfile and fails.
  *
  * Containment (P1.28f; amendment 8, point 1): every path is resolved, and each resolved path must stay where it
- * belongs. `sitesDir` lies inside `edgeDir/sites/`, or in the shipped mode only is `sites/` itself, as
- * the dev stack mounts it (P1.34q); a snippet is a regular file inside `edgeDir/snippets/`; a site is
- * a regular file, or a symlink to one, inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
+ * belongs. In the shipped mode `sitesDir` lies inside `edgeDir/sites/` or is `sites/` itself, as the dev stack mounts it
+ * (P1.34q); a snippet is a regular file inside `edgeDir/snippets/`; a site is a regular file, or a symlink to one,
+ * inside `edgeDir/sites/`; none has a second hard link. Out of scope: hard links
  * beyond that count, and a file swapped between `kind` and `read`, since this is a build-time reader over a checkout.
  * Any error it throws carries no value from `env` (P1.30h).
  *
  * In the "local" mode (P1.34a, P1.34o), `local/app.caddy` is read as one more enabled site and `local/tls.caddy` in
  * place of `snippets/tls.caddy`, as the local stack's two read-only file mounts place them; each must be a regular file
- * inside local/, and no other file there is read (architecture record 2026-10-13-p127l-local-gaps, item 1). `sitesDir`
- * stays inside sites/ in both modes. Only the local mode takes the enabled sites as a list of file mounts in place of
- * `sitesDir` (P1.34q; local-gaps Amendment 3 S2), checked by `mountedSites`; C18 still passes a directory there until
- * P1.34d moves it to the list. In either mode a file outside
- * local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and APP_UPSTREAM must differ from the
- * PDS ones.
+ * inside local/, and no other file there is read (architecture record 2026-10-13-p127l-local-gaps, item 1). The local
+ * mode takes the enabled sites only as a list of file mounts, checked by `mountedSites` (P1.34q; local-gaps Amendment 3
+ * S2), and refuses a directory (P1.33n); C18 passes that list (P1.33y). The shipped mode takes only a directory. In
+ * either mode a file outside local/, the Caddyfile included, holding a LOCAL_ONLY part fails, and APP_HOST and
+ * APP_UPSTREAM must differ from the PDS ones.
  */
 export function readEdgeConfig(
   edgeDir: string,
@@ -519,7 +518,7 @@ function readEdgeTree(
     if (line === FILE_IMPORTS[0]) return globbed(files, snippets.path, [snippets], false, line, read);
     if (line === FILE_IMPORTS[1]) {
       if (typeof sitesDir !== "string") return mountedSites(files, sitesDir, sites, local, read);
-      return globbed(files, sitesDir, [sites], true, line, read, mode === "local" ? local : null);
+      return globbed(files, sitesDir, [sites], true, line, read);
     }
     return line;
   });
@@ -572,36 +571,14 @@ const areas = (bounds: Bound[]): string => bounds.map((bound) => bound.area).joi
 /** The one file the local stack mounts into the enabled sites, from local/ (P1.34o). */
 const MOUNTED_SITE = "app.caddy";
 
-/**
- * The text of every entry of `dir` in byte order, each read through `read`, which checks where it resolves. With
- * `mounted`, MOUNTED_SITE from there joins the entries as its mount places it: a regular file, never a link, and never
- * beside an entry of the same name, which the mount would hide from Caddy but not from this reader.
- */
-function globbed(
-  files: EdgeFiles,
-  dir: string,
-  bounds: Bound[],
-  links: boolean,
-  line: string,
-  read: Reader,
-  mounted: Bound | null = null,
-): string {
+/** The text of every entry of `dir` in byte order, each read through `read`, which checks where it resolves. */
+function globbed(files: EdgeFiles, dir: string, bounds: Bound[], links: boolean, line: string, read: Reader): string {
   const names = files.list(dir);
-  if (mounted !== null) {
-    if (names.includes(MOUNTED_SITE)) {
-      throw new CaddyfileError(`${MOUNTED_SITE}: an enabled site has the mounted app site's name`);
-    }
-    if (files.realpath(`${mounted.path}/${MOUNTED_SITE}`) === null) {
-      throw new CaddyfileError(`${MOUNTED_SITE}: missing from ${mounted.area}`);
-    }
-    names.push(MOUNTED_SITE);
-  }
   if (names.length === 0) throw new CaddyfileError(`${line} matches nothing`);
   return names
     .sort()
     .map((name) => {
       if (!CADDY_FILE.test(name)) throw new CaddyfileError(`${name}: not a .caddy file`);
-      if (mounted !== null && name === MOUNTED_SITE) return read(mounted.path, name, [mounted], false);
       return read(dir, name, bounds, links);
     })
     .join("\n");
