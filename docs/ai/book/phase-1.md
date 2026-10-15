@@ -8949,17 +8949,18 @@ local-only service that skips the env drift test picking up a key that changes i
   map). Any value that differs, is missing, or belongs to a service not in the table fails, naming the service and
   key. A local-only service gets its own row. Red tests: `pids_limit` 4096 on the reader, `mem_limit` raised on web,
   `cpus` removed from edge, and a service missing from the table.
-- I-2, env of local-only services: local-only services (pds-token-reader, seed, and plc from P1.34v) skip
-  environmentDrift, since dev has nothing to compare them with. Each one's environment is pinned in the drift test as an
-  exact key-value map, written as the compose file has it: a literal, or a `${VAR}` reference kept as text and never
-  resolved, so no secret enters the table. A secret-bearing key (`*_PASSWORD`, `*_SECRET`, `*_TOKEN`, `*_KEY`, or
-  anything the secret scanner or SE-7 treats as secret) must be a `${VAR}` reference, never a literal, in both compose
-  and the table (architecture, in the same record). Its `env_file` list is pinned exactly, in order. Any added, removed
-  or changed entry fails, naming the service and key (for example APP_* on seed or plc). P1.34v adds plc's map the same
-  way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red tests: APP_HOST on seed,
-  NODE_TLS_REJECT_UNAUTHORIZED on the reader, an unlisted `env_file` on seed, a changed value of an allowed key (for
-  example the reader's PDS URL), a deleted allowed key, a literal in place of a `${VAR}` reference, and a literal on a
-  secret-bearing key.
+- I-2, env of local-only services: local-only services skip environmentDrift, since dev has nothing to compare them
+  with. This step pins the ones that exist when it lands (pds-token-reader); P1.34v adds plc and P1.29s adds seed, each
+  with its limits row and env pins, in its own PR (Codex on #910: seed does not exist before P1.29s). Each one's
+  environment is pinned in the drift test as an exact key-value map, written as the compose file has it: a literal, or a
+  `${VAR}` reference kept as text and never resolved, so no secret enters the table. A secret-bearing key (`*_PASSWORD`,
+  `*_SECRET`, `*_TOKEN`, `*_KEY`, or anything the secret scanner or SE-7 treats as secret) must be a `${VAR}` reference,
+  never a literal, in both compose and the table (architecture, in the same record). Its `env_file` list is pinned
+  exactly, in order. Any added, removed or changed entry fails, naming the service and key (for example APP_* on the
+  reader). P1.34v adds plc's map the same way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red
+  tests: APP_HOST on the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, an unlisted `env_file` on the reader, a
+  changed value of an allowed key (for example the reader's PDS URL), a deleted allowed key, a literal in place of a
+  `${VAR}` reference, and a literal on a secret-bearing key.
 - The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
   record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
   (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
@@ -12461,6 +12462,8 @@ P1.29h, P1.29s, P1.29t.
    point 1); it creates accounts through the local PDS and confirms their email through P1.29h's reader and the real
    `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one `logging` entry: exactly
    `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
+   adds seed's row to P1.35r's limits table and seed's exact environment map and `env_file` list to P1.35r's
+   local-only env pins, with red tests APP_HOST on seed and an unlisted `env_file` on seed (Codex on #910). It
    also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
    2026-10-12-p134l-secrets-folder-listing, rider), and a test that the token reader passes `hostWalk` to the pin
    unchanged, so mutant R12 (statfs blind) dies (verify-845-200b534 N3; book edit 2026-10-13-host-pin-steps, "Step-book
