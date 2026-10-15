@@ -311,14 +311,15 @@ describe("preflight", () => {
   });
 
   test("c2_image_not_ours_or_unlocked_fails", async () => {
-    // Not the lock's edge ref, so C18 fails too (P1.30w), and C25, because the edge adds a capability (P1.30x).
+    // Not the lock's edge ref, so C18 fails too (P1.30w), C25, because the edge adds a capability (P1.30x), and C17,
+    // because a service that is not the edge shares a network with the PDS (P1.35o).
     for (const image of [
       `docker.io/library/caddy@${digest("a")}`,
       "ghcr.io/undefined6799/edge:latest",
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
       const result = await check({ compose: COMPOSE.replace(EDGE, image) });
-      expect(failed(result.lines), image).toEqual(["C2", "C18", "C25"]);
+      expect(failed(result.lines), image).toEqual(["C2", "C17", "C18", "C25"]);
       expect(result.code, image).toBe(1);
     }
   });
@@ -326,13 +327,13 @@ describe("preflight", () => {
   test("missing_input_fails_check_not_run", async () => {
     const result = await check({ lock: null });
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
-    // C18 reads the lock's edge ref (P1.30w), and C25 does for the edge's cap_add (P1.30x), so both fail closed with
-    // the lock too, and without the edge entry alone.
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18", "C25"]);
+    // C18 reads the lock's edge ref (P1.30w), C25 does for the edge's cap_add (P1.30x), and C17 to know the edge beside
+    // the PDS (P1.35o), so all three fail closed without the lock, and without the edge entry alone.
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C17", "C18", "C25"]);
     expect(result.code).toBe(1);
     const { edge: _, ...noEdge } = LOCK;
     const unlisted = (await check({ lock: noEdge })).lines;
-    expect(failed(unlisted)).toEqual(["C2", "C18", "C25"]);
+    expect(failed(unlisted)).toEqual(["C2", "C17", "C18", "C25"]);
     expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
@@ -1692,6 +1693,25 @@ describe("preflight C17 (P1.30t)", () => {
     );
   });
 
+  test("c17_neighbours_are_known_by_image", async () => {
+    // Architecture 2026-10-15 03:05Z, F3: a PDS and the edge are known by the image they run, never by name alone.
+    const c17 = async (compose: string, networks: object = TABLE) =>
+      (await check({ compose, networks })).lines.find((line) => / C17 /.test(line));
+    const beside = (name: string, image: string) =>
+      COMPOSE.replace("  web:\n", `  ${name}:\n    image: ${image}\n  web:\n`);
+    const withMember = (name: string) => ({ ...TABLE, default: { internal: false, members: ["edge", "pds", name] } });
+    // A second service running the PDS image, under another name, is a second PDS.
+    expect(await c17(beside("relay", PDS), withMember("relay"))).toBe("FAIL C17 pds and relay both run the pds");
+    // A service named edge that runs another image is no edge.
+    expect(await c17(COMPOSE.replace(`    image: ${EDGE}\n`, `    image: ${WEB}\n`))).toBe(
+      "FAIL C17 edge shares a network with the pds",
+    );
+    // Nor is a service whose name merely starts with edge (verify-895 N5).
+    expect(await c17(beside("edge-proxy", WEB), withMember("edge-proxy"))).toBe(
+      "FAIL C17 edge-proxy shares a network with the pds",
+    );
+  });
+
   test("c17_default_network_counted", async () => {
     // A service with no networks key joins `default`, so a table without it, or without one of its members, fails.
     await expectOnly("C17", { networks: {} });
@@ -1847,9 +1867,10 @@ describe("preflight C25 (P1.30x)", () => {
 
   test("c25_edge_image_built_from_another_dockerfile_fails", async () => {
     const compose = built("edge", EDGE, "deployment/images/node-app.Dockerfile");
-    expect(await expectOnly("C25", { compose, files: DOCKERFILES })).toBe(
-      "FAIL C25 edge adds a capability but its image and build name different images",
-    );
+    const result = await check({ compose, files: DOCKERFILES });
+    // A mismatched edge is no edge, so C17 also refuses it beside the PDS (P1.35o, architecture 03:05Z F3).
+    expect(failed(result.lines)).toEqual(["C17", "C25"]);
+    expect(result.lines).toContain("FAIL C25 edge adds a capability but its image and build name different images");
   });
 
   test("c25_other_image_built_from_the_edge_dockerfile_fails", async () => {
@@ -2620,6 +2641,139 @@ networks:
     ]) {
       expect(await c28(value), value).toBe("FAIL C28 PDS_DID_PLC_URL is not the local PLC");
     }
+  });
+
+  test("local_c17_plc_beside_the_pds_only_as_ruled", async () => {
+    // Architecture 2026-10-15 03:05Z, F1: the PDS publishes to http://plc:2582, so under --env local the PLC may share
+    // `plc_pds` with it, and only there, only the two of them, and only running the base lock's localOnly plc entry.
+    const PLC = { ref: "docker.io/example/plc", tag: "0.0.1", digest: digest("e") };
+    const PLC_IMAGE = `${PLC.ref}:${PLC.tag}@${PLC.digest}`;
+    const bases = (localOnly: unknown) =>
+      JSON.stringify({
+        ...JSON.parse(BASES),
+        plc: { ...PLC, source: "upstream", stage: "runtime", buildStage: false, localOnly },
+      });
+    const shape = ({ name = "plc", image = PLC_IMAGE, network = "plc_pds", plcAlso = "", webAlso = "" } = {}) =>
+      LOCAL.replace(
+        "    env_file: ../../unset-dev-env/pds.env\n",
+        `    env_file: ../../unset-dev-env/pds.env\n    networks: [default, ${network}]\n`,
+      )
+        .replace("    networks: [back]\n", `    networks: [back${webAlso}]\n`)
+        .replace(
+          "\nsecrets:\n  db_password:",
+          `\n  ${name}:\n    image: ${image}\n    networks: [${network}${plcAlso}]\nsecrets:\n  db_password:`,
+        )
+        .replace("\nnetworks:\n  back: {}\n", `\nnetworks:\n  back: {}\n  ${network}:\n    internal: true\n`);
+    const table = (network: string, members: string[]) => ({
+      ...TABLE,
+      [network]: { internal: true, members: ["pds", ...members] },
+    });
+    const c17 = async (compose: string, networks: object, localOnly: unknown = true, env = "local") => {
+      const files = { "deployment/images/bases.lock.json": bases(localOnly) };
+      const { lines } =
+        env === "local"
+          ? await local(() => compose, { networks, files })
+          : await check({ compose, networks, files }, env);
+      return lines.find((line) => / C17 /.test(line));
+    };
+    const plcNeighbour = "FAIL C17 plc shares a network with the pds";
+    expect(await c17(shape(), table("plc_pds", ["plc"]))).toBe("PASS C17 ok");
+    // The same compose under dev.
+    expect(await c17(shape(), table("plc_pds", ["plc"]), true, "dev")).toBe(plcNeighbour);
+    // No plc entry, or a malformed one, is no exemption (architecture 03:05Z addendum).
+    const noEntry = { "deployment/images/bases.lock.json": BASES };
+    expect(
+      (await local(() => shape(), { networks: table("plc_pds", ["plc"]), files: noEntry })).lines.find((line) =>
+        / C17 /.test(line),
+      ),
+    ).toBe(plcNeighbour);
+    for (const plc of ["x", null, [], { ...PLC, localOnly: true, digest: undefined }]) {
+      const files = { "deployment/images/bases.lock.json": JSON.stringify({ ...JSON.parse(BASES), plc }) };
+      const { lines } = await local(() => shape(), { networks: table("plc_pds", ["plc"]), files });
+      expect(
+        lines.find((line) => / C17 /.test(line)),
+        JSON.stringify(plc),
+      ).toBe(plcNeighbour);
+    }
+    // A malformed entry exempts nothing, even for a service that spells out the same broken string (verify-906 S2).
+    const broken: [object, string][] = [
+      [{ ref: PLC.ref, tag: PLC.tag }, `${PLC.ref}:${PLC.tag}@undefined`],
+      [{ ...PLC, digest: "" }, `${PLC.ref}:${PLC.tag}@`],
+      [{ ref: PLC.ref, digest: PLC.digest }, `${PLC.ref}:undefined@${PLC.digest}`],
+      [{ ...PLC, digest: 1 }, `${PLC.ref}:${PLC.tag}@1`],
+      [{ ...PLC, ref: "" }, `:${PLC.tag}@${PLC.digest}`],
+      [{ ...PLC, tag: "" }, `${PLC.ref}:@${PLC.digest}`],
+      // A digest that is not a string but reads as the right one, and a short one.
+      [{ ...PLC, digest: [PLC.digest] }, PLC_IMAGE],
+      [{ ...PLC, digest: `sha256:${"e".repeat(63)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}`],
+      [{ ...PLC, digest: `sha256:${"E".repeat(64)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`],
+    ];
+    for (const [entry, image] of broken) {
+      const plc = { ...entry, source: "upstream", stage: "runtime", buildStage: false, localOnly: true };
+      const files = { "deployment/images/bases.lock.json": JSON.stringify({ ...JSON.parse(BASES), plc }) };
+      const { lines } = await local(() => shape({ image: JSON.stringify(image) }), {
+        networks: table("plc_pds", ["plc"]),
+        files,
+      });
+      expect(
+        lines.find((line) => / C17 /.test(line)),
+        image,
+      ).toBe(plcNeighbour);
+    }
+    // Exactly the entry's image: one digest character, no digest, no tag, another tag, or the digest's case.
+    for (const image of [
+      `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}f`,
+      `${PLC.ref}:${PLC.tag}`,
+      `${PLC.ref}@${PLC.digest}`,
+      `${PLC.ref}:0.0.2@${PLC.digest}`,
+      `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`,
+    ]) {
+      expect(await c17(shape({ image }), table("plc_pds", ["plc"])), image).toBe(plcNeighbour);
+    }
+    // The same compose under prod.
+    expect(await c17(shape(), table("plc_pds", ["plc"]), true, "prod")).toContain("plc shares a network with the pds");
+    // The localOnly entry under another key is no plc entry.
+    const otherKey = {
+      "deployment/images/bases.lock.json": JSON.stringify({
+        ...JSON.parse(BASES),
+        directory: { ...PLC, localOnly: true },
+      }),
+    };
+    expect(
+      (await local(() => shape(), { networks: table("plc_pds", ["plc"]), files: otherKey })).lines.find((line) =>
+        / C17 /.test(line),
+      ),
+    ).toBe(plcNeighbour);
+    // The entry is not marked localOnly.
+    const noFlag = {
+      "deployment/images/bases.lock.json": JSON.stringify({
+        ...JSON.parse(BASES),
+        plc: { ...PLC, source: "upstream", stage: "runtime", buildStage: false },
+      }),
+    };
+    expect(
+      (await local(() => shape(), { networks: table("plc_pds", ["plc"]), files: noFlag })).lines.find((line) =>
+        / C17 /.test(line),
+      ),
+    ).toBe(plcNeighbour);
+    for (const localOnly of [false, null, "true", 1]) {
+      expect(await c17(shape(), table("plc_pds", ["plc"]), localOnly), String(localOnly)).toBe(plcNeighbour);
+    }
+    // plc on another network it shares with the PDS.
+    const onDefault = { ...table("plc_pds", ["plc"]), default: { internal: false, members: ["edge", "pds", "plc"] } };
+    expect(await c17(shape({ plcAlso: ", default" }), onDefault)).toBe(plcNeighbour);
+    // A third member on plc_pds.
+    const third = { ...table("plc_pds", ["plc", "web"]), back: { internal: false, members: ["web"] } };
+    expect(await c17(shape({ webAlso: ", plc_pds" }), third)).toBe(
+      "FAIL C17 web shares a network with the pds; plc shares a network with the pds",
+    );
+    // A service named plc that runs another image.
+    const other = `docker.io/example/other:0.0.1@${digest("f")}`;
+    expect(await c17(shape({ image: other }), table("plc_pds", ["plc"]))).toBe(plcNeighbour);
+    // The PLC's image under another name, on another network with the PDS.
+    expect(await c17(shape({ name: "directory", network: "plc_web" }), table("plc_web", ["directory"]))).toBe(
+      "FAIL C17 directory shares a network with the pds",
+    );
   });
 
   test("local_unsigned_never_hides_a_failure", async () => {

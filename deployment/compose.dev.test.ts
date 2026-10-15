@@ -9,7 +9,7 @@ import { VENDOR_IMAGES } from "./images/vendor.ts";
 import { c26 } from "./preflight/checks/build.ts";
 import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
-import { networkTableProblems, parseNetworkTable } from "./preflight/checks/networks.ts";
+import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
 import { type Compose, parseCompose, parseStrictData, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
@@ -259,6 +259,16 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(postgres.networks.length).toBeGreaterThan(0);
     for (const network of postgres.networks) expect(internal.has(network), network).toBe(true);
     expect(postgres.ports).toEqual([]);
+  });
+
+  test("web_only_on_internal_networks", () => {
+    // web has no way out: every network it joins is internal (architecture 02:05Z option C; verify-895 N2).
+    const compose = dev();
+    const internal = new Set(compose.networks.filter((n) => n.internal).map((n) => n.name));
+    const web = service(compose, "web");
+    expect(web.networks.length).toBeGreaterThan(0);
+    for (const network of web.networks) expect(internal.has(network), network).toBe(true);
+    expect(web.ports).toEqual([]);
   });
 
   test("compose_dev_only_edge_publishes", () => {
@@ -635,13 +645,14 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     }
   };
 
-  /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
-  const outcomes = async (edit: (text: string) => string = (text) => text): Promise<Outcome[]> => {
+  const BASES = join(CHECKOUT, "deployment/images/bases.lock.json");
+  /** The preflight's inputs for compose.dev.yaml's text after `edit`, with the real base lock and no deploy lock. */
+  const devInputs = (edit: (text: string) => string = (text) => text) => {
     const file = join(DEPLOYMENT, FILE);
     const { inputs } = loadInputs(["--env", "dev", "--compose", file, "--interpolation-env", ENV_FILE], {
       root: CHECKOUT,
       run: async () => ({ code: 1, stdout: "", stderr: "" }),
-      readText: (path) => (path === file ? edit(read(FILE)) : null),
+      readText: (path) => (path === file ? edit(read(FILE)) : path === BASES ? readFileSync(BASES, "utf8") : null),
       readEnv: (path) =>
         path === ENV_FILE
           ? { text: read("env/dev-public.example.env"), id: `${DEV}:3` }
@@ -656,9 +667,26 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
       uid: DEPLOY_UID,
       environment: {},
     });
+    return inputs;
+  };
+  /** C9's and C26's outcomes for compose.dev.yaml's text after `edit`. */
+  const outcomes = async (edit?: (text: string) => string): Promise<Outcome[]> => {
+    const inputs = devInputs(edit);
     const signal = new AbortController().signal;
     return [await c9.run(inputs, signal), await c26.run(inputs, signal)];
   };
+
+  test("compose_dev_pds_neighbours_pass", () => {
+    // verify-895 F2: the same neighbour check C17 runs at deploy, on the real file, so CI refuses what C17 would. The
+    // PDS is known by the base lock's image and the edge by its Dockerfile (P1.35o, architecture 03:05Z F3).
+    expect(pdsNeighbours(devInputs())).toEqual([]);
+    const webOnEdge = (text: string) => text.replace("    networks: [db, app]\n", "    networks: [db, app, edge]\n");
+    expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
+    const renamed = (text: string) =>
+      text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
+    // Renamed, the PDS is still known by its image.
+    expect(pdsNeighbours(devInputs((text) => webOnEdge(renamed(text))))).toEqual(["web shares a network with the pds"]);
+  });
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
