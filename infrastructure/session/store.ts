@@ -8,6 +8,7 @@
 // It moved here from infrastructure/postgres/session/ (P2.03c). The comment in migration 0011 still names the old
 // folder; applied migrations are locked by their checksums (infrastructure/postgres/migrate.ts), so it stays.
 import { createHash, randomBytes } from "node:crypto";
+import type { Did } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
 
@@ -25,7 +26,7 @@ type Db = SessionDb;
 /** Idle and absolute lifetimes, and the least time between two touches, in seconds (interfaces/http config). */
 export type SessionLimits = { readonly idleS: number; readonly absoluteS: number; readonly touchIntervalS: number };
 export type Session = {
-  readonly did: string;
+  readonly did: Did;
   readonly idHash: Buffer;
   readonly createdAt: Date;
   /** P2.11's cache of the PDS's answer; null until checked. */
@@ -41,10 +42,10 @@ export type SessionRequest = {
 export type SessionRead = { readonly session: Session | null; readonly clearCookie: boolean };
 
 export type SessionStore = {
-  create(db: Db, did: string, options?: { readonly replacingCookie?: string }): Promise<CreatedSession>;
+  create(db: Db, did: Did, options?: { readonly replacingCookie?: string }): Promise<CreatedSession>;
   read(request: SessionRequest): Promise<SessionRead>;
   destroy(db: Db, idHash: Buffer): Promise<void>;
-  setEmailConfirmed(db: Db, target: Buffer | { readonly did: string }, value: boolean): Promise<void>;
+  setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean): Promise<void>;
   sweep(db: Db): Promise<number>;
 };
 export type CreatedSession = { readonly cookieValue: string; readonly expiresAt: Date };
@@ -65,8 +66,9 @@ function idHashOf(cookieValue: string): Buffer | null {
   return bytes.length === ID_BYTES && bytes.toString("base64url") === cookieValue ? sha256(bytes) : null;
 }
 
+/** `did` comes from a `types.did` column, which holds only DIDs that parsed when they were written. */
 type SessionRow = {
-  did: string;
+  did: Did;
   created_at: Date;
   email_confirmed: boolean | null;
   expired: boolean;
@@ -83,7 +85,7 @@ export function createSessionStore(options: {
   const memo = new WeakMap<object, Promise<SessionRead>>();
 
   /** Rotation first (this browser's previous session dies, whoever it belonged to), then a fresh id. */
-  async function create(db: Db, did: string, { replacingCookie }: { readonly replacingCookie?: string } = {}) {
+  async function create(db: Db, did: Did, { replacingCookie }: { readonly replacingCookie?: string } = {}) {
     const previous = replacingCookie === undefined ? null : idHashOf(replacingCookie);
     if (previous !== null) await destroy(db, previous);
     // A repeated id is astronomically unlikely (2^-256); one retry with a new id, then the error stands.
@@ -156,7 +158,7 @@ export function createSessionStore(options: {
   }
 
   /** P2.11's cache, for one session or for every session of a DID. */
-  async function setEmailConfirmed(db: Db, target: Buffer | { readonly did: string }, value: boolean) {
+  async function setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean) {
     const set = "UPDATE app.session SET email_confirmed = $2, email_checked_at = now()";
     if (Buffer.isBuffer(target)) await db.query(`${set} WHERE id_hash = $1`, [target, value]);
     else await db.query(`${set} WHERE did = $1`, [target.did, value]);

@@ -3,6 +3,7 @@
 // the columns it may insert, so every expiry is judged by the database clock, as in production.
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
+import { type Did, parseDid } from "@unset/domains-identity";
 import { createSessionStore, type SessionLimits } from "@unset/infrastructure-session";
 import { AppError } from "@unset/shared-errors";
 import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
@@ -28,8 +29,13 @@ const web = webPool();
 afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 const LIMITS: SessionLimits = { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 };
-const DID_A = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
-const DID_B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
+const did = (text: string): Did => {
+  const parsed = parseDid(text);
+  if (parsed === null) throw new Error(`test DID did not parse: ${text}`);
+  return parsed;
+};
+const DID_A = did("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa");
+const DID_B = did("did:plc:bbbbbbbbbbbbbbbbbbbbbbbb");
 const sha256 = (data: Uint8Array): Buffer => createHash("sha256").update(data).digest();
 
 const sql = <T extends Record<string, unknown>>(text: string, values: unknown[] = []) =>
@@ -255,14 +261,14 @@ describe("session store", () => {
 
   test("session.set_email_confirmed", async () => {
     const { store, request } = setup();
-    const did = "did:plc:cccccccccccccccccccccccc";
-    const first = await insertSession(did);
-    const second = await insertSession(did);
+    const owner = did("did:plc:cccccccccccccccccccccccc");
+    const first = await insertSession(owner);
+    const second = await insertSession(owner);
     const one = await store.read(request(first));
     await withClient(web, null, (db) => store.setEmailConfirmed(db, one.session?.idHash as Buffer, true));
     expect((await store.read(request(first))).session?.emailConfirmed).toBe(true);
     expect((await store.read(request(second))).session?.emailConfirmed).toBeNull();
-    await withClient(web, null, (db) => store.setEmailConfirmed(db, { did }, false));
+    await withClient(web, null, (db) => store.setEmailConfirmed(db, { did: owner }, false));
     expect((await store.read(request(first))).session?.emailConfirmed).toBe(false);
     expect((await store.read(request(second))).session?.emailConfirmed).toBe(false);
   });
