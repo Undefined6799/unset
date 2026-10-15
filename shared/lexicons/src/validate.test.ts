@@ -18,6 +18,23 @@ describe("validateRecord", () => {
       "write",
     );
     expect(nested).toEqual({ ok: false, errors: ["$.stats[0].x: unknown field"] });
+    // A field named after an Object.prototype member is unknown like any other.
+    for (const key of ["constructor", "toString", "__proto__"]) {
+      const inherited = validateRecord(
+        "sh.unset.profile",
+        JSON.parse(`{"$type":"sh.unset.profile","displayName":"Ada","createdAt":"${CREATED}","${key}":"x"}`),
+        "write",
+      );
+      expect(inherited, key).toEqual({ ok: false, errors: [`$.${key}: unknown field`] });
+    }
+  });
+
+  test("validate_write_accepts_nested_type_discriminator", () => {
+    // An object behind a ref may name its def (atproto.com/specs/lexicon, "$type"); the generated validator accepts it.
+    const typed = { ...profile, stats: [{ $type: "sh.unset.profile#stat", label: "a", value: "1" }] };
+    expect(validateRecord("sh.unset.profile", typed, "write")).toEqual({ ok: true, value: typed });
+    const wrong = { ...profile, stats: [{ $type: "sh.unset.profile#other", label: "a", value: "1" }] };
+    expect(validateRecord("sh.unset.profile", wrong, "write").ok).toBe(false);
   });
 
   test("validate_read_accepts_unknown_field", () => {

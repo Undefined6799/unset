@@ -102,6 +102,40 @@ describe("schema build checks", () => {
     const inherits = authApp();
     (setOf(inherits).permissions as unknown[]).push({ ...rpc, inheritAud: true });
     expect(planted(inherits)).toEqual([]);
+    // Without inheritAud the server drops the entry (@atproto/oauth-scopes include-scope.js parseLexPermission).
+    const neither = authApp();
+    (setOf(neither).permissions as unknown[]).push(rpc);
+    expect(planted(neither)).toEqual(["schemas/sh.unset.authApp.json: permission 2 does not set inheritAud: true"]);
+  });
+
+  test("permission_entry_keys_exact", () => {
+    // A misspelt key is kept by the parser and dropped by the server, so `acton` would turn a create/delete-only entry
+    // into one that allows every action, widening every existing grant at its next refresh.
+    const typo = authApp();
+    const follow = (setOf(typo).permissions as Record<string, unknown>[]).find(
+      (p) => p.resource === "repo" && p.action,
+    );
+    if (follow === undefined) throw new Error("the set has no repo entry with actions");
+    follow.acton = follow.action;
+    delete follow.action;
+    expect(planted(typo)).toEqual(['schemas/sh.unset.authApp.json: permission 1 has unknown key "acton"']);
+    const rpcExtra = authApp();
+    (setOf(rpcExtra).permissions as unknown[]).push({
+      type: "permission",
+      resource: "rpc",
+      lxm: ["sh.unset.getThing"],
+      inheritAud: true,
+      collection: ["sh.unset.profile"],
+    });
+    expect(planted(rpcExtra)).toEqual(['schemas/sh.unset.authApp.json: permission 2 has unknown key "collection"']);
+  });
+
+  test("schema_file_names_unique", () => {
+    // schemas/ and vendor/ are copied into one folder for `lex build`; a shared name would let one silently win.
+    const twin = { ...ours("sh.unset.follow"), file: "vendor/sh.unset.follow.json", ours: false };
+    expect(schemaProblems([ours("sh.unset.follow"), twin])).toContain(
+      "vendor/sh.unset.follow.json: sh.unset.follow.json is also in schemas/",
+    );
   });
 
   test("follow_schema_in_first_set", () => {

@@ -45,7 +45,20 @@ export function readSchemas(root = PACKAGE): SchemaFile[] {
 
 /** Every problem in the given schema files; empty means they may be built. */
 export function schemaProblems(files: readonly SchemaFile[]): string[] {
-  return files.flatMap(({ file, doc: value, ours }) => {
+  return [...files.flatMap(fileProblems), ...sharedNames(files)];
+}
+
+/** schemas/ and vendor/ are copied into one folder for `lex build`, so a name in both would let one silently win. */
+function sharedNames(files: readonly SchemaFile[]): string[] {
+  const base = (file: string) => file.slice(file.indexOf("/") + 1);
+  const owned = new Set(files.filter((f) => f.ours).map((f) => base(f.file)));
+  return files
+    .filter((f) => !f.ours && owned.has(base(f.file)))
+    .map((f) => `${f.file}: ${base(f.file)} is also in schemas/`);
+}
+
+function fileProblems({ file, doc: value, ours }: SchemaFile): string[] {
+  {
     const parsed = doc.lexiconDocumentSchema.safeParse(value);
     if (!parsed.success) return [`${file}: invalid lexicon (${parsed.reason.message})`];
     const id = parsed.value.id;
@@ -55,7 +68,7 @@ export function schemaProblems(files: readonly SchemaFile[]): string[] {
     const main = parsed.value.defs.main;
     if (main?.type === "permission-set") problems.push(...permissionSetProblems(main).map((p) => `${file}: ${p}`));
     return problems;
-  });
+  }
 }
 
 // The lexicon parser keeps keys it does not know, so a misspelt constraint ("maxGraphems") would silently drop a
@@ -106,21 +119,36 @@ function childNodes(node: Node, path: string): (readonly [Node, string])[] {
 }
 
 /**
+ * The keys a set's entry may carry, per resource: what @atproto/oauth-scopes 0.5.13 reads from it (repo: collection
+ * and action; rpc: lxm, aud, inheritAud). The parser keeps any other key and the server ignores it, so a misspelt
+ * `action` would grant every action.
+ */
+const PERMISSION_KEYS = {
+  repo: ["type", "resource", "collection", "action"],
+  rpc: ["type", "resource", "lxm", "aud", "inheritAud"],
+} as const satisfies Record<string, readonly string[]>;
+
+/**
  * A set may grant only repo: and rpc: under its own group prefix, and an rpc: entry must inherit its audience
  * (@atproto/oauth-scopes 0.5.13, dist/scopes/include-scope.js: parseLexPermission, isParentAuthorityOf). Its
- * consent text appears on every user's consent screen, in English and French (invariant 8).
+ * consent text appears on every user's consent screen; English only until the i18n slice adds French.
  */
 export function permissionSetProblems(set: doc.LexiconPermissionSet): string[] {
   const problems = set.permissions.flatMap((permission, i) => {
     const { resource } = permission;
     if (resource !== "repo" && resource !== "rpc")
       return [`permission ${i} has resource "${resource}"; only repo and rpc`];
+    const allowed: readonly string[] = PERMISSION_KEYS[resource];
+    const unknown = Object.keys(permission).filter((key) => !allowed.includes(key));
+    const found = unknown.map((key) => `permission ${i} has unknown key "${key}"`);
     const names = (resource === "repo" ? permission.collection : permission.lxm) as unknown;
     const list = Array.isArray(names) ? names.map(String) : [String(names)];
     const outside = list.filter((nsid) => !nsid.startsWith(SET_PREFIX) || nsid.length <= SET_PREFIX.length);
-    const found = outside.map((nsid) => `permission ${i} names ${nsid} outside ${SET_PREFIX}`);
+    found.push(...outside.map((nsid) => `permission ${i} names ${nsid} outside ${SET_PREFIX}`));
     if (resource === "rpc" && permission.aud !== undefined)
       found.push(`permission ${i} has a fixed aud; rpc entries use inheritAud`);
+    else if (resource === "rpc" && permission.inheritAud !== true)
+      found.push(`permission ${i} does not set inheritAud: true`);
     return found;
   });
   for (const field of ["title", "detail"] as const) {

@@ -34,7 +34,7 @@ export function validateRecord(nsid: RecordNsid, value: unknown, mode: Mode): Va
   if (value.$type !== nsid) return { ok: false, errors: [`$.$type: expected "${nsid}"`] };
   const checked = (entry.validator as Validator).$safeValidate(toLex(value));
   if (!checked.success) return { ok: false, errors: [checked.reason.message] };
-  const unknown = mode === "write" && entry.strict ? unknownFields(entry.defs as Defs, "main", value, "$") : [];
+  const unknown = mode === "write" && entry.strict ? unknownFields(nsid, entry.defs as Defs, "main", value, "$") : [];
   return unknown.length > 0 ? { ok: false, errors: unknown } : { ok: true, value };
 }
 
@@ -46,20 +46,30 @@ function toLex(value: Record<string, unknown>): unknown {
   }
 }
 
-/** Fields of `value` that the def does not define, following local `#refs` into nested objects and array items. */
-function unknownFields(defs: Defs, name: string, value: Record<string, unknown>, path: string): string[] {
+/**
+ * Fields of `value` that the def does not define, following local `#refs` into nested objects and array items. A
+ * nested object may name its own def in `$type` (atproto.com/specs/lexicon, "$type"); the root's was checked already.
+ * Properties are looked up as own keys only, so a field named `constructor` is unknown like any other.
+ */
+function unknownFields(nsid: string, defs: Defs, name: string, value: Record<string, unknown>, path: string): string[] {
   const def = defs[name];
   const props = def?.record?.properties ?? def?.properties ?? {};
   return Object.entries(value).flatMap(([key, child]) => {
-    if (key === "$type" && path === "$") return [];
-    const prop = props[key];
+    if (key === "$type" && (path === "$" || child === `${nsid}#${name}`)) return [];
+    const prop = Object.hasOwn(props, key) ? props[key] : undefined;
     if (!prop) return [`${path}.${key}: unknown field`];
     const ref = prop.type === "array" ? prop.items?.ref : prop.ref;
     if (!ref?.startsWith("#")) return [];
     const items = prop.type === "array" && Array.isArray(child) ? child : [child];
     return items.flatMap((item, i) =>
       isObject(item)
-        ? unknownFields(defs, ref.slice(1), item, prop.type === "array" ? `${path}.${key}[${i}]` : `${path}.${key}`)
+        ? unknownFields(
+            nsid,
+            defs,
+            ref.slice(1),
+            item,
+            prop.type === "array" ? `${path}.${key}[${i}]` : `${path}.${key}`,
+          )
         : [],
     );
   });
