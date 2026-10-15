@@ -146,10 +146,13 @@ services:
     depends_on:
       pds:
         condition: service_started
-    # The PDS reaches the app's host and its own through these names on the network it shares with the edge, never
-    # extra_hosts or a fixed address (architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1).
+    # The PDS reaches the app's host and its own through these names on the network it shares with the edge, and web
+    # through the same names on the app network, never extra_hosts or a fixed address (architecture record
+    # 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1; architecture 2026-10-15 02:05Z, option C).
     networks:
       edge:
+        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
+      app:
         aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
     mem_limit: 256m
     cpus: 0.5
@@ -174,14 +177,14 @@ services:
       PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN}
       HTTP_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS}
       MEDIA_ORIGIN: ${WEB_MEDIA_ORIGIN}
-      # Nothing fronts web yet: it joins the edge network with its app host site in Phase 2, so the address is the
-      # socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
+      # Only the edge reaches web, on the app network, and its upstream snippet drops the client's address, so the
+      # address is the socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
       TRUSTED_PROXY_MODE: socket
       NODE_OPTIONS: --max-old-space-size=384
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db]
+    networks: [db, app]
     mem_limit: 512m
     cpus: 1
     pids_limit: 128
@@ -217,6 +220,11 @@ services:
 
 networks:
   db:
+    internal: true
+  # web's only way to the edge. web reaches the PDS only through the edge's aliases on this network, never directly.
+  # Internal, so web still has no way out. Record: the 02:05Z (option C) and 02:21Z sections of
+  # unset-plan/book-edits/2026-10-14-p134d-split.md.
+  app:
     internal: true
   # Only the edge shares a network with the PDS's HTTP port: the PDS trusts every private address as a proxy (step book
   # P1.29, "Networks"). pds_egress is the PDS's own way out (PLC, DID and handle resolution, client metadata).
