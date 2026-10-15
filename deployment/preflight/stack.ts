@@ -121,7 +121,12 @@ export function plan(
   const { action, env, files, envFile } = parse(argv);
   const compose = ["compose", ...files.flatMap((f) => ["-f", f]), "--env-file", envFile];
   const down: Command = { name: "docker", file: "docker", args: [...compose, "down"] };
-  const leafCheck: Command = { name: "the leaf check", file: process.execPath, args: [SERVED_LEAF], undo: down };
+  const leafCheck: Command = {
+    name: "the leaf check",
+    file: process.execPath,
+    args: [SERVED_LEAF, "--env", env],
+    undo: down,
+  };
   const commands: Command[] =
     action === "up"
       ? [

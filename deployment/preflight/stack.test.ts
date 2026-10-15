@@ -227,7 +227,11 @@ describe("stack wrapper (P1.27w)", () => {
     const { commands } = plan(LOCAL_UP, {});
     expect(commands.map((c) => c.file)).toEqual([process.execPath, "docker", process.execPath]);
     expect(commands[0]?.args.slice(1, 4)).toEqual(["--", "--env", "local"]);
-    expect(commands[2]?.args).toEqual([expect.stringMatching(/deployment\/preflight\/served-leaf\.ts$/)]);
+    expect(commands[2]?.args).toEqual([
+      expect.stringMatching(/deployment\/preflight\/served-leaf\.ts$/),
+      "--env",
+      "local",
+    ]);
     expect(plan(LOCAL_DOWN, {}).commands.map((c) => c.args.at(-1))).toEqual(["down"]);
   });
 
@@ -249,7 +253,7 @@ describe("stack wrapper (P1.27w)", () => {
     expect(failed.ran.map((command) => command.at(-1))).toEqual([
       expect.stringMatching(/\.env$/),
       "--build",
-      expect.stringMatching(/served-leaf\.ts$/),
+      "local",
       "down",
     ]);
     // A check that is killed or cannot start takes the stack down too.

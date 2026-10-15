@@ -5,9 +5,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSecureContext, createServer, type Server } from "node:tls";
+import { type ConnectionOptions, connect, createSecureContext, createServer, type Server } from "node:tls";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { servedLeafProblem } from "./served-leaf.ts";
+import { type Connect, servedLeafProblem } from "./served-leaf.ts";
 
 const HOSTS = ["app.localhost", "pds.localhost"];
 const SAN = HOSTS.map((host) => `DNS:${host}`).join(",");
@@ -42,8 +42,16 @@ describe("the served leaf check (P1.34d item 15)", () => {
     await new Promise<void>((ready) => server.listen(0, "127.0.0.1", ready));
     return (server.address() as AddressInfo).port;
   };
-  const check = (port: number, deadlineMs = 5_000) =>
-    servedLeafProblem({ hosts: HOSTS, copy: pem("leafA"), root: pem("root"), port, deadlineMs });
+  /** Every connect the check makes, as asked for; the socket goes to the test server's port instead of 443. */
+  let asked: ConnectionOptions[] = [];
+  const toPort =
+    (port: number): Connect =>
+    (options) => {
+      asked.push(options);
+      return connect({ ...options, port });
+    };
+  const check = (port: number, deadlineMs = 5_000, env = "local", copy = pem("leafA")) =>
+    servedLeafProblem({ env, copy, root: pem("root"), deadlineMs, connect: toPort(port) });
 
   beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), "served-leaf-"));
@@ -59,7 +67,38 @@ describe("the served leaf check (P1.34d item 15)", () => {
   });
 
   test("served_leaf_equal_to_the_copy_passes", async () => {
+    asked = [];
     expect(await check(await serve("leafA"))).toBeNull();
+    // Architecture 02:58Z, conditions 1 and 4: the fixed edge address, each host as the servername, the dev root only.
+    expect(
+      asked.map(({ host, port, servername, rejectUnauthorized }) => [host, port, servername, rejectUnauthorized]),
+    ).toEqual(HOSTS.map((host) => ["127.0.0.1", 443, host, true]));
+    expect(asked.every((options) => options.ca === pem("root"))).toBe(true);
+  });
+
+  test("the_check_refuses_before_connecting_outside_local", async () => {
+    // Architecture 02:58Z, conditions 2 and 3: under dev or prod, or for a name outside .localhost, nothing connects.
+    asked = [];
+    const port = await serve("leafA");
+    for (const env of ["dev", "prod", "LOCAL", ""]) {
+      expect(await check(port, 5_000, env), env).toBe("the leaf check runs only under --env local");
+    }
+    const outside = "the leaf names something other than hosts under .localhost";
+    const sans: [string, string][] = [
+      ["public", "DNS:app.example"],
+      ["bare", "DNS:localhost"],
+      ["suffix", "DNS:app.notlocalhost"],
+      ["ip", "DNS:app.localhost,IP:127.0.0.1"],
+    ];
+    for (const [name, san] of sans) {
+      make(
+        name,
+        ["basicConstraints=critical,CA:FALSE", `subjectAltName=${san}`, "extendedKeyUsage=serverAuth"],
+        "root",
+      );
+      expect(await check(port, 5_000, "local", pem(name)), name).toBe(outside);
+    }
+    expect(asked).toEqual([]);
   });
 
   test("served_leaf_other_than_the_copy_fails_naming_the_file", async () => {
