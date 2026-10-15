@@ -2691,7 +2691,67 @@ networks:
         JSON.stringify(plc),
       ).toBe(plcNeighbour);
     }
+    // A malformed entry exempts nothing, even for a service that spells out the same broken string (verify-906 S2).
+    const broken: [object, string][] = [
+      [{ ref: PLC.ref, tag: PLC.tag }, `${PLC.ref}:${PLC.tag}@undefined`],
+      [{ ...PLC, digest: "" }, `${PLC.ref}:${PLC.tag}@`],
+      [{ ref: PLC.ref, digest: PLC.digest }, `${PLC.ref}:undefined@${PLC.digest}`],
+      [{ ...PLC, digest: 1 }, `${PLC.ref}:${PLC.tag}@1`],
+      [{ ...PLC, ref: "" }, `:${PLC.tag}@${PLC.digest}`],
+      [{ ...PLC, tag: "" }, `${PLC.ref}:@${PLC.digest}`],
+      // A digest that is not a string but reads as the right one, and a short one.
+      [{ ...PLC, digest: [PLC.digest] }, PLC_IMAGE],
+      [{ ...PLC, digest: `sha256:${"e".repeat(63)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}`],
+      [{ ...PLC, digest: `sha256:${"E".repeat(64)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`],
+    ];
+    for (const [entry, image] of broken) {
+      const plc = { ...entry, source: "upstream", stage: "runtime", buildStage: false, localOnly: true };
+      const files = { "deployment/images/bases.lock.json": JSON.stringify({ ...JSON.parse(BASES), plc }) };
+      const { lines } = await local(() => shape({ image: JSON.stringify(image) }), {
+        networks: table("plc_pds", ["plc"]),
+        files,
+      });
+      expect(
+        lines.find((line) => / C17 /.test(line)),
+        image,
+      ).toBe(plcNeighbour);
+    }
+    // Exactly the entry's image: one digest character, no digest, no tag, another tag, or the digest's case.
+    for (const image of [
+      `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}f`,
+      `${PLC.ref}:${PLC.tag}`,
+      `${PLC.ref}@${PLC.digest}`,
+      `${PLC.ref}:0.0.2@${PLC.digest}`,
+      `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`,
+    ]) {
+      expect(await c17(shape({ image }), table("plc_pds", ["plc"])), image).toBe(plcNeighbour);
+    }
+    // The same compose under prod.
+    expect(await c17(shape(), table("plc_pds", ["plc"]), true, "prod")).toContain("plc shares a network with the pds");
+    // The localOnly entry under another key is no plc entry.
+    const otherKey = {
+      "deployment/images/bases.lock.json": JSON.stringify({
+        ...JSON.parse(BASES),
+        directory: { ...PLC, localOnly: true },
+      }),
+    };
+    expect(
+      (await local(() => shape(), { networks: table("plc_pds", ["plc"]), files: otherKey })).lines.find((line) =>
+        / C17 /.test(line),
+      ),
+    ).toBe(plcNeighbour);
     // The entry is not marked localOnly.
+    const noFlag = {
+      "deployment/images/bases.lock.json": JSON.stringify({
+        ...JSON.parse(BASES),
+        plc: { ...PLC, source: "upstream", stage: "runtime", buildStage: false },
+      }),
+    };
+    expect(
+      (await local(() => shape(), { networks: table("plc_pds", ["plc"]), files: noFlag })).lines.find((line) =>
+        / C17 /.test(line),
+      ),
+    ).toBe(plcNeighbour);
     for (const localOnly of [false, null, "true", 1]) {
       expect(await c17(shape(), table("plc_pds", ["plc"]), localOnly), String(localOnly)).toBe(plcNeighbour);
     }

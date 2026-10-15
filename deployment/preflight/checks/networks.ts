@@ -118,7 +118,8 @@ export const repository = (image: string): string => {
  * The local PLC's one exemption (architecture 2026-10-15 03:05Z, F1): the PDS publishes to http://plc:2582, so under
  * --env local it shares `plc_pds` with the PLC, and nothing else. All four must hold: the env is local; the network is
  * exactly `plc_pds`; the network's only members are the PDS and this service; and this service runs the base lock's
- * `plc` entry, marked localOnly, by exact ref:tag@digest.
+ * `plc` entry, marked localOnly, by exact ref:tag@digest. The entry must be well formed first, so a broken one that a
+ * service spells out the same way exempts nothing (verify-906-57737f2 S2).
  */
 function plcBesidePds(
   inputs: Inputs,
@@ -130,8 +131,17 @@ function plcBesidePds(
   if (inputs.env !== "local" || network !== "plc_pds") return false;
   const members = inputs.compose.services.filter((s) => s.networks.includes(network));
   if (members.length !== 2 || !members.includes(pds) || !members.includes(service)) return false;
-  return plc?.localOnly === true && service.image === exactImage(plc);
+  return plc?.localOnly === true && wellFormed(plc) && service.image === exactImage(plc);
 }
+
+/** A base lock entry with a non-empty ref and tag and a sha256 digest of 64 lower-case hex characters. */
+const wellFormed = (entry: BaseEntry): boolean =>
+  typeof entry.ref === "string" &&
+  entry.ref !== "" &&
+  typeof entry.tag === "string" &&
+  entry.tag !== "" &&
+  typeof entry.digest === "string" &&
+  /^sha256:[0-9a-f]{64}$/.test(entry.digest);
 
 /**
  * C17: no `network_mode` (host, service: or container: would bypass the table), and the networks match the table. The
