@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u,
-  P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c,
-  P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01
-  and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t,
+  P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d,
+  P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's
+  P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -307,6 +307,8 @@ flowchart LR
   P1_33r --> P1_32b
   P1_32c["P1.32c fixture DIDs replaced"]
   P1_35h["P1.35h in-flight rejection path tested"]
+  P1_35i["P1.35i test handles on reserved domains"]
+  P1_35j["P1.35j trusted test handles on reserved domains"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -8105,6 +8107,43 @@ would hang until its signal fires.
 - an abort listener is not left behind after the rejection.
 
 Done when a mutant that swallows the rejection, or resolves it, turns a test red, and check is green.
+
+---
+
+### P1.35i — Move test handles to reserved domains
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue (pending), product (`domains/identity/syntax.test.ts`, `deployment/preflight/preflight.test.ts`,
+`shared/log/logger.test.ts` and `shared/log/logger.hardening.test.ts`), kind/fix, lane Phase 1 after P1.35h (lane order
+only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
+step-book mapping. Nothing from Alex. Test handles on registrable domains (`*.bsky.social`, `*.0x40.me`) can belong to
+real people (rule SE-7a).
+
+**What:**
+- Files: `domains/identity/syntax.test.ts` (10 hits); `deployment/preflight/preflight.test.ts`;
+  `shared/log/logger.test.ts:248` and `:254`; `shared/log/logger.hardening.test.ts:69`.
+- `*.bsky.social` moves to `*.example.com` or `*.test`.
+- `*.0x40.me` and `*.0x40.space` stay only where the test is about our own suffix; the label is then one letter
+  repeated, and a comment says why the suffix is needed. Everything else moves to reserved domains.
+- The PR body lists every one-letter label it keeps on our suffixes (they join P2.09's reserved list).
+
+Done when no product test file holds a handle on a registrable domain other than those kept labels, and check is green.
+
+---
+
+### P1.35j — Move trusted test handles to reserved domains
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+
+Slice 1, issue (pending), trusted base (the `shared/http` server and config tests), kind/fix, lane Phase 1 after P1.35i
+(lane order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and
+its step-book mapping. Like any trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs
+Alex's typed line: "yes P1.35j shared/http test handles reserved domains".
+
+**What:** the same rules as P1.35i for the `shared/http` server and config tests. The PR body lists every one-letter
+label it keeps on our suffixes.
+
+Done when no trusted-base test file holds a handle on a registrable domain other than those kept labels, and check is
+green.
 
 ---
 

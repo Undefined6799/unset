@@ -2345,7 +2345,10 @@ Done when (tests):
   - `boot.missing_secret`: no password file → exit code 1, no secret in stderr.
   - `zero_dependency`: `interfaces/pds-admin/package.json` has no `dependencies` (dev dependencies only for tests).
   - `reserved.list`: `reserved-labels.json` contains exactly `www, api, admin, account, mail, mta-sts, autoconfig, status`
-    plus the rule "any label starting with `_`"; `check-reserved` against the fake PDS prints one line per label.
+    plus the rule "any label starting with `_`"; `check-reserved` against the fake PDS prints one line per label. It
+    also lists the one-letter test labels kept on our own suffixes, as named in P1.35i's and P1.35j's PR bodies, so no
+    real user can hold one (book edit 2026-10-15-verify-875-fixture-wording, "Mapping of architecture's N5 and F2
+    ruling").
   - `web.issueInvite_mapping`: each pds-admin status → the matching `issueInvite` kind; a NetGuardError → `unavailable`.
 
 Reuse (provisional — for reuse review):

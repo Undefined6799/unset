@@ -264,10 +264,12 @@ The rules that matter most for the first slice (sign in, see your own profile). 
   - (b) `did:web:` on an RFC 2606 or RFC 6761 name: example.com, example.net, example.org, or anything under .example, .test, .invalid or .localhost;
   - (c) an obvious placeholder that fails did:plc syntax, so it cannot resolve: wrong length or characters outside the alphabet, such as `did:plc:abc` or `did:plc:alice`;
   - (d) one named exception, `did:plc:abcdefghijklmnopqrstuvwx`, the alphabet run already used in logger, did-columns, seal and sealStream.
+  - (e) A `did:web` that fails syntax, or that names an IP address, a port, or a special-use name (RFC 6761 or RFC 6762 names such as .local, and anything under .arpa), is allowed only in a test that asserts the value is refused. IP literals in such tests must come from RFC 5737, 2001:db8::/32, loopback or RFC 1918/4193 private space, never a public address. The same values in a test that expects acceptance are a finding.
 - **Refused:** any other value that passes did:plc syntax, including random-looking 24-character strings, which could be real (#864); and any did:web on a registrable domain.
 - **Handles** follow the same pattern: example.com and the RFC 2606 or RFC 6761 names, or `*.test`. **Addresses:** RFC 5737, 2001:db8::/32 or loopback (unchanged). **Long hex:** only in `*.vector.json` (unchanged).
+- **Handles on our own suffixes:** `*.bsky.social` handles move to example.com or `.test` labels, because those can be real people. Our own suffixes (`0x40.me`, `unset.sh` and the like) stay only where the test is about that suffix. The label is one letter repeated, and a comment says why the suffix matters. When handle registration is built, those exact labels join the reserved-handle list, so no real user can ever hold one. Everything else moves to the reserved domains.
 - Enforced by: verifier review; automated check not yet built.
-- Source: architecture ruling 2026-10-15 ~00:22Z on verify-875 F1 (book edit 2026-10-15-verify-875-fixture-wording); verify-864 found the real-looking DID.
+- Source: architecture rulings 2026-10-15 ~00:22Z on verify-875 F1 and ~00:36Z on verify-875-4099940 N5 and F2 (book edit 2026-10-15-verify-875-fixture-wording); verify-864 found the real-looking DID.
 - Status: NEW — the rule was kept in project memory and verifier practice and is written down here for the first time. Not a loosening: a value that cannot resolve to anyone protects as well as the strict forms do.
 - Priority: P1
 
