@@ -1,5 +1,8 @@
 // The store's decisions that need no database: which cookie values reach it, and how a failure surfaces. Its
 // behaviour against real Postgres, as web, is tests/integration/session/store.test.ts.
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { type Did, parseDid } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
@@ -42,5 +45,26 @@ describe("session store without a database", () => {
     // An AppError (the pool's db.busy, a deadline) passes through as it is.
     const busy = storeWith(() => Promise.reject(new AppError("db.busy")));
     await expect(busy.read({ key: {}, cookieValue: value, deadline: null })).rejects.toMatchObject({ code: "db.busy" });
+  });
+
+  test("session.destroyAllForDid_requires_tx", () => {
+    // The caller's transaction is a required argument, so ending the sessions commits with the caller's own change
+    // (P2.12's block, P3.06's account state) or not at all. The check is the typecheck; nothing is called here.
+    const store = storeWith(() => Promise.reject(new Error("never reached")));
+    const did = parseDid("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa") as Did;
+    // @ts-expect-error: no transaction passed
+    const withoutTx = () => store.destroyAllForDid(did, "user_signout_all");
+    expect(withoutTx).toBeTypeOf("function");
+  });
+
+  test("session.end_sessions_single_sql", () => {
+    // One mechanism (phase-3 Notes): only the definer's migration deletes a DID's sessions; TypeScript calls it.
+    const root = join(import.meta.dirname, "..", "..");
+    const pattern = "DELETE FROM app[.]session WHERE did";
+    const files = execFileSync("git", ["grep", "--untracked", "-l", "-i", "-E", pattern, "--", "*.ts", "*.sql"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+    expect(files.trim().split("\n")).toEqual(["infrastructure/postgres/migrations/0014_app_end_sessions.sql"]);
   });
 });
