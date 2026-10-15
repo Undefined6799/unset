@@ -76,8 +76,8 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V2.1.1 | The application's documentation defines input validation rules for how to check the … | open |  | — |
 | V2.1.2 | The application's documentation defines how to validate the logical and contextual … | open |  | — |
 | V2.1.3 | Expectations for business logic limits and validations are documented, including both … | open |  | — |
-| V2.2.1 | Input is validated to enforce business or functional expectations for that input | open |  | — |
-| V2.2.2 | The application is designed to enforce input validation at a trusted service layer | partial | `test:shared/config/schema.test.ts#kinds_parse_strictly`, `test:domains/identity/syntax.test.ts#normalises_and_rejects` | — |
+| V2.2.1 | Input is validated to enforce business or functional expectations for that input | partial | `test:shared/lexicons/src/limits.test.ts#limits_enforced`, `test:shared/lexicons/src/validate.test.ts#invalid_values_fail_with_paths`, `step:P2.23` | P2.23 |
+| V2.2.2 | The application is designed to enforce input validation at a trusted service layer | partial | `test:shared/config/schema.test.ts#kinds_parse_strictly`, `test:domains/identity/syntax.test.ts#normalises_and_rejects`, `test:shared/lexicons/src/validate.test.ts#type_mismatch_fails` | — |
 | V2.2.3 | The application ensures that combinations of related data items are reasonable according … | open |  | — |
 | V2.3.1 | The application will only process business logic flows for the same user in the expected … | open |  | — |
 | V2.3.2 | Business logic limits are implemented per the application's documentation to avoid … | open |  | — |
@@ -336,7 +336,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V15.2.3 | The production environment only includes functionality that is required for the … | partial | `test:interfaces/http/main.test.ts#prod_entry_imports_no_app_source`, `test:apps/web/render.test.tsx#island_props_too_large_prod`, `test:deployment/images/postgres.image.test.ts#postgres_image_has_no_sample_key_pair`, `test:scripts/lint/depcruise.test.ts#lexicon_scripts_row_is_narrow` | P1.27 |
 | V15.3.1 | The application only returns the required subset of fields from a data object | open | `step:P2.20` | P2.20 |
 | V15.3.2 | Where the application backend makes calls to external URLs, it is configured to not … | covered | `test:infrastructure/net-guard/src/request.test.ts#no_redirects`, `test:infrastructure/net-guard/src/fetch.test.ts#no_redirects` | — |
-| V15.3.3 | The application has countermeasures to protect against mass assignment attacks by … | open |  | — |
+| V15.3.3 | The application has countermeasures to protect against mass assignment attacks by … | partial | `test:shared/lexicons/src/validate.test.ts#validate_write_rejects_unknown_field`, `step:P2.23` | P2.23 |
 | V15.3.4 | All proxying and middleware components transfer the user's original IP address correctly … | covered | `test:shared/http/trustedProxy.test.ts#header_rightmost`, `test:shared/http/trustedProxy.test.ts#header_ignored_from_untrusted_peer`, `test:shared/http/server.test.ts#trusted_proxy_on_every_route_but_health` | P1.28 |
 | V15.3.5 | The application explicitly ensures that variables are of the correct type and performs … | partial | `lint:noExplicitAny`, `test:shared/config/schema.test.ts#int_and_url_refuse_lax_forms`, `test:scripts/workspace/references.test.ts#nested_project_red_fixtures` | — |
 | V15.3.6 | JavaScript code is written in a way that prevents prototype pollution, for example, by … | partial | `test:shared/ui/islands/props.test.ts#proto_key_roundtrip`, `test:shared/ui/islands/props.keys.test.ts#escaped_keys_are_refused` | — |

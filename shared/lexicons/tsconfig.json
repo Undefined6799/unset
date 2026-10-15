@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist", "resolveJsonModule": true },
+  "include": ["index.ts", "src/**/*.ts", "scripts/**/*.ts", "schemas/*.json", "vendor/*.json"],
+  "references": [{ "path": "./generated" }]
+}
