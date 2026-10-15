@@ -88,7 +88,7 @@ export const c26: Check = {
       const problem = buildProblem(build, inputs);
       if (problem !== null) return fail(`${name} ${problem}`);
     }
-    return devCaFolderProblem(inputs) ?? pass();
+    return devCaFolderProblem(inputs) ?? devTrustFolderProblem(inputs) ?? pass();
   },
 };
 
@@ -209,3 +209,35 @@ const fileProblem = (path: string, info: Stats): string | null => {
   if (!info.isFile()) return `dev CA folder holds something other than files and folders: ${path}`;
   return info.nlink === 1 ? null : `dev CA file has extra hard links: ${path}`;
 };
+
+/**
+ * Why the folder of the dev root pds and web trust fails C26 under local, or null (P1.33g; record
+ * 2026-10-12-p134c-p134d-local-dev-root-ca, "Architecture confirmation", condition 1). It is a real directory holding
+ * exactly root.pem: a regular file by lstat, with one link, that no group or other user can write. Every error refuses,
+ * naming the path. C18 judges what root.pem holds.
+ */
+function devTrustFolderProblem(inputs: Inputs): Outcome | null {
+  if (inputs.env !== "local") return null;
+  const folder = join(dirname(inputs.root), "unset-dev-trust");
+  const info = inputs.lstat(folder);
+  if (info === null) {
+    return isAbsent(folder, inputs) ? missing("unset-dev-trust") : fail(`dev trust folder cannot be read: ${folder}`);
+  }
+  if (!info.isDirectory()) return fail(`dev trust folder is not a real directory: ${folder}`);
+  let names: string[];
+  try {
+    names = inputs.readdir(folder).sort();
+  } catch {
+    return fail(`dev trust folder cannot be read: ${folder}`);
+  }
+  const other = names.find((name) => name !== "root.pem");
+  if (other !== undefined) return fail(`dev trust folder holds something other than root.pem: ${join(folder, other)}`);
+  const path = join(folder, "root.pem");
+  const root = inputs.lstat(path);
+  if (root === null)
+    return names.length === 0 ? missing("unset-dev-trust/root.pem") : fail(`dev trust root cannot be read: ${path}`);
+  if (!root.isFile()) return fail(`dev trust root is not a regular file: ${path}`);
+  if (root.nlink !== 1) return fail(`dev trust root has extra hard links: ${path}`);
+  if ((root.mode & 0o022) !== 0) return fail(`dev trust root is writable by group or other: ${path}`);
+  return null;
+}

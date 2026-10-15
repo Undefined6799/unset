@@ -15,6 +15,7 @@ The secrets live in `unset-dev-secrets/`, a folder **beside** your checkout of t
 ├── unset/                 the repository checkout
 ├── unset-dev-secrets/     the secret files below
 ├── unset-dev-env/         dev-public.env, the stack's interpolation file
+├── unset-dev-ca/          the local dev root and its key (local stack only; never bound)
 └── unset-dev-trust/       root.pem only: the local dev root's public certificate
 ```
 
@@ -112,24 +113,68 @@ The scratch copy stays inside the locked folder, so no other account can read it
 Rootless Docker is not supported yet: its container uids map to other host uids, so the owners above would be wrong
 and the preflight fails closed.
 
-## The local stack's leaf (P1.33x)
+## The local stack's dev root and leaf (P1.33g)
 
-The local edge serves a leaf certificate signed by your dev root (P1.34d writes the full openssl recipe). The preflight
-runs as you and cannot read the leaf secret, which belongs to the edge's uid, so it judges a public copy instead. Write
-both from the one `leaf.pem` that openssl made, in the same step, and never copy the key:
+The local stack serves its two names with a leaf certificate signed by a dev root that you make once (record
+2026-10-12-p134c-p134d-local-dev-root-ca, Amendments 1 and 2). The root is name-constrained: it can only vouch for your
+local app host and local PDS host (and names under them), never for an IP address, and it can sign no other CA. Its key
+lives in `unset-dev-ca/`, beside the checkout, which nothing ever binds or builds from.
+
+Set `APP_HOST` and `PDS_HOST` in your shell to the two names in your local env file, then, from the folder that holds
+your checkout, make the root (825 days at most):
 
 ```sh
-sudo install -o 65532 -g 65532 -m 0400 leaf.pem unset-dev-secrets/local_tls_cert
-install -m 0600 leaf.pem unset-dev-env/local-leaf.pem
-install -D -m 0644 root.pem unset-dev-trust/root.pem
+umask 077
+mkdir -p unset-dev-ca
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-ca/root.key
+chmod 0400 unset-dev-ca/root.key
+openssl req -x509 -new -key unset-dev-ca/root.key -sha256 -days 825 -subj "/CN=unset local dev root" \
+  -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+  -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -addext "nameConstraints=critical,permitted;DNS:$APP_HOST,permitted;DNS:$PDS_HOST,excluded;IP:0.0.0.0/0.0.0.0,excluded;IP:::/::" \
+  -out unset-dev-ca/root.pem
+mkdir -m 0755 unset-dev-trust
+cp unset-dev-ca/root.pem unset-dev-trust/root.pem
+chmod 0644 unset-dev-trust/root.pem
 ```
 
-`unset-dev-trust/` holds only the dev root's public certificate, which P1.34d binds into pds and web; it is never the
-CA folder, the env folder or the secrets folder. Under `--env local`, C18 fails unless `local-leaf.pem` is one
-certificate issued by `unset-dev-trust/root.pem`, is not a CA, names exactly `APP_HOST` and `PDS_HOST` with no IP
-address, and has at least 14 days left. It also fails unless `APP_HOST` is the host of web's `PUBLIC_ORIGIN`. Renew by
-rerunning the leaf command and all three lines above. From P1.34d on, a stale copy is caught after start: `local:up`
-compares the leaf the edge serves with the copy and takes the stack down on a mismatch.
+`unset-dev-trust/` holds only that copy of the root's public certificate, which P1.34d binds into pds and web; it is
+never the CA folder, the env folder or the secrets folder. Copy it, never link it, and put nothing else there.
+
+Then make the leaf (397 days), and install it:
+
+```sh
+umask 077
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out unset-dev-ca/leaf.key
+openssl req -x509 -new -key unset-dev-ca/leaf.key -CA unset-dev-ca/root.pem -CAkey unset-dev-ca/root.key \
+  -days 397 -sha256 -subj "/CN=$APP_HOST" \
+  -addext "basicConstraints=critical,CA:FALSE" -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=serverAuth" -addext "subjectAltName=DNS:$APP_HOST,DNS:$PDS_HOST" \
+  -out unset-dev-ca/leaf.pem
+```
+
+```sh
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-ca/leaf.pem unset-dev-secrets/local_tls_cert
+sudo install -o 65532 -g 65532 -m 0400 unset-dev-ca/leaf.key unset-dev-secrets/local_tls_key
+install -m 0600 unset-dev-ca/leaf.pem unset-dev-env/local-leaf.pem
+rm unset-dev-ca/leaf.key unset-dev-ca/leaf.pem
+```
+
+The preflight runs as you and cannot read the leaf secret, which belongs to the edge's uid, so it judges the public
+copy `local-leaf.pem` instead, written from the same `leaf.pem` in the same step. The key is never copied anywhere but
+the secret. Under `--env local`:
+
+- C26 fails unless `unset-dev-ca/` is a real folder with no links, and `unset-dev-trust/` is a real folder holding
+  only `root.pem`: a regular file with one link that no group or other user can write.
+- C18 fails unless `unset-dev-trust/root.pem` is byte for byte `unset-dev-ca/root.pem`, holds no private key, and is
+  one CA certificate with the name constraints above; and unless `local-leaf.pem` is one certificate issued by it, is
+  not a CA, names exactly `APP_HOST` and `PDS_HOST` with no IP address, and has at least 14 days left. It also fails
+  unless `APP_HOST` is the host of web's `PUBLIC_ORIGIN`.
+
+Check when the leaf expires with `openssl x509 -enddate -noout -in unset-dev-env/local-leaf.pem`. Renew it by
+rerunning the leaf commands and the install lines; an expired or nearly expired leaf fails closed. From P1.34d on, a
+stale copy is caught after start: `local:up` compares the leaf the edge serves with the copy and takes the stack down
+on a mismatch.
 
 ## Starting and stopping
 

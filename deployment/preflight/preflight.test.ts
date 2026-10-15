@@ -2432,6 +2432,9 @@ secrets:
    * the two local hosts, each leaf with `san` as its subjectAltName.
    */
   const pki = mkdtempSync(join(tmpdir(), "local-leaf-"));
+  /** The runbook's name constraints (record 2026-10-12-p134c-p134d-local-dev-root-ca, item 2 and Amendment 2). */
+  const LOCAL_CONSTRAINTS =
+    "permitted;DNS:app.localhost,permitted;DNS:pds.localhost,excluded;IP:0.0.0.0/0.0.0.0,excluded;IP:::/::";
   dirs.push(pki);
   const openssl = (...args: string[]) => execFileSync("openssl", args, { cwd: pki, stdio: ["ignore", "pipe", "pipe"] });
   openssl(
@@ -2440,7 +2443,7 @@ secrets:
     ),
     ...["-subj", "/CN=throwaway root", "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0"],
     ...["-addext", "keyUsage=critical,keyCertSign,cRLSign"],
-    ...["-addext", "nameConstraints=critical,permitted;DNS:app.localhost,permitted;DNS:pds.localhost"],
+    ...["-addext", `nameConstraints=critical,${LOCAL_CONSTRAINTS}`],
   );
   const DEV_ROOT = readFileSync(join(pki, "root.pem"), "utf8");
   /** Another root under the same name with its own key, and the same key under another name: each signature check alone. */
@@ -2509,6 +2512,7 @@ secrets:
       remove = [],
       leaf = LEAF,
       devRoot = DEV_ROOT,
+      caRoot = devRoot,
       setUp = () => undefined,
       deps = {},
       ...s
@@ -2517,6 +2521,7 @@ secrets:
       remove?: string[];
       leaf?: string | null;
       devRoot?: string | null;
+      caRoot?: string | null;
       setUp?: (root: string) => void;
       deps?: Partial<Deps>;
     } = {},
@@ -2537,10 +2542,12 @@ secrets:
     if (devRoot !== null) {
       mkdirSync(join(dirname(root), "unset-dev-trust"), { recursive: true });
       writeFileSync(join(dirname(root), "unset-dev-trust/root.pem"), devRoot);
+      chmodSync(join(dirname(root), "unset-dev-trust/root.pem"), 0o644);
     }
-    // Local needs the dev CA (P1.35a): the folder with its key, one link each.
+    // Local needs the dev CA (P1.35a): the folder with its key and its root, one link each.
     mkdirSync(devCaOf(root), { mode: 0o700 });
     writeFileSync(join(devCaOf(root), "root.key"), "fixture\n", { mode: 0o400 });
+    if (caRoot !== null) writeFileSync(join(devCaOf(root), "root.pem"), caRoot, { mode: 0o600 });
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     for (const path of remove) rmSync(join(root, path));
     setUp(root);
@@ -2728,6 +2735,71 @@ secrets:
     expect(await onEnv("dev", hardLinked)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
     expect(await onEnv("prod", () => undefined)).toBe("PASS C26 ok");
     expect(await onEnv("prod", made)).toBe("FAIL C26 dev CA folder present on a prod host");
+  });
+
+  test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
+    // P1.33g (record 2026-10-12-p134c-p134d-local-dev-root-ca, "Architecture confirmation", condition 1): the folder
+    // pds and web bind is a real directory holding exactly root.pem, a regular file with one link that no group or
+    // other user can write. Every error refuses, naming the path.
+    const c26 = (lines: string[]) => lines.find((line) => /^[A-Z]+ C26 /.test(line));
+    const onLocal = async (setUp: (root: string) => void, options: { devRoot?: null; deps?: Partial<Deps> } = {}) =>
+      c26((await local((text) => text, { setUp, ...options })).lines);
+    const trust = (root: string) => join(dirname(root), "unset-dev-trust");
+    let seen = "";
+    const note = (path: string) => {
+      seen = path;
+      return path;
+    };
+    expect(await onLocal(() => undefined)).toBe("PASS C26 ok");
+    expect(await onLocal(() => undefined, { devRoot: null })).toBe("FAIL C26 input missing: unset-dev-trust");
+    const empty = (root: string) => rmSync(join(trust(root), "root.pem"));
+    expect(await onLocal(empty)).toBe("FAIL C26 input missing: unset-dev-trust/root.pem");
+    const extra = (root: string) => writeFileSync(note(join(trust(root), "extra.pem")), "fixture\n");
+    expect(await onLocal(extra)).toBe(`FAIL C26 dev trust folder holds something other than root.pem: ${seen}`);
+    const linked = (root: string) => linkSync(note(join(trust(root), "root.pem")), join(root, "deployment/trust-copy"));
+    expect(await onLocal(linked)).toBe(`FAIL C26 dev trust root has extra hard links: ${seen}`);
+    for (const mode of [0o664, 0o646]) {
+      const writable = (root: string) => chmodSync(note(join(trust(root), "root.pem")), mode);
+      expect(await onLocal(writable), mode.toString(8)).toBe(
+        `FAIL C26 dev trust root is writable by group or other: ${seen}`,
+      );
+    }
+    const pointed = (root: string) => {
+      renameSync(join(trust(root), "root.pem"), join(dirname(root), "elsewhere.pem"));
+      symlinkSync(join(dirname(root), "elsewhere.pem"), note(join(trust(root), "root.pem")));
+    };
+    expect(await onLocal(pointed)).toBe(`FAIL C26 dev trust root is not a regular file: ${seen}`);
+    const moved = (root: string) => {
+      renameSync(trust(root), join(dirname(root), "store-trust"));
+      symlinkSync("store-trust", note(trust(root)));
+    };
+    expect(await onLocal(moved)).toBe(`FAIL C26 dev trust folder is not a real directory: ${seen}`);
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const unlisted = await onLocal((root) => note(trust(root)), {
+      deps: {
+        readdir: (path) => {
+          if (path.endsWith("/unset-dev-trust")) throw denied;
+          return readdirSync(path);
+        },
+      },
+    });
+    expect(unlisted).toBe(`FAIL C26 dev trust folder cannot be read: ${seen}`);
+    // The fixture's own lstat for every path but the one it cannot see: there, but unreadable, so never absent.
+    let at = "";
+    const blind = (hide: (root: string) => string) => (path: string) =>
+      path === hide(at) ? null : (fakeFs(at).lstat?.(path) ?? null);
+    const unseen = async (hide: (root: string) => string) =>
+      onLocal(
+        (root) => {
+          at = root;
+          note(hide(root));
+        },
+        { deps: { lstat: blind(hide) } },
+      );
+    expect(await unseen(trust)).toBe(`FAIL C26 dev trust folder cannot be read: ${seen}`);
+    expect(await unseen((root) => join(trust(root), "root.pem"))).toBe(
+      `FAIL C26 dev trust root cannot be read: ${seen}`,
+    );
   });
 
   test("local_c2_admits_builds_and_run_only_vendor_images", async () => {
@@ -2942,6 +3014,59 @@ secrets:
     for (const [line, options] of cases) expect(await c18(options), line).toBe(line);
     // Fifteen days left passes.
     expect(await c18({ leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { days: 15 }) })).toBe("PASS C18 ok");
+  });
+
+  test("local_c18_dev_root_is_the_cas_constrained_root", async () => {
+    // P1.33g (record 2026-10-12-p134c-p134d-local-dev-root-ca, "Architecture confirmation", conditions 2 and 3): the
+    // copy pds and web trust is the dev CA's own root, byte for byte, holds no key, is a CA, and carries the runbook's
+    // name constraints: the two local hosts permitted and every IPv4 and IPv6 address excluded.
+    const c18 = async (options: { leaf?: string; devRoot?: string; caRoot?: string | null }) =>
+      (await local((text) => text, options)).lines.find((line) => / C18 /.test(line));
+    const rootWith = (name: string, extensions: string[]) => {
+      openssl(
+        ...`req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ${name}.key -out ${name}.pem`.split(
+          " ",
+        ),
+        ...["-days", "30", "-subj", "/CN=throwaway root", ...extensions.flatMap((e) => ["-addext", e])],
+      );
+      return {
+        devRoot: readFileSync(join(pki, `${name}.pem`), "utf8"),
+        leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { issuer: name }),
+      };
+    };
+    const CA = ["basicConstraints=critical,CA:TRUE,pathlen:0", "keyUsage=critical,keyCertSign,cRLSign"];
+    const EXCLUDED = "excluded;IP:0.0.0.0/0.0.0.0,excluded;IP:::/::";
+    const swapped = `permitted;DNS:pds.localhost,permitted;DNS:app.localhost,${EXCLUDED}`;
+    expect(await c18(rootWith("swapped", [...CA, `nameConstraints=critical,${swapped}`]))).toBe("PASS C18 ok");
+    const copy =
+      "FAIL C18 the dev root copy is not the dev CA's root: unset-dev-trust/root.pem and unset-dev-ca/root.pem";
+    expect(await c18({ caRoot: SAME_KEY_ROOT })).toBe(copy);
+    expect(await c18({ caRoot: `${DEV_ROOT}\n` })).toBe(copy);
+    expect(await c18({ caRoot: null })).toBe("FAIL C18 input missing: unset-dev-ca/root.pem");
+    const key = readFileSync(join(pki, "root.key"), "utf8");
+    expect(await c18({ devRoot: `${DEV_ROOT}${key}` })).toBe("FAIL C18 the dev root copy holds a private key");
+    expect(await c18({ devRoot: `${key}${DEV_ROOT}` })).toBe("FAIL C18 the dev root copy holds a private key");
+    const notCa = rootWith("not-ca", [
+      "basicConstraints=critical,CA:FALSE",
+      `nameConstraints=critical,${LOCAL_CONSTRAINTS}`,
+    ]);
+    expect(await c18(notCa)).toBe("FAIL C18 the dev root is not a CA");
+    const unconstrained = "FAIL C18 the dev root does not carry the local name constraints";
+    const roots: [string, string[]][] = [
+      ["none", CA],
+      ["one-host", [...CA, `nameConstraints=critical,permitted;DNS:app.localhost,${EXCLUDED}`]],
+      ["third-host", [...CA, `nameConstraints=critical,${LOCAL_CONSTRAINTS},permitted;DNS:x.localhost`]],
+      ["ip-open", [...CA, "nameConstraints=critical,permitted;DNS:app.localhost,permitted;DNS:pds.localhost"]],
+      [
+        "v4-only",
+        [
+          ...CA,
+          "nameConstraints=critical,permitted;DNS:app.localhost,permitted;DNS:pds.localhost,excluded;IP:0.0.0.0/0.0.0.0",
+        ],
+      ],
+      ["not-critical", [...CA, `nameConstraints=${LOCAL_CONSTRAINTS}`]],
+    ];
+    for (const [name, extensions] of roots) expect(await c18(rootWith(name, extensions)), name).toBe(unconstrained);
   });
 
   test("local_guards_loopback_ports_and_localhost_pds", async () => {
