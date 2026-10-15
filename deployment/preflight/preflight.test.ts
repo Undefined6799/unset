@@ -2375,7 +2375,8 @@ services:
     ports: ["127.0.0.1:80:80", "127.0.0.1:443:443"]
     secrets: [local_tls_cert, local_tls_key]
     volumes:
-      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
+      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
+      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
     environment:
       PDS_HOST: pds.localhost
@@ -2466,6 +2467,36 @@ secrets:
     return readFileSync(join(pki, `${name}.pem`), "utf8");
   };
   const LEAF = leafPem("DNS:app.localhost,DNS:pds.localhost");
+  // `openssl ca` sets exact validity dates, which `req -x509` (3.0) cannot: notBefore and notAfter as days from now.
+  writeFileSync(
+    join(pki, "ca.cnf"),
+    "[ca]\ndefault_ca = d\n[d]\ndatabase = index.txt\nnew_certs_dir = .\nserial = serial\ndefault_md = sha256\n" +
+      "policy = p\nunique_subject = no\ncopy_extensions = copy\n[p]\ncommonName = supplied\n",
+  );
+  writeFileSync(join(pki, "index.txt"), "");
+  writeFileSync(join(pki, "serial"), "01\n");
+  const stamp = (days: number) =>
+    `${new Date(Date.now() + days * 86_400_000).toISOString().replace(/[-:T]/g, "").slice(2, 14)}Z`;
+  const datedPem = (kind: "root" | "leaf", from: number, to: number): string => {
+    const name = `dated${leaves++}`;
+    const subject = kind === "root" ? "/CN=throwaway root" : "/CN=app.localhost";
+    const ext =
+      kind === "root"
+        ? ["basicConstraints=critical,CA:TRUE,pathlen:0", "keyUsage=critical,keyCertSign,cRLSign"]
+        : ["basicConstraints=critical,CA:FALSE", "subjectAltName=DNS:app.localhost,DNS:pds.localhost"];
+    openssl(
+      ...`req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ${name}.key -out ${name}.csr`.split(" "),
+      ...["-subj", subject, ...ext.flatMap((e) => ["-addext", e])],
+    );
+    const signer =
+      kind === "root" ? ["-selfsign", "-keyfile", `${name}.key`] : ["-cert", "root.pem", "-keyfile", "root.key"];
+    openssl(
+      ...`ca -batch -notext -config ca.cnf -in ${name}.csr -out ${name}.pem`.split(" "),
+      ...signer,
+      ...["-startdate", stamp(from), "-enddate", stamp(to)],
+    );
+    return readFileSync(join(pki, `${name}.pem`), "utf8");
+  };
   /** The edge Dockerfile itself, built from the root: the path is right, but C26 refuses the context. */
   const OFF_CONTEXT_EDGE = "      context: ..\n      dockerfile: deployment/edge/Dockerfile\n";
   /** The local stack after `edit`, with its leaf secret files written beside the other secrets. */
@@ -2720,6 +2751,25 @@ secrets:
         "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
         (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://app.localhost.example.test\n"),
       ],
+      // verify-869 S3: the host must equal APP_HOST, never merely end with it.
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://old-app.localhost\n"),
+      ],
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://x.app.localhost\n"),
+      ],
+      // verify-869 S1 and S3: an IPv4 address (with an origin to match), uppercase and a trailing dot.
+      [
+        "FAIL C18 APP_HOST is not a hostname",
+        (text) =>
+          text
+            .replace(appHost, "      APP_HOST: 192.0.2.1\n")
+            .replace(origin, "      PUBLIC_ORIGIN: https://192.0.2.1\n"),
+      ],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: APP.localhost\n")],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: app.localhost.\n")],
       ["FAIL C18 web's PUBLIC_ORIGIN is not a URL", (text) => text.replace(`    environment:\n${origin}`, "")],
       [
         "FAIL C18 web's PUBLIC_ORIGIN is not a URL",
@@ -2768,6 +2818,17 @@ secrets:
       ["FAIL C18 the local leaf copy is not one certificate", { leaf: `${LEAF}${LEAF}` }],
       ["FAIL C18 the local leaf copy is not one certificate", { leaf: readFileSync(join(pki, "root.key"), "utf8") }],
       ["FAIL C18 the dev root is not one certificate", { devRoot: "" }],
+      // verify-869 S3: names the DNS pattern refuses, and a PEM with anything after it or CRLF line ends.
+      [names, { leaf: leafPem("DNS:*.localhost,DNS:pds.localhost") }],
+      [names, { leaf: leafPem("DNS:APP.localhost,DNS:pds.localhost") }],
+      [names, { leaf: leafPem("DNS:app.localhost.,DNS:pds.localhost") }],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: `${LEAF}junk\n` }],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: LEAF.replace(/\n/g, "\r\n") }],
+      // verify-869 S2: both ends of the one link are inside their dates, and the margin is 14 days, not 13.
+      ["FAIL C18 the local leaf is not yet valid", { leaf: datedPem("leaf", 1, 60) }],
+      ["FAIL C18 the local leaf expires within 14 days", { leaf: datedPem("leaf", -1, 13.5) }],
+      ["FAIL C18 the dev root has expired", { devRoot: datedPem("root", -60, -1) }],
+      ["FAIL C18 the dev root is not yet valid", { devRoot: datedPem("root", 1, 60) }],
     ];
     for (const [line, options] of cases) expect(await c18(options), line).toBe(line);
     // Fifteen days left passes.
@@ -2938,13 +2999,7 @@ secrets:
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
     );
-    // The app site's mount waits for P1.34o's reader (book edit 2026-10-13-p127l-to-third-lane, Amendment 1): until the
-    // reader reads local/app.caddy with the enabled sites, C18 refuses it as any other mount over the sites.
-    const app = "./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro";
-    expect(await c18(volume(app))).toBe("FAIL C18 the edge mounts over /etc/caddy/sites/enabled/app.caddy");
-    expect(await c18(volume("./edge/local/app.caddy:/etc/caddy/sites/enabled/second.caddy:ro"))).toBe(
-      "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/second.caddy",
-    );
+    // The app site is one of the site file mounts now (P1.33y); local_c18_mounts_each_site_file judges those.
     // A volume at the snippet's target is not the file it names, however it is filled.
     const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
     expect(
@@ -2990,6 +3045,48 @@ secrets:
         ),
       ),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
+  test("local_c18_mounts_each_site_file", async () => {
+    // P1.33y (book edit 2026-10-13-p134o-after-791, Amendment 1; local-gaps Amendment 3 S2): under local the edge mounts
+    // every sites/*.caddy and local/app.caddy as its own read-only file, never the sites directory.
+    const c18 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C18 /.test(line));
+    const pds = "      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
+    const app = "      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n";
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    const cases: [string, (text: string) => string][] = [
+      [
+        "FAIL C18 the local edge mounts a directory at /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n"),
+      ],
+      [
+        "FAIL C18 the local edge mounts a directory at /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, `${pds}      - ./edge/sites/enabled:/etc/caddy/sites/enabled/:ro\n`),
+      ],
+      ["FAIL C18 the site pds.caddy is not mounted read-only", (text) => text.replace(pds, pds.replace(":ro\n", "\n"))],
+      [
+        "FAIL C18 the site pds.caddy is not a bind mount",
+        (text) =>
+          text
+            .replace(pds, "      - sites:/etc/caddy/sites/enabled/pds.caddy:ro\n")
+            .replace("\nsecrets:", "\nvolumes:\n  sites: {}\nsecrets:"),
+      ],
+      [
+        "FAIL C18 input missing: the edge's site mounts in /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, "").replace(app, ""),
+      ],
+      ["FAIL C18 the edge config is unreadable: app.caddy: not mounted", (text) => text.replace(app, "")],
+      ["FAIL C18 the edge config is unreadable: pds.caddy: not mounted", (text) => text.replace(pds, "")],
+      [
+        "FAIL C18 the edge config is unreadable: second.caddy: not a site the local stack mounts",
+        (text) => text.replace(app, `${app}${app.replace("enabled/app", "enabled/second")}`),
+      ],
+      [
+        "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/more/pds.caddy",
+        (text) => text.replace(pds, `${pds}${pds.replace("enabled/pds", "enabled/more/pds")}`),
+      ],
+    ];
+    for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
   });
 
   // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local

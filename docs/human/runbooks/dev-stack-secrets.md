@@ -14,7 +14,8 @@ The secrets live in `unset-dev-secrets/`, a folder **beside** your checkout of t
 ~/src/
 ├── unset/                 the repository checkout
 ├── unset-dev-secrets/     the secret files below
-└── unset-dev-env/         dev-public.env, the stack's interpolation file
+├── unset-dev-env/         dev-public.env, the stack's interpolation file
+└── unset-dev-trust/       root.pem only: the local dev root's public certificate
 ```
 
 Postgres builds from the repository root, so a secrets folder inside the checkout would sit inside a build context,
