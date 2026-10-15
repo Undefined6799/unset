@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y,
-  P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37,
-  P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged),
-  P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v,
+  P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e,
+  P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02
+  merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -598,6 +598,7 @@ flowchart LR
   P1_33y --> P1_35a
   P1_35a --> P1_34d
   P1_35f["P1.35f compose probe stall root-caused"]
+  P1_35g["P1.35g IP refused as local PDS host"]
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -8252,29 +8253,63 @@ Done when each red case fails on main and passes with the change, and check is g
 ### P1.35f — Root-cause the compose version probe stall
 Tags: —            Depends on: —
 
-Slice 1, issue #879, product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread
-after P1.33y, next in its queue (lane order only); book edit 2026-10-15-verify-862-c14-and-compose-probe, section 2,
-from verify-862-d6836ab. Nothing from Alex. In the check job, "docker compose version killed after 10000 ms"
+Slice 1, issue #879, product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread after
+P1.33y, next in its queue (lane order only); book edit 2026-10-15-verify-862-c14-and-compose-probe, section 2, its
+"Correction (step book, 00:19Z)" and "P1.35f ruled" sections, and architecture's option A ruling (~00:25Z) in book edit
+2026-10-15-p135f-findings. Nothing from Alex. In the check job, "docker compose version killed after 10000 ms"
 (`tests/support/docker.ts:73`, raised through the module-level probe at
-`deployment/preflight/compose-parse.test.ts:642`) stops the file from loading. It turned #862's required check red, and
-main had the same timeout in run 38638697888. A failing check gets a root cause: no timeout bump, no retry, no skip, and
-no making the probe soft. A missing Compose in CI must still fail.
+`deployment/preflight/compose-parse.test.ts:642`) stopped the file from loading and turned #862's required check red
+(run 38646729832). Main run 38638697888 did not hit the probe: it failed on a separate `docker build killed after 300000
+ms` in the edge builds, which is noted and not booked. The lane's evidence rules out daemon contact, plugin lookup and
+parallel probing: the probe makes no connect(), and it stalled once in about 400 runs.
+
+**What (architecture's option A):**
+- Under `CI=true`, `hasCompose` is true without probing (`process.env.CI === "true"`): no module-level compose probe on
+  the CI path. CI always has Compose. This is not a timeout, retry or skip.
+- In CI, a missing or broken Compose fails loudly at the first test that uses it, with the agreement tests' own error
+  naming `docker compose`, never a skip. A test proves that under `CI=true` a failing compose call surfaces as a failure
+  and not as a skip.
+- Off CI, the probe's existing behaviour stays as it is.
+- Not B (runner telemetry is a check path for an unconfirmed one-off; revisit only on a second probe stall) and not C
+  (a timeout change). The PR body notes the run ids above.
+
+Done when the findings record names the causes it ruled out and the residual runner stall, the CI path has no probe,
+the red test proves a failing compose call fails, check is green, and no timeout changed.
+
+---
+
+### P1.35g — Refuse an IP address as the local PDS host
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue (pending), product (`deployment/preflight/`), kind/fix, lane the third thread after P1.35f (lane order
+only); book edit 2026-10-15-verify-876-followups, from verify-876-aef02b9 S1 (the PDS_HOST half of verify-869 S1; it
+predates #876) and N1-N5, with architecture's ruling on S1 (~00:27Z). A tightening: nothing from Alex. Under local,
+`PDS_HOST` can be an IPv4 address: a leaf carrying `DNS:192.0.2.2` with an edge `PDS_HOST` of `192.0.2.2` passes the
+whole preflight, on main too. `PDS_HOST` uses the shared HOST shape (`deployment/edge/caddyfile.ts:53`, trusted base),
+the leaf is compared to it as given (`local-leaf.ts:42-48`), and C21 is skipped under local, so nothing ties the edge's
+`PDS_HOST` to the PDS's `PDS_HOSTNAME`.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the edge terminating
+TLS for one name while the PDS issues its OAuth issuer, DID-doc service endpoint and handles under another, so sign-in
+fails confusingly or the app trusts a host the PDS does not answer for; and an IP address standing in for a host name.
 
 **What:**
-1. Find why `docker compose version` takes over 10 s on the runner, and show the evidence in the PR. Candidates to rule
-   in or out: a first-run CLI plugin or context lookup; daemon or socket contact a version call should not need; many
-   vitest workers spawning Docker at module load at the same moment; runner CPU starvation while the job's other work
-   runs.
-2. Fix that cause where it lives, for example an environment that stops the CLI contacting anything, or one probe per
-   run instead of one per worker at import time.
-3. Add a test that would have caught it, where one is possible.
+- S1: under local, the preflight refuses a `PDS_HOST` whose last label is all digits, exactly as for `APP_HOST`. The
+  check lives in the preflight; the shared shape in trusted base does not change. Red fixture: the `192.0.2.2` leaf and
+  host above.
+- Architecture's ruling: under local, the edge's `PDS_HOST` must equal the PDS's `PDS_HOSTNAME`, both compared as
+  normalized hostnames (lower case, no trailing dot, no port). A mismatch fails, naming both variables and echoing no
+  other env value. Tests: equal (passes); different (fails); differing only in case or a trailing dot (passes); one
+  variable absent (input missing).
+- N1: `localSiteMounts` (`edge.ts:301`) comes back under Biome's cognitive-complexity limit of 15, with no rule change
+  and no suppression.
+- N2: the expiry margin is pinned at exactly 14 days; a 14.5-day mutant turns a test red.
+- N3: a test pins C17's exact reader name (`networks.ts:71`); a `*-reader` mutant turns it red.
+- N4: two more PEM fixtures for S3: leading text before the certificate, and a certificate followed by its key.
+- N5: a missing site source fails naming the input (`input missing: <path>`) instead of the generic "FAIL C18 check
+  error" (`edge.ts:43-47`), still failing closed.
 
-If the fix changes how or where Docker probes run in CI (a global setup, a workflow step or `scripts/test/run.ts`), the
-lane asks architecture before building. A workflow or `scripts/test` change is a check path and needs Alex's typed
-line, so the lane stops and reports instead of widening the PR.
-
-Done when the cause is named with evidence, the fix addresses that cause, and the check job passes on main and on the
-PR without any change to timeouts.
+Done when each red case fails on main and passes with the change, and check is green.
 
 ---
 
@@ -8515,13 +8550,16 @@ at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbi
 verifier found the directory form reachable in #809 only through a missing mode gate, which #809 fixes, so what remains
 is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out of #809.
 
-**What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, once P1.34d
-moves C18 to the `SiteMount` list. Only the per-file `SiteMount` form remains.
+**What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
+P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
+form remains.
 
 Also (Amendment 1 of the same book edit, from verify-809-664b242): N1, the comment at `caddyfile.ts:456` ("`sitesDir`
 stays inside sites/ in both modes") becomes local-only, since the shipped mode may be `sites/` itself (:447-448), with
 :456-458 reflowed; N3, the B1 fixture comment in `a_directory_mount_fails` drops its opening "Nor". (N2 was a fix to
-#809's PR body, not to the book.)
+#809's PR body, not to the book.) And N6 of book edit 2026-10-15-verify-876-followups: the comment at
+`caddyfile.ts:457-458` is stale, since C18 now takes the list, not "until P1.34d"; this step fixes it, because it
+already edits that trusted file.
 
 Done when, red first, a test shows the reader itself refuses a directory mount under local (not only C18), and check
 is green.
