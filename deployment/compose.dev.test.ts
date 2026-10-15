@@ -221,7 +221,8 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_dev_hardening", () => {
-    for (const s of dev().services) {
+    // Both files' services, so a local-only one (the token reader) is pinned too (verify-903 M2).
+    for (const s of [...dev().services, ...local().services]) {
       const h = s.hardening;
       expect(h.capDrop, s.name).toEqual(["ALL"]);
       // Only the edge binds below 1024 (80 and 443), as its non-root user (P1.28 setcap; plan section 8).
@@ -230,8 +231,8 @@ describe("compose.dev.yaml (P1.29)", () => {
       expect(h.readOnly, s.name).toBe(true);
       // Every service names its numeric non-root user: a mounted secret is owned by that uid (C9 record (vi)).
       expect(h.user, s.name).toMatch(/^[1-9][0-9]*:[1-9][0-9]*$/);
-      // A one-off run (migrate) never restarts.
-      expect(h.restart, s.name).toBe(s.name === "migrate" ? "no" : "unless-stopped");
+      // A one-off run (migrate, and the token reader under `compose run`) never restarts.
+      expect(h.restart, s.name).toBe(s.name === "migrate" || s.name === TOKEN_READER ? "no" : "unless-stopped");
       expect(
         s.tmpfs.some((t) => t.target === "/tmp"),
         s.name,
@@ -240,7 +241,9 @@ describe("compose.dev.yaml (P1.29)", () => {
   });
 
   test("compose_dev_limits", () => {
-    for (const s of dev().services) expect(limitProblems(s, runsNode(s)), s.name).toEqual([]);
+    for (const s of [...dev().services, ...local().services]) {
+      expect(limitProblems(s, runsNode(s)), s.name).toEqual([]);
+    }
     expect(
       dev()
         .services.filter(runsNode)
@@ -441,6 +444,12 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
+    // The local PDS differs only by its PLC and the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1).
+    expect(Object.fromEntries(envOf(service(local(), "pds")))).toEqual({
+      ...Object.fromEntries(env),
+      PDS_DID_PLC_URL: "http://plc:2582",
+      NODE_EXTRA_CA_CERTS: "/etc/unset-dev-trust/root.pem",
+    });
   });
 
   test("pds_env_file_holds_only_its_secrets", () => {
@@ -507,12 +516,12 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
 
   test("no_pds_disable_or_dev_mode_variable", () => {
     // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose ("Also"), the fail-closed twin of F-25: no
-    // PDS_DISABLE_SSRF_PROTECTION, no PDS_DEV_MODE and no other PDS switch that turns a protection off, in this file's
-    // services or in any env template a stack copies from.
+    // PDS_DISABLE_SSRF_PROTECTION, no PDS_DEV_MODE and no other PDS switch that turns a protection off, in either
+    // compose file's services (verify-903 M1) or in any env template a stack copies from.
     const templates = readdirSync(join(DEPLOYMENT, "env")).filter((file) => file.endsWith(".example.env"));
     expect(templates).toContain("pds.example.env");
     const settings: [string, string][] = [
-      ...dev().services.flatMap((s) => [...envOf(s)]),
+      ...[...dev().services, ...local().services].flatMap((s) => [...envOf(s)]),
       ...templates.flatMap((file) => envSettings(read(join("env", file)))),
     ];
     expect(settings.map(([name]) => name)).toContain("PDS_HOSTNAME");
