@@ -3,9 +3,10 @@
 // directions, so no service joins a network, and no network opens up, without a reviewed change to the table. The
 // comparison is exported for P1.29's compose_dev_networks_match_table, so CI and the deploy gate judge alike.
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
+import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
 import { runsBuilt } from "./build.ts";
 import { type BaseEntry, exactImage, readBases, readLock } from "./lock.ts";
-import { type Check, fail, type Inputs, missing, pass } from "./types.ts";
+import { type Check, type Env, fail, type Inputs, missing, pass } from "./types.ts";
 
 export type NetworkTable = ReadonlyMap<string, { internal: boolean; members: readonly string[] }>;
 
@@ -154,7 +155,7 @@ const noNetworkReader = (service: Service): boolean =>
 export const c17: Check = {
   id: "C17",
   run: (inputs) => {
-    const { compose, readText, networkTablePath } = inputs;
+    const { compose, env, readText, networkTablePath } = inputs;
     const moded = compose.services.find((service) => service.networkMode !== null && !noNetworkReader(service));
     if (moded !== undefined) return fail(`network_mode is set in ${moded.name}`);
     const text = readText(networkTablePath);
@@ -165,7 +166,28 @@ export const c17: Check = {
     } catch {
       return fail("the network table is unreadable");
     }
-    const problems = [...pdsNeighbours(inputs), ...networkTableProblems(compose, table)];
+    const local = localOnlyProblems(compose, env);
+    if (local !== null) return fail(local);
+    const expected = withLocalOnly(table, env);
+    if (typeof expected === "string") return fail(expected);
+    const problems = [...pdsNeighbours(inputs), ...networkTableProblems(compose, expected)];
     return problems.length === 0 ? pass() : fail(problems.join("; "));
   },
 };
+
+/** Under dev and prod, the first network only the local stack may have (architecture 02:32Z), or null. */
+function localOnlyProblems(compose: Pick<Compose, "networks">, env: Env): string | null {
+  if (env === "local") return null;
+  const network = compose.networks.find(({ name }) => isLocalOnlyNetwork(name));
+  return network === undefined ? null : `network ${network.name} is local only`;
+}
+
+/**
+ * Under local, the table plus the local-only networks, matched as one. The table never lists a local-only network,
+ * listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no local-only rows; verify-903 S3).
+ */
+function withLocalOnly(table: NetworkTable, env: Env): NetworkTable | string {
+  const clash = [...table.keys()].find(isLocalOnlyNetwork);
+  if (clash !== undefined) return `the network table lists ${clash}, a local-only network`;
+  return env === "local" ? new Map([...table, ...LOCAL_ONLY_NETWORKS]) : table;
+}

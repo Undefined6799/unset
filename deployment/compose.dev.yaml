@@ -1,11 +1,12 @@
 # The development stack (P1.29, P1.29a; plan section 8 Phase 1; step book phase-1.md P1.29 items 6 and 7): postgres,
-# migrate, the PDS, the edge in front of it, and web. One file for both env files, `dev` (the homelab) and `local` (an
-# agent's throwaway stack), chosen by the single interpolation file the wrapper (deployment/preflight/stack.ts,
-# P1.27w) passes to the preflight and to Compose alike. Every image is built here from a Dockerfile images.yml scans;
-# none is pulled, so the preflight's signed-image checks (C2 to C5) refuse this stack until P1.27s publishes signed
-# images (architecture record 2026-10-12-p129-local-build-preflight). The one exception is the PDS, Bluesky's own image
-# run as shipped (Alex, "Allow pinned", 2026-10-07T13:00:19Z): named here exactly as its run-only lock entry, which the
-# mirror workflow scans (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
+# migrate, the PDS, the edge in front of it, and web, for the homelab, through the wrapper
+# (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose alike.
+# A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts. Every
+# image is built here from a Dockerfile images.yml scans; none is pulled, so the preflight's signed-image checks (C2 to
+# C5) refuse this stack until P1.27s publishes signed images (architecture record
+# 2026-10-12-p129-local-build-preflight). The one exception is the PDS, Bluesky's own image run as shipped (Alex, "Allow
+# pinned", 2026-10-07T13:00:19Z): named here exactly as its run-only lock entry, which the mirror workflow scans
+# (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
 #
 # Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
 # `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every
@@ -86,7 +87,7 @@ services:
   # (deployment/env/pds.example.env). Not set, on purpose: PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25) or any
   # other PDS DISABLE switch but C16's (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any
   # PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, the AppView and report service (optional, dist/config/config.js:162-189),
-  # and on local the mail URLs (mail is dropped; pds_mail_unset_only_with_logging_off).
+  # and the mail URLs (no mail is sent; pds_mail_unset_only_with_logging_off).
   pds:
     image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
     user: "1000:1000"
@@ -189,34 +190,6 @@ services:
     cpus: 1
     pids_limit: 128
     restart: unless-stopped
-
-  # The local email inbox stand-in (P1.29h; architecture record 2026-10-13-p129h-local-token-reader and its Amendment
-  # 1): tests/support/pds-email-token.ts runs it as `docker compose --profile tools run --rm pds-token-reader
-  # /reader/read.ts <did>`, and `up` never starts it. It reads one account's confirm_email token from the PDS's
-  # account database, read-only, and prints only that. The locked Node base run as shipped, for this service only
-  # (compose_images_match_lock): docker-node's entrypoint runs a script path given as the command with node
-  # (docker-library/node 26/trixie-slim/docker-entrypoint.sh). No network, no env, no secret.
-  pds-token-reader:
-    image: docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33
-    profiles: [tools]
-    network_mode: none
-    # The token is a credential: no log driver keeps a copy, and the attached stdout still reaches the wrapper
-    # (architecture record 2026-10-13-p129h-local-token-reader, Amendment 2, B1).
-    logging:
-      driver: none
-    user: "1000:1000"
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    tmpfs:
-      - /tmp:uid=1000,gid=1000,mode=1777
-    volumes:
-      - pdsdata:/data:ro
-      - ../tests/support/pds-email-token-read.ts:/reader/read.ts:ro
-    mem_limit: 128m
-    cpus: 0.25
-    pids_limit: 32
-    restart: "no"
 
 networks:
   db:
