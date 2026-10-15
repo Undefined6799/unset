@@ -45,7 +45,7 @@ beforeAll(async () => {
   await migrateInto("unset");
   postgres.sql("postgres", `ALTER ROLE web PASSWORD '${webPassword}'`);
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
 
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
   const pool = createPool({

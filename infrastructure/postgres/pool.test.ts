@@ -20,16 +20,16 @@ const codeOf = async (promise: Promise<unknown>) =>
 describe("pool", () => {
   test("pool_is_lazy", async () => {
     const pool = unreachable();
-    expect(pool.driver.totalCount).toBe(0);
-    await pool.close();
+    expect(pool.totalCount).toBe(0);
+    await pool.end();
   });
 
   test("fired_deadline_never_asks_the_pool", async () => {
     const pool = unreachable();
     const deadline = AbortSignal.abort();
     expect(await codeOf(acquire(pool, deadline))).toBe("http.deadline");
-    expect(pool.driver.totalCount).toBe(0);
-    await pool.close();
+    expect(pool.totalCount).toBe(0);
+    await pool.end();
   });
 
   test("unreachable_server_is_db_busy", async () => {
@@ -38,6 +38,6 @@ describe("pool", () => {
     expect(failure).toBeInstanceOf(AppError);
     expect((failure as AppError).code).toBe("db.busy");
     expect((failure as AppError).cause).toBeInstanceOf(Error);
-    await pool.close();
+    await pool.end();
   });
 });

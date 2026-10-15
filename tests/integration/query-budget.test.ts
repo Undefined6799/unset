@@ -31,7 +31,7 @@ const provided = inject("postgres");
 const database = provided.databases[relative(REPOSITORY, import.meta.filename)] ?? "";
 let statements = 0;
 const pools: Pool[] = [];
-afterAll(() => Promise.all(pools.map((pool) => pool.close())));
+afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 function countingPool(): Pool {
   const pool = createPool({

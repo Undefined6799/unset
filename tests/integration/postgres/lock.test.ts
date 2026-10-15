@@ -22,7 +22,7 @@ const connection = { host: provided.host, port: provided.port, ...provided.roles
 // Connected as the real `web` role, so its sessions run with its own timeouts (roles.json, set by migration 0003):
 // statement_timeout 2 s, idle_in_transaction_session_timeout 10 s.
 const pools: Pool[] = [];
-afterAll(() => Promise.all(pools.map((pool) => pool.close())));
+afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 /** One replica's lock pool, whose log lines land in `logged`. */
 function replica(options: { max?: number; service?: string } = {}) {
@@ -138,7 +138,7 @@ describe("advisory lock", () => {
     expect(waited).toBeLessThan(1000);
     expect(await first.done).toBe("held");
     // The timed-out client rolled back cleanly and went back to the pool.
-    expect(b.lock.pool.driver.idleCount).toBe(1);
+    expect(b.lock.pool.idleCount).toBe(1);
   });
 
   test("wait_longer_than_role_timeout", { timeout: 20_000 }, async () => {
@@ -203,7 +203,7 @@ describe("advisory lock", () => {
     });
     expect(result).toBe(42);
     expect(logged).toEqual([{ event: "lock.lost", fields: { kind: "oauth" } }]);
-    expect(lock.pool.driver.totalCount).toBe(0);
+    expect(lock.pool.totalCount).toBe(0);
   });
 
   test("pool_exhausted", async () => {
@@ -256,6 +256,6 @@ describe("advisory lock", () => {
     await expect(withAdvisoryLock(lock, LockNamespace.oauth, DID, async () => 1, { waitMs: 0 })).rejects.toThrow(
       RangeError,
     );
-    expect(lock.pool.driver.totalCount).toBe(0);
+    expect(lock.pool.totalCount).toBe(0);
   });
 });

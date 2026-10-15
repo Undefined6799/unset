@@ -86,7 +86,7 @@ async function login(user: string, password: string): Promise<string> {
   } catch (error) {
     return String((error as { cause?: { code?: unknown } }).cause?.code);
   } finally {
-    await pool.close();
+    await pool.end();
   }
 }
 

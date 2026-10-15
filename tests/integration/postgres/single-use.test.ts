@@ -30,7 +30,7 @@ const poolAs = (role: ProcessRole, max = 1): Pool => {
 };
 const web = poolAs("web", 10);
 const retention = poolAs("retention");
-afterAll(() => Promise.all(pools.map((pool) => pool.close())));
+afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 const DID_A = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const DID_B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";

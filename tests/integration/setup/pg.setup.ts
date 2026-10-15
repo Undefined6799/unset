@@ -88,7 +88,7 @@ async function asMigrator<T>(connection: MigratorConnection, fn: (client: PoolCl
   try {
     return await withClient(pool, null, fn);
   } finally {
-    await pool.close();
+    await pool.end();
   }
 }
 

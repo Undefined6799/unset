@@ -22,13 +22,9 @@ export type PoolOptions = {
   readonly onStatement?: () => void;
 };
 
-export type Pool = {
-  /** The driver pool; only this file touches it. */
-  readonly driver: pg.Pool;
-  readonly connectTimeoutMs: number;
-  /** The P1.04 shutdown close hook: ends every connection. */
-  readonly close: () => Promise<void>;
-};
+/** A role's pool. Take clients only through `acquire` or `withClient` (Semgrep pool-access-single-file); `end()` is the
+ * P1.04 shutdown close hook. */
+export type Pool = pg.Pool;
 
 /**
  * Builds a role's pool. Its sessions run with the role's own timeouts, which migration 0003 sets from roles.json
@@ -47,7 +43,7 @@ export function createPool(options: PoolOptions): Pool {
   driver.on("error", () => undefined);
   const { onStatement } = options;
   if (onStatement !== undefined) driver.on("connect", (client) => countStatements(client, onStatement));
-  return { driver, connectTimeoutMs: options.connectTimeoutMs, close: () => driver.end() };
+  return driver;
 }
 
 /** Transaction control, which `tx.ts` adds on its own: not a data round trip, so not counted (ruling 2026-10-06). */
@@ -74,7 +70,7 @@ function countStatements(client: pg.PoolClient, onStatement: () => void): void {
  */
 export async function acquire(pool: Pool, deadline: AbortSignal | null): Promise<PoolClient> {
   if (deadline?.aborted) throw new AppError("http.deadline");
-  const pending = pool.driver.connect();
+  const pending = pool.connect();
   if (deadline === null) return pending.catch(busy);
   let onAbort = (): void => undefined;
   const aborted = new Promise<never>((_, reject) => {

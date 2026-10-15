@@ -69,7 +69,7 @@ beforeAll(async () => {
   for (const role of ROLES) postgres.sql("postgres", `ALTER ROLE ${role} PASSWORD '${passwords[role]}'`);
   as = { web: poolAs("web"), admin: poolAs("admin"), auditor: poolAs("auditor") };
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
 
 function poolAs(role: Role): Pool {
   const pool = createPool({

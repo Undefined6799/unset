@@ -25,7 +25,7 @@ function webPool(onStatement?: () => void): Pool {
   return pool;
 }
 const web = webPool();
-afterAll(() => Promise.all(pools.map((pool) => pool.close())));
+afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 const LIMITS: SessionLimits = { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 };
 const DID_A = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -225,7 +225,7 @@ describe("session store", () => {
     const pool = webPool();
     const { store } = setup(pool);
     const value = await insertSession(DID_A);
-    await pool.close();
+    await pool.end();
     pools.splice(pools.indexOf(pool), 1);
     // The route's error handler answers the AppError with its catalogue status; the cookie is never cleared.
     const failed = await store.read({ key: {}, cookieValue: value, deadline: null }).catch((error: unknown) => error);

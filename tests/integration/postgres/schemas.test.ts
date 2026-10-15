@@ -13,7 +13,7 @@ const pool = createPool({
   max: 1,
   connectTimeoutMs: 2000,
 });
-afterAll(() => pool.close());
+afterAll(() => pool.end());
 
 describe("schemas", () => {
   test("schemas_exist", async () => {

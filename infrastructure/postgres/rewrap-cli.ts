@@ -42,6 +42,6 @@ if (import.meta.main) {
     process.stdout.write(line(counts));
     process.exitCode = check === undefined ? 0 : checkExit(counts, check);
   } finally {
-    await pool.close();
+    await pool.end();
   }
 }

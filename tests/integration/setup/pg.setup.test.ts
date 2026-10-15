@@ -28,7 +28,7 @@ async function asRole(role: { user: string; password: string }, sql: string): Pr
   try {
     return await withClient(pool, null, async (client) => (await client.query(sql)).rows[0]);
   } finally {
-    await pool.close();
+    await pool.end();
   }
 }
 
