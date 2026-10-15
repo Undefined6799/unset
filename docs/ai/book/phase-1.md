@@ -8553,7 +8553,8 @@ can forge. The race between the walk and its re-lstat, and a root bind mount (ve
 here; no mountinfo parsing.
 
 **What:**
-- S1: red cases for the 11 mutants that survive at `preflight.test.ts:2630-2731`: a hard link at depth 3; a FIFO
+- S1: ten red cases for the 11 mutants that survive at `preflight.test.ts:2630-2731` (the depth-3 hard link kills both
+  M1 and M4; verify-887-a7a20cb section 6): a hard link at depth 3; a FIFO
   below depth 1; a socket; a device (via injected lstat); a dot-name hard link; an unreadable entry at depth 2; dev with
   a symlinked folder; dev with a link inside; realpath EACCES under dev; realpath EACCES under prod. The builder
   matches each case to its mutant in the report's table.
@@ -8603,7 +8604,10 @@ only by the edge's two aliases on `app`. compose-parse narrows: aliases only on 
 `aliases_only_on_the_edge_with_its_two_hosts`, with red fixtures for an alias on any other service (including web), on
 any other network, a third alias, and `app` with only one of the two. A preflight check (C17 or a sibling) pins that
 the edge is the only service sharing any network with the PDS's HTTP port; red fixture: web on `edge`. The local-only
-PLC network keeps its A4 allowlist entry.
+PLC network keeps its A4 allowlist entry. P1.29's network table and its threat line now read `web` on `app`, never on
+`edge`.
+
+D8: a new network boundary, so this step's PR carries its own ADR in `docs/human/decisions/`, which Alex accepts.
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
@@ -12372,11 +12376,12 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   `pids_limit`, restart `unless-stopped`. Every Node service also sets `NODE_OPTIONS=--max-old-space-size=<n>` with `n`
   at most 75 % of its `mem_limit` in MiB, so the heap hits its own cap before the container is killed (findings F-32).
 - Networks (round 1, F15). The PDS trusts **every private address** as a proxy (`pds/src/index.ts:197-204`), so
-  any container sharing a network with the PDS's HTTP port could forge a client address; only the edge (and, from
-  Phase 2, `web`) may share one:
+  any container sharing a network with the PDS's HTTP port could forge a client address; only the edge may share one
+  (`web` reaches the PDS through the edge on `app`, P1.35n, architecture's 02:05Z option C):
   | Network | Settings | Members |
   |---|---|---|
-  | `edge` | not internal; no `ipam` | edge, pds (and `web` from Phase 2) |
+  | `edge` | not internal; no `ipam` | edge, pds |
+  | `app` | `internal: true` | edge and `web` only; the edge carries the `APP_HOST` and `PDS_HOST` aliases (P1.35n) |
   | `pds_egress` | not internal | pds only (outbound HTTPS: PLC, DID and handle resolution, OAuth client metadata, other permission sets, AppView) |
   | `db` | `internal: true` | postgres, migrate (and `web` from Phase 2) |
   | `tap` | `internal: true` | tap and its DB (profile `tap`) |
@@ -12467,7 +12472,8 @@ dev-seed:
 
 **Threats:** the development stack's networks and the PDS's trust in private addresses.
   - S A container next to the PDS forges a client address (the PDS trusts every private address as a proxy) → only the
-    edge (and `web`) share a network with the PDS (`compose_dev_networks_match_table`,
+    edge shares a network with the PDS, and `web` reaches it through the edge on `app` (P1.35n)
+    (`compose_dev_networks_match_table`,
     `postgres_only_on_internal_networks`).
   - E A dev service exposed to the LAN or the internet → only the edge publishes (`compose_dev_only_edge_publishes`).
   - I Mail tokens in PDS debug logs while SMTP is unset → logging off and `LOG_LEVEL` allowlisted
