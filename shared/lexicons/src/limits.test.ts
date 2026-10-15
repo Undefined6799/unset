@@ -6,7 +6,9 @@ const CREATED = "2026-10-12T00:00:00.000Z";
 const profile = { $type: "sh.unset.profile", displayName: "Ada", createdAt: CREATED };
 const section = { $type: "sh.unset.section", type: "links", title: "Links", position: 0, createdAt: CREATED };
 const text = (n: number) => "x".repeat(n);
-const url = (bytes: number) => `https://a.example/${"p".repeat(bytes - 18)}`;
+const ORIGIN = "https://a.example.com/";
+const url = (bytes: number) => `${ORIGIN}${"p".repeat(bytes - ORIGIN.length)}`;
+const MAIL_DOMAIN = "@a.example.com";
 const blob = (size: number) => ({
   $type: "blob",
   ref: { $link: "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku" },
@@ -31,7 +33,7 @@ const FIXTURES: Record<string, Build> = {
   "profile.bio": P((n) => ({ bio: text(n) })),
   "profile.location": P((n) => ({ location: text(n) })),
   "profile.websiteBytes": P((n) => ({ website: url(n) })),
-  "profile.emailBytes": P((n) => ({ email: `${text(n - 10)}@a.example` })),
+  "profile.emailBytes": P((n) => ({ email: `${text(n - MAIL_DOMAIN.length)}${MAIL_DOMAIN}` })),
   "profile.availabilityLabel": P((n) => ({ availability: { label: text(n) } })),
   "profile.availabilityDetail": P((n) => ({ availability: { detail: text(n) } })),
   "profile.statsMax": P((n) => ({ stats: stats(n) })),
