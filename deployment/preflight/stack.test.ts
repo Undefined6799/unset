@@ -10,6 +10,7 @@ import {
   CHILD_ENV_NAMES,
   childEnv,
   DOCKER_INFO_DEADLINE_MS,
+  type Exit,
   main,
   plan as planStack,
   processRunner,
@@ -79,6 +80,9 @@ const COMPOSE = ["--compose", "deployment/compose.dev.yaml"];
 const ENV_FILE = ["--interpolation-env", "deployment/env/dev.env"];
 const UP = ["up", "--env", "dev", ...COMPOSE, ...ENV_FILE];
 const DOWN = ["down", "--env", "dev", ...COMPOSE, ...ENV_FILE];
+const LOCAL_COMPOSE = ["--compose", "deployment/compose.local.yaml"];
+const LOCAL_UP = ["up", "--env", "local", ...LOCAL_COMPOSE, ...ENV_FILE];
+const LOCAL_DOWN = ["down", "--env", "local", ...LOCAL_COMPOSE, ...ENV_FILE];
 
 describe("stack wrapper (P1.27w)", () => {
   test("child_env_is_exactly_the_allowlist", () => {
@@ -216,6 +220,43 @@ describe("stack wrapper (P1.27w)", () => {
         runner(() => 0),
       ),
     ).toBe(0);
+  });
+
+  test("local_up_checks_the_served_leaf_after_compose", () => {
+    // P1.34d item 15: under local, the served-leaf check runs last, as a process like the preflight.
+    const { commands } = plan(LOCAL_UP, {});
+    expect(commands.map((c) => c.file)).toEqual([process.execPath, "docker", process.execPath]);
+    expect(commands[0]?.args.slice(1, 4)).toEqual(["--", "--env", "local"]);
+    expect(commands[2]?.args).toEqual([expect.stringMatching(/deployment\/preflight\/served-leaf\.ts$/)]);
+    expect(plan(LOCAL_DOWN, {}).commands.map((c) => c.args.at(-1))).toEqual(["down"]);
+  });
+
+  test("a_failing_leaf_check_takes_the_stack_down", () => {
+    // P1.34d item 15, red test: a served leaf that differs from the copy brings the stack down, and the run fails.
+    const leafCheck = (exit: Exit) => {
+      const ran: string[][] = [];
+      const leafRunner: Runner = {
+        ...runner(() => 0),
+        spawn: (file, args) => {
+          ran.push([file, ...args.slice(-1)]);
+          return /served-leaf\.ts$/.test(args[0] ?? "") ? exit : { status: 0, signal: null };
+        },
+      };
+      return { code: main(LOCAL_UP, {}, leafRunner, () => undefined, SOCKET), ran };
+    };
+    const failed = leafCheck({ status: 1, signal: null });
+    expect(failed.code).toBe(1);
+    expect(failed.ran.map((command) => command.at(-1))).toEqual([
+      expect.stringMatching(/\.env$/),
+      "--build",
+      expect.stringMatching(/served-leaf\.ts$/),
+      "down",
+    ]);
+    // A check that is killed or cannot start takes the stack down too.
+    const killed = leafCheck({ status: null, signal: "SIGKILL" });
+    expect(killed.code).toBe(2);
+    expect(killed.ran.at(-1)).toEqual(["docker", "down"]);
+    expect(leafCheck({ status: 0, signal: null }).ran.map((command) => command.at(-1))).not.toContain("down");
   });
 
   test("down_never_removes_volumes", () => {
