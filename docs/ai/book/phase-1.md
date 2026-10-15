@@ -68,12 +68,12 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
-  P1.33c, P1.35b, P1.35c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l,
-  P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
-  P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
-  P1.33w, P1.33x, P1.33y, P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b,
-  P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36
-  (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15,
+  P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
+  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
+  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
+  P1.32c, P1.33w, P1.33x, P1.33y, P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z,
+  P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b,
+  P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15,
   P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
@@ -599,6 +599,8 @@ flowchart LR
   P1_35a --> P1_34d
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
+  P1_35e["P1.35e built image scanned, not a rebuild"]
+  P1_35c --> P1_35e
   P1_34d --> P1_33z
   P1_28 --> P1_29a
   P1_27y --> P1_27n
@@ -8264,7 +8266,7 @@ Done when the test fails without the line and passes with it, and check is green
 
 ### P1.35c — Pin the depcruise rows and image export checks
 Tags: [SEC] [ALEX] (typed line)            Depends on: —
-Slice 1, issue (pending), check path (`.github/workflows/images.yml`, `scripts/ci`, `scripts/lint`; the depcruise config
+Slice 1, issue #877, check path (`.github/workflows/images.yml`, `scripts/ci`, `scripts/lint`; the depcruise config
 is `scripts/lint/.dependency-cruiser.cjs`), kind/fix, lane Cursor after P1.35b, then P1.33v; book edit
 2026-10-15-verify-863-866-followups, from verify-863-4df3354 and verify-866-ddf2ed3-r2 (no blockers) and architecture's
 ruling (section "Architecture on the post-merge verifies of #863 (P1.33f) and #866 (P1.33u), 2026-10-15 ~00:02Z" of book
@@ -8307,6 +8309,26 @@ Size: mostly tests, which pr-shape excludes. If the source passes about 400 line
 P1.35d (reserved).
 
 Done when every case above is red without its change and green with it, and check is green.
+
+---
+
+### P1.35e — Scan the image we built, not a rebuild
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.35c
+
+Slice 1, issue #878, check path (`.github/workflows/images.yml`, `scripts/ci`), kind/fix, lane Cursor after P1.35c (both
+PRs edit `images.yml`); book edit 2026-10-15-verify-863-866-followups, "N7 ruled", carrying architecture's ruling in the
+last section of book edit 2026-10-14-verify-835-secret-scan (verify-835 N3, verify-866 N7: the export job rebuilds the
+image instead of scanning scan-image's build). A should-fix. Typed line (architecture's wording): "yes P1.35e
+.github/workflows/images.yml scripts/ci scan the built image".
+
+**What:**
+- scan-image builds the image once and saves it as an OCI archive artifact, together with its digest.
+- scan-export downloads that archive and checks the digest; a mismatch fails. It exports from the archive and never
+  rebuilds.
+- Tests in `scripts/ci` pin the artifact hand-off, the digest check (red on a mismatch) and the absence of any build
+  step in scan-export.
+
+Done when each test is red without its change and green with it, and check is green.
 
 ---
 
@@ -9391,6 +9413,8 @@ signature from our exact workflow is refused):
   - ADR 0023 records the answer with its question, option and time, and the attestation-availability finding for
     public repositories, and says that moving back to a key needs a new ADR.
   - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
+  - One digest: publish scans, signs and attests the one digest it pushes (book edit
+    2026-10-15-verify-863-866-followups, "N7 ruled"; P1.35e does the same for the PR check).
   - The trusted-root fetch: `sigstore-root.yml` has `permissions: contents: read`, no secrets and no environment. It
     runs Sigstore's TUF client, pinned by version and checksum, against the public-good root, uploads
     `trusted_root.json` as a run artifact, and prints the TUF root version and the file's sha256 in the job summary.
