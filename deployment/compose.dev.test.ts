@@ -532,10 +532,15 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
   test("edge_answers_for_the_app_and_pds_hosts", () => {
     // Architecture record 2026-10-13-p129a-pds-and-edge-in-compose, Amendment 1: the PDS reaches both hosts (it fetches
     // the app's client metadata) through the edge's aliases on the network they share, never extra_hosts or a fixed
-    // address. compose-parse refuses aliases anywhere else or with other values (aliases_only_on_the_edge_with_its_two_hosts).
+    // address; web reaches them the same way on the app network, which the PDS is never on (architecture 2026-10-15
+    // 02:05Z, option C). compose-parse refuses aliases anywhere else or with other values
+    // (aliases_only_on_the_edges_edge_and_app_networks_with_its_two_hosts).
     const raw = parseStrictData(read(FILE), FILE) as { services: Record<string, Record<string, unknown>> };
-    expect(raw.services.edge?.networks).toEqual({ edge: { aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"] } });
+    const hosts = { aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"] };
+    expect(raw.services.edge?.networks).toEqual({ edge: hosts, app: hosts });
     expect(service(dev(), "pds").networks).toContain("edge");
+    expect(service(dev(), "pds").networks).not.toContain("app");
+    expect(service(dev(), "web").networks).toEqual(["db", "app"]);
     expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
   });
 
