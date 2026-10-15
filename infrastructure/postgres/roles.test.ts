@@ -3,6 +3,7 @@
 // lands with the index.ts export it imports through (a trusted-base file and its re-export land in two PRs).
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
@@ -77,6 +78,27 @@ describe("role passwords", () => {
     const roster = [{ name: "web", passwordFrom: "pg_web_password" }];
     const result = await syncRolePasswords({ connection: NOWHERE, secretsDir: dir, roster });
     expect(result).toEqual({ ok: false, reason: "secret_not_ascii", role: "web" });
+  });
+
+  test("password_sync_unanswered_connect_times_out", { timeout: 20_000 }, async () => {
+    // A server that accepts the connection and never answers: node-postgres waits forever without a connect timeout
+    // (findings F-09), which would hang unset-migrate after its migrations instead of failing.
+    const silent = createServer(() => undefined);
+    await new Promise<void>((resolve) => silent.listen(0, "127.0.0.1", resolve));
+    const port = (silent.address() as { port: number }).port;
+    writeFileSync(join(dir, "pg_web_password"), `${PASSWORD}\n`);
+    try {
+      const started = Date.now();
+      const result = await syncRolePasswords({
+        connection: { ...NOWHERE, port },
+        secretsDir: dir,
+        roster: [{ name: "web", passwordFrom: "pg_web_password" }],
+      });
+      expect(result).toEqual({ ok: false, reason: "database", sqlstate: undefined });
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      silent.close();
+    }
   });
 
   test("roles_without_password_file_skipped", async () => {
