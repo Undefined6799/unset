@@ -2618,21 +2618,27 @@ book edit 2026-10-14-verify-847-outline-fixes, S1.
 ---
 
 ### P0.09z — Pin the outline check's comparisons
-Tags: [ALEX] (typed line)            Depends on: P0.09w (merged), P2.26f
+Tags: [ALEX] (typed line)            Depends on: P0.09w (merged)
 Check class (`scripts/docs/outline.ts` and `scripts/docs/docs.test.ts`), kind/build; issue #858; lane routed by the
-coordinator; book edit 2026-10-14-verify-847-outline-fixes, from verify-847-afbc77f S2-S4 and N2. It depends on the
-P2.26f rename (batch 55): without it, item 3 would refuse the book. It needs Alex's typed line "yes P0.09z scripts/docs
-outline check equality ids".
+coordinator; book edit 2026-10-14-verify-847-outline-fixes, from verify-847-afbc77f S2-S4 and N2. The P2.26aq to P2.26f
+rename it needed landed in batch 55 (#857), so it no longer depends on P2.26f (book edit 2026-10-14-verify-857-fixes,
+S1). It needs Alex's typed line "yes P0.09z scripts/docs outline check equality ids".
 
 **What:**
 1. S2: the heading comparison is set equality in both directions. Red fixtures: the heading names an extra id, the row
    names an extra id, and both share some ids.
 2. S3: red tests for the four untested refusals: a duplicate row (`outline.ts:97`), a duplicate heading (`:206`), a
    heading with no row (`:212`), and a heading with no Depends line (`:216`).
-3. S4: one id pattern, `^P[0-6]\.\d{2}[a-z]?$`, used at `outline.ts:12`, `:38` and `:77`. A token that looks like an id
-   but fails the pattern is refused, never skipped. Red fixtures: `P0.090`, `P7.01` and `P1.23rr`.
-4. N2: a row with no heading is reported, and launch-gate headings and en-dash headings are read, each with a red
-   fixture. If N2 surfaces book drift, the step stops and reports it; the fixes go to a book batch first.
+3. S4: one id pattern, `^(P[0-6]\.\d{2}[a-z]?|L\.\d{2}[a-z]?)$` (it keeps the launch-gate alternative; book edit
+   2026-10-14-verify-857-fixes, S5), used at `outline.ts:12`, `:38` and `:77`. A token that looks like an id but fails
+   the pattern is refused, never skipped. Red fixtures: `P0.090`, `P7.01` and `P1.23rr`.
+4. N2: a row with no heading of its own passes when its parent (the id with its trailing letter dropped) has a heading
+   and the row's id appears in that section's body; only rows that fail both are reported. Launch-gate headings and
+   en-dash headings are read, each with a red fixture (book edit 2026-10-14-verify-857-fixes, S5). A row marked
+   "*(outline row only; no body yet)*" passes (P4.00 and P4.14a today); the checker reads that exact marker, and
+   nothing else exempts a row (book edit 2026-10-14-verify-868-fixes, S3). The stop rule stays:
+   the first run must report zero rows on the batch-56 book, or the step reports the rows and stops; the fixes go to a
+   book batch first.
 
 Size: about 60 source lines and 200 test lines.
 
@@ -2643,6 +2649,7 @@ check is green.
 
 ### P0.09x — List the cleanup definers as trusted functions
 Tags: [ALEX] (typed line)            Depends on: —            Plan: rule SE-6
+As built: #867, merged as bc4444c.
 Check class (`.github/CODEOWNERS`), kind/build; issue #825; book edit 2026-10-13-codex-813-close-expired-hold,
 architecture amendment 2 of 23:42Z and its step-book mapping, from the verifier of #824 (verify-824-6ec1d8c, B1). P4.07g
 creates three new SECURITY DEFINER functions in `core` and grants `retention` EXECUTE on them. Unless their names are
@@ -2658,6 +2665,14 @@ Lane: Phase 2, which handles check paths, like P0.09w. It needs Alex's typed lin
 functions", relayed by id to that lane. Without his line, P4.07g waits; nothing is reworded to pass the classifier.
 
 Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `trusted_function`, and check is green.
+
+Where, as built: the probe test `scripts/guards/grant-isolation.test.ts`, which #867 added under the directive's rules 3
+and 4 and the Done-when (book edit 2026-10-14-verify-867-notes, N3).
+
+Under ADR 0022 the definers live in `migrations-trusted/`, trusted by path; the trusted-functions list is the second
+lock, refusing the same names in the product `migrations/` stream, so a product migration cannot shadow or redefine a
+trusted function even though migrator lacks the owner role (book edit 2026-10-14-verify-867-notes, "Architecture's
+answer").
 
 ---
 
@@ -2688,15 +2703,24 @@ section, so `scripts/workspace/codeowners.test.ts` gains two cases. N1: the `ini
 `init/` line; today moving it to the end of the section stays green. N2: a later line for the same path with a
 different owner is refused; that case also stays green today.
 
-Also (P1.33o's item 7, re-homed: book edit 2026-10-14-verify-829-host-pin-leaf, "Re-homing P1.33o's unbuilt items 6 and
-7"; verify-842-e4f6e94 S2): `/shared/host-pin/ @Undefined6799` joins CODEOWNERS' security-review list, in the Supply
-chain block near `/deployment/`, because the preflight imports it (verify-840-7e8bbba S4). It does not join the
-trusted-base section: the preflight itself is product under `/deployment/`. The codeowners test pins the line.
+P1.33o's item 7 (the `/shared/host-pin/` security-review CODEOWNERS line) does not ride this step: it cannot wait for
+Phase 4, so it is P1.35b (book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" and "Mapping:
+item 7 becomes P1.35b"). This step's CODEOWNERS edit stays the guarded-schema paths only.
+
+Also (verify-867-649c77a N1; book edit 2026-10-14-verify-867-notes): the probe at
+`scripts/guards/grant-isolation.test.ts:146-171` stays green if the three trusted-function names become glob forms
+(`core.*`, `core.close_*`, `*close_expired_hold`). This step adds one `arrayContaining` assertion on the exact names. It
+is a tightening in `scripts/guards`, which this step already touches, and the typed line below covers it.
+
+This book text lags #826 on purpose: the guarded-schemas rewrite enters the book only after the plan thread's ADR 0022
+docs PR merges, which waits on Alex's typed line "yes guarded schemas ADR docs/ai/PLAN.md docs/human/decisions" (book
+edit 2026-10-14-guarded-schemas-steps; book edit 2026-10-14-verify-857-fixes, S4). Until then the body above stands.
 
 Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y
-.github/CODEOWNERS scripts/guards scripts/workspace" (book edit 2026-10-14-verify-843-notes; it replaces "yes P0.09y
-migration guard", which Alex had not typed), relayed by id to that lane. Without his line, P4.07 waits; nothing is
-reworded around the guard.
+.github/CODEOWNERS scripts/guards scripts/workspace" (book edit 2026-10-14-verify-843-notes). It replaces both earlier
+lines: this book's "yes P0.09y migration guard", which Alex had not typed, and the guarded-schemas record's "yes P0.09y
+.github/CODEOWNERS scripts/guards" (book edit 2026-10-14-verify-857-fixes, S4). It is relayed by id to that lane.
+Without his line, P4.07 waits; nothing is reworded around the guard.
 
 ---
 

@@ -68,12 +68,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
-  P1.33c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29,
-  P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h,
-  P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.33w, P1.33x, P1.33y, P1.34d,
-  P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
-  P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
-  phase-2's P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
+  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
+  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t,
+  P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d,
+  P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's
+  P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -304,6 +305,10 @@ flowchart LR
   P1_33r["P1.33r in-flight DID lookups shared"]
   P1_32b["P1.32b in-flight handle checks shared"]
   P1_33r --> P1_32b
+  P1_32c["P1.32c fixture DIDs replaced"]
+  P1_35h["P1.35h in-flight rejection path tested"]
+  P1_35i["P1.35i test handles on reserved domains"]
+  P1_35j["P1.35j trusted test handles on reserved domains"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -592,6 +597,15 @@ flowchart LR
   P1_33w --> P1_33x
   P1_33x --> P1_33y
   P1_33y --> P1_34d
+  P1_35a["P1.35a dev CA folder rule gaps closed"]
+  P1_33y --> P1_35a
+  P1_35a --> P1_34d
+  P1_35f["P1.35f compose probe stall root-caused"]
+  P1_35g["P1.35g IP refused as local PDS host"]
+  P1_35b["P1.35b host-pin security review owner"]
+  P1_35c["P1.35c depcruise rows and export checks pinned"]
+  P1_35e["P1.35e built image scanned, not a rebuild"]
+  P1_35c --> P1_35e
   P1_34d --> P1_33z
   P1_28 --> P1_29a
   P1_27y --> P1_27n
@@ -7674,6 +7688,7 @@ PR shows both runs, and check is green.
 
 ### P1.33u — Make the image secret scan gate
 Tags: [SEC] [ALEX] (typed line)            Depends on: P1.33s (merged, 7c56327)
+As built: #866, merged as af44fc7.
 Slice 1, issue #848, check path (`.github/workflows/images.yml`, the comment at `.github/workflows/mirror.yml:62-66` and
 a new test in `scripts/ci/`), kind/build, lane Cursor with the P1.33s family (Alex's 20:24:47Z choice; directive
 `/mnt/project-files/unset-plan/cursor/directive-check-steps.md`); book edit 2026-10-14-verify-835-secret-scan, step 1
@@ -7743,6 +7758,10 @@ Size: about 80 source lines and 120 test lines.
 Done when the disable list matches Trivy 0.75.0's built-in rule ids (tested), each mirror that runs unmodified has a
 gated export scan, the PR lists the tightened scans' findings on current main (stopping as above if any appear), and
 check is green.
+
+Also (verify-866 N5; book edit 2026-10-15-verify-863-866-followups, "Elsewhere"): this step rewrites the mirror.yml
+comment anyway, so it fixes the "vulnerabilities only" wording (mirror.yml also secret-scans) and the stale
+`mirror.yml:53` (v0.74.0) and `:63`. The typed line already covers `mirror.yml` and is unchanged.
 
 ---
 
@@ -7988,7 +8007,7 @@ rules and tests below.
 **What:** concurrent uncached lookups for one DID share one network call.
 1. Only `consistency: "cached"` calls coalesce. A `fresh` call never joins a flight that started before it (fresh
    means "read after now": after an identity event, P3.05; after login, P2.06). A `cached` call may join a fresh flight.
-2. Flights are keyed by DID, verifyHandle's too.
+2. Flights are keyed by DID.
 3. A flight keeps the resolver's existing network timeout and is never tied to the first caller's abort signal. A caller
    that aborts detaches without cancelling the flight for the others.
 4. Every joiner gets the same outcome: success, or the same IdentityError kind. `unavailable` is still never cached
@@ -7996,11 +8015,12 @@ rules and tests below.
    waiting.
 5. The in-flight map is capped at the cache max (`DID_DOC_CACHE_MAX`, `HANDLE_CACHE_MAX`). When it is full, a new DID
    makes its own call without coalescing, as today; nothing is refused.
-6. `invalidateHandle` and the resolver's refresh drop the DID's in-flight entry, so the next call starts a new flight.
+6. The resolver's refresh drops the DID's in-flight entry, so the next call starts a new flight.
 
 Tests, each red first: 50 concurrent cached calls for one DID make one network call; a fresh call during a cached
 flight makes its own call; a PLC outage is one call per DID per wave and every waiter gets `unavailable`; the map never
-exceeds the cap; an aborted first caller does not fail the others; an invalidate during a flight starts a new one.
+exceeds the cap; an aborted first caller does not fail the others; a resolver refresh during a flight starts a new one
+(book edit 2026-10-14-verify-857-fixes, N2).
 
 Size: about 80 source lines and 200 test lines.
 
@@ -8010,7 +8030,8 @@ Done when the DID-resolution tests fail on main and pass with the change, and ch
 
 ### P1.32b — Share in-flight handle checks
 Tags: [SEC] trusted            Depends on: P1.33r
-Slice 1, issue #865, trusted base (`domains/identity/verify-handle.ts` and its tests), kind/feature, lane Phase 1
+Slice 1, issue #865, trusted base (`domains/identity/verify-handle.ts` and its tests, and
+`infrastructure/net-guard/src/dns.test.ts`), kind/feature, lane Phase 1
 right after P1.33r's PR merges; book edit 2026-10-14-outside-review-lows, "P1.33r split under SE-6". P1.33 has no free
 letters, so the id comes from P1.32. Like any trusted-base PR it touches nothing outside trusted base, and Alex reviews
 it as code owner; it needs no typed line, because it is not a check path and tightens nothing he decided.
@@ -8021,13 +8042,114 @@ handle checks: one caller's check poisoning what others receive, and a shift in 
 **What:** verifyHandle's flight, keyed by DID (P1.33r rule 2), built on P1.33r's `in-flight.ts`, which this step imports
 and never edits. `invalidateHandle` drops the DID's in-flight entry (rule 6).
 
-Done when seven tests fail on main and pass with the change (red first), the ASVS V6.8.1 rows are updated, and check is
+Also (book edit 2026-10-14-verify-864-fixture-did, item 2): replace the real-looking DID in
+`infrastructure/net-guard/src/dns.test.ts:44` (trusted base, test-only, the same class as `verify-handle.ts`, so SE-6
+holds) with `did:plc:` plus 24 copies of one letter. If this step has already merged, that line becomes its own small
+trusted step, with an id from the step book.
+
+Tests, red first (book edit 2026-10-14-verify-857-fixes, N2):
+1. 50 concurrent verifyHandle calls for one DID make one network call.
+2. A fresh call during a cached flight makes its own call.
+3. A PLC outage is one call per DID per wave, and every waiter gets `unavailable`.
+4. `unavailable` is not cached after the flight ends.
+5. The in-flight map never exceeds `HANDLE_CACHE_MAX`.
+6. An aborted first caller does not fail the others.
+7. `invalidateHandle` during a flight starts a new one.
+
+Done when the seven tests fail on main and pass with the change, the ASVS V6.8.1 rows are updated, and check is green.
+
+---
+
+### P1.32c — Replace the real-looking DID in fixtures
+Tags: —            Depends on: —
+Slice 1, issue #870, product (test fixtures in `domains/identity/`, `shared/log/` and `shared/ui/showcase/`), kind/fix,
+lane Phase 1 after P1.32b (lane order only: no file is shared, so no Depends; book edit 2026-10-14-verify-868-fixes,
+Addendum N7); book edit 2026-10-14-verify-864-fixture-did, item 1, from verify-864-b700f05. Nothing from Alex. The DID
+itself is quoted in the record, not here, so this page never matches the grep below.
+
+**What:** the real-looking `did:plc:` value that verify-864 found breaks the fixture rule (`did:plc:` plus 24 copies of
+one letter, or `did:web:` on an RFC 2606 host). Measured on main at 23:37Z (book edit 2026-10-14-verify-868-fixes, S4):
+- the value itself at `domains/identity/syntax.test.ts:6`, `:26`, `:27` and `:28` (`:28` with `#atproto`) becomes
+  `did:plc:` plus 24 copies of one letter; the 25-character negative case at `:12` becomes 25 copies of the same letter,
+  so it stays one character too long;
+- the near-copies at `:11` (23 characters), `:13` (upper case) and `:14` (ends in `1`) become 23 copies, 24 upper-case
+  copies, and 23 copies followed by `1`. Each keeps its comment and stays invalid for the same reason;
+- `shared/log/logger.test.ts:226`, `:255` and `shared/log/logger.hardening.test.ts:45` (test fixtures), and
+  `shared/ui/showcase/Showcase.tsx:144` (UI showcase sample data; product either way, N3);
+- `did:web:sub.example.co.uk` at `tests/integration/postgres/did-columns.test.ts:248` becomes `did:web:sub.example.com`,
+  because example.co.uk is a registrable domain (rule SE-7a; book edit 2026-10-15-verify-875-fixture-wording,
+  "Mapping of architecture's ruling").
+`domains/identity/resolve-did.test.ts:12` is not in the list: #864 already replaces it. Every assertion keeps its
+meaning: the logger tests must still see the DID redacted.
+
+Done when a case-insensitive grep of the repo for the DID's first 23 characters (the value is in book edit
+2026-10-14-verify-864-fixture-did, never quoted here) returns nothing outside `infrastructure/net-guard/`, which catches
+every near-copy; a sliding six-character search finds no six-character window of the original DID in the repo,
+case-insensitively, outside `infrastructure/net-guard/`, which catches a short fragment (verify-875 S1; book edit
+2026-10-15-verify-875-fixture-wording); the touched tests pass; and check is green. The `net-guard` line belongs to
+P1.32b, or to its own trusted step if #865 merges without it (Addendum, replacing N2). No guard enforces the fixture
+rule for DIDs (SE-7a, verifier review); one would be a check-path step with Alex's typed line, and is not booked.
+
+---
+
+### P1.35h — Test the in-flight rejection path
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue #882, product (`domains/identity/`, tests only), kind/fix, lane Phase 1 after P1.32c (#875; lane
+order only); book edit 2026-10-15-verify-874-followups, section 1, from verify-874-b614e15 (P1.32b, #874, no blockers).
+Nothing from Alex. Nothing tests the rejection path of `awaitFlight` (`domains/identity/in-flight.ts:92`, from #864):
+swallowing the rejection there passes all 75 identity tests, and a resolver caller with a live signal whose lookup fails
+would hang until its signal fires.
+
+**What (tests, red first):**
+- a flight that rejects makes a joiner with a live, never-aborting signal reject with the same IdentityError kind,
+  without waiting on the signal;
+- an abort listener is not left behind after the rejection.
+
+Done when a mutant that swallows the rejection, or resolves it, turns a test red, and check is green.
+
+---
+
+### P1.35i — Move test handles to reserved domains
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue #884, product (`domains/identity/syntax.test.ts`, `deployment/preflight/preflight.test.ts`,
+`shared/log/logger.test.ts` and `shared/log/logger.hardening.test.ts`), kind/fix, lane Phase 1 after P1.35h (lane order
+only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
+step-book mapping. Nothing from Alex. Test handles on registrable domains (`*.bsky.social`, `*.0x40.me`) can belong to
+real people (rule SE-7a).
+
+**What:**
+- Files: `domains/identity/syntax.test.ts` (10 hits); `deployment/preflight/preflight.test.ts`;
+  `shared/log/logger.test.ts:248` and `:254`; `shared/log/logger.hardening.test.ts:69`.
+- `*.bsky.social` moves to `*.example.com` or `*.test`.
+- `*.0x40.me` and `*.0x40.space` stay only where the test is about our own suffix; the label is then one letter
+  repeated, and a comment says why the suffix is needed. Everything else moves to reserved domains.
+- The PR body lists every one-letter label it keeps on our suffixes (they join P2.09's reserved list).
+
+Done when no product test file holds a handle on a registrable domain other than those kept labels, and check is green.
+
+---
+
+### P1.35j — Move trusted test handles to reserved domains
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+
+Slice 1, issue #885, trusted base (the `shared/http` server and config tests), kind/fix, lane Phase 1 after P1.35i
+(lane order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and
+its step-book mapping. Like any trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs
+Alex's typed line: "yes P1.35j shared/http test handles reserved domains".
+
+**What:** the same rules as P1.35i for the `shared/http` server and config tests. The PR body lists every one-letter
+label it keeps on our suffixes.
+
+Done when no trusted-base test file holds a handle on a registrable domain other than those kept labels, and check is
 green.
 
 ---
 
 ### P1.33w — Refuse binds that reach the dev CA folder
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k
+As built: #861, merged as 4da9d02. Architecture's ruling on verify-861-9ae3539 is P1.35a.
 Slice 1, issue #853, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
 2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
@@ -8041,8 +8163,8 @@ the secrets folder (it joins that list, with red tests).
 Also (architecture on verify-861, last section of 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in "Architecture's
 nlink rule rides P1.33w" of book edit 2026-10-14-p134d-split): every regular file in `unset-dev-ca` must have nlink 1,
 checked with lstat; otherwise C26 refuses under local and names the path. Tests: a hard link inside the checkout (red),
-a hard link outside it (red), and nlink 1 (green). The rule is not generalized to everything C9 and C26 walk. If #861
-merges first, the rule becomes its own small product step, with an id from the step book.
+a hard link outside it (red), and nlink 1 (green). The rule is not generalized to everything C9 and C26 walk. #861
+merged first, so the follow-up rules are P1.35a (book edit 2026-10-14-p134d-split, "P1.35a" section).
 
 Done when the red tests fail on main and pass with the change, and check is green.
 
@@ -8050,6 +8172,8 @@ Done when the red tests fail on main and pass with the change, and check is gree
 
 ### P1.33x — Check the local leaf names and expiry
 Tags: [SEC]            Depends on: P1.33w (same files; avoids conflicts)
+As built: #869 at 8e3a8f2, merged as 116b8dc. verify-869's S1 and S2 were not on it; they ride P1.33y (#876) (book edit
+2026-10-14-verify-868-fixes, "Correction (23:55Z)").
 Slice 1, issue #854, product (`deployment/preflight/`), kind/feature, lane the third thread; book edit
 2026-10-14-p134d-split, a split of P1.34d (#742) by size: no item's content changes, and the record
 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments still govern the text. Not paused. Nothing from Alex.
@@ -8068,6 +8192,17 @@ section of 2026-10-14-p134d-split): the preflight cannot read the leaf secret (0
 judges the public, cert-only copy `unset-dev-env/local-leaf.pem`, written by the same openssl run as the leaf, and
 never reads the secret. The SAN, IP SAN, 14-day expiry and `APP_HOST` checks run on the copy. A missing or unreadable
 copy fails with `input missing: unset-dev-env/local-leaf.pem`; red fixture: copy absent.
+
+Chain check (book edit 2026-10-14-verify-857-fixes, S2(a), restoring architecture's ~22:20Z point 1 in
+2026-10-12-p134c-p134d-local-dev-root-ca): C18 under local also requires that `unset-dev-env/local-leaf.pem` chains to
+the local dev root, by both issuer name and signature. C18 reads the root from `unset-dev-trust/root.pem` (item 5's
+path, confirmed for C18 at 23:08Z); an absent root fails with "input missing: unset-dev-trust/root.pem". Red fixtures:
+a foreign CA, the same name with another key, and the same key with another name. As built on #869 at 8e3a8f2
+("Updates (23:23Z)" of book edit 2026-10-14-verify-857-fixes), which also moves the root path, so P1.33y moves nothing.
+
+Runbook (S2(c), point 4): the `local-leaf.pem` lines of `docs/human/runbooks/dev-stack-secrets.md` (the openssl run
+writes the cert-only copy beside the env files in `unset-dev-env/`, copying with `install`, never a link) ride this
+step as docs (SE-6), because it lands before P1.34d.
 
 Also (verify-851-cabc9e3 on P1.33k, #851; last section of book edit 2026-10-14-p134d-split), all product in
 `deployment/preflight/`:
@@ -8099,16 +8234,234 @@ directory site mount on the local edge, answered by the refusal below; dev keeps
 
 **What** (P1.34d item 12's C18 half; book edit 2026-10-13-p127l-verify-owners, point 2): under `--env local`, C18
 accepts exactly the per-file read-only site mounts at `/etc/caddy/sites/enabled/<name>.caddy` and refuses a directory
-mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:77`
-refuses file mounts, and the fixture at `preflight.test.ts:2452` changes with it. C18 under dev is unchanged.
+mount at `sites/enabled`. Today `deployment/preflight/checks/edge.ts:66-83` requires a directory and `edge.ts:82`
+refuses file mounts, and the per-file site fixtures at `preflight.test.ts:2625-2628` change with it (lines on ee55b68;
+book edit 2026-10-14-verify-857-fixes, N4). C18 under dev is unchanged.
+
+Root path: this step moves nothing. P1.33x (#869) carries the move to `unset-dev-trust/root.pem` as built ("Updates
+(23:23Z)" of book edit 2026-10-14-verify-857-fixes; book edit 2026-10-14-p134d-split, "P1.33y root path mapping
+confirmed", which now reads as P1.33x for the path). The folder-content checks stay with P1.34d (or P1.33g if it
+splits).
 
 Done when a per-file local fixture passes, a local directory mount is refused, the dev fixtures are unchanged, and
 check is green.
 
 ---
 
+### P1.35a — Close the dev CA folder rule's gaps
+Tags: [SEC]            Depends on: P1.33y
+Slice 1, issue #871, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before P1.34d
+(it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
+2026-10-14-p134d-split, "P1.35a" section, carrying architecture's ruling on verify-861-9ae3539 (S1, S2, S3, N1; last
+section of 2026-10-12-p134c-p134d-local-dev-root-ca), quoted below (book edit 2026-10-14-verify-868-fixes, S2). P1.33w
+merged as #861, so the ruling is its own step; P1.33 has no free letters, and P1.34's only unused letter (P1.34h) was
+released and is still named in history; the id means nothing about P1.35's lexicon authority. A tightening: nothing from
+Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the dev root key
+reaching a container through a symlinked or hard-linked path, an unreadable folder passing, or the folder present on
+prod, answered by the rules and red cases below.
+
+**What:** architecture's ruling (~23:20Z), quoted:
+
+> All of these are tightenings and land as one follow-up product step (deployment/preflight; the step book gives the
+> letter).
+>
+> **S1: fail closed on shape and on every error.**
+> - The folder `unset-dev-ca` is judged by `lstat`, never `stat`. It must be a real directory. A symlink, or any other
+>   non-directory, is a refusal: "dev CA folder is not a real directory: <path>".
+> - Under local, an absent folder fails as `input missing`, because local needs the CA. Under dev, an absent folder
+>   passes. Under prod, see S2.
+> - Every `lstat`, `readdir` or `realpath` error inside the rule is a refusal naming the path, never a skip. Lines
+>   build.ts:166 and :170 change accordingly.
+> - The PR's fixture that treats a symlinked folder as valid becomes a red case.
+>
+> **N1: no following links.**
+> - The walk is our own recursion using `lstat` and `readdirSync(..., { withFileTypes: true })` without `recursive`.
+>   Node 26's recursive readdir follows symlinked directories.
+> - Any symlink anywhere inside the folder is a refusal. The folder holds only regular files and real subdirectories.
+> - Every regular file at any depth must have nlink 1.
+>
+> **S2: run under every env.**
+> - **local:** as ruled, folder required.
+> - **dev:** the same checks whenever the folder exists, because compose.dev.yaml's three builds use the checkout root
+>   as context, so a hard link there would reach an image.
+> - **prod:** the dev CA folder must not exist next to the checkout at all. Its presence is a refusal: "dev CA folder
+>   present on a prod host". A prod host never needs the dev root, and finding it there means a host was set up from the
+>   wrong runbook.
+> - The local-only env guard is removed. `UNSET_ENV` comparisons stay positive allowlists (P1.34z).
+>
+> **S3: tests that kill the three surviving mutants.**
+> - A fixture with `root.pem` at the top and `sub/x`, each hard-linked into the checkout, must refuse on each of them.
+>   That catches "no recursion", "only root.key" and "only the first entry".
+> - Add red cases for:
+>   - a symlinked folder;
+>   - a symlink inside the folder pointing to a directory outside it;
+>   - an unreadable entry (mode 000);
+>   - prod with the folder present;
+>   - dev with a hard-linked key.
+
+Also a red case: a FIFO inside the folder (the folder holds only regular files and real subdirectories; book edit
+2026-10-14-verify-868-fixes, S2).
+
+Done when each red case fails on main and passes with the change, and check is green.
+
+---
+
+### P1.35f — Root-cause the compose version probe stall
+Tags: —            Depends on: —
+
+Slice 1, issue #879, product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread after
+P1.33y, next in its queue (lane order only); book edit 2026-10-15-verify-862-c14-and-compose-probe, section 2, its
+"Correction (step book, 00:19Z)" and "P1.35f ruled" sections, and architecture's option A ruling (~00:25Z) in book edit
+2026-10-15-p135f-findings. Nothing from Alex. In the check job, "docker compose version killed after 10000 ms"
+(`tests/support/docker.ts:73`, raised through the module-level probe at
+`deployment/preflight/compose-parse.test.ts:642`) stopped the file from loading and turned #862's required check red
+(run 38646729832). Main run 38638697888 did not hit the probe: it failed on a separate `docker build killed after 300000
+ms` in the edge builds, which is noted and not booked. The lane's evidence rules out daemon contact, plugin lookup and
+parallel probing: the probe makes no connect(), and it stalled once in about 400 runs.
+
+**What (architecture's option A):**
+- Under `CI=true`, `hasCompose` is true without probing (`process.env.CI === "true"`): no module-level compose probe on
+  the CI path. CI always has Compose. This is not a timeout, retry or skip.
+- In CI, a missing or broken Compose fails loudly at the first test that uses it, with the agreement tests' own error
+  naming `docker compose`, never a skip. A test proves that under `CI=true` a failing compose call surfaces as a failure
+  and not as a skip.
+- Off CI, the probe's existing behaviour stays as it is.
+- Not B (runner telemetry is a check path for an unconfirmed one-off; revisit only on a second probe stall) and not C
+  (a timeout change). The PR body notes the run ids above.
+
+Done when the findings record names the causes it ruled out and the residual runner stall, the CI path has no probe,
+the red test proves a failing compose call fails, check is green, and no timeout changed.
+
+---
+
+### P1.35g — Refuse an IP address as the local PDS host
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue #880, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.35f (lane order
+only); book edit 2026-10-15-verify-876-followups, from verify-876-aef02b9 S1 (the PDS_HOST half of verify-869 S1; it
+predates #876) and N1-N5, with architecture's ruling on S1 (~00:27Z). A tightening: nothing from Alex. Under local,
+`PDS_HOST` can be an IPv4 address: a leaf carrying `DNS:192.0.2.2` with an edge `PDS_HOST` of `192.0.2.2` passes the
+whole preflight, on main too. `PDS_HOST` uses the shared HOST shape (`deployment/edge/caddyfile.ts:53`, trusted base),
+the leaf is compared to it as given (`local-leaf.ts:42-48`), and C21 is skipped under local, so nothing ties the edge's
+`PDS_HOST` to the PDS's `PDS_HOSTNAME`.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): the edge terminating
+TLS for one name while the PDS issues its OAuth issuer, DID-doc service endpoint and handles under another, so sign-in
+fails confusingly or the app trusts a host the PDS does not answer for; and an IP address standing in for a host name.
+
+**What:**
+- S1: under local, the preflight refuses a `PDS_HOST` whose last label is all digits, exactly as for `APP_HOST`. The
+  check lives in the preflight; the shared shape in trusted base does not change. Red fixture: the `192.0.2.2` leaf and
+  host above.
+- Architecture's ruling: under local, the edge's `PDS_HOST` must equal the PDS's `PDS_HOSTNAME`, both compared as
+  normalized hostnames (lower case, no trailing dot, no port). A mismatch fails, naming both variables and echoing no
+  other env value. Tests: equal (passes); different (fails); differing only in case or a trailing dot (passes); one
+  variable absent (input missing).
+- N1: `localSiteMounts` (`edge.ts:301`) comes back under Biome's cognitive-complexity limit of 15, with no rule change
+  and no suppression.
+- N2: the expiry margin is pinned at exactly 14 days; a 14.5-day mutant turns a test red.
+- N3: a test pins C17's exact reader name (`networks.ts:71`); a `*-reader` mutant turns it red.
+- N4: two more PEM fixtures for S3: leading text before the certificate, and a certificate followed by its key.
+- N5: a missing site source fails naming the input (`input missing: <path>`) instead of the generic "FAIL C18 check
+  error" (`edge.ts:43-47`), still failing closed.
+
+Done when each red case fails on main and passes with the change, and check is green.
+
+---
+
+### P1.35b — Give host-pin a security review owner
+Tags: [SEC] [ALEX] (typed line)            Depends on: —
+Slice 1, issue #872, check path (`.github/CODEOWNERS` and `scripts/workspace/codeowners.test.ts`), kind/fix, lane
+Cursor; book edit 2026-10-14-verify-829-host-pin-leaf, "Architecture on item 7's home" (quoted) and "Mapping: item 7
+becomes P1.35b". P1.33o's item 7 cannot wait for P0.09y (Phase 4): until it lands, a product-only PR can change
+`shared/host-pin`, which the preflight imports, without security-review ownership. P1.33o (#850), P1.33f (#863) and
+P1.33u (#866) have merged, so none can carry it. P1.33 has no free letters, and P1.34's only unused letter (P1.34h) was
+released and is still named in history; the id means nothing about P1.35's lexicon authority (book edit
+2026-10-14-verify-868-fixes, N4). Typed line: "yes P1.35b .github/CODEOWNERS scripts/workspace shared/host-pin security
+review" (`scripts/workspace` is added to the ruling's line because the test lives there; architecture is told).
+
+**What:** add `/shared/host-pin/ @Undefined6799` to CODEOWNERS' Supply chain block, not the trusted-base section. A
+test asserts that the line exists and sits outside the trusted-base section; the existing CODEOWNERS parser tests
+cover the format.
+
+Size: one CODEOWNERS line and one test.
+
+Done when the test fails without the line and passes with it, and check is green.
+
+---
+
+### P1.35c — Pin the depcruise rows and image export checks
+Tags: [SEC] [ALEX] (typed line)            Depends on: —
+Slice 1, issue #877, check path (`.github/workflows/images.yml`, `scripts/ci`, `scripts/lint`; the depcruise config
+is `scripts/lint/.dependency-cruiser.cjs`), kind/fix, lane Cursor after P1.35b, then P1.33v; book edit
+2026-10-15-verify-863-866-followups, from verify-863-4df3354 and verify-866-ddf2ed3-r2 (no blockers) and architecture's
+ruling (section "Architecture on the post-merge verifies of #863 (P1.33f) and #866 (P1.33u), 2026-10-15 ~00:02Z" of book
+edit 2026-10-14-verify-835-secret-scan). One PR (architecture item 5). P1.33f (#863) and P1.33u (#866) have merged.
+P1.33 has no free letters, and P1.34's only unused letter (P1.34h) was released and is still named in history. Typed
+line (architecture's wording): "yes P1.35c .github/workflows/images.yml scripts/ci scripts/lint export and entry
+checks".
+
+**What, depcruise (#863):**
+- S3 is accepted as built: the five-pattern exclude array (`.dependency-cruiser.cjs:367-375`) stays. A test pins each
+  pattern in both directions: the npm dist edge is seen, and workspace dist is excluded (architecture item 1).
+- S1: a real cruise shows that the `index.test.ts` to `node_modules/vitest/dist/index.js` edge is allowed by the tooling
+  row only; a host-pin row allowing `^node_modules/vitest/dist/` turns the test red.
+- S2 (N1): fixtures pin `^` on the host-pin row's `from` and `to` (`.dependency-cruiser.cjs:134`); removing either turns
+  a test red.
+- Nits: item 4 gains a real-cruise `shared/<x>/dist` case; the fixture stubs (`depcruise-fixture.ts:91`) drop the
+  `exports` field unless a test needs it.
+- #588's two open nits, both still on main: the `depcruise.test.ts:507` comment says P1.30r, not P1.30u; a red fixture
+  such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
+
+**What, image scan gate (#866):**
+- S1: a test pins the gate's `EXPORT_RESULT: ${{ needs.scan-export.result }}` (`images.yml:393`); feeding it
+  scan-image's result, or a hard-coded success, turns it red.
+- S2: tests kill the close variants of mutants 5, 8, 9 and 11: step-level `continue-on-error`; an empty or
+  sub-directory mount (`images.yml:364-365`); `-e TRIVY_SKIP_DIRS`; a step `if` on `matrix.name`; `matrix.exclude`.
+- N2 (architecture item 2): every path in the export check resolves inside the exported root only. An absolute link
+  target is re-rooted under the export directory, `..` is clamped at the root, and resolution stops after 40 hops; a
+  longer chain, or a loop, fails.
+- N1 (item 3): the ENTRYPOINT executable, resolved as in N2, is a regular file with an execute bit.
+- N3 (item 4): where the executable is an interpreter (`node`, for kinds node-app and migrate in
+  `deployment/images/kinds.json`), the script argument is resolved against WORKDIR inside the root and must be a regular
+  file. The interpreter list is closed and pinned by a test.
+- Red cases (item 5): an absolute os-release link that points at the runner; a dangling entry; a directory entry; a
+  missing app script.
+- N4: a test covers an image with no ENTRYPOINT, and the lookup on the image's own PATH.
+- N6: a red test makes the "0 files scanned" check fire; if it cannot fire, the check is removed and the PR says why.
+- N8: `scan-export.test.ts` cleans up its temp dirs.
+
+Size: mostly tests, which pr-shape excludes. If the source passes about 400 lines, the depcruise half splits off as
+P1.35d (reserved).
+
+Done when every case above is red without its change and green with it, and check is green.
+
+---
+
+### P1.35e — Scan the image we built, not a rebuild
+Tags: [SEC] [ALEX] (typed line)            Depends on: P1.35c
+
+Slice 1, issue #878, check path (`.github/workflows/images.yml`, `scripts/ci`), kind/fix, lane Cursor after P1.35c (both
+PRs edit `images.yml`); book edit 2026-10-15-verify-863-866-followups, "N7 ruled", carrying architecture's ruling in the
+last section of book edit 2026-10-14-verify-835-secret-scan (verify-835 N3, verify-866 N7: the export job rebuilds the
+image instead of scanning scan-image's build). A should-fix. Typed line (architecture's wording): "yes P1.35e
+.github/workflows/images.yml scripts/ci scan the built image".
+
+**What:**
+- scan-image builds the image once and saves it as an OCI archive artifact, together with its digest.
+- scan-export downloads that archive and checks the digest; a mismatch fails. It exports from the archive and never
+  rebuilds.
+- Tests in `scripts/ci` pin the artifact hand-off, the digest check (red on a mismatch) and the absence of any build
+  step in scan-export.
+
+Done when each test is red without its change and green with it, and check is green.
+
+---
+
 ### P1.34d — Trust one dev root CA on the local stack
-Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y
+Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a
 Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/preflight/`, and
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
@@ -8121,10 +8474,15 @@ book before opening it.
 
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
-   command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The recipe also writes
-   `local-leaf.pem`, the certificate only, beside the env files in `unset-dev-env/`: the copy P1.33x's C18 judges
-   (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split). It also copies the root into
-   `unset-dev-trust/` (item 5).
+   command), with the expiry check `openssl x509 -enddate`. Expiry fails closed. The `local-leaf.pem` lines (the
+   cert-only copy P1.33x's C18 judges) are already in the runbook from P1.33x; this item points to them (book edit
+   2026-10-14-verify-857-fixes, S2(c)). It copies the root into `unset-dev-trust/root.pem` (item 5) with P1.33x's root
+   line, `install -D -m 0644 root.pem unset-dev-trust/root.pem`, never a link, so nlink stays 1 and the mode meets "not
+   group- or other-writable"; it writes nothing else into that folder (book edit 2026-10-14-verify-868-fixes, S1,
+   superseding "cp" in the split record). The token reader's dev-root fixture
+   (`tests/integration/pds-email-token.test.ts:25`, `/srv/unset-dev-env/dev-root-ca.pem`) and whatever passes the real
+   path move to `unset-dev-trust/root.pem` here, not in P1.33y (book edit 2026-10-14-p134d-split, "P1.33y root path
+   mapping confirmed").
 2. The root: `basicConstraints=critical,CA:TRUE,pathlen:0`, `keyUsage=critical,keyCertSign,cRLSign` and
    `nameConstraints=critical,permitted;DNS:<local app host>,permitted;DNS:<local PDS host>`, exact names with no
    wildcard parent (one suffix only if the PDS needs per-account subdomains).
@@ -8132,20 +8490,24 @@ book before opening it.
    binds it.
 4. The leaf: `CA:FALSE`, `extendedKeyUsage=serverAuth`, SANs exactly the two local hosts, 397 days, EC P-256. Its key is
    a C9 secret (0400, uid 65532), mounted only into the edge.
-5. The public root cert sits in a sibling folder, `unset-dev-trust/`, bind-mounted read-only into pds and web only,
-   with `NODE_EXTRA_CA_CERTS` pointing at it. It is an ordinary bind source: never an env or secrets folder, and still
+5. The public root cert sits in a sibling folder, `unset-dev-trust/`, bind-mounted read-only into pds and web only, with
+   `NODE_EXTRA_CA_CERTS` pointing at it. It is an ordinary bind source: never an env or secrets folder, and still
    refused by C9 and C26 if it reaches `unset-dev-ca`, `unset-dev-env` or the secrets folder. The preflight requires,
    under local:
-   - the folder holds exactly `root.pem`, a regular file with nlink 1, not group- or other-writable;
+   - the folder is a real directory (lstat) and holds exactly `root.pem`, a regular file with nlink 1, not group- or
+     other-writable (architecture's recorded confirmation, following its 23:20Z nlink ruling; "Updates (23:23Z)" of book
+     edit 2026-10-14-verify-857-fixes);
    - `root.pem` is byte-identical to `unset-dev-ca`'s root cert, and a mismatch fails naming both paths;
    - `root.pem` holds a single CA:true certificate carrying the item 2 name constraints, and any PRIVATE KEY header is
      a refusal.
 
-   `local-leaf.pem` stays in `unset-dev-env/`, because the preflight reads it and nothing binds it. Red tests: an extra
-   file in the folder; nlink 2; group-writable; a cert that differs from the CA's; a non-CA cert; a cert without the
-   name constraints; a PRIVATE KEY block. If this step measures over 400 source lines, these preflight checks join the
-   P1.33g split with the runbook and the throwaway-root tests. (Book edit 2026-10-14-p134d-split, "Item 5 settled:
-   unset-dev-trust/", architecture's confirmation with no exception to C9.)
+   `local-leaf.pem` stays in `unset-dev-env/`, because the preflight reads it and nothing binds it. Red tests: a
+   symlinked `unset-dev-trust/`; an extra file in the folder; nlink 2; group-writable; a cert that differs from the
+   CA's; a non-CA cert; a cert without the name constraints; a PRIVATE KEY block. If this step measures over 400 source
+   lines, these preflight checks join the P1.33g split with the runbook and the throwaway-root tests. (Book edit
+   2026-10-14-p134d-split, "Item 5 settled: unset-dev-trust/"; architecture's confirmation with no exception to C9 is
+   the section "Architecture confirmation (2026-10-14 ~22:50Z, recorded here 23:21Z)" of
+   2026-10-12-p134c-p134d-local-dev-root-ca; book edit 2026-10-14-verify-857-fixes, S3.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
 7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
    of the record and no amendment removed it; without it `local/app.caddy` cannot reach web).
@@ -8199,7 +8561,9 @@ book before opening it.
     with the local file), red first by setting `LOG_LEVEL=debug` in a fixture.
 15. Handshake check (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split): after start, `local:up`
     checks that the leaf the edge serves for each local host has the same SHA-256 as `unset-dev-env/local-leaf.pem`.
-    On a mismatch it takes the stack down and exits non-zero with a fixed-word reason. Red test: a served leaf that
+    On a mismatch it takes the stack down, exits non-zero with a fixed-word reason, and names the file to regenerate
+    (`unset-dev-env/local-leaf.pem`). It logs only the fingerprint comparison result, never a certificate body (SE-7;
+    book edit 2026-10-14-verify-857-fixes, S2(b), architecture's ~22:20Z point 2). Red test: a served leaf that
     differs from the copy brings the stack down. The drift test is unaffected: the copy is not a compose mount.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
@@ -8244,13 +8608,16 @@ at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbi
 verifier found the directory form reachable in #809 only through a missing mode gate, which #809 fixes, so what remains
 is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out of #809.
 
-**What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, once P1.34d
-moves C18 to the `SiteMount` list. Only the per-file `SiteMount` form remains.
+**What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
+P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
+form remains.
 
 Also (Amendment 1 of the same book edit, from verify-809-664b242): N1, the comment at `caddyfile.ts:456` ("`sitesDir`
 stays inside sites/ in both modes") becomes local-only, since the shipped mode may be `sites/` itself (:447-448), with
 :456-458 reflowed; N3, the B1 fixture comment in `a_directory_mount_fails` drops its opening "Nor". (N2 was a fix to
-#809's PR body, not to the book.)
+#809's PR body, not to the book.) And N6 of book edit 2026-10-15-verify-876-followups: the comment at
+`caddyfile.ts:457-458` is stale, since C18 now takes the list, not "until P1.34d"; this step fixes it, because it
+already edits that trusted file.
 
 Done when, red first, a test shows the reader itself refuses a directory mount under local (not only C18), and check
 is green.
@@ -8797,6 +9164,7 @@ edited, nothing else is in the PR, the PR body lists every line that is not a mo
 
 ### P1.33f — Anchor the depcruise exclude to our outputs
 Tags: [SEC] [ALEX] (typed line)            Depends on: —
+As built: #863, merged as 4bb4d36.
 Slice 1, issue #846, check path (`scripts/lint/.dependency-cruiser.cjs` and its tests), kind/build, lane Cursor
 (Alex's 20:24:47Z choice); book edit 2026-10-14-verify-829-host-pin-leaf, architecture on verify-840-7e8bbba S2 and the
 step-book mapping after it. The exclude at `.dependency-cruiser.cjs:357-358`, `(^|/)(dist|coverage|…)/`, also matches
@@ -8933,6 +9301,7 @@ Done when every fixture is red for its own reason, Biome reports no `noUnusedImp
 
 ### P1.33l — Pin the token reader to the local stack
 Tags: [SEC]            Depends on: P1.33j
+As built: #852, merged as df655b0.
 Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
 P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
 of 2026-10-13-local-plc (Codex on #800), and 2026-10-13-local-plc-a4-steps (13:38Z, which retitles it and makes it
@@ -9175,6 +9544,8 @@ signature from our exact workflow is refused):
   - ADR 0023 records the answer with its question, option and time, and the attestation-availability finding for
     public repositories, and says that moving back to a key needs a new ADR.
   - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
+  - One digest: publish scans, signs and attests the one digest it pushes (book edit
+    2026-10-15-verify-863-866-followups, "N7 ruled"; P1.35e does the same for the PR check).
   - The trusted-root fetch: `sigstore-root.yml` has `permissions: contents: read`, no secrets and no environment. It
     runs Sigstore's TUF client, pinned by version and checksum, against the public-good root, uploads
     `trusted_root.json` as a run artifact, and prints the TUF root version and the file's sha256 in the job summary.
@@ -10132,7 +10503,7 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C1 | `name:` present and equals `unset-<env>` |
 | C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
 | C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
-| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it): keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
+| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
 | C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
 | C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
 | C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
