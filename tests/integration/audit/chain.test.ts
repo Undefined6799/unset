@@ -84,8 +84,6 @@ function poolAs(role: Role): Pool {
     service: "audit-chain-test",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
     onStatement: () => {
       statements += 1;
     },
@@ -277,8 +275,6 @@ function owner(): Pool {
       service: "audit-chain-test",
       max: 1,
       connectTimeoutMs: 5000,
-      statementTimeoutMs: 10_000,
-      idleInTransactionTimeoutMs: 10_000,
     });
     pools.push(ownerPool);
   }

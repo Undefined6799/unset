@@ -39,8 +39,6 @@ function countingPool(): Pool {
     service: "query-budget",
     max: 1,
     connectTimeoutMs: 2000,
-    statementTimeoutMs: 2000,
-    idleInTransactionTimeoutMs: 5000,
     onStatement: () => {
       statements += 1;
     },

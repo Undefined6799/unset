@@ -51,8 +51,6 @@ function poolFor(database: string, user = "migrator", password = migratorPasswor
     service: "did-columns-test",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
   });
   pools.push(pool);
   return pool;

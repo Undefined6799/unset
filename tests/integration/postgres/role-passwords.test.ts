@@ -79,8 +79,6 @@ async function login(user: string, password: string): Promise<string> {
     service: "role-passwords-test",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 5000,
-    idleInTransactionTimeoutMs: 5000,
   });
   try {
     await withClient(pool, null, (client) => client.query("SELECT 1"));

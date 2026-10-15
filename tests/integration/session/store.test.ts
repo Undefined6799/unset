@@ -19,8 +19,6 @@ function webPool(onStatement?: () => void): Pool {
     service: "session-test",
     max: 4,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 5000,
-    idleInTransactionTimeoutMs: 5000,
     ...(onStatement === undefined ? {} : { onStatement }),
   });
   pools.push(pool);

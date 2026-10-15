@@ -36,8 +36,6 @@ const poolOf = (connection: PoolOptions["connection"], options: { max?: number; 
     service: "web",
     max: options.max ?? 2,
     connectTimeoutMs: options.connectTimeoutMs ?? 2000,
-    statementTimeoutMs: 2000,
-    idleInTransactionTimeoutMs: 5000,
   });
   pools.push(pool);
   return pool;
@@ -73,14 +71,24 @@ async function closePools(): Promise<void> {
 }
 
 /** A fresh role allowed into this database's public schema, and a pool for it. */
-async function setup(options: { max?: number; connectTimeoutMs?: number; connectionLimit?: number } = {}) {
+async function setup(
+  options: {
+    max?: number;
+    connectTimeoutMs?: number;
+    connectionLimit?: number;
+    roleSettings?: Record<string, string>;
+  } = {},
+) {
   const role = `t_${randomBytes(6).toString("hex")}`;
   roles.push(role);
   const password = randomBytes(24).toString("hex");
+  const settings = Object.entries(options.roleSettings ?? {}).map(
+    ([name, value]) => `ALTER ROLE ${role} SET ${name} = '${value}'; `,
+  );
   await withClient(migrator, null, (client) =>
     client.query(
       `CREATE ROLE ${role} LOGIN PASSWORD '${password}' CONNECTION LIMIT ${options.connectionLimit ?? -1}; ` +
-        `GRANT USAGE ON SCHEMA public TO ${role}`,
+        `GRANT USAGE ON SCHEMA public TO ${role}; ${settings.join("")}`,
     ),
   );
   return poolOf({ ...connection, user: role, password }, options);
@@ -94,7 +102,9 @@ const codeOf = (promise: Promise<unknown>) =>
 
 describe("pool", () => {
   test("pool_settings", async () => {
-    const pool = await setup();
+    // The role's own settings (migration 0003 sets them from roles.json) are what a pooled session runs with; the pool
+    // adds only its application_name, so no caller holds a second copy of the timeouts.
+    const pool = await setup({ roleSettings: { statement_timeout: "3s", idle_in_transaction_session_timeout: "7s" } });
     expect(pool.driver.totalCount).toBe(0);
     const settings = await withClient(pool, null, async (client) => {
       const { rows } = await client.query(
@@ -102,7 +112,7 @@ describe("pool", () => {
       );
       return rows[0];
     });
-    expect(settings).toEqual({ st: "2s", it: "5s", app: "web" });
+    expect(settings).toEqual({ st: "3s", it: "7s", app: "web" });
     expect(pool.driver.idleCount).toBe(1);
   });
 

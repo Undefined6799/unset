@@ -9,8 +9,6 @@ const unreachable = () =>
     service: "web",
     max: 2,
     connectTimeoutMs: 500,
-    statementTimeoutMs: 2000,
-    idleInTransactionTimeoutMs: 5000,
   });
 
 const codeOf = async (promise: Promise<unknown>) =>

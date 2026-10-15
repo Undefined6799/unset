@@ -15,9 +15,6 @@ export type PoolOptions = {
   readonly max: number;
   /** PG_CONNECT_TIMEOUT_MS: the longest wait for a client, nested inside the caller's deadline. */
   readonly connectTimeoutMs: number;
-  /** The role's `statement_timeout` (2 s on `web`, plan §6.1). */
-  readonly statementTimeoutMs: number;
-  readonly idleInTransactionTimeoutMs: number;
   /**
    * Called once per statement sent on any of this pool's clients, transaction control excepted. Only the query budget
    * test sets it (P1.11t); production composes do not.
@@ -33,7 +30,11 @@ export type Pool = {
   readonly close: () => Promise<void>;
 };
 
-/** Builds a role's pool. The settings travel in the startup packet (pg 8.23.0 lib/client.js:551-568), not as SETs. */
+/**
+ * Builds a role's pool. Its sessions run with the role's own timeouts, which migration 0003 sets from roles.json
+ * (`ALTER ROLE ... SET`), so they live in one place; the pool sends only its application_name in the startup packet
+ * (pg 8.23.0 lib/client.js:551-568), and a setting sent there would override the role's.
+ */
 export function createPool(options: PoolOptions): Pool {
   const driver = new pg.Pool({
     ...options.connection,
@@ -41,8 +42,6 @@ export function createPool(options: PoolOptions): Pool {
     // node-postgres waits forever by default (findings F-09); this bounds the wait even without a deadline.
     connectionTimeoutMillis: options.connectTimeoutMs,
     application_name: options.service,
-    statement_timeout: options.statementTimeoutMs,
-    idle_in_transaction_session_timeout: options.idleInTransactionTimeoutMs,
   });
   // An idle client's dropped connection is reported here; the pool already discards that client.
   driver.on("error", () => undefined);

@@ -70,8 +70,6 @@ function poolAs(role: Writer, max = 1): Pool {
     service: "audit-test",
     max,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
   });
   pools.push(pool);
   return pool;

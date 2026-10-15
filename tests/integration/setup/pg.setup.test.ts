@@ -24,8 +24,6 @@ async function asRole(role: { user: string; password: string }, sql: string): Pr
     service: "test",
     max: 1,
     connectTimeoutMs: 2000,
-    statementTimeoutMs: 2000,
-    idleInTransactionTimeoutMs: 5000,
   });
   try {
     return await withClient(pool, null, async (client) => (await client.query(sql)).rows[0]);

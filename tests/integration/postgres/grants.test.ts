@@ -61,8 +61,6 @@ function poolFor(database: string, user = "migrator", password = migratorPasswor
     service: "grants-test",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
   });
   pools.push(pool);
   return pool;
@@ -368,7 +366,7 @@ describe("grants", () => {
   });
 
   test("role_settings", async () => {
-    // Through psql, which sends no settings of its own: a pool sends statement_timeout at startup (P1.11p).
+    // Through psql, which sends no settings of its own; pools send none either since P1.11a, so this is every session.
     const password = await withPassword("web");
     const shown = postgres.login(
       "web",

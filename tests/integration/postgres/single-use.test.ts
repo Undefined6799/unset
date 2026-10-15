@@ -24,8 +24,6 @@ const poolAs = (role: ProcessRole, max = 1): Pool => {
     service: "single-use-test",
     max,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 5000,
-    idleInTransactionTimeoutMs: 5000,
   });
   pools.push(pool);
   return pool;

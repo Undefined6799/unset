@@ -19,8 +19,8 @@ import {
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";
 const connection = { host: provided.host, port: provided.port, ...provided.roles.web, database, ssl: false };
-// The `web` role's own timeouts (roles.json): statement_timeout 2 s, idle_in_transaction_session_timeout 10 s.
-const roleTimeouts = { statementTimeoutMs: 2000, idleInTransactionTimeoutMs: 10_000 };
+// Connected as the real `web` role, so its sessions run with its own timeouts (roles.json, set by migration 0003):
+// statement_timeout 2 s, idle_in_transaction_session_timeout 10 s.
 const pools: Pool[] = [];
 afterAll(() => Promise.all(pools.map((pool) => pool.close())));
 
@@ -35,7 +35,6 @@ function replica(options: { max?: number; service?: string } = {}) {
     connection,
     service: options.service ?? "lock-test",
     max: options.max ?? 4,
-    ...roleTimeouts,
     log,
   });
   pools.push(lock.pool);
@@ -43,7 +42,7 @@ function replica(options: { max?: number; service?: string } = {}) {
 }
 
 /** A plain `web` pool for side sessions: holding other locks, reading pg_locks, ending a backend. */
-const side = createPool({ connection, service: "lock-test-side", max: 2, connectTimeoutMs: 5000, ...roleTimeouts });
+const side = createPool({ connection, service: "lock-test-side", max: 2, connectTimeoutMs: 5000 });
 pools.push(side);
 const sql = async <T extends Record<string, unknown>>(text: string, values: unknown[] = []) =>
   withClient(side, null, async (client) => (await client.query<T>(text, values)).rows);
