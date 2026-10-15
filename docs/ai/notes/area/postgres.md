@@ -43,6 +43,8 @@ checked: 2026-10-15
 - The browser session store is not here: it is its own trusted workspace, `infrastructure/session/` (P2.03),
   like `infrastructure/audit/`. It never imports this folder; each interface passes it a `withDb` built from
   `withClient`. Only a SHA-256 of the session id is stored; its real-Postgres tests are `tests/integration/session/`.
+  A session lasts only while its DID has a row in `app.oauth_session` (P2.04s). Migration 0014's definer
+  `app.end_sessions_for_did` is the one SQL that deletes a DID's sessions; the store's `destroyAllForDid` calls it.
   Migration 0011's comment still names the old `infrastructure/postgres/session/`; applied migrations are
   checksum-locked, so it stays as written.
 

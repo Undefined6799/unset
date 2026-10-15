@@ -3,6 +3,8 @@
 export {
   type CreatedSession,
   createSessionStore,
+  END_SESSIONS_REASONS,
+  type EndSessionsReason,
   type Session,
   type SessionDb,
   type SessionLimits,
