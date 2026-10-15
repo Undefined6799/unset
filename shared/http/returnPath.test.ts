@@ -43,7 +43,7 @@ describe("safeReturnPath", () => {
     ["paragraph separator", ch(0x2029)],
     ["byte order mark", ch(0xfeff)],
   ])("rejects_control_chars %s", (_name, control) => {
-    expect(safeReturnPath(`/${control}/evil.com`)).toBeNull();
+    expect(safeReturnPath(`/${control}/evil.example`)).toBeNull();
   });
 
   test("rejects_double_slash_anywhere", () => {

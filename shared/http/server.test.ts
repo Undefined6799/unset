@@ -109,10 +109,11 @@ describe("request checks", () => {
     const { server, request } = kit({ routes: [page({ method: "GET", path: "/@:handle" })] });
     expect(server).toBeDefined();
     expect((await request("/@x", { host: "evil.example" })).status).toBe(421);
+    // Our handle suffix, since the test is about it, with the kept one-letter labels a and b (SE-7a).
     expect((await request("/@x", { host: "a.b.0x40.me" })).status).toBe(421);
-    expect((await request("/@x", { host: "alice.0x40.me" })).status).toBe(200);
-    expect((await request("/@x", { host: "ALICE.0x40.me:443" })).status).toBe(200);
-    expect((await request("/@x", { host: "alice.0x40.me:8443" })).status).toBe(421);
+    expect((await request("/@x", { host: "a.0x40.me" })).status).toBe(200);
+    expect((await request("/@x", { host: "A.0x40.me:443" })).status).toBe(200);
+    expect((await request("/@x", { host: "a.0x40.me:8443" })).status).toBe(421);
   });
 
   test("missing_host_400", async () => {

@@ -67,7 +67,7 @@ describe("httpKitConfig", () => {
       expect(problems({ ...ENV, MEDIA_ORIGIN: media })).toEqual([{ key: "MEDIA_ORIGIN", reason: "invalid" }]);
     }
     // A TLD outside KNOWN_TLDS cannot be compared, so it is refused rather than guessed.
-    expect(problems({ ...ENV, MEDIA_ORIGIN: "https://media.example.co.uk" })).toEqual([
+    expect(problems({ ...ENV, MEDIA_ORIGIN: "https://sub.example.com" })).toEqual([
       { key: "MEDIA_ORIGIN", reason: "invalid" },
     ]);
     expect(problems({ ...ENV, MEDIA_ORIGIN: "http://unsetcdn.net" })).toEqual([
@@ -128,7 +128,9 @@ describe("httpKitConfig", () => {
   });
 
   test("host_entries_match_one_label", () => {
-    expect(hostAllowed("alice.0x40.me", [".0x40.me"])).toBe(true);
+    // Our own suffixes, since the test is about them: the kept labels a and b, and evil0x40.me, the one named
+    // look-alike, because no reserved parent keeps a host that ends in our suffix's text without the dot (SE-7a).
+    expect(hostAllowed("a.0x40.me", [".0x40.me"])).toBe(true);
     expect(hostAllowed("a.b.0x40.me", [".0x40.me"])).toBe(false);
     expect(hostAllowed("0x40.me", [".0x40.me"])).toBe(false);
     expect(hostAllowed("evil0x40.me", [".0x40.me"])).toBe(false);
