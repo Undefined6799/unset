@@ -1,6 +1,6 @@
 # Engineering Rules (unset.sh)
 
-Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the 48 rules with the recommended option for each of D1-D9). DO-3 added 2026-10-05 at Alex's request (rule 49). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
+Status: **ADOPTED** by Alex 2026-10-04 12:56Z ("Adopt all" card: the 48 rules with the recommended option for each of D1-D9). DO-3 added 2026-10-05 at Alex's request (rule 49). SE-7a written down 2026-10-15 from architecture's ruling on verify-875 F1 (the fixture-identifier rule verifiers already applied). Rationale, cuts and changelog: `../architecture-handoff/engineering-rules-rationale.md`.
 
 These rules sit beside the four guidelines in `engineering/` and never weaken a security or privacy decision in the plan. Where a rule and the plan disagree, the plan wins. Where a rule and the ADG disagree on structure, the ADG wins.
 
@@ -256,6 +256,19 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Source: SRE — ch. 6, ch. 12; DevOps Handbook — ch. 14 (Create Telemetry to Enable Seeing and Solving Problems).
 - Status: PARTLY — Plan §6 logging, P1.04 `request_log_uses_template`. NEW: the enforced schema.
 - Amended 2026-10-06 (P1.11e): `version` is a non-negative safe integer (anything else is dropped); `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. Neither can carry a DID, handle, IP or token. A new field needs an architecture ruling and a line here. String fields other than `route` and `reqId` are fixed words by shape, so a handle, DID, email, IP or URL cannot pass (P1.03w, ruling 2026-10-06). Amended 2026-10-06 (P1.23e): `island` is an island id from the server's own island registry, matching `^[a-z][a-z0-9-]{0,40}$`, else written as `[island]`; it is never taken from a request.
+- Priority: P1
+
+**SE-7a. No fixture, sample or test value may be a real person's identifier, or plausibly be one.**
+- **DIDs in fixtures, samples and tests** are one of:
+  - (a) `did:plc:` followed by 24 copies of one character from the did:plc alphabet (a-z, 2-7);
+  - (b) `did:web:` on an RFC 2606 or RFC 6761 name: example.com, example.net, example.org, or anything under .example, .test, .invalid or .localhost;
+  - (c) an obvious placeholder that fails did:plc syntax, so it cannot resolve: wrong length or characters outside the alphabet, such as `did:plc:abc` or `did:plc:alice`;
+  - (d) one named exception, `did:plc:abcdefghijklmnopqrstuvwx`, the alphabet run already used in logger, did-columns, seal and sealStream.
+- **Refused:** any other value that passes did:plc syntax, including random-looking 24-character strings, which could be real (#864); and any did:web on a registrable domain.
+- **Handles** follow the same pattern: example.com and the RFC 2606 or RFC 6761 names, or `*.test`. **Addresses:** RFC 5737, 2001:db8::/32 or loopback (unchanged). **Long hex:** only in `*.vector.json` (unchanged).
+- Enforced by: verifier review; automated check not yet built.
+- Source: architecture ruling 2026-10-15 ~00:22Z on verify-875 F1 (book edit 2026-10-15-verify-875-fixture-wording); verify-864 found the real-looking DID.
+- Status: NEW — the rule was kept in project memory and verifier practice and is written down here for the first time. Not a loosening: a value that cannot resolve to anyone protects as well as the strict forms do.
 - Priority: P1
 
 ## 7. Testing

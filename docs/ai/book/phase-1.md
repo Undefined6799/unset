@@ -8071,15 +8071,20 @@ one letter, or `did:web:` on an RFC 2606 host). Measured on main at 23:37Z (book
 - the near-copies at `:11` (23 characters), `:13` (upper case) and `:14` (ends in `1`) become 23 copies, 24 upper-case
   copies, and 23 copies followed by `1`. Each keeps its comment and stays invalid for the same reason;
 - `shared/log/logger.test.ts:226`, `:255` and `shared/log/logger.hardening.test.ts:45` (test fixtures), and
-  `shared/ui/showcase/Showcase.tsx:144` (UI showcase sample data; product either way, N3).
+  `shared/ui/showcase/Showcase.tsx:144` (UI showcase sample data; product either way, N3);
+- `did:web:sub.example.co.uk` at `tests/integration/postgres/did-columns.test.ts:248` becomes `did:web:sub.example.com`,
+  because example.co.uk is a registrable domain (rule SE-7a; book edit 2026-10-15-verify-875-fixture-wording,
+  "Mapping of architecture's ruling").
 `domains/identity/resolve-did.test.ts:12` is not in the list: #864 already replaces it. Every assertion keeps its
 meaning: the logger tests must still see the DID redacted.
 
 Done when a case-insensitive grep of the repo for the DID's first 23 characters (the value is in book edit
 2026-10-14-verify-864-fixture-did, never quoted here) returns nothing outside `infrastructure/net-guard/`, which catches
-every near-copy; the touched tests pass; and check is green. The `net-guard` line belongs to P1.32b, or to its own
-trusted step if #865 merges without it (Addendum, replacing N2). No guard enforces the fixture rule for DIDs; one would
-be a check-path step with Alex's typed line, and is not booked.
+every near-copy; a sliding six-character search finds no six-character window of the original DID in the repo,
+case-insensitively, outside `infrastructure/net-guard/`, which catches a short fragment (verify-875 S1; book edit
+2026-10-15-verify-875-fixture-wording); the touched tests pass; and check is green. The `net-guard` line belongs to
+P1.32b, or to its own trusted step if #865 merges without it (Addendum, replacing N2). No guard enforces the fixture
+rule for DIDs (SE-7a, verifier review); one would be a check-path step with Alex's typed line, and is not booked.
 
 ---
 
