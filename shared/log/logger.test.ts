@@ -251,7 +251,7 @@ describe("logger", () => {
 
   test("word_fields_refuse_identifiers", () => {
     const identifiers = [
-      "alice.example.com",
+      "a.example.com",
       "did:plc:eeeeeeeeeeeeeeeeeeeeeeee",
       "alice@example.com",
       "203.0.113.7",

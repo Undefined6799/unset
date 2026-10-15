@@ -41,6 +41,10 @@ describe("parseHandle", () => {
   test("normalises_and_rejects", () => {
     const cases: [string, string | null][] = [
       ["alice.example.com", "alice.example.com"],
+      ["example.com", "example.com"],
+      // 0x40.me is our own handle domain and the only two-letter TLD a test may use (RFC 2606 and 6761 name none);
+      // the one-letter label x is listed for P2.09's reserved handles (P1.35i).
+      ["x.0x40.me", "x.0x40.me"],
       ["Alice.Example.COM", "alice.example.com"],
       ["@alice.example.com", "alice.example.com"],
       ["  alice.example.com\t", "alice.example.com"],
@@ -52,11 +56,11 @@ describe("parseHandle", () => {
       ["-a.example.com", null],
       ["a-.example.com", null],
       ["org", null],
-      ["name.org.", null],
+      ["name.example.org.", null],
       ["john.0", null],
       ["jo@hn.example.com", null],
       ["💩.example.com", null],
-      ["Kelvin.com", null], // KELVIN SIGN lowercases to an ASCII k; non-ASCII input is refused first
+      ["Kelvin.example.com", null], // KELVIN SIGN lowercases to an ASCII k; non-ASCII input is refused first
       ["a.b\u0000.com", null],
       [`${"a".repeat(64)}.com`, null],
     ];
