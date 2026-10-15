@@ -72,10 +72,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35p, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
-  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
-  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the
-  slice exit P2.13a.
+  P1.34d, P1.35p, P1.35r, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s,
+  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.37, P1.37b, P1.36
+  (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12,
+  P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -361,6 +361,7 @@ flowchart LR
   P1_31d["P1.31d exports and lexicon scripts rules"]
   P1_31["P1.31 lexicons package"]
   P1_31c["P1.31c NSID cross-pin"]
+  P1_31g["P1.31g lexicons breaking-change check"]
   P1_31e["P1.31e unset-source condition"]
   P1_31f["P1.31f web server via unset-source"]
   P1_32["P1.32 permanent choices STOP"]
@@ -508,6 +509,8 @@ flowchart LR
   P1_01 --> P1_31
   P1_31d --> P1_31
   P1_31 --> P1_31c
+  P1_31 --> P1_31g
+  P1_31d --> P1_31g
   P1_31c --> P1_31e
   P1_31e --> P1_31f
   P1_32 -.-> P1_31
@@ -610,11 +613,15 @@ flowchart LR
   P1_35p["P1.35p dev CA preflight and runbook gaps closed"]
   P1_33g --> P1_35p
   P1_35m --> P1_35p
+  P1_34d --> P1_35p
+  P1_35r["P1.35r compose limits and local-only env pinned"]
+  P1_34d --> P1_35r
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
   P1_35o["P1.35o app network pinned in the dev compose tests"]
   P1_35n --> P1_35o
   P1_35o --> P1_34v
+  P1_35r --> P1_34v
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
@@ -672,6 +679,7 @@ flowchart LR
   P0_11 -.-> P1_34
   P1_29t -.-> P1_34
   P1_31 --> P1_35
+  P1_31g --> P1_35
   P1_34 --> P1_35
   P1_18 -.-> P1_35
   P0_12 -.-> P1_35
@@ -8193,6 +8201,7 @@ on our handle suffix, or a hostname other than an A1 own host (unset.sh and its 
 
 ### P1.35k — Move net-guard test hosts to reserved names
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+As built: #900 at ee82825, merged as 89de4e0.
 
 Slice 1, issue #891, trusted base (`infrastructure/net-guard/` tests only), kind/fix, lane Phase 1 after P1.35j (lane
 order only); book edit 2026-10-15-verify-886-fixture-scope, architecture's 01:55Z ruling (c) and its step-book mapping.
@@ -8535,7 +8544,9 @@ Done when each test is red without its change and green with it, and check is gr
 
 ### P1.33g — Document and test the local dev root
 Tags: [SEC]            Depends on: P1.35a
-As built: #896 at 742568a, merged as 8a49712.
+As built: #896 at 742568a, merged as 8a49712. The runbook copies the root with `cp` and `chmod 0644`, where the step
+text books `install` (verify-896 N1; P1.35p moves the runbook to `install`). Item 5's conditions 2 and 3 sit in C18,
+where the root is already read, not in C26 (verify-896 N2).
 
 Slice 1, issue #889, product (`deployment/preflight/`, its tests, and `docs/human/runbooks/dev-stack-secrets.md` as
 docs), kind/feature, lane the third thread after P1.35a (both edit C26 in `deployment/preflight/checks/build.ts`; the
@@ -8570,6 +8581,9 @@ Done when each red test fails on main for its own reason and passes with the cha
 
 ### P1.35m — Pin the dev CA folder walk's edges
 Tags: [SEC]            Depends on: P1.35a
+As built: #901 at 19cbda0, merged as 152b695. Note (verify-901-9996fec N1): a self-loop symlink at the folder reads
+"not a real directory: <folder>" under local and dev ("present on a prod host" under prod); an lstat that cannot see
+the folder still reads "dev CA folder cannot be read" (#887's message).
 
 Slice 1, issue #893, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
 C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
@@ -8647,6 +8661,7 @@ Done when each red fixture fails on main for its own reason and passes with the 
 
 ### P1.35o — Pin the app network in the dev compose tests
 Tags: [SEC]            Depends on: P1.35n
+As built: #906 at 3e62ab9, merged as 2170d34.
 
 Slice 1, issue #902, product (`deployment/` compose tests and `deployment/preflight/`), kind/fix, lane the third thread
 after P1.35m, and before P1.34d where possible (a soft order: P1.34d's drift test calls whichever `pdsNeighbours` is on
@@ -8774,9 +8789,11 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
     key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit 2026-10-14-p134d-split,
     "item 11 holds over item 14"): `environment` per service as a normalized key-value map (list and map forms alike),
-    where only the named keys may differ, on the services named; `env_file` per service as an ordered list whose entries
-    correspond one to one and whose paths differ only in the env directory; and every other key (command, entrypoint,
-    mem_limit and the rest). Red tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
+    where only the named keys may differ, on the services named; `env_file` per service as an ordered list of entries,
+    each directly in `../../unset-dev-env/` in both files (that folder exactly: a sub-folder or any other folder fails),
+    corresponding one to one and compared by basename (book edit 2026-10-15-verify-903-info-items, section "P1.35r
+    (#908)", its env_file folder paragraph); and every other key (command, entrypoint, mem_limit and the rest). Red
+    tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
     --use-system-ca in NODE_OPTIONS and in command; env_file pds.env on web and on edge;
     NODE_OPTIONS=--max-old-space-size=4096 on web. Preflight still runs in full on the local file; the drift test
     catches a weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as
@@ -8843,19 +8860,23 @@ P1.29t's client_id probe red and green move to P1.33z (session containers cannot
 ---
 
 ### P1.35p — Close the dev CA preflight and runbook gaps
-Tags: [SEC]            Depends on: P1.33g, P1.35m
+Tags: [SEC]            Depends on: P1.33g, P1.35m, P1.34d (#742: N4/N5 need its bind)
 
 Slice 1, issue #904, product (`deployment/preflight/`, including `deployment/preflight/stack.ts`, its tests, and
 `docs/human/runbooks/dev-stack-secrets.md`), kind/fix, lane the third thread after P1.34d (the record keeps it there for
 the C9 rules). Book edit 2026-10-15-verify-896-901-followups, from verify-896-742568a (P1.33g, #896) and
 verify-901-9996fec (P1.35m, #901), with architecture's 03:50Z ruling (section "Architecture on verify-896-742568a and
-verify-901-9996fec" of book edit 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the record's last section). Every
+verify-901-9996fec" of book edit 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the record's section "Mapping of
+architecture's ruling"). Every
 item is a tightening, so nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev root whose
 name constraints are forged or hidden from a byte search; a root that may sign further CAs or carries key usages beyond
 certificate and CRL signing; a trust folder another user can write; preflight hung by a FIFO; a printed filesystem or
-environment string forging a PASS line; and a folder swapped during the walk.
+environment string forging a PASS line; a folder swapped and left swapped during the walk (one swapped and reverted
+within the walk stays a residual); an APP_HOST outside `.localhost` or equal to PDS_HOST, so the leaf and site name
+the wrong host; an env value outside the allowlist turning on the trust folder (N9); and the runbook writing through a
+symlink.
 
 **What, C18 and the root (verify-896):**
 - S1: a strict DER walk from Certificate to tbsCertificate to extensions, not a byte search. DER only (minimal lengths,
@@ -8878,7 +8899,7 @@ environment string forging a PASS line; and a folder swapped during the walk.
 - S3 and N1: the runbook (`dev-stack-secrets.md:136-138`) uses `install -d` for the folder and `install -m 0644` for the
   root, as the step text books (not `cp`). That fixes `mkdir -m 0755` failing on rerun, the `install -D` line dropped
   from main, and `cp` writing through a symlink.
-- N2: P1.33g's As built says items 2 and 3 live in C18, not C26. N6: red cases for the four survivors that exist only on
+- N6: red cases for the four survivors that exist only on
   disk: a dot-named file beside `root.pem`, a SEC1 key block, `ln -s` in the runbook path, and a CA:TRUE leaf.
 
 **What, the walk and printing (verify-901):**
@@ -8886,25 +8907,83 @@ environment string forging a PASS line; and a folder swapped during the walk.
   the filesystem, the environment or an error, including COMPOSE_* names (`stack.ts:101-105`, `:213`). Red fixture: a
   variable name with `\n` and `\r\e[2K` forging a PASS line.
 - S2: red cases for the six fail-open survivors X1, X5, X12, X13, X4 and X7; X1, X5 and X13 turn a refusal into PASS on
-  disk, so they come first. N1: P1.35m's As built names the lstat-error message.
+  disk, so they come first.
 - N2: record dev and ino for every directory the walk visits, and re-lstat all of them after the walk; any change fails.
   The residual wording becomes "a swap made and reverted entirely within the walk (deploy user or root)".
 - N3: the non-UTF-8 refusal prints the entry's raw bytes through the escape helper (for example `\xff`), with the
   folder.
 
-**What, APP_HOST under local (architecture 04:03Z, the record's last section):**
+**What, APP_HOST under local (architecture 04:03Z, the record's section "APP_HOST value under local"):**
 - Under `--env local`, preflight judges APP_HOST's value three ways: it sits under the constrained `.localhost` names,
   it differs from PDS_HOST, and it is never an IP literal. As of #903 at 8e12639, `local-leaf.ts:86-93` checks that it
   is a hostname (refusing a numeric last label) matching web's PUBLIC_ORIGIN host, and `caddyfile.local` refuses
   equality with PDS_HOST. The builder confirms each of the three on main and adds whichever is missing, each with a red
-  test: `app.example.com`, APP_HOST equal to PDS_HOST, `127.0.0.1`, and `[::1]`.
+  test: `app.example.com`, APP_HOST equal to PDS_HOST, `127.0.0.1`, `[::1]`, bare `localhost` ("under" means a proper
+  subdomain), and `app.notlocalhost` with a comment naming `.localhost` (SE-7a's suffix-boundary rule). The last two
+  kill an `endsWith("localhost")` mutant of the host pattern at `deployment/edge/caddyfile.ts:57` and
+  `deployment/preflight/checks/local-leaf.ts:90`.
 
-Size: if the step measures over about 400 source lines, it splits at the measure into a verify-896 part (C18 DER walk,
-N3, the C9 owner and mode rules, N9) and a verify-901 part (printable module, re-lstat, N3, the X-mutant reds). The
-second part takes the next free id, and the split is recorded in book edit 2026-10-15-verify-896-901-followups before
-the PR is ready.
+Size: if the step measures over about 400 source lines, it splits at the measure, placing every item. The verify-896
+part takes S1 (DER walk), N3, N4/N5, N9, S2 (FIFO reads), S3/N1 (runbook install), N6 (the four on-disk reds) and the
+APP_HOST item (preflight under local). The verify-901 part takes S1 (printable module), N2 (re-lstat), N3 (raw bytes)
+and the S2 X-mutant reds. The second part takes the next free id, and the split is recorded in book edit
+2026-10-15-verify-896-901-followups before the PR is ready.
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
+
+---
+
+### P1.35r — Pin compose limits and local-only env
+Tags: [SEC]            Depends on: P1.34d
+
+Slice 1, issue #908, product (`deployment/` compose tests and a limits table beside `networks.dev.json`, plus two test
+lines in `tests/integration/pds-email-token.test.ts`), kind/fix, lane the third thread after P1.34d (#742). Book edit
+2026-10-15-verify-903-info-items, from verify-903-04cbbaf I-1 and I-2. A tightening, so nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a raised or
+removed resource limit that lets one service starve the host (the compose tests check presence only), and a
+local-only service that skips the env drift test picking up a key that changes its trust, such as TLS or app settings.
+
+**What:**
+- I-1, limits by value: each service's `mem_limit`, `cpus` and `pids_limit` are pinned exactly, in both compose
+  files, from one table beside `networks.dev.json` (for example `deployment/limits.dev.json`, a service-to-limits
+  map). Any value that differs, is missing, or belongs to a service not in the table fails, naming the service and
+  key. A local-only service gets its own row. Red tests: `pids_limit` 4096 on the reader, `mem_limit` raised on web,
+  `cpus` removed from edge, and a service missing from the table.
+- I-2, env of local-only services: local-only services skip environmentDrift, since dev has nothing to compare them
+  with. This step pins the ones that exist when it lands (pds-token-reader); P1.34v adds plc and P1.29s adds seed, each
+  with its limits row and env pins, in its own PR (Codex on #910: seed does not exist before P1.29s). Each one's
+  environment is pinned in the drift test as an exact key-value map, written as the compose file has it: a literal, or a
+  `${VAR}` reference kept as text and never resolved, so no secret enters the table. Secret-bearing key: split on `_`,
+  and any word is one of PASSWORD, PASSWD, PASS, PW, SECRET, TOKEN, KEY, PRIVATE, CREDS, CREDENTIALS, SEED, DSN. The
+  list is closed. Secret-bearing value: any URL with userinfo, under any key. Accepted: (1) a `*_FILE` key whose literal
+  value is a path under `/run/secrets/` (as `compose.dev.yaml:41`, :65); (2) the whole value exactly `${NAME:?message}`,
+  where NAME matches `[A-Z][A-Z0-9_]*` and the message is non-empty; (3) a userinfo URL whose password is exactly one
+  `${NAME:?message}`. Everything else is refused: a literal, a plain `${NAME}`, any `:-` `-` `:+` `+` form, a `:?` with
+  no message, an unbraced `$NAME`, a bare key, a userinfo URL without a password part, or any other composite. The same
+  predicate applies in compose and in the table (architecture 12:40Z, the record's section "Architecture on
+  verify-910-a686fe0 S3"). Its `env_file` list is pinned exactly, in order. Any added, removed or changed entry fails,
+  naming the service and key (for example APP_* on the reader). The reader has no environment and no `env_file` today
+  (`compose.dev.yaml:198`, "No network, no env, no secret"), so its pin is an exact empty map and an empty list. This
+  step still builds the full key-value comparison and the secret-bearing predicate as code, so the value red tests in
+  P1.34v and P1.29s have code to test. The predicate's minimum reds run on fixtures in this step's own test, since the
+  reader has no env: a literal under a listed word; `${NAME:-x}`; a bare key; a userinfo URL with a literal password; a
+  `*_FILE` key outside `/run/secrets/`. P1.34v adds plc's map the same way (book edit 2026-10-15-verify-903-info-items,
+  "Codex P2 on #910"). Red tests here: APP_HOST on the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an
+  unlisted `env_file` on the reader. The value red tests (a changed value of an allowed key, a deleted allowed key, a
+  literal in place of a `${VAR}` reference, and a literal on a secret-bearing key) need a service with environment, so
+  they ride P1.34v on plc and P1.29s on seed (Codex on #910).
+- The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
+  record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
+  (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
+  or substring match fails; and for both files moved to the same other folder, so a rule that only checks that
+  local's folder equals dev's fails.
+- The two suffix-boundary names in `tests/integration/pds-email-token.test.ts`, SE-7a's known exceptions
+  (verify-910-a686fe0 S2; book edit 2026-10-15-verify-886-fixture-scope, "Step-book mapping of verify-910 S1, S2"),
+  test only: `pdslocalhost` (:403) becomes `pds.notlocalhost` and `https://evillocalhost` (:440) becomes
+  `https://evil.notlocalhost`, each with a comment naming `.localhost`.
+
+Done when each red test fails on main for its own reason and passes with the change, and check is green.
 
 ---
 
@@ -9409,7 +9488,7 @@ and check is green.
 ---
 
 ### P1.34v — Run a local PLC directory in the local stack
-Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o
+Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o, P1.35r
 Slice 1, issue #782, product (`deployment/compose.local.yaml`, its network table, the image lock, the local PDS env),
 lane the third thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 4 of 2026-10-13-local-plc;
 book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 and 3 to
@@ -9444,6 +9523,11 @@ the local file).
   its age and pre-merge scan evidence. A local-only test fails the PLC image, service, network or database in any
   compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml` mounts
   `init-local/`.
+- This step adds plc's row to P1.35r's limits table and plc's exact environment map and `env_file` list to its
+  local-only env pins, with P1.35r's value red tests on plc: a changed value of an allowed key, a deleted allowed key,
+  a literal in place of a `${VAR}` reference, and a literal on a secret-bearing key (book edit
+  2026-10-15-verify-903-info-items). plc's rows meet P1.35r's secret-bearing predicate (e.g. `DATABASE_URL` as
+  `postgres://plc:${PLC_DB_PASSWORD:?set it}@plc-db/plc`).
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
@@ -12397,6 +12481,9 @@ P1.29h, P1.29s, P1.29t.
    point 1); it creates accounts through the local PDS and confirms their email through P1.29h's reader and the real
    `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one `logging` entry: exactly
    `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
+   adds seed's row to P1.35r's limits table and seed's exact environment map and `env_file` list to P1.35r's
+   local-only env pins, with red tests APP_HOST on seed, an unlisted `env_file` on seed, and P1.35r's value red tests
+   on seed (Codex on #910); seed's rows meet P1.35r's secret-bearing predicate. It
    also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
    2026-10-12-p134l-secrets-folder-listing, rider), and a test that the token reader passes `hostWalk` to the pin
    unchanged, so mutant R12 (statfs blind) dies (verify-845-200b534 N3; book edit 2026-10-13-host-pin-steps, "Step-book
@@ -12557,7 +12644,7 @@ bump. If P1.29t cannot run it, it moves to the preflight.
 and seeds test accounts without printing a secret and without ever touching the lexicon authority.
 
 **Inputs:** P1.11 migrator image and Postgres settings; P1.27 images and lock; P1.28 edge image and config; the dev
-PDS hostname `0x40.space` (plan §5.3 and decision 20); `shared/lexicons/published.lock.json` (P1.31/P1.35).
+PDS hostname `0x40.space` (plan §5.3 and decision 20); `shared/lexicons/published.lock.json` (P1.31g/P1.35).
 Two env files use the same compose file: `dev` (the homelab, Alex-operated from P1.34 on) and `local`
 (`PDS_HOSTNAME=pds.unset.localhost`, edge on 127.0.0.1 only; agents' throwaway stacks for tests).
 
@@ -13280,18 +13367,20 @@ Build choices (architecture's 2026-10-12-p131-depcruise-and-lexicon-choices; boo
 - Generated code goes in `generated/`, whose own tsconfig sets `exactOptionalPropertyTypes: false`; hand-written
   code keeps it true. `biome-ignore-all noExplicitAny` on generated files only, and a regenerate-and-diff test
   requires the build output to equal the committed files.
-- The breaking-check runs as a test. An absent `listed` means not listed (fails closed).
 - The NSID cross-pin test is P1.31c's own PR.
 
 **Tags:** [PERMANENT] [SEC] [ALEX] [STOP] (Alex reviews the schemas' fields and the permission set's EN/FR consent text in this step's PR; nothing is published until he approves it: answered by Alex 2026-10-03 11:48Z) · **Depends on:** P1.01, P1.32 (Q4, the permission-set NSID), P1.31d · **Plan:** §3 (lexicons, scope string), §5.2, §5.3; fable 01
 
 **Where:** `shared/lexicons/{schemas/sh.unset.*.json, vendor/app.bsky/*, src/{validate.ts, scope.ts, index.ts},
-published.lock.json, published/<nsid>.json, scripts/{build.ts, breaking-check.ts}, test/}`.
+published/<nsid>.json, scripts/build.ts, test/}`; `scripts/breaking-check.ts` and `published.lock.json` are P1.31g's.
 
-**Size:** ~200 source lines plus schemas, ~350 test lines.
+**Size:** about 400 source lines (`build.ts`, `src/` limits, scope and validate, `index.ts`, LICENSE) plus schemas,
+with their tests and `generated_types_current`. The breaking-check moved to P1.31g (book edit
+2026-10-15-p131-size-split: 539 lines per pr-shape as built at 4e59bf6, split at the clean seam).
 
 **Goal:** The `sh.unset.*` schemas, the permission set and the OAuth scope string exist in one package, are
-strictly validated, generate types with `@atproto/lex`, and cannot change in a breaking way once published.
+strictly validated and generate types with `@atproto/lex`; P1.31g adds the check that they cannot change in a
+breaking way once published.
 
 **Inputs:** plan §3's record list and scope string; `@atproto/lex` 0.3.13 (pinned exactly; the agent rechecks the
 latest patch at start); the vendored `app.bsky` schemas the records reference.
@@ -13322,7 +13411,7 @@ latest patch at start); the vendored `app.bsky` schemas the records reference.
   - new collections (Phase 4's P4.01 and later) are **added to the same set**, never a new set NSID (a new set
     NSID forces every user to consent again);
   - each addition is its own PR, tagged `[ALEX]`, because it silently expands every user's token; the
-    breaking-check refuses it without the flag `--approved-by-alex=<PR number>`;
+    breaking-check (P1.31g) refuses it without the flag `--approved-by-alex=<PR number>`;
   - removing a permission breaks running features → refused (a feature is retired first, then a reviewed
     removal PR with the same flag);
   - an unexpected change of the published set's CID is a **security incident** (P1.35 monitor and runbook);
@@ -13343,13 +13432,7 @@ latest patch at start); the vendored `app.bsky` schemas the records reference.
   takes a `mode: "write" | "read"`).
 - `scopeString(): string` the full scope per §3 (`atproto include:sh.unset.authApp …`), and `scopeStringFallback()`
   the granular-scope list for PDSes that do not support permission sets.
-- `published.lock.json`: `{ "<nsid>": { "cid": "…", "schemaRecordCid": "…", "publishedAt": "…" } }` (filled by
-  P1.35); `published/<nsid>.json` snapshots of what was published.
-- `breaking-check`: for each **record or query** NSID in the lock, compares the current schema with its
-  snapshot; any of: removed field, changed type, new required field, narrowed constraint (maxLength down, enum
-  value removed; knownValues is fine), changed `key` type → exit 1 "breaking: publish a new NSID". For the
-  **permission set** the rules above apply instead (add with Alex's flag; never remove; never a new NSID).
-  Consent-text edits also need the flag (users see them).
+- `published/<nsid>.json` snapshots of what was published (filled by P1.35).
 - Limits (maxLength, maxGraphemes, array lengths) per record from §3, centralised in one constants file.
 
 **Algorithm:**
@@ -13360,28 +13443,22 @@ build:
 3. lex build → generated types into src/generated (checked in; --check mode in CI).
 4. Permission-set checks: every permission is repo: or rpc: under sh.unset.; no rpc: entry has a fixed aud;
    title and detail exist in en and fr. Any failure → exit 1.
-5. breaking-check against published.lock.json (record/query rules, or permission-set rules).
 scopeString:
 1. Return the exact string from §3 built from constants; a test pins it byte for byte.
 ```
 
 **Edge cases and failures:**
-- A record schema change after publication → breaking-check fails; the fix is a new record NSID (e.g.
-  `sh.unset.profileV2`) — never an edit (permanent, `[PERMANENT]`). This does **not** apply to the permission set
-  (see Outputs).
 - A PDS without permission-set support → the OAuth client (Phase 2) requests the fallback scope; this step only
   provides both strings.
 - A record with a `$type` mismatch → validateRecord fails.
 - Unknown fields on read → accepted and ignored (forward compatibility); on write → refused.
 
-**Threats:** the record formats and the permission set that other apps and users' PDSes rely on.
+**Threats:** the record formats and the permission set that other apps and users' PDSes rely on. The breaking-check's
+threats (a published schema changing under existing records; a set widening every grant without Alex's flag) are
+P1.31g's.
+  - E The permission set grants beyond our prefix → refused (`permission_set_scope_prefix_only`).
   - T A write carries fields the schema does not define → refused on write (`validate_write_rejects_unknown_field`,
     `limits_enforced`).
-  - E The permission set widens every user's grant at the next token refresh → additions need Alex's flag, removals
-    fail, only our prefix (`breaking_check_permission_set_add_requires_flag`,
-    `breaking_check_permission_set_removal_fails`, `permission_set_scope_prefix_only`).
-  - T A published schema changes under existing records → breaking check (`breaking_check_detects_removed_field`,
-    `…_new_required`, `…_narrowed_maxlength`).
   - S The scope string drifts from plan line 126 → pinned (`scope_string_pinned`, `scope_fallback_pinned`).
 
 **Done when (tests):**
@@ -13390,10 +13467,6 @@ scopeString:
 - `validate_write_rejects_unknown_field`; `validate_read_accepts_unknown_field`.
 - `limits_enforced`: one over-limit fixture per limited field → error.
 - `scope_string_pinned`; `scope_fallback_pinned`.
-- `breaking_check_detects_removed_field`, `…_new_required`, `…_narrowed_maxlength`; `breaking_check_allows_new_optional`.
-- `breaking_check_permission_set_add_requires_flag`: adding a permission without `--approved-by-alex` → exit 1;
-  with it → exit 0.
-- `breaking_check_permission_set_removal_fails`.
 - `permission_set_has_en_fr_title_detail`.
 - `follow_schema_in_first_set` (answer 29b): the set lists `repo:sh.unset.follow`; `sh.unset.follow` validates
   `{subject: <did>, createdAt}` and rejects a missing or non-DID `subject`; the fallback scope pins it.
@@ -13409,8 +13482,64 @@ scopeString:
 - get/putPreferences lexicons → REJECT (preferences are not ours to define).
 - Vault note `atproto-lexicon-authoring` → LESSON.
 
-**Not in this step:** publishing (P1.35); Phase 4 collections (P4.01 adds them to the same set through an
-`[ALEX]` PR), except `sh.unset.follow`, which is here from the first publication (answer 29b).
+**Not in this step:** the breaking-check (P1.31g); publishing (P1.35); Phase 4 collections (P4.01 adds them to the same
+set through an `[ALEX]` PR), except `sh.unset.follow`, which is here from the first publication (answer 29b).
+
+---
+
+### P1.31g — Lexicons breaking-change check
+
+**Tags:** [SEC] · **Depends on:** P1.31, P1.31d (#759: its scripts row allows `node:fs` and `node:path`; it already
+holds through P1.31)
+
+Slice 1, issue #907, product, Phase 1 lane, after
+P1.31. Book edit 2026-10-15-p131-size-split: P1.31 measured 539 source lines as built, and the breaking-check is the
+clean seam, since it has no input until P1.35 publishes the first schema (no `published/` folder before then). It
+carries `scripts/breaking-check.ts` and its tests unchanged from 4e59bf6. P1.35 depends on it as well as P1.31, so
+nothing is published before the check exists. As split (the record's last section): P1.31 at 184ea10, P1.31g at
+1483997 stacked on it.
+
+**Where:** `shared/lexicons/{scripts/breaking-check.ts, scripts/breaking-check.test.ts, published.lock.json}` (only
+the check reads the lock, so it moved here from P1.31), and the breaking-check line of the lexicons note
+(`docs/ai/notes/area/lexicons.md`, its `code:` list and the `scripts/breaking-check.ts` bullet).
+
+**Goal:** a published schema or the published permission set cannot change in a breaking way, or widen every user's
+grant, without the reviewed path.
+
+**Outputs:**
+- `published.lock.json`: `{ "<nsid>": { "cid": "…", "schemaRecordCid": "…", "publishedAt": "…" } }` (empty
+  until P1.35 fills it).
+- `breaking-check`: for each **record or query** NSID in the lock, compares the current schema with its
+  snapshot; any of: removed field, changed type, new required field, narrowed constraint (maxLength down, enum
+  value removed; knownValues is fine), changed `key` type → exit 1 "breaking: publish a new NSID". For the
+  **permission set** P1.31's rules apply instead (add with Alex's flag; never remove; never a new NSID).
+  Consent-text edits also need the flag (users see them).
+- The breaking-check runs as a test. An absent `listed` means not listed (fails closed).
+- The permission-set rules are P1.31's Outputs ("How the permission set evolves"): an addition needs
+  `--approved-by-alex=<PR number>`, a removal is refused, never a new set NSID.
+
+**Algorithm:** breaking-check against `published.lock.json` (record/query rules, or permission-set rules), run as a
+test.
+
+**Edge cases and failures:**
+- A record schema change after publication → breaking-check fails; the fix is a new record NSID (e.g.
+  `sh.unset.profileV2`) — never an edit (permanent, `[PERMANENT]`). This does **not** apply to the permission set
+  (see Outputs).
+
+**Threats:**
+  - E The permission set widens every user's grant at the next token refresh → additions need Alex's flag, removals
+    fail, only our prefix (`breaking_check_permission_set_add_requires_flag`,
+    `breaking_check_permission_set_removal_fails`).
+  - T A published schema changes under existing records → breaking check (`breaking_check_detects_removed_field`,
+    `…_new_required`, `…_narrowed_maxlength`).
+
+**Done when (tests):**
+- `breaking_check_detects_removed_field`, `…_new_required`, `…_narrowed_maxlength`; `breaking_check_allows_new_optional`.
+- `breaking_check_permission_set_add_requires_flag`: adding a permission without `--approved-by-alex` → exit 1;
+  with it → exit 0.
+- `breaking_check_permission_set_removal_fails`.
+
+**Not in this step:** the schemas, the build, validation and the scope strings (P1.31); publishing (P1.35).
 
 ---
 
@@ -14461,7 +14590,7 @@ schedules a monitor holds the repository token, its permissions and a runner. **
 `.github/workflows/lexicon-monitor.yml` and `scripts/ci/lexicon-monitor.ts` (moved under a check folder); this step
 holds `shared/lexicons/` and the runbooks.
 
-**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.34, P1.33p (G-1: public lexicon resolution fetches from the public PDS), P1.33a (creating its account on `https://0x40.space` is when the dev PDS takes that name; decision 24 retires the prototype first),
+**Tags:** [ALEX] [PERMANENT] [SEC] · **Depends on:** P1.35q, P1.31 (its PR approved by Alex: fields and consent text), P1.31g (its breaking-check), P1.34, P1.33p (G-1: public lexicon resolution fetches from the public PDS), P1.33a (creating its account on `https://0x40.space` is when the dev PDS takes that name; decision 24 retires the prototype first),
 P0.12 (rows K1 and K1b), P0.13 (licence ADR: the lexicons are MIT), P1.18 · **Plan:** §3, §5.2, §5.3 ("published never from CI or agents"), §10 (nightly PLC log check); decision 20
 
 **Where:** `docs/human/runbooks/{lexicon-authority.md, plc-nullification.md, permission-set-changed.md,
