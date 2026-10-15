@@ -8495,7 +8495,9 @@ by the tests below.
   the two exact hosts and refuses an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf.
 - P1.34d item 5's `unset-dev-trust` preflight checks under C26 local: exactly `root.pem`, lstat regular, nlink 1, not
   group- or other-writable, a real folder; byte-identical to `unset-dev-ca/root.pem`, naming both paths in the reason;
-  one CA:true certificate with item 2's name constraints; PRIVATE KEY refused. Seven red tests.
+  one CA:true certificate with item 2's name constraints; PRIVATE KEY refused. Eight red tests, as P1.34d item 5 lists
+  them: a symlinked `unset-dev-trust/`, an extra file, nlink 2, group-writable, a cert that differs from the CA's, a
+  non-CA cert, a cert without the name constraints, and a PRIVATE KEY block.
 
 Class: product only. The tests live beside the preflight or under `tests/`, never under a check path
 (`scripts/{test,docs,...}`, SE-6), and the runbook rides as docs. If this step measures over 400 source lines, the lane
@@ -8656,7 +8658,8 @@ lane the third thread (P1.34d was a dependency only for the C18 move, which P1.3
 coordinator's relay at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps
 Amendment 3 S2). The verifier found the directory form reachable in #809 only through a missing mode gate, which #809
 fixes, so what remains is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out
-of #809.
+of #809. Its outline row stays after P1.34d for lane flow only; the lane may take it as soon as P1.33y and P1.34q are
+merged (both are).
 
 **What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
 P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
@@ -9719,8 +9722,9 @@ failing on CRITICAL and keeping every shipped image at fail-on-HIGH?" (architect
 `/usr/bin/xcaddy`, fixed in 1.26.6, while `caddy:2.11.7-alpine` and the shipped edge image scan clean (Trivy 0.74.0,
 HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). That was true when relayed; since then main's `mirror` run fails on
 `caddy:2.11.7-alpine` and `pds:0.4.5037` (none of the last 40 runs on main green, verify-868-fd7be32-postmerge O3);
-P1.33c's exceptions and the P1.27r scan step answer it. xcaddy is a build-time CLI fed only our pinned versions and
-checksum-verified modules, in an unprivileged job; the edge image's own Trivy scan reads the built binary's Go build
+P1.33c's exceptions answer the `pds` half; no step yet answers the `caddy:2.11.7-alpine` half (P1.27r covers the Images
+workflow's `scan`, not Mirror's), so the step book books one. xcaddy is a build-time CLI fed only our pinned versions
+and checksum-verified modules, in an unprivileged job; the edge image's own Trivy scan reads the built binary's Go build
 info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE ignore entries (the alternative) recur on
 every Go point release and waive a CVE id globally unless scoped by path.
 
