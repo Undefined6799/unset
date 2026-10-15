@@ -8950,10 +8950,13 @@ local-only service that skips the env drift test picking up a key that changes i
   key. A local-only service gets its own row. Red tests: `pids_limit` 4096 on the reader, `mem_limit` raised on web,
   `cpus` removed from edge, and a service missing from the table.
 - I-2, env of local-only services: local-only services (pds-token-reader, seed, and plc from P1.34v) skip
-  environmentDrift, since dev has nothing to compare them with. Each gets an exact allowlist of environment keys and
-  `env_file` entries in the drift test, so a key outside its list fails (for example APP_* on seed or plc). P1.34v
-  adds plc's row. Red tests: APP_HOST on seed, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an unlisted `env_file`
-  on seed.
+  environmentDrift, since dev has nothing to compare them with. Each one's environment is pinned in the drift test as
+  an exact key-value map, written as the compose file has it: a literal, or a `${VAR}` reference kept as text and
+  never resolved, so no secret enters the table. Its `env_file` list is pinned exactly, in order. Any added, removed or
+  changed entry fails, naming the service and key (for example APP_* on seed or plc). P1.34v adds plc's map the same
+  way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red tests: APP_HOST on seed,
+  NODE_TLS_REJECT_UNAUTHORIZED on the reader, an unlisted `env_file` on seed, a changed value of an allowed key (for
+  example the reader's PDS URL), a deleted allowed key, and a literal in place of a `${VAR}` reference.
 - The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
   record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
   (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
@@ -9500,8 +9503,8 @@ the local file).
   its age and pre-merge scan evidence. A local-only test fails the PLC image, service, network or database in any
   compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml` mounts
   `init-local/`.
-- This step adds plc's row to P1.35r's limits table and local-only env allowlist (book edit
-  2026-10-15-verify-903-info-items).
+- This step adds plc's row to P1.35r's limits table and plc's exact environment map and `env_file` list to its
+  local-only env pins (book edit 2026-10-15-verify-903-info-items).
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
