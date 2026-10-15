@@ -68,13 +68,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
-  P1.33c, P1.35b, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y,
-  P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q,
-  P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.33w,
-  P1.33x, P1.33y, P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s,
-  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled
-  forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13
-  and the slice exit P2.13a.
+  P1.33c, P1.35b, P1.35c, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l,
+  P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
+  P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
+  P1.33w, P1.33x, P1.33y, P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b,
+  P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36
+  (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15,
+  P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -598,6 +598,7 @@ flowchart LR
   P1_33y --> P1_35a
   P1_35a --> P1_34d
   P1_35b["P1.35b host-pin security review owner"]
+  P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_34d --> P1_33z
   P1_28 --> P1_29a
   P1_27y --> P1_27n
@@ -7751,6 +7752,10 @@ Done when the disable list matches Trivy 0.75.0's built-in rule ids (tested), ea
 gated export scan, the PR lists the tightened scans' findings on current main (stopping as above if any appear), and
 check is green.
 
+Also (verify-866 N5; book edit 2026-10-15-verify-863-866-followups, "Elsewhere"): this step rewrites the mirror.yml
+comment anyway, so it fixes the "vulnerabilities only" wording (mirror.yml also secret-scans) and the stale
+`mirror.yml:53` (v0.74.0) and `:63`. The typed line already covers `mirror.yml` and is unchanged.
+
 ---
 
 
@@ -8254,6 +8259,54 @@ cover the format.
 Size: one CODEOWNERS line and one test.
 
 Done when the test fails without the line and passes with it, and check is green.
+
+---
+
+### P1.35c — Pin the depcruise rows and image export checks
+Tags: [SEC] [ALEX] (typed line)            Depends on: —
+Slice 1, issue (pending), check path (`.github/workflows/images.yml`, `scripts/ci`, `scripts/lint`; the depcruise config
+is `scripts/lint/.dependency-cruiser.cjs`), kind/fix, lane Cursor after P1.35b, then P1.33v; book edit
+2026-10-15-verify-863-866-followups, from verify-863-4df3354 and verify-866-ddf2ed3-r2 (no blockers) and architecture's
+ruling (section "Architecture on the post-merge verifies of #863 (P1.33f) and #866 (P1.33u), 2026-10-15 ~00:02Z" of book
+edit 2026-10-14-verify-835-secret-scan). One PR (architecture item 5). P1.33f (#863) and P1.33u (#866) have merged.
+P1.33 has no free letters, and P1.34's only unused letter (P1.34h) was released and is still named in history. Typed
+line (architecture's wording): "yes P1.35c .github/workflows/images.yml scripts/ci scripts/lint export and entry
+checks".
+
+**What, depcruise (#863):**
+- S3 is accepted as built: the five-pattern exclude array (`.dependency-cruiser.cjs:367-375`) stays. A test pins each
+  pattern in both directions: the npm dist edge is seen, and workspace dist is excluded (architecture item 1).
+- S1: a real cruise shows that the `index.test.ts` to `node_modules/vitest/dist/index.js` edge is allowed by the tooling
+  row only; a host-pin row allowing `^node_modules/vitest/dist/` turns the test red.
+- S2 (N1): fixtures pin `^` on the host-pin row's `from` and `to` (`.dependency-cruiser.cjs:134`); removing either turns
+  a test red.
+- Nits: item 4 gains a real-cruise `shared/<x>/dist` case; the fixture stubs (`depcruise-fixture.ts:91`) drop the
+  `exports` field unless a test needs it.
+- #588's two open nits, both still on main: the `depcruise.test.ts:507` comment says P1.30r, not P1.30u; a red fixture
+  such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
+
+**What, image scan gate (#866):**
+- S1: a test pins the gate's `EXPORT_RESULT: ${{ needs.scan-export.result }}` (`images.yml:393`); feeding it
+  scan-image's result, or a hard-coded success, turns it red.
+- S2: tests kill the close variants of mutants 5, 8, 9 and 11: step-level `continue-on-error`; an empty or
+  sub-directory mount (`images.yml:364-365`); `-e TRIVY_SKIP_DIRS`; a step `if` on `matrix.name`; `matrix.exclude`.
+- N2 (architecture item 2): every path in the export check resolves inside the exported root only. An absolute link
+  target is re-rooted under the export directory, `..` is clamped at the root, and resolution stops after 40 hops; a
+  longer chain, or a loop, fails.
+- N1 (item 3): the ENTRYPOINT executable, resolved as in N2, is a regular file with an execute bit.
+- N3 (item 4): where the executable is an interpreter (`node`, for kinds node-app and migrate in
+  `deployment/images/kinds.json`), the script argument is resolved against WORKDIR inside the root and must be a regular
+  file. The interpreter list is closed and pinned by a test.
+- Red cases (item 5): an absolute os-release link that points at the runner; a dangling entry; a directory entry; a
+  missing app script.
+- N4: a test covers an image with no ENTRYPOINT, and the lookup on the image's own PATH.
+- N6: a red test makes the "0 files scanned" check fire; if it cannot fire, the check is removed and the PR says why.
+- N8: `scan-export.test.ts` cleans up its temp dirs.
+
+Size: mostly tests, which pr-shape excludes. If the source passes about 400 lines, the depcruise half splits off as
+P1.35d (reserved).
+
+Done when every case above is red without its change and green with it, and check is green.
 
 ---
 
