@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.34d, P1.33z,
-  P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
-  P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
-  phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.34d, P1.35l,
+  P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j,
+  P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
+  23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -606,6 +606,8 @@ flowchart LR
   P1_33g --> P1_34d
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
+  P1_35l["P1.35l PDS host checked in every env"]
+  P1_35g --> P1_35l
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -8395,7 +8397,7 @@ fails confusingly or the app trusts a host the PDS does not answer for; and an I
 - Architecture's ruling: under local, the edge's `PDS_HOST` must equal the PDS's `PDS_HOSTNAME`, both compared as
   normalized hostnames (lower case, no trailing dot, no port). A mismatch fails, naming both variables and echoing no
   other env value. Tests: equal (passes); different (fails); differing only in case or a trailing dot (passes); one
-  variable absent (input missing).
+  variable absent (input missing). dev and prod get the same check in P1.35l.
 - N1: `localSiteMounts` (`edge.ts:301`) comes back under Biome's cognitive-complexity limit of 15, with no rule change
   and no suppression.
 - N2: the expiry margin is pinned at exactly 14 days; a 14.5-day mutant turns a test red.
@@ -8654,6 +8656,39 @@ Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open
 Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
 tests and item 15's handshake red test pass, the real `compose.local.yaml` test under `--env local` (item 12) passes,
 and check is green.
+
+---
+
+### P1.35l — Check the PDS host in every env
+Tags: [SEC]            Depends on: P1.35g
+
+Slice 1, issue (pending), product (`deployment/preflight/`), kind/feature, lane the third thread after P1.34d (lane
+order; the lane may take it sooner if idle); book edit 2026-10-15-verify-876-followups, "P1.35l lettered", from
+architecture's 02:01Z ruling, with verify-888's N4 and N6 folded in ("verify-888 notes"). A tightening: nothing from
+Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): as P1.35g's, in
+every env: the edge terminating TLS for one name while the PDS issues its OAuth issuer, DID-doc service endpoint and
+handles under another, and an IP address standing in for a host name. C21 does not cover this outside local: it reads
+only the retirement report (`host.ts:18-40`).
+
+**What:** one check for every env (local, dev, prod) replaces C18's local-only branch: `PDS_HOST` equals
+`PDS_HOSTNAME` after normalization (lower case, no trailing dot, no port); an IP literal in either variable is refused;
+an absent variable is input missing. Reasons are fixed words, naming both variables and echoing no other env value. The
+env comparison is a positive allowlist, and nothing P1.35g built under local weakens.
+
+Tests (architecture):
+- For dev and prod: equal is green; a different name, an IPv4 address and an IPv6 address are each red; a case-only or
+  trailing-dot difference is green; an absent variable is input missing. Pinned red: prod with `192.0.2.2`, and prod
+  with `other.example.test` against `pds.example.test`. Every local test from P1.35g stays green.
+- verify-888 N4: three fixtures, each red on the mismatch alone (not only through L2): a port with non-digit text
+  (`pds.localhost:abc`), a double trailing dot (`pds.localhost..`) and leading whitespace (` pds.localhost`). They kill
+  mutants P15, P16 and P18 of `normalHost` (`deployment/preflight/checks/local-leaf.ts:80`).
+- verify-888 N6: an empty `PDS_HOST` and an empty `PDS_HOSTNAME` each fail as input missing; an lstat error other than
+  ENOENT (for example ENOTDIR) on a site source is a check error, not input missing (`edge.ts:323-330`); the
+  absent-source check runs before `localFileMounts` (`edge.ts:280-283`).
+
+Done when every test above passes, each red fixture fails on main for its own reason, and check is green.
 
 ---
 
