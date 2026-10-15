@@ -615,6 +615,8 @@ describe("allowlist matrix", () => {
       // Tests included: a test of a script sits beside it, under scripts/.
       edge("shared/lexicons/src/a.test.ts", "../scripts/build.ts"),
       edge("tests/integration/a.test.ts", "../../shared/lexicons/scripts/build.ts"),
+      // Every file under scripts/, not only build.ts.
+      edge("shared/lexicons/src/b.ts", "../scripts/lib/hash.ts"),
     );
     await expectPass(
       edge("shared/lexicons/scripts/build.test.ts", "./build.ts"),
@@ -624,7 +626,12 @@ describe("allowlist matrix", () => {
 
   test("exports_only_package_resolves", async () => {
     // P1.31d: a package that publishes only an `exports` map (no `main`), as @atproto/lex-schema does. Without
-    // exportsFields its import never resolved, so no path rule saw it.
+    // exportsFields its import never resolved, so no path rule saw it. The conditions are exactly architecture's four
+    // ("types" was declined: it would cruise .d.ts files instead of runtime entries).
+    expect((config.options as { enhancedResolveOptions?: unknown }).enhancedResolveOptions).toEqual({
+      exportsFields: ["exports"],
+      conditionNames: ["import", "require", "node", "default"],
+    });
     const from = "shared/http/a.ts";
     const result = await packageCruise(from, ["exp-only", "exp-only/public", "exp-only/conditional"]);
     const found = (path: string) => ({ resolved: `node_modules/exp-only/${path}`, couldNotResolve: false });

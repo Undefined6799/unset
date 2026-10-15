@@ -329,6 +329,49 @@ describe("workspace references", () => {
     ]);
   }, 60_000);
 
+  // P1.31d: the containment and option rules read the real path and the effective options, not the written ones.
+  test("nested_project_link_and_extends_fixtures", () => {
+    const root = typecheckTree({ "shared/f": {}, "shared/g": {}, "shared/h": {}, "shared/i": {} });
+    // A link to a sibling whose name starts with the parent's (shared/f -> shared/ff) is still outside it.
+    nested(root, "shared/f", { references: ["./link"] });
+    nested(root, "shared/ff");
+    symlinkSync(join(root, "shared/ff"), join(root, "shared/f/link"), "dir");
+    // A folder inside the parent whose tsconfig.json is a link to one outside it.
+    nested(root, "shared/g", { references: ["./gen"] });
+    nested(root, "shared/gg");
+    mkdirSync(join(root, "shared/g/gen"));
+    symlinkSync(join(root, "shared/gg/tsconfig.json"), join(root, "shared/g/gen/tsconfig.json"));
+    // noCheck inherited through extends, and composite left out rather than set false.
+    nested(root, "shared/h", { references: ["./gen"] });
+    put(root, "shared/h/gen/relaxed.json", {
+      extends: "../../../tsconfig.base.json",
+      compilerOptions: { noCheck: true },
+    });
+    put(root, "shared/h/gen/tsconfig.json", {
+      extends: "./relaxed.json",
+      compilerOptions: { composite: true, rootDir: ".", outDir: "dist" },
+      include: ["*.ts"],
+    });
+    put(root, "shared/h/gen/a.ts", "export {};\n");
+    nested(root, "shared/i", { references: ["./gen"] });
+    put(root, "shared/i/gen/tsconfig.json", {
+      extends: "../../../tsconfig.base.json",
+      compilerOptions: { rootDir: ".", outDir: "dist" },
+      include: ["*.ts"],
+    });
+    put(root, "shared/i/gen/a.ts", "export {};\n");
+    expect(untypecheckedFiles(root)).toEqual([
+      "shared/f: reference ./link is not a project inside shared/f",
+      "shared/g: reference ./gen is not a project inside shared/g",
+      "shared/h/gen: a project may not set noCheck",
+      "shared/i/gen: a project must set composite",
+      "shared/ff/a.ts",
+      "shared/gg/a.ts",
+      "shared/h/gen/a.ts",
+      "shared/i/gen/a.ts",
+    ]);
+  }, 60_000);
+
   test("no_workspace_yet_passes", () => {
     expect(workspaceProblems(tree({}))).toEqual([]);
   });

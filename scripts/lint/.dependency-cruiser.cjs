@@ -123,9 +123,9 @@ const MATRIX = [
   },
   { name: "shared", from: { path: "^shared/", pathNot: LEAF_SHARED }, to: [{ path: "^shared/" }, CORE, NPM] },
   // The lexicon build scripts (P1.31d; architecture record 2026-10-12-p131-depcruise-and-lexicon-choices item 2): they
-  // generate code that ships in the trusted lexicons package, so they stay inside it. They may read and write files
-  // and run git, so they reach exactly LEXICON_SCRIPT_BUILTINS and no other built-in; nothing outside them imports one
-  // (lexicon-scripts-not-imported).
+  // generate code that ships in the trusted lexicons package, so they stay inside it. They read and write files and run
+  // the pinned lex and biome binaries by execFile (P1.31 as-built item 11), so they reach exactly
+  // LEXICON_SCRIPT_BUILTINS and no other built-in; nothing outside them imports one (lexicon-scripts-not-imported).
   {
     name: "shared-lexicons-scripts",
     from: { path: LEXICON_SCRIPTS },
