@@ -8607,7 +8607,9 @@ the edge is the only service sharing any network with the PDS's HTTP port; red f
 PLC network keeps its A4 allowlist entry. P1.29's network table and its threat line now read `web` on `app`, never on
 `edge`.
 
-D8: a new network boundary, so this step's PR carries its own ADR in `docs/human/decisions/`, which Alex accepts.
+No ADR (architecture 02:21Z: D8 does not apply). The record is P1.29's network table with the `app` row, plus the
+networks comment in `deployment/compose.dev.yaml`, which this step updates to say web reaches the PDS only through the
+edge's aliases on `app`, citing the 02:05Z and 02:21Z sections of book edit 2026-10-14-p134d-split.
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
