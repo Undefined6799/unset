@@ -8476,8 +8476,8 @@ Done when each test is red without its change and green with it, and check is gr
 ### P1.33g — Document and test the local dev root
 Tags: [SEC]            Depends on: P1.35a
 
-Slice 1, issue (pending), product (`deployment/preflight/`, its tests, and `docs/human/runbooks/dev-stack-secrets.md`
-as docs), kind/feature, lane the third thread after P1.35a (both edit C26 in `deployment/preflight/checks/build.ts`; the
+Slice 1, issue #889, product (`deployment/preflight/`, its tests, and `docs/human/runbooks/dev-stack-secrets.md` as
+docs), kind/feature, lane the third thread after P1.35a (both edit C26 in `deployment/preflight/checks/build.ts`; the
 lane stacks it on P1.35a's PR); book edit 2026-10-14-p134d-split, "P1.33g taken: the split of item 4", a split of
 P1.34d (#742) by size: no item's content changes, and the record 2026-10-12-p134c-p134d-local-dev-root-ca and its
 amendments still govern the text. It is a split of booked work, so it needs nothing from Alex.
