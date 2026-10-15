@@ -303,14 +303,18 @@ function typecheckWalk(root: string): Walk {
   return walk;
 }
 
-/** Counts `project`'s files once it passes, then follows its references; `path` is the chain that reached it. */
+/** Counts `project`'s files once it passes, then follows its references; `path` is the chain that reached it. A
+ * nested project counts only files whose real path lies inside its own folder (Amendment 3), so an include that
+ * reaches elsewhere leaves that file to a root-referenced project. */
 function visitProject(walk: Walk, project: string, path: Step[]): void {
   const real = realpath(join(walk.root, project));
   if (walk.walked.has(real ?? project)) return;
   walk.walked.add(real ?? project);
   const problem = optionProblem(walk.root, project);
   if (problem !== null) return void walk.problems.push(problem);
-  for (const file of listedFiles(walk.root, project)) walk.covered.add(file);
+  const counts = (file: string): boolean =>
+    path.length === 0 || (real !== null && (realpath(join(walk.root, file)) ?? "").startsWith(`${real}${sep}`));
+  for (const file of listedFiles(walk.root, project)) if (counts(file)) walk.covered.add(file);
   const config = `${project}/tsconfig.json`;
   const refs = existsSync(join(walk.root, config)) ? referencePaths(readJson(walk.root, config)) : [];
   for (const ref of refs) followReference(walk, [...path, { dir: project, real }], ref);

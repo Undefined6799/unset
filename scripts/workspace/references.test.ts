@@ -372,6 +372,21 @@ describe("workspace references", () => {
     ]);
   }, 60_000);
 
+  // P1.31d (Amendment 3): a nested project counts a file only when its real path lies inside the project's own folder,
+  // so a nested include that reaches elsewhere leaves that file reported.
+  test("nested_include_outside_project_counts_nothing", () => {
+    const root = typecheckTree({ "shared/j": {} });
+    nested(root, "shared/j", { references: ["./gen"] });
+    put(root, "shared/j/gen/tsconfig.json", {
+      extends: "../../../tsconfig.base.json",
+      compilerOptions: { composite: true, rootDir: "../../..", outDir: "dist" },
+      include: ["*.ts", "../../../domains/stray/*.ts"],
+    });
+    put(root, "shared/j/gen/a.ts", "export {};\n");
+    put(root, "domains/stray/b.ts", "export {};\n");
+    expect(untypecheckedFiles(root)).toEqual(["domains/stray/b.ts"]);
+  }, 60_000);
+
   test("no_workspace_yet_passes", () => {
     expect(workspaceProblems(tree({}))).toEqual([]);
   });
