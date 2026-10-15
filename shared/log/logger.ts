@@ -46,6 +46,12 @@ const EVENTS = [
   // valid for that request), and the expiry sweep finished (the count of sessions deleted, never a DID).
   "session.touch_failed",
   "session.sweep",
+  // P2.04, the OAuth stores: a stored state or token set whose seal did not open (a value moved to another row, or
+  // sealed with a key no longer in the keyring); the row is deleted. The kind is `state` or `session`, never the key.
+  "oauth.unseal_failed",
+  // P2.04, the OAuth client: the library dropped a token set (on every callback, on sign-out, or a failed refresh),
+  // with one reason word: revoked, refresh_failed, invalid or other. It ends no app session.
+  "oauth.session_deleted",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
