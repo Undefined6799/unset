@@ -39,15 +39,21 @@ export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: strin
   if (leaf.ca) return fail("the local leaf is a CA");
   if (!leaf.checkIssued(root) || !leaf.verify(root.publicKey))
     return fail("the local leaf is not issued by the dev root");
+  const served = servedProblem(leaf, appHost, pdsHost, now);
+  return served === null ? null : fail(served);
+}
+
+/** Why the leaf does not name exactly APP_HOST and PDS_HOST, with no IP, inside its dates and 14 days from the end. */
+function servedProblem(leaf: X509Certificate, appHost: string, pdsHost: string, now: number): string | null {
   const names = (leaf.subjectAltName ?? "").split(", ");
-  if (names.some((name) => name.startsWith("IP Address:"))) return fail("the local leaf has an IP name");
+  if (names.some((name) => name.startsWith("IP Address:"))) return "the local leaf has an IP name";
   const hosts = names.map((name) => DNS.exec(name)?.[1]);
   const wanted = [appHost, pdsHost];
   if (hosts.length !== 2 || !wanted.every((host) => hosts.includes(host))) {
-    return fail("the local leaf's names are not exactly APP_HOST and PDS_HOST");
+    return "the local leaf's names are not exactly APP_HOST and PDS_HOST";
   }
-  if (leaf.validFromDate.getTime() > now) return fail("the local leaf is not yet valid");
-  if (leaf.validToDate.getTime() - now < 14 * DAY_MS) return fail("the local leaf expires within 14 days");
+  if (leaf.validFromDate.getTime() > now) return "the local leaf is not yet valid";
+  if (leaf.validToDate.getTime() - now < 14 * DAY_MS) return "the local leaf expires within 14 days";
   return null;
 }
 
