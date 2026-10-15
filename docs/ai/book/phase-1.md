@@ -8665,7 +8665,7 @@ and check is green.
 ### P1.35l — Check the PDS host in every env
 Tags: [SEC]            Depends on: P1.35g
 
-Slice 1, issue (pending), product (`deployment/preflight/`), kind/feature, lane the third thread after P1.34d (lane
+Slice 1, issue #892, product (`deployment/preflight/`), kind/feature, lane the third thread after P1.34d (lane
 order; the lane may take it sooner if idle); book edit 2026-10-15-verify-876-followups, "P1.35l lettered", from
 architecture's 02:01Z ruling, with verify-888's N4 and N6 folded in ("verify-888 notes"). A tightening: nothing from
 Alex.
