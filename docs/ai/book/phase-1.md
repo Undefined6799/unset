@@ -8165,7 +8165,7 @@ The PR body lists every one-letter label it keeps on our suffixes.
   or example.org, with labels under them; a bare `.example` appears only in a test that means "unknown TLD" (book edit
   2026-10-15-verify-886-fixture-scope, "Step-book mapping of the returnPath ruling"). It is not a sweep: other bare
   `.example` and `.test` hosts stay, and returnPath.test.ts:17, :21 and :22 move to `evil.example.com` in the next
-  trusted `shared/http` step with verify-899 N1, lettered when it opens (architecture 03:11Z; same record, "Q1 ruled").
+  trusted `shared/http` step with verify-899 N1, lettered when it opens (architecture 03:16Z and 03:18Z; same record).
 - Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example.com` (a real-shaped TLD keeps the off-site-host case
   faithful); `config.test.ts:70` `media.example.co.uk` takes the did-columns replacement, `sub.example.com` (the
   multi-label public-suffix shape is an accepted loss if the test needed it).
