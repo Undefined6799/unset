@@ -178,6 +178,8 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
     edge("shared/lexicons/scripts/build.ts", "@atproto/lex-cli"),
     ...config.LEXICON_SCRIPT_BUILTINS.map((name) => edge("shared/lexicons/scripts/build.ts", `node:${name}`)),
   ],
+  "shared-ui-islands": [edge("shared/ui/a.ts", "../islands/index.ts")],
+  "shared-islands": [edge("shared/islands/a.ts", "./b.ts"), edge("shared/islands/a.ts", "left-pad")],
   "shared-ui-build": [
     edge("shared/ui-build/a.ts", "./b.ts"),
     edge("shared/ui-build/a.ts", "../ui/index.ts", "type"),
@@ -450,6 +452,7 @@ describe("boundary rules", () => {
       await expectFail("island-import-boundary", edge(island, `${up(island)}interfaces/http/compose.ts`));
       await expectFail("island-import-boundary", edge(island, `${up(island)}shared/config/index.ts`));
       await expectPass(edge(island, `${up(island)}shared/ui/index.ts`));
+      await expectPass(edge(island, `${up(island)}shared/islands/index.ts`));
     }
     await expectFail("island-import-boundary", edge(ISLANDS[0] as string, "../server/session.ts"));
     await expectPass(edge(ISLANDS[0] as string, "../../../../shared/config/index.ts", "type"));
@@ -547,6 +550,21 @@ describe("allowlist matrix", () => {
       | undefined;
     expect(new RegExp(uiFrom?.path ?? "$^").test("shared/ui-build/a.ts")).toBe(false);
     expect(new RegExp(uiFrom?.path ?? "$^").test("shared/ui/a.ts")).toBe(true);
+  });
+
+  test("shared_islands_is_a_leaf", async () => {
+    // P1.25o: the island runtime ships to the browser, so it reaches only itself and npm (no Node built-in), and never
+    // the kit, which imports it. The kit sees it only through its index (DC-2).
+    await expectFail(
+      "not-in-allowed",
+      edge("shared/islands/a.ts", "node:fs"),
+      edge("shared/islands/a.ts", "../ui/index.ts"),
+      edge("shared/islands/a.ts", "../ui/index.ts", "type"),
+      edge("shared/ui/a.ts", "../islands/props.ts"),
+      // The kit's edge to the runtime adds the index alone: no Node built-in for the kit, and no other leaf gains it.
+      edge("shared/ui/a.ts", "node:fs"),
+      edge("shared/lexicons/a.ts", "../islands/index.ts"),
+    );
   });
 
   test("deployment_preflight_is_a_leaf", async () => {

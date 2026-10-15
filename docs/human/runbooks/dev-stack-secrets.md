@@ -189,5 +189,17 @@ npm run dev:up
 npm run dev:down
 ```
 
+The local stack (P1.34d) is `deployment/compose.local.yaml`, with the same wrapper under `--env local`:
+
+```sh
+npm run local:up
+npm run local:down
+```
+
+After Compose starts it, `local:up` connects to the edge on 127.0.0.1:443 once for each name in
+`unset-dev-env/local-leaf.pem`, trusting only `unset-dev-trust/root.pem`, and checks that the edge serves exactly that
+certificate. If it does not, or the edge does not answer within a minute, the wrapper runs `local:down` and fails,
+naming `unset-dev-env/local-leaf.pem`: rerun the leaf commands and the install lines above, then `local:up` again.
+
 Never run `docker compose` or the preflight on this stack by hand: the wrapper is what keeps the preflight's inputs
 and Compose's identical.

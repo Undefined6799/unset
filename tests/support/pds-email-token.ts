@@ -45,7 +45,7 @@ export type LocalStack = {
   readFile: (path: string) => string;
   /** This machine's name (node:os hostname()), which the daemon must give back. */
   hostname: string;
-  /** The dev root's public certificate (P1.34d; `unset-dev-env/` beside the checkout), an absolute path. */
+  /** The dev root's public certificate (P1.34d item 1; `unset-dev-trust/root.pem` beside the checkout), an absolute path. */
   devRootCert: string;
   /** The env the caller names: only `local` runs, and there is no default. */
   env: string | undefined;

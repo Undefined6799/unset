@@ -650,6 +650,13 @@ function aliases(r: Reader, node: unknown, service: string, network: string): vo
   if (!exact) r.fail(node, "the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}");
 }
 
+/** Whether a service's `networks:` mapping gives `network` an attachment with aliases. */
+const aliased = (node: unknown, network: string): boolean =>
+  isMap(node) &&
+  node.items.some(
+    (pair) => isScalar(pair.key) && pair.key.value === network && isMap(pair.value) && pair.value.has("aliases"),
+  );
+
 /** `networks:` on a service, as a list of keys or a map of key to attachment; with neither it is on `default`. */
 function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: string): string[] {
   if (node === undefined) return hasMode ? [] : ["default"];
@@ -675,6 +682,9 @@ function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: st
   }
   if (names.length === 0) r.fail(node, `networks of ${service} is empty`);
   if (new Set(names).size !== names.length) r.fail(node, `networks of ${service} repeats a network`);
+  // The other half of "each network carries exactly both" (verify-895 N3): the edge on edge or app carries its aliases.
+  const bare = names.find((name) => service === "edge" && ALIAS_NETWORKS.has(name) && !aliased(node, name));
+  if (bare !== undefined) r.fail(node, `the edge on network ${bare} must carry its aliases`);
   return names;
 }
 
