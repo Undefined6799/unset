@@ -22,7 +22,7 @@ const EDGE_ID = "2".repeat(64);
 const VOLUME = "unset-local_pdsdata";
 const PLC_ID = "3".repeat(64);
 const MACHINE = "devbox";
-const ROOT_PATH = "/srv/unset-dev-env/dev-root-ca.pem";
+const ROOT_PATH = "/srv/unset-dev-trust/root.pem";
 const ROOT_PEM = "-----BEGIN CERTIFICATE-----\nMIIBfixture+/=\n-----END CERTIFICATE-----\n";
 const SOCKET = "/var/run/docker.sock";
 const COMPOSE_PATH = "/srv/unset/deployment/compose.local.yaml";
@@ -366,15 +366,12 @@ describe("tests/support/pds-email-token.ts", () => {
         ],
       ),
       // The dev root (S2): an absolute path to a regular file holding one PEM certificate, read here.
-      ...[
-        "dev-root-ca.pem",
-        "file:///srv/unset-dev-env/dev-root-ca.pem",
-        "http://203.0.113.5/ca.pem",
-        "/srv/../x.pem",
-      ].map((path): [string, (w: World) => World] => [
-        "the dev root certificate path is not absolute",
-        (w) => ({ ...w, files: { ...w.files, [path]: "file" }, devRoot: path }),
-      ]),
+      ...["root.pem", "file:///srv/unset-dev-trust/root.pem", "http://203.0.113.5/ca.pem", "/srv/../x.pem"].map(
+        (path): [string, (w: World) => World] => [
+          "the dev root certificate path is not absolute",
+          (w) => ({ ...w, files: { ...w.files, [path]: "file" }, devRoot: path }),
+        ],
+      ),
       ["the dev root certificate is not a regular file", (w) => ({ ...w, files: { [SOCKET]: "socket" } })],
       ["the dev root certificate is not a regular file", (w) => ({ ...w, files: { ...w.files, [ROOT_PATH]: "link" } })],
       ["the dev root certificate is not one PEM certificate", (w) => ({ ...w, rootPem: "not a certificate\n" })],
