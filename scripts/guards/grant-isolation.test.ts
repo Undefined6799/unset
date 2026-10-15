@@ -170,6 +170,31 @@ ALTER TABLE app.x ENABLE ROW LEVEL SECURITY;`;
     expect(reasons).toEqual(names.flatMap(() => ["trusted_function", "trusted_function"]));
   });
 
+  test("web_execute_on_end_sessions_definer_is_trusted", () => {
+    // P2.04r. P2.04s creates the SECURITY DEFINER app.end_sessions_for_did and grants web EXECUTE in one migration
+    // (its caller needs both); P3.06g later grants indexer and admin. Without the name on the trusted-functions line
+    // the grant on the new function is feature and the file is mixed_grant_change; with it, both are trusted_function.
+    const sql = [
+      "CREATE FUNCTION app.end_sessions_for_did(p_did types.did, p_why text) RETURNS int LANGUAGE plpgsql",
+      "  SECURITY DEFINER SET search_path = pg_catalog, app AS $$ BEGIN RETURN 0; END $$;",
+      "GRANT EXECUTE ON FUNCTION app.end_sessions_for_did(types.did, text) TO web;",
+    ].join("\n");
+    expect(verdict({ sql, others: [] })).toEqual({ ok: true, touched: true });
+    const side = (migrations: GrantSide["migrations"]): GrantSide => ({
+      migrations,
+      grantMatrix: null,
+      erasureRegistry: null,
+    });
+    const base = [{ path: `${MIG}/0001_base.sql`, sql: BASE_SQL }];
+    const reasons = classifyGrantChanges({
+      base: side(base),
+      head: side([...base, { path: NEW_SQL, sql }]),
+      changed: [{ path: NEW_SQL, status: "A" }],
+      trustedFunctions,
+    }).map((finding) => finding.reason);
+    expect(reasons).toEqual(["trusted_function", "trusted_function"]);
+  });
+
   test("grant_parse_add_column", () => {
     const sql = "ALTER TABLE app.account ADD COLUMN bio text;";
     expect(verdict({ sql, others: [FEATURE], baseMatrix: tables(true) })).toEqual({ ok: true, touched: false });
