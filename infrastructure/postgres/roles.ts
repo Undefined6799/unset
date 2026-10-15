@@ -93,7 +93,10 @@ export async function syncRolePasswords(options: PasswordSyncOptions): Promise<P
   if (!(passwords instanceof Map)) return passwords;
   if (roles.length === 0) return { ok: true, roles: [] };
 
-  const client = new pg.Client(options.connection);
+  // As migrate.ts connects (P1.11): node-postgres waits forever without a connect timeout (findings F-09), and a
+  // dropped connection emits 'error', which would end the process with no listener; the query in flight still fails.
+  const client = new pg.Client({ ...options.connection, application_name: "migrate", connectionTimeoutMillis: 5000 });
+  client.on("error", () => undefined);
   try {
     await client.connect();
     return await inTransaction(client, async () => {
