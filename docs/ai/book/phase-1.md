@@ -8686,24 +8686,30 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     internal flags, and ports (still on 127.0.0.1). The allowed differences are exactly: `name`; `env_file` paths;
     `image` replaced by `build` (judged by C2 to C5, C18, C25 and C27 under the card); the edge's per-file site mounts
     (item 12) and the leaf mount; the `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only;
-    the local-name network aliases; and the PLC service, its network and its database wiring, which exist in the local
-    file only, with the local pds, web and appview on that network (tap only once P3.02 confirms it resolves DIDs;
-    architecture's Amendments 4 and 5 of 2026-10-13-local-plc); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local
-    file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps),
-    and the same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes,
-    S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
-    2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
-    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
-    key named. Preflight still runs in full on the local file; the drift test catches a weakening that preflight would
-    allow. This step moves `pds-token-reader` from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it
-    always exists in exactly one file; until then it stays in the dev file and cannot run there (P1.33l refuses dev;
-    architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The drift allowance also names `seed` as local-only, which
-    P1.29s adds to `compose.local.yaml` (book edit 2026-10-13-verify-814-fixes, Amendment 1). The reader-only test
-    (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
-    `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). `compose.local.yaml` sets
-    `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until P1.34v lands, DID creation fails at the PDS and never
-    reaches plc.directory, which is fail-closed for the seed (step-book note 1 of 2026-10-13-local-plc-a4-steps,
-    confirmed by architecture 19:31Z). Until this step lands, `local:up` does not exist.
+    the local-name network aliases; and the PLC service, its per-consumer `plc_*` networks and its database wiring,
+    local only; each consumer joins only its own one; the drift test checks that set exactly (architecture 02:26Z; book
+    edit 2026-10-13-local-plc-a4-steps, "Step-book mapping of the 02:26Z ruling"); `PDS_DID_PLC_URL` on pds
+    (`http://plc:2582` in the local file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of
+    2026-10-13-local-plc-a4-steps), and the same for web and appview once P1.34z gives them a PLC URL in compose (book
+    edit 2026-10-13-verify-814-fixes, S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here
+    first; step-book note 2 of 2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount
+    (P1.34u's files, mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in
+    either direction, fails with the key named. Preflight still runs in full on the local file; the drift test catches a
+    weakening that preflight would allow. This step moves `pds-token-reader` from `compose.dev.yaml` to
+    `compose.local.yaml` in the same PR, so it always exists in exactly one file; until then it stays in the dev file
+    and cannot run there (P1.33l refuses dev; architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The drift
+    allowance also names `seed` as local-only, which P1.29s adds to `compose.local.yaml` (book edit
+    2026-10-13-verify-814-fixes, Amendment 1). The reader-only test (`pds_token_reader_only_in_the_dev_file`) becomes
+    `pds_token_reader_only_in_the_local_file`: exactly `compose.local.yaml` (architecture's Amendment 6 of
+    2026-10-13-local-plc, Q2). `compose.local.yaml` sets `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until
+    P1.34v lands, DID creation fails at the PDS and never reaches plc.directory, which is fail-closed for the seed
+    (step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z). Until this step lands,
+    `local:up` does not exist. The local-only list lives in one module in `deployment/preflight/`, which the drift test
+    and C17 both import (architecture 02:32Z; same record, "Step-book mapping of the C17 ruling"). Under local, C17
+    expects networks.dev.json plus that list, matched both ways and exactly; under dev and prod, any network on the list
+    and any `plc_*` network is refused. networks.dev.json gets no local-only rows. If this step lands before any `plc_*`
+    entry exists, the list holds only what this step needs, and the dev and prod refusal is still tested, with a
+    fixture.
 12. The local edge mounts each `sites/*.caddy` file and `local/app.caddy` read-only at
     `/etc/caddy/sites/enabled/<name>.caddy`, with no directory mount (book edit 2026-10-13-p134o-after-791, Amendment
     1). C18's half (accepting exactly those per-file mounts under local) moved to P1.33y. The reader's
@@ -8730,9 +8736,10 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
 
-Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
-tests and item 15's handshake red test pass, the real `compose.local.yaml` test under `--env local` (item 12) passes,
-and check is green.
+Done when the `unset-dev-ca` red tests and item 15's handshake red test pass, the real `compose.local.yaml` test under
+`--env local` (item 12) passes, the drift test and the wrapper's down-on-mismatch test pass, and check is green.
+P1.29t's client_id probe red and green move to P1.33z (session containers cannot pull the PDS image; book edit
+2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"). Its PR body names this departure.
 
 ---
 
@@ -8790,20 +8797,28 @@ are never committed, pointing to `docs/human/runbooks/dev-stack-secrets.md` to c
 and the local origin to open. No secret values and no example values that look like real keys. The wipe line waits for
 P2.25's local arm: until then the section says the wipe is not built yet and documents no command that fails.
 
-Done when the run is green in CI on this step's PR, the README section is in, and check is green.
+Done when the run is green in CI on this step's PR, the README section is in, and check is green. In this PR's CI, the
+client_id probe passes against the started local stack (green), and fails with a named TLS or client_id fetch error when
+the stack runs without P1.34d's leaf and mounts (red); a pull failure, a timeout or an unhealthy container is not a red.
+Both halves are cited by run id. If the green half fails, its fix is the next local-chain step. No other registry,
+mirror or vendored image; any `.github/` change is its own check step with Alex's typed line (book edit
+2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling").
+
+Rule for every thread: nobody says local sign-in works until this step's run is green, or Alex reports `npm run
+local:up` and the probe passing on his machine.
 
 ---
 
 ### P1.33n — Drop the directory form from the site reader
 Tags: [SEC] trusted            Depends on: P1.33y, P1.34q
 Slice 1, issue #810, trusted base (`deployment/edge/`), kind/refactor (kind/fix if the verifier finds it reachable),
-lane the third thread (P1.34d was a dependency only for the C18 move, which P1.33y made; book edit
+lane Phase 1 (moved from the third lane for lane balance; book edit 2026-10-13-p133n-drop-sites-directory-form, "Lane
+move"). P1.34d was a dependency only for the C18 move, which P1.33y made (book edit
 2026-10-15-verify-868-postmerge-followups, O2); book edit 2026-10-13-p133n-drop-sites-directory-form, from the
 coordinator's relay at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps
 Amendment 3 S2). The verifier found the directory form reachable in #809 only through a missing mode gate, which #809
 fixes, so what remains is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out
-of #809. Its outline row stays after P1.34d for lane flow only; the lane may take it as soon as P1.33y and P1.34q are
-merged (both are).
+of #809. Its outline row stays after P1.34d for lane flow only; P1.33y and P1.34q are both merged, so it can start now.
 
 **What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
 P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
@@ -9235,11 +9250,15 @@ book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 an
 the local file).
 
 **What:**
-- The PLC exists in `compose.local.yaml` only. Its service sits on an `internal: true` network with no host port. Its
-  members are exactly the PLC and every local service P1.34z points at it: pds, web and appview. Tap stays out until
-  P3.02 confirms from the pinned Tap source that it resolves DIDs (fail-closed; nothing on the sign-in path needs
-  tap; architecture's Amendment 5 of 2026-10-13-local-plc, point 3). No other service joins it, and C17's network
-  table lists exactly those members. Red fixture: any other service on the PLC network.
+- The PLC exists in `compose.local.yaml` only. Each consumer P1.34z points at it (pds, web, appview) gets its own
+  `internal: true` network, `plc_pds`, `plc_web`, `plc_appview`, with exactly two members, the PLC service and that
+  consumer; no host port and no aliases; each consumer reaches `http://plc:2582` over its own network. `plc_tap` joins
+  only after P3.02 confirms tap resolves DIDs (Amendment 5, point 3). #895's edge-only check stays as built, with no
+  exception (architecture 02:26Z). This step adds the PLC entries to P1.34d's local-only list module, naming each
+  `plc_*` network with its two exact members (architecture 02:32Z). Red fixtures: a shared PLC network holding pds and
+  web; a third member on any `plc_*` network; any other service on a `plc_*` network; a `plc_*` network under dev;
+  `plc_web` containing pds; an unlisted `plc_*` network under local (book edit 2026-10-13-local-plc-a4-steps, "Step-book
+  mapping of the 02:26Z ruling" and "Step-book mapping of the C17 ruling").
 - `local:up` checks, before starting the PDS, that the PLC database exists, with a read-only query as the PLC role; if
   it is missing (a local volume made before this step) it refuses with a fixed reason naming `local:reset`. Init stays
   the only creator of roles and databases (P1.34u). `local:reset` removes only volumes labelled
