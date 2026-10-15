@@ -2,7 +2,7 @@
 // the edge, with throwaway certificates from the openssl on this machine. Nothing here starts Docker.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import type { AddressInfo } from "node:net";
+import { type AddressInfo, createServer as createTcpServer, type Server as TcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ConnectionOptions, connect, createSecureContext, createServer, type Server } from "node:tls";
@@ -87,6 +87,8 @@ describe("the served leaf check (P1.34d item 15)", () => {
     const sans: [string, string][] = [
       ["public", "DNS:app.example"],
       ["bare", "DNS:localhost"],
+      // Not a reserved name: no RFC 2606 or 6761 name can test the .localhost suffix boundary itself (SE-7a,
+      // suffix-boundary rule, last section of book edit verify-886-fixture-scope).
       ["suffix", "DNS:app.notlocalhost"],
       ["ip", "DNS:app.localhost,IP:127.0.0.1"],
     ];
@@ -119,6 +121,54 @@ describe("the served leaf check (P1.34d item 15)", () => {
       "the edge's leaf does not verify against unset-dev-trust/root.pem (UNABLE_TO_VERIFY_LEAF_SIGNATURE): " +
         "regenerate unset-dev-env/local-leaf.pem",
     );
+  });
+
+  test("a_stalled_handshake_times_out", async () => {
+    // Architecture 02:58Z condition 4: a listener that accepts and never answers the ClientHello fails closed at the
+    // deadline, so local:up cannot hang (verify-903 S2).
+    const stalled: TcpServer = createTcpServer(() => undefined);
+    await new Promise<void>((ready) => stalled.listen(0, "127.0.0.1", ready));
+    const port = (stalled.address() as AddressInfo).port;
+    const started = Date.now();
+    try {
+      expect(await check(port, 1_500)).toBe("the edge did not answer in time");
+      expect(Date.now() - started).toBeLessThan(4_000);
+    } finally {
+      stalled.close();
+    }
+  });
+
+  test("the_probe_sends_nothing_and_closes_after_the_handshake", async () => {
+    // Condition 4: handshake only. No application byte is written, and every socket ends destroyed (verify-903 S2).
+    const port = await serve("leafA");
+    const sockets: ReturnType<typeof connect>[] = [];
+    let writes = 0;
+    const counting: Connect = (options) => {
+      const socket = connect({ ...options, port });
+      const write = socket.write.bind(socket);
+      const end = socket.end.bind(socket);
+      socket.write = ((...args: Parameters<typeof write>) => {
+        writes++;
+        return write(...args);
+      }) as typeof socket.write;
+      socket.end = ((...args: Parameters<typeof end>) => {
+        if (args[0] !== undefined && typeof args[0] !== "function") writes++;
+        return end(...args);
+      }) as typeof socket.end;
+      sockets.push(socket);
+      return socket;
+    };
+    const problem = await servedLeafProblem({
+      env: "local",
+      copy: pem("leafA"),
+      root: pem("root"),
+      deadlineMs: 5_000,
+      connect: counting,
+    });
+    expect(problem).toBeNull();
+    expect(sockets).toHaveLength(HOSTS.length);
+    expect(writes).toBe(0);
+    expect(sockets.every((socket) => socket.destroyed)).toBe(true);
   });
 
   test("an_edge_that_never_answers_fails_at_the_deadline", async () => {

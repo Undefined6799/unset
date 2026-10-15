@@ -113,10 +113,12 @@ function localOnlyProblems(compose: Pick<Compose, "networks">, env: Env): string
   return network === undefined ? null : `network ${network.name} is local only`;
 }
 
-/** Under local, the table plus the local-only networks, matched as one; a name in both is the table's to fix. */
+/**
+ * Under local, the table plus the local-only networks, matched as one. The table never lists a local-only network,
+ * listed or `plc_*`, under any env (architecture 02:32Z: networks.dev.json gets no local-only rows; verify-903 S3).
+ */
 function withLocalOnly(table: NetworkTable, env: Env): NetworkTable | string {
-  if (env !== "local") return table;
-  const clash = [...LOCAL_ONLY_NETWORKS.keys()].find((name) => table.has(name));
+  const clash = [...table.keys()].find(isLocalOnlyNetwork);
   if (clash !== undefined) return `the network table lists ${clash}, a local-only network`;
-  return new Map([...table, ...LOCAL_ONLY_NETWORKS]);
+  return env === "local" ? new Map([...table, ...LOCAL_ONLY_NETWORKS]) : table;
 }

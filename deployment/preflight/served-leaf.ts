@@ -11,8 +11,7 @@
 import { X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { ConnectionOptions, TLSSocket } from "node:tls"; // guard-allow: egress types only, opens no socket
-import { connect as tlsConnect } from "node:tls"; // guard-allow: egress loopback leaf probe, fixed 127.0.0.1:443
+import { type ConnectionOptions, type TLSSocket, connect as tlsConnect } from "node:tls"; // guard-allow: egress loopback leaf probe, fixed 127.0.0.1:443
 
 /**
  * The edge's published TLS port in compose.local.yaml, and the only place this check connects. The architecture ruling
@@ -69,9 +68,12 @@ async function untilReady(attempt: () => Promise<Attempt>, deadline: number): Pr
 function handshake({ root, connect = tlsConnect }: ServedLeafCheck, host: string, deadline: number): Promise<Attempt> {
   return new Promise((settle) => {
     const socket = connect({ ...EDGE, servername: host, ca: root, rejectUnauthorized: true });
-    socket.setTimeout(Math.max(1, Math.min(ATTEMPT_MS, deadline - Date.now())), () =>
-      socket.destroy(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })),
+    // A wall-clock limit per attempt, not an idle timer, so an edge that trickles bytes cannot hold it open either.
+    const timer = setTimeout(
+      () => socket.destroy(Object.assign(new Error("timeout"), { code: "ETIMEDOUT" })),
+      Math.max(1, Math.min(ATTEMPT_MS, deadline - Date.now())),
     );
+    socket.once("close", () => clearTimeout(timer));
     socket.once("secureConnect", () => {
       settle({ fingerprint: socket.getPeerCertificate().fingerprint256 });
       socket.destroy();

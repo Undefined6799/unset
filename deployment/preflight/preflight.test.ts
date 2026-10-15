@@ -2966,6 +2966,22 @@ networks:
         .replace("  back: {}", "  back: {}\n  plc_web:\n    internal: true"),
     );
     expect(lines.find((line) => / C17 /.test(line))).toBe("FAIL C17 network plc_web is not in the table");
+    // Nor may the table admit it: networks.dev.json gets no local-only rows, under any env (verify-903 S3).
+    const listed = { ...TABLE, plc_web: { internal: true, members: ["web"] } };
+    const admitted = await local(
+      (text) =>
+        text
+          .replace("    networks: [back]", "    networks: [back, plc_web]")
+          .replace("  back: {}", "  back: {}\n  plc_web:\n    internal: true"),
+      { networks: listed },
+    );
+    expect(admitted.lines.find((line) => / C17 /.test(line))).toBe(
+      "FAIL C17 the network table lists plc_web, a local-only network",
+    );
+    const prod = await check({ networks: listed });
+    expect(prod.lines.find((line) => / C17 /.test(line))).toBe(
+      "FAIL C17 the network table lists plc_web, a local-only network",
+    );
   });
 
   test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
