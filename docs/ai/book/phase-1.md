@@ -8163,8 +8163,9 @@ The PR body lists every one-letter label it keeps on our suffixes.
   `evil0x40.me` (SE-7a's named suffix-boundary allowance); labels `a` and `b` on `.0x40.me` at server.test.ts:112-115
   and config.test.ts:131-132 (own-suffix allowance; listed in the PR body for P2.09).
 
-Done when no `shared/http` test file holds a handle or hostname on a registrable domain other than the kept labels and
-the allowances above, and check is green.
+Done when no `shared/http` test file holds a handle or hostname on a registrable domain other than the kept labels, the
+allowances above, and our own domains as hostnames (such as `static.unset.sh`, `chat.unset.sh`, `www.unset.sh`; SE-7a),
+and check is green.
 
 ---
 
@@ -8622,12 +8623,14 @@ Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/p
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
 P1.29t depends on it. Split by size (book edit 2026-10-14-p134d-split): items 6, 9, 12's C18 half and 13 moved to
-P1.33w, P1.33x, P1.33y and P1.33z; this step keeps items 1-5, 7, 8, 10, 11, 14, 15 and item 12's per-file mounts and
-real-file test. Its dependents (P1.34u, P1.34v, P1.29s, P1.29t and others) keep depending on it, so they also
-wait for the three new steps. It still measured over 400 source lines, so item 4's split is taken: item 1's openssl
-recipe, the throwaway-root tests and item 5's `unset-dev-trust` preflight checks moved to **P1.33g, "Document and test
-the local dev root"**, before this step (book edit 2026-10-14-p134d-split, "P1.33g taken"). This step keeps the
-compose and `local:up` items.
+P1.33w, P1.33x, P1.33y and P1.33z; its dependents (P1.34u, P1.34v, P1.29s, P1.29t and others) keep depending on it, so
+they also wait for the new steps. It still measured over 400 source lines, so item 4's split is taken: item 1's openssl
+recipe (built to items 2-4 and 8), item 5's `unset-dev-trust` preflight checks and item 8's throwaway-root tests moved
+to **P1.33g, "Document and test the local dev root"** (book edit 2026-10-14-p134d-split, "P1.33g taken"), and item 7
+moved to **P1.35n**. This step keeps only the compose and `local:up` work: items 3 and 4's mounts (the root key bound
+nowhere, the leaf key only into the edge), item 5's bind mount and `NODE_EXTRA_CA_CERTS`, item 1's token-reader fixture
+path move, items 10, 11, 14 and 15, and item 12's per-file mounts and real-file test. Item 1's runbook recipe, item 2,
+item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build them again.
 
 **What:**
 1. Runbook: the deploy user generates the dev root and one leaf with openssl; renewal is by hand (rerun the leaf
