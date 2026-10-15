@@ -8586,15 +8586,18 @@ compose and `local:up` items.
    the section "Architecture confirmation (2026-10-14 ~22:50Z, recorded here 23:21Z)" of
    2026-10-12-p134c-p134d-local-dev-root-ca; book edit 2026-10-14-verify-857-fixes, S3.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
-7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
-   of the record and no amendment removed it; without it `local/app.caddy` cannot reach web). Under `--env local` the
-   preflight reads a new `deployment/networks.local.json`; `inputs.ts` maps local, dev and prod each to its own table
-   and refuses any other env (no default). A test holds the local table equal to the dev table plus one named list of
-   differences (today: web on edge; local-plc A4's PLC network joins it when that step lands), and the item 11 compose
-   drift test uses the same list. The local table only adds memberships: it never removes a dev one and never adds a
-   host port. Any further local difference needs an architecture ruling and an entry on that list. dev's table and
-   compose file are unchanged (architecture's 01:51Z ruling on the record's item 4; book edit 2026-10-14-p134d-split,
-   "Step-book mapping of the 01:51Z item 4 ruling").
+7. Web reaches the PDS only through the edge (architecture 02:05Z, option C; book edit 2026-10-14-p134d-split,
+   "Step-book mapping of the 02:05Z option C ruling", which replaces the withdrawn 01:51Z networks.local.json mapping).
+   A new network `app` (`internal: true`), members edge and web only, goes in compose.dev.yaml, the local compose file
+   and networks.dev.json, so one table and the drift test still hold dev and local identical (p127l-local-gaps Amendment
+   2 point 3). The PDS is never on `app`; web reaches the PDS host and the app host only by the edge's two aliases on
+   `app`. compose-parse narrows: aliases only on the edge service, only on the networks `edge` and `app`, only its two
+   hosts, each network carrying exactly both; this replaces `aliases_only_on_the_edge_with_its_two_hosts`, with red
+   fixtures for an alias on any other service (including web), on any other network, a third alias, and `app` with only
+   one of the two. A preflight check (C17 or a sibling) pins that the edge is the only service sharing any network with
+   the PDS's HTTP port; red fixture: web on `edge`. The local-only PLC network keeps its A4 allowlist entry. If this
+   pushes P1.34d over 400 source lines, the lane tells the step book before opening, and the `app` network with its
+   compose-parse and invariant checks becomes its own step ahead of P1.34d.
 8. (Amendment 2, architecture's amendment 5 of 2026-10-12-refocus-local-signin-rulings.) The root also excludes the
    IPv4 and IPv6 all-addresses ranges and is valid for at most 825 days; subdomain admission is accepted. Tests use
    a throwaway root: an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf are refused;
