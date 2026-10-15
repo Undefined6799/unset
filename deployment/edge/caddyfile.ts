@@ -483,6 +483,9 @@ function readEdgeTree(
   if (typeof sitesDir !== "string" && mode !== "local") {
     throw new CaddyfileError("site file mounts are read only in the local mode");
   }
+  if (typeof sitesDir === "string" && mode === "local") {
+    throw new CaddyfileError("the local mode reads the enabled sites only as file mounts");
+  }
   distinctAppValues(env);
   const root = resolved(files, edgeDir, "the edge directory");
   const sites: Bound = { path: `${root}/sites`, area: "sites/" };
@@ -495,7 +498,7 @@ function readEdgeTree(
   }
   if (typeof sitesDir === "string") {
     const enabled = resolved(files, sitesDir, "the enabled sites directory");
-    if ((mode !== "shipped" || enabled !== sites.path) && !enabled.startsWith(`${sites.path}/`))
+    if (enabled !== sites.path && !enabled.startsWith(`${sites.path}/`))
       throw new CaddyfileError("the enabled sites directory is not inside sites/");
   }
   const caddyfile = entry(files, root, "Caddyfile", [{ path: root, area: "the edge directory" }], false);
