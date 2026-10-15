@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v,
-  P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e,
-  P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02
-  merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.35h, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u,
+  P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c,
+  P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01
+  and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -306,6 +306,7 @@ flowchart LR
   P1_32b["P1.32b in-flight handle checks shared"]
   P1_33r --> P1_32b
   P1_32c["P1.32c fixture DIDs replaced"]
+  P1_35h["P1.35h in-flight rejection path tested"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -8086,6 +8087,24 @@ case-insensitively, outside `infrastructure/net-guard/`, which catches a short f
 2026-10-15-verify-875-fixture-wording); the touched tests pass; and check is green. The `net-guard` line belongs to
 P1.32b, or to its own trusted step if #865 merges without it (Addendum, replacing N2). No guard enforces the fixture
 rule for DIDs (SE-7a, verifier review); one would be a check-path step with Alex's typed line, and is not booked.
+
+---
+
+### P1.35h — Test the in-flight rejection path
+Tags: [SEC]            Depends on: —
+
+Slice 1, issue (pending), product (`domains/identity/`, tests only), kind/fix, lane Phase 1 after P1.32c (#875; lane
+order only); book edit 2026-10-15-verify-874-followups, section 1, from verify-874-b614e15 (P1.32b, #874, no blockers).
+Nothing from Alex. Nothing tests the rejection path of `awaitFlight` (`domains/identity/in-flight.ts:92`, from #864):
+swallowing the rejection there passes all 75 identity tests, and a resolver caller with a live signal whose lookup fails
+would hang until its signal fires.
+
+**What (tests, red first):**
+- a flight that rejects makes a joiner with a live, never-aborting signal reject with the same IdentityError kind,
+  without waiting on the signal;
+- an abort listener is not left behind after the rejection.
+
+Done when a mutant that swallows the rejection, or resolves it, turns a test red, and check is green.
 
 ---
 

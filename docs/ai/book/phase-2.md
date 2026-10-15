@@ -1415,7 +1415,9 @@ Algorithm:
      a. `UPSERT app.account(did, first_seen_at = now())` keeping existing columns.
      b. `created = sessions.create(tx, did, {replacingCookie: request cookie __Host-sid})`.
      DB error → deny `login.failed` (no cookie set). After commit, count `auth.login_succeeded` (no DID).
-  10. `invalidateHandle(did)` (the handle may have changed during sign-up or on the PDS).
+  10. `invalidateHandle(did)` (the handle may have changed during sign-up or on the PDS); the next handle check for
+      this DID in this request uses `consistency: "fresh"` (P1.33r rule (a): read after now), so neither a cached nor
+      an in-flight older DID document answers it.
   11. Email read (best effort, 5 s): `pdsCall(did, getSession)` → `ok` → `sessions.setEmailConfirmed(created, value)`;
       any other outcome → leave null (P2.11 reads it).
   12. Response: set `__Host-sid` (Max-Age 30 d); clear `__Host-signed_out`; 303 to the first that applies:
