@@ -304,15 +304,21 @@ function localSiteMounts(edge: Service): SiteMount[] | Outcome {
     const target = mountTarget(mount);
     if (target === SITES_TARGET) return fail(`the local edge mounts a directory at ${SITES_TARGET}`);
     if (siteFileTarget(target)) {
-      const name = posix.basename(target);
-      if (mount.type !== "bind" || mount.source === null) return fail(`the site ${name} is not a bind mount`);
-      if (!mount.readOnly) return fail(`the site ${name} is not mounted read-only`);
-      sites.push({ source: mount.source, name });
+      const site = siteMount(mount, posix.basename(target));
+      if (!("source" in site)) return site;
+      sites.push(site);
     } else if (overCaddyConfig(target) && LOCAL_MOUNTS[target] === undefined) {
       return fail(`the edge mounts over ${target}`);
     }
   }
   return sites.length > 0 ? sites : missing(`the edge's site mounts in ${SITES_TARGET}`);
+}
+
+/** One enabled site's mount: a read-only bind of its file, named `name` in the enabled sites directory. */
+function siteMount(mount: Mount, name: string): SiteMount | Outcome {
+  if (mount.type !== "bind" || mount.source === null) return fail(`the site ${name} is not a bind mount`);
+  if (!mount.readOnly) return fail(`the site ${name} is not mounted read-only`);
+  return { source: mount.source, name };
 }
 
 /**
