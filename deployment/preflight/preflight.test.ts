@@ -14,6 +14,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -24,7 +25,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
-import { type Deps, preflight, type Run } from "./index.ts";
+import { type Deps, preflight, printable, type Run } from "./index.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes: number[]): string {
@@ -739,7 +740,10 @@ describe("preflight", () => {
       chmodSync(join(dirname(root), "store"), 0o755);
       symlinkSync("store/ca", devCaOf(root));
     };
-    expect((await bind("../../store", moved)).lines).toContain(reaches);
+    const movedLines = (await bind("../../store", moved)).lines;
+    expect(movedLines).toContain(reaches);
+    // And C26 refuses the folder itself: no dev CA folder, real or a link, belongs on a prod host (verify-887 N5).
+    expect(movedLines).toContain("FAIL C26 dev CA folder present on a prod host");
     // A link in the project that resolves into it.
     const linked = (root: string) => {
       made(root);
@@ -2361,14 +2365,14 @@ describe("preflight --env local (P1.27l)", () => {
       dev: PASSED,
       "no lock": NO_LOCK,
       "dev no lock": NO_LOCK,
-      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       unsigned: [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       platform: [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
-      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
-      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
+      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       "no key": [PASSED[0], ...NO_KEY, PASSED[3]],
       "dev no key": [PASSED[0], ...NO_KEY, PASSED[3]],
-      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       "dev unsigned": [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       "prod platform": [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
     });
@@ -2720,7 +2724,7 @@ networks:
     const unlisted = await onLocal(sub, {
       readdir: (path) => {
         if (path.endsWith("/unset-dev-ca/sub")) throw denied;
-        return readdirSync(path);
+        return readdirSync(path, { encoding: "buffer" });
       },
     });
     expect(unlisted).toBe(`FAIL C26 dev CA folder entry cannot be read: ${seen}`);
@@ -2755,6 +2759,190 @@ networks:
     expect(await onEnv("dev", hardLinked)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
     expect(await onEnv("prod", () => undefined)).toBe("PASS C26 ok");
     expect(await onEnv("prod", made)).toBe("FAIL C26 dev CA folder present on a prod host");
+  });
+
+  test("c26_dev_ca_walk_edges_are_pinned", async () => {
+    // P1.35m (verify-887 S1, S2, N1-N3; architecture 2026-10-15 02:08Z, last section of record
+    // 2026-10-12-p134c-p134d-local-dev-root-ca): every depth, every entry type, names by their exact bytes, the folder's
+    // own errors, and a folder swapped while it is walked.
+    const c26 = (lines: string[]) => lines.find((line) => /^[A-Z]+ C26 /.test(line));
+    const folder = (root: string) => devCaOf(root);
+    const onLocal = async (setUp: (root: string) => void, deps: Partial<Deps> = {}) =>
+      c26((await local((text) => text, { setUp, deps })).lines);
+    const onEnv = async (env: "dev" | "prod", setUp: (root: string) => void, deps: Partial<Deps> = {}) => {
+      const s = stack();
+      setUp(s.root);
+      const result = await preflight(["--env", env, "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+        ...deps,
+      });
+      return c26(result.lines);
+    };
+    const made = (root: string) => {
+      mkdirSync(folder(root), { mode: 0o700 });
+      writeFileSync(join(folder(root), "root.key"), "fixture\n", { mode: 0o400 });
+    };
+    let seen = "";
+    const note = (path: string) => {
+      seen = path;
+      return path;
+    };
+    const other = (path: string) => `FAIL C26 dev CA folder holds something other than files and folders: ${path}`;
+    // Depth 3: a hard-linked file and a FIFO are judged as at the top.
+    const deep = (root: string) => mkdirSync(join(folder(root), "a/b"), { recursive: true, mode: 0o700 });
+    const deepLink = (root: string) => {
+      deep(root);
+      writeFileSync(note(join(folder(root), "a/b/k")), "fixture\n");
+      linkSync(seen, join(root, "deployment/ca-copy"));
+    };
+    expect(await onLocal(deepLink)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    const deepFifo = (root: string) => {
+      deep(root);
+      execFileSync("mkfifo", [note(join(folder(root), "a/b/pipe"))]);
+    };
+    expect(await onLocal(deepFifo)).toBe(other(seen));
+    // A dot name is an entry like any other.
+    const dot = (root: string) => linkSync(join(folder(root), "root.key"), note(join(folder(root), ".hidden")));
+    expect(await onLocal(dot)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    // A socket and a device, through the lstat (mknod needs root): neither is a regular file.
+    let at = "";
+    const typed = (kind: "isSocket" | "isCharacterDevice" | "isBlockDevice") => (path: string) => {
+      const info = fakeFs(at).lstat?.(path) ?? null;
+      if (info === null || path !== join(folder(at), "node")) return info;
+      return Object.assign(Object.create(Object.getPrototypeOf(info)), info, {
+        isFile: () => false,
+        isDirectory: () => false,
+        isSymbolicLink: () => false,
+        [kind]: () => true,
+      });
+    };
+    for (const kind of ["isSocket", "isCharacterDevice", "isBlockDevice"] as const) {
+      const node = (root: string) => {
+        at = root;
+        writeFileSync(note(join(folder(root), "node")), "fixture\n");
+      };
+      expect(await onLocal(node, { lstat: typed(kind) }), kind).toBe(other(seen));
+    }
+    // An entry the walk cannot see at depth 2.
+    const blind = (hide: (root: string) => string) => (path: string) =>
+      path === hide(at) ? null : (fakeFs(at).lstat?.(path) ?? null);
+    const unseen = (root: string) => {
+      at = root;
+      deep(root);
+      note(join(folder(root), "a/b"));
+    };
+    expect(await onLocal(unseen, { lstat: blind((root) => join(folder(root), "a/b")) })).toBe(
+      `FAIL C26 dev CA folder entry cannot be read: ${seen}`,
+    );
+    // N3: the folder's own listing failing is the folder's error, not an entry's.
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const unlisted = await onLocal((root) => note(folder(root)), {
+      readdir: (path) => {
+        if (path.endsWith("/unset-dev-ca")) throw denied;
+        return readdirSync(path, { encoding: "buffer" });
+      },
+    });
+    expect(unlisted).toBe(`FAIL C26 dev CA folder cannot be read: ${seen}`);
+    // Dev judges a present folder as local does: a link in its place, and a link inside it.
+    const moved = (root: string) => {
+      made(root);
+      renameSync(folder(root), join(dirname(root), "store-ca"));
+      symlinkSync("store-ca", note(folder(root)));
+    };
+    expect(await onEnv("dev", moved)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    const inside = (root: string) => {
+      made(root);
+      mkdirSync(join(dirname(root), "outside"));
+      symlinkSync(join(dirname(root), "outside"), note(join(folder(root), "out")));
+    };
+    expect(await onEnv("dev", inside)).toBe(`FAIL C26 dev CA folder holds a link: ${seen}`);
+    // A folder lstat cannot see and realpath cannot resolve is there, so neither dev nor prod passes it.
+    const realpathDenied = (path: string) => {
+      if (path === folder(at)) throw denied;
+      return statOrNull(path) === null ? null : realpathSync(path);
+    };
+    for (const env of ["dev", "prod"] as const) {
+      const hidden = (root: string) => {
+        at = root;
+        made(root);
+        note(folder(root));
+      };
+      expect(await onEnv(env, hidden, { lstat: blind(folder), realpath: realpathDenied }), env).toBe(
+        `FAIL C26 dev CA folder cannot be read: ${seen}`,
+      );
+    }
+    // N1: a self-loop link in the folder's place, with the local stack's builds, refuses by the folder's own message.
+    const loop = (root: string) => {
+      rmSync(folder(root), { recursive: true });
+      symlinkSync("unset-dev-ca", note(folder(root)));
+    };
+    expect(await onLocal(loop)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    // S2: names by their exact bytes. A name that is not UTF-8 is refused before any lstat, alone or beside a clean
+    // file under the name the lossy decode would give it (U+FFFD), whether it is a hard-linked key or a link out.
+    const bytes = (root: string) => Buffer.concat([Buffer.from(`${folder(root)}/`), Buffer.from([0xff])]);
+    const notUtf8 = (path: string) => `FAIL C26 dev CA folder holds a name that is not UTF-8, in: ${path}`;
+    const lone = (root: string) => {
+      note(folder(root));
+      writeFileSync(bytes(root), "fixture\n");
+    };
+    expect(await onLocal(lone)).toBe(notUtf8(seen));
+    const replaced = (root: string) => join(folder(root), "\u{fffd}");
+    const beside = (root: string) => {
+      note(folder(root));
+      writeFileSync(replaced(root), "fixture\n");
+      writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+      linkSync(join(root, "deployment/ca-copy"), bytes(root));
+    };
+    expect(await onLocal(beside)).toBe(notUtf8(seen));
+    const besideLink = (root: string) => {
+      note(folder(root));
+      writeFileSync(replaced(root), "fixture\n");
+      symlinkSync(dirname(root), bytes(root));
+    };
+    expect(await onLocal(besideLink)).toBe(notUtf8(seen));
+    // A valid UTF-8 name holding U+FFFD is judged like any other, and printed escaped.
+    const fffd = (root: string) => {
+      writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+      linkSync(join(root, "deployment/ca-copy"), replaced(root));
+    };
+    expect(await onLocal(fffd)).toMatch(/^FAIL C26 dev CA file has extra hard links: \/.+\/unset-dev-ca\/\\u\{fffd\}$/);
+    // A folder swapped for another while it is walked: the walk saw clean entries, but not the folder that stays.
+    const swapped = await onLocal((root) => note(folder(root)), {
+      readdir: (path) => {
+        const names = readdirSync(path, { encoding: "buffer" });
+        if (path === seen) {
+          renameSync(seen, `${seen}-old`);
+          mkdirSync(seen, { mode: 0o700 });
+          for (const name of names) writeFileSync(join(seen, name.toString()), "fixture\n");
+        }
+        return names;
+      },
+    });
+    expect(swapped).toBe(`FAIL C26 dev CA folder changed while it was checked: ${seen}`);
+  });
+
+  test("preflight_prints_names_escaped", async () => {
+    // P1.35m (architecture 2026-10-15 02:08Z, N2; SE-7): a name is the deploy user's text, and a person reads the
+    // lines. A newline cannot forge a PASS line, and a carriage return and an erase cannot hide a FAIL on a terminal.
+    for (const name of ["x\nPASS C26 ok", "x\r\x1b[2K"]) {
+      let path = "";
+      const { lines } = await local((text) => text, {
+        setUp: (root) => {
+          path = join(devCaOf(root), name);
+          writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+          linkSync(join(root, "deployment/ca-copy"), path);
+        },
+      });
+      expect(lines.filter((line) => /C26/.test(line))).toEqual([
+        `FAIL C26 dev CA file has extra hard links: ${printable(path)}`,
+      ]);
+      expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
+    }
+    expect(printable("a\\b\x00\x1f\x7f\x80\x9f\xa0\u{fffd}\u{1f600}\ud800 é")).toBe(
+      "a\\\\b\\x00\\x1f\\x7f\\x80\\x9f\\xa0\\u{fffd}\\u{1f600}\\u{d800} \\xe9",
+    );
   });
 
   test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
@@ -2799,7 +2987,7 @@ networks:
       deps: {
         readdir: (path) => {
           if (path.endsWith("/unset-dev-trust")) throw denied;
-          return readdirSync(path);
+          return readdirSync(path, { encoding: "buffer" });
         },
       },
     });
