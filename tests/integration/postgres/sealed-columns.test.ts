@@ -150,10 +150,12 @@ describe("sealed columns", () => {
       "CREATE TABLE app.t (id text PRIMARY KEY, secret types.sealed, media_key text, blob bytea, n int, owner text)",
     );
     const pool = poolFor(database);
+    // The real registry's rows ride along in each one given here, so only app.t's problems show.
     expect(await registryProblems(pool)).toEqual(["add a sealed-columns row for app.t.secret"]);
-    expect(await registryProblems(pool, { "app.t.secret": { rowKey: "id" } })).toEqual([]);
+    expect(await registryProblems(pool, { ...SEALED_COLUMNS, "app.t.secret": { rowKey: "id" } })).toEqual([]);
     expect(
       await registryProblems(pool, {
+        ...SEALED_COLUMNS,
         "app.t.secret": { rowKey: "id" },
         "app.t.gone": { rowKey: "id", form: "sealToStream" },
         "app.t.n": { rowKey: "id", form: "sealTo" },
@@ -166,13 +168,13 @@ describe("sealed columns", () => {
       "app.t.gone (sealToStream) is not a text or bytea column",
       "app.t.n (sealTo) is not a text or bytea column",
     ]);
-    expect(await registryProblems(pool, { "app.t.secret": { rowKey: "owner" } })).toEqual([
+    expect(await registryProblems(pool, { ...SEALED_COLUMNS, "app.t.secret": { rowKey: "owner" } })).toEqual([
       "app.t.secret: row key owner is not unique on its own",
     ]);
     // A types.sealed column registered with a form is refused: a form row names a text or bytea column only.
-    expect(await registryProblems(pool, { "app.t.secret": { rowKey: "id", form: "sealTo" } })).toEqual([
-      "app.t.secret (sealTo) is not a text or bytea column",
-    ]);
+    expect(
+      await registryProblems(pool, { ...SEALED_COLUMNS, "app.t.secret": { rowKey: "id", form: "sealTo" } }),
+    ).toEqual(["app.t.secret (sealTo) is not a text or bytea column"]);
   });
 
   test("sealed_domain_check", async () => {
