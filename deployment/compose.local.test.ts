@@ -1,8 +1,8 @@
 // P1.34d item 11: compose.local.yaml is compose.dev.yaml plus exactly the differences a throwaway stack on one machine
 // needs (book edit 2026-10-13-p127l-to-third-lane, Amendment 4; architecture record 2026-10-13-p127l-local-gaps,
 // Amendments 1 and 2). The preflight runs in full on the local file too; this catches a weakening it would allow, in
-// either direction, naming the service and the key. `environment` is not compared: the preflight's env checks judge it,
-// and pds_mail_unset_only_with_logging_off (compose.dev.test.ts) covers both files' PDS.
+// either direction, naming the service and the key. Every service key is compared, `environment` and `env_file` too
+// (item 11 holds over item 14: step book 03:46Z, book edit 2026-10-14-p134d-split, "verify-903-8b2abfc S1").
 import { execFileSync } from "node:child_process";
 import {
   lstatSync,
@@ -15,10 +15,18 @@ import {
   statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { pdsNeighbours } from "./preflight/checks/networks.ts";
-import { type Compose, type Mount, parseCompose, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
+import {
+  type Compose,
+  type EnvValue,
+  type Hardening,
+  type Mount,
+  parseCompose,
+  type Service,
+  TOKEN_READER,
+} from "./preflight/compose-parse.ts";
 import { preflight } from "./preflight/index.ts";
 import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS, LOCAL_ONLY_SERVICES } from "./preflight/local-only.ts";
 
@@ -33,6 +41,20 @@ const ADDED: Record<string, { mounts?: Mount[]; secrets?: string[]; networks?: s
   web: { mounts: [TRUST] },
   edge: { secrets: ["local_tls_cert", "local_tls_key"] },
 };
+/**
+ * The environment values the local file may set where dev differs, by service and key (item 11): the PLC URL on pds,
+ * the trusted root on pds and web, and `UNSET_ENV` once P1.34z writes `local`. The edge's two keys serve item 12's app
+ * site, which only the local edge has.
+ */
+const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
+  pds: {
+    PDS_DID_PLC_URL: { literal: "http://plc:2582" },
+    NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" },
+  },
+  web: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
+  edge: { APP_HOST: { ref: "APP_HOST" }, APP_UPSTREAM: { literal: "web:8080" } },
+};
+const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
 /** The edge's sites, each its own read-only file in local (item 12), where dev binds the sites folder. */
 const EDGE_SITES: { dev: Mount[]; local: Mount[] } = {
   dev: [{ type: "bind", source: "./edge/sites", target: "/etc/caddy/sites/enabled", readOnly: true }],
@@ -47,7 +69,33 @@ const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.str
 const without = <T>(list: readonly T[], drop: readonly T[] = []): T[] =>
   list.filter((x) => !drop.some((d) => same(d, x)));
 
-/** Each key of one service that differs between the files beyond what ADDED and EDGE_SITES allow. */
+/** Each environment key of one service whose value differs beyond ENV_ALLOWED, or that a list repeats. */
+function environmentDrift(dev: Service, local: Service): string[] {
+  const allowed = ENV_ALLOWED[dev.name] ?? {};
+  const devEnv = new Map(dev.environment);
+  const localEnv = new Map(local.environment);
+  const problems = [dev, local]
+    .filter((s) => new Map(s.environment).size !== s.environment.length)
+    .map(() => `${dev.name}: environment repeats a key`);
+  for (const key of new Set([...devEnv.keys(), ...localEnv.keys()])) {
+    const value = localEnv.get(key);
+    const permitted =
+      same(devEnv.get(key), value) ||
+      (allowed[key] !== undefined && same(allowed[key], value)) ||
+      (key === "UNSET_ENV" && devEnv.has(key) && same(UNSET_ENV_LOCAL, value));
+    if (!permitted) problems.push(`${dev.name}: environment ${key} differs`);
+  }
+  return problems;
+}
+
+/** Whether the env files correspond one to one, in order, differing at most in their folder (item 11). */
+const envFilesAgree = (dev: Service, local: Service): boolean =>
+  same(
+    dev.envFiles.map((path) => basename(path)),
+    local.envFiles.map((path) => basename(path)),
+  );
+
+/** Each key of one service that differs between the files beyond what item 11 allows; every key is compared. */
 function serviceDrift(dev: Service, local: Service): string[] {
   const added = ADDED[dev.name] ?? {};
   const devMounts = dev.name === "edge" ? without(dev.mounts, EDGE_SITES.dev) : dev.mounts;
@@ -55,35 +103,40 @@ function serviceDrift(dev: Service, local: Service): string[] {
     ...(added.mounts ?? []),
     ...(dev.name === "edge" ? EDGE_SITES.local : []),
   ]);
-  const compared: [string, unknown, unknown][] = [
-    ...Object.entries(dev.hardening).map(([key, value]): [string, unknown, unknown] => [
-      key,
-      value,
-      local.hardening[key as keyof Service["hardening"]],
-    ]),
+  const built = local.build !== null && dev.build === null;
+  // Keys compared other than as written; any key not named here is compared exactly, so a key compose-parse comes to
+  // read is compared from the day it is added.
+  const special: { [K in keyof Service]?: () => string[] } = {
+    name: () => [],
+    hardening: () =>
+      Object.keys({ ...dev.hardening, ...local.hardening })
+        .filter((key) => !same(dev.hardening[key as keyof Hardening], local.hardening[key as keyof Hardening]))
+        .map((key) => `${dev.name}: ${key} differs`),
     // A pulled image may be built locally instead (judged by C2 to C5, C18, C25 and C27 under the card), never the
     // other way round.
-    ["image", dev.image, local.build !== null && dev.build === null ? dev.image : local.image],
-    ["build", dev.build, local.build !== null && dev.build === null ? null : local.build],
-    ["tmpfs", dev.tmpfs, local.tmpfs],
-    ["logging", dev.logging, local.logging],
-    ["profiles", dev.profiles, local.profiles],
-    ["networkMode", dev.networkMode, local.networkMode],
-    ["networks", dev.networks, without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name)])],
-    ["ports", dev.ports, local.ports],
-    ["mounts", devMounts, localMounts],
-    ["secrets", dev.secrets, without(local.secrets, added.secrets)],
-    ["dependsOn", dev.dependsOn, local.dependsOn],
-  ];
+    image: () => (same(dev.image, built ? dev.image : local.image) ? [] : [`${dev.name}: image differs`]),
+    build: () => (same(dev.build, built ? null : local.build) ? [] : [`${dev.name}: build differs`]),
+    networks: () =>
+      same(dev.networks, without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name)]))
+        ? []
+        : [`${dev.name}: networks differs`],
+    mounts: () => (same(devMounts, localMounts) ? [] : [`${dev.name}: mounts differs`]),
+    secrets: () => (same(dev.secrets, without(local.secrets, added.secrets)) ? [] : [`${dev.name}: secrets differs`]),
+    environment: () => environmentDrift(dev, local),
+    envFiles: () => (envFilesAgree(dev, local) ? [] : [`${dev.name}: env_file differs`]),
+  };
+  const keys = new Set([...Object.keys(dev), ...Object.keys(local)] as (keyof Service)[]);
+  const compared = [...keys].flatMap((key) => {
+    const judge = special[key];
+    if (judge !== undefined) return judge();
+    return same(dev[key], local[key]) ? [] : [`${dev.name}: ${key} differs`];
+  });
   // Added items must be there in full, so a missing trust mount or leaf secret is a difference too.
   const missingAdded =
     !(added.mounts ?? []).every((m) => local.mounts.some((x) => same(x, m))) ||
     !(added.networks ?? []).every((n) => local.networks.includes(n)) ||
     !(added.secrets ?? []).every((n) => local.secrets.includes(n));
-  return [
-    ...compared.filter(([, a, b]) => !same(a, b)).map(([key]) => `${dev.name}: ${key} differs`),
-    ...(missingAdded ? [`${dev.name}: an allowed local addition is missing`] : []),
-  ];
+  return [...compared, ...(missingAdded ? [`${dev.name}: an allowed local addition is missing`] : [])];
 }
 
 /** The local-only networks `service` is a listed member of. */
@@ -205,6 +258,85 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
       ],
     ];
     for (const [d, l, problem] of cases) expect(drift(d, l), problem).toContain(problem);
+  });
+
+  test("a_changed_environment_or_env_file_is_named", () => {
+    // verify-903-8b2abfc S1: each mutant that survived when environment and env_file were not compared.
+    const setEnv = (s: Service, key: string, value: string): Service => ({
+      ...s,
+      environment: [...s.environment.filter(([k]) => k !== key), [key, { literal: value }]],
+    });
+    const withFile = (s: Service, path: string): Service => ({ ...s, envFiles: [...s.envFiles, path] });
+    const pdsEnv = dev.services.find((s) => s.name === "pds")?.envFiles[0] ?? "";
+    const cases: [service: string, key: string, value: string][] = [
+      ["web", "NODE_TLS_REJECT_UNAUTHORIZED", "0"],
+      ["pds", "NODE_TLS_REJECT_UNAUTHORIZED", "0"],
+      ["web", "NODE_OPTIONS", "--max-old-space-size=384 --use-system-ca"],
+      ["web", "NODE_OPTIONS", "--max-old-space-size=4096"],
+      // An allowed key on a service item 11 does not name it for, or with another value.
+      ["edge", "NODE_EXTRA_CA_CERTS", "/etc/unset-dev-trust/root.pem"],
+      ["pds", "PDS_DID_PLC_URL", "http://plc:2583"],
+      ["web", "UNSET_ENV", "prod"],
+    ];
+    for (const [service, key, value] of cases) {
+      const problem = `${service}: environment ${key} differs`;
+      expect(
+        drift(
+          dev,
+          editService(local, service, (s) => setEnv(s, key, value)),
+        ),
+        problem,
+      ).toContain(problem);
+    }
+    // The other direction: a key only dev sets, and a repeated key in list form.
+    const devTls = editService(dev, "web", (s) => setEnv(s, "NODE_TLS_REJECT_UNAUTHORIZED", "0"));
+    expect(drift(devTls, local)).toContain("web: environment NODE_TLS_REJECT_UNAUTHORIZED differs");
+    const repeated = editService(local, "web", (s) => ({
+      ...s,
+      environment: [...s.environment, ...s.environment.slice(0, 1)],
+    }));
+    expect(drift(dev, repeated)).toContain("web: environment repeats a key");
+    // UNSET_ENV may become exactly local where dev sets it, as P1.34z will write it.
+    expect(
+      drift(
+        dev,
+        editService(local, "web", (s) => setEnv(s, "UNSET_ENV", "local")),
+      ),
+    ).toEqual([]);
+    // env_file: pds.env given to a service without it, in either file, or renamed.
+    expect(
+      drift(
+        dev,
+        editService(local, "web", (s) => withFile(s, pdsEnv)),
+      ),
+    ).toContain("web: env_file differs");
+    expect(
+      drift(
+        dev,
+        editService(local, "edge", (s) => withFile(s, pdsEnv)),
+      ),
+    ).toContain("edge: env_file differs");
+    expect(
+      drift(
+        editService(dev, "web", (s) => withFile(s, pdsEnv)),
+        local,
+      ),
+    ).toContain("web: env_file differs");
+    const renamed = editService(local, "pds", (s) => ({ ...s, envFiles: ["../../unset-dev-env/pds-local.env"] }));
+    expect(drift(dev, renamed)).toContain("pds: env_file differs");
+    // Only the folder may differ.
+    const moved = editService(local, "pds", (s) => ({ ...s, envFiles: ["../../elsewhere/pds.env"] }));
+    expect(drift(dev, moved)).toEqual([]);
+  });
+
+  test("a_command_with_use_system_ca_is_refused_before_any_comparison", () => {
+    // `command` is not a key compose-parse reads, so it is refused by name and never reaches the drift test.
+    const text = readFileSync(join(DEPLOYMENT, "compose.local.yaml"), "utf8").replace(
+      "      NODE_OPTIONS: --max-old-space-size=384\n",
+      '      NODE_OPTIONS: --max-old-space-size=384\n    command: ["node", "--use-system-ca", "server.js"]\n',
+    );
+    expect(text).toContain("--use-system-ca");
+    expect(() => parseCompose(text, "compose.local.yaml")).toThrow(/service key command/);
   });
 
   test("only_pds_and_web_trust_the_dev_root", () => {
