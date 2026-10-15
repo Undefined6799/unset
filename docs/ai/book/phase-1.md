@@ -8126,6 +8126,7 @@ Done when a mutant that swallows the rejection, or resolves it, turns a test red
 
 ### P1.35i — Move test handles to reserved domains
 Tags: [SEC]            Depends on: —
+As built: #886 at fed4c30, merged as 2894a57.
 
 Slice 1, issue #884, product (`domains/identity/syntax.test.ts`, `deployment/preflight/preflight.test.ts`,
 `shared/log/logger.test.ts` and `shared/log/logger.hardening.test.ts`), kind/fix, lane Phase 1 after P1.35h (lane order
@@ -8239,7 +8240,7 @@ path, confirmed for C18 at 23:08Z); an absent root fails with "input missing: un
 a foreign CA, the same name with another key, and the same key with another name. As built on #869 at 8e3a8f2
 ("Updates (23:23Z)" of book edit 2026-10-14-verify-857-fixes), which also moves the root path, so P1.33y moves nothing.
 
-Moved to P1.33y and built there (#876; book edit 2026-10-14-verify-868-fixes, "Correction (23:55Z)").
+Built on #869 (116b8dc); only the `unset-dev-trust/` folder-tree line rode P1.33y (#876).
 Runbook (S2(c), point 4): the `local-leaf.pem` lines of `docs/human/runbooks/dev-stack-secrets.md` (the openssl run
 writes the cert-only copy beside the env files in `unset-dev-env/`, copying with `install`, never a link) ride this
 step as docs (SE-6), because it lands before P1.34d.
@@ -8294,6 +8295,9 @@ check is green.
 
 ### P1.35a — Close the dev CA folder rule's gaps
 Tags: [SEC]            Depends on: P1.33y
+As built: #887 at a7a20cb, merged as f8dce03. It walks with a plain `readdirSync` plus an `lstat` per entry
+(build.ts:193), not `withFileTypes`: equal or stronger, since `lstat` also gives the link count (book edit
+2026-10-15-verify-887-followups, N4).
 Slice 1, issue #871, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before P1.34d
 (it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
 2026-10-14-p134d-split, "P1.35a" section, carrying architecture's ruling on verify-861-9ae3539 (S1, S2, S3, N1; last
@@ -8383,6 +8387,7 @@ the red test proves a failing compose call fails, check is green, and no timeout
 
 ### P1.35g — Refuse an IP address as the local PDS host
 Tags: [SEC]            Depends on: —
+As built: #888 at 78e935a, merged as 3de230b.
 
 Slice 1, issue #880, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.35f (lane order
 only); book edit 2026-10-15-verify-876-followups, from verify-876-aef02b9 S1 (the PDS_HOST half of verify-869 S1; it
@@ -8458,8 +8463,7 @@ checks".
 - Nits: item 4 gains a real-cruise `shared/<x>/dist` case; the fixture stubs (`depcruise-fixture.ts:91`) drop the
   `exports` field unless a test needs it.
 - #588's two open nits, both still on main: the `depcruise.test.ts:507` comment says P1.30u and should say P1.30r; a red
-  fixture
-  such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
+  fixture such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
 
 **What, image scan gate (#866):**
 - S1: a test pins the gate's `EXPORT_RESULT: ${{ needs.scan-export.result }}` (`images.yml:393`); feeding it
@@ -8584,6 +8588,7 @@ Done when each red case fails on main for its own reason (each S1 case kills its
 
 ### P1.35n — Give web its own network to the edge
 Tags: [SEC]            Depends on: —
+As built: #895 at ee70994, merged as 2b53bd5.
 
 Slice 1, issue #894, product (`deployment/` compose files, `deployment/networks.dev.json`, `deployment/preflight/`),
 kind/feature, lane the third thread before P1.34d (its place among P1.33g, P1.35m and the open PRs follows the lane's
@@ -8736,8 +8741,10 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
 
-Done when the `unset-dev-ca` red tests and item 15's handshake red test pass, the real `compose.local.yaml` test under
-`--env local` (item 12) passes, the drift test and the wrapper's down-on-mismatch test pass, and check is green.
+Done when P1.34d's own red tests pass: item 15's handshake red test; item 11's drift test, red on a drifted
+`compose.local.yaml`; the wrapper's down-on-mismatch test; item 12's real `compose.local.yaml` test under `--env local`;
+and C17's local-only list module refusing a `plc_*` network under dev (02:32Z ruling); and check is green. Item 5's
+checks are P1.33g's and item 6's refusal is P1.33w's (book edit 2026-10-15-verify-890-postmerge-followups, B6).
 P1.29t's client_id probe red and green move to P1.33z (session containers cannot pull the PDS image; book edit
 2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"). Its PR body names this departure.
 
@@ -8767,7 +8774,7 @@ Tests (architecture):
   with `other.example.test` against `pds.example.test`. Every local test from P1.35g stays green.
 - verify-888 N4: three fixtures, each red on the mismatch alone (not only through L2): a port with non-digit text
   (`pds.localhost:abc`), a double trailing dot (`pds.localhost..`) and leading whitespace (` pds.localhost`). They kill
-  mutants P15, P16 and P18 of `normalHost` (`deployment/preflight/checks/local-leaf.ts:80`).
+  mutants P15, P16 and P18 of `normalHost` (`deployment/preflight/checks/local-leaf.ts:81`).
 - verify-888 N6: an empty `PDS_HOST` and an empty `PDS_HOSTNAME` each fail as input missing; an lstat error other than
   ENOENT (for example ENOTDIR) on a site source is a check error, not input missing (`edge.ts:323-330`); the
   absent-source check runs before `localFileMounts` (`edge.ts:280-283`).
@@ -8818,7 +8825,7 @@ move"). P1.34d was a dependency only for the C18 move, which P1.33y made (book e
 coordinator's relay at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps
 Amendment 3 S2). The verifier found the directory form reachable in #809 only through a missing mode gate, which #809
 fixes, so what remains is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out
-of #809. Its outline row stays after P1.34d for lane flow only; P1.33y and P1.34q are both merged, so it can start now.
+of #809. P1.33y and P1.34q are both merged, so it can start now.
 
 **What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
 P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
@@ -9887,10 +9894,11 @@ HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). That was true when relayed; 
 `caddy:2.11.7-alpine` and `pds:0.4.5037` (none of the last 40 runs on main green, verify-868-fd7be32-postmerge O3);
 P1.33c's exceptions answer the `pds` half, and the `caddy:2.11.7-alpine` half is already ruled in book edit
 2026-10-12-mirror-caddy-replaced-binary: it is the runtime entry, so we wait for upstream's rebuilt digest under the age
-rule, with Alex's card at the 2026-10-19 bound (P1.27r covers the Images workflow's `scan`, not Mirror's). xcaddy is a
-build-time CLI fed only our pinned versions and checksum-verified modules, in an unprivileged job; the edge image's own
-Trivy scan reads the built binary's Go build info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE
-ignore entries (the alternative) recur on every Go point release and waive a CVE id globally unless scoped by path.
+rule, with Alex's card at the 2026-10-19 bound if no fixed digest exists (P1.27r covers the Images workflow's `scan`,
+not Mirror's). xcaddy is a build-time CLI fed only our pinned versions and checksum-verified modules, in an unprivileged
+job; the edge image's own Trivy scan reads the built binary's Go build info, so a vulnerable stdlib compiled into what
+ships still fails. Per-CVE ignore entries (the alternative) recur on every Go point release and waive a CVE id globally
+unless scoped by path.
 
 **Where:** `.github/workflows/mirror.yml` reads each entry's `stage` and fails if it is missing. `build` entries scan
 at HIGH and CRITICAL, fail on CRITICAL, and report HIGH in the job summary and annotations; `runtime` entries are
@@ -12106,8 +12114,9 @@ P1.29h, P1.29s, P1.29t.
    2026-10-07T13:00:19Z, quoted in the body): the `edge` service and the
    `pds_egress` network next to the PDS, mounting `deployment/edge/sites/` (or P1.28's enabled directory) exactly as
    C18 requires, never a symlink or copy of a site file in the trusted base; P1.29's edge tests move here
-   (`compose_dev_hardening`'s edge `cap_add` part and the edge side of the networks comparison); web joins `edge` only
-   when its app host site exists (the Phase 2 row of the networks table). Before P1.34 the homelab is tailnet-only, so
+   (`compose_dev_hardening`'s edge `cap_add` part and the edge side of the networks comparison); web never joins
+   `edge`; it reaches the PDS and the app host only through the edge's aliases on `app` (P1.35n, #895; architecture
+   02:05Z option C). Before P1.34 the homelab is tailnet-only, so
    its `dev` edge cannot get a certificate until P1.34 opens public access (book edit
    2026-10-12-p129-edge-moves-to-p129a; architecture's 2026-10-12-p129-tls-override-and-edge-sites). Also: the exact
    vendor allowlist entry `ghcr.io/bluesky-social/pds` (never
@@ -12404,8 +12413,8 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   (`web` reaches the PDS through the edge on `app`, P1.35n, architecture's 02:05Z option C):
   | Network | Settings | Members |
   |---|---|---|
-  | `edge` | not internal; no `ipam` | edge, pds |
-  | `app` | `internal: true` | edge and `web` only; the edge carries the `APP_HOST` and `PDS_HOST` aliases (P1.35n) |
+  | `edge` | not internal; no `ipam` | edge, pds; the edge carries the `APP_HOST` and `PDS_HOSTNAME` aliases here too (option C item 3; compose.dev.yaml:154) |
+  | `app` | `internal: true` | edge and `web` only; the edge carries the `APP_HOST` and `PDS_HOSTNAME` aliases (P1.35n; compose.dev.yaml:156) |
   | `pds_egress` | not internal | pds only (outbound HTTPS: PLC, DID and handle resolution, OAuth client metadata, other permission sets, AppView) |
   | `db` | `internal: true` | postgres, migrate (and `web` from Phase 2) |
   | `tap` | `internal: true` | tap and its DB (profile `tap`) |
