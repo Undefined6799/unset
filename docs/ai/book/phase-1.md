@@ -69,13 +69,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
-  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
-  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n,
+  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
+  P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
+  P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
   P1.34d, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
-  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from
-  slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice
-  exit P2.13a.
+  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice
+  2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
+  P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -609,6 +609,9 @@ flowchart LR
   P1_35a --> P1_35m
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
+  P1_35o["P1.35o app network pinned in the dev compose tests"]
+  P1_35n --> P1_35o
+  P1_35o --> P1_34v
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
@@ -8635,6 +8638,44 @@ Done when each red fixture fails on main for its own reason and passes with the 
 
 ---
 
+### P1.35o — Pin the app network in the dev compose tests
+Tags: [SEC]            Depends on: P1.35n
+
+Slice 1, issue to come (the board files it), product (`deployment/` compose tests and `deployment/preflight/`),
+kind/fix, lane the third thread after P1.35m and before P1.34d, so P1.34d's drift test is written against it; it also
+lands ahead of P1.34v, which depends on it. Book edit 2026-10-15-verify-895-followups, from verify-895-2b53bd5 (P1.35n,
+#895) and architecture's 03:05Z ruling (last section of book edit 2026-10-13-local-plc-a4-steps). A tightening, so
+nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a service that
+reaches the PDS by taking the PDS's or the edge's name, a second PDS under another name, and a PLC exemption that
+widens beyond the one local network.
+
+**What:**
+- F2: `compose_dev_networks_match_table` (compose.dev.test.ts:211-215) also calls `pdsNeighbours` on the real
+  `compose.dev.yaml`, so CI catches what C17 would only refuse at deploy.
+- N1: the comment at compose.dev.yaml:180-181 becomes "Only the edge sends web HTTP, on the app network, …", and the
+  snippet clause says it describes local and Phase 2.
+- N2: a `web_only_on_internal_networks` test beside `postgres_only_on_internal_networks`; the mutant that makes `app`
+  not internal (C3) dies.
+- N3: compose-parse refuses the edge on `app` with no aliases (option C point 3, "each network must carry exactly
+  both"); red fixture.
+- N5 (cheap): an `edge-*` service beside the PDS is refused, which kills the `startsWith("edge")` exemption mutant (V2).
+- F3 (architecture 03:05Z): `pdsNeighbours`, the edge exemption and the PLC exemption identify services by image
+  identity, not name. The PDS is the locked PDS image ref (under local, the PDS build by exact realpath, Amendment 1);
+  the edge is C26's edge Dockerfile realpath or its lock ref. Every PDS-image service counts as a PDS, and more than one
+  PDS-image service fails C17. Red fixtures: a second PDS-image service under another name beside web; a service named
+  edge running a non-edge image beside the PDS.
+- F1 (same ruling): one named, local-only exemption in `pdsNeighbours`. A neighbour is ignored only when the env is
+  local, the shared network is exactly `plc_pds`, `plc_pds` has exactly two members (the PDS and that service), and the
+  service runs the `localOnly` PLC lock entry by exact `ref:tag@sha256`. Red fixtures, which kill the
+  `s.name !== "plc"` mutant: the same compose under dev; plc on any other network shared with the PDS; a third member
+  on `plc_pds`; a service named plc running another image; the PLC image under another name on `plc_web` with the PDS.
+
+Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
+
+---
+
 ### P1.34d — Trust one dev root CA on the local stack
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a,
 P1.33g, P1.35n
@@ -8714,10 +8755,11 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     first; step-book note 2 of 2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount
     (P1.34u's files, mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in
     either direction, fails with the key named. Preflight still runs in full on the local file; the drift test catches a
-    weakening that preflight would allow. This step moves `pds-token-reader` from `compose.dev.yaml` to
-    `compose.local.yaml` in the same PR, so it always exists in exactly one file; until then it stays in the dev file
-    and cannot run there (P1.33l refuses dev; architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The drift
-    allowance also names `seed` as local-only, which P1.29s adds to `compose.local.yaml` (book edit
+    weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as P1.35o
+    does for the dev file (F2 of book edit 2026-10-15-verify-895-followups). This step moves `pds-token-reader` from
+    `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it always exists in exactly one file; until then it
+    stays in the dev file and cannot run there (P1.33l refuses dev; architecture's Amendment 7 of 2026-10-13-local-plc,
+    Q3). The drift allowance also names `seed` as local-only, which P1.29s adds to `compose.local.yaml` (book edit
     2026-10-13-verify-814-fixes, Amendment 1). The reader-only test (`pds_token_reader_only_in_the_dev_file`) becomes
     `pds_token_reader_only_in_the_local_file`: exactly `compose.local.yaml` (architecture's Amendment 6 of
     2026-10-13-local-plc, Q2). `compose.local.yaml` sets `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until
@@ -9275,7 +9317,7 @@ and check is green.
 ---
 
 ### P1.34v — Run a local PLC directory in the local stack
-Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d
+Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o
 Slice 1, issue #782, product (`deployment/compose.local.yaml`, its network table, the image lock, the local PDS env),
 lane the third thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 4 of 2026-10-13-local-plc;
 book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 and 3 to
@@ -9285,12 +9327,13 @@ the local file).
 - The PLC exists in `compose.local.yaml` only. Each consumer P1.34z points at it (pds, web, appview) gets its own
   `internal: true` network, `plc_pds`, `plc_web`, `plc_appview`, with exactly two members, the PLC service and that
   consumer; no host port and no aliases; each consumer reaches `http://plc:2582` over its own network. `plc_tap` joins
-  only after P3.02 confirms tap resolves DIDs (Amendment 5, point 3). #895's edge-only check stays as built, with no
-  exception (architecture 02:26Z). This step adds the PLC entries to P1.34d's local-only list module, naming each
-  `plc_*` network with its two exact members (architecture 02:32Z). Red fixtures: a shared PLC network holding pds and
-  web; a third member on any `plc_*` network; any other service on a `plc_*` network; a `plc_*` network under dev;
-  `plc_web` containing pds; an unlisted `plc_*` network under local (book edit 2026-10-13-local-plc-a4-steps, "Step-book
-  mapping of the 02:26Z ruling" and "Step-book mapping of the C17 ruling").
+  only after P3.02 confirms tap resolves DIDs (Amendment 5, point 3). The PLC's one local-only exemption on `plc_pds` is
+  built in P1.35o (architecture 03:05Z; book edit 2026-10-15-verify-895-followups, mapping notes). This step adds the
+  PLC entries to P1.34d's local-only list module, naming each `plc_*` network with its two exact members (architecture
+  02:32Z). Red fixtures: a shared PLC network holding pds and web; a third member on any `plc_*` network; any other
+  service on a `plc_*` network; a `plc_*` network under dev; `plc_web` containing pds; an unlisted `plc_*` network under
+  local (book edit 2026-10-13-local-plc-a4-steps, "Step-book mapping of the 02:26Z ruling" and "Step-book mapping of the
+  C17 ruling").
 - `local:up` checks, before starting the PDS, that the PLC database exists, with a read-only query as the PLC role; if
   it is missing (a local volume made before this step) it refuses with a fixed reason naming `local:reset`. Init stays
   the only creator of roles and databases (P1.34u). `local:reset` removes only volumes labelled
@@ -12444,7 +12487,7 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   | `db` | `internal: true` | postgres, migrate (and `web` from Phase 2) |
   | `tap` | `internal: true` | tap and its DB (profile `tap`) |
   | `tap_egress` | not internal | tap only (outbound; the edge stays off it) |
-  | `tap_edge` | `internal: true` | tap and the edge only; the edge's attachment carries the `PDS_HOST` alias (`APP_HOST` only if tap calls it), so tap reaches the dev PDS through the edge without joining the PDS-facing network (book edit 2026-10-13-p129a-build-rulings, Amendment 3) |
+  | `tap_edge` | `internal: true` | tap and the edge only; the edge's attachment carries the `PDS_HOST` alias, so tap reaches the dev PDS through the edge without joining the PDS-facing network (book edit 2026-10-13-p129a-build-rulings, Amendment 3) |
   Only the edge publishes ports. No network sets `ipam` and no service has a fixed address (book edit
   2026-10-13-p129a-build-rulings, item 1): P1.29t reads the edge's address at run time with `docker inspect`.
 - Services:
