@@ -1,11 +1,12 @@
 # The development stack (P1.29, P1.29a; plan section 8 Phase 1; step book phase-1.md P1.29 items 6 and 7): postgres,
 # migrate, the PDS, the edge in front of it, and web, for the homelab, through the wrapper
 # (deployment/preflight/stack.ts, P1.27w), which passes one interpolation file to the preflight and to Compose alike.
-# A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts. Every image is built here from a Dockerfile images.yml scans;
-# none is pulled, so the preflight's signed-image checks (C2 to C5) refuse this stack until P1.27s publishes signed
-# images (architecture record 2026-10-12-p129-local-build-preflight). The one exception is the PDS, Bluesky's own image
-# run as shipped (Alex, "Allow pinned", 2026-10-07T13:00:19Z): named here exactly as its run-only lock entry, which the
-# mirror workflow scans (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
+# A throwaway stack on one machine is compose.local.yaml (P1.34d), held to this file by compose.local.test.ts. Every
+# image is built here from a Dockerfile images.yml scans; none is pulled, so the preflight's signed-image checks (C2 to
+# C5) refuse this stack until P1.27s publishes signed images (architecture record
+# 2026-10-12-p129-local-build-preflight). The one exception is the PDS, Bluesky's own image run as shipped (Alex, "Allow
+# pinned", 2026-10-07T13:00:19Z): named here exactly as its run-only lock entry, which the mirror workflow scans
+# (architecture record 2026-10-07-p129-migrate-image-and-run-only-images, point 2).
 #
 # Read under the preflight's strict subset (deployment/preflight/compose-parse.ts): no interpolation outside
 # `environment`, no `healthcheck` (the postgres image carries its own), no `command`. Every service drops every

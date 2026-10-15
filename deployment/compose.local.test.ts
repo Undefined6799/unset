@@ -17,6 +17,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { pdsNeighbours } from "./preflight/checks/networks.ts";
 import { type Compose, type Mount, parseCompose, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
 import { preflight } from "./preflight/index.ts";
 import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS, LOCAL_ONLY_SERVICES } from "./preflight/local-only.ts";
@@ -151,6 +152,8 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
 
   test("compose_local_differs_from_dev_only_as_allowed", () => {
     expect(drift(dev, local)).toEqual([]);
+    // The neighbour rule C17 runs at deploy, on the real local file too (#742 item 11; verify-895 F2).
+    expect(pdsNeighbours(local)).toEqual([]);
   });
 
   test("a_weakening_in_either_file_is_named", () => {
