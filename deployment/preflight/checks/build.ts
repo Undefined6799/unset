@@ -82,15 +82,17 @@ function contextProblem(context: string, inputs: Inputs): string | null {
  */
 export const c26: Check = {
   id: "C26",
-  run: (inputs) => {
-    for (const { name, build } of inputs.compose.services) {
-      if (build === null) continue;
-      const problem = buildProblem(build, inputs);
-      if (problem !== null) return fail(`${name} ${problem}`);
-    }
-    return devCaFolderProblem(inputs) ?? devTrustFolderProblem(inputs) ?? pass();
-  },
+  run: (inputs) => buildsProblem(inputs) ?? devCaFolderProblem(inputs) ?? devTrustFolderProblem(inputs) ?? pass(),
 };
+
+function buildsProblem(inputs: Inputs): Outcome | null {
+  for (const { name, build } of inputs.compose.services) {
+    if (build === null) continue;
+    const problem = buildProblem(build, inputs);
+    if (problem !== null) return fail(`${name} ${problem}`);
+  }
+  return null;
+}
 
 /** Why C26 refuses this build, after the service's name, or null. */
 export function buildProblem(build: NonNullable<Service["build"]>, inputs: Inputs): string | null {
