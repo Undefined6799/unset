@@ -124,7 +124,7 @@ export function plan(
   const leafCheck: Command = {
     name: "the leaf check",
     file: process.execPath,
-    args: [SERVED_LEAF, "--env", env],
+    args: [SERVED_LEAF, "--", "--env", env],
     undo: down,
   };
   const commands: Command[] =

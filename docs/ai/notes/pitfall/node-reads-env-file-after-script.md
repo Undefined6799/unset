@@ -42,3 +42,7 @@ Re-checked at P1.33k, which drops `stack.ts`'s unused `node:fs` and `node:path` 
 `shared/host-pin`; no flag, argv form or child environment changed, and the rules above still hold.
 Re-checked at P1.35a, which adds a `readdir` input to `inputs.ts` for the dev CA folder walk; no flag, argv form or
 env-file read changed, and the rules above still hold.
+Re-checked at P1.34d, which lets `stack.ts` take `--env local` and, after `up`, run `served-leaf.ts` as a third child.
+That child gets the same environment, empty `NODE_OPTIONS` included, and is called as `node served-leaf.ts -- --env
+local`, which refuses any other form; `stack.test.ts` pins the argv. No `--env-file*`, `--require` or `--import` flag
+was added, and the rules above still hold.

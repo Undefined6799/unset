@@ -94,11 +94,13 @@ if (import.meta.main) {
   const beside = (path: string) => join(dirname(resolve(import.meta.dirname, "../..")), path);
   const copy = readFileSync(beside("unset-dev-env/local-leaf.pem"), "utf8");
   const root = readFileSync(beside("unset-dev-trust/root.pem"), "utf8");
-  const [flag, env, ...rest] = process.argv.slice(2);
+  // Called as `node served-leaf.ts -- --env local`, so Node never reads an argument as one of its own flags
+  // (docs/ai/notes/pitfall/node-reads-env-file-after-script.md).
+  const [separator, flag, env, ...rest] = process.argv.slice(2);
   const problem =
-    flag === "--env" && env !== undefined && rest.length === 0
+    separator === "--" && flag === "--env" && env !== undefined && rest.length === 0
       ? await servedLeafProblem({ env, copy, root, deadlineMs: DEADLINE_MS })
-      : "usage: served-leaf.ts --env local";
+      : "usage: served-leaf.ts -- --env local";
   process.stderr.write(`leaf check: ${problem ?? "the edge serves unset-dev-env/local-leaf.pem"}\n`);
   process.exitCode = problem === null ? 0 : 1;
 }

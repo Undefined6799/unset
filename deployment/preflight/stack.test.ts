@@ -229,6 +229,7 @@ describe("stack wrapper (P1.27w)", () => {
     expect(commands[0]?.args.slice(1, 4)).toEqual(["--", "--env", "local"]);
     expect(commands[2]?.args).toEqual([
       expect.stringMatching(/deployment\/preflight\/served-leaf\.ts$/),
+      "--",
       "--env",
       "local",
     ]);
