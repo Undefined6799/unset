@@ -5,6 +5,7 @@
   "exclude": ["dist"],
   "references": [
     { "path": "../infrastructure/audit" },
+    { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },
     { "path": "../shared/host-pin" },
     { "path": "../shared/log" }
