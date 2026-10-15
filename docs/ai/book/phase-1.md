@@ -611,7 +611,6 @@ flowchart LR
   P1_35n --> P1_34d
   P1_35o["P1.35o app network pinned in the dev compose tests"]
   P1_35n --> P1_35o
-  P1_35o --> P1_34d
   P1_35o --> P1_34v
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
@@ -8643,10 +8642,11 @@ Done when each red fixture fails on main for its own reason and passes with the 
 Tags: [SEC]            Depends on: P1.35n
 
 Slice 1, issue #902, product (`deployment/` compose tests and `deployment/preflight/`), kind/fix, lane the third thread
-after P1.35m and before P1.34d. P1.34d depends on it, because P1.34d's drift test calls the image-keyed `pdsNeighbours`
-built here, and so does P1.34v. Book edit 2026-10-15-verify-895-followups, from verify-895-2b53bd5 (P1.35n, #895) and
-architecture's 03:05Z ruling (last section of book edit 2026-10-13-local-plc-a4-steps). A tightening, so nothing from
-Alex.
+after P1.35m, and before P1.34d where possible (a soft order: P1.34d's drift test calls whichever `pdsNeighbours` is on
+main, and P1.35o's PR keeps that test green; book edit 2026-10-15-verify-895-followups, "P1.35o and P1.34d: soft
+order"). P1.34v depends on it for the `plc_pds` exemption. Book edit 2026-10-15-verify-895-followups, from
+verify-895-2b53bd5 (P1.35n, #895) and architecture's 03:05Z ruling (last section of book edit
+2026-10-13-local-plc-a4-steps). A tightening, so nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a service that
 reaches the PDS by taking the PDS's or the edge's name, a second PDS under another name, and a PLC exemption that
@@ -8679,7 +8679,7 @@ Done when each red fixture fails on main for its own reason and passes with the 
 
 ### P1.34d — Trust one dev root CA on the local stack
 Tags: [SEC]            Depends on: P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a,
-P1.33g, P1.35n, P1.35o
+P1.33g, P1.35n
 Slice 1, issue #742, product (`deployment/` compose and env files, `deployment/preflight/`, and
 `docs/human/runbooks/dev-stack-secrets.md`, which is code-owned but not trusted base), kind/feature, lane the third
 thread; book edit 2026-10-12-p134c-p134d-local-dev-root-ca, amendment 1 (option B). Not paused. Nothing from Alex.
