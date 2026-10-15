@@ -8936,9 +8936,9 @@ Done when each red fixture fails on main for its own reason and passes with the 
 ### P1.35r — Pin compose limits and local-only env
 Tags: [SEC]            Depends on: P1.34d
 
-Slice 1, issue #908, product (`deployment/` compose tests and a limits table beside `networks.dev.json`),
-kind/fix, lane the third thread after P1.34d (#742). Book edit 2026-10-15-verify-903-info-items, from
-verify-903-04cbbaf I-1 and I-2. A tightening, so nothing from Alex.
+Slice 1, issue #908, product (`deployment/` compose tests and a limits table beside `networks.dev.json`, plus two test
+lines in `tests/integration/pds-email-token.test.ts`), kind/fix, lane the third thread after P1.34d (#742). Book edit
+2026-10-15-verify-903-info-items, from verify-903-04cbbaf I-1 and I-2. A tightening, so nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a raised or
 removed resource limit that lets one service starve the host (the compose tests check presence only), and a
@@ -8954,23 +8954,34 @@ local-only service that skips the env drift test picking up a key that changes i
   with. This step pins the ones that exist when it lands (pds-token-reader); P1.34v adds plc and P1.29s adds seed, each
   with its limits row and env pins, in its own PR (Codex on #910: seed does not exist before P1.29s). Each one's
   environment is pinned in the drift test as an exact key-value map, written as the compose file has it: a literal, or a
-  `${VAR}` reference kept as text and never resolved, so no secret enters the table. A secret-bearing key (`*_PASSWORD`,
-  `*_SECRET`, `*_TOKEN`, `*_KEY`, or anything the secret scanner or SE-7 treats as secret) must be a `${VAR}` reference,
-  never a literal, in both compose and the table (architecture, in the same record). Its `env_file` list is pinned
-  exactly, in order. Any added, removed or changed entry fails, naming the service and key (for example APP_* on the
-  reader). The reader has no environment and no `env_file` today (`compose.dev.yaml:198`, "No network, no env, no
-  secret"), so its pin is an exact empty map and an empty list. This step still builds the full key-value comparison and
-  the secret-key `${VAR}` guard as code, so the value red tests in P1.34v and P1.29s have code to test. P1.34v adds
-  plc's map the same way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red tests here: APP_HOST on
-  the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an unlisted `env_file` on the reader. The value red tests
-  (a changed value of an allowed key, a deleted allowed key, a literal in place of a `${VAR}` reference, and a literal
-  on a secret-bearing key) need a service with environment, so they ride P1.34v on plc and P1.29s on seed (Codex on
-  #910).
+  `${VAR}` reference kept as text and never resolved, so no secret enters the table. Secret-bearing key: split on `_`,
+  and any word is one of PASSWORD, PASSWD, PASS, PW, SECRET, TOKEN, KEY, PRIVATE, CREDS, CREDENTIALS, SEED, DSN. The
+  list is closed. Secret-bearing value: any URL with userinfo, under any key. Accepted: (1) a `*_FILE` key whose literal
+  value is a path under `/run/secrets/` (as `compose.dev.yaml:41`, :65); (2) the whole value exactly `${NAME:?message}`,
+  where NAME matches `[A-Z][A-Z0-9_]*` and the message is non-empty; (3) a userinfo URL whose password is exactly one
+  `${NAME:?message}`. Everything else is refused: a literal, a plain `${NAME}`, any `:-` `-` `:+` `+` form, a `:?` with
+  no message, an unbraced `$NAME`, a bare key, a userinfo URL without a password part, or any other composite. The same
+  predicate applies in compose and in the table (architecture 12:40Z, the record's section "Architecture on
+  verify-910-a686fe0 S3"). Its `env_file` list is pinned exactly, in order. Any added, removed or changed entry fails,
+  naming the service and key (for example APP_* on the reader). The reader has no environment and no `env_file` today
+  (`compose.dev.yaml:198`, "No network, no env, no secret"), so its pin is an exact empty map and an empty list. This
+  step still builds the full key-value comparison and the secret-bearing predicate as code, so the value red tests in
+  P1.34v and P1.29s have code to test. The predicate's minimum reds run on fixtures in this step's own test, since the
+  reader has no env: a literal under a listed word; `${NAME:-x}`; a bare key; a userinfo URL with a literal password; a
+  `*_FILE` key outside `/run/secrets/`. P1.34v adds plc's map the same way (book edit 2026-10-15-verify-903-info-items,
+  "Codex P2 on #910"). Red tests here: APP_HOST on the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an
+  unlisted `env_file` on the reader. The value red tests (a changed value of an allowed key, a deleted allowed key, a
+  literal in place of a `${VAR}` reference, and a literal on a secret-bearing key) need a service with environment, so
+  they ride P1.34v on plc and P1.29s on seed (Codex on #910).
 - The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
   record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
   (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
   or substring match fails; and for both files moved to the same other folder, so a rule that only checks that
   local's folder equals dev's fails.
+- The two suffix-boundary names in `tests/integration/pds-email-token.test.ts`, SE-7a's known exceptions
+  (verify-910-a686fe0 S2; book edit 2026-10-15-verify-886-fixture-scope, "Step-book mapping of verify-910 S1, S2"),
+  test only: `pdslocalhost` (:403) becomes `pds.notlocalhost` and `https://evillocalhost` (:440) becomes
+  `https://evil.notlocalhost`, each with a comment naming `.localhost`.
 
 Done when each red test fails on main for its own reason and passes with the change, and check is green.
 
@@ -9515,7 +9526,8 @@ the local file).
 - This step adds plc's row to P1.35r's limits table and plc's exact environment map and `env_file` list to its
   local-only env pins, with P1.35r's value red tests on plc: a changed value of an allowed key, a deleted allowed key,
   a literal in place of a `${VAR}` reference, and a literal on a secret-bearing key (book edit
-  2026-10-15-verify-903-info-items).
+  2026-10-15-verify-903-info-items). plc's rows meet P1.35r's secret-bearing predicate (e.g. `DATABASE_URL` as
+  `postgres://plc:${PLC_DB_PASSWORD:?set it}@plc-db/plc`).
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
@@ -12471,7 +12483,7 @@ P1.29h, P1.29s, P1.29t.
    `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
    adds seed's row to P1.35r's limits table and seed's exact environment map and `env_file` list to P1.35r's
    local-only env pins, with red tests APP_HOST on seed, an unlisted `env_file` on seed, and P1.35r's value red tests
-   on seed (Codex on #910). It
+   on seed (Codex on #910); seed's rows meet P1.35r's secret-bearing predicate. It
    also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
    2026-10-12-p134l-secrets-folder-listing, rider), and a test that the token reader passes `hostWalk` to the pin
    unchanged, so mutant R12 (statfs blind) dies (verify-845-200b534 N3; book edit 2026-10-13-host-pin-steps, "Step-book
