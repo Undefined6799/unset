@@ -72,10 +72,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35p, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
-  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.37, P1.37b, P1.36 (pulled
-  forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13
-  and the slice exit P2.13a.
+  P1.34d, P1.35p, P1.35r, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s,
+  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.37, P1.37b, P1.36
+  (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12,
+  P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -614,6 +614,8 @@ flowchart LR
   P1_33g --> P1_35p
   P1_35m --> P1_35p
   P1_34d --> P1_35p
+  P1_35r["P1.35r compose limits and local-only env pinned"]
+  P1_34d --> P1_35r
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
   P1_35o["P1.35o app network pinned in the dev compose tests"]
@@ -8785,8 +8787,9 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
     key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit 2026-10-14-p134d-split,
     "item 11 holds over item 14"): `environment` per service as a normalized key-value map (list and map forms alike),
-    where only the named keys may differ, on the services named; `env_file` per service as an ordered list whose entries
-    correspond one to one and whose paths differ only in the env directory; and every other key (command, entrypoint,
+    where only the named keys may differ, on the services named; `env_file` per service as an ordered list of entries,
+    all under `../../unset-dev-env/` in both files, corresponding one to one and compared by basename, any other folder
+    failing (book edit 2026-10-15-verify-903-info-items, last paragraph); and every other key (command, entrypoint,
     mem_limit and the rest). Red tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
     --use-system-ca in NODE_OPTIONS and in command; env_file pds.env on web and on edge;
     NODE_OPTIONS=--max-old-space-size=4096 on web. Preflight still runs in full on the local file; the drift test
@@ -8924,6 +8927,33 @@ and the S2 X-mutant reds. The second part takes the next free id, and the split 
 2026-10-15-verify-896-901-followups before the PR is ready.
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
+
+---
+
+### P1.35r — Pin compose limits and local-only env
+Tags: [SEC]            Depends on: P1.34d
+
+Slice 1, issue #908, product (`deployment/` compose tests and a limits table beside `networks.dev.json`),
+kind/fix, lane the third thread after P1.34d (#742). Book edit 2026-10-15-verify-903-info-items, from
+verify-903-04cbbaf I-1 and I-2. A tightening, so nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a raised or
+removed resource limit that lets one service starve the host (the compose tests check presence only), and a
+local-only service that skips the env drift test picking up a key that changes its trust, such as TLS or app settings.
+
+**What:**
+- I-1, limits by value: each service's `mem_limit`, `cpus` and `pids_limit` are pinned exactly, in both compose
+  files, from one table beside `networks.dev.json` (for example `deployment/limits.dev.json`, a service-to-limits
+  map). Any value that differs, is missing, or belongs to a service not in the table fails, naming the service and
+  key. A local-only service gets its own row. Red tests: `pids_limit` 4096 on the reader, `mem_limit` raised on web,
+  `cpus` removed from edge, and a service missing from the table.
+- I-2, env of local-only services: local-only services (pds-token-reader, seed, and plc from P1.34v) skip
+  environmentDrift, since dev has nothing to compare them with. Each gets an exact allowlist of environment keys and
+  `env_file` entries in the drift test, so a key outside its list fails (for example APP_* on seed or plc). P1.34v
+  adds plc's row. Red tests: APP_HOST on seed, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an unlisted `env_file`
+  on seed.
+
+Done when each red test fails on main for its own reason and passes with the change, and check is green.
 
 ---
 
@@ -9463,6 +9493,8 @@ the local file).
   its age and pre-merge scan evidence. A local-only test fails the PLC image, service, network or database in any
   compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml` mounts
   `init-local/`.
+- This step adds plc's row to P1.35r's limits table and local-only env allowlist (book edit
+  2026-10-15-verify-903-info-items).
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
