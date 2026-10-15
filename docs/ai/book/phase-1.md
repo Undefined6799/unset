@@ -8950,13 +8950,16 @@ local-only service that skips the env drift test picking up a key that changes i
   key. A local-only service gets its own row. Red tests: `pids_limit` 4096 on the reader, `mem_limit` raised on web,
   `cpus` removed from edge, and a service missing from the table.
 - I-2, env of local-only services: local-only services (pds-token-reader, seed, and plc from P1.34v) skip
-  environmentDrift, since dev has nothing to compare them with. Each one's environment is pinned in the drift test as
-  an exact key-value map, written as the compose file has it: a literal, or a `${VAR}` reference kept as text and
-  never resolved, so no secret enters the table. Its `env_file` list is pinned exactly, in order. Any added, removed or
-  changed entry fails, naming the service and key (for example APP_* on seed or plc). P1.34v adds plc's map the same
+  environmentDrift, since dev has nothing to compare them with. Each one's environment is pinned in the drift test as an
+  exact key-value map, written as the compose file has it: a literal, or a `${VAR}` reference kept as text and never
+  resolved, so no secret enters the table. A secret-bearing key (`*_PASSWORD`, `*_SECRET`, `*_TOKEN`, `*_KEY`, or
+  anything the secret scanner or SE-7 treats as secret) must be a `${VAR}` reference, never a literal, in both compose
+  and the table (architecture, in the same record). Its `env_file` list is pinned exactly, in order. Any added, removed
+  or changed entry fails, naming the service and key (for example APP_* on seed or plc). P1.34v adds plc's map the same
   way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red tests: APP_HOST on seed,
   NODE_TLS_REJECT_UNAUTHORIZED on the reader, an unlisted `env_file` on seed, a changed value of an allowed key (for
-  example the reader's PDS URL), a deleted allowed key, and a literal in place of a `${VAR}` reference.
+  example the reader's PDS URL), a deleted allowed key, a literal in place of a `${VAR}` reference, and a literal on a
+  secret-bearing key.
 - The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
   record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
   (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
