@@ -510,6 +510,7 @@ flowchart LR
   P1_31d --> P1_31
   P1_31 --> P1_31c
   P1_31 --> P1_31g
+  P1_31d --> P1_31g
   P1_31c --> P1_31e
   P1_31e --> P1_31f
   P1_32 -.-> P1_31
@@ -12560,7 +12561,7 @@ bump. If P1.29t cannot run it, it moves to the preflight.
 and seeds test accounts without printing a secret and without ever touching the lexicon authority.
 
 **Inputs:** P1.11 migrator image and Postgres settings; P1.27 images and lock; P1.28 edge image and config; the dev
-PDS hostname `0x40.space` (plan §5.3 and decision 20); `shared/lexicons/published.lock.json` (P1.31/P1.35).
+PDS hostname `0x40.space` (plan §5.3 and decision 20); `shared/lexicons/published.lock.json` (P1.31g/P1.35).
 Two env files use the same compose file: `dev` (the homelab, Alex-operated from P1.34 on) and `local`
 (`PDS_HOSTNAME=pds.unset.localhost`, edge on 127.0.0.1 only; agents' throwaway stacks for tests).
 
@@ -13288,7 +13289,7 @@ Build choices (architecture's 2026-10-12-p131-depcruise-and-lexicon-choices; boo
 **Tags:** [PERMANENT] [SEC] [ALEX] [STOP] (Alex reviews the schemas' fields and the permission set's EN/FR consent text in this step's PR; nothing is published until he approves it: answered by Alex 2026-10-03 11:48Z) · **Depends on:** P1.01, P1.32 (Q4, the permission-set NSID), P1.31d · **Plan:** §3 (lexicons, scope string), §5.2, §5.3; fable 01
 
 **Where:** `shared/lexicons/{schemas/sh.unset.*.json, vendor/app.bsky/*, src/{validate.ts, scope.ts, index.ts},
-published.lock.json, published/<nsid>.json, scripts/build.ts, test/}`; `scripts/breaking-check.ts` is P1.31g's.
+published/<nsid>.json, scripts/build.ts, test/}`; `scripts/breaking-check.ts` and `published.lock.json` are P1.31g's.
 
 **Size:** about 400 source lines (`build.ts`, `src/` limits, scope and validate, `index.ts`, LICENSE) plus schemas,
 with their tests and `generated_types_current`. The breaking-check moved to P1.31g (book edit
@@ -13348,8 +13349,7 @@ latest patch at start); the vendored `app.bsky` schemas the records reference.
   takes a `mode: "write" | "read"`).
 - `scopeString(): string` the full scope per §3 (`atproto include:sh.unset.authApp …`), and `scopeStringFallback()`
   the granular-scope list for PDSes that do not support permission sets.
-- `published.lock.json`: `{ "<nsid>": { "cid": "…", "schemaRecordCid": "…", "publishedAt": "…" } }` (filled by
-  P1.35); `published/<nsid>.json` snapshots of what was published.
+- `published/<nsid>.json` snapshots of what was published (filled by P1.35).
 - Limits (maxLength, maxGraphemes, array lengths) per record from §3, centralised in one constants file.
 
 **Algorithm:**
@@ -13406,18 +13406,26 @@ set through an `[ALEX]` PR), except `sh.unset.follow`, which is here from the fi
 
 ### P1.31g — Lexicons breaking-change check
 
-**Tags:** [SEC] · **Depends on:** P1.31
+**Tags:** [SEC] · **Depends on:** P1.31, P1.31d (#759: its scripts row allows `node:fs` and `node:path`; it already
+holds through P1.31, and the book states it)
 
-Slice 1, issue #907, product (`shared/lexicons/scripts/breaking-check.ts` and its tests), Phase 1 lane, after
+Slice 1, issue #907, product, Phase 1 lane, after
 P1.31. Book edit 2026-10-15-p131-size-split: P1.31 measured 539 source lines as built, and the breaking-check is the
 clean seam, since it has no input until P1.35 publishes the first schema (no `published/` folder before then). It
 carries `scripts/breaking-check.ts` and its tests unchanged from 4e59bf6. P1.35 depends on it as well as P1.31, so
-nothing is published before the check exists.
+nothing is published before the check exists. As split (the record's last section): P1.31 at 184ea10, P1.31g at
+1483997 stacked on it.
+
+**Where:** `shared/lexicons/{scripts/breaking-check.ts, scripts/breaking-check.test.ts, published.lock.json}` (only
+the check reads the lock, so it moved here from P1.31), and the breaking-check line of the lexicons note
+(`docs/ai/notes/area/lexicons.md`, its `code:` list and the `scripts/breaking-check.ts` bullet).
 
 **Goal:** a published schema or the published permission set cannot change in a breaking way, or widen every user's
 grant, without the reviewed path.
 
 **Outputs:**
+- `published.lock.json`: `{ "<nsid>": { "cid": "…", "schemaRecordCid": "…", "publishedAt": "…" } }` (empty
+  until P1.35 fills it).
 - `breaking-check`: for each **record or query** NSID in the lock, compares the current schema with its
   snapshot; any of: removed field, changed type, new required field, narrowed constraint (maxLength down, enum
   value removed; knownValues is fine), changed `key` type → exit 1 "breaking: publish a new NSID". For the

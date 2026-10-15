@@ -461,7 +461,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.31c | Pin the lexicon NSID to the permanent value | — | P1.31 | `phase-1.md` |
 | P1.31e | Admit the private unset-source condition | — | P1.31c | `phase-1.md` |
 | P1.31f | Export the web server through unset-source | — | P1.31e | `phase-1.md` |
-| P1.31g | Lexicons breaking-change check | [SEC] | P1.31 | `phase-1.md` |
+| P1.31g | Lexicons breaking-change check | [SEC] | P1.31, P1.31d | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.37b | Harden the legal marker docs check | — | P1.37 | `phase-1.md` |
 | P1.36 | Compliance skeletons (pulled forward from slice 2, Alex 23:08Z; test in `scripts/docs/`, check class) | — | P0.07 | `phase-1.md` |
@@ -938,6 +938,7 @@ flowchart TD
   P1_31c --> P1_31e
   P1_31e --> P1_31f
   P1_31 --> P1_31g
+  P1_31d --> P1_31g
   P1_32 --> P1_32a
   P1_18 --> P2_01
   P2_01 --> P2_02
