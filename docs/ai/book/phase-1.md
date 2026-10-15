@@ -8197,9 +8197,9 @@ infrastructure/net-guard test hosts reserved names".
 
 **What:** `prototype.test.ts:208`, `:226` and `:230` use `127.attacker.com`, which becomes `127.attacker.example`. The
 numeric first label is what the tests need, and it survives the move. The rest of net-guard's hosts are service or own
-hosts and stay: service hosts are the A2 closed list (plc.directory, bsky.social, docker.io, registry-1.docker.io,
-ghcr.io, quay.io, github.com with placeholder paths) and own hosts are A1's (SE-7a; book edit
-2026-10-15-verify-886-fixture-scope, last section).
+hosts and stay: service hosts are SE-7a's closed list (A2, widened by role at architecture's 03:35Z S4 ruling) and own
+hosts are A1's, and the public IPs are SE-7a's closed list, embedded forms included (book edit
+2026-10-15-verify-886-fixture-scope).
 
 Done when no net-guard test file holds a registrable host other than an A2 service host or an A1 own host, the same
 refusals still fire, and check is green.
