@@ -37,7 +37,3 @@ export const LIMITS = {
 
 /** Image types the profile's avatar and cover accept. */
 export const IMAGE_ACCEPT = ["image/png", "image/jpeg", "image/webp"] as const;
-
-/** The section kinds the schema knows. Another value is valid in a record and renders as links. */
-export const SECTION_TYPES = ["social", "links", "projects", "writing", "text", "cta"] as const;
-export type SectionType = (typeof SECTION_TYPES)[number];

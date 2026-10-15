@@ -2,7 +2,7 @@
 // process that writes or reads our records; MIT, no product rules. The one file others import (rule DC-2).
 import { sh } from "./generated/index.generated.ts";
 
-export { IMAGE_ACCEPT, LIMITS, SECTION_TYPES, type SectionType } from "./src/limits.ts";
+export { IMAGE_ACCEPT, LIMITS } from "./src/limits.ts";
 export { scopeString, scopeStringFallback } from "./src/scope.ts";
 export { type Mode, type RecordNsid, type ValidationResult, validateRecord } from "./src/validate.ts";
 
