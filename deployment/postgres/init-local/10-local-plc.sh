@@ -7,8 +7,8 @@
 # The PLC server runs its own Kysely migrations into schema public of the database it is given
 # (did-method-plc bed123d, packages/server/src/db/index.ts:95-99 and service/index.js:10-16), and needs no extension,
 # so owning its database is all the role needs. It has no right anywhere else: 00-bootstrap.sh revoked PUBLIC from the
-# unset and tap databases. The password is read as in 00-bootstrap.sh: a backtick \set inside psql, reaching SQL only
-# through :'name' quoting, never through argv or the environment.
+# unset and tap databases, and this file revokes it from the default ones. The password is read as in 00-bootstrap.sh:
+# a backtick \set inside psql, reaching SQL only through :'name' quoting, never through argv or the environment.
 set -euo pipefail
 
 SECRETS=/run/secrets
@@ -31,6 +31,10 @@ CREATE ROLE plc LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASS
 
 CREATE DATABASE plc OWNER plc;
 REVOKE ALL ON DATABASE plc FROM PUBLIC;
+-- PUBLIC holds CONNECT and TEMPORARY on the default databases (PG 18 docs, ddl-priv.html, "Default privileges"), so
+-- the plc role could otherwise open postgres or template1 and fill the volume with temporary tables. Only the
+-- bootstrap superuser, which bypasses grants, connects to either; no role creates databases from template1.
+REVOKE CONNECT, TEMPORARY ON DATABASE postgres, template1 FROM PUBLIC;
 
 \connect plc
 REVOKE ALL ON SCHEMA public FROM PUBLIC;

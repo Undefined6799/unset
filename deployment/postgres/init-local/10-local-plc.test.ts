@@ -69,8 +69,17 @@ describe("10-local-plc.sh", () => {
         "SELECT has_schema_privilege('public', 'public', 'USAGE'), has_schema_privilege('public', 'public', 'CREATE')",
       ),
     ).toBe("f|f");
-    const plcElsewhere = ["unset", "tap"].map((db) => `has_database_privilege('plc', '${db}', 'CONNECT')`);
-    expect(pg.sql("plc", `SELECT ${plcElsewhere.join(", ")}`)).toBe("f|f");
+    // Every other database a role can connect to, the defaults postgres and template1 included: plc holds neither
+    // CONNECT nor TEMPORARY on any of them (PUBLIC holds both on new databases by default, PG 18 ddl-priv).
+    expect(
+      pg.sql(
+        "plc",
+        "SELECT datname FROM pg_database WHERE datallowconn AND datname <> 'plc' AND " +
+          "(has_database_privilege('plc', datname, 'CONNECT') OR has_database_privilege('plc', datname, 'TEMPORARY')) " +
+          "ORDER BY 1",
+      ),
+    ).toBe("");
+    expect(pg.sql("plc", "SELECT count(*) FROM pg_database WHERE datallowconn AND datname <> 'plc'")).toBe("4");
 
     // The password is the file's contents (trailing newline dropped), over TCP with SCRAM; as owner of its own
     // database plc can run the PLC server's migrations, which create tables in schema public.
@@ -78,7 +87,9 @@ describe("10-local-plc.sh", () => {
     expect(pg.login("plc", "plc", plcPassword, "CREATE TABLE probe (id int); DROP TABLE probe; SELECT 'ok'")).toBe(
       "CREATE TABLE\nDROP TABLE\nok",
     );
-    expect(() => pg.login("plc", "unset", plcPassword, "SELECT 1")).toThrow();
+    for (const db of ["unset", "tap", "postgres", "template1"]) {
+      expect(() => pg.login("plc", db, plcPassword, "SELECT 1")).toThrow();
+    }
   });
 
   test("local_plc_role_not_in_roster", () => {
