@@ -78,12 +78,15 @@ services:
   web:
     image: ${WEB}
     user: "65532:65532"
+    networks: [back]
     secrets: [db_password]
     environment:
       FINGERPRINT_CHECK: arachnid
 secrets:
   db_password:
     file: ../../unset-dev-secrets/db_password
+networks:
+  back: {}
 `;
 const LOCK = {
   edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
@@ -125,8 +128,14 @@ type Stack = {
   /** Extra files under the root, by repository-relative path (Dockerfiles a build names, P1.30y). */
   files?: Record<string, string>;
 };
-/** The all-good stack's table: every service on Compose's implicit default network. */
-const TABLE = { default: { internal: false, members: ["edge", "pds", "web"] } };
+/**
+ * The all-good stack's table: the edge and the PDS on Compose's implicit default network, and web on its own, since only
+ * the edge may share a network with the PDS (architecture 2026-10-15 02:05Z, option C point 4).
+ */
+const TABLE = {
+  default: { internal: false, members: ["edge", "pds"] },
+  back: { internal: false, members: ["web"] },
+};
 const dirs: string[] = [];
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
@@ -1629,15 +1638,15 @@ describe("preflight C17 (P1.30t)", () => {
   // Two declared networks and the implicit default, in both service forms (compose-spec 05-services.md "networks").
   const NETWORKED = COMPOSE.replace(
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
-    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n      inner:',
+    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        priority: 1\n      inner:',
   )
     .replace(
       "    env_file: ../../unset-dev-env/pds.env",
       "    env_file: ../../unset-dev-env/pds.env\n    networks: [inner]",
     )
-    .replace("\nsecrets:", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
+    .replace("\nnetworks:\n", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\n");
   const NETWORKED_TABLE = {
-    default: { internal: false, members: ["web"] },
+    back: { internal: false, members: ["web"] },
     front: { internal: false, members: ["edge"] },
     inner: { internal: true, members: ["edge", "pds"] },
   };
@@ -1658,26 +1667,32 @@ describe("preflight C17 (P1.30t)", () => {
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks: [default, pds_net]',
         )
-        .replace(`    image: ${WEB}`, `    image: ${WEB}\n    networks: ${webNetworks}`)
-        .replace("\nsecrets:", "\nnetworks:\n  pds_net:\n    internal: true\nsecrets:");
+        .replace("    networks: [back]", `    networks: ${webNetworks}`)
+        .replace("\nnetworks:\n", "\nnetworks:\n  pds_net:\n    internal: true\n");
     const table = {
       default: { internal: false, members: ["edge", "web"] },
+      back: { internal: false, members: [] },
       pds_net: { internal: true, members: ["edge", "pds"] },
     };
     expect(failed((await check({ compose: withPdsNetwork("[default]"), networks: table })).lines)).toEqual([]);
+    // The table cannot admit it either: only the edge may share a network with the PDS (option C point 4).
     expect(await expectOnly("C17", { compose: withPdsNetwork("[default, pds_net]"), networks: table })).toBe(
-      "FAIL C17 web is on pds_net, the table says not",
+      "FAIL C17 web shares a network with the pds; web is on pds_net, the table says not",
+    );
+    const admitted = { ...table, pds_net: { internal: true, members: ["edge", "pds", "web"] } };
+    expect(await expectOnly("C17", { compose: withPdsNetwork("[default, pds_net]"), networks: admitted })).toBe(
+      "FAIL C17 web shares a network with the pds",
     );
   });
 
   test("c17_default_network_counted", async () => {
     // A service with no networks key joins `default`, so a table without it, or without one of its members, fails.
     await expectOnly("C17", { networks: {} });
-    await expectOnly("C17", { networks: { default: { internal: false, members: ["edge", "pds"] } } });
+    await expectOnly("C17", { networks: { ...TABLE, default: { internal: false, members: ["edge"] } } });
     // A top-level networks.default changes that network's settings.
-    const internal = COMPOSE.replace("\nsecrets:", "\nnetworks:\n  default:\n    internal: true\nsecrets:");
+    const internal = COMPOSE.replace("\nnetworks:\n", "\nnetworks:\n  default:\n    internal: true\n");
     await expectOnly("C17", { compose: internal });
-    const table = { default: { internal: true, members: ["edge", "pds", "web"] } };
+    const table = { ...TABLE, default: { internal: true, members: ["edge", "pds"] } };
     expect(failed((await check({ compose: internal, networks: table })).lines)).toEqual([]);
   });
 
@@ -1686,15 +1701,12 @@ describe("preflight C17 (P1.30t)", () => {
     const outer = { ...NETWORKED_TABLE, inner: { internal: false, members: ["edge", "pds"] } };
     expect(await expectOnly("C17", { compose: NETWORKED, networks: outer })).toContain("inner: internal differs");
     // An attachment key outside the four the subset reads, an empty list, and a network no file defines are refused.
-    const mac = NETWORKED.replace(
-      '        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]',
-      "        mac_address: 02:42:ac:11:00:02",
-    );
+    const mac = NETWORKED.replace("        priority: 1", "        mac_address: 02:42:ac:11:00:02");
     await cannotRun({ compose: mac, networks: NETWORKED_TABLE }, /mac_address/);
     const empty = NETWORKED.replace("networks: [inner]", "networks: []");
     await cannotRun({ compose: empty, networks: NETWORKED_TABLE }, /empty/);
-    const undefinedNetwork = NETWORKED.replace("networks: [inner]", "networks: [back]");
-    await cannotRun({ compose: undefinedNetwork, networks: NETWORKED_TABLE }, /network back is not defined/);
+    const undefinedNetwork = NETWORKED.replace("networks: [inner]", "networks: [gone]");
+    await cannotRun({ compose: undefinedNetwork, networks: NETWORKED_TABLE }, /network gone is not defined/);
   });
 
   test("c17_external_network_refused", async () => {
@@ -2394,6 +2406,7 @@ services:
       context: ..
       dockerfile: deployment/images/node-app.Dockerfile
     user: "65532:65532"
+    networks: [back]
     secrets: [db_password]
     environment:
       PUBLIC_ORIGIN: https://app.localhost
@@ -2404,6 +2417,8 @@ secrets:
     file: ../../unset-dev-secrets/local_tls_cert
   local_tls_key:
     file: ../../unset-dev-secrets/local_tls_key
+networks:
+  back: {}
 `;
   /**
    * The handle domain is the PDS's own, and local runs without email: no SMTP URL is set (Alex's "Local only" mail card,
