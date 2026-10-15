@@ -71,10 +71,11 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.34d, P1.35l,
-  P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j,
-  P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
-  23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.34d,
+  P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i,
+  P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2,
+  Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
+  P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -604,6 +605,8 @@ flowchart LR
   P1_33g["P1.33g local dev root documented and tested"]
   P1_35a --> P1_33g
   P1_33g --> P1_34d
+  P1_35m["P1.35m dev CA folder walk edges pinned"]
+  P1_35a --> P1_35m
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
@@ -8531,6 +8534,47 @@ Class: product only. The tests live beside the preflight or under `tests/`, neve
 tells the step book before opening; P1.34d's letters for a further split come from the next free family, as for P1.35a.
 
 Done when each red test fails on main for its own reason and passes with the change, and check is green.
+
+---
+
+### P1.35m — Pin the dev CA folder walk's edges
+Tags: [SEC]            Depends on: P1.35a
+
+Slice 1, issue (pending), product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
+C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
+verify-887-a7a20cb on P1.35a (#887) and architecture's 02:08Z ruling (last section of
+2026-10-12-p134c-p134d-local-dev-root-ca). A tightening: nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev CA folder
+walk that a link, special file, odd name or swapped folder slips past, and preflight output that a crafted file name
+can forge. The race between the walk and its re-lstat, and a root bind mount (verify-887 N6), stay residuals, recorded
+here; no mountinfo parsing.
+
+**What:**
+- S1: red cases for the 11 mutants that survive at `preflight.test.ts:2630-2731`: a hard link at depth 3; a FIFO
+  below depth 1; a socket; a device (via injected lstat); a dot-name hard link; an unreadable entry at depth 2; dev with
+  a symlinked folder; dev with a link inside; realpath EACCES under dev; realpath EACCES under prod. The builder
+  matches each case to its mutant in the report's table.
+- S2 (architecture 02:08Z): the walk reads names with `readdirSync(dir, { encoding: "buffer" })`, judges each entry
+  by its exact bytes and builds child paths from them. A name that is not valid UTF-8 is refused with the fixed message
+  before any lstat; a valid UTF-8 name containing U+FFFD is judged like any other. Red fixtures: a lone 0xff name; 0xff
+  beside a real U+FFFD file holding a hard-linked key; the same pair with an outward symlink.
+- Re-lstat: after the walk, re-lstat the folder and fail on any change of dev or ino from the first lstat.
+- N1: ELOOP and any other lstat error on the folder itself map to the fixed "not a real directory: <path>" message, so
+  a self-loop symlink no longer shows as a C26 check error.
+- N2 (SE-7 output rule): one escape helper in the preflight output module; every string preflight prints that came
+  from the filesystem or the environment goes through it (`index.ts:83`, `:113` and every other print site). C0 and C1
+  controls, DEL and non-ASCII become `\xNN` or `\u{...}`, and a backslash is doubled. Red fixtures: a name with a
+  newline forging a PASS line, and one with `\r\x1b[2K`.
+- N3: `build.ts:195`'s "dev CA folder entry cannot be read: <folder>" becomes "dev CA folder cannot be read", as at
+  `:167`, when the folder's own readdir fails.
+- N5: the C9 fixture `c9_bind_mount_reaching_dev_ca_fails` ("The folder itself a link to another place",
+  `preflight.test.ts:726-732`) also asserts C26's refusal.
+
+If this step measures over 400 source lines, the lane tells the step book before opening, and N2's escape helper becomes
+its own step.
+
+Done when each red case fails on main for its own reason (each S1 case kills its mutant), and check is green.
 
 ---
 

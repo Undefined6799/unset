@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 304 steps: 280 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 305 steps: 281 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -435,6 +435,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.35f | Root-cause the compose version probe stall | — | — | `phase-1.md` |
 | P1.35g | Refuse an IP address as the local PDS host | [SEC] | — | `phase-1.md` |
 | P1.33g | Document and test the local dev root (split from P1.34d) | [SEC] | P1.35a | `phase-1.md` |
+| P1.35m | Pin the dev CA folder walk's edges | [SEC] | P1.35a | `phase-1.md` |
 | P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a, P1.33g | `phase-1.md` |
 | P1.35l | Check the PDS host in every env | [SEC] | P1.35g | `phase-1.md` |
 | P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
@@ -1064,6 +1065,8 @@ flowchart TD
   P1_33g["P1.33g Local dev root documented and tested"]
   P1_35a --> P1_33g
   P1_33g --> P1_34d
+  P1_35m["P1.35m Dev CA folder walk edges pinned"]
+  P1_35a --> P1_35m
   P1_35f["P1.35f Compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
