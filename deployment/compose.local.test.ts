@@ -19,16 +19,11 @@ import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { type Compose, type Mount, parseCompose, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
 import { preflight } from "./preflight/index.ts";
+import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS, LOCAL_ONLY_SERVICES } from "./preflight/local-only.ts";
 
 const DEPLOYMENT = import.meta.dirname;
 const parse = (file: string): Compose => parseCompose(readFileSync(join(DEPLOYMENT, file), "utf8"), file);
 
-/**
- * Services only the local file has: the token reader now, the seed (P1.29s) and the PLC (P1.34v) when they land. P1.34v
- * also adds the PLC's per-consumer networks (plc_pds, plc_web, plc_appview) to what the local file may add, each consumer
- * joining only its own (architecture 2026-10-15 02:26Z, last section of record 2026-10-13-local-plc-a4-steps).
- */
-const LOCAL_ONLY = new Set([TOKEN_READER, "seed", "plc"]);
 /** The dev root's public folder, bound read-only into pds and web only (item 5). */
 const TRUST: Mount = { type: "bind", source: "../../unset-dev-trust", target: "/etc/unset-dev-trust", readOnly: true };
 /** What the local file may add to a service, beyond dev's: mounts, secrets and networks, by service. */
@@ -73,7 +68,7 @@ function serviceDrift(dev: Service, local: Service): string[] {
     ["logging", dev.logging, local.logging],
     ["profiles", dev.profiles, local.profiles],
     ["networkMode", dev.networkMode, local.networkMode],
-    ["networks", dev.networks, without(local.networks, added.networks)],
+    ["networks", dev.networks, without(local.networks, [...(added.networks ?? []), ...localOnlyOf(dev.name)])],
     ["ports", dev.ports, local.ports],
     ["mounts", devMounts, localMounts],
     ["secrets", dev.secrets, without(local.secrets, added.secrets)],
@@ -90,19 +85,45 @@ function serviceDrift(dev: Service, local: Service): string[] {
   ];
 }
 
+/** The local-only networks `service` is a listed member of. */
+const localOnlyOf = (service: string): string[] =>
+  [...LOCAL_ONLY_NETWORKS].filter(([, row]) => row.members.includes(service)).map(([name]) => name);
+
+/** Each local-only network the local file holds other than as listed, with exactly its listed members. */
+function localOnlyNetworkDrift(local: Compose): string[] {
+  const problems: string[] = [];
+  for (const network of local.networks.filter(({ name }) => isLocalOnlyNetwork(name))) {
+    const row = LOCAL_ONLY_NETWORKS.get(network.name);
+    if (row === undefined) problems.push(`${network.name} is not on the local-only list`);
+  }
+  for (const [name, row] of LOCAL_ONLY_NETWORKS) {
+    const network = local.networks.find((n) => n.name === name);
+    const members = local.services.filter((s) => s.networks.includes(name)).map((s) => s.name);
+    if (
+      network === undefined ||
+      network.internal !== row.internal ||
+      !same([...members].sort(), [...row.members].sort())
+    )
+      problems.push(`${name} differs from the local-only list`);
+  }
+  return problems;
+}
+
 /** Every difference between the files that the local stack is not allowed; none means they agree. */
 function drift(dev: Compose, local: Compose): string[] {
   const problems: string[] = [];
   for (const s of local.services) {
     const twin = dev.services.find((d) => d.name === s.name);
-    if (twin === undefined && !LOCAL_ONLY.has(s.name)) problems.push(`${s.name} is only in the local file`);
+    if (twin === undefined && !LOCAL_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is only in the local file`);
     if (twin !== undefined) problems.push(...serviceDrift(twin, s));
   }
   for (const s of dev.services) {
-    if (LOCAL_ONLY.has(s.name)) problems.push(`${s.name} is in the dev file`);
+    if (LOCAL_ONLY_SERVICES.has(s.name)) problems.push(`${s.name} is in the dev file`);
     else if (!local.services.some((l) => l.name === s.name)) problems.push(`${s.name} is only in the dev file`);
   }
-  if (!same(dev.networks, local.networks)) problems.push("the networks or their internal flags differ");
+  const shared = local.networks.filter(({ name }) => !LOCAL_ONLY_NETWORKS.has(name));
+  if (!same(dev.networks, shared)) problems.push("the networks or their internal flags differ");
+  problems.push(...localOnlyNetworkDrift(local));
   return problems;
 }
 
@@ -169,6 +190,15 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
         dev,
         { ...local, networks: local.networks.map((n) => ({ ...n, internal: false })) },
         "the networks or their internal flags differ",
+      ],
+      // A PLC network the local-only list does not name (architecture 02:32Z).
+      [
+        dev,
+        {
+          ...editService(local, "web", (s) => ({ ...s, networks: [...s.networks, "plc_web"] })),
+          networks: [...local.networks, { name: "plc_web", internal: true }],
+        },
+        "plc_web is not on the local-only list",
       ],
     ];
     for (const [d, l, problem] of cases) expect(drift(d, l), problem).toContain(problem);

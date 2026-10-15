@@ -1785,6 +1785,19 @@ describe("preflight C17 (P1.30t)", () => {
     expect(await expectOnly("C17", { compose: NETWORKED, networks: fewer })).toContain("pds is on inner");
   });
 
+  test("c17_local_only_networks_refused_outside_local", async () => {
+    // Architecture 2026-10-15 02:32Z: a PLC network belongs to the local stack alone, so dev and prod refuse one even
+    // when their table lists it; under local, one the local-only list does not name is refused by the table.
+    const plc = (compose: string) =>
+      compose.replace("    networks: [back]", "    networks: [plc_web]").replace("  back: {}", "  plc_web: {}");
+    const table = { default: TABLE.default, plc_web: { internal: false, members: ["web"] } };
+    expect(await expectOnly("C17", { compose: plc(COMPOSE), networks: table })).toBe(
+      "FAIL C17 network plc_web is local only",
+    );
+    const dev = await check({ compose: plc(DEV), pdsEnv: DEV_ENV, networks: table }, "dev");
+    expect(dev.lines).toContain("FAIL C17 network plc_web is local only");
+  });
+
   test("c17_table_duplicate_key_refused", async () => {
     const twice =
       '{"default": {"internal": true, "members": []}, "default": {"internal": false, "members": ["edge", "pds", "web"]}}';
@@ -2943,6 +2956,16 @@ networks:
     expect(printable("a\\b\x00\x1f\x7f\x80\x9f\xa0\u{fffd}\u{1f600}\ud800 é")).toBe(
       "a\\\\b\\x00\\x1f\\x7f\\x80\\x9f\\xa0\\u{fffd}\\u{1f600}\\u{d800} \\xe9",
     );
+  });
+
+  test("local_c17_unlisted_plc_network_fails", async () => {
+    // Architecture 2026-10-15 02:32Z: under local, C17 expects networks.dev.json plus the local-only list, both ways.
+    const { lines } = await local((text) =>
+      text
+        .replace("    networks: [back]", "    networks: [back, plc_web]")
+        .replace("  back: {}", "  back: {}\n  plc_web:\n    internal: true"),
+    );
+    expect(lines.find((line) => / C17 /.test(line))).toBe("FAIL C17 network plc_web is not in the table");
   });
 
   test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
