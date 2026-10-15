@@ -8151,22 +8151,29 @@ Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
 
 Slice 1, issue #885, trusted base (every test file under `shared/http/`), kind/fix, lane Phase 1 after P1.35i (lane
 order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
-step-book mapping; widened by book edit 2026-10-15-verify-886-fixture-scope (architecture, 01:55Z). Like any
-trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs Alex's typed line: "yes P1.35j
-shared/http test handles reserved domains", which names shared/http and so still covers the widened file list.
+step-book mapping; widened by book edit 2026-10-15-verify-886-fixture-scope (architecture, 01:55Z; widened again by its
+02:46Z A1-A3 ruling, still all inside `shared/http/`). Like any trusted-base PR it touches nothing outside trusted base.
+As architecture ruled, it needs Alex's typed line: "yes P1.35j shared/http test handles reserved domains", which names
+shared/http and so still covers the widened file list.
 
 **What:** the same rules as P1.35i for every test file under `shared/http/` (server, config, returnPath, csrf, csp).
 The PR body lists every one-letter label it keeps on our suffixes.
 - Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example`; `config.test.ts:70` `media.example.co.uk` takes the
   did-columns replacement, `sub.example.com` (the multi-label public-suffix shape is an accepted loss if the test needed
   it).
+- A1: `alice.0x40.me` (server.test.ts, config.test.ts) becomes `a.0x40.me` or `x.0x40.me`, keeping the port and case
+  variants (`A.0x40.me:443`, `a.0x40.me:8443`). `a.b.0x40.me` stays (one-letter labels).
+- A3: `unsetcdn.net` becomes `media.example` in `csp/policies.test.ts`, its snapshot and `config.test.ts`. A grep on
+  main (2b53bd5) finds it only in those test files, so no product code changes; product code keeps taking the media
+  origin from config. Tests may switch to the real domain once P0.11 records one as ours.
 - Stays: `csrf/gate.test.ts:107` `evil.unset.sh` (our suffix, in a test about our origins); `config.test.ts:134`
   `evil0x40.me` (SE-7a's named suffix-boundary allowance); labels `a` and `b` on `.0x40.me` at server.test.ts:112-115
   and config.test.ts:131-132 (own-suffix allowance; listed in the PR body for P2.09).
 
-Done when no `shared/http` test file holds a handle or hostname on a registrable domain other than the kept labels, the
-allowances above, and our own domains as hostnames (such as `static.unset.sh`, `chat.unset.sh`, `www.unset.sh`; SE-7a),
-and check is green.
+Done when no `shared/http` test file holds a handle on a registrable domain other than the reserved one-letter labels
+on our handle suffix, or a hostname other than an A1 own host (unset.sh and its service subdomains such as
+`static.unset.sh`, `chat.unset.sh`, `www.unset.sh`; unset.ac; 0x40.space), an A2 service host, a (b) name, or the
+`evil0x40.me` suffix-boundary allowance (SE-7a); and check is green.
 
 ---
 
@@ -8180,10 +8187,12 @@ infrastructure/net-guard test hosts reserved names".
 
 **What:** `prototype.test.ts:208`, `:226` and `:230` use `127.attacker.com`, which becomes `127.attacker.example`. The
 numeric first label is what the tests need, and it survives the move. The rest of net-guard's hosts are service or own
-hosts and stay.
+hosts and stay: service hosts are the A2 closed list (plc.directory, bsky.social, docker.io, registry-1.docker.io,
+ghcr.io, quay.io, github.com with placeholder paths) and own hosts are A1's (SE-7a; book edit
+2026-10-15-verify-886-fixture-scope, last section).
 
-Done when no net-guard test file holds a registrable host other than service or own hosts, the same refusals still
-fire, and check is green.
+Done when no net-guard test file holds a registrable host other than an A2 service host or an A1 own host, the same
+refusals still fire, and check is green.
 
 ---
 
