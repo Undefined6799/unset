@@ -8892,6 +8892,13 @@ environment string forging a PASS line; and a folder swapped during the walk.
 - N3: the non-UTF-8 refusal prints the entry's raw bytes through the escape helper (for example `\xff`), with the
   folder.
 
+**What, APP_HOST under local (architecture 04:03Z, the record's last section):**
+- Under `--env local`, preflight judges APP_HOST's value three ways: it sits under the constrained `.localhost` names,
+  it differs from PDS_HOST, and it is never an IP literal. As of #903 at 8e12639, `local-leaf.ts:86-93` checks that it
+  is a hostname (refusing a numeric last label) matching web's PUBLIC_ORIGIN host, and `caddyfile.local` refuses
+  equality with PDS_HOST. The builder confirms each of the three on main and adds whichever is missing, each with a red
+  test: `app.example.com`, APP_HOST equal to PDS_HOST, `127.0.0.1`, and `[::1]`.
+
 Size: if the step measures over about 400 source lines, it splits at the measure into a verify-896 part (C18 DER walk,
 N3, the C9 owner and mode rules, N9) and a verify-901 part (printable module, re-lstat, N3, the X-mutant reds). The
 second part takes the next free id, and the split is recorded in book edit 2026-10-15-verify-896-901-followups before
