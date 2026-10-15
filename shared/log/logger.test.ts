@@ -245,13 +245,13 @@ describe("logger", () => {
 
   test("unknown_event_kind_placeholder", () => {
     const { log, records } = capture();
-    log.info("user.alice.0x40.me signed in" as never, { kind: "TypeError" });
+    log.info("user.alice.example.com signed in" as never, { kind: "TypeError" });
     expect(records()[0]).toMatchObject({ event: "log.unknown_event", kind: "[event]" });
   });
 
   test("word_fields_refuse_identifiers", () => {
     const identifiers = [
-      "alice.0x40.me",
+      "alice.example.com",
       "did:plc:eeeeeeeeeeeeeeeeeeeeeeee",
       "alice@example.com",
       "203.0.113.7",
