@@ -8957,10 +8957,14 @@ local-only service that skips the env drift test picking up a key that changes i
   `*_SECRET`, `*_TOKEN`, `*_KEY`, or anything the secret scanner or SE-7 treats as secret) must be a `${VAR}` reference,
   never a literal, in both compose and the table (architecture, in the same record). Its `env_file` list is pinned
   exactly, in order. Any added, removed or changed entry fails, naming the service and key (for example APP_* on the
-  reader). P1.34v adds plc's map the same way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red
-  tests: APP_HOST on the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, an unlisted `env_file` on the reader, a
-  changed value of an allowed key (for example the reader's PDS URL), a deleted allowed key, a literal in place of a
-  `${VAR}` reference, and a literal on a secret-bearing key.
+  reader). The reader has no environment and no `env_file` today (`compose.dev.yaml:198`, "No network, no env, no
+  secret"), so its pin is an exact empty map and an empty list. This step still builds the full key-value comparison and
+  the secret-key `${VAR}` guard as code, so the value red tests in P1.34v and P1.29s have code to test. P1.34v adds
+  plc's map the same way (book edit 2026-10-15-verify-903-info-items, "Codex P2 on #910"). Red tests here: APP_HOST on
+  the reader, NODE_TLS_REJECT_UNAUTHORIZED on the reader, and an unlisted `env_file` on the reader. The value red tests
+  (a changed value of an allowed key, a deleted allowed key, a literal in place of a `${VAR}` reference, and a literal
+  on a secret-bearing key) need a service with environment, so they ride P1.34v on plc and P1.29s on seed (Codex on
+  #910).
 - The env_file folder rule (P1.34d item 11), pinned against weaker rewrites (verify-903-7742397 N-e and N-f; the
   record's section "verify-903-7742397 N-e, N-f"), test only: red tests for an entry under a sub-folder
   (`../../unset-dev-env/sub/pds.env`) and under a near-named folder (`../../unset-dev-env-old/pds.env`), so a prefix
@@ -9508,7 +9512,9 @@ the local file).
   compose file other than `compose.local.yaml`, and no compose file other than `compose.local.yaml` mounts
   `init-local/`.
 - This step adds plc's row to P1.35r's limits table and plc's exact environment map and `env_file` list to its
-  local-only env pins (book edit 2026-10-15-verify-903-info-items).
+  local-only env pins, with P1.35r's value red tests on plc: a changed value of an allowed key, a deleted allowed key,
+  a literal in place of a `${VAR}` reference, and a literal on a secret-bearing key (book edit
+  2026-10-15-verify-903-info-items).
 - The PDS rotation key and recovery-key setup follow the pds-key-custody note.
 
 Done when the local PDS creates an account against the local PLC, the local-only test is green, and check is green.
@@ -12463,7 +12469,8 @@ P1.29h, P1.29s, P1.29t.
    `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one `logging` entry: exactly
    `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
    adds seed's row to P1.35r's limits table and seed's exact environment map and `env_file` list to P1.35r's
-   local-only env pins, with red tests APP_HOST on seed and an unlisted `env_file` on seed (Codex on #910). It
+   local-only env pins, with red tests APP_HOST on seed, an unlisted `env_file` on seed, and P1.35r's value red tests
+   on seed (Codex on #910). It
    also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
    2026-10-12-p134l-secrets-folder-listing, rider), and a test that the token reader passes `hostWalk` to the pin
    unchanged, so mutant R12 (statfs blind) dies (verify-845-200b534 N3; book edit 2026-10-13-host-pin-steps, "Step-book
