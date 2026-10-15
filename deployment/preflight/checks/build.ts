@@ -82,7 +82,19 @@ function contextProblem(context: string, inputs: Inputs): string | null {
  */
 export const c26: Check = {
   id: "C26",
-  run: (inputs) => buildsProblem(inputs) ?? devCaFolderProblem(inputs) ?? devTrustFolderProblem(inputs) ?? pass(),
+  run: (inputs) => {
+    let built: Outcome | null;
+    try {
+      built = buildsProblem(inputs);
+    } catch (error) {
+      // A context test that throws on the dev CA folder (a self-loop link: realpath ELOOP) refuses by the folder's own
+      // message (architecture 2026-10-15 02:08Z, N1). Anything else stays a check error.
+      const folder = devCaFolderProblem(inputs);
+      if (folder === null) throw error;
+      return folder;
+    }
+    return built ?? devCaFolderProblem(inputs) ?? devTrustFolderProblem(inputs) ?? pass();
+  },
 };
 
 function buildsProblem(inputs: Inputs): Outcome | null {
@@ -171,8 +183,14 @@ function devCaFolderProblem(inputs: Inputs): Outcome | null {
   }
   if (inputs.env === "prod") return fail("dev CA folder present on a prod host");
   if (!info.isDirectory()) return fail(`dev CA folder is not a real directory: ${folder}`);
-  const problem = devCaEntryProblem(folder, inputs);
-  return problem === null ? null : fail(problem);
+  const problem = devCaEntryProblem(folder, inputs, "dev CA folder");
+  if (problem !== null) return fail(problem);
+  // A folder swapped while it was walked: the race stays a residual, but a swap left in place is caught (02:08Z).
+  const after = inputs.lstat(folder);
+  if (after === null || after.dev !== info.dev || after.ino !== info.ino) {
+    return fail(`dev CA folder changed while it was checked: ${folder}`);
+  }
+  return null;
 }
 
 /** True only when nothing is there: realpath answers null for a missing path and throws on any other error. */
@@ -187,15 +205,16 @@ function isAbsent(path: string, inputs: Inputs): boolean {
 /**
  * Why an entry under the dev CA folder is refused, or null. Our own recursion by lstat follows no link (a recursive
  * readdir follows linked folders, Node v26.10.0 doc/api/fs.md, fs.readdirSync `recursive`): the folder holds only
- * regular files with one link each and real folders.
+ * regular files with one link each and real folders. `what` names `dir` when its listing fails.
  */
-function devCaEntryProblem(dir: string, inputs: Inputs): string | null {
-  let names: string[];
+function devCaEntryProblem(dir: string, inputs: Inputs, what = "dev CA folder entry"): string | null {
+  let names: string[] | null;
   try {
-    names = inputs.readdir(dir).sort();
+    names = utf8Names(inputs.readdir(dir));
   } catch {
-    return `dev CA folder entry cannot be read: ${dir}`;
+    return `${what} cannot be read: ${dir}`;
   }
+  if (names === null) return `dev CA folder holds a name that is not UTF-8, in: ${dir}`;
   for (const name of names) {
     const path = join(dir, name);
     const info = inputs.lstat(path);
@@ -226,12 +245,13 @@ function devTrustFolderProblem(inputs: Inputs): Outcome | null {
     return isAbsent(folder, inputs) ? missing("unset-dev-trust") : fail(`dev trust folder cannot be read: ${folder}`);
   }
   if (!info.isDirectory()) return fail(`dev trust folder is not a real directory: ${folder}`);
-  let names: string[];
+  let names: string[] | null;
   try {
-    names = inputs.readdir(folder).sort();
+    names = utf8Names(inputs.readdir(folder));
   } catch {
     return fail(`dev trust folder cannot be read: ${folder}`);
   }
+  if (names === null) return fail(`dev trust folder holds something other than root.pem: ${folder}`);
   const other = names.find((name) => name !== "root.pem");
   if (other !== undefined) return fail(`dev trust folder holds something other than root.pem: ${join(folder, other)}`);
   const path = join(folder, "root.pem");
@@ -242,4 +262,25 @@ function devTrustFolderProblem(inputs: Inputs): Outcome | null {
   if (root.nlink !== 1) return fail(`dev trust root has extra hard links: ${path}`);
   if ((root.mode & 0o022) !== 0) return fail(`dev trust root is writable by group or other: ${path}`);
   return null;
+}
+
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/**
+ * The names, sorted, or null when one is not UTF-8 (architecture 2026-10-15 02:08Z, S2). readdir hands over each name
+ * as its bytes (`encoding: "buffer"`, Node v26.10.0 doc/api/fs.md, fs.readdirSync). A lossy decode turns every invalid
+ * byte into U+FFFD, so an entry could be judged by a clean neighbour's name; `fatal` throws instead, and `ignoreBOM`
+ * keeps a leading BOM (doc/api/util.md, new TextDecoder). Valid UTF-8 decoded that way encodes back to the same bytes,
+ * so each path built from these names is the entry's own (the U+FFFD and 0xff cases in preflight.test.ts pin it).
+ */
+function utf8Names(names: Buffer[]): string[] | null {
+  const decoded: string[] = [];
+  for (const name of names) {
+    try {
+      decoded.push(UTF8.decode(name));
+    } catch {
+      return null;
+    }
+  }
+  return decoded.sort();
 }
