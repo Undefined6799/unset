@@ -41,7 +41,7 @@ afterEach(() => {
 
 describe("resolveTxt", () => {
   test("resolve_txt_ok", async () => {
-    const records = [["did=did:plc:ewvi7nxzyoun6zhxrhs64oiz"], ["v=1 ", "two chunks"]];
+    const records = [["did=did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"], ["v=1 ", "two chunks"]];
     const { createResolver, seen } = stub(async () => records);
     expect(await resolveTxt("_atproto.alice.example", { timeoutMs: 2_000, createResolver })).toEqual(records);
     expect(seen).toEqual({
