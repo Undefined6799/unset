@@ -63,13 +63,13 @@ describe("schema build checks", () => {
     expect(planted(moved)).toEqual(["schemas/sh.unset.like.json: id sh.unset.follow does not match the file name"]);
   });
 
-  test("permission_set_has_en_fr_title_detail", () => {
+  test("permission_set_has_en_title_detail", () => {
+    // English only until the i18n slice adds French (Alex, 2026-10-15, "English first").
     const main = setOf(authApp());
-    for (const key of ["title:lang", "detail:lang"])
-      expect(Object.keys(main[key] as object).sort()).toEqual(["en", "fr"]);
-    const noFrench = authApp();
-    delete (setOf(noFrench)["detail:lang"] as Record<string, string>).fr;
-    expect(planted(noFrench)).toEqual(['schemas/sh.unset.authApp.json: permission set has no "fr" detail']);
+    for (const key of ["title:lang", "detail:lang"]) expect(Object.keys(main[key] as object)).toEqual(["en"]);
+    const noEnglish = authApp();
+    delete (setOf(noEnglish)["detail:lang"] as Record<string, string>).en;
+    expect(planted(noEnglish)).toEqual(['schemas/sh.unset.authApp.json: permission set has no "en" detail']);
   });
 
   test("permission_set_scope_prefix_only", () => {

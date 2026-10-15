@@ -14,7 +14,8 @@ const REPO = join(PACKAGE, "..", "..");
 const GENERATED = join(PACKAGE, "generated");
 const FLAT_NSID = /^sh\.unset\.[a-zA-Z][a-zA-Z0-9]*$/;
 const SET_PREFIX = "sh.unset.";
-const LANGUAGES = ["en", "fr"];
+/** Consent text languages. English only until the i18n slice adds French (Alex, 2026-10-15, "English first"). */
+const LANGUAGES = ["en"];
 /** Keys whose values are data, not schema nodes. */
 const VALUE_LISTS = new Set(["knownValues", "enum", "default", "const"]);
 // Generated code casts recursive refs `as any` (@atproto/lex-builder 0.1.17); the line keeps biome's rule for ours.

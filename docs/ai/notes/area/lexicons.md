@@ -27,7 +27,7 @@ apps rely on it, so a change is close to permanent.
   lexicon objects accept them; `read` (records from the network) does not.
 - `src/limits.ts`: the limits the UI and the domain show; a test holds them equal to the schemas.
 - `src/scope.ts`: the OAuth scope string, and the expanded fallback for a PDS without permission sets.
-- `scripts/build.ts`: schema checks (strict keys, flat NSIDs, en and fr consent text) and generation.
+- `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
 
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.

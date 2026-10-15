@@ -19,12 +19,11 @@ const main = /*#__PURE__*/ l.permissionSet(
   ],
   {
     title: "unset.sh profile and pages",
-    "title:lang": { en: "unset.sh profile and pages", fr: "Profil et pages unset.sh" },
+    "title:lang": { en: "unset.sh profile and pages" },
     detail:
       "Create and update your unset.sh profile, sections and pages, and your follows of unset.sh accounts, in your account. Nothing else in your account.",
     "detail:lang": {
       en: "Create and update your unset.sh profile, sections and pages, and your follows of unset.sh accounts, in your account. Nothing else in your account.",
-      fr: "Créer et modifier votre profil, vos sections et vos pages unset.sh, et vos abonnements à des comptes unset.sh, dans votre compte. Rien d'autre dans votre compte.",
     },
   },
 );
