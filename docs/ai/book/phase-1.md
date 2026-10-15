@@ -8560,7 +8560,14 @@ compose and `local:up` items.
    2026-10-12-p134c-p134d-local-dev-root-ca; book edit 2026-10-14-verify-857-fixes, S3.)
 6. Moved to P1.33w (the `unset-dev-ca` bind and build-context refusal in C9 and C26).
 7. `web` joins the edge network on `local` through the app site's row in the networks table (restored: it was item 4
-   of the record and no amendment removed it; without it `local/app.caddy` cannot reach web).
+   of the record and no amendment removed it; without it `local/app.caddy` cannot reach web). Under `--env local` the
+   preflight reads a new `deployment/networks.local.json`; `inputs.ts` maps local, dev and prod each to its own table
+   and refuses any other env (no default). A test holds the local table equal to the dev table plus one named list of
+   differences (today: web on edge; local-plc A4's PLC network joins it when that step lands), and the item 11 compose
+   drift test uses the same list. The local table only adds memberships: it never removes a dev one and never adds a
+   host port. Any further local difference needs an architecture ruling and an entry on that list. dev's table and
+   compose file are unchanged (architecture's 01:51Z ruling on the record's item 4; book edit 2026-10-14-p134d-split,
+   "Step-book mapping of the 01:51Z item 4 ruling").
 8. (Amendment 2, architecture's amendment 5 of 2026-10-12-refocus-local-signin-rulings.) The root also excludes the
    IPv4 and IPv6 all-addresses ranges and is valid for at most 825 days; subdomain admission is accepted. Tests use
    a throwaway root: an unrelated DNS leaf, IP-only leaves, a CN-only unrelated leaf and a sub-CA leaf are refused;
@@ -9722,11 +9729,12 @@ failing on CRITICAL and keeping every shipped image at fail-on-HIGH?" (architect
 `/usr/bin/xcaddy`, fixed in 1.26.6, while `caddy:2.11.7-alpine` and the shipped edge image scan clean (Trivy 0.74.0,
 HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). That was true when relayed; since then main's `mirror` run fails on
 `caddy:2.11.7-alpine` and `pds:0.4.5037` (none of the last 40 runs on main green, verify-868-fd7be32-postmerge O3);
-P1.33c's exceptions answer the `pds` half; no step yet answers the `caddy:2.11.7-alpine` half (P1.27r covers the Images
-workflow's `scan`, not Mirror's), so the step book books one. xcaddy is a build-time CLI fed only our pinned versions
-and checksum-verified modules, in an unprivileged job; the edge image's own Trivy scan reads the built binary's Go build
-info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE ignore entries (the alternative) recur on
-every Go point release and waive a CVE id globally unless scoped by path.
+P1.33c's exceptions answer the `pds` half, and the `caddy:2.11.7-alpine` half is already ruled in book edit
+2026-10-12-mirror-caddy-replaced-binary: it is the runtime entry, so we wait for upstream's rebuilt digest under the age
+rule, with Alex's card at the 2026-10-19 bound (P1.27r covers the Images workflow's `scan`, not Mirror's). xcaddy is a
+build-time CLI fed only our pinned versions and checksum-verified modules, in an unprivileged job; the edge image's own
+Trivy scan reads the built binary's Go build info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE
+ignore entries (the alternative) recur on every Go point release and waive a CVE id globally unless scoped by path.
 
 **Where:** `.github/workflows/mirror.yml` reads each entry's `stage` and fails if it is missing. `build` entries scan
 at HIGH and CRITICAL, fail on CRITICAL, and report HIGH in the job summary and annotations; `runtime` entries are
