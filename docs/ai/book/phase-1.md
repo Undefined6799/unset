@@ -69,13 +69,13 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
   P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
-  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
-  P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n,
+  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
+  P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
+  P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
   P1.34d, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
-  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from
-  slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice
-  exit P2.13a.
+  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice
+  2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
+  P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -609,6 +609,9 @@ flowchart LR
   P1_35a --> P1_35m
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
+  P1_35o["P1.35o app network pinned in the dev compose tests"]
+  P1_35n --> P1_35o
+  P1_35o --> P1_34v
   P1_35f["P1.35f compose probe stall root-caused"]
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
@@ -8126,6 +8129,7 @@ Done when a mutant that swallows the rejection, or resolves it, turns a test red
 
 ### P1.35i — Move test handles to reserved domains
 Tags: [SEC]            Depends on: —
+As built: #886 at fed4c30, merged as 2894a57.
 
 Slice 1, issue #884, product (`domains/identity/syntax.test.ts`, `deployment/preflight/preflight.test.ts`,
 `shared/log/logger.test.ts` and `shared/log/logger.hardening.test.ts`), kind/fix, lane Phase 1 after P1.35h (lane order
@@ -8150,22 +8154,36 @@ Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
 
 Slice 1, issue #885, trusted base (every test file under `shared/http/`), kind/fix, lane Phase 1 after P1.35i (lane
 order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
-step-book mapping; widened by book edit 2026-10-15-verify-886-fixture-scope (architecture, 01:55Z). Like any
-trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs Alex's typed line: "yes P1.35j
-shared/http test handles reserved domains", which names shared/http and so still covers the widened file list.
+step-book mapping; widened by book edit 2026-10-15-verify-886-fixture-scope (architecture, 01:55Z; widened again by its
+02:46Z A1-A3 ruling, still all inside `shared/http/`). Like any trusted-base PR it touches nothing outside trusted base.
+As architecture ruled, it needs Alex's typed line: "yes P1.35j shared/http test handles reserved domains", which names
+shared/http and so still covers the widened file list.
 
 **What:** the same rules as P1.35i for every test file under `shared/http/` (server, config, returnPath, csrf, csp).
 The PR body lists every one-letter label it keeps on our suffixes.
-- Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example`; `config.test.ts:70` `media.example.co.uk` takes the
-  did-columns replacement, `sub.example.com` (the multi-label public-suffix shape is an accepted loss if the test needed
-  it).
+- Rule (architecture 03:01Z): the `shared/http` test hostnames this step writes or replaces use example.com, example.net
+  or example.org, with labels under them; a bare `.example` appears only in a test that means "unknown TLD" (book edit
+  2026-10-15-verify-886-fixture-scope, "Step-book mapping of the returnPath ruling"). It is not a sweep: other bare
+  `.example` and `.test` hosts stay, and returnPath.test.ts:17, :21 and :22 move to `evil.example.com` in the next
+  trusted `shared/http` step with verify-899 N1, lettered when it opens (architecture 03:16Z and 03:18Z; same record).
+- Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example.com` (a real-shaped TLD keeps the off-site-host case
+  faithful); `config.test.ts:70` `media.example.co.uk` takes the did-columns replacement, `sub.example.com` (the
+  multi-label public-suffix shape is an accepted loss if the test needed it).
+- A1: `alice.0x40.me` (server.test.ts, config.test.ts) becomes `a.0x40.me` or `x.0x40.me`, keeping the port and case
+  variants (`A.0x40.me:443`, `a.0x40.me:8443`). `a.b.0x40.me` stays (one-letter labels).
+- A3: `unsetcdn.net` becomes `media.example.net` in `csp/policies.test.ts`, its snapshot and `config.test.ts`
+  (`media.example` would fail: KNOWN_TLDS in `shared/http/config.ts` has no `.example` and must not gain it;
+  architecture's A3 correction). A grep on main (2b53bd5) finds it only in those test files, so no product code changes;
+  product code keeps taking the media origin from config. Tests may switch to the real domain once P0.11 records one as
+  ours.
 - Stays: `csrf/gate.test.ts:107` `evil.unset.sh` (our suffix, in a test about our origins); `config.test.ts:134`
   `evil0x40.me` (SE-7a's named suffix-boundary allowance); labels `a` and `b` on `.0x40.me` at server.test.ts:112-115
   and config.test.ts:131-132 (own-suffix allowance; listed in the PR body for P2.09).
 
-Done when no `shared/http` test file holds a handle or hostname on a registrable domain other than the kept labels, the
-allowances above, and our own domains as hostnames (such as `static.unset.sh`, `chat.unset.sh`, `www.unset.sh`; SE-7a),
-and check is green.
+Done when no `shared/http` test file holds a handle on a registrable domain other than the reserved one-letter labels
+on our handle suffix, or a hostname other than an A1 own host (unset.sh and its service subdomains such as
+`static.unset.sh`, `chat.unset.sh`, `www.unset.sh`; unset.ac; 0x40.space), an A2 service host, a (b) name, or the
+`evil0x40.me` suffix-boundary allowance (SE-7a); and check is green.
 
 ---
 
@@ -8179,10 +8197,12 @@ infrastructure/net-guard test hosts reserved names".
 
 **What:** `prototype.test.ts:208`, `:226` and `:230` use `127.attacker.com`, which becomes `127.attacker.example`. The
 numeric first label is what the tests need, and it survives the move. The rest of net-guard's hosts are service or own
-hosts and stay.
+hosts and stay: service hosts are SE-7a's closed list (A2, widened by role at architecture's 03:35Z S4 ruling) and own
+hosts are A1's, and the public IPs are SE-7a's closed list, embedded forms included (book edit
+2026-10-15-verify-886-fixture-scope).
 
-Done when no net-guard test file holds a registrable host other than service or own hosts, the same refusals still
-fire, and check is green.
+Done when no net-guard test file holds a registrable host other than an A2 service host or an A1 own host, the same
+refusals still fire, and check is green.
 
 ---
 
@@ -8239,7 +8259,7 @@ path, confirmed for C18 at 23:08Z); an absent root fails with "input missing: un
 a foreign CA, the same name with another key, and the same key with another name. As built on #869 at 8e3a8f2
 ("Updates (23:23Z)" of book edit 2026-10-14-verify-857-fixes), which also moves the root path, so P1.33y moves nothing.
 
-Moved to P1.33y and built there (#876; book edit 2026-10-14-verify-868-fixes, "Correction (23:55Z)").
+Built on #869 (116b8dc); only the `unset-dev-trust/` folder-tree line rode P1.33y (#876).
 Runbook (S2(c), point 4): the `local-leaf.pem` lines of `docs/human/runbooks/dev-stack-secrets.md` (the openssl run
 writes the cert-only copy beside the env files in `unset-dev-env/`, copying with `install`, never a link) ride this
 step as docs (SE-6), because it lands before P1.34d.
@@ -8294,6 +8314,9 @@ check is green.
 
 ### P1.35a — Close the dev CA folder rule's gaps
 Tags: [SEC]            Depends on: P1.33y
+As built: #887 at a7a20cb, merged as f8dce03. It walks with a plain `readdirSync` plus an `lstat` per entry
+(build.ts:193), not `withFileTypes`: equal or stronger, since `lstat` also gives the link count (book edit
+2026-10-15-verify-887-followups, N4).
 Slice 1, issue #871, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33y and before P1.34d
 (it shares files with P1.33x and P1.33y, and P1.34d's local stack relies on the folder rule); book edit
 2026-10-14-p134d-split, "P1.35a" section, carrying architecture's ruling on verify-861-9ae3539 (S1, S2, S3, N1; last
@@ -8383,6 +8406,7 @@ the red test proves a failing compose call fails, check is green, and no timeout
 
 ### P1.35g — Refuse an IP address as the local PDS host
 Tags: [SEC]            Depends on: —
+As built: #888 at 78e935a, merged as 3de230b.
 
 Slice 1, issue #880, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.35f (lane order
 only); book edit 2026-10-15-verify-876-followups, from verify-876-aef02b9 S1 (the PDS_HOST half of verify-869 S1; it
@@ -8458,8 +8482,7 @@ checks".
 - Nits: item 4 gains a real-cruise `shared/<x>/dist` case; the fixture stubs (`depcruise-fixture.ts:91`) drop the
   `exports` field unless a test needs it.
 - #588's two open nits, both still on main: the `depcruise.test.ts:507` comment says P1.30u and should say P1.30r; a red
-  fixture
-  such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
+  fixture such as `../edge/caddyfileXts` kills the unescaped-dot mutant on the caddyfile row.
 
 **What, image scan gate (#866):**
 - S1: a test pins the gate's `EXPORT_RESULT: ${{ needs.scan-export.result }}` (`images.yml:393`); feeding it
@@ -8584,6 +8607,7 @@ Done when each red case fails on main for its own reason (each S1 case kills its
 
 ### P1.35n — Give web its own network to the edge
 Tags: [SEC]            Depends on: —
+As built: #895 at ee70994, merged as 2b53bd5.
 
 Slice 1, issue #894, product (`deployment/` compose files, `deployment/networks.dev.json`, `deployment/preflight/`),
 kind/feature, lane the third thread before P1.34d (its place among P1.33g, P1.35m and the open PRs follows the lane's
@@ -8611,6 +8635,45 @@ PLC network keeps its A4 allowlist entry. P1.29's network table and its threat l
 No ADR (architecture 02:21Z: D8 does not apply). The record is P1.29's network table with the `app` row, plus the
 networks comment in `deployment/compose.dev.yaml`, which this step updates to say web reaches the PDS only through the
 edge's aliases on `app`, citing the 02:05Z and 02:21Z sections of book edit 2026-10-14-p134d-split.
+
+Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
+
+---
+
+### P1.35o — Pin the app network in the dev compose tests
+Tags: [SEC]            Depends on: P1.35n
+
+Slice 1, issue #902, product (`deployment/` compose tests and `deployment/preflight/`), kind/fix, lane the third thread
+after P1.35m, and before P1.34d where possible (a soft order: P1.34d's drift test calls whichever `pdsNeighbours` is on
+main, and P1.35o's PR keeps that test green; book edit 2026-10-15-verify-895-followups, "P1.35o and P1.34d: soft
+order"). P1.34v depends on it for the `plc_pds` exemption. Book edit 2026-10-15-verify-895-followups, from
+verify-895-2b53bd5 (P1.35n, #895) and architecture's 03:05Z ruling (last section of book edit
+2026-10-13-local-plc-a4-steps). A tightening, so nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a service that
+reaches the PDS by taking the PDS's or the edge's name, a second PDS under another name, and a PLC exemption that
+widens beyond the one local network.
+
+**What:**
+- F2: `compose_dev_networks_match_table` (compose.dev.test.ts:211-215) also calls `pdsNeighbours` on the real
+  `compose.dev.yaml`, so CI catches what C17 would only refuse at deploy.
+- N1: the comment at compose.dev.yaml:180-181 becomes "Only the edge sends web HTTP, on the app network, …", and the
+  snippet clause says it describes local and Phase 2.
+- N2: a `web_only_on_internal_networks` test beside `postgres_only_on_internal_networks`; the mutant that makes `app`
+  not internal (C3) dies.
+- N3: compose-parse refuses the edge on `app` with no aliases (option C point 3, "each network must carry exactly
+  both"); red fixture.
+- N5 (cheap): an `edge-*` service beside the PDS is refused, which kills the `startsWith("edge")` exemption mutant (V2).
+- F3 (architecture 03:05Z): `pdsNeighbours`, the edge exemption and the PLC exemption identify services by image
+  identity, not name. The PDS is the locked PDS image ref (under local, the PDS build by exact realpath, Amendment 1);
+  the edge is C26's edge Dockerfile realpath or its lock ref. Every PDS-image service counts as a PDS, and more than one
+  PDS-image service fails C17. Red fixtures: a second PDS-image service under another name beside web; a service named
+  edge running a non-edge image beside the PDS.
+- F1 (same ruling): one named, local-only exemption in `pdsNeighbours`. A neighbour is ignored only when the env is
+  local, the shared network is exactly `plc_pds`, `plc_pds` has exactly two members (the PDS and that service), and the
+  service runs the `localOnly` PLC lock entry by exact `ref:tag@sha256`. Red fixtures, which kill the
+  `s.name !== "plc"` mutant: the same compose under dev; plc on any other network shared with the PDS; a third member
+  on `plc_pds`; a service named plc running another image; the PLC image under another name on `plc_web` with the PDS.
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
@@ -8686,24 +8749,31 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     internal flags, and ports (still on 127.0.0.1). The allowed differences are exactly: `name`; `env_file` paths;
     `image` replaced by `build` (judged by C2 to C5, C18, C25 and C27 under the card); the edge's per-file site mounts
     (item 12) and the leaf mount; the `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only;
-    the local-name network aliases; and the PLC service, its network and its database wiring, which exist in the local
-    file only, with the local pds, web and appview on that network (tap only once P3.02 confirms it resolves DIDs;
-    architecture's Amendments 4 and 5 of 2026-10-13-local-plc); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local
-    file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps),
-    and the same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes,
-    S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
-    2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
-    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
-    key named. Preflight still runs in full on the local file; the drift test catches a weakening that preflight would
-    allow. This step moves `pds-token-reader` from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it
-    always exists in exactly one file; until then it stays in the dev file and cannot run there (P1.33l refuses dev;
-    architecture's Amendment 7 of 2026-10-13-local-plc, Q3). The drift allowance also names `seed` as local-only, which
-    P1.29s adds to `compose.local.yaml` (book edit 2026-10-13-verify-814-fixes, Amendment 1). The reader-only test
-    (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
-    `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). `compose.local.yaml` sets
-    `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until P1.34v lands, DID creation fails at the PDS and never
-    reaches plc.directory, which is fail-closed for the seed (step-book note 1 of 2026-10-13-local-plc-a4-steps,
-    confirmed by architecture 19:31Z). Until this step lands, `local:up` does not exist.
+    the local-name network aliases; and the PLC service, its per-consumer `plc_*` networks and its database wiring,
+    local only; each consumer joins only its own one; the drift test checks that set exactly (architecture 02:26Z; book
+    edit 2026-10-13-local-plc-a4-steps, "Step-book mapping of the 02:26Z ruling"); `PDS_DID_PLC_URL` on pds
+    (`http://plc:2582` in the local file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of
+    2026-10-13-local-plc-a4-steps), and the same for web and appview once P1.34z gives them a PLC URL in compose (book
+    edit 2026-10-13-verify-814-fixes, S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here
+    first; step-book note 2 of 2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount
+    (P1.34u's files, mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in
+    either direction, fails with the key named. Preflight still runs in full on the local file; the drift test catches a
+    weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as P1.35o
+    does for the dev file (F2 of book edit 2026-10-15-verify-895-followups). This step moves `pds-token-reader` from
+    `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it always exists in exactly one file; until then it
+    stays in the dev file and cannot run there (P1.33l refuses dev; architecture's Amendment 7 of 2026-10-13-local-plc,
+    Q3). The drift allowance also names `seed` as local-only, which P1.29s adds to `compose.local.yaml` (book edit
+    2026-10-13-verify-814-fixes, Amendment 1). The reader-only test (`pds_token_reader_only_in_the_dev_file`) becomes
+    `pds_token_reader_only_in_the_local_file`: exactly `compose.local.yaml` (architecture's Amendment 6 of
+    2026-10-13-local-plc, Q2). `compose.local.yaml` sets `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until
+    P1.34v lands, DID creation fails at the PDS and never reaches plc.directory, which is fail-closed for the seed
+    (step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z). Until this step lands,
+    `local:up` does not exist. The local-only list lives in one module in `deployment/preflight/`, which the drift test
+    and C17 both import (architecture 02:32Z; same record, "Step-book mapping of the C17 ruling"). Under local, C17
+    expects networks.dev.json plus that list, matched both ways and exactly; under dev and prod, any network on the list
+    and any `plc_*` network is refused. networks.dev.json gets no local-only rows. If this step lands before any `plc_*`
+    entry exists, the list holds only what this step needs, and the dev and prod refusal is still tested, with a
+    fixture.
 12. The local edge mounts each `sites/*.caddy` file and `local/app.caddy` read-only at
     `/etc/caddy/sites/enabled/<name>.caddy`, with no directory mount (book edit 2026-10-13-p134o-after-791, Amendment
     1). C18's half (accepting exactly those per-file mounts under local) moved to P1.33y. The reader's
@@ -8726,13 +8796,27 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     (`unset-dev-env/local-leaf.pem`). It logs only the fingerprint comparison result, never a certificate body (SE-7;
     book edit 2026-10-14-verify-857-fixes, S2(b), architecture's ~22:20Z point 2). Red test: a served leaf that
     differs from the copy brings the stack down. The drift test is unaffected: the copy is not a compose mount.
+    The check (`served-leaf.ts`) has one outbound connect, which carries `// guard-allow: egress <reason>` (the guard's
+    booked escape hatch, phase-0.md:929, :983), and the code enforces every fact the reason states: the target is the
+    module constants `127.0.0.1` and `443` (no parameter, env read or DNS lookup); under any env other than local it
+    refuses before connecting; each servername is a DNS SAN read with `X509Certificate` from the leaf file C18 judged
+    and must sit under the constrained `.localhost` names, else it refuses before connecting; it uses `ca` = root.pem
+    only with `rejectUnauthorized: true`, closes right after the handshake, sends no application bytes, and a handshake
+    timeout fails closed. Tests inject the connect function and assert the exact target, a refusal under dev and prod,
+    and a refusal for a SAN outside `.localhost`; the red then green against a real TLS server stays. No net-guard
+    loopback mode, no file exemption, no `openssl s_client` (architecture 02:58Z; book edit 2026-10-14-p134d-split,
+    "Step-book mapping of the 02:58Z served-leaf ruling"). The annotation is a line in product code, not a check-path
+    change.
 
 Never `PDS_DEV_MODE`, a fetch bypass or request interception (F-25 stands). Open: whether C13 to C16 refuse
 `NODE_EXTRA_CA_CERTS` on the PDS or web; booked when the builder measures it.
 
-Done when P1.29t's `client_id` probe fails without this step and passes with it (red first), the `unset-dev-ca` red
-tests and item 15's handshake red test pass, the real `compose.local.yaml` test under `--env local` (item 12) passes,
-and check is green.
+Done when P1.34d's own red tests pass: item 15's handshake red test; item 11's drift test, red on a drifted
+`compose.local.yaml`; the wrapper's down-on-mismatch test; item 12's real `compose.local.yaml` test under `--env local`;
+and C17's local-only list module refusing a `plc_*` network under dev (02:32Z ruling); and check is green. Item 5's
+checks are P1.33g's and item 6's refusal is P1.33w's (book edit 2026-10-15-verify-890-postmerge-followups, B6).
+P1.29t's client_id probe red and green move to P1.33z (session containers cannot pull the PDS image; book edit
+2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"). Its PR body names this departure.
 
 ---
 
@@ -8760,7 +8844,7 @@ Tests (architecture):
   with `other.example.test` against `pds.example.test`. Every local test from P1.35g stays green.
 - verify-888 N4: three fixtures, each red on the mismatch alone (not only through L2): a port with non-digit text
   (`pds.localhost:abc`), a double trailing dot (`pds.localhost..`) and leading whitespace (` pds.localhost`). They kill
-  mutants P15, P16 and P18 of `normalHost` (`deployment/preflight/checks/local-leaf.ts:80`).
+  mutants P15, P16 and P18 of `normalHost` (`deployment/preflight/checks/local-leaf.ts:81`).
 - verify-888 N6: an empty `PDS_HOST` and an empty `PDS_HOSTNAME` each fail as input missing; an lstat error other than
   ENOENT (for example ENOTDIR) on a site source is a check error, not input missing (`edge.ts:323-330`); the
   absent-source check runs before `localFileMounts` (`edge.ts:280-283`).
@@ -8790,20 +8874,28 @@ are never committed, pointing to `docs/human/runbooks/dev-stack-secrets.md` to c
 and the local origin to open. No secret values and no example values that look like real keys. The wipe line waits for
 P2.25's local arm: until then the section says the wipe is not built yet and documents no command that fails.
 
-Done when the run is green in CI on this step's PR, the README section is in, and check is green.
+Done when the run is green in CI on this step's PR, the README section is in, and check is green. In this PR's CI, the
+client_id probe passes against the started local stack (green), and fails with a named TLS or client_id fetch error when
+the stack runs without P1.34d's leaf and mounts (red); a pull failure, a timeout or an unhealthy container is not a red.
+Both halves are cited by run id. If the green half fails, its fix is the next local-chain step. No other registry,
+mirror or vendored image; any `.github/` change is its own check step with Alex's typed line (book edit
+2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling").
+
+Rule for every thread: nobody says local sign-in works until this step's run is green, or Alex reports `npm run
+local:up` and the probe passing on his machine.
 
 ---
 
 ### P1.33n — Drop the directory form from the site reader
 Tags: [SEC] trusted            Depends on: P1.33y, P1.34q
 Slice 1, issue #810, trusted base (`deployment/edge/`), kind/refactor (kind/fix if the verifier finds it reachable),
-lane the third thread (P1.34d was a dependency only for the C18 move, which P1.33y made; book edit
+lane Phase 1 (moved from the third lane for lane balance; book edit 2026-10-13-p133n-drop-sites-directory-form, "Lane
+move"). P1.34d was a dependency only for the C18 move, which P1.33y made (book edit
 2026-10-15-verify-868-postmerge-followups, O2); book edit 2026-10-13-p133n-drop-sites-directory-form, from the
 coordinator's relay at 14:56Z on P1.34q (#809). Not paused: it closes a path the per-file rule forbids (local-gaps
 Amendment 3 S2). The verifier found the directory form reachable in #809 only through a missing mode gate, which #809
 fixes, so what remains is dead code (book edit 2026-10-13-p127l-verify-owners, Amendment 1). SE-6 keeps this change out
-of #809. Its outline row stays after P1.34d for lane flow only; the lane may take it as soon as P1.33y and P1.34q are
-merged (both are).
+of #809. P1.33y and P1.34q are both merged, so it can start now.
 
 **What:** remove the directory form of the local site mount from the edge site reader, with its fixtures, now that
 P1.33y moves C18 to the `SiteMount` list (book edit 2026-10-15-verify-876-followups, N6). Only the per-file `SiteMount`
@@ -9228,18 +9320,23 @@ and check is green.
 ---
 
 ### P1.34v — Run a local PLC directory in the local stack
-Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d
+Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o
 Slice 1, issue #782, product (`deployment/compose.local.yaml`, its network table, the image lock, the local PDS env),
 lane the third thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 4 of 2026-10-13-local-plc;
 book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 and 3 to
 the local file).
 
 **What:**
-- The PLC exists in `compose.local.yaml` only. Its service sits on an `internal: true` network with no host port. Its
-  members are exactly the PLC and every local service P1.34z points at it: pds, web and appview. Tap stays out until
-  P3.02 confirms from the pinned Tap source that it resolves DIDs (fail-closed; nothing on the sign-in path needs
-  tap; architecture's Amendment 5 of 2026-10-13-local-plc, point 3). No other service joins it, and C17's network
-  table lists exactly those members. Red fixture: any other service on the PLC network.
+- The PLC exists in `compose.local.yaml` only. Each consumer P1.34z points at it (pds, web, appview) gets its own
+  `internal: true` network, `plc_pds`, `plc_web`, `plc_appview`, with exactly two members, the PLC service and that
+  consumer; no host port and no aliases; each consumer reaches `http://plc:2582` over its own network. `plc_tap` joins
+  only after P3.02 confirms tap resolves DIDs (Amendment 5, point 3). The PLC's one local-only exemption on `plc_pds` is
+  built in P1.35o (architecture 03:05Z; book edit 2026-10-15-verify-895-followups, mapping notes). This step adds the
+  PLC entries to P1.34d's local-only list module, naming each `plc_*` network with its two exact members (architecture
+  02:32Z). Red fixtures: a shared PLC network holding pds and web; a third member on any `plc_*` network; any other
+  service on a `plc_*` network; a `plc_*` network under dev; `plc_web` containing pds; an unlisted `plc_*` network under
+  local (book edit 2026-10-13-local-plc-a4-steps, "Step-book mapping of the 02:26Z ruling" and "Step-book mapping of the
+  C17 ruling").
 - `local:up` checks, before starting the PDS, that the PLC database exists, with a read-only query as the PLC role; if
   it is missing (a local volume made before this step) it refuses with a fixed reason naming `local:reset`. Init stays
   the only creator of roles and databases (P1.34u). `local:reset` removes only volumes labelled
@@ -9868,10 +9965,11 @@ HIGH and CRITICAL, ignore-unfixed; relayed 02:05Z). That was true when relayed; 
 `caddy:2.11.7-alpine` and `pds:0.4.5037` (none of the last 40 runs on main green, verify-868-fd7be32-postmerge O3);
 P1.33c's exceptions answer the `pds` half, and the `caddy:2.11.7-alpine` half is already ruled in book edit
 2026-10-12-mirror-caddy-replaced-binary: it is the runtime entry, so we wait for upstream's rebuilt digest under the age
-rule, with Alex's card at the 2026-10-19 bound (P1.27r covers the Images workflow's `scan`, not Mirror's). xcaddy is a
-build-time CLI fed only our pinned versions and checksum-verified modules, in an unprivileged job; the edge image's own
-Trivy scan reads the built binary's Go build info, so a vulnerable stdlib compiled into what ships still fails. Per-CVE
-ignore entries (the alternative) recur on every Go point release and waive a CVE id globally unless scoped by path.
+rule, with Alex's card at the 2026-10-19 bound if no fixed digest exists (P1.27r covers the Images workflow's `scan`,
+not Mirror's). xcaddy is a build-time CLI fed only our pinned versions and checksum-verified modules, in an unprivileged
+job; the edge image's own Trivy scan reads the built binary's Go build info, so a vulnerable stdlib compiled into what
+ships still fails. Per-CVE ignore entries (the alternative) recur on every Go point release and waive a CVE id globally
+unless scoped by path.
 
 **Where:** `.github/workflows/mirror.yml` reads each entry's `stage` and fails if it is missing. `build` entries scan
 at HIGH and CRITICAL, fail on CRITICAL, and report HIGH in the job summary and annotations; `runtime` entries are
@@ -12087,8 +12185,9 @@ P1.29h, P1.29s, P1.29t.
    2026-10-07T13:00:19Z, quoted in the body): the `edge` service and the
    `pds_egress` network next to the PDS, mounting `deployment/edge/sites/` (or P1.28's enabled directory) exactly as
    C18 requires, never a symlink or copy of a site file in the trusted base; P1.29's edge tests move here
-   (`compose_dev_hardening`'s edge `cap_add` part and the edge side of the networks comparison); web joins `edge` only
-   when its app host site exists (the Phase 2 row of the networks table). Before P1.34 the homelab is tailnet-only, so
+   (`compose_dev_hardening`'s edge `cap_add` part and the edge side of the networks comparison); web never joins
+   `edge`; it reaches the PDS and the app host only through the edge's aliases on `app` (P1.35n, #895; architecture
+   02:05Z option C). Before P1.34 the homelab is tailnet-only, so
    its `dev` edge cannot get a certificate until P1.34 opens public access (book edit
    2026-10-12-p129-edge-moves-to-p129a; architecture's 2026-10-12-p129-tls-override-and-edge-sites). Also: the exact
    vendor allowlist entry `ghcr.io/bluesky-social/pds` (never
@@ -12385,13 +12484,13 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   (`web` reaches the PDS through the edge on `app`, P1.35n, architecture's 02:05Z option C):
   | Network | Settings | Members |
   |---|---|---|
-  | `edge` | not internal; no `ipam` | edge, pds |
-  | `app` | `internal: true` | edge and `web` only; the edge carries the `APP_HOST` and `PDS_HOST` aliases (P1.35n) |
+  | `edge` | not internal; no `ipam` | edge, pds; the edge carries the `APP_HOST` and `PDS_HOSTNAME` aliases here too (option C item 3; compose.dev.yaml:154) |
+  | `app` | `internal: true` | edge and `web` only; the edge carries the `APP_HOST` and `PDS_HOSTNAME` aliases (P1.35n; compose.dev.yaml:156) |
   | `pds_egress` | not internal | pds only (outbound HTTPS: PLC, DID and handle resolution, OAuth client metadata, other permission sets, AppView) |
   | `db` | `internal: true` | postgres, migrate (and `web` from Phase 2) |
   | `tap` | `internal: true` | tap and its DB (profile `tap`) |
   | `tap_egress` | not internal | tap only (outbound; the edge stays off it) |
-  | `tap_edge` | `internal: true` | tap and the edge only; the edge's attachment carries the `PDS_HOST` alias (`APP_HOST` only if tap calls it), so tap reaches the dev PDS through the edge without joining the PDS-facing network (book edit 2026-10-13-p129a-build-rulings, Amendment 3) |
+  | `tap_edge` | `internal: true` | tap and the edge only; the edge's attachment carries the `PDS_HOST` alias, so tap reaches the dev PDS through the edge without joining the PDS-facing network (book edit 2026-10-13-p129a-build-rulings, Amendment 3) |
   Only the edge publishes ports. No network sets `ipam` and no service has a fixed address (book edit
   2026-10-13-p129a-build-rulings, item 1): P1.29t reads the edge's address at run time with `docker inspect`.
 - Services:
