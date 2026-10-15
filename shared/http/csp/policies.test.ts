@@ -10,7 +10,7 @@ const GROUPS: readonly RouteGroup[] = ["app", "public", "profile", "static", "me
 const PROD = {
   UNSET_ENV: "prod",
   PUBLIC_ORIGIN: "https://unset.sh",
-  MEDIA_ORIGIN: "https://unsetcdn.net",
+  MEDIA_ORIGIN: "https://media.example.net",
   ASSETS_BASE: "",
   DEV_VITE_ORIGIN: "",
 } as const;
@@ -64,7 +64,7 @@ describe("csp policies", () => {
     // @ts-expect-error an origin must come from config, not a plain string
     const raw: Source = { origin: "https://evil.example" };
     expect([scheme, star, unsafe, raw]).toHaveLength(4);
-    expect(() => configOrigin("MEDIA_ORIGIN", "https://unsetcdn.net/x")).toThrow("MEDIA_ORIGIN invalid");
+    expect(() => configOrigin("MEDIA_ORIGIN", "https://media.example.net/x")).toThrow("MEDIA_ORIGIN invalid");
     expect(() => configOrigin("MEDIA_ORIGIN", "*")).toThrow("MEDIA_ORIGIN invalid");
   });
 
@@ -91,7 +91,7 @@ describe("csp policies", () => {
     expect(directive(own, "object-src")).toBe("object-src 'none'");
     const split = buildCsp(policiesFor(cspOrigins({ ...PROD, ASSETS_BASE: "https://static.unset.sh/assets/" })).public);
     expect(directive(split, "img-src")).toBe("img-src https://static.unset.sh/assets/");
-    expect(split).not.toContain("unsetcdn.net");
+    expect(split).not.toContain("media.example.net");
   });
 
   test("media_group", () => {

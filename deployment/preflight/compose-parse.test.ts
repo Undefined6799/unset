@@ -94,32 +94,54 @@ describe("compose subset", () => {
   // P1.29a Amendment 1 (/mnt/project-files/unset-plan/book-edits/2026-10-13-p129a-pds-and-edge-in-compose.md): an
   // alias makes a container answer to a name on that network, so only the edge may carry aliases, and only its two
   // hosts, each a whole interpolation. Any other alias could let a container claim the PDS's or the app's name.
-  test("aliases_only_on_the_edge_with_its_two_hosts", () => {
+  test("aliases_only_on_the_edges_edge_and_app_networks_with_its_two_hosts", () => {
+    // Architecture 2026-10-15 02:05Z, option C point 3 (replacing aliases_only_on_the_edge_with_its_two_hosts): only the
+    // edge carries aliases, only on the networks edge and app, and each of them carries exactly its two hosts.
     const hosts = '["${APP_HOST}", "${PDS_HOSTNAME}"]';
-    const stack = (service: string, aliases: string) =>
-      `name: unset-prod\nservices:\n  ${service}:\n    image: x\n    networks:\n      front:\n        aliases: ${aliases}\nnetworks:\n  front: {}\n`;
-    expect(parseCompose(stack("edge", hosts), "c.yaml").services[0]?.networks).toEqual(["front"]);
-    expect(() => parseCompose(stack("edge", '["${PDS_HOSTNAME}", "${APP_HOST}"]'), "c.yaml")).not.toThrow();
-    expect(() => parseCompose(stack("pds", hosts), "c.yaml")).toThrow(
-      new ParseError("c.yaml:7: aliases on pds: only the edge carries aliases"),
-    );
+    const stack = (service: string, network: string, aliases: string) =>
+      `name: unset-prod\nservices:\n  ${service}:\n    image: x\n    networks:\n      ${network}:\n        aliases: ${aliases}\nnetworks:\n  ${network}: {}\n`;
+    for (const network of ["edge", "app"]) {
+      expect(parseCompose(stack("edge", network, hosts), "c.yaml").services[0]?.networks).toEqual([network]);
+      expect(() => parseCompose(stack("edge", network, '["${PDS_HOSTNAME}", "${APP_HOST}"]'), "c.yaml")).not.toThrow();
+    }
+    const both =
+      "name: unset-prod\nservices:\n  edge:\n    image: x\n    networks:\n" +
+      `      edge:\n        aliases: ${hosts}\n      app:\n        aliases: ${hosts}\nnetworks:\n  edge: {}\n  app: {}\n`;
+    expect(parseCompose(both, "c.yaml").services[0]?.networks).toEqual(["edge", "app"]);
+    for (const service of ["pds", "web"]) {
+      for (const network of ["edge", "app"]) {
+        expect(() => parseCompose(stack(service, network, hosts), "c.yaml")).toThrow(
+          new ParseError(`c.yaml:7: aliases on ${service}: only the edge carries aliases`),
+        );
+      }
+    }
+    for (const network of ["front", "db", "pds_egress", "default"]) {
+      expect(() => parseCompose(stack("edge", network, hosts), "c.yaml"), network).toThrow(
+        new ParseError(`c.yaml:7: aliases on network ${network}: only edge and app carry them`),
+      );
+    }
     const wrong = "c.yaml:7: the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}";
-    for (const aliases of [
-      "[edge]",
-      "[pds.unset.localhost, app.example.test]",
-      '["${PDS_HOSTNAME}"]',
-      '["${APP_HOST}", "${PDS_HOSTNAME}", edge]',
-      '["${APP_HOST}", "${APP_HOST}"]',
-      '["${APP_HOST}", "${PDS_UPSTREAM}"]',
-      '["${APP_HOST}x", "${PDS_HOSTNAME}"]',
-      "${APP_HOST}",
-      "[]",
-    ]) {
-      expect(() => parseCompose(stack("edge", aliases), "c.yaml"), aliases).toThrow(new ParseError(wrong));
+    for (const network of ["edge", "app"]) {
+      for (const aliases of [
+        "[edge]",
+        "[pds.unset.localhost, app.example.test]",
+        '["${PDS_HOSTNAME}"]',
+        '["${APP_HOST}"]',
+        '["${APP_HOST}", "${PDS_HOSTNAME}", edge]',
+        '["${APP_HOST}", "${APP_HOST}"]',
+        '["${APP_HOST}", "${PDS_UPSTREAM}"]',
+        '["${APP_HOST}x", "${PDS_HOSTNAME}"]',
+        "${APP_HOST}",
+        "[]",
+      ]) {
+        expect(() => parseCompose(stack("edge", network, aliases), "c.yaml"), `${network} ${aliases}`).toThrow(
+          new ParseError(wrong),
+        );
+      }
     }
     // Any other `$` under networks is still refused.
     expect(() =>
-      parseCompose(stack("edge", hosts).replace("front:\n        aliases", "${N}:\n        aliases"), "c.yaml"),
+      parseCompose(stack("edge", "edge", hosts).replace("edge:\n        aliases", "${N}:\n        aliases"), "c.yaml"),
     ).toThrow(/\$ in networks/);
   });
   // P1.30u: the edge service's mounts decide which Caddy config runs (C18), so `volumes` is read in a strict subset:
@@ -579,7 +601,7 @@ services:
     restart: unless-stopped
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     networks:
-      front:
+      edge:
         aliases: ["\${APP_HOST}", "\${PDS_HOSTNAME}"]
       inner:
     volumes:
@@ -621,7 +643,7 @@ services:
       dockerfile: migrate.Dockerfile
     networks: [inner]
 networks:
-  front: {}
+  edge: {}
   inner:
     internal: true
     driver: bridge

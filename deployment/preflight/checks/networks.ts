@@ -63,6 +63,19 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
 }
 
 /**
+ * Every service but the edge that shares a network with the PDS: the PDS trusts every private address as a proxy, so
+ * any such neighbour could send it forged forwarding headers (architecture 2026-10-15 02:05Z, option C point 4, in book
+ * edit 2026-10-14-p134d-split; step book P1.29, "Networks"). Pinned here, not left to each table.
+ */
+export function pdsNeighbours(compose: Pick<Compose, "services">): string[] {
+  const pds = compose.services.find((service) => service.name === "pds");
+  if (pds === undefined) return [];
+  return compose.services
+    .filter((s) => s.name !== "pds" && s.name !== "edge" && s.networks.some((n) => pds.networks.includes(n)))
+    .map((s) => `${s.name} shares a network with the pds`);
+}
+
+/**
  * C17: no `network_mode` (host, service: or container: would bypass the table), and the networks match the table. The
  * one exception is `none` on the tools-profile token reader, by its name, which joins no network at all (P1.29h;
  * architecture record 2026-10-13-p129h-local-token-reader, Amendment 1, and its 04:17Z answer on C17).
@@ -83,7 +96,7 @@ export const c17: Check = {
     } catch {
       return fail("the network table is unreadable");
     }
-    const problems = networkTableProblems(compose, table);
+    const problems = [...pdsNeighbours(compose), ...networkTableProblems(compose, table)];
     return problems.length === 0 ? pass() : fail(problems.join("; "));
   },
 };
