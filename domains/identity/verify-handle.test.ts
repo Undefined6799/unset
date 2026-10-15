@@ -228,6 +228,12 @@ describe("verifyHandle", () => {
     expect(await w.verifier({ resolveDid }).verifyHandle(A)).toEqual({ status: "unavailable" });
   });
 
+  test("already_aborted_signal_makes_no_request", async () => {
+    const w = world();
+    expect(await w.verifier().verifyHandle(A, { signal: AbortSignal.abort() })).toEqual({ status: "unavailable" });
+    expect(w.calls).toEqual({ plc: 0, txt: [] });
+  });
+
   test("unexpected_error_reported_once", async () => {
     const w = world();
     const boom = new TypeError("boom");
@@ -267,17 +273,19 @@ describe("verifyHandle", () => {
 });
 
 /**
- * A verifier whose TXT answers wait until the test releases them, so checks overlap (P1.33r). PLC answers at once with
- * a document for whichever DID was asked, claiming alice.example.com; the resolver keeps no cache, so only the
- * verifier's sharing is counted.
+ * A verifier whose TXT answers wait until the test releases them, so checks overlap (P1.33r). PLC answers with a
+ * document for whichever DID was asked, claiming alice.example.com: at once, or when released if `holdPlc` is set. The
+ * resolver keeps no cache, so only the verifier's sharing is counted.
  */
-function heldVerifier(cacheMax = 10) {
+function heldVerifier(cacheMax = 10, holdPlc = false) {
   const held: ((outcome: TxtOutcome) => void)[] = [];
+  const heldPlc: (() => void)[] = [];
   const calls = { plc: 0, txt: [] as string[] };
   const network: IdentityNetwork = {
     get: async (url, request) => {
       if (request.target !== "plc") return status(404);
       calls.plc += 1;
+      if (holdPlc) await new Promise<void>((release) => heldPlc.push(release));
       return json(doc(url.pathname.slice(1), ["at://alice.example.com"]));
     },
     txt: (name) => {
@@ -287,7 +295,7 @@ function heldVerifier(cacheMax = 10) {
   };
   const resolveDid = createDidResolver({ network, plcUrl: PLC_URL, cacheTtlS: 0, cacheMax: 10, now: () => 0 });
   const verifier = createHandleVerifier({ network, resolveDid, verifyTtlS: 600, invalidTtlS: 60, cacheMax });
-  return { ...verifier, held, calls };
+  return { ...verifier, held, heldPlc, calls };
 }
 
 const tick = () => new Promise((settled) => setTimeout(settled, 0));
@@ -398,12 +406,51 @@ describe("verifyHandle shares in-flight checks", () => {
     const after = verifyHandle(A);
     await tick();
     expect(w.calls.txt).toHaveLength(2);
-    w.held[1]?.(records(`did=${B}`));
+    // The newer check writes nothing (unavailable is never cached), so only the invalidation can stop the old write.
+    w.held[1]?.({ kind: "unavailable" });
+    expect((await after).status).toBe("unavailable");
     w.held[0]?.(VERIFIED_A);
     expect((await before).status).toBe("verified");
-    expect((await after).status).toBe("invalid");
-    // The check that started before the invalidation does not write its verdict back.
-    expect((await verifyHandle(A)).status).toBe("invalid");
-    expect(w.calls.txt).toHaveLength(2);
+    // The check that started before the invalidation does not write its verdict back: the next call checks again.
+    const again = verifyHandle(A);
+    await tick();
+    expect(w.calls.txt).toHaveLength(3);
+    w.held[2]?.(records(`did=${B}`));
+    expect((await again).status).toBe("invalid");
+  });
+
+  test("abort_during_did_resolution_leaves_the_shared_check", async () => {
+    const w = heldVerifier(10, true);
+    const { verifyHandle } = w;
+    const controller = new AbortController();
+    const first = verifyHandle(A, { signal: controller.signal });
+    const second = verifyHandle(A);
+    await tick();
+    expect(w.heldPlc).toHaveLength(1);
+    // Caller 1 aborts while the DID document is still on its way: no signal reaches the shared check.
+    controller.abort();
+    expect(await first).toEqual({ status: "unavailable" });
+    w.heldPlc[0]?.();
+    await tick();
+    w.held[0]?.(VERIFIED_A);
+    expect((await second).status).toBe("verified");
+    expect(w.calls).toEqual({ plc: 1, txt: ["_atproto.alice.example.com"] });
+  });
+
+  test("unexpected_error_reported_once_per_shared_check", async () => {
+    const w = world();
+    const boom = new TypeError("boom");
+    const broken: IdentityNetwork = {
+      ...w.network,
+      get: async () => {
+        throw boom;
+      },
+    };
+    const resolveDid = createDidResolver({ network: broken, plcUrl: PLC_URL, cacheTtlS: 0, cacheMax: 1 });
+    const reported: unknown[] = [];
+    const { verifyHandle } = w.verifier({ resolveDid, onUnexpected: (error) => reported.push(error) });
+    const verdicts = await Promise.all(Array.from({ length: 5 }, () => verifyHandle(A)));
+    expect(verdicts).toEqual(Array(5).fill({ status: "unavailable" }));
+    expect(reported).toEqual([boom]);
   });
 });
