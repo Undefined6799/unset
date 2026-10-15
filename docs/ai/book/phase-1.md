@@ -72,10 +72,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
-  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice
-  2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
-  P2.13a.
+  P1.34d, P1.35p, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
+  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
+  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the
+  slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -607,6 +607,9 @@ flowchart LR
   P1_33g --> P1_34d
   P1_35m["P1.35m dev CA folder walk edges pinned"]
   P1_35a --> P1_35m
+  P1_35p["P1.35p dev CA preflight and runbook gaps closed"]
+  P1_33g --> P1_35p
+  P1_35m --> P1_35p
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
   P1_35o["P1.35o app network pinned in the dev compose tests"]
@@ -8151,6 +8154,7 @@ Done when no product test file holds a handle on a registrable domain other than
 
 ### P1.35j — Move trusted test handles to reserved domains
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+As built: #899 at 68a5ea5, merged as c2f0850.
 
 Slice 1, issue #885, trusted base (every test file under `shared/http/`), kind/fix, lane Phase 1 after P1.35i (lane
 order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
@@ -8531,6 +8535,7 @@ Done when each test is red without its change and green with it, and check is gr
 
 ### P1.33g — Document and test the local dev root
 Tags: [SEC]            Depends on: P1.35a
+As built: #896 at 742568a, merged as 8a49712.
 
 Slice 1, issue #889, product (`deployment/preflight/`, its tests, and `docs/human/runbooks/dev-stack-secrets.md` as
 docs), kind/feature, lane the third thread after P1.35a (both edit C26 in `deployment/preflight/checks/build.ts`; the
@@ -8661,19 +8666,24 @@ widens beyond the one local network.
   snippet clause says it describes local and Phase 2.
 - N2: a `web_only_on_internal_networks` test beside `postgres_only_on_internal_networks`; the mutant that makes `app`
   not internal (C3) dies.
-- N3: compose-parse refuses the edge on `app` with no aliases (option C point 3, "each network must carry exactly
-  both"); red fixture.
+- N3: compose-parse refuses an edge with no aliases on `edge` and on `app` (option C point 3, "each network must carry
+  exactly both"); red fixture.
 - N5 (cheap): an `edge-*` service beside the PDS is refused, which kills the `startsWith("edge")` exemption mutant (V2).
 - F3 (architecture 03:05Z): `pdsNeighbours`, the edge exemption and the PLC exemption identify services by image
-  identity, not name. The PDS is the locked PDS image ref (under local, the PDS build by exact realpath, Amendment 1);
-  the edge is C26's edge Dockerfile realpath or its lock ref. Every PDS-image service counts as a PDS, and more than one
-  PDS-image service fails C17. Red fixtures: a second PDS-image service under another name beside web; a service named
-  edge running a non-edge image beside the PDS.
+  identity, not name. A PDS is any service named `pds`, or any service whose image is the PDS repository at any tag or
+  digest, matched on the normalized reference (registry prefix, tag only, digest only and letter case cannot hide it);
+  the image comes from the base lock under local and the deploy lock under dev and prod. The PDS is never built, so
+  there is no local-build clause. More than one PDS fails C17. The edge and PLC exemptions stay exact: the edge is C26's
+  edge Dockerfile realpath or its lock ref, never the repository alone (verify-898-4d3cc92 S3; book edit
+  2026-10-13-local-plc-a4-steps, "Step-book mapping of the P1.35o readings"). Red fixtures: a second PDS-image service
+  under another name beside web; a service named edge running a non-edge image beside the PDS.
 - F1 (same ruling): one named, local-only exemption in `pdsNeighbours`. A neighbour is ignored only when the env is
   local, the shared network is exactly `plc_pds`, `plc_pds` has exactly two members (the PDS and that service), and the
-  service runs the `localOnly` PLC lock entry by exact `ref:tag@sha256`. Red fixtures, which kill the
-  `s.name !== "plc"` mutant: the same compose under dev; plc on any other network shared with the PDS; a third member
-  on `plc_pds`; a service named plc running another image; the PLC image under another name on `plc_web` with the PDS.
+  service runs the `localOnly` PLC lock entry by exact `ref:tag@sha256`. Red fixtures, which kill the `s.name !== "plc"`
+  mutant: the same compose under dev; plc on any other network shared with the PDS; a third member on `plc_pds`; a
+  service named plc running another image; the PLC image under another name on `plc_web` with the PDS; and a plc-named
+  service on `plc_pds` under local with no `plc` lock entry, or a malformed one (no entry means no exemption, fail
+  closed; the entry is inert on main until P1.34v adds it).
 
 Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
@@ -8748,32 +8758,43 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
     user, read_only, cap_drop, cap_add, security_opt, tmpfs, logging, profiles, network_mode, networks with their
     internal flags, and ports (still on 127.0.0.1). The allowed differences are exactly: `name`; `env_file` paths;
     `image` replaced by `build` (judged by C2 to C5, C18, C25 and C27 under the card); the edge's per-file site mounts
-    (item 12) and the leaf mount; the `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only;
-    the local-name network aliases; and the PLC service, its per-consumer `plc_*` networks and its database wiring,
-    local only; each consumer joins only its own one; the drift test checks that set exactly (architecture 02:26Z; book
-    edit 2026-10-13-local-plc-a4-steps, "Step-book mapping of the 02:26Z ruling"); `PDS_DID_PLC_URL` on pds
-    (`http://plc:2582` in the local file, `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of
-    2026-10-13-local-plc-a4-steps), and the same for web and appview once P1.34z gives them a PLC URL in compose (book
-    edit 2026-10-13-verify-814-fixes, S4); `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here
-    first; step-book note 2 of 2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount
-    (P1.34u's files, mounted by P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in
-    either direction, fails with the key named. Preflight still runs in full on the local file; the drift test catches a
-    weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as P1.35o
-    does for the dev file (F2 of book edit 2026-10-15-verify-895-followups). This step moves `pds-token-reader` from
-    `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it always exists in exactly one file; until then it
-    stays in the dev file and cannot run there (P1.33l refuses dev; architecture's Amendment 7 of 2026-10-13-local-plc,
-    Q3). The drift allowance also names `seed` as local-only, which P1.29s adds to `compose.local.yaml` (book edit
-    2026-10-13-verify-814-fixes, Amendment 1). The reader-only test (`pds_token_reader_only_in_the_dev_file`) becomes
-    `pds_token_reader_only_in_the_local_file`: exactly `compose.local.yaml` (architecture's Amendment 6 of
-    2026-10-13-local-plc, Q2). `compose.local.yaml` sets `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until
-    P1.34v lands, DID creation fails at the PDS and never reaches plc.directory, which is fail-closed for the seed
-    (step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z). Until this step lands,
-    `local:up` does not exist. The local-only list lives in one module in `deployment/preflight/`, which the drift test
-    and C17 both import (architecture 02:32Z; same record, "Step-book mapping of the C17 ruling"). Under local, C17
-    expects networks.dev.json plus that list, matched both ways and exactly; under dev and prod, any network on the list
-    and any `plc_*` network is refused. networks.dev.json gets no local-only rows. If this step lands before any `plc_*`
-    entry exists, the list holds only what this step needs, and the dev and prod refusal is still tested, with a
-    fixture.
+    (item 12), with the two edge keys that item 12's `deployment/edge/local/app.caddy` reads, exactly `APP_HOST:
+    ${APP_HOST}` and `APP_UPSTREAM: web:8080`, on the edge only and in the local file only, present both or neither
+    exactly when the app.caddy mount is (book edit 2026-10-14-p134d-split, 04:03Z section; red tests: APP_UPSTREAM
+    `pds:3000` or any other value such as `web:8081` on the edge, a literal host for APP_HOST, either key on web or pds,
+    either key in the dev file, the keys without the mount, the mount without the keys), and the leaf mount; the
+    `unset-dev-trust` mount (item 5) and `NODE_EXTRA_CA_CERTS` on pds and web only; the local-name network aliases; and
+    the PLC service, its per-consumer `plc_*` networks and its database wiring, local only; each consumer joins only its
+    own one; the drift test checks that set exactly (architecture 02:26Z; book edit 2026-10-13-local-plc-a4-steps,
+    "Step-book mapping of the 02:26Z ruling"); `PDS_DID_PLC_URL` on pds (`http://plc:2582` in the local file,
+    `https://plc.directory` in the dev file; C28 pins each; step-book note 1 of 2026-10-13-local-plc-a4-steps), and the
+    same for web and appview once P1.34z gives them a PLC URL in compose (book edit 2026-10-13-verify-814-fixes, S4);
+    `UNSET_ENV` (`local` in the local file, written by P1.34z and allowed here first; step-book note 2 of
+    2026-10-13-local-plc-a4-steps); the db service's one read-only `init-local/` mount (P1.34u's files, mounted by
+    P1.34v); and `pds-token-reader` and `seed`, local-only services. Anything else, in either direction, fails with the
+    key named. So the drift test compares every service key (verify-903-8b2abfc S1; book edit 2026-10-14-p134d-split,
+    "item 11 holds over item 14"): `environment` per service as a normalized key-value map (list and map forms alike),
+    where only the named keys may differ, on the services named; `env_file` per service as an ordered list whose entries
+    correspond one to one and whose paths differ only in the env directory; and every other key (command, entrypoint,
+    mem_limit and the rest). Red tests, one per mutant: NODE_TLS_REJECT_UNAUTHORIZED=0 on web and on pds;
+    --use-system-ca in NODE_OPTIONS and in command; env_file pds.env on web and on edge;
+    NODE_OPTIONS=--max-old-space-size=4096 on web. Preflight still runs in full on the local file; the drift test
+    catches a weakening that preflight would allow. The drift test also calls `pdsNeighbours` on the real local file, as
+    P1.35o does for the dev file (F2 of book edit 2026-10-15-verify-895-followups). This step moves `pds-token-reader`
+    from `compose.dev.yaml` to `compose.local.yaml` in the same PR, so it always exists in exactly one file; until then
+    it stays in the dev file and cannot run there (P1.33l refuses dev; architecture's Amendment 7 of
+    2026-10-13-local-plc, Q3). The drift allowance also names `seed` as local-only, which P1.29s adds to
+    `compose.local.yaml` (book edit 2026-10-13-verify-814-fixes, Amendment 1). The reader-only test
+    (`pds_token_reader_only_in_the_dev_file`) becomes `pds_token_reader_only_in_the_local_file`: exactly
+    `compose.local.yaml` (architecture's Amendment 6 of 2026-10-13-local-plc, Q2). `compose.local.yaml` sets
+    `PDS_DID_PLC_URL=http://plc:2582`, P1.34t's constant; until P1.34v lands, DID creation fails at the PDS and never
+    reaches plc.directory, which is fail-closed for the seed (step-book note 1 of 2026-10-13-local-plc-a4-steps,
+    confirmed by architecture 19:31Z). Until this step lands, `local:up` does not exist. The local-only list lives in
+    one module in `deployment/preflight/`, which the drift test and C17 both import (architecture 02:32Z; same record,
+    "Step-book mapping of the C17 ruling"). Under local, C17 expects networks.dev.json plus that list, matched both ways
+    and exactly; under dev and prod, any network on the list and any `plc_*` network is refused. networks.dev.json gets
+    no local-only rows. If this step lands before any `plc_*` entry exists, the list holds only what this step needs,
+    and the dev and prod refusal is still tested, with a fixture.
 12. The local edge mounts each `sites/*.caddy` file and `local/app.caddy` read-only at
     `/etc/caddy/sites/enabled/<name>.caddy`, with no directory mount (book edit 2026-10-13-p134o-after-791, Amendment
     1). C18's half (accepting exactly those per-file mounts under local) moved to P1.33y. The reader's
@@ -8786,10 +8807,11 @@ item 5's checks and item 8 below say what P1.33g builds; P1.34d does not build t
 14. Mail-off logging on local (book edit 2026-10-13-p127l-local-gaps, "Step-book mapping of verify-836-7f7582a N1 and
     N2"; verify-842-e4f6e94 N1): with mail refused on local, the preflight no longer checks "mail unset means
     LOG_ENABLED is exactly false and LOG_LEVEL is allowlisted" there; the rule lives only in
-    `pds_mail_unset_only_with_logging_off` on `compose.dev.yaml` (`deployment/compose.dev.test.ts:466`). The drift test
-    does not compare `environment`, so it does not carry the rule over. This step runs the same `mailLogProblems`
-    assertion on the pds service of `compose.local.yaml` (one test over both files, or a second test of the same name
-    with the local file), red first by setting `LOG_LEVEL=debug` in a fixture.
+    `pds_mail_unset_only_with_logging_off` on `compose.dev.yaml` (`deployment/compose.dev.test.ts:466`). Before this
+    step the drift test did not compare environment; item 11 now does, and this item keeps the mail-log assertion on the
+    local file as its own named test. This step runs the same `mailLogProblems` assertion on the pds service of
+    `compose.local.yaml` (one test over both files, or a second test of the same name with the local file), red first by
+    setting `LOG_LEVEL=debug` in a fixture.
 15. Handshake check (leaf-copy ruling, last section of book edit 2026-10-14-p134d-split): after start, `local:up`
     checks that the leaf the edge serves for each local host has the same SHA-256 as `unset-dev-env/local-leaf.pem`.
     On a mismatch it takes the stack down, exits non-zero with a fixed-word reason, and names the file to regenerate
@@ -8817,6 +8839,72 @@ and C17's local-only list module refusing a `plc_*` network under dev (02:32Z ru
 checks are P1.33g's and item 6's refusal is P1.33w's (book edit 2026-10-15-verify-890-postmerge-followups, B6).
 P1.29t's client_id probe red and green move to P1.33z (session containers cannot pull the PDS image; book edit
 2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"). Its PR body names this departure.
+
+---
+
+### P1.35p — Close the dev CA preflight and runbook gaps
+Tags: [SEC]            Depends on: P1.33g, P1.35m
+
+Slice 1, issue #904, product (`deployment/preflight/`, including `deployment/preflight/stack.ts`, its tests, and
+`docs/human/runbooks/dev-stack-secrets.md`), kind/fix, lane the third thread after P1.34d (the record keeps it there for
+the C9 rules). Book edit 2026-10-15-verify-896-901-followups, from verify-896-742568a (P1.33g, #896) and
+verify-901-9996fec (P1.35m, #901), with architecture's 03:50Z ruling (section "Architecture on verify-896-742568a and
+verify-901-9996fec" of book edit 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the record's last section). Every
+item is a tightening, so nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev root whose
+name constraints are forged or hidden from a byte search; a root that may sign further CAs or carries key usages beyond
+certificate and CRL signing; a trust folder another user can write; preflight hung by a FIFO; a printed filesystem or
+environment string forging a PASS line; and a folder swapped during the walk.
+
+**What, C18 and the root (verify-896):**
+- S1: a strict DER walk from Certificate to tbsCertificate to extensions, not a byte search. DER only (minimal lengths,
+  no indefinite lengths, no trailing bytes); any parse error fails C18. Exactly one 2.5.29.30 extension, and a duplicate
+  of any extension OID fails. nameConstraints is critical and its extnValue byte-equals the expected encoding. Use a
+  lockfile ASN.1 parser if one exists, otherwise a small walker with a fuzz test; no new dependency without supply-chain
+  review. Red fixtures: the expected bytes hidden in another extension, a duplicate nameConstraints, a non-critical one,
+  an extra permitted subtree, trailing bytes, and a long-form length that should be short.
+- N3: basicConstraints is critical with cA true and pathLenConstraint 0; keyUsage is critical with exactly keyCertSign
+  and cRLSign. If P1.34c's generator emits anything else, this step fixes it. Red fixtures: no pathlen, pathlen 1,
+  digitalSignature added, a non-critical keyUsage.
+- N4/N5 (C9): `unset-dev-trust/` is owned by the preflight uid or root, with mode & 0o022 == 0; `root.pem` has the same
+  owner rule and a mode of exactly 0444 or 0644. The `unset-dev-ca/` rules stay as P1.35a set them. Red fixtures: a 0777
+  folder, a uid-4242 owner, `root.pem` at 0600 and at 0664.
+- N9: the env branch is a positive, exhaustive allowlist: only local allows the trust folder, dev and prod are named
+  explicitly, and anything else is refused (the P1.34z pattern).
+- S2: a FIFO at `unset-dev-ca/root.pem` or `unset-dev-trust/root.pem` hangs preflight (the second is on main). Both are
+  read through `readEnvOrNull` or its lstat-then-regular-file contract. Red tests: a FIFO at each path fails promptly,
+  naming the path.
+- S3 and N1: the runbook (`dev-stack-secrets.md:136-138`) uses `install -d` for the folder and `install -m 0644` for the
+  root, as the step text books (not `cp`). That fixes `mkdir -m 0755` failing on rerun, the `install -D` line dropped
+  from main, and `cp` writing through a symlink.
+- N2: P1.33g's As built says items 2 and 3 live in C18, not C26. N6: red cases for the four survivors that exist only on
+  disk: a dot-named file beside `root.pem`, a SEC1 key block, `ln -s` in the runbook path, and a CA:TRUE leaf.
+
+**What, the walk and printing (verify-901):**
+- S1: `printable` moves to its own module, and preflight and `stack.ts` use it for every printed string that comes from
+  the filesystem, the environment or an error, including COMPOSE_* names (`stack.ts:101-105`, `:213`). Red fixture: a
+  variable name with `\n` and `\r\e[2K` forging a PASS line.
+- S2: red cases for the six fail-open survivors X1, X5, X12, X13, X4 and X7; X1, X5 and X13 turn a refusal into PASS on
+  disk, so they come first. N1: P1.35m's As built names the lstat-error message.
+- N2: record dev and ino for every directory the walk visits, and re-lstat all of them after the walk; any change fails.
+  The residual wording becomes "a swap made and reverted entirely within the walk (deploy user or root)".
+- N3: the non-UTF-8 refusal prints the entry's raw bytes through the escape helper (for example `\xff`), with the
+  folder.
+
+**What, APP_HOST under local (architecture 04:03Z, the record's last section):**
+- Under `--env local`, preflight judges APP_HOST's value three ways: it sits under the constrained `.localhost` names,
+  it differs from PDS_HOST, and it is never an IP literal. As of #903 at 8e12639, `local-leaf.ts:86-93` checks that it
+  is a hostname (refusing a numeric last label) matching web's PUBLIC_ORIGIN host, and `caddyfile.local` refuses
+  equality with PDS_HOST. The builder confirms each of the three on main and adds whichever is missing, each with a red
+  test: `app.example.com`, APP_HOST equal to PDS_HOST, `127.0.0.1`, and `[::1]`.
+
+Size: if the step measures over about 400 source lines, it splits at the measure into a verify-896 part (C18 DER walk,
+N3, the C9 owner and mode rules, N9) and a verify-901 part (printable module, re-lstat, N3, the X-mutant reds). The
+second part takes the next free id, and the split is recorded in book edit 2026-10-15-verify-896-901-followups before
+the PR is ready.
+
+Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
 ---
 
@@ -8888,6 +8976,7 @@ local:up` and the probe passing on his machine.
 
 ### P1.33n — Drop the directory form from the site reader
 Tags: [SEC] trusted            Depends on: P1.33y, P1.34q
+As built: #897 at a275a53, merged as 08d28f3.
 Slice 1, issue #810, trusted base (`deployment/edge/`), kind/refactor (kind/fix if the verifier finds it reachable),
 lane Phase 1 (moved from the third lane for lane balance; book edit 2026-10-13-p133n-drop-sites-directory-form, "Lane
 move"). P1.34d was a dependency only for the C18 move, which P1.33y made (book edit
