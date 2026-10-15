@@ -16,9 +16,9 @@ exports[`csp policies > snapshot_per_group > prod 1`] = `
 {
   "admin": "default-src 'none'; script-src https://unset.sh/assets/; style-src https://unset.sh/assets/; img-src 'self'; font-src https://unset.sh/assets/; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
   "api": "default-src 'none'; frame-ancestors 'none'",
-  "app": "default-src 'none'; script-src https://unset.sh/assets/; style-src https://unset.sh/assets/; img-src 'self' https://unsetcdn.net; font-src https://unset.sh/assets/; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
+  "app": "default-src 'none'; script-src https://unset.sh/assets/; style-src https://unset.sh/assets/; img-src 'self' https://media.example.net; font-src https://unset.sh/assets/; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'; require-trusted-types-for 'script'; trusted-types 'none'",
   "media": "default-src 'none'; sandbox",
-  "profile": "default-src 'none'; style-src https://unset.sh/assets/; img-src https://unsetcdn.net; font-src https://unset.sh/assets/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  "profile": "default-src 'none'; style-src https://unset.sh/assets/; img-src https://media.example.net; font-src https://unset.sh/assets/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
   "public": "default-src 'none'; style-src https://unset.sh/assets/; img-src https://unset.sh/assets/; font-src https://unset.sh/assets/; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; manifest-src 'self'",
   "static": "default-src 'none'; frame-ancestors 'none'",
 }
