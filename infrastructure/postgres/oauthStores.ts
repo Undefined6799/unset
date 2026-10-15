@@ -29,7 +29,10 @@ function opened<V>(log: Logger, kind: "state" | "session", open: () => unknown):
   }
 }
 
-export function createOAuthStateStore<V>(options: Options): SealedStore<V> {
+/** The state store, plus the sweep the hourly job runs: an abandoned login never reaches `del`. */
+export type OAuthStateStore<V> = SealedStore<V> & { sweep(): Promise<number> };
+
+export function createOAuthStateStore<V>(options: Options): OAuthStateStore<V> {
   const context = (key: string) => sealedContext("app.oauth_state.sealed", key);
   const run = <T>(fn: Parameters<typeof withClient<T>>[2]) => withClient(options.pool, null, fn);
   const del = async (key: string) => {
@@ -43,22 +46,29 @@ export function createOAuthStateStore<V>(options: Options): SealedStore<V> {
       const sealed = rows[0]?.sealed;
       if (sealed === undefined) return undefined;
       const value = opened<V>(options.log, "state", () => options.sealer.unsealJson(sealed, context(key)));
-      if (value === undefined) await del(key);
+      // Only the value that did not open: a newer one written meanwhile stays.
+      if (value === undefined)
+        await run((db) => db.query("DELETE FROM app.oauth_state WHERE key = $1 AND sealed = $2", [key, sealed]));
       return value;
     },
     async set(key, value) {
-      await run(async (db) => {
-        // An abandoned login never reaches del, and anyone may start one: each write purges the expired rows, so the
-        // table holds only the last STATE_TTL_S of logins.
-        await db.query("DELETE FROM app.oauth_state WHERE expires_at <= now()");
-        await db.query(
+      await run((db) =>
+        db.query(
           "INSERT INTO app.oauth_state (key, sealed, expires_at) VALUES ($1, $2, now() + make_interval(secs => $3)) " +
             "ON CONFLICT (key) DO UPDATE SET sealed = EXCLUDED.sealed, expires_at = EXCLUDED.expires_at",
           [key, options.sealer.sealJson(value, context(key)), STATE_TTL_S],
-        );
-      });
+        ),
+      );
     },
     del,
+    /**
+     * Deletes every expired state and returns the count. Like the session sweep, it scans the table (no expiry index,
+     * P2.03i ruling): the table holds at most an hour of abandoned logins, and no login write pays for the scan.
+     */
+    async sweep() {
+      const result = await run((db) => db.query("DELETE FROM app.oauth_state WHERE expires_at <= now()"));
+      return result.rowCount ?? 0;
+    },
   };
 }
 
@@ -79,7 +89,9 @@ export function createOAuthSessionStore<V extends BoundToKey>(options: Options):
       const sealed = rows[0]?.sealed;
       if (sealed === undefined) return undefined;
       const value = opened<V>(options.log, "session", () => options.sealer.unsealJson(sealed, context(did)));
-      if (value === undefined) await del(did);
+      // Only the value that did not open: a fresh token set another replica stored meanwhile stays.
+      if (value === undefined)
+        await run((db) => db.query("DELETE FROM app.oauth_session WHERE did = $1 AND sealed = $2", [did, sealed]));
       return value;
     },
     async set(did, value) {

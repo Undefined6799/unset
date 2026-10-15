@@ -3,7 +3,7 @@
 // The client metadata must list every scope either may request, so it declares their union. Coverage is decided by
 // the pinned @atproto/oauth-scopes 0.5.13 matcher (`ScopePermissions`), never by comparing strings.
 import { ScopePermissions } from "@atproto/oauth-scopes";
-import { NSID, scopeString, scopeStringFallback } from "@unset/shared-lexicons";
+import { IMAGE_ACCEPT, NSID, scopeString, scopeStringFallback } from "@unset/shared-lexicons";
 
 /** Every scope the client may request, once each, in request order. */
 export const SCOPE_METADATA = [...new Set([...scopeString().split(" "), ...scopeStringFallback().split(" ")])].join(
@@ -22,7 +22,8 @@ const REQUIRED_GRANT: readonly Requirement[] = [
   { scope: "atproto", granted: (permissions) => permissions.scopes.has("atproto") },
   ...repoWrite(NSID.profile),
   ...repoWrite(NSID.section),
-  { scope: "blob:image/*", granted: (permissions) => permissions.allowsBlob({ mime: "image/png" }) },
+  // Every image type the app accepts: a server may narrow the wildcard to one type (review on #921).
+  { scope: "blob:image/*", granted: (permissions) => IMAGE_ACCEPT.every((mime) => permissions.allowsBlob({ mime })) },
   {
     scope: "account:email?action=read",
     granted: (permissions) => permissions.allowsAccount({ attr: "email", action: "read" }),
