@@ -71,9 +71,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.35h, P1.35i, P1.35j, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.34d, P1.33z, P1.33n,
-  P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
-  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
+  P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.34d, P1.33z,
+  P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
+  P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then
   phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
@@ -309,6 +309,7 @@ flowchart LR
   P1_35h["P1.35h in-flight rejection path tested"]
   P1_35i["P1.35i test handles on reserved domains"]
   P1_35j["P1.35j trusted test handles on reserved domains"]
+  P1_35k["P1.35k net-guard test hosts on reserved names"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -8140,16 +8141,40 @@ Done when no product test file holds a handle on a registrable domain other than
 ### P1.35j — Move trusted test handles to reserved domains
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
 
-Slice 1, issue #885, trusted base (the `shared/http` server and config tests), kind/fix, lane Phase 1 after P1.35i
-(lane order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and
-its step-book mapping. Like any trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs
-Alex's typed line: "yes P1.35j shared/http test handles reserved domains".
+Slice 1, issue #885, trusted base (every test file under `shared/http/`), kind/fix, lane Phase 1 after P1.35i (lane
+order only); book edit 2026-10-15-verify-875-fixture-wording, architecture on verify-875-4099940 F2 (~00:36Z) and its
+step-book mapping; widened by book edit 2026-10-15-verify-886-fixture-scope (architecture, 01:55Z). Like any
+trusted-base PR it touches nothing outside trusted base. As architecture ruled, it needs Alex's typed line: "yes P1.35j
+shared/http test handles reserved domains", which names shared/http and so still covers the widened file list.
 
-**What:** the same rules as P1.35i for the `shared/http` server and config tests. The PR body lists every one-letter
-label it keeps on our suffixes.
+**What:** the same rules as P1.35i for every test file under `shared/http/` (server, config, returnPath, csrf, csp).
+The PR body lists every one-letter label it keeps on our suffixes.
+- Moves: `returnPath.test.ts:46` `evil.com` becomes `evil.example`; `config.test.ts:70` `media.example.co.uk` takes the
+  did-columns replacement, `sub.example.com` (the multi-label public-suffix shape is an accepted loss if the test needed
+  it).
+- Stays: `csrf/gate.test.ts:107` `evil.unset.sh` (our suffix, in a test about our origins); `config.test.ts:134`
+  `evil0x40.me` (SE-7a's named suffix-boundary allowance); labels `a` and `b` on `.0x40.me` at server.test.ts:112-115
+  and config.test.ts:131-132 (own-suffix allowance; listed in the PR body for P2.09).
 
-Done when no trusted-base test file holds a handle on a registrable domain other than those kept labels, and check is
-green.
+Done when no `shared/http` test file holds a handle or hostname on a registrable domain other than the kept labels and
+the allowances above, and check is green.
+
+---
+
+### P1.35k — Move net-guard test hosts to reserved names
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+
+Slice 1, issue #891, trusted base (`infrastructure/net-guard/` tests only), kind/fix, lane Phase 1 after P1.35j (lane
+order only); book edit 2026-10-15-verify-886-fixture-scope, architecture's 01:55Z ruling (c) and its step-book mapping.
+Like any trusted-base PR it touches nothing outside trusted base. It needs Alex's typed line: "yes P1.35k
+infrastructure/net-guard test hosts reserved names".
+
+**What:** `prototype.test.ts:208`, `:226` and `:230` use `127.attacker.com`, which becomes `127.attacker.example`. The
+numeric first label is what the tests need, and it survives the move. The rest of net-guard's hosts are service or own
+hosts and stay.
+
+Done when no net-guard test file holds a registrable host other than service or own hosts, the same refusals still
+fire, and check is green.
 
 ---
 
