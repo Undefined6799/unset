@@ -32,7 +32,7 @@ export const c2: Check = {
     const locked = new Set(Object.values(lock).map((entry) => entry.ref));
     for (const { name, image } of inputs.compose.services) {
       const match = image === null ? null : OUR_IMAGE.exec(image);
-      if (match === null) return fail(`${name} image is not ghcr.io/undefined6799/… by digest`);
+      if (match === null) return fail(`${name} image is not ghcr.io/undefined6799/... by digest`);
       if (!locked.has(`${match[1]}${match[2]}`)) return fail(`${name} image is not in the lock`);
     }
     return pass();

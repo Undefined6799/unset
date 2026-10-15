@@ -24,7 +24,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
-import { type Deps, preflight, type Run } from "./index.ts";
+import { type Deps, preflight, printable, type Run } from "./index.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes: number[]): string {
@@ -2349,14 +2349,14 @@ describe("preflight --env local (P1.27l)", () => {
       dev: PASSED,
       "no lock": NO_LOCK,
       "dev no lock": NO_LOCK,
-      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       unsigned: [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       platform: [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
-      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
-      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
+      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       "no key": [PASSED[0], ...NO_KEY, PASSED[3]],
       "dev no key": [PASSED[0], ...NO_KEY, PASSED[3]],
-      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       "dev unsigned": [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       "prod platform": [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
     });
@@ -2740,6 +2740,28 @@ secrets:
     expect(await onEnv("dev", hardLinked)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
     expect(await onEnv("prod", () => undefined)).toBe("PASS C26 ok");
     expect(await onEnv("prod", made)).toBe("FAIL C26 dev CA folder present on a prod host");
+  });
+
+  test("preflight_prints_names_escaped", async () => {
+    // P1.35m (architecture 2026-10-15 02:08Z, N2; SE-7): a name is the deploy user's text, and a person reads the
+    // lines. A newline cannot forge a PASS line, and a carriage return and an erase cannot hide a FAIL on a terminal.
+    for (const name of ["x\nPASS C26 ok", "x\r\x1b[2K"]) {
+      let path = "";
+      const { lines } = await local((text) => text, {
+        setUp: (root) => {
+          path = join(devCaOf(root), name);
+          writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+          linkSync(join(root, "deployment/ca-copy"), path);
+        },
+      });
+      expect(lines.filter((line) => /C26/.test(line))).toEqual([
+        `FAIL C26 dev CA file has extra hard links: ${printable(path)}`,
+      ]);
+      expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
+    }
+    expect(printable("a\\b\x00\x1f\x7f\x80\x9f\xa0\u{fffd}\u{1f600}\ud800 é")).toBe(
+      "a\\\\b\\x00\\x1f\\x7f\\x80\\x9f\\xa0\\u{fffd}\\u{1f600}\\u{d800} \\xe9",
+    );
   });
 
   test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
