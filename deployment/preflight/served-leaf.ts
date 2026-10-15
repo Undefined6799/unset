@@ -89,18 +89,26 @@ function localHosts(leaf: X509Certificate): string[] | null {
   return hosts.length > 0 && hosts.every((host) => host !== null) ? (hosts as string[]) : null;
 }
 
+/**
+ * The env of `node served-leaf.ts -- --env <env>`, the one form stack.ts calls, so Node never reads an argument as one
+ * of its own flags (docs/ai/notes/pitfall/node-reads-env-file-after-script.md); null for any other argv.
+ */
+export function leafEnv(argv: readonly string[]): string | null {
+  const [separator, flag, env, ...rest] = argv;
+  return separator === "--" && flag === "--env" && env !== undefined && rest.length === 0 ? env : null;
+}
+
 if (import.meta.main) {
-  // Beside the checkout, where the preflight read them (checks/local-leaf.ts).
-  const beside = (path: string) => join(dirname(resolve(import.meta.dirname, "../..")), path);
-  const copy = readFileSync(beside("unset-dev-env/local-leaf.pem"), "utf8");
-  const root = readFileSync(beside("unset-dev-trust/root.pem"), "utf8");
-  // Called as `node served-leaf.ts -- --env local`, so Node never reads an argument as one of its own flags
-  // (docs/ai/notes/pitfall/node-reads-env-file-after-script.md).
-  const [separator, flag, env, ...rest] = process.argv.slice(2);
-  const problem =
-    separator === "--" && flag === "--env" && env !== undefined && rest.length === 0
-      ? await servedLeafProblem({ env, copy, root, deadlineMs: DEADLINE_MS })
-      : "usage: served-leaf.ts -- --env local";
+  // The argv is judged before any file is read, so a wrong form fails with the usage line alone.
+  const env = leafEnv(process.argv.slice(2));
+  let problem: string | null = "usage: served-leaf.ts -- --env local";
+  if (env !== null) {
+    // Beside the checkout, where the preflight read them (checks/local-leaf.ts).
+    const beside = (path: string) => join(dirname(resolve(import.meta.dirname, "../..")), path);
+    const copy = readFileSync(beside("unset-dev-env/local-leaf.pem"), "utf8");
+    const root = readFileSync(beside("unset-dev-trust/root.pem"), "utf8");
+    problem = await servedLeafProblem({ env, copy, root, deadlineMs: DEADLINE_MS });
+  }
   process.stderr.write(`leaf check: ${problem ?? "the edge serves unset-dev-env/local-leaf.pem"}\n`);
   process.exitCode = problem === null ? 0 : 1;
 }

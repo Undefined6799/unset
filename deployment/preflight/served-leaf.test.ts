@@ -1,13 +1,13 @@
 // P1.34d item 15: the check `local:up` runs after start, against a real TLS server on a loopback port standing in for
 // the edge, with throwaway certificates from the openssl on this machine. Nothing here starts Docker.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { type AddressInfo, createServer as createTcpServer, type Server as TcpServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ConnectionOptions, connect, createSecureContext, createServer, type Server } from "node:tls";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { type Connect, servedLeafProblem } from "./served-leaf.ts";
+import { type Connect, leafEnv, servedLeafProblem } from "./served-leaf.ts";
 
 const HOSTS = ["app.localhost", "pds.localhost"];
 const SAN = HOSTS.map((host) => `DNS:${host}`).join(",");
@@ -176,5 +176,33 @@ describe("the served leaf check (P1.34d item 15)", () => {
     servers.at(-1)?.close();
     await new Promise((settled) => setTimeout(settled, 50));
     expect(await check(port, 1_500)).toBe("the edge did not answer in time");
+  });
+});
+
+describe("the leaf check's argv (pitfall node-reads-env-file-after-script)", () => {
+  test("the_leaf_check_takes_only_the_node_separator_form", () => {
+    // stack.ts calls `node served-leaf.ts -- --env <env>`; any other form is refused (verify-903-2f7413d S-1).
+    expect(leafEnv(["--", "--env", "local"])).toBe("local");
+    for (const argv of [
+      [],
+      ["--env", "local"],
+      ["-", "--env", "local"],
+      ["--", "--env"],
+      ["--", "--env=local"],
+      ["--", "--envs", "local"],
+      ["--", "--", "--env", "local"],
+      ["--", "--env", "local", "--env-file=x"],
+    ]) {
+      expect(leafEnv(argv), JSON.stringify(argv)).toBeNull();
+    }
+  });
+
+  test("the_script_refuses_another_form_before_reading_a_file", () => {
+    // Without the `--` the script prints the usage line and exits 1, reading no leaf or root to get there.
+    const run = spawnSync(process.execPath, [join(import.meta.dirname, "served-leaf.ts"), "--env", "local"], {
+      env: { PATH: process.env.PATH ?? "", NODE_OPTIONS: "" },
+      encoding: "utf8",
+    });
+    expect([run.status, run.stderr]).toEqual([1, "leaf check: usage: served-leaf.ts -- --env local\n"]);
   });
 });
