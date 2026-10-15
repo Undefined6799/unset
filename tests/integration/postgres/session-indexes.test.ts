@@ -12,10 +12,8 @@ const pool = createPool({
   service: "session-indexes-test",
   max: 1,
   connectTimeoutMs: 2000,
-  statementTimeoutMs: 2000,
-  idleInTransactionTimeoutMs: 5000,
 });
-afterAll(() => pool.close());
+afterAll(() => pool.end());
 
 describe("session indexes", () => {
   test("session_indexes_exist", async () => {

@@ -24,11 +24,18 @@ function targets(registry: SealedRegistry): Target[] {
     });
 }
 
+/**
+ * An operator run scans whole tables, so it may outlast the role's own statement timeout (2 s on `web`); each of its
+ * transactions allows 60 s, and the setting ends with the transaction (SET LOCAL, PG 18 sql-set.html).
+ */
+const OPERATOR_TIMEOUTS = "SET LOCAL statement_timeout = '60s'; SET LOCAL idle_in_transaction_session_timeout = '60s'";
+
 /** How many stored values each key id still wraps, over every registered `types.sealed` column. */
 export async function kidCounts(pool: Pool, registry: SealedRegistry = SEALED_COLUMNS): Promise<KidCounts> {
   const counts: Record<string, number> = {};
   for (const { table, column } of targets(registry)) {
     const rows = await withTransaction(pool, null, async (client) => {
+      await client.query(OPERATOR_TIMEOUTS);
       const sql = `SELECT split_part(${column}, '.', 2) AS kid, count(*)::int AS n FROM ${table}
                     WHERE ${column} IS NOT NULL GROUP BY 1`;
       return (await client.query<{ kid: string; n: number }>(sql)).rows;
@@ -41,6 +48,7 @@ export async function kidCounts(pool: Pool, registry: SealedRegistry = SEALED_CO
 /** One batch: lock up to `batchSize` rows not under the active key, rewrap them, write them back. Returns the count. */
 async function rewrapBatch(client: PoolClient, sealer: Sealer, target: Target, active: string, batchSize: number) {
   const { table, column, rowKey } = target;
+  await client.query(OPERATOR_TIMEOUTS);
   const { rows } = await client.query<{ row: string; value: string }>(
     `SELECT ${rowKey}::text AS row, ${column}::text AS value FROM ${table}
       WHERE split_part(${column}, '.', 2) <> $1 LIMIT $2 FOR UPDATE SKIP LOCKED`,

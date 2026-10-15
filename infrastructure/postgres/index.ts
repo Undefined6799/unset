@@ -39,8 +39,6 @@ export {
 } from "./roles.ts";
 export {
   type CatalogColumn,
-  contextIn,
-  parseRegistry,
   SEALED_COLUMNS,
   type SealedColumnId,
   type SealedForm,

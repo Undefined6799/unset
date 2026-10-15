@@ -84,13 +84,11 @@ async function asMigrator<T>(connection: MigratorConnection, fn: (client: PoolCl
     service: "test-setup",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
   });
   try {
     return await withClient(pool, null, fn);
   } finally {
-    await pool.close();
+    await pool.end();
   }
 }
 

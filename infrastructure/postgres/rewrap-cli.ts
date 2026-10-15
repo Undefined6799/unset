@@ -36,14 +36,12 @@ if (import.meta.main) {
     service: "rewrap",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 60_000,
-    idleInTransactionTimeoutMs: 60_000,
   });
   try {
     const counts = check === undefined ? await rewrapAll(pool, cfg.SEAL_KEYRING) : await kidCounts(pool);
     process.stdout.write(line(counts));
     process.exitCode = check === undefined ? 0 : checkExit(counts, check);
   } finally {
-    await pool.close();
+    await pool.end();
   }
 }
