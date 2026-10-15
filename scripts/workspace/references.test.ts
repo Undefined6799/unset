@@ -25,23 +25,47 @@ const manifest = (dir: string, dependencies: Record<string, string> = {}) => {
 function tree(workspaces: Record<string, Spec>): string {
   const root = mkdtempSync(join(tmpdir(), "workspaces-"));
   temps.push(root);
-  const put = (file: string, body: unknown): void => {
-    mkdirSync(dirname(join(root, file)), { recursive: true });
-    writeFileSync(join(root, file), typeof body === "string" ? body : JSON.stringify(body));
-  };
   for (const [dir, spec] of Object.entries(workspaces)) {
-    put(`${dir}/package.json`, manifest(dir, spec.dependencies));
-    put(`${dir}/tsconfig.json`, {
+    put(root, `${dir}/package.json`, manifest(dir, spec.dependencies));
+    put(root, `${dir}/tsconfig.json`, {
       extends: "../../tsconfig.base.json",
       compilerOptions: { composite: true, rootDir: ".", outDir: "dist" },
       references: (spec.references ?? []).map((ref) => ({ path: `../../${ref}` })),
     });
-    put(`${dir}/index.ts`, spec.source ?? "export const x = 1;\n");
-    if (spec.test !== false) put(`${dir}/index.test.ts`, "");
+    put(root, `${dir}/index.ts`, spec.source ?? "export const x = 1;\n");
+    if (spec.test !== false) put(root, `${dir}/index.test.ts`, "");
   }
   const references = ["scripts", ...Object.keys(workspaces)].map((path) => ({ path }));
-  put("tsconfig.json", { files: [], references });
+  put(root, "tsconfig.json", { files: [], references });
   return root;
+}
+
+function put(root: string, file: string, body: unknown): void {
+  mkdirSync(dirname(join(root, file)), { recursive: true });
+  writeFileSync(join(root, file), typeof body === "string" ? body : JSON.stringify(body));
+}
+
+/** A tree of workspaces tsc can list: node_modules, the base config, and a scripts project with one file. */
+function typecheckTree(workspaces: Record<string, Spec>): string {
+  const root = tree(workspaces);
+  symlinkSync(join(ROOT, "node_modules"), join(root, "node_modules"), "dir");
+  put(root, "tsconfig.base.json", readFileSync(join(ROOT, "tsconfig.base.json"), "utf8"));
+  // The real scripts project without its reference to scripts/ui, which the fixture lacks (a missing one is a finding).
+  const scripts = JSON.parse(readFileSync(join(ROOT, "scripts/tsconfig.json"), "utf8")) as Record<string, unknown>;
+  put(root, "scripts/tsconfig.json", { ...scripts, references: [] });
+  put(root, "scripts/a.ts", "export {};\n");
+  return root;
+}
+
+/** A project at `dir` with one file, composite unless `options` says otherwise, listing only its own folder's files. */
+function nested(root: string, dir: string, spec: { options?: object; references?: string[] } = {}): void {
+  put(root, `${dir}/tsconfig.json`, {
+    extends: `${"../".repeat(dir.split("/").length)}tsconfig.base.json`,
+    compilerOptions: { composite: true, rootDir: ".", outDir: "dist", ...spec.options },
+    include: ["*.ts"],
+    references: (spec.references ?? []).map((path) => ({ path })),
+  });
+  put(root, `${dir}/a.ts`, "export {};\n");
 }
 
 /** A tree where `from` references `to` (and `to` exists), checked. */
@@ -249,18 +273,119 @@ describe("workspace references", () => {
   // Two real typecheck passes: 3.5 s alone and up to 5.7 s inside the full suite, past vitest's 5 s default (P1.01q).
   test("every_ts_file_is_typechecked", () => {
     expect(untypecheckedFiles(ROOT)).toEqual([]);
-    const root = tree({});
-    symlinkSync(join(ROOT, "node_modules"), join(root, "node_modules"), "dir");
-    for (const file of ["tsconfig.base.json", "scripts/tsconfig.json"]) {
-      mkdirSync(dirname(join(root, file)), { recursive: true });
-      writeFileSync(join(root, file), readFileSync(join(ROOT, file), "utf8"));
-    }
-    for (const file of ["scripts/a.ts", "vitest.config.ts", "tests/integration/x.test.ts", "domains/stray/d.ts"]) {
-      mkdirSync(dirname(join(root, file)), { recursive: true });
-      writeFileSync(join(root, file), "export {};\n");
-    }
+    const root = typecheckTree({});
+    for (const file of ["vitest.config.ts", "tests/integration/x.test.ts", "domains/stray/d.ts"]) put(root, file, "");
     expect(untypecheckedFiles(root)).toEqual(["domains/stray/d.ts", "tests/integration/x.test.ts"]);
   }, 20_000);
+
+  // P1.31d (architecture record 2026-10-12-p131-depcruise-and-lexicon-choices, Amendment 1): the walk follows nested
+  // references as tsc -b does, and a nested project counts only inside its parent, composite, without noCheck.
+  test("nested_project_red_fixtures", () => {
+    const root = typecheckTree({ "shared/a": {}, "shared/b": {}, "shared/c": {}, "shared/d": {}, "shared/e": {} });
+    // Options at any depth (Amendment 2): noCheck, and no composite. A file reached only through a failing project is
+    // reported too.
+    nested(root, "shared/e", { options: { noCheck: true } });
+    nested(root, "shared/a", { references: ["./unchecked", "./plain"] });
+    nested(root, "shared/a/unchecked", { options: { noCheck: true }, references: ["./inner"] });
+    nested(root, "shared/a/unchecked/inner");
+    nested(root, "shared/a/plain", { options: { composite: false } });
+    // Cycles: back to the root-referenced parent, and between two nested projects.
+    nested(root, "shared/b", { references: ["./gen"] });
+    nested(root, "shared/b/gen", { references: ["..", "./inner"] });
+    nested(root, "shared/b/gen/inner", { references: [".."] });
+    // Containment: a sibling folder, a path through .., a missing folder, node_modules and a link out.
+    const outside = ["../outside", "./gen/../../outside", "./link", "./missing", "./node_modules/pkg"];
+    nested(root, "shared/c", { references: outside });
+    nested(root, "shared/outside");
+    nested(root, "shared/c/node_modules/pkg");
+    symlinkSync(join(root, "shared/outside"), join(root, "shared/c/link"), "dir");
+    // A diamond passes (d references gen and gen/inner, gen references inner); a nested project may not reference a
+    // root-referenced one, though inner's own files still count.
+    nested(root, "shared/d", { references: ["./gen", "./gen/inner"] });
+    nested(root, "shared/d/gen", { references: ["./inner"] });
+    nested(root, "shared/d/gen/inner", { references: ["../../../a"] });
+    const refused = (ref: string): string => `shared/c: reference ${ref} is not a project inside shared/c`;
+    expect(untypecheckedFiles(root)).toEqual([
+      "shared/a/plain: a project must set composite",
+      "shared/a/unchecked: a project may not set noCheck",
+      "shared/b/gen: tsconfig references form a cycle (shared/b -> shared/b/gen -> shared/b/gen/inner -> shared/b/gen)",
+      "shared/b: tsconfig references form a cycle (shared/b -> shared/b/gen -> shared/b)",
+      ...outside.map(refused),
+      "shared/d/gen/inner: reference ../../../a is not a project inside shared/d/gen/inner",
+      "shared/e: a project may not set noCheck",
+      "shared/a/plain/a.ts",
+      "shared/a/unchecked/a.ts",
+      "shared/a/unchecked/inner/a.ts",
+      // tsc lists nothing for a project in a cycle, so the whole cycle is reported.
+      "shared/b/a.ts",
+      "shared/b/gen/a.ts",
+      "shared/b/gen/inner/a.ts",
+      "shared/b/index.test.ts",
+      "shared/b/index.ts",
+      "shared/e/a.ts",
+      "shared/e/index.test.ts",
+      "shared/e/index.ts",
+      "shared/outside/a.ts",
+    ]);
+  }, 60_000);
+
+  // P1.31d: the containment and option rules read the real path and the effective options, not the written ones.
+  test("nested_project_link_and_extends_fixtures", () => {
+    const root = typecheckTree({ "shared/f": {}, "shared/g": {}, "shared/h": {}, "shared/i": {} });
+    // A link to a sibling whose name starts with the parent's (shared/f -> shared/ff) is still outside it.
+    nested(root, "shared/f", { references: ["./link"] });
+    nested(root, "shared/ff");
+    symlinkSync(join(root, "shared/ff"), join(root, "shared/f/link"), "dir");
+    // A folder inside the parent whose tsconfig.json is a link to one outside it.
+    nested(root, "shared/g", { references: ["./gen"] });
+    nested(root, "shared/gg");
+    mkdirSync(join(root, "shared/g/gen"));
+    symlinkSync(join(root, "shared/gg/tsconfig.json"), join(root, "shared/g/gen/tsconfig.json"));
+    // noCheck inherited through extends, and composite left out rather than set false.
+    nested(root, "shared/h", { references: ["./gen"] });
+    put(root, "shared/h/gen/relaxed.json", {
+      extends: "../../../tsconfig.base.json",
+      compilerOptions: { noCheck: true },
+    });
+    put(root, "shared/h/gen/tsconfig.json", {
+      extends: "./relaxed.json",
+      compilerOptions: { composite: true, rootDir: ".", outDir: "dist" },
+      include: ["*.ts"],
+    });
+    put(root, "shared/h/gen/a.ts", "export {};\n");
+    nested(root, "shared/i", { references: ["./gen"] });
+    put(root, "shared/i/gen/tsconfig.json", {
+      extends: "../../../tsconfig.base.json",
+      compilerOptions: { rootDir: ".", outDir: "dist" },
+      include: ["*.ts"],
+    });
+    put(root, "shared/i/gen/a.ts", "export {};\n");
+    expect(untypecheckedFiles(root)).toEqual([
+      "shared/f: reference ./link is not a project inside shared/f",
+      "shared/g: reference ./gen is not a project inside shared/g",
+      "shared/h/gen: a project may not set noCheck",
+      "shared/i/gen: a project must set composite",
+      "shared/ff/a.ts",
+      "shared/gg/a.ts",
+      "shared/h/gen/a.ts",
+      "shared/i/gen/a.ts",
+    ]);
+  }, 60_000);
+
+  // P1.31d (Amendment 3): a nested project counts a file only when its real path lies inside the project's own folder,
+  // so a nested include that reaches elsewhere leaves that file reported.
+  test("nested_include_outside_project_counts_nothing", () => {
+    const root = typecheckTree({ "shared/j": {} });
+    nested(root, "shared/j", { references: ["./gen"] });
+    put(root, "shared/j/gen/tsconfig.json", {
+      extends: "../../../tsconfig.base.json",
+      compilerOptions: { composite: true, rootDir: "../../..", outDir: "dist" },
+      include: ["*.ts", "../../../domains/stray/*.ts"],
+    });
+    put(root, "shared/j/gen/a.ts", "export {};\n");
+    put(root, "domains/stray/b.ts", "export {};\n");
+    expect(untypecheckedFiles(root)).toEqual(["domains/stray/b.ts"]);
+  }, 60_000);
 
   test("no_workspace_yet_passes", () => {
     expect(workspaceProblems(tree({}))).toEqual([]);

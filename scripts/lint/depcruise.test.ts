@@ -73,6 +73,48 @@ function duplicatePairs(rows: Record<string, Edge[]>): string[] {
   return [...seen].filter(([, where]) => where.length > 1).map(([key, where]) => `${key}: ${where.join(", ")}`);
 }
 
+/**
+ * Cruises `from` importing each specifier, beside two stub packages shaped like real ones. `exp-only` has an `exports`
+ * map and no `main`: `.` (into its dist/), `./public` and a conditional `./conditional` are exported, and private.js
+ * ships but is not. `main-dist` has only `main: dist/index.js`. apps/web/dist/server.js stands for our own build output.
+ */
+async function packageCruise(from: string, specs: string[]): Promise<ICruiseResult> {
+  const root = tempDir();
+  write(root, from, specs.map((spec, n) => `import * as m${n} from "${spec}";\nexport { m${n} };\n`).join(""));
+  const exportsMap = {
+    ".": "./dist/index.js",
+    "./public": "./public.js",
+    "./conditional": { import: "./esm.js", require: "./cjs.js", default: "./cjs.js" },
+  };
+  write(root, "node_modules/exp-only/package.json", JSON.stringify({ name: "exp-only", exports: exportsMap }));
+  for (const file of ["dist/index.js", "public.js", "esm.js", "cjs.js", "private.js"]) {
+    write(root, `node_modules/exp-only/${file}`, "module.exports = {};\n");
+  }
+  write(root, "node_modules/main-dist/package.json", JSON.stringify({ name: "main-dist", main: "dist/index.js" }));
+  write(root, "node_modules/main-dist/dist/index.js", "module.exports = {};\n");
+  write(root, "apps/web/dist/server.js", "export const x = 1;\n");
+  const dependencies = { "exp-only": "1.0.0", "main-dist": "1.0.0" };
+  write(root, "package.json", JSON.stringify({ name: "fixture", private: true, dependencies }));
+  const { output } = await cruise(["."], {
+    ...config.options,
+    baseDir: root,
+    validate: true,
+    ruleSet: REAL_RULES,
+    outputType: "json",
+  });
+  return JSON.parse(String(output));
+}
+
+/** Where `from`'s import of `spec` resolved in a packageCruise; undefined when the cruise dropped the edge. */
+function resolved(
+  result: ICruiseResult,
+  from: string,
+  spec: string,
+): { resolved: string; couldNotResolve: boolean } | undefined {
+  const dep = result.modules.find((m) => m.source === from)?.dependencies.find((d) => d.module === spec);
+  return dep && { resolved: dep.resolved, couldNotResolve: dep.couldNotResolve };
+}
+
 const FAKE = "infrastructure/arachnid/fingerprint-check.fake.ts";
 
 /** At least one passing edge per MATRIX row (AB-1: one fixture per matrix row). */
@@ -130,6 +172,12 @@ const ROW_FIXTURES: Record<string, Edge[]> = {
   ],
   shared: [edge("shared/config/a.ts", "../errors/index.ts"), edge("shared/http/a.ts", "node:http")],
   "shared-ui-lexicons": [edge("shared/lexicons/a.ts", "@atproto/lex"), edge("shared/ui/a.ts", "./b.ts")],
+  "shared-lexicons-scripts": [
+    edge("shared/lexicons/scripts/build.ts", "../src/a.ts"),
+    edge("shared/lexicons/scripts/build.ts", "./b.ts"),
+    edge("shared/lexicons/scripts/build.ts", "@atproto/lex-cli"),
+    ...config.LEXICON_SCRIPT_BUILTINS.map((name) => edge("shared/lexicons/scripts/build.ts", `node:${name}`)),
+  ],
   "shared-ui-islands": [edge("shared/ui/a.ts", "../islands/index.ts")],
   "shared-islands": [edge("shared/islands/a.ts", "./b.ts"), edge("shared/islands/a.ts", "left-pad")],
   "shared-ui-build": [
@@ -554,6 +602,86 @@ describe("allowlist matrix", () => {
     );
     // The row is one way: the edge still never imports the preflight (P1.30r).
     await expectFail("edge-not-preflight", edge("deployment/edge/caddyfile.ts", "../preflight/checks/edge.ts"));
+  });
+
+  test("lexicon_scripts_row_is_narrow", async () => {
+    // P1.31d (architecture record 2026-10-12-p131-depcruise-and-lexicon-choices item 2): the scripts reach their own
+    // package, npm and exactly five Node built-ins, never all of CORE, and nothing outside them imports one.
+    expect(config.LEXICON_SCRIPT_BUILTINS).toEqual(["fs", "path", "os", "url", "child_process"]);
+    const script = "shared/lexicons/scripts/build.ts";
+    await expectFail(
+      "not-in-allowed",
+      edge(script, "node:http"),
+      edge(script, "node:net"),
+      edge(script, "node:crypto"),
+      edge(script, "node:worker_threads"),
+      // Each built-in is named exactly; a subpath module such as fs/promises is another module.
+      edge(script, "node:fs/promises"),
+      edge(script, "../../config/index.ts"),
+      // Only the scripts gain the built-ins: the package's own code stays on its pure row.
+      edge("shared/lexicons/src/a.ts", "node:fs"),
+      edge("shared/lexicons/a.ts", "node:child_process"),
+      edge("shared/lexicons/scriptsx/a.ts", "node:fs"),
+    );
+    await expectFail("no-product-imports-tooling", edge(script, "../../../scripts/guards/files.ts"));
+    await expectFail(
+      "lexicon-scripts-not-imported",
+      edge("shared/lexicons/src/a.ts", "../scripts/build.ts"),
+      edge("shared/lexicons/index.ts", "./scripts/build.ts"),
+      edge("interfaces/http/a.ts", "../../shared/lexicons/scripts/build.ts"),
+      edge("domains/identity/a.ts", "../../shared/lexicons/scripts/build.ts"),
+      // Tests included: a test of a script sits beside it, under scripts/.
+      edge("shared/lexicons/src/a.test.ts", "../scripts/build.ts"),
+      edge("tests/integration/a.test.ts", "../../shared/lexicons/scripts/build.ts"),
+      // Every file under scripts/, not only build.ts.
+      edge("shared/lexicons/src/b.ts", "../scripts/lib/hash.ts"),
+    );
+    await expectPass(
+      edge("shared/lexicons/scripts/build.test.ts", "./build.ts"),
+      edge("shared/lexicons/scripts/check/a.ts", "../build.ts"),
+    );
+  });
+
+  test("exports_only_package_resolves", async () => {
+    // P1.31d: a package that publishes only an `exports` map (no `main`), as @atproto/lex-schema does. Without
+    // exportsFields its import never resolved, so no path rule saw it. The conditions are exactly architecture's four
+    // ("types" was declined: it would cruise .d.ts files instead of runtime entries).
+    expect((config.options as { enhancedResolveOptions?: unknown }).enhancedResolveOptions).toEqual({
+      exportsFields: ["exports"],
+      conditionNames: ["import", "require", "node", "default"],
+    });
+    const from = "shared/http/a.ts";
+    const result = await packageCruise(from, ["exp-only", "exp-only/public", "exp-only/conditional"]);
+    const found = (path: string) => ({ resolved: `node_modules/exp-only/${path}`, couldNotResolve: false });
+    expect(resolved(result, from, "exp-only")).toEqual(found("dist/index.js"));
+    expect(resolved(result, from, "exp-only/public")).toEqual(found("public.js"));
+    // The first condition in the package's own order that is in conditionNames wins (enhanced-resolve 5.26.0
+    // lib/util/entrypoints.js), as in Node.
+    expect(resolved(result, from, "exp-only/conditional")).toEqual(found("esm.js"));
+    expect(outcome(result)).toEqual({ exitCode: 0, rules: [] });
+  });
+
+  test("exports_unexported_subpath_is_a_finding", async () => {
+    // A file the package ships but does not export cannot be reached, so the import is unresolved and fails.
+    const from = "shared/http/a.ts";
+    const result = await packageCruise(from, ["exp-only/private.js"]);
+    expect(resolved(result, from, "exp-only/private.js")?.couldNotResolve).toBe(true);
+    expect(outcome(result).exitCode).not.toBe(0);
+    expect(outcome(result).rules).toContain("not-in-allowed");
+  });
+
+  test("package_dist_entry_is_checked", async () => {
+    // P1.31d: `exclude` drops our own dist/ but never a package's. Before, an entry under node_modules/*/dist/ (vitest,
+    // vite, hono, most exports maps) was excluded with its edge, so a domain could import such a package unseen.
+    const from = "domains/identity/a.ts";
+    const result = await packageCruise(from, ["main-dist", "exp-only"]);
+    expect(resolved(result, from, "main-dist")).toEqual({
+      resolved: "node_modules/main-dist/dist/index.js",
+      couldNotResolve: false,
+    });
+    expect(resolved(result, from, "exp-only")?.resolved).toBe("node_modules/exp-only/dist/index.js");
+    expect(outcome(result).rules).toEqual(["not-in-allowed", "not-in-allowed"]);
+    expect(result.modules.map((m) => m.source)).not.toContain("apps/web/dist/server.js");
   });
 
   test("render_build_import_is_exact", async () => {

@@ -144,7 +144,11 @@ describe("image tests", () => {
     const repository = await imageBuildProblems(ROOT);
     // The allowed edge is printed once, from the repository walk only, so it is visible in the check log.
     for (const edge of repository.allowed) console.log(`unresolved, allowed: ${edge}`);
-    expect(repository).toEqual({ problems: [], allowed: [RENDER_EDGE] });
+    expect(repository.problems).toEqual([]);
+    // The render loader's edge is unresolved until apps/web's server build exists. render-entry.test.ts writes that
+    // build while this file runs, and then the edge resolves into apps/web/dist/, which the boundary config excludes,
+    // so the cruise drops it (P1.31d). Either way the walk follows nothing past it, and no other edge may appear.
+    expect([[], [RENDER_EDGE]]).toContainEqual(repository.allowed);
     const root = tree({
       "a/spawn.test.ts": `spawnSync("docker", ${JSON.stringify(["buildx", BUILD_WORD, "."])});\n`,
       "a/shell.test.ts": `run("${["docker", BUILD_WORD].join(" ")} -t x .");\n`,
