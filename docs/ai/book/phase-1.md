@@ -72,10 +72,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t, P1.34g,
-  P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward from slice
-  2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit
-  P2.13a.
+  P1.34d, P1.35p, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s, P1.29t,
+  P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b, P1.36 (pulled forward
+  from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the
+  slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -607,6 +607,9 @@ flowchart LR
   P1_33g --> P1_34d
   P1_35m["P1.35m dev CA folder walk edges pinned"]
   P1_35a --> P1_35m
+  P1_35p["P1.35p dev CA preflight and runbook gaps closed"]
+  P1_33g --> P1_35p
+  P1_35m --> P1_35p
   P1_35n["P1.35n web on its own network to the edge"]
   P1_35n --> P1_34d
   P1_35o["P1.35o app network pinned in the dev compose tests"]
@@ -8831,6 +8834,65 @@ and C17's local-only list module refusing a `plc_*` network under dev (02:32Z ru
 checks are P1.33g's and item 6's refusal is P1.33w's (book edit 2026-10-15-verify-890-postmerge-followups, B6).
 P1.29t's client_id probe red and green move to P1.33z (session containers cannot pull the PDS image; book edit
 2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling"). Its PR body names this departure.
+
+---
+
+### P1.35p — Close the dev CA preflight and runbook gaps
+Tags: [SEC]            Depends on: P1.33g, P1.35m
+
+Slice 1, issue #904, product (`deployment/preflight/`, including `deployment/preflight/stack.ts`, its tests, and
+`docs/human/runbooks/dev-stack-secrets.md`), kind/fix, lane the third thread after P1.34d (the record keeps it there for
+the C9 rules). Book edit 2026-10-15-verify-896-901-followups, from verify-896-742568a (P1.33g, #896) and
+verify-901-9996fec (P1.35m, #901), with architecture's 03:50Z ruling (section "Architecture on verify-896-742568a and
+verify-901-9996fec" of book edit 2026-10-12-p134c-p134d-local-dev-root-ca; mapped in the record's last section). Every
+item is a tightening, so nothing from Alex.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev root whose
+name constraints are forged or hidden from a byte search; a root that may sign further CAs or carries key usages beyond
+certificate and CRL signing; a trust folder another user can write; preflight hung by a FIFO; a printed filesystem or
+environment string forging a PASS line; and a folder swapped during the walk.
+
+**What, C18 and the root (verify-896):**
+- S1: a strict DER walk from Certificate to tbsCertificate to extensions, not a byte search. DER only (minimal lengths,
+  no indefinite lengths, no trailing bytes); any parse error fails C18. Exactly one 2.5.29.30 extension, and a duplicate
+  of any extension OID fails. nameConstraints is critical and its extnValue byte-equals the expected encoding. Use a
+  lockfile ASN.1 parser if one exists, otherwise a small walker with a fuzz test; no new dependency without supply-chain
+  review. Red fixtures: the expected bytes hidden in another extension, a duplicate nameConstraints, a non-critical one,
+  an extra permitted subtree, trailing bytes, and a long-form length that should be short.
+- N3: basicConstraints is critical with cA true and pathLenConstraint 0; keyUsage is critical with exactly keyCertSign
+  and cRLSign. If P1.34c's generator emits anything else, this step fixes it. Red fixtures: no pathlen, pathlen 1,
+  digitalSignature added, a non-critical keyUsage.
+- N4/N5 (C9): `unset-dev-trust/` is owned by the preflight uid or root, with mode & 0o022 == 0; `root.pem` has the same
+  owner rule and a mode of exactly 0444 or 0644. The `unset-dev-ca/` rules stay as P1.35a set them. Red fixtures: a 0777
+  folder, a uid-4242 owner, `root.pem` at 0600 and at 0664.
+- N9: the env branch is a positive, exhaustive allowlist: only local allows the trust folder, dev and prod are named
+  explicitly, and anything else is refused (the P1.34z pattern).
+- S2: a FIFO at `unset-dev-ca/root.pem` or `unset-dev-trust/root.pem` hangs preflight (the second is on main). Both are
+  read through `readEnvOrNull` or its lstat-then-regular-file contract. Red tests: a FIFO at each path fails promptly,
+  naming the path.
+- S3 and N1: the runbook (`dev-stack-secrets.md:136-138`) uses `install -d` for the folder and `install -m 0644` for the
+  root, as the step text books (not `cp`). That fixes `mkdir -m 0755` failing on rerun, the `install -D` line dropped
+  from main, and `cp` writing through a symlink.
+- N2: P1.33g's As built says items 2 and 3 live in C18, not C26. N6: red cases for the four survivors that exist only on
+  disk: a dot-named file beside `root.pem`, a SEC1 key block, `ln -s` in the runbook path, and a CA:TRUE leaf.
+
+**What, the walk and printing (verify-901):**
+- S1: `printable` moves to its own module, and preflight and `stack.ts` use it for every printed string that comes from
+  the filesystem, the environment or an error, including COMPOSE_* names (`stack.ts:101-105`, `:213`). Red fixture: a
+  variable name with `\n` and `\r\e[2K` forging a PASS line.
+- S2: red cases for the six fail-open survivors X1, X5, X12, X13, X4 and X7; X1, X5 and X13 turn a refusal into PASS on
+  disk, so they come first. N1: P1.35m's As built names the lstat-error message.
+- N2: record dev and ino for every directory the walk visits, and re-lstat all of them after the walk; any change fails.
+  The residual wording becomes "a swap made and reverted entirely within the walk (deploy user or root)".
+- N3: the non-UTF-8 refusal prints the entry's raw bytes through the escape helper (for example `\xff`), with the
+  folder.
+
+Size: if the step measures over about 400 source lines, it splits at the measure into a verify-896 part (C18 DER walk,
+N3, the C9 owner and mode rules, N9) and a verify-901 part (printable module, re-lstat, N3, the X-mutant reds). The
+second part takes the next free id, and the split is recorded in book edit 2026-10-15-verify-896-901-followups before
+the PR is ready.
+
+Done when each red fixture fails on main for its own reason and passes with the change, and check is green.
 
 ---
 
