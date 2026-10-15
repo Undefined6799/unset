@@ -71,10 +71,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k,
   P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b,
-  P1.32c, P1.33w, P1.33x, P1.33y, P1.35a, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z,
-  P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37, P1.37b,
-  P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15,
-  P2.12, P2.13 and the slice exit P2.13a.
+  P1.32c, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.34d, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y,
+  P1.34z, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.37,
+  P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged),
+  P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -597,6 +597,7 @@ flowchart LR
   P1_35a["P1.35a dev CA folder rule gaps closed"]
   P1_33y --> P1_35a
   P1_35a --> P1_34d
+  P1_35f["P1.35f compose probe stall root-caused"]
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -8240,6 +8241,35 @@ Also a red case: a FIFO inside the folder (the folder holds only regular files a
 2026-10-14-verify-868-fixes, S2).
 
 Done when each red case fails on main and passes with the change, and check is green.
+
+---
+
+### P1.35f — Root-cause the compose version probe stall
+Tags: —            Depends on: —
+
+Slice 1, issue (pending), product (`tests/support/` and `deployment/preflight/` tests), kind/fix, lane the third thread
+after P1.33y, next in its queue (lane order only); book edit 2026-10-15-verify-862-c14-and-compose-probe, section 2,
+from verify-862-d6836ab. Nothing from Alex. In the check job, "docker compose version killed after 10000 ms"
+(`tests/support/docker.ts:73`, raised through the module-level probe at
+`deployment/preflight/compose-parse.test.ts:642`) stops the file from loading. It turned #862's required check red, and
+main had the same timeout in run 38638697888. A failing check gets a root cause: no timeout bump, no retry, no skip, and
+no making the probe soft. A missing Compose in CI must still fail.
+
+**What:**
+1. Find why `docker compose version` takes over 10 s on the runner, and show the evidence in the PR. Candidates to rule
+   in or out: a first-run CLI plugin or context lookup; daemon or socket contact a version call should not need; many
+   vitest workers spawning Docker at module load at the same moment; runner CPU starvation while the job's other work
+   runs.
+2. Fix that cause where it lives, for example an environment that stops the CLI contacting anything, or one probe per
+   run instead of one per worker at import time.
+3. Add a test that would have caught it, where one is possible.
+
+If the fix changes how or where Docker probes run in CI (a global setup, a workflow step or `scripts/test/run.ts`), the
+lane asks architecture before building. A workflow or `scripts/test` change is a check path and needs Alex's typed
+line, so the lane stops and reports instead of widening the PR.
+
+Done when the cause is named with evidence, the fix addresses that cause, and the check job passes on main and on the
+PR without any change to timeouts.
 
 ---
 
