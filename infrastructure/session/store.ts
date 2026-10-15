@@ -53,7 +53,6 @@ export type CreatedSession = { readonly cookieValue: string; readonly expiresAt:
 const ID_BYTES = 32;
 /** Canonical unpadded base64url of 32 bytes. */
 const COOKIE_VALUE = /^[A-Za-z0-9_-]{43}$/;
-const UNIQUE_VIOLATION = "23505";
 const NONE: SessionRead = { session: null, clearCookie: false };
 const CLEAR: SessionRead = { session: null, clearCookie: true };
 
@@ -79,29 +78,22 @@ export function createSessionStore(options: {
   readonly withDb: WithSessionDb;
   readonly limits: SessionLimits;
   readonly log: Logger;
-  readonly random?: (bytes: number) => Buffer;
 }): SessionStore {
-  const { withDb, limits, log, random = randomBytes } = options;
+  const { withDb, limits, log } = options;
   const memo = new WeakMap<object, Promise<SessionRead>>();
 
   /** Rotation first (this browser's previous session dies, whoever it belonged to), then a fresh id. */
   async function create(db: Db, did: Did, { replacingCookie }: { readonly replacingCookie?: string } = {}) {
     const previous = replacingCookie === undefined ? null : idHashOf(replacingCookie);
     if (previous !== null) await destroy(db, previous);
-    // A repeated id is astronomically unlikely (2^-256); one retry with a new id, then the error stands.
-    for (let attempt = 1; ; attempt++) {
-      const id = random(ID_BYTES);
-      try {
-        const { rows } = await db.query<{ expires_at: Date }>(
-          "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) " +
-            "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3)) RETURNING absolute_expires_at AS expires_at",
-          [sha256(id), did, limits.absoluteS],
-        );
-        return { cookieValue: id.toString("base64url"), expiresAt: (rows[0] as { expires_at: Date }).expires_at };
-      } catch (error) {
-        if (attempt > 1 || (error as { code?: unknown }).code !== UNIQUE_VIOLATION) throw error;
-      }
-    }
+    // A repeated id (2^-256) violates the primary key, and the caller's transaction fails closed (P2.03 step 1c).
+    const id = randomBytes(ID_BYTES);
+    const { rows } = await db.query<{ expires_at: Date }>(
+      "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) " +
+        "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3)) RETURNING absolute_expires_at AS expires_at",
+      [sha256(id), did, limits.absoluteS],
+    );
+    return { cookieValue: id.toString("base64url"), expiresAt: (rows[0] as { expires_at: Date }).expires_at };
   }
 
   /**
