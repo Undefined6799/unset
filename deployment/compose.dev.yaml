@@ -221,8 +221,9 @@ services:
 networks:
   db:
     internal: true
-  # web's only way to the edge, and through the edge's aliases to the app and PDS hosts (architecture 2026-10-15 02:05Z,
-  # option C). Internal, so web still has no way out.
+  # web's only way to the edge. web reaches the PDS only through the edge's aliases on this network, never directly.
+  # Internal, so web still has no way out. Record: the 02:05Z (option C) and 02:21Z sections of
+  # unset-plan/book-edits/2026-10-14-p134d-split.md.
   app:
     internal: true
   # Only the edge shares a network with the PDS's HTTP port: the PDS trusts every private address as a proxy (step book
