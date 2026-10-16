@@ -18,14 +18,12 @@ checked: 2026-10-16
 MIT-licensed. `safeHref` stays in [[ui]].
 
 **Files.**
-- `define.ts`, `props.ts`, `slot.ts` and `readProps.ts`. `readProps.ts` is the only file whose import specifier
-  changed when it was copied (`../../islands/props.ts` to `./props.ts`). `tests/move-parity.test.ts` reads the
-  shared/ui originals by path. A missing `define.ts` or `slot.ts` original is allowed (P1.25p deleted them); a
-  missing `props.ts` or `readProps.ts` original is not, and a missing copy never is.
+- `define.ts`, `props.ts`, `slot.ts` and `readProps.ts` are the runtime. `readProps.ts` imports `./props.ts`.
+  P1.25e deleted the shared/ui originals (`islands/props.ts`, `src/islands/readProps.ts`), their tests, and
+  `tests/move-parity.test.ts` (`docs/ai/book/phase-1.md`).
 - `index.ts`: the only file another workspace may import (DC-2). The kit, each `*.island.tsx`, `hydrate.ts` and
-  apps/web import this index, never a subpath. P1.25e deletes the trusted originals still in [[ui]].
+  apps/web import this index, never a subpath.
 
-**How data flows.** An island's props are serialised here and read back in the browser by `readProps`. The old
-`props.ts` and `readProps.ts` in [[ui]], and their tests, stay until P1.25e. [[ui]]'s index no longer exports them.
+**How data flows.** An island's props are serialised here and read back in the browser by `readProps`.
 
 **Links.** [[ui]], `docs/ai/book/phase-1.md` P1.25p.

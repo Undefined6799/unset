@@ -34,7 +34,7 @@ checked: 2026-10-16
   Re-measure with `scripts/budgets/island.ts` before exporting more components.
 - `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,
   the props serialiser and the browser reader are [[islands]] (`@unset/shared-islands`); this index does not
-  re-export them. `islands/props.ts` and `src/islands/readProps.ts` stay until P1.25e.
+  re-export them. P1.25e deleted `islands/props.ts` and `src/islands/readProps.ts`.
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
