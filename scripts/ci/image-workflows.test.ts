@@ -102,4 +102,25 @@ describe("image workflows", () => {
     expect(runs).toContain('test "$(docker run --rm --entrypoint id "$APP_IMAGE" -u)" = "65532"');
     expect(runs).toContain("{{.State.Health.Status}}");
   });
+
+  test("web_health_gets_secrets_and_postgres", () => {
+    // P2.04i: the web server reads secret files and checks its Postgres connection budget before it listens.
+    const job = workflow("images.yml").jobs.images;
+    const health = job?.steps?.find((step) => step.name === "Becomes healthy")?.run ?? "";
+    const lock = JSON.parse(readFileSync(join(ROOT, "deployment", "images", "bases.lock.json"), "utf8")).postgres;
+    expect(job?.env?.POSTGRES_IMAGE).toBe(`${lock.ref}:${lock.tag}@${lock.digest}`);
+    // Made in the run, so no key material sits in the repository, and mounted read-only as files, never plain env.
+    expect(health).toContain('secrets="$RUNNER_TEMP/secrets"');
+    expect(health).toContain('-v "$secrets:/run/secrets:ro"');
+    for (const name of ["pg_password", "seal_keyring", "oauth_client_keys"])
+      expect(health).toContain(`"$secrets/${name}"`);
+    for (const key of ["PG_PASSWORD_FILE", "SEAL_KEYRING_FILE", "OAUTH_CLIENT_KEYS_FILE"]) {
+      expect(health).toMatch(new RegExp(`-e ${key}=/run/secrets/\\w+`));
+    }
+    expect(health).not.toMatch(/-e (PG_PASSWORD|SEAL_KEYRING|OAUTH_CLIENT_KEYS)=/);
+    // The app and a throwaway Postgres share one job network; the app waits for nothing else.
+    expect(health).toMatch(/docker run -d "\$\{pg\[@\]\}" "\$POSTGRES_IMAGE"/);
+    expect(health).toMatch(/--network health\b/);
+    expect(health).toContain("pg_isready");
+  });
 });
