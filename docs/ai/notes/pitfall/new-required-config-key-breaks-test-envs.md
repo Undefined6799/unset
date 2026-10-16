@@ -26,9 +26,10 @@ it only warns about (`shared/config/load.ts`). Adding the key to the test envs f
 then the PR that makes it required. Use realistic test values, never values the new rule rejects (for a CIDR list,
 never `0.0.0.0/0`).
 
-**The image check too.** The images workflow starts the web image with `deployment/images/web.test.env` alone: no
-secret files and no database (`.github/workflows/images.yml`, a checks path). A required `secretFile` key, or a boot
-check that needs Postgres before `listen`, keeps that image from ever becoming healthy, and the fix is a checks PR that
-must land first (P2.04c, #928).
+**The image check too.** The images workflow's health step (`.github/workflows/images.yml`, a checks path) starts
+the web image with `deployment/images/web.test.env`. Since P2.04i it also makes the secret files per run and starts a
+throwaway Postgres, and sets the keys that describe them; P2.04c could not go green without that. A new required
+`secretFile` key, or a boot check that needs another service before `listen`, needs a line in that step too, and the
+step is a checks PR that must land first. A plain required key goes in `web.test.env` with the PR that adds it.
 
 **Repair.** Easy; it only costs an extra PR and a wait for the merge.
