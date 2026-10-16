@@ -3,9 +3,11 @@
 // at most BUDGET statements, counted by a pool's onStatement hook. Every statement a checked-out client sends counts,
 // inside withTransaction too, except transaction control (BEGIN, COMMIT, ROLLBACK, SAVEPOINT, RELEASE): the budget is
 // about data round trips, and tx.ts adds those on its own (architecture ruling 2026-10-06 (c)). Requests run one at a time, so the count between two
-// requests is that request's. No composition root takes a pool yet: the step that first wires one passes this test's
-// counting pool into compose().
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+// requests is that request's. P2.04c gives the web server its pools, but no route of it runs a statement yet: the
+// first route that does passes this test's counting pool into compose(). The web server's config needs secret files
+// (P2.04c), which a JSON fixture cannot hold, so its env gets them from interfaces/http/test-env.ts at run time.
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute } from "@unset/shared-http";
@@ -63,6 +65,16 @@ const interfacesWithManifest = (): string[] =>
     ? readdirSync(INTERFACES).filter((name) => existsSync(join(INTERFACES, name, "routes.manifest.json")))
     : [];
 const readJson = <T>(path: string): T => JSON.parse(readFileSync(path, "utf8")) as T;
+const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
+afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
+/** A fixture's env, with the web server's secret files added (P2.04c); loaded like compose.ts, by path. */
+async function envOf(name: string, fixture: Fixture): Promise<Record<string, string>> {
+  if (name !== "http") return fixture.env;
+  const { webSecretEnv } = (await import(join(INTERFACES, "http", "test-env.ts"))) as {
+    webSecretEnv: (dir: string) => Record<string, string>;
+  };
+  return { ...fixture.env, ...webSecretEnv(SECRETS) };
+}
 
 describe("query budget", () => {
   test("query_budget_per_route", async () => {
@@ -84,7 +96,7 @@ describe("query budget", () => {
       };
       // The web server's composition takes apps/web's render; tests pass the source (P1.23c), never the build.
       const wiring = name === "http" ? [await import(join(REPOSITORY, "apps", "web", "render.tsx"))] : [];
-      const { server } = await compose(loadConfig(config, fixture.env), ...wiring);
+      const { server } = await compose(loadConfig(config, await envOf(name, fixture)), ...wiring);
       for (const request of fixture.requests) {
         const route = `${name} ${request.method} ${request.path}`;
         const result = await measure(server, request);
@@ -116,7 +128,7 @@ describe("query budget", () => {
     };
     const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
     const server = createServer({
-      config: loadConfig(config, fixture.env) as never,
+      config: loadConfig(config, await envOf("http", fixture)) as never,
       routes: [route("/five", BUDGET), route("/six", BUDGET + 1)],
       policies: {},
       log,

@@ -88,6 +88,20 @@ describe("logger", () => {
     expect(records().map((r) => r.route)).toEqual(["/@:handle", "[route]"]);
   });
 
+  test("logger_route_template_names_a_file", () => {
+    // P2.04c: the kit's literal may name a .json or .txt file (P2.04k), and logs as itself; nothing wider does.
+    const { log, records } = capture();
+    for (const route of ["/oauth-client-metadata.json", "/oauth/jwks.json", "/alice.example", "/:file.json"]) {
+      log.info("config.unknown_keys", { route });
+    }
+    expect(records().map((r) => r.route)).toEqual([
+      "/oauth-client-metadata.json",
+      "/oauth/jwks.json",
+      "[route]",
+      "[route]",
+    ]);
+  });
+
   test("logger_unknown_event", () => {
     const { log, records } = capture();
     log.info("user.did:plc:abcdefghijklmnopqrstuvwx logged in" as never);

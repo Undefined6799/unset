@@ -27,6 +27,16 @@
       "method": "POST",
       "path": "/prefs/theme",
       "status": 415
+    },
+    {
+      "method": "GET",
+      "path": "/oauth-client-metadata.json",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/oauth/jwks.json",
+      "status": 200
     }
   ]
 }
