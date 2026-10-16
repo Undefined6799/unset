@@ -1,6 +1,6 @@
 # 0020 — Permanent choices: Matrix server name, Tailnet Lock custody, permission set NSID
 
-Status: accepted on Alex's merge of #753. It records Alex's answers of 2026-10-03 to Q1, Q2 and Q4 of step P1.32.
+Status: Superseded by 0025.
 
 PERMANENT — changing any value breaks existing users.
 

@@ -10,7 +10,7 @@ word in the code that is not here and not plain English has found a defect: add 
 | **DID** | A permanent account identifier (`did:plc:…` or `did:web:…`); it never changes when the handle changes. |
 | **DID document** | The public record a DID resolves to: the account's handle claim (`alsoKnownAs`), signing key and PDS address. |
 | **PLC** | The directory that stores `did:plc` documents; changes are signed operations; read replicas may lag. |
-| **handle** | A human-readable name (`alice.0x40.me`) that must be verified both ways: handle → DID and DID → handle. |
+| **handle** | A human-readable name (`alice.unset.im`) that must be verified both ways: handle → DID and DID → handle. |
 | **`verifyHandle`** | Our one function that does that two-way check; nothing else reads `alsoKnownAs`. |
 | **PDS** | Personal Data Server: hosts accounts and their repos, runs sign-in. Ours is `unset.ac` (production) and `0x40.space` (development). |
 | **repo** | An account's public, signed data store on its PDS; everything in it is public and copied by relays. |
@@ -47,7 +47,7 @@ word in the code that is not here and not plain English has found a defect: add 
 |---|---|
 | **homeserver** | The Matrix server holding accounts and rooms; ours is Synapse. |
 | **MAS** | Matrix Authentication Service: the OAuth/OIDC sign-in in front of Synapse. |
-| **MXID** | A Matrix user id, `@alice:unset.sh`. |
+| **MXID** | A Matrix user id, `@alice:unset.cc`. |
 | **`server_name`** | The domain in every MXID; permanent once accounts exist. |
 | **device** | One signed-in client; encryption keys are per device. |
 | **cross-signing** | The user's keys that vouch for their own devices. |

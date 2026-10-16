@@ -9,6 +9,8 @@ It must support DNSSEC DS submission for `.ac` and hardware-key (WebAuthn) 2FA. 
 
 ## 2. Register
 - `unset.ac` (production PDS).
+- `unset.im` (handles, ADR 0025).
+- `unset.cc` (chat, ADR 0025).
 - The media domain. It must be its own registrable domain, never a subdomain of the app or the PDS. Candidates:
   - `unsetcdn.net` (the plan's example)
   - `unsetmedia.net`

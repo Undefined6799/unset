@@ -438,3 +438,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **PDS call wrapper (book P2.07; own record: [0024](0024-atproto-api-agent.md)):** every call to a member's PDS
   goes through one function that restores the OAuth session. The XRPC client is `@atproto/api` 0.24.2 `Agent`,
   because `@atproto/lex` is the lexicon CLI and `@atproto/lex-client` stays in `shared/lexicons`.
+- **Public domains (Alex, 2026-10-16 22:42Z; own record: [0025](0025-public-domains.md)):** the app is `unset.sh`,
+  the PDS is `unset.ac`, handles are `<user>.unset.im`, and chat is `unset.cc`. The Matrix `server_name` is
+  `unset.cc`, so an MXID reads `@localpart:unset.cc`. This supersedes the handle domain `<user>.0x40.me` in Q1
+  above and supersedes ADR 0020. The development PDS hostname is unchanged.

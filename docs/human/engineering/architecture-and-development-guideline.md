@@ -17,7 +17,7 @@ unset.sh/
 ├── apps/                 user-facing applications: UI only, no product rules, no database access
 │   ├── web/              public application (unset.sh)
 │   ├── admin/            admin screens and islands (Tailscale only)
-│   └── chat/             chat client on its own origin (chat.unset.sh), Phase 6
+│   └── chat/             chat client on its own origin (unset.cc), Phase 6
 │
 ├── interfaces/           entry points; one folder per running process, each its own container
 │   ├── http/             web server: routes, forms, its jobs
