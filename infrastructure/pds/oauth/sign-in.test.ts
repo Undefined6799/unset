@@ -1,4 +1,4 @@
-// P2.05a (sign-in.ts): a sign-in started against a stand-in authorization server, through the real library client
+// P2.05a, P2.06 (sign-in.ts): a sign-in started and completed against a stand-in authorization server, through the real library client
 // (@atproto/oauth-client 0.8.9) over our identity resolvers. Only the network and the server are doubles (TE-1), so
 // each outcome is pinned to the error the library really throws, not to a shape written here. The successful runs
 // start from the issuer (the PDS chooser), so no DID document here claims a handle: reading that claim belongs to
@@ -9,7 +9,6 @@ import { NetGuardError } from "@unset/infrastructure-net-guard";
 import { scopeString, scopeStringFallback } from "@unset/shared-lexicons";
 import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { authorize } from "./sign-in.ts";
 import {
   type ClientKeys,
   createOAuthClient,
@@ -17,6 +16,7 @@ import {
   type SavedSession,
   type SavedState,
 } from "./oauth-client.ts";
+import { authorize, completeAuthorization } from "./sign-in.ts";
 
 const ORIGIN = "https://unset.example";
 const HANDLE = "alice.pds-test.dev";
@@ -29,6 +29,7 @@ const asMetadata = {
   issuer: PDS,
   authorization_endpoint: `${PDS}/oauth/authorize`,
   token_endpoint: `${PDS}/oauth/token`,
+  revocation_endpoint: `${PDS}/oauth/revoke`,
   pushed_authorization_request_endpoint: `${PDS}/oauth/par`,
   require_pushed_authorization_requests: true,
   response_types_supported: ["code"],
@@ -56,7 +57,11 @@ type World = {
   par?: (() => Response)[];
   /** Replaces the whole server, for failures before PAR. */
   server?: (url: URL) => Response | Promise<Response>;
+  /** The token endpoint's answer; by default a DPoP token set for DID with the full scope. */
+  token?: () => Response;
 };
+
+const TOKENS = { access_token: "at", refresh_token: "rt", token_type: "DPoP", sub: DID, expires_in: 3600 };
 
 /** The real client over a stand-in PLC, handle DNS and authorization server; records PAR bodies and log lines. */
 async function setup(world: World = {}) {
@@ -73,6 +78,7 @@ async function setup(world: World = {}) {
     },
   };
   const pars: URLSearchParams[] = [];
+  const posts: string[] = [];
   const par = world.par ?? [() => json({ request_uri: REQUEST_URI, expires_in: 299 }, 201)];
   const server = async (url: URL, request: Request): Promise<Response> => {
     if (world.server) return world.server(url);
@@ -84,6 +90,9 @@ async function setup(world: World = {}) {
       pars.push(new URLSearchParams(await request.text()));
       return (par[pars.length - 1] ?? (par.at(-1) as () => Response))();
     }
+    if (request.method === "POST") posts.push(url.pathname);
+    if (url.pathname === "/oauth/token") return world.token?.() ?? json({ ...TOKENS, scope: scopeString() });
+    if (url.pathname === "/oauth/revoke") return new Response(null, { status: 200 });
     return json({ error: "not_found" }, 404);
   };
   const states = new Map<string, SavedState>();
@@ -118,7 +127,13 @@ async function setup(world: World = {}) {
   });
   const run = (input: string, prompt?: "login") =>
     authorize(client, input, { appState: APP_STATE, ...(prompt ? { prompt } : {}), deadline: null, log });
-  return { run, pars, states, logged };
+  /** Starts a flow at the issuer and returns the query the server would send the browser back with. */
+  const started = async (extra: Record<string, string> = { code: "code-1", iss: PDS }) => {
+    await run(PDS);
+    return new URLSearchParams({ state: pars.at(-1)?.get("state") ?? "", ...extra });
+  };
+  const complete = (query: URLSearchParams) => completeAuthorization(client, query, log);
+  return { run, started, complete, pars, posts, states, sessions, logged };
 }
 
 describe("authorize", () => {
@@ -193,5 +208,59 @@ describe("authorize", () => {
     });
     expect(await run(PDS)).toEqual({ ok: false, reason: "failed" });
     expect(logged).toEqual([{ event: "oauth.authorize_failed", fields: { kind: "OAuthResolverError" } }]);
+  });
+});
+
+describe("completeAuthorization", () => {
+  test("callback_completes", async () => {
+    const { started, complete, states, sessions } = await setup();
+    const result = await complete(await started());
+    expect(result).toMatchObject({ ok: true, did: DID, issuer: PDS, appState: APP_STATE, scope: scopeString() });
+    // The library spent its state and stored the token set under the DID.
+    expect(states.size).toBe(0);
+    expect([...sessions.keys()]).toEqual([DID]);
+  });
+
+  test("callback_unknown_or_replayed_state_is_expired", async () => {
+    const { started, complete } = await setup();
+    expect(await complete(new URLSearchParams({ state: "nope", code: "c", iss: PDS }))).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+    const query = await started();
+    expect((await complete(query)).ok).toBe(true);
+    expect(await complete(query)).toEqual({ ok: false, reason: "expired" });
+  });
+
+  test("callback_consent_denied", async () => {
+    const { started, complete, posts } = await setup();
+    const query = await started({ error: "access_denied", iss: PDS });
+    expect(await complete(query)).toEqual({ ok: false, reason: "consent_denied" });
+    expect(posts).toEqual([]);
+  });
+
+  test("callback_mixup_iss", async () => {
+    // A callback naming another issuer is refused before any token request (oauth-client.js:184-194).
+    const { started, complete, posts, logged } = await setup();
+    expect(await complete(await started({ code: "c", iss: "https://elsewhere.dev" }))).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+    expect(posts).toEqual([]);
+    expect(logged).toEqual([{ event: "oauth.callback_failed", fields: { kind: "OAuthCallbackError" } }]);
+  });
+
+  test("callback_token_endpoint_down_is_unreachable", async () => {
+    const { started, complete } = await setup({ token: () => json({ error: "server_error" }, 503) });
+    expect(await complete(await started())).toEqual({ ok: false, reason: "pds_unreachable" });
+  });
+
+  test("callback_revoke_drops_the_grant", async () => {
+    const { started, complete, posts, sessions } = await setup();
+    const result = await complete(await started());
+    if (!result.ok) throw new Error("expected a completed sign-in");
+    await result.revoke();
+    expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
+    expect(sessions.size).toBe(0);
   });
 });
