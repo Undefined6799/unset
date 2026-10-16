@@ -71,6 +71,7 @@ test("route_manifest_names_an_extra_route", async () => {
       ...loginRoutes({
         page: () => new Response(),
         screens: web.screens,
+        safeHref: web.safeHref,
         resolveHandle: async () => ({ status: "unavailable" }),
         issueNonce: async () => "",
         authorize: async () => ({ ok: false, reason: "failed" }),
