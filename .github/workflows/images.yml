@@ -52,6 +52,8 @@ jobs:
       HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
       TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
       SYFT_IMAGE: anchore/syft:v1.54.0@sha256:0356562f495d432056237fbea5cbc2d4839c9c75cd500784a66de2e7cc95ca7c
+      # The base the postgres image pins (bases.lock.json), for the health check's throwaway database.
+      POSTGRES_IMAGE: docker.io/library/postgres:18-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -109,11 +111,40 @@ jobs:
             const found = dev.filter((name) => fs.existsSync(`/app/node_modules/${name}`));
             if (found.length > 0) { console.error(`the image holds dev dependencies ${found.join(" ")}`); process.exit(1); }'
       # The image's own HEALTHCHECK (GET /health) must report healthy within 20 s, started with the app's test env.
+      # Since P2.04c the web server reads three secret files and checks its Postgres connection budget before it
+      # listens (P2.04i). The secrets are made here, fresh each run and never in the repository: a Postgres password,
+      # a seal keyring and one ES256 client key from the image's own Node. They reach the app as read-only files
+      # (`*_FILE`, as in production). A throwaway Postgres runs as `web` on a job network the app joins; the keys that
+      # describe this setup are set here, and the app's own settings stay in its test env.
       - name: Becomes healthy
         if: steps.dockerfile.outputs.present == 'true'
         run: |
           APP_IMAGE="$(cat "$RUNNER_TEMP/iid")"
-          id="$(docker run -d --read-only --tmpfs /tmp --env-file "deployment/images/$APP.test.env" "$APP_IMAGE")"
+          secrets="$RUNNER_TEMP/secrets"
+          mkdir "$secrets"
+          openssl rand -hex 24 | tr -d '\n' > "$secrets/pg_password"
+          printf '{"active":"k1","keys":{"k1":"%s"}}' "$(openssl rand -base64 32)" > "$secrets/seal_keyring"
+          docker run --rm --network none --entrypoint node "$APP_IMAGE" -e '
+            const { generateKeyPairSync } = require("node:crypto");
+            const jwk = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ format: "jwk" });
+            process.stdout.write(JSON.stringify([{ ...jwk, kid: "ci", alg: "ES256" }]));' > "$secrets/oauth_client_keys"
+          # Readable by the containers' own users (postgres, 65532); the runner is thrown away after the job.
+          chmod 644 "$secrets"/*
+          docker network create health > /dev/null
+          pg=(--name postgres --network health -e POSTGRES_USER=web -e POSTGRES_DB=unset
+            -e POSTGRES_PASSWORD_FILE=/run/secrets/pg_password -v "$secrets/pg_password:/run/secrets/pg_password:ro")
+          docker run -d "${pg[@]}" "$POSTGRES_IMAGE" > /dev/null
+          # Over TCP: the entrypoint's init server listens on the socket only, so this waits for the real one.
+          for _ in $(seq 30); do
+            if docker exec postgres pg_isready -q -h 127.0.0.1 -U web -d unset; then break; fi
+            sleep 1
+          done
+          app=(--read-only --tmpfs /tmp --network health -v "$secrets:/run/secrets:ro"
+            --env-file "deployment/images/$APP.test.env"
+            -e PG_HOST=postgres -e PG_DATABASE=unset -e PG_USER=web -e PG_SSLMODE=disable
+            -e PG_PASSWORD_FILE=/run/secrets/pg_password -e SEAL_KEYRING_FILE=/run/secrets/seal_keyring
+            -e OAUTH_CLIENT_KEYS_FILE=/run/secrets/oauth_client_keys -e OAUTH_ACTIVE_KID=ci)
+          id="$(docker run -d "${app[@]}" "$APP_IMAGE")"
           for _ in $(seq 20); do
             status="$(docker inspect --format '{{.State.Health.Status}}' "$id")"
             if [ "$status" = "healthy" ]; then docker rm -f "$id" > /dev/null; exit 0; fi
