@@ -29,6 +29,8 @@ afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
 type World = {
+  /** Whether the request carries a live session. */
+  signedIn?: boolean;
   resolution?: HandleResolution;
   authorized?: AuthorizeResult;
   allowHttp?: boolean;
@@ -60,6 +62,7 @@ function setup(world: World = {}) {
       ),
     screens: web.screens,
     safeHref: web.safeHref,
+    signedIn: async () => world.signedIn ?? false,
     resolveHandle: async (handle: Handle) => {
       resolved.push(handle);
       return world.resolution ?? { status: "found", did: DID as never, via: "dns" };
@@ -107,6 +110,13 @@ describe("GET /login", () => {
     expect(html).toContain(`Use ${PDS} sign-in`);
     expect(cookies(response)).toEqual([]);
     expect([nonces(), authorized.length, resolved.length]).toEqual([0, 0, 0]);
+  });
+
+  test("login_signed_in_redirect", async () => {
+    const { send } = setup({ signedIn: true });
+    const response = await send("/login");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/me");
   });
 
   test("login_get_drops_an_unsafe_next", async () => {

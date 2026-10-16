@@ -100,3 +100,28 @@ describe("signed-out screen", () => {
     expect(page).not.toContain("<script");
   });
 });
+
+describe("me screen", () => {
+  const DID = `did:plc:${"a".repeat(24)}`;
+
+  test("me_shows_the_account_and_sign_out", () => {
+    const page = html(
+      screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, pdsHost: "pds.example" }),
+    );
+    expect(page).toContain("alice.pds.example");
+    expect(page).toContain(`<code>${DID}</code>`);
+    expect(tags(page, "form")).toEqual([{ method: "post", action: "/logout" }]);
+    expect(page).toContain(">Sign out</button>");
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
+    expect(page).not.toContain("could not check your handle");
+    expect(page).not.toContain("<script");
+  });
+
+  test("me_says_when_the_handle_could_not_be_checked", () => {
+    const page = html(
+      screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, pdsHost: "pds.example" }),
+    );
+    expect(page).toContain("handle.invalid");
+    expect(page).toContain("We could not check your handle just now");
+  });
+});
