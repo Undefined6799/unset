@@ -17,7 +17,8 @@ type Lock = Record<string, { cid: string; schemaRecordCid: string; publishedAt: 
 /** Limits that may only grow, and limits that may only shrink, in a published schema. */
 const MAXIMA = ["maxLength", "maxGraphemes", "maxSize", "maximum"];
 const MINIMA = ["minLength", "minGraphemes", "minimum"];
-const FIXED = ["type", "format", "const", "ref"];
+/** `default` decides what an absent field means, so an absent `listed` stays not listed (fails closed). */
+const FIXED = ["type", "format", "const", "ref", "default"];
 const CONSENT = ["title", "title:lang", "detail", "detail:lang"];
 
 /** Every way `next` breaks the published `before`; empty means it may be published under the same NSID. */

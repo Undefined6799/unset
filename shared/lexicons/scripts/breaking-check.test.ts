@@ -54,6 +54,14 @@ describe("breaking-check", () => {
     ]);
   });
 
+  test("breaking_check_listed_absent_stays_not_listed", () => {
+    const next = original("sh.unset.profile");
+    Object.assign(record(next).properties.listed ?? {}, { default: true });
+    expect(breakingProblems(next, original("sh.unset.profile"), {})).toEqual([
+      "sh.unset.profile#main.listed: default changed from undefined to true",
+    ]);
+  });
+
   test("breaking_check_allows_new_optional", () => {
     const next = original("sh.unset.profile");
     record(next).properties.pronouns = { type: "string", maxGraphemes: 20, maxLength: 200 };

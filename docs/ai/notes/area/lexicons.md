@@ -28,7 +28,8 @@ apps rely on it, so a change is close to permanent.
 - `src/limits.ts`: the limits the UI and the domain show; a test holds them equal to the schemas.
 - `src/scope.ts`: the OAuth scope string, and the expanded fallback for a PDS without permission sets.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
-- `scripts/breaking-check.ts`: refuses a narrowed limit or lost value on a published schema; additions to
+- `scripts/breaking-check.ts`: refuses a narrowed limit, a lost value or a changed `default` (an absent
+  `listed` must stay not listed) on a published schema; additions to
   the permission set need Alex's approval and removals are refused.
 
 **Pitfalls.**
