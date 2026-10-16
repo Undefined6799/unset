@@ -4,14 +4,17 @@
 // cannot resolve our permission set refuses it with `invalid_scope` and does not fall back itself (P1.31's
 // scopeStringFallback comment), so the request is made once more with the scope written out. Its errors become the few
 // outcomes the login page tells apart; the authorize tests pin each one to the error the library really throws.
-import { OAuthResolverError, OAuthResponseError } from "@atproto/oauth-client-node";
-import { IdentityError } from "@unset/domains-identity";
+// P2.06: completing it. The library's `callback` (oauth-client.js:155-223) spends its stored state (single use), checks
+// `iss` against that state's issuer, exchanges the code, checks that the token's `sub` is a DID whose PDS this issuer
+// serves (oauth-server-agent.js `verifyIssuer`), and stores the token set; this returns what the callback route checks.
+import { OAuthCallbackError, OAuthResolverError, OAuthResponseError } from "@atproto/oauth-client-node";
+import { type Did, IdentityError, parseDid } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import { scopeString, scopeStringFallback } from "@unset/shared-lexicons";
 import type { Logger } from "@unset/shared-log";
 import type { createOAuthClient } from "./oauth-client.ts";
 
-type Client = Pick<Awaited<ReturnType<typeof createOAuthClient>>["client"], "authorize">;
+type Client = Awaited<ReturnType<typeof createOAuthClient>>["client"];
 
 export type AuthorizeFailure =
   | "handle_unverified"
@@ -50,7 +53,11 @@ const NOT_CLAIMED = "does not include the handle";
 const IDENTITY_STEP = "Failed to resolve identity";
 
 /** `input` is a handle, a DID or the issuer's URL (the PDS chooser). */
-export async function authorize(client: Client, input: string, options: AuthorizeOptions): Promise<AuthorizeResult> {
+export async function authorize(
+  client: Pick<Client, "authorize">,
+  input: string,
+  options: AuthorizeOptions,
+): Promise<AuthorizeResult> {
   const timeout = AbortSignal.timeout(AUTHORIZE_TIMEOUT_MS);
   const signal = options.deadline ? AbortSignal.any([options.deadline, timeout]) : timeout;
   const request = (scope: string) =>
@@ -89,13 +96,74 @@ function reasonOf(error: unknown): AuthorizeFailure {
       ? "handle_unverified"
       : "handle_not_found";
   }
-  const unreachable = chain.some(
+  return unreachable(chain) ? "pds_unreachable" : "failed";
+}
+
+/** The server could not be reached or failed itself, as opposed to refusing. */
+const unreachable = (chain: readonly unknown[]): boolean =>
+  chain.some(
     (cause) =>
       (cause instanceof NetGuardError && UNREACHABLE.has(cause.code)) ||
       (cause instanceof DOMException && (cause.name === "TimeoutError" || cause.name === "AbortError")) ||
       (cause instanceof OAuthResponseError && cause.status >= 500),
   );
-  return unreachable ? "pds_unreachable" : "failed";
+
+export type CallbackFailure = "consent_denied" | "expired" | "pds_unreachable" | "failed";
+export type CompletedSignIn = {
+  readonly ok: true;
+  /** The account the server vouched for: the token's `sub`, checked by the library against its DID document. */
+  readonly did: Did;
+  readonly issuer: string;
+  /** Exactly what `authorize` was given; the callback route parses it. */
+  readonly appState: string;
+  /** The scope the server granted, for grantCovers. */
+  readonly scope: string;
+  /** Revokes this grant and drops its token set; errors are swallowed only after being logged. */
+  readonly revoke: () => Promise<void>;
+};
+export type CallbackResult = CompletedSignIn | { readonly ok: false; readonly reason: CallbackFailure };
+
+/** `query` is the callback URL's whole query, passed to the library as it came. */
+export async function completeAuthorization(
+  client: Pick<Client, "callback">,
+  query: URLSearchParams,
+  log: Logger,
+): Promise<CallbackResult> {
+  let completed: Awaited<ReturnType<Client["callback"]>>;
+  try {
+    completed = await client.callback(query);
+  } catch (error) {
+    const reason = callbackReason(error);
+    if (reason === "failed") log.warn("oauth.callback_failed", { kind: kindOf(error) });
+    return { ok: false, reason };
+  }
+  const { session, state } = completed;
+  const did = parseDid(session.did);
+  let scope: string;
+  try {
+    // Read from the set just stored, never refreshed (`false`): a sign-in never leaves without knowing its grant.
+    scope = (await session.getTokenInfo(false)).scope;
+  } catch (error) {
+    log.warn("oauth.callback_failed", { kind: kindOf(error) });
+    return { ok: false, reason: "failed" };
+  }
+  if (state === null || did === null) {
+    log.warn("oauth.callback_failed", { kind: state === null ? "no_app_state" : "bad_sub" });
+    return { ok: false, reason: "failed" };
+  }
+  const revoke = () =>
+    session.signOut().catch((error: unknown) => log.warn("oauth.callback_failed", { kind: kindOf(error) }));
+  return { ok: true, did, issuer: session.serverMetadata.issuer, appState: state, scope, revoke };
+}
+
+function callbackReason(error: unknown): CallbackFailure {
+  if (error instanceof OAuthCallbackError) {
+    // No stored state for this `state` (unknown, expired or already spent): the library throws before it has an
+    // appState to attach (oauth-client.js:165-175); every later failure carries ours.
+    if (error.state === undefined) return "expired";
+    if (error.params.get("error") === "access_denied") return "consent_denied";
+  }
+  return unreachable(causes(error)) ? "pds_unreachable" : "failed";
 }
 
 /** The error and its causes, outermost first; a short bounded walk, since a cause chain is the library's to build. */
