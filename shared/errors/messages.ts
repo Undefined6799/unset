@@ -31,6 +31,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "login.consent_denied": "Sign-in was cancelled at the account's server.",
   "login.scope_insufficient": "The account's server did not grant what unset.sh needs. Try again and allow access.",
   "login.account_mismatch": "You signed in as a different account than the one you typed. Try again.",
+  "login.session_ended": "That sign-in ended. Sign in again.",
   "logout.confirm_required": "Tick the box to sign out of every browser.",
   "logout.revoke_unconfirmed":
     "We could not confirm the sign-in server ended access. On a shared computer, open Connected apps on your account page and disconnect unset.sh.",

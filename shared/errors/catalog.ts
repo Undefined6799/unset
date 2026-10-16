@@ -35,6 +35,8 @@ export const ERROR_CODES = {
   "login.consent_denied": { status: 403, public: true },
   "login.scope_insufficient": { status: 403, public: true },
   "login.account_mismatch": { status: 403, public: true },
+  // P2.07: the PDS wrapper ended the session because the grant is dead.
+  "login.session_ended": { status: 401, public: true },
   // P2.08a, signing out everywhere. Shown from a redirect (`error=`), not as the response status.
   "logout.confirm_required": { status: 400, public: true },
   "logout.revoke_unconfirmed": { status: 503, public: true },

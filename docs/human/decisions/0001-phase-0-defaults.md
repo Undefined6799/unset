@@ -435,3 +435,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   [0023](0023-local-pds-publishes-to-shared-plc.md)):** the local PDS publishes to `plc.directory` like dev and prod,
   and C28 requires exactly that URL in every env. Its test accounts are a few fixed ones, made once by hand and reused;
   nothing creates accounts per run, and the email-token reader keeps refusing every stack. Step P1.34t.
+- **PDS call wrapper (book P2.07; own record: [0024](0024-atproto-api-agent.md)):** every call to a member's PDS
+  goes through one function that restores the OAuth session. The XRPC client is `@atproto/api` 0.24.2 `Agent`,
+  because `@atproto/lex` is the lexicon CLI and `@atproto/lex-client` stays in `shared/lexicons`.
