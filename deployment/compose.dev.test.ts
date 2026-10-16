@@ -11,6 +11,7 @@ import { edgeSitesDir } from "./preflight/checks/edge.ts";
 import { VENDOR_IMAGES as PREFLIGHT_VENDOR_IMAGES } from "./preflight/checks/images.ts";
 import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./preflight/checks/networks.ts";
 import { c9 } from "./preflight/checks/secrets.ts";
+import { switchesProtectionOff } from "./preflight/checks/settings.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
 import { type Compose, parseCompose, parseStrictData, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
@@ -399,16 +400,6 @@ const envSettings = (text: string): [string, string][] =>
     .split("\n")
     .filter((line) => line !== "" && !line.startsWith("#"))
     .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]);
-/**
- * A setting that turns a PDS protection off or puts it in development mode. The one exemption, by exact name and value,
- * is the confirmation-link switch C16 requires (architecture record 2026-10-13-p129a-pds-and-edge-in-compose,
- * Amendment 2; plan section 5.3).
- */
-const switchesProtectionOff = (name: string, value: string): boolean => {
-  if (name === "PDS_EMAIL_DISABLE_CONFIRMATION_LINK" && value === "true") return false;
-  return name.includes("DEV_MODE") || (name.startsWith("PDS_") && name.includes("DISABLE"));
-};
-
 /** Pino's levels at info or above, and silent (P1.30 C12): debug and trace would log mail tokens (below). */
 const LOG_LEVELS = new Set(["info", "warn", "error", "fatal", "silent"]);
 const SMTP = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_ADDRESS"];
@@ -542,6 +533,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       ["PDS_DEV_MODE", "true"],
       ["DEV_MODE", "1"],
       ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "false"],
+      ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "TRUE"],
       ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "1"],
       ["PDS_EMAIL_DISABLE_CONFIRMATION_LINK", "${X}"],
       ["PDS_EMAIL_DISABLE_CONFIRMATION_LINKS", "true"],

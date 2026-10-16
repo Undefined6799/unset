@@ -18,12 +18,29 @@ export const c13: Check = {
   ),
 };
 
-/** C14: the PDS is not in dev mode. */
+/**
+ * A setting that turns a PDS protection off or enables dev mode (P1.34k). The one exemption is the confirmation-link
+ * switch, and only at the exact value `true` (C16 requires that pair). The key's presence is the denial: @atproto/pds
+ * (packages/pds/src/config/env.ts on main, read 2026-10-14) parses these with envBool, which treats `true` and `1` as
+ * true and `false` and `0` as false (packages/common/src/env.ts). A value PDS currently ignores must not be allowed
+ * through, because the compose rule already refuses the key itself. The shipped image is pds 0.4.5037; that tag's
+ * env.ts URL was not published, so this reading is the repository main, not that tag.
+ */
+export function switchesProtectionOff(name: string, value: string): boolean {
+  if (name === "PDS_EMAIL_DISABLE_CONFIRMATION_LINK" && value === "true") return false;
+  return name.includes("DEV_MODE") || (name.startsWith("PDS_") && name.includes("DISABLE"));
+}
+
+/** C14: no dev mode and no PDS switch that turns a protection off. The reason names the key, never its value. */
 export const c14: Check = {
   id: "C14",
-  run: withPds((env) =>
-    !present(env, "PDS_DEV_MODE") || value(env, "PDS_DEV_MODE") === "false" ? pass() : fail("PDS_DEV_MODE is enabled"),
-  ),
+  run: withPds((env) => {
+    for (const name of env.names()) {
+      const off = env.use(name, (raw) => (raw === undefined ? false : switchesProtectionOff(name, raw)));
+      if (off) return fail(`${name} turns a protection off`);
+    }
+    return pass();
+  }),
 };
 
 /**
