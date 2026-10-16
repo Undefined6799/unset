@@ -528,8 +528,9 @@ jobs:
             echo "$failed pin(s) without a build or push time"
             exit 1
           fi
-      # The mirror's runtime rule (mirror.yml): HIGH or CRITICAL with a fixed version fails, with the accepted
-      # findings file and the pin's stripped paths left out, each passed to both --skip-dirs and --skip-files. Gated
+      # The mirror's runtime rule (mirror.yml): HIGH or CRITICAL with a fixed version fails. The shared
+      # findings file applies, except a ghcr.io/bluesky-social/pds pin, which reads the PDS file (P1.33c).
+      # A pin's stripped paths are left out, each passed to both --skip-dirs and --skip-files. Gated
       # on the selection alone (docs.github.com, expressions, "Status check functions": an if without one implies
       # success()), so it runs after a failed lookup. Every pin is scanned, each failure is named, and the step
       # fails after the last pin.
@@ -546,9 +547,17 @@ jobs:
             while IFS= read -r path; do
               if [ -n "$path" ]; then skip+=(--skip-dirs "$path" --skip-files "$path"); fi
             done <<< "$(jq -r '.stripped[]' <<< "$pin")"
+            # P1.33c: the PDS ignore file applies only to ghcr.io/bluesky-social/pds. A caddy pin,
+            # and every other pin, keeps the shared file.
+            ignorefile=.github/trivyignore.yaml
+            case "$source" in
+              ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)
+                ignorefile=.github/trivyignore.pds.yaml
+                ;;
+            esac
             status=0
             docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
-              image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile .github/trivyignore.yaml \
+              image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --ignorefile "$ignorefile" \
               --timeout 10m "${skip[@]}" "$source" < /dev/null || status=$?
             if [ "$status" -ne 0 ]; then
               echo "::error title=pins::scan failed (exit $status) for $source"

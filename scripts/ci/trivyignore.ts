@@ -6,6 +6,8 @@
 import { parse } from "yaml";
 
 export const MAX_DAYS = 90;
+/** P1.33c: the PDS file expires within 30 days. The shared file stays at MAX_DAYS. */
+export const PDS_MAX_DAYS = 30;
 const SECTIONS = ["vulnerabilities", "misconfigurations", "secrets", "licenses"] as const;
 const DAY_MS = 86_400_000;
 
@@ -19,7 +21,7 @@ function dateOf(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function entryProblems(section: string, entry: Entry, index: number, today: Date): string[] {
+function entryProblems(section: string, entry: Entry, index: number, today: Date, maxDays: number): string[] {
   const name = typeof entry.id === "string" && entry.id !== "" ? `${section} ${entry.id}` : null;
   if (name === null) return [`${section} entry ${index + 1}: no id`];
   if (typeof entry.statement !== "string" || entry.statement.trim() === "")
@@ -29,18 +31,18 @@ function entryProblems(section: string, entry: Entry, index: number, today: Date
   const day = expires.toISOString().slice(0, 10);
   const startOfToday = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
   if (expires.getTime() <= startOfToday) return [`${name}: expired on ${day}`];
-  if (expires.getTime() > startOfToday + MAX_DAYS * DAY_MS)
-    return [`${name}: expired_at ${day} is more than ${MAX_DAYS} days ahead`];
+  if (expires.getTime() > startOfToday + maxDays * DAY_MS)
+    return [`${name}: expired_at ${day} is more than ${maxDays} days ahead`];
   return [];
 }
 
 /** Every rule the ignore file breaks on `today`; an empty list means it may be used. */
-export function trivyIgnoreProblems(yamlText: string, today: Date): string[] {
+export function trivyIgnoreProblems(yamlText: string, today: Date, maxDays: number = MAX_DAYS): string[] {
   const doc: Record<string, unknown> = parse(yamlText) ?? {};
   return Object.entries(doc).flatMap(([section, entries]) => {
     if (!(SECTIONS as readonly string[]).includes(section)) return [`unknown section ${section}`];
     if (entries === null) return [];
     if (!Array.isArray(entries)) return [`${section}: not a list`];
-    return entries.flatMap((entry: Entry, i) => entryProblems(section, entry ?? {}, i, today));
+    return entries.flatMap((entry: Entry, i) => entryProblems(section, entry ?? {}, i, today, maxDays));
   });
 }
