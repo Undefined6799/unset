@@ -9,7 +9,8 @@
 #   NODE_EXTRA_CA_CERTS (item 5); nothing else is added to what they trust, and no fetch check is turned off (F-25);
 # - the token reader, which reads an account's email token from the PDS's data for the sign-up tests, lives here only
 #   (local-plc Amendment 6, Q2);
-# - the PDS publishes to the local PLC only (C28) and sends no mail (Alex's "Local only" card, 2026-10-14T20:28:12Z).
+# - the PDS sends no mail (Alex's "Local only" card, 2026-10-14T20:28:12Z). It publishes to plc.directory like dev's
+#   (C28, ADR 0023): we run no PLC, so its few fixed test accounts are public entries.
 #
 # Read under the preflight's strict subset (deployment/preflight/compose-parse.ts), with compose.dev.yaml's rules: no
 # interpolation outside `environment` and network aliases, no `healthcheck`, no `command`, every capability dropped, no
@@ -69,7 +70,7 @@ services:
     pids_limit: 64
     restart: "no"
 
-  # As in compose.dev.yaml, but publishing to the local PLC and with no mail settings at all.
+  # As in compose.dev.yaml, but with no mail settings at all.
   pds:
     image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
     user: "1000:1000"
@@ -88,7 +89,7 @@ services:
       PDS_PORT: "3000"
       PDS_DATA_DIRECTORY: /home/node/pds
       PDS_BLOBSTORE_DISK_LOCATION: /home/node/pds/blocks
-      PDS_DID_PLC_URL: http://plc:2582
+      PDS_DID_PLC_URL: https://plc.directory
       PDS_INVITE_REQUIRED: "true"
       PDS_CRAWLERS: ""
       PDS_RATE_LIMITS_ENABLED: "false"

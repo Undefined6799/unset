@@ -9424,6 +9424,11 @@ Slice 1, issue #780, product (`deployment/preflight/`), lane the third thread, f
 (P1.34t, u, v, y, z), all before P1.29s; book edit 2026-10-13-local-plc-steps, from architecture's 2026-10-13-local-plc.
 Today the local PDS points at the public plc.directory, so P1.29s and P1.29t would publish permanent public did:plc
 operations.
+As changed (Alex, 2026-10-16; ADRs 0022 and 0023): we host no PLC directory, so the local arm is exactly
+`https://plc.directory` like dev and prod. The local PDS's test accounts are a few fixed ones made once, public
+entries pointing at a local-only host; seeds and probes that create accounts per run stay off (the token reader keeps
+refusing every stack). P1.34v, P1.34y and P1.34z are dropped; the inert pieces already merged (P1.34u's role, P1.34y's
+`localPlc` policy, C17's `plc_pds` exemption) are removed in their own cleanup.
 
 **What** (architecture's Amendment 4 of 2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps): the loaded PDS
 env must set `PDS_DID_PLC_URL`, by env:
@@ -10997,7 +11002,7 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 | C23 | prod only (P5.07b, decision 23): `FINGERPRINT_CHECK=arachnid` and `FAKE_FINGERPRINT_LIST` absent; dev and local skip it (PASS with the fixed reason "skipped: dev stage", as built by P1.30j); the server's own boot refusal (P5.07b) is the second guard |
 | C24 | host clock (findings F-16): `timedatectl show -p NTPSynchronized --value` prints `yes`, and when `chronyc` is installed `chronyc tracking` reports a system-time offset ≤ 1 s. Service-auth JWTs (60 s), `pds-admin` envelopes (`iat`/`exp`, 5 s of future leeway) and WebAuthn assertions assume a synchronised clock. Command missing or output unparsable → FAIL. Skipped only when `PDS_HOSTNAME` ends in `.localhost` (an agent's throwaway stack): PASS with the fixed reason "skipped: PDS_HOSTNAME ends in .localhost", as built by P1.30d |
 | C25 | edge low-port capability (P1.30x; Amendment 5 of book edit 2026-10-12-p204s-p130x-p130y-booked): `cap_add: [NET_BIND_SERVICE]` only on a service that runs the lock's edge image (which image a service runs is a lock fact, `checks/capabilities.ts`), only with `cap_drop: [ALL]`; when a service has both `image` and `build`, both must name edge (the comparison lands with P1.30y, which reads `build`) |
-| C28 | `PDS_DID_PLC_URL` by env (P1.34t; step-book note 1 of 2026-10-13-local-plc-a4-steps, confirmed by architecture 19:31Z): local exactly `http://plc:2582`; dev and prod exactly `https://plc.directory`; unset or anything else → FAIL |
+| C28 | `PDS_DID_PLC_URL` (P1.34t, as changed 2026-10-16 by ADR 0023): every env exactly `https://plc.directory`; unset or anything else → FAIL |
 
 **Algorithm:**
 ```text

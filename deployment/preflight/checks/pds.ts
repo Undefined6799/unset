@@ -76,23 +76,23 @@ export const c7: Check = {
 };
 
 /**
- * The PLC directory each env's PDS publishes to (P1.34t; architecture record 2026-10-13-local-plc, Amendment 4). Dev
- * (the 0x40.space PDS, decision 20) and prod use the public directory, exactly; local, where seeds and probes create
- * test identities, uses only its own PLC, so none reaches the public one. `plc` on the did-method-plc server's default
- * port (@did-plc/server 0.0.1 src/bin.ts:18) is the name P1.34v gives that service.
+ * The PLC directory every env's PDS publishes to (P1.34t; ADRs 0022 and 0023): the shared public directory, exactly.
+ * We run no PLC of our own (Alex, 2026-10-16), so the local PDS's test accounts are public did:plc entries too; they are a few
+ * fixed accounts made once, and no seed or probe creates more (the token reader refuses this stack).
  */
-const PLC_URL = { dev: "https://plc.directory", prod: "https://plc.directory", local: "http://plc:2582" } as const;
+const PLC_URL = "https://plc.directory";
 
 /**
- * C28: PDS_DID_PLC_URL is set and is exactly its env's PLC. Unset or empty, the PDS uses https://plc.directory
- * (@atproto/pds 0.5.37 dist/config/config.js:99), which a local stack must never do.
+ * C28: PDS_DID_PLC_URL is set and is exactly the public PLC in every env. Unset or empty, the PDS also uses
+ * https://plc.directory (@atproto/pds 0.5.37 dist/config/config.js:99), but the value is required spelled out, so each
+ * file states where its accounts are published and a look-alike never passes.
  */
 export const c28: Check = {
   id: "C28",
-  run: withPds((env, { env: stage }) => {
+  run: withPds((env) => {
     if (!env.has("PDS_DID_PLC_URL")) return fail("PDS_DID_PLC_URL missing");
-    if (equals(env, "PDS_DID_PLC_URL", PLC_URL[stage])) return pass();
-    return fail(stage === "local" ? "PDS_DID_PLC_URL is not the local PLC" : "PDS_DID_PLC_URL is not the public PLC");
+    if (equals(env, "PDS_DID_PLC_URL", PLC_URL)) return pass();
+    return fail("PDS_DID_PLC_URL is not the public PLC");
   }),
 };
 
