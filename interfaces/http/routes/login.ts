@@ -17,6 +17,7 @@ import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import type { WebRender } from "../web/render-entry.ts";
+import { appStateOf } from "./app-state.ts";
 
 export type LoginDeps = {
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
@@ -101,14 +102,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   /** startAuth: the nonce, the authorization, then the two cookies and the continue page. */
   async function startAuth(account: Account, next: SafePath | null, deadline: AbortSignal): Promise<Response> {
     const nonce = await deps.issueNonce(deadline);
-    const appState = JSON.stringify({
-      v: 1,
-      nonce,
-      flow: "login",
-      expectedDid: account.expectedDid,
-      next,
-      startedAt: Date.now(),
-    });
+    const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next });
     const result = await deps.authorize(account.input, { appState, deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
     if (!result.ok) return back(`login.${result.reason}`, next);
