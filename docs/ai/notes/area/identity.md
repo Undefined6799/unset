@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[net-guard]]", "[[node-dns-lookup-hides-nxdomain]]"]
 replaced_by: null
 tags: [area, identity]
-checked: 2026-10-06
+checked: 2026-10-16
 ---
 # identity
 
@@ -24,6 +24,7 @@ network itself.
 - `did-doc.ts`: reads the atproto fields of a DID document; `alsoKnownAs` is passed on raw.
 - `verify-handle.ts`: shows a handle only when it resolves back to the same DID. Trusted base.
 - `contract.ts`: the `IdentityNetwork` port, one GET and one TXT lookup, with three failures.
+- `auth/gates.ts`: whether a confirmed-email cache is still fresh (`emailGate`, P2.11). No network.
 
 **How data flows.** Interface → identity → `IdentityNetwork` → [[pds]] adapter → [[net-guard]] → network. Every
 outage is `unavailable` and fails closed; it is never read as a missing account.
