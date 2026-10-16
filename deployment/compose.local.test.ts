@@ -16,7 +16,7 @@ import {
   statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, posix, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { pdsNeighbours } from "./preflight/checks/networks.ts";
 import {
@@ -196,6 +196,118 @@ function localOnlyNetworkDrift(local: Compose): string[] {
   return problems;
 }
 
+/**
+ * The environment and env_file of each local-only service, exactly as compose.local.yaml writes them (P1.35r I-2): a
+ * literal, or a `${VAR}` reference kept as text and never resolved, so no secret enters this table. The reader has
+ * neither (compose.local.yaml: "No network, no env, no secret"); P1.34v adds plc's pin and P1.29s seed's.
+ */
+const LOCAL_ONLY_PINS: ReadonlyMap<string, { environment: Record<string, string>; envFiles: string[] }> = new Map([
+  [TOKEN_READER, { environment: {}, envFiles: [] }],
+]);
+
+/** A value as the compose file writes it: a reference as `${NAME}`, a literal with each `$` doubled again. */
+const asWritten = (value: EnvValue): string =>
+  "ref" in value ? `\${${value.ref}}` : value.literal.replaceAll("$", () => "$$");
+
+/** Each local-only service whose environment or env_file is not exactly its pin, or carries a secret as refused. */
+function localOnlyDrift(local: Compose): string[] {
+  const services = local.services.filter((s) => LOCAL_ONLY_SERVICES.has(s.name));
+  const problems = [...LOCAL_ONLY_PINS.keys()]
+    .filter((name) => !services.some((s) => s.name === name))
+    .map((name) => `${name} is pinned but not in the local file`);
+  for (const s of services) {
+    const pin = LOCAL_ONLY_PINS.get(s.name);
+    if (pin === undefined) problems.push(`${s.name} has no environment and env_file pin`);
+    else problems.push(...pinDrift(s, pin.environment, pin.envFiles));
+  }
+  return problems;
+}
+
+/** Each way one service is off its pin: a key added, removed, changed or repeated, a refused secret, its env_file. */
+function pinDrift(s: Service, environment: Record<string, string>, envFiles: string[]): string[] {
+  const written = s.environment.map(([key, value]): [string, string] => [key, asWritten(value)]);
+  const actual = new Map(written);
+  const pinned = new Map(Object.entries(environment));
+  const problems = actual.size === written.length ? [] : [`${s.name}: environment repeats a key`];
+  for (const key of new Set([...actual.keys(), ...pinned.keys()])) {
+    if (actual.get(key) !== pinned.get(key)) problems.push(`${s.name}: environment ${key} is not as pinned`);
+  }
+  // The same predicate holds in compose and in the pin (architecture 12:40Z).
+  for (const [where, entries] of [
+    ["environment", written],
+    ["pin", [...pinned]],
+  ] as const) {
+    for (const [key, value] of entries) {
+      const why = secretRefusal(key, value);
+      if (why !== null) problems.push(`${s.name}: ${where} ${why}`);
+    }
+  }
+  return same(s.envFiles, envFiles) ? problems : [...problems, `${s.name}: env_file is not as pinned`];
+}
+
+/** The closed list of words that make a key secret-bearing, each matched as a whole `_`-separated word, in any case. */
+const SECRET_WORDS = new Set([
+  "PASSWORD",
+  "PASSWD",
+  "PASS",
+  "PW",
+  "SECRET",
+  "TOKEN",
+  "KEY",
+  "PRIVATE",
+  "CREDS",
+  "CREDENTIALS",
+  "SEED",
+  "DSN",
+]);
+/** Exactly `${NAME:?message}`: NAME in capitals, and a message with a visible character and no `$`, `{` or `}`. */
+const REQUIRED_REFERENCE = /^\$\{[A-Z][A-Z0-9_]*:\?[^${}]*[^${}\s][^${}]*\}$/;
+/** A braced interpolation, up to its first closing brace. */
+const BRACED = /\$\{[^}]*\}/g;
+/** What each braced interpolation becomes while a value's URLs are read; a value that holds it is refused. */
+const HOLE = "\u0000";
+/** A URL's userinfo: after `://`, anything but `/`, `?` and `#` up to an `@`. */
+const USERINFO = /:\/\/([^/?#]*)@/g;
+const SECRETS_DIR = "/run/secrets/";
+
+/**
+ * Why a key and its value as written carry a secret other than as allowed, or null (architecture 12:40Z, the record's
+ * section "Architecture on verify-910-a686fe0 S3"). A key is secret-bearing when one of its words is listed, and a
+ * value when it holds a URL with userinfo, under any key. Either is accepted only as (1) a `*_FILE` key whose literal
+ * value is a path under /run/secrets/, (2) exactly `${NAME:?message}`, or (3) a userinfo URL whose password is exactly
+ * one such reference. Everything else is refused. A null value is a bare key, which Compose fills from the shell.
+ * Compose's forms (compose-spec 12-interpolation.md, main, read 2026-10-16): `${VAR:?err}` exits with an error if VAR
+ * is unset or empty, while `${VAR?err}` passes an empty value; a message may nest an interpolation, so it holds no `$`.
+ */
+function secretRefusal(key: string, value: string | null): string | null {
+  const masked = value?.replaceAll(BRACED, HOLE) ?? "";
+  const userinfo = [value ?? "", masked].some((text) => [...text.matchAll(USERINFO)].length > 0);
+  if (!userinfo && !key.split("_").some((word) => SECRET_WORDS.has(word.toUpperCase()))) return null;
+  const accepted =
+    value !== null &&
+    !value.includes(HOLE) &&
+    (secretFile(key, value) || REQUIRED_REFERENCE.test(value) || referencedPassword(value, masked));
+  return accepted ? null : `${key} carries a secret other than as a /run/secrets file or a required reference`;
+}
+
+/** A `*_FILE` key whose literal value names a file under /run/secrets/, with no `.`, `..` or empty segment. */
+const secretFile = (key: string, value: string): boolean =>
+  key.endsWith("_FILE") &&
+  value.startsWith(SECRETS_DIR) &&
+  !value.endsWith("/") &&
+  !value.includes("$") &&
+  posix.normalize(value) === value;
+
+/** Whether the value's one userinfo URL has exactly `${NAME:?message}` as its password, and nothing else interpolates. */
+function referencedPassword(value: string, masked: string): boolean {
+  const urls = [...masked.matchAll(USERINFO)];
+  const references = value.match(BRACED) ?? [];
+  if (urls.length !== 1 || references.length !== 1 || masked.replaceAll("$$", "").includes("$")) return false;
+  const userinfo = urls[0]?.[1] ?? "";
+  const colon = userinfo.indexOf(":");
+  return colon !== -1 && userinfo.slice(colon + 1) === HOLE && REQUIRED_REFERENCE.test(references[0] ?? "");
+}
+
 /** Every difference between the files that the local stack is not allowed; none means they agree. */
 function drift(dev: Compose, local: Compose): string[] {
   const problems: string[] = [];
@@ -210,14 +322,9 @@ function drift(dev: Compose, local: Compose): string[] {
   }
   const shared = local.networks.filter(({ name }) => !LOCAL_ONLY_NETWORKS.has(name));
   if (!same(dev.networks, shared)) problems.push("the networks or their internal flags differ");
-  problems.push(...localOnlyNetworkDrift(local));
+  problems.push(...localOnlyNetworkDrift(local), ...localOnlyDrift(local));
   return problems;
 }
-
-/** Why a key and its value as written carry a secret other than as allowed, or null. Main has no such predicate. */
-const secretRefusal = (_key: string, _value: string | null): string | null => null;
-/** Each way a local-only service's environment or env_file is off its pin. Main compares neither. */
-const pinDrift = (_s: Service, _environment: Record<string, string>, _envFiles: string[]): string[] => [];
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const base58 = (bytes: number[]): string => {

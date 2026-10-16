@@ -70,9 +70,17 @@ type LimitRow = { mem_limit: string; cpus: number; pids_limit: number };
 const LIMITS = "limits.dev.json";
 const readLimits = (): Record<string, LimitRow> => JSON.parse(read(LIMITS)) as Record<string, LimitRow>;
 
-/** Each limit of `compose` off the table. Main's rule for now: each limit is present (limitProblems), at any value. */
-function limitsDrift(_table: Record<string, LimitRow>, compose: Compose): string[] {
-  return compose.services.flatMap((s) => limitProblems(s, false));
+const LIMIT_KEYS = ["mem_limit", "cpus", "pids_limit"] as const;
+/** Each limit of `compose` that differs from its table row or is missing, and each service the table has no row for. */
+function limitsDrift(table: Record<string, LimitRow>, compose: Compose): string[] {
+  return compose.services.flatMap((s) => {
+    const row = Object.hasOwn(table, s.name) ? table[s.name] : undefined;
+    if (row === undefined) return [`${s.name} has no row in ${LIMITS}`];
+    const written = { mem_limit: s.hardening.memLimit, cpus: s.hardening.cpus, pids_limit: s.hardening.pidsLimit };
+    return LIMIT_KEYS.filter((key) => written[key] !== row[key]).map(
+      (key) => `${s.name}: ${key} is ${written[key] ?? "missing"}, ${LIMITS} says ${row[key]}`,
+    );
+  });
 }
 /** A copy of `compose` with `name`'s hardening changed. */
 const limited = (compose: Compose, name: string, change: Partial<Hardening>): Compose => ({
