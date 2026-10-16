@@ -4,11 +4,19 @@
 // runs only the build and its import graph holds no app source (architecture Amendment 2026-10-06 21:05Z); tests
 // pass the source, which only Vitest can compile (it has import.meta.glob and CSS Modules).
 // P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
-// connection; `boot` checks the connection budget before the server listens.
+// connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
+// the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08:
+// signing out of this browser. P2.13: the signed-in home, with P2.02's handle check on the same DID resolver.
 import { fileURLToPath } from "node:url";
-import { createDidResolver } from "@unset/domains-identity";
+import { createDidResolver, createHandleVerifier, resolveHandle } from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
-import { createIdentityNetwork, createOAuthClient, type SavedSession } from "@unset/infrastructure-pds";
+import {
+  authorize,
+  completeAuthorization,
+  createIdentityNetwork,
+  createOAuthClient,
+  type SavedSession,
+} from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
   connectionOf,
@@ -17,17 +25,26 @@ import {
   createOAuthStateStore,
   createPool,
   createRequestLock,
+  createSingleUseStore,
+  PURPOSES,
   withClient,
+  withTransaction,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
+import { createSessionStore } from "@unset/infrastructure-session";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
 import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { loginRoutes } from "./routes/login.ts";
+import { logoutRoutes } from "./routes/logout.ts";
+import { meRoutes } from "./routes/me.ts";
+import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
+import { sessionCookieValue } from "./session-cookie.ts";
 import { loadWebBuild } from "./web/build.ts";
 import { type PageDeps, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
@@ -90,7 +107,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     withClient(pool, null, (db) =>
       checkConnectionBudget(db, [cfg.PG_POOL_MAX, cfg.LOCK_POOL_MAX], cfg.PG_MAX_REPLICAS),
     );
-  return { client, boot, onClose: [() => pool.end(), () => lockPool.pool.end()] };
+  return { client, network, resolveDid, pool, boot, onClose: [() => pool.end(), () => lockPool.pool.end()] };
 }
 
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
@@ -106,14 +123,83 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   };
   const oauth = await composeOAuth(cfg, log);
+  const page: Services["page"] = (input) => pageResponse(deps, input);
+  const nonces = createSingleUseStore({ log });
+  const sessions = createSessionStore({
+    withDb: (deadline, fn) => withClient(oauth.pool, deadline, fn),
+    limits: {
+      idleS: cfg.SESSION_IDLE_S,
+      absoluteS: cfg.SESSION_ABSOLUTE_S,
+      touchIntervalS: cfg.SESSION_TOUCH_INTERVAL_S,
+    },
+    log,
+  });
+  const readSession = (request: Request, deadline: AbortSignal) => {
+    const cookieValue = sessionCookieValue(request.headers.get("cookie"));
+    return sessions.read({ key: request, cookieValue, deadline });
+  };
+  const handles = createHandleVerifier({
+    network: oauth.network,
+    resolveDid: oauth.resolveDid,
+    verifyTtlS: cfg.HANDLE_VERIFY_TTL_S,
+    invalidTtlS: cfg.HANDLE_INVALID_TTL_S,
+    cacheMax: cfg.HANDLE_CACHE_MAX,
+    onUnexpected: (error) =>
+      log.warn("handle.verify_failed", { kind: error instanceof Error ? error.constructor.name : "unknown" }),
+  });
+  const login = loginRoutes({
+    page,
+    screens: render.screens,
+    safeHref: render.safeHref,
+    readSession,
+    resolveHandle: (handle) => resolveHandle(oauth.network, handle),
+    issueNonce: (deadline) =>
+      withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
+    authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
+    pdsHost: cfg.PDS_HOSTNAME,
+    handleDomain: cfg.HANDLE_SUFFIX.slice(1),
+    allowHttp: cfg.OAUTH_ALLOW_HTTP,
+    log,
+  });
+  const callback = oauthCallbackRoutes({
+    complete: (query) => completeAuthorization(oauth.client, query, log),
+    consumeNonce: (nonce, deadline) =>
+      withClient(oauth.pool, deadline, (db) => nonces.consume(db, "login.nonce", nonce)),
+    createSession: (did, replacingCookie, deadline) =>
+      withTransaction(oauth.pool, deadline, (tx) =>
+        sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
+      ),
+    sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
+    log,
+  });
+  const logout = logoutRoutes({
+    readSession: async (request, deadline) => (await readSession(request, deadline)).session,
+    destroySession: (session, deadline) =>
+      withTransaction(oauth.pool, deadline, (tx) => sessions.destroy(tx, session.idHash)),
+    page,
+    screens: render.screens,
+    pdsHost: cfg.PDS_HOSTNAME,
+    log,
+  });
+  const me = meRoutes({
+    readSession,
+    verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
+    page,
+    screens: render.screens,
+    pdsHost: cfg.PDS_HOSTNAME,
+  });
   const routes = [
     ...prefsRoutes(),
     ...assetsRoutes(build.files),
     ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
+    ...login,
+    ...callback,
+    ...logout,
+    ...me,
   ];
   return {
     server: createServer({ config: cfg, routes, policies, log, onClose: oauth.onClose }),
-    page: (page) => pageResponse(deps, page),
+    page,
     oauth: oauth.client,
     boot: oauth.boot,
   };

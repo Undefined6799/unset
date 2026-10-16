@@ -26,7 +26,13 @@
       "path": "../../infrastructure/seal"
     },
     {
+      "path": "../../infrastructure/session"
+    },
+    {
       "path": "../../shared/config"
+    },
+    {
+      "path": "../../shared/errors"
     },
     {
       "path": "../../shared/http"

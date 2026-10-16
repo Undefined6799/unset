@@ -183,6 +183,8 @@ services:
       PLC_URL: https://plc.directory
       OAUTH_CLIENT_KEYS_FILE: /run/secrets/web_oauth_client_keys
       OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
+      PDS_HOSTNAME: ${PDS_HOSTNAME}
+      HANDLE_SUFFIX: ${PDS_SERVICE_HANDLE_DOMAINS}
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).

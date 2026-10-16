@@ -27,4 +27,8 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "login.pds_unreachable": "The account's sign-in server could not be reached. Try again soon.",
   "login.failed": "Sign-in could not start. Try again.",
   "login.expired": "That sign-in step expired. Start again.",
+  "login.state_mismatch": "That sign-in was started in another browser or tab. Start again here.",
+  "login.consent_denied": "Sign-in was cancelled at the account's server.",
+  "login.scope_insufficient": "The account's server did not grant what unset.sh needs. Try again and allow access.",
+  "login.account_mismatch": "You signed in as a different account than the one you typed. Try again.",
 };

@@ -91,10 +91,10 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 |---|---|---|---|---|
 | V3.2.1 | Security controls are in place to prevent browsers from rendering content or … | covered | `test:shared/http/csp/headers.test.ts#headers_on_every_response`, `test:interfaces/http/routes/assets.test.ts#content_type_fixed_with_nosniff` | — |
 | V3.2.2 | Content intended to be displayed as text, rather than rendered as HTML, is handled using … | partial | `test:apps/web/render.test.tsx#island_props_xss_escaped`, `guard:inner-html` | P2.20 |
-| V3.3.1 | Cookies have the 'Secure' attribute set, and if the '__Host-' prefix is not used for the … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `guard:cookie-domain` | P2.03 |
-| V3.3.2 | Each cookie's 'SameSite' attribute value is set according to the purpose of the cookie … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes` | P2.03 |
-| V3.3.3 | Cookies have the '__Host-' prefix for the cookie name unless they are explicitly designed … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `guard:cookie-domain` | P2.03 |
-| V3.3.4 | If the value of a cookie is not meant to be accessible to client-side scripts (such as a … | partial | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `step:P2.06` | P2.06 |
+| V3.3.1 | Cookies have the 'Secure' attribute set, and if the '__Host-' prefix is not used for the … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `test:interfaces/http/routes/login.test.ts#login_post_handle`, `guard:cookie-domain` | P2.03 |
+| V3.3.2 | Each cookie's 'SameSite' attribute value is set according to the purpose of the cookie … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `test:interfaces/http/routes/login.test.ts#login_post_handle` | P2.03 |
+| V3.3.3 | Cookies have the '__Host-' prefix for the cookie name unless they are explicitly designed … | covered | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_is_host_only`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `test:interfaces/http/routes/login.test.ts#login_post_handle`, `guard:cookie-domain` | P2.03 |
+| V3.3.4 | If the value of a cookie is not meant to be accessible to client-side scripts (such as a … | partial | `test:interfaces/http/prefs/theme.test.ts#theme_cookie_attributes`, `test:interfaces/http/session-cookie.test.ts#session.cookie_attributes`, `test:interfaces/http/routes/login.test.ts#login_post_handle`, `step:P2.06` | P2.06 |
 | V3.4.1 | A Strict-Transport-Security header field is included on all responses to enforce an HTTP … | covered | `test:shared/http/csp/headers.test.ts#headers_on_every_response`, `test:shared/http/csp/headers.test.ts#handler_cannot_override` | — |
 | V3.4.2 | The Cross-Origin Resource Sharing (CORS) Access-Control-Allow-Origin header field is a … | open |  | — |
 | V3.4.3 | HTTP responses include a Content-Security-Policy response header field which defines … | covered | `test:shared/http/csp/policies.test.ts#snapshot_per_group`, `test:shared/http/csp/policies.test.ts#no_unsafe_tokens`, `test:shared/http/csp/headers.test.ts#error_pages_use_group_csp` | — |
@@ -107,7 +107,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V3.5.4 | Separate applications are hosted on different hostnames to leverage the restrictions … | covered | `test:shared/http/config.test.ts#media_same_site_refused`, `test:shared/http/csp/policies.test.ts#media_group` | — |
 | V3.5.5 | Messages received by the postMessage interface are discarded if the origin of the message … | n/a | n/a: no postMessage listener; islands talk to the server over HTTP only (guideline §1) | — |
 | V3.7.1 | The application only uses client-side technologies which are still supported and … | open |  | — |
-| V3.7.2 | The application will only automatically redirect the user to a different hostname or … | covered | `test:shared/http/returnPath.fuzz.test.ts#fuzz_same_origin`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_path_rejects_offsite` | — |
+| V3.7.2 | The application will only automatically redirect the user to a different hostname or … | covered | `test:shared/http/returnPath.fuzz.test.ts#fuzz_same_origin`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_path_rejects_offsite`, `test:interfaces/http/routes/login.test.ts#login_post_never_leaves_origin`, `test:interfaces/http/routes/login.test.ts#continue_target_not_from_query` | — |
 
 ## V4 API and Web Service
 
@@ -188,13 +188,13 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V7.2.1 | The application performs all session token verification using a trusted, backend service | open |  | — |
 | V7.2.2 | The application uses either self-contained or reference tokens that are dynamically … | open |  | — |
 | V7.2.3 | If reference tokens are used to represent user sessions, they are unique and generated … | covered | `test:tests/integration/session/store.test.ts#session.create_stores_hash_only`, `test:tests/integration/session/store.test.ts#session.rotation` | P2.03 |
-| V7.2.4 | The application generates a new session token on user authentication, including … | open | `step:P2.06` | P2.06 |
+| V7.2.4 | The application generates a new session token on user authentication, including … | covered | `test:interfaces/http/routes/oauth-callback.test.ts#callback_rotates_old_session`, `test:tests/integration/session/store.test.ts#session.rotation` | P2.06 |
 | V7.3.1 | There is an inactivity timeout such that re-authentication is enforced according to risk … | partial | `test:tests/integration/session/store.test.ts#session.idle_expiry`, `step:P2.06` | P2.06 |
 | V7.3.2 | There is an absolute maximum session lifetime such that re-authentication is enforced … | partial | `test:tests/integration/session/store.test.ts#session.absolute_expiry`, `step:P2.06` | P2.06 |
-| V7.4.1 | When session termination is triggered (such as logout or expiration), the application … | open | `step:P2.08` | P2.08 |
+| V7.4.1 | When session termination is triggered (such as logout or expiration), the application … | partial | `test:interfaces/http/routes/logout.test.ts#logout_this_browser`, `test:tests/integration/session/store.test.ts#session.rotation`, `step:P2.08` | P2.08 |
 | V7.4.2 | The application terminates all active sessions when a user account is disabled or deleted … | partial | `test:tests/integration/session/store.test.ts#end_sessions.deletes_did_sessions`, `test:tests/integration/session/store.test.ts#end_sessions.keeps_token_set_when_deactivated`, `step:P3.06` | P3.06 |
 | V7.4.3 | The application gives the option to terminate all other active sessions after a … | open | `step:P2.08` | P2.08 |
-| V7.4.4 | All pages that require authentication have easy and visible access to logout functionality | open | `step:P2.13` | P2.13 |
+| V7.4.4 | All pages that require authentication have easy and visible access to logout functionality | partial | `test:apps/web/src/screens/screens.test.tsx#me_shows_the_account_and_sign_out`, `step:P2.13` | P2.13 |
 | V7.4.5 | Application administrators are able to terminate active sessions for an individual user … | open |  | — |
 | V7.5.1 | The application requires full re-authentication before allowing modifications to … | open |  | — |
 | V7.5.2 | Users are able to view and (having authenticated again with at least one factor) … | open | `step:P2.08` | P2.08 |
@@ -230,9 +230,9 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | id | requirement (short) | status | evidence | step |
 |---|---|---|---|---|
 | V10.1.1 | Tokens are only sent to components that strictly need them | partial | `test:tests/integration/postgres/oauth-stores.test.ts#stores_sealed_at_rest`, `test:tests/integration/postgres/oauth-stores.test.ts#stores_aad_binding` | P2.06 |
-| V10.1.2 | The client only accepts values from the authorization server (such as the authorization … | open | `step:P2.06` | P2.06 |
-| V10.2.1 | Verify that, if the code flow is used, the OAuth client has protection against … | partial | `test:tests/integration/postgres/oauth-stores.test.ts#stores_expiry`, `test:tests/integration/postgres/oauth-stores.test.ts#stores_sealed_at_rest`, `test:infrastructure/pds/oauth/authorize.test.ts#authorize_returns_the_server_url`, `step:P2.06` | P2.06 |
-| V10.2.2 | Verify that, if the OAuth client can interact with more than one authorization server, it … | open | `step:P2.06` | P2.06 |
+| V10.1.2 | The client only accepts values from the authorization server (such as the authorization … | covered | `test:interfaces/http/routes/oauth-callback.test.ts#callback_no_cookie_or_cookie_mismatch`, `test:infrastructure/pds/oauth/sign-in.test.ts#callback_unknown_or_replayed_state_is_expired` | P2.06 |
+| V10.2.1 | Verify that, if the code flow is used, the OAuth client has protection against … | covered | `test:tests/integration/postgres/oauth-stores.test.ts#stores_expiry`, `test:tests/integration/postgres/oauth-stores.test.ts#stores_sealed_at_rest`, `test:interfaces/http/routes/login.test.ts#login_post_handle`, `test:interfaces/http/routes/login.test.ts#continue_expired_or_unknown`, `test:infrastructure/pds/oauth/sign-in.test.ts#authorize_returns_the_server_url`, `test:interfaces/http/routes/oauth-callback.test.ts#callback_no_cookie_or_cookie_mismatch` | P2.06 |
+| V10.2.2 | Verify that, if the OAuth client can interact with more than one authorization server, it … | covered | `test:infrastructure/pds/oauth/sign-in.test.ts#callback_mixup_iss` | P2.06 |
 | V10.3.1 | The resource server only accepts access tokens that are intended for use with that … | open |  | — |
 | V10.3.2 | The resource server enforces authorization decisions based on claims from the access … | open |  | — |
 | V10.3.3 | If an access control decision requires identifying a unique user from an access token … | open |  | — |
@@ -250,7 +250,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V10.4.11 | The authorization server configuration only assigns the required scopes to the OAuth … | open |  | — |
 | V10.5.1 | The client (as the relying party) mitigates ID Token replay attacks | open | `step:P2.06` | P2.06 |
 | V10.5.2 | The client uniquely identifies the user from ID Token claims, usually the 'sub' claim … | partial | `test:domains/identity/verify-handle.test.ts#bidirectional_ok`, `step:P2.06` | P2.06 |
-| V10.5.3 | The client rejects attempts by a malicious authorization server to impersonate another … | covered | `test:tests/integration/oauth/refresh.test.ts#client_rejects_impersonating_issuer` | P2.04 |
+| V10.5.3 | The client rejects attempts by a malicious authorization server to impersonate another … | covered | `test:tests/integration/oauth/refresh.test.ts#client_rejects_impersonating_issuer`, `test:infrastructure/pds/oauth/sign-in.test.ts#callback_mixup_iss` | P2.04 |
 | V10.5.4 | The client validates that the ID Token is intended to be used for that client (audience) … | open | `step:P2.06` | P2.06 |
 | V10.5.5 | Verify that, when using OIDC back-channel logout, the relying party mitigates denial of … | n/a | n/a: no OIDC back-channel logout; atproto OAuth has none | — |
 | V10.6.1 | The OpenID Provider only allows values 'code', 'ciba', 'id_token', or 'id_token code' for … | open |  | — |

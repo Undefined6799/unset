@@ -6,13 +6,15 @@
 // package manifest, never by config or the environment, and dependency-cruiser and semgrep see a literal. A missing
 // or malformed build fails startup. Tests pass the source to compose() instead; Vitest compiles it with the same class
 // names (scripts/ui/css-scope.ts).
-import type { islandName, renderPage, screens } from "@unset/apps-web";
+import type { islandName, renderPage, safeHref, screens } from "@unset/apps-web";
 
 /** What the web server uses from apps/web's render entry. */
 export type WebRender = Readonly<{
   renderPage: typeof renderPage;
   islandName: typeof islandName;
   screens: typeof screens;
+  /** The kit's link validator; the server cannot import the kit, whose index reaches .tsx files Node refuses. */
+  safeHref: typeof safeHref;
 }>;
 
 /** Loads the server build's module; tests pass a stub, production uses the default. */
@@ -21,7 +23,12 @@ export type WebRenderImporter = () => Promise<Partial<WebRender>>;
 const importServerBuild: WebRenderImporter = () => import("@unset/apps-web/server");
 
 /** Every page in `screens`; typed as a record so a page added to apps/web fails typecheck until it is listed here. */
-const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = { login: true, loginContinue: true };
+const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = {
+  login: true,
+  loginContinue: true,
+  signedOut: true,
+  me: true,
+};
 
 function hasEveryScreen(screens: unknown): screens is WebRender["screens"] {
   if (typeof screens !== "object" || screens === null) return false;
@@ -42,9 +49,13 @@ export async function loadWebRender(importer: WebRenderImporter = importServerBu
   if (
     typeof module.renderPage !== "function" ||
     typeof module.islandName !== "function" ||
-    !hasEveryScreen(module.screens)
+    !hasEveryScreen(module.screens) ||
+    typeof module.safeHref !== "function"
   ) {
-    throw new Error("web render build: @unset/apps-web/server does not export renderPage, islandName and screens");
+    throw new Error(
+      "web render build: @unset/apps-web/server does not export renderPage, islandName, screens and safeHref",
+    );
   }
-  return { renderPage: module.renderPage, islandName: module.islandName, screens: module.screens };
+  const { renderPage, islandName, screens, safeHref } = module;
+  return { renderPage, islandName, screens, safeHref };
 }

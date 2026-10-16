@@ -89,3 +89,39 @@ describe("continue screen", () => {
     expect(page).not.toContain('q="<b>');
   });
 });
+
+describe("signed-out screen", () => {
+  test("signed_out_links_to_the_pds_account_and_sign_in", () => {
+    const page = html(screens.signedOut({ pdsHost: "pds.example" }));
+    expect(page).toContain("You are signed out");
+    expect(page).toContain("our sign-in server; it is the only place you type your password");
+    const links = tags(page, "a").map((a) => a.href);
+    expect(links).toEqual(["https://pds.example/account", "/login"]);
+    expect(page).not.toContain("<script");
+  });
+});
+
+describe("me screen", () => {
+  const DID = `did:plc:${"a".repeat(24)}`;
+
+  test("me_shows_the_account_and_sign_out", () => {
+    const page = html(
+      screens.me({ handle: "alice.pds.example", did: DID, handleUnavailable: false, pdsHost: "pds.example" }),
+    );
+    expect(page).toContain("alice.pds.example");
+    expect(page).toContain(`<code>${DID}</code>`);
+    expect(tags(page, "form")).toEqual([{ method: "post", action: "/logout" }]);
+    expect(page).toContain(">Sign out</button>");
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
+    expect(page).not.toContain("could not check your handle");
+    expect(page).not.toContain("<script");
+  });
+
+  test("me_says_when_the_handle_could_not_be_checked", () => {
+    const page = html(
+      screens.me({ handle: "handle.invalid", did: DID, handleUnavailable: true, pdsHost: "pds.example" }),
+    );
+    expect(page).toContain("handle.invalid");
+    expect(page).toContain("We could not check your handle just now");
+  });
+});

@@ -34,11 +34,17 @@ covers what a session needs, with the library's matcher. Its `onSessionDeleted` 
 on every callback, so it must never end app sessions. Any `@atproto/oauth-client-node` import lives in this folder only
 (vendor-sdk-one-adapter), tests included.
 
-**Starting a sign-in (P2.05).** `oauth/authorize.ts` calls the library's `authorize` with our appState, retries once
+**Starting a sign-in (P2.05).** `oauth/sign-in.ts` calls the library's `authorize` with our appState, retries once
 with the written-out scope when the server answers `invalid_scope` (it cannot resolve our permission set), and turns
 the library's errors into five outcomes: `handle_unverified`, `handle_not_found`, `identity_unavailable`,
 `pds_unreachable`, `failed`. Two of them rest on library internals, the identity step's message prefix and the
-"does not include the handle" message; `authorize.test.ts` runs the real client against a stand-in server, so a
+"does not include the handle" message; `sign-in.test.ts` runs the real client against a stand-in server, so a
 library upgrade that changes either fails there.
+
+**Completing it (P2.06).** `completeAuthorization` in the same file hands the callback query to the library, which
+spends its state, checks `iss`, exchanges the code and checks the token's `sub` against its DID document's PDS and
+issuer. It returns the DID, issuer, appState and the granted scope (read from the stored set without a refresh) and a
+`revoke`; failures are `consent_denied`, `expired` (no stored state: unknown, expired or replayed), `pds_unreachable`
+and `failed`. The interface decides the rest (nonce, expected account, grant, session).
 
 **Links.** [[identity]], [[net-guard]].

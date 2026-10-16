@@ -4,7 +4,7 @@
 import { bool, list, str, withRule } from "./schema.ts";
 
 /** Exact lowercase hostnames: no scheme, port, wildcard or trailing dot. */
-const HOSTNAME = /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*/;
+export const HOSTNAME = /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*/;
 
 export const netGuardFields = {
   /** Hosts reached inside the stack that must resolve only to private addresses (our own PDS). Required in prod. */
