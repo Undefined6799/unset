@@ -35,6 +35,7 @@ const AUTHORIZE_TIMEOUT_MS = 10_000;
 /** net-guard codes that mean the server could not be reached, as opposed to being refused. */
 const UNREACHABLE: ReadonlySet<string> = new Set([
   "egress.dns_failed",
+  "egress.dns_no_record",
   "egress.dns_timeout",
   "egress.connect",
   "egress.tls",
