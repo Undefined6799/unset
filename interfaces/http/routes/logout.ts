@@ -3,12 +3,13 @@
 // sign-in asks the server for the password again. Other browsers of the same account keep their sessions, and the
 // shared OAuth token set stays for them. No DID in any log line: only the count `auth.logout_this_browser`.
 import type { Session } from "@unset/infrastructure-session";
+import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route, type RouteGroup } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { ReactNode } from "react";
 import { sessionClearCookie } from "../session-cookie.ts";
 import type { WebRender } from "../web/render-entry.ts";
-import { signedOutCookie } from "./sign-in-state.ts";
+import { clearNonceCookie, clearTargetCookie, signedOutCookie } from "./sign-in-state.ts";
 
 export type LogoutDeps = {
   /** This request's P2.03 session, or null. */
@@ -36,13 +37,18 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
       session: "none",
       handler: async ({ request, deadline }) => {
         const session = await deps.readSession(request, deadline);
-        // A failed delete throws: the kit answers with its error page and the cookie stays, so a retry finds it.
         if (session !== null) {
-          await deps.destroySession(session, deadline);
+          // A failed delete is a retryable 503 (book P2.08 step 3), and the cookie stays so the retry finds it.
+          await deps.destroySession(session, deadline).catch((cause: unknown) => {
+            throw new AppError("service.unavailable", { cause });
+          });
           deps.log.info("auth.logout_this_browser");
         }
         const headers = new Headers({ location: "/signed-out", "cache-control": "no-store" });
         headers.append("set-cookie", sessionClearCookie());
+        // A sign-in started before this one ends here too: its authorization was made without prompt=login.
+        headers.append("set-cookie", clearNonceCookie());
+        headers.append("set-cookie", clearTargetCookie());
         headers.append("set-cookie", signedOutCookie());
         return new Response(null, { status: 303, headers });
       },

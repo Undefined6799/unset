@@ -59,6 +59,7 @@ export const clearSignedOutCookie = (): string => `${SIGNED_OUT_COOKIE}=; ${NONC
 
 export const targetCookie = (target: string): string =>
   `${TARGET_COOKIE}=${Buffer.from(target).toString("base64url")}; ${TARGET_ATTRIBUTES}; Max-Age=${TARGET_TTL_S}`;
+export const clearTargetCookie = (): string => `${TARGET_COOKIE}=; ${TARGET_ATTRIBUTES}; Max-Age=0`;
 /** The stored target as text, or null when the cookie is missing, doubled or not base64url. */
 export function targetFromCookies(header: string | null): string | null {
   const encoded = cookieValue(header, TARGET_COOKIE);
