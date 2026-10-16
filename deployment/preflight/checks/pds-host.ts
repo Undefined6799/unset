@@ -22,11 +22,10 @@ export function pdsHostProblem(inputs: Inputs, pdsHost: string | undefined): Out
 const normalHost = (host: string): string => host.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
 
 /**
- * An IP address as written in a host: IPv6 bracketed or bare (a hostname holds at most one colon, before its port), or
- * IPv4 as a name whose last label is all digits, which a resolver reads as an address (verify-869 S1). Lexical, since
- * the egress guard keeps node:net in infrastructure/net-guard.
+ * An IP address as written in a host: IPv6, bracketed or bare, holds two colons or more where a hostname holds at most
+ * one, before its port; IPv4 is a name whose last label is all digits, which a resolver reads as an address
+ * (verify-869 S1). Lexical, since the egress guard keeps node:net in infrastructure/net-guard.
  */
 function ipLiteral(host: string): boolean {
-  if (host.startsWith("[") || host.split(":").length > 2) return true;
-  return /(^|\.)\d+$/.test(normalHost(host));
+  return host.split(":").length > 2 || /(^|\.)\d+$/.test(normalHost(host));
 }
