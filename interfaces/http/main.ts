@@ -3,7 +3,8 @@ import { bootOrExit, exitOnConfigError } from "@unset/shared-config";
 import { compose } from "./compose.ts";
 import { config } from "./config.ts";
 
-const { server, boot } = await compose(bootOrExit(config));
-// The budget check refuses pool sizes the database role cannot hold as a ConfigError: exit 78, like a bad key.
+// Building and the budget check can still refuse the config (a PLC_URL net-guard does not allow, pools the database
+// role cannot hold) as a ConfigError: exit 78, like a bad key.
+const { server, boot } = await compose(bootOrExit(config)).catch(exitOnConfigError);
 await boot().catch(exitOnConfigError);
 await server.listen();
