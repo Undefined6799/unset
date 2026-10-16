@@ -342,13 +342,16 @@ describe("compose.dev.yaml (P1.29)", () => {
     expect(postgres.ports).toEqual([]);
   });
 
-  test("web_only_on_internal_networks", () => {
-    // web has no way out: every network it joins is internal (architecture 02:05Z option C; verify-895 N2).
+  test("web_leaves_only_through_its_own_egress", () => {
+    // web's one way out is web_egress, a network no other service joins, and every request on it goes through
+    // net-guard (ADR 0022, replacing architecture 02:05Z option C's "no way out" for web; verify-895 N2).
     const compose = dev();
     const internal = new Set(compose.networks.filter((n) => n.internal).map((n) => n.name));
     const web = service(compose, "web");
     expect(web.networks.length).toBeGreaterThan(0);
-    for (const network of web.networks) expect(internal.has(network), network).toBe(true);
+    expect(web.networks.filter((network) => !internal.has(network))).toEqual(["web_egress"]);
+    const members = compose.services.filter((s) => s.networks.includes("web_egress")).map((s) => s.name);
+    expect(members).toEqual(["web"]);
     expect(web.ports).toEqual([]);
   });
 
@@ -631,7 +634,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     expect(raw.services.edge?.networks).toEqual({ edge: hosts, app: hosts });
     expect(service(dev(), "pds").networks).toContain("edge");
     expect(service(dev(), "pds").networks).not.toContain("app");
-    expect(service(dev(), "web").networks).toEqual(["db", "app"]);
+    expect(service(dev(), "web").networks).toEqual(["db", "app", "web_egress"]);
     expect(read("env/dev-public.example.env")).toMatch(/^APP_HOST=\S+$/m);
   });
 
@@ -763,7 +766,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     // verify-895 F2: the same neighbour check C17 runs at deploy, on the real file, so CI refuses what C17 would. The
     // PDS is known by the base lock's image and the edge by its Dockerfile (P1.35o, architecture 03:05Z F3).
     expect(pdsNeighbours(devInputs())).toEqual([]);
-    const webOnEdge = (text: string) => text.replace("    networks: [db, app]\n", "    networks: [db, app, edge]\n");
+    const webOnEdge = (text: string) =>
+      text.replace("    networks: [db, app, web_egress]\n", "    networks: [db, app, web_egress, edge]\n");
     expect(pdsNeighbours(devInputs(webOnEdge))).toEqual(["web shares a network with the pds"]);
     const renamed = (text: string) =>
       text.replace("\n  pds:\n", "\n  relay:\n").replace("depends_on:\n      pds:", "depends_on:\n      relay:");
