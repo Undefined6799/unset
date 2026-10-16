@@ -8,7 +8,8 @@ ADR 0022 says we host no PLC directory, and leaves open where the local PDS publ
 an account and a local sign-in has no one to sign in. The local PLC was planned (architecture record
 2026-10-13-local-plc, Amendment 4) so that seeds and probes, which create accounts on every run (P1.29s, P1.29t), would
 never write to the public directory. On 2026-10-16 Alex chose to publish local accounts to `plc.directory` and keep them
-to a few fixed ones. It changes a security check (C28) and reverses a recorded design, so it needs a record (D8).
+to a few fixed ones, and confirmed that a public did:plc is fine: it is just an identifier, naming a handle, keys and a
+server. It changes a security check (C28) and reverses a recorded design, so it needs a record (D8).
 
 ## Decision
 1. **The local PDS publishes to `https://plc.directory`**, like dev and prod. C28 requires exactly that URL in every
