@@ -20,6 +20,15 @@ export type WebRenderImporter = () => Promise<Partial<WebRender>>;
 
 const importServerBuild: WebRenderImporter = () => import("@unset/apps-web/server");
 
+/** Every page in `screens`; typed as a record so a page added to apps/web fails typecheck until it is listed here. */
+const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = { login: true, loginContinue: true };
+
+function hasEveryScreen(screens: unknown): screens is WebRender["screens"] {
+  if (typeof screens !== "object" || screens === null) return false;
+  const pages = screens as Record<string, unknown>;
+  return Object.keys(SCREEN_NAMES).every((name) => typeof pages[name] === "function");
+}
+
 /** Imports the server build; throws when it is missing or lacks the render entry's exports, so startup fails closed. */
 export async function loadWebRender(importer: WebRenderImporter = importServerBuild): Promise<WebRender> {
   let module: Partial<WebRender>;
@@ -33,8 +42,7 @@ export async function loadWebRender(importer: WebRenderImporter = importServerBu
   if (
     typeof module.renderPage !== "function" ||
     typeof module.islandName !== "function" ||
-    typeof module.screens !== "object" ||
-    module.screens === null
+    !hasEveryScreen(module.screens)
   ) {
     throw new Error("web render build: @unset/apps-web/server does not export renderPage, islandName and screens");
   }
