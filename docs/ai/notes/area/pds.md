@@ -45,6 +45,8 @@ library upgrade that changes either fails there.
 spends its state, checks `iss`, exchanges the code and checks the token's `sub` against its DID document's PDS and
 issuer. It returns the DID, issuer, appState and the granted scope (read from the stored set without a refresh) and a
 `revoke`; failures are `consent_denied`, `expired` (no stored state: unknown, expired or replayed), `pds_unreachable`
-and `failed`. The interface decides the rest (nonce, expected account, grant, session).
+and `failed`. The interface decides the rest (nonce, expected account, grant, session). `sign-in.test.ts` also pins
+the PKCE verifier against the PAR challenge, a `sub` whose issuer is not the token server, a replayed callback that
+sends no second token request, and a second login replacing the stored token set.
 
 **Links.** [[identity]], [[net-guard]].
