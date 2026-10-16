@@ -4,7 +4,7 @@ type: area
 status: current
 areas: ["[[lexicons]]"]
 summary: "Hub for shared/lexicons: the sh.unset.* record and permission-set schemas, their validator, limits and OAuth scope."
-code: [shared/lexicons/index.ts, shared/lexicons/scripts/build.ts]
+code: [shared/lexicons/index.ts, shared/lexicons/scripts/build.ts, shared/lexicons/scripts/breaking-check.ts]
 sources: []
 importance: high
 related: ["[[identity]]", "[[pds]]"]
@@ -28,6 +28,9 @@ apps rely on it, so a change is close to permanent.
 - `src/limits.ts`: the limits the UI and the domain show; a test holds them equal to the schemas.
 - `src/scope.ts`: the OAuth scope string, and the expanded fallback for a PDS without permission sets.
 - `scripts/build.ts`: schema checks (strict keys, flat NSIDs, English consent text; French comes with the i18n slice) and generation.
+- `scripts/breaking-check.ts`: refuses a narrowed limit, a lost value or a changed `default` (an absent
+  `listed` must stay not listed) on a published schema; additions to
+  the permission set need Alex's approval and removals are refused.
 
 **Pitfalls.**
 - `@atproto/lex-document`'s parser keeps unknown keys, so build.ts checks keys itself from `.shape`.
