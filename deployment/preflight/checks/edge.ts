@@ -26,8 +26,9 @@ import {
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
-import { appHostProblem, localLeafProblem, pdsHostProblem } from "./local-leaf.ts";
+import { appHostProblem, localLeafProblem } from "./local-leaf.ts";
 import { readLock } from "./lock.ts";
+import { pdsHostProblem } from "./pds-host.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
 /** Where the edge image reads its enabled sites (deployment/edge/Caddyfile, `import sites/enabled/*.caddy`). */
