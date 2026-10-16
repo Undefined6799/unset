@@ -45,11 +45,12 @@ insufficient grant is revoked), then a P2.03 session in its own transaction, rot
 It redirects to the stored `next` or `/me`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
 {code}`), never a DID. Not yet: `app.account` and onboarding, the email read, `invalidateHandle` (later steps).
 
-**Signing out (P2.08).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's session, clears
-`__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`; the callback clears it.
-GET /signed-out points to the PDS account page. The OAuth token set is kept (other browsers share it). Not yet: "sign out
-everywhere" (needs P2.04s's `destroyAllForDid`) and revoking the grant when the last browser signs out (needs a count of
-the DID's sessions from the session store, trusted base).
+**Signing out (P2.08, remainder P2.08a).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's
+session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
+that was the last session, it revokes the grant (`OAuthClient.revoke`, 10s) and deletes the stored set if revoke
+throws. POST /logout/everywhere requires `confirm=yes`, revokes first, then `destroyAllForDid`. The count is
+`logout-sessions.ts` (the book's SELECT, same transaction as the delete). `infrastructure/session` stays untouched:
+it is trusted base, so a store method cannot share this PR. GET /signed-out points at the PDS account page.
 
 **The signed-in home (P2.13).** `routes/me.ts`: GET /me reads the session (none → `/login?next=/me`), shows the handle
 only when P2.02's `verifyHandle` (wired in compose with HANDLE_* config, sharing the DID resolver's cache) confirms it,

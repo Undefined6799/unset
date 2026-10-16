@@ -99,6 +99,23 @@ describe("signed-out screen", () => {
     expect(links).toEqual(["https://pds.example/account", "/login"]);
     expect(page).not.toContain("<script");
   });
+
+  test("pdsAccountLink.own_vs_foreign", () => {
+    const own = html(screens.signedOut({ pdsHost: "pds.test" }));
+    expect(own).toContain("https://pds.test/account");
+    expect(own).toContain("pds.test, our sign-in server; it is the only place you type your password");
+    const foreign = html(screens.signedOut({ pdsHost: "pds.test", issuer: "https://pds.example", ours: false }));
+    expect(foreign).toContain("https://pds.example/");
+    expect(foreign).not.toContain("/account");
+    expect(foreign).toContain("your sign-in server (pds.example)");
+    expect(foreign).not.toContain("only place you type your password");
+  });
+
+  test("signed_out_everywhere_says_when_revoke_is_unconfirmed", () => {
+    const page = html(screens.signedOut({ pdsHost: "pds.example", everywhere: true, revokeUnconfirmed: true }));
+    expect(page).toContain("every browser");
+    expect(page).toContain("could not confirm the sign-in server ended access");
+  });
 });
 
 describe("me screen", () => {
@@ -110,8 +127,14 @@ describe("me screen", () => {
     );
     expect(page).toContain("alice.pds.example");
     expect(page).toContain(`<code>${DID}</code>`);
-    expect(tags(page, "form")).toEqual([{ method: "post", action: "/logout" }]);
+    expect(tags(page, "form")).toEqual([
+      { method: "post", action: "/logout" },
+      { method: "post", action: "/logout/everywhere" },
+    ]);
     expect(page).toContain(">Sign out</button>");
+    expect(page).toContain('name="confirm"');
+    expect(page).toContain('value="yes"');
+    expect(page).toContain(">Sign out everywhere</button>");
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
     expect(page).not.toContain("could not check your handle");
     expect(page).not.toContain("<script");

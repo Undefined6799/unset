@@ -5,8 +5,9 @@
 // pass the source, which only Vitest can compile (it has import.meta.glob and CSS Modules).
 // P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
 // connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
-// the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08:
-// signing out of this browser. P2.13: the signed-in home, with P2.02's handle check on the same DID resolver.
+// the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
+// and P2.08a: this browser, the last browser's grant, and sign-out everywhere. P2.13: the signed-in home, with
+// P2.02's handle check on the same DID resolver.
 import { fileURLToPath } from "node:url";
 import { createDidResolver, createHandleVerifier, resolveHandle } from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
@@ -37,6 +38,7 @@ import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
 import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
+import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { loginRoutes } from "./routes/login.ts";
 import { logoutRoutes } from "./routes/logout.ts";
@@ -174,8 +176,12 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   });
   const logout = logoutRoutes({
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,
-    destroySession: (session, deadline) =>
-      withTransaction(oauth.pool, deadline, (tx) => sessions.destroy(tx, session.idHash)),
+    ...browserLogout({
+      pool: oauth.pool,
+      sessions,
+      // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
+      revoke: (did) => oauth.client.revoke(did),
+    }),
     page,
     screens: render.screens,
     pdsHost: cfg.PDS_HOSTNAME,
