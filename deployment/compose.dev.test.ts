@@ -610,6 +610,8 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
     pg_web_password: 65532,
     pg_api_password: 65532,
     pg_indexer_password: 65532,
+    web_seal_keyring: 65532,
+    web_oauth_client_keys: 65532,
   };
   /** A stat of `kind` with this mode and owner; a copy of a real one, so the methods are Node's. */
   const made = (kind: "dir" | "file", mode: number, uid: number, ino: number): Stats =>
@@ -700,7 +702,7 @@ describe("compose.dev.yaml under the preflight's C9 and C26 (P1.29)", () => {
 
   test("c9_and_c26_pass_on_the_dev_stack", async () => {
     expect(await outcomes()).toEqual([
-      { pass: true, reason: "2 files, 7 mounted secrets" },
+      { pass: true, reason: "2 files, 9 mounted secrets" },
       { pass: true, reason: "ok" },
     ]);
   });

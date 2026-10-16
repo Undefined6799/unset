@@ -167,8 +167,25 @@ services:
       # Only the edge reaches web, on the app network, and its upstream snippet drops the client's address, so the
       # address is the socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
       TRUSTED_PROXY_MODE: socket
+      # The OAuth client (P2.04c, P2.04w): Postgres as web, whose pools must fit the role's 40 connections across three
+      # replicas with the 8-connection lock pool (checkConnectionBudget), so 5; the seal keyring and the client keys as
+      # mounted files; our own PDS as net-guard's one internal host, reached through the edge's alias on the app
+      # network; the key new sign-ins sign with. PLC_URL is the public directory until P1.34z points local at its own.
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: web
+      PG_PASSWORD_FILE: /run/secrets/pg_web_password
+      PG_SSLMODE: disable
+      PG_POOL_MAX: "5"
+      SEAL_KEYRING_FILE: /run/secrets/web_seal_keyring
+      NETGUARD_INTERNAL_HOSTS: ${PDS_HOSTNAME}
+      PLC_URL: https://plc.directory
+      OAUTH_CLIENT_KEYS_FILE: /run/secrets/web_oauth_client_keys
+      OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
       NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
       NODE_OPTIONS: --max-old-space-size=384
+    # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
+    secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -236,6 +253,10 @@ secrets:
     file: ../../unset-dev-secrets/pg_api_password
   pg_indexer_password:
     file: ../../unset-dev-secrets/pg_indexer_password
+  web_seal_keyring:
+    file: ../../unset-dev-secrets/web_seal_keyring
+  web_oauth_client_keys:
+    file: ../../unset-dev-secrets/web_oauth_client_keys
   local_tls_cert:
     file: ../../unset-dev-secrets/local_tls_cert
   local_tls_key:

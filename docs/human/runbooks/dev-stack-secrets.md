@@ -57,6 +57,9 @@ keeps every other host account out:
 | `pg_web_password` | `65532:65532` | migrate | the `web` role's password, set after migrations |
 | `pg_api_password` | `65532:65532` | migrate | the `api` role's password |
 | `pg_indexer_password` | `65532:65532` | migrate | the `indexer` role's password |
+| `pg_web_password` (also) | `65532:65532` | web | the same file: web logs in as `web` with it (P2.04w) |
+| `web_seal_keyring` | `65532:65532` | web | the seal keyring for the OAuth state and token sets |
+| `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
 lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). The dev seed
@@ -64,6 +67,22 @@ lists the folder, so a stray file here passes (P1.34l (#754) adds that listing).
 mode `0600` and owned by you (Amendment 7 of the bind-ancestors record). Nothing in a container reads it.
 
 Each password is at least 16 bytes (`PG_PASSWORD` and the role files are read as `secretFile({ minBytes: 16 })`).
+
+## The web server's two files (P2.04w)
+
+`web` and `migrate` both run as `65532`, so web mounts the same `pg_web_password` file migrate sets the role from. The
+other two are web's alone. Make each with `umask 077`, then `chown 65532:65532` and `chmod 0400` as above.
+
+- `web_seal_keyring`: a JSON keyring, one 32-byte key by id (`infrastructure/seal/keyring.ts`):
+  `printf '{"active":"k1","keys":{"k1":"%s"}}' "$(openssl rand -base64 32)" > web_seal_keyring`.
+  Rotating it is `unset-rewrap` (P1.14d), never an edit in place: a value sealed with a key that is gone cannot open.
+- `web_oauth_client_keys`: a JSON array of private ES256 JWKs, each with a `kid` (1 to 4 keys; `oauth/oauth-client.ts`
+  `parseClientKeys`). With Node 26 on your machine:
+  `node -e 'const {generateKeyPairSync}=require("node:crypto");const jwk=generateKeyPairSync("ec",{namedCurve:"P-256"}).privateKey.export({format:"jwk"});process.stdout.write(JSON.stringify([{...jwk,kid:process.argv[1],alg:"ES256"}]))' web-2026-10 > web_oauth_client_keys`.
+  Set `WEB_OAUTH_ACTIVE_KID` in `dev-public.env` to that kid. Adding or removing a key is a rotation: follow
+  `docs/human/runbooks/oauth-key-rotation.md`, which keeps the old key until no token set names it.
+
+Neither value is ever printed by the server: the keyring and the keys show as `[keyring]` and `[oauth keys]`.
 
 ## The PDS's env file (P1.29a)
 
