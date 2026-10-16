@@ -57,6 +57,16 @@
       "method": "GET",
       "path": "/oauth/callback",
       "status": 303
+    },
+    {
+      "method": "POST",
+      "path": "/logout",
+      "status": 415
+    },
+    {
+      "method": "GET",
+      "path": "/signed-out",
+      "status": 200
     }
   ]
 }

@@ -17,7 +17,7 @@ import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import type { WebRender } from "../web/render-entry.ts";
-import { appStateOf, cookieValue, nonceCookie } from "./sign-in-state.ts";
+import { appStateOf, cookieValue, nonceCookie, signedOutFrom } from "./sign-in-state.ts";
 
 export type LoginDeps = {
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
@@ -27,7 +27,10 @@ export type LoginDeps = {
   resolveHandle: (handle: Handle) => Promise<HandleResolution>;
   /** A P1.16 `login.nonce`, valid 10 minutes. */
   issueNonce: (deadline: AbortSignal) => Promise<string>;
-  authorize: (input: string, options: { appState: string; deadline: AbortSignal }) => Promise<AuthorizeResult>;
+  authorize: (
+    input: string,
+    options: { appState: string; prompt?: "login"; deadline: AbortSignal },
+  ) => Promise<AuthorizeResult>;
   /** Our PDS's host: the chooser's authorization server is `https://` and this. */
   pdsHost: string;
   /** What a name typed without a dot is completed with. */
@@ -88,10 +91,11 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   }
 
   /** startAuth: the nonce, the authorization, then the two cookies and the continue page. */
-  async function startAuth(account: Account, next: SafePath | null, deadline: AbortSignal): Promise<Response> {
+  async function startAuth(request: Request, account: Account, next: SafePath | null, deadline: AbortSignal) {
     const nonce = await deps.issueNonce(deadline);
     const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next });
-    const result = await deps.authorize(account.input, { appState, deadline });
+    const prompt = signedOutFrom(request.headers.get("cookie")) ? ({ prompt: "login" } as const) : {};
+    const result = await deps.authorize(account.input, { appState, ...prompt, deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
     if (!result.ok) return back(`login.${result.reason}`, next);
     const target = deps.safeHref(result.url.href, schemes);
@@ -145,7 +149,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         const next = safeReturnPath(single(form, "next"));
         const account = await chooseAccount(form);
         if (typeof account === "string") return back(account, next);
-        return startAuth(account, next, deadline);
+        return startAuth(request, account, next, deadline);
       },
     }),
     defineRoute({

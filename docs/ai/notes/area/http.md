@@ -45,6 +45,12 @@ insufficient grant is revoked), then a P2.03 session in its own transaction, rot
 It redirects to the stored `next` or `/me`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
 {code}`), never a DID. Not yet: `app.account` and onboarding, the email read, `invalidateHandle` (later steps).
 
+**Signing out (P2.08).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's session, clears
+`__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`; the callback clears it.
+GET /signed-out points to the PDS account page. The OAuth token set is kept (other browsers share it). Not yet: "sign out
+everywhere" (needs P2.04s's `destroyAllForDid`) and revoking the grant when the last browser signs out (needs a count of
+the DID's sessions from the session store, trusted base).
+
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only
 from tests, which pass `import * as web from "@unset/apps-web"`; a new test that composes the server must pass it too,

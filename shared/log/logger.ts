@@ -61,6 +61,8 @@ const EVENTS = [
   "oauth.callback_failed",
   "auth.login_succeeded",
   "auth.login_denied",
+  // P2.08, signing out of this browser: a count with no DID.
+  "auth.logout_this_browser",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
