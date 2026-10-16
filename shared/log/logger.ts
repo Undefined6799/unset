@@ -61,6 +61,10 @@ const EVENTS = [
   "oauth.callback_failed",
   "auth.login_succeeded",
   "auth.login_denied",
+  // P2.07, a PDS call: a 401 while the token set is still stored (not a logout), and a failure whose class
+  // was not one of the expected ones. `kind` is the class name, never the message (it can carry a DID).
+  "pds.401_with_live_set",
+  "pds.unexpected",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
   // P2.08a, signing out of every browser, and a revocation the authorization server did not confirm. No DID.

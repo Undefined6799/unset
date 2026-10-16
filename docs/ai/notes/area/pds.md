@@ -49,4 +49,10 @@ and `failed`. The interface decides the rest (nonce, expected account, grant, se
 the PKCE verifier against the PAR challenge, a `sub` whose issuer is not the token server, a replayed callback that
 sends no second token request, and a second login replacing the stored token set.
 
+**PDS calls (P2.07).** `pds-call.ts` is the only place that calls `client.restore(` or `new Agent(`. It classifies
+failures into `ok`, `transient`, `auth_dead`, `scope_missing` and `rejected`. A dead grant ends the DID's sessions
+through an injected `endSessions` (`destroyAllForDid`); this package cannot import `infrastructure/session`. A
+handshake, a 429 or an outage does not. `pdsCall.dev_pds_nonce_rotation` needs the local compose stack and is not
+in the unit tests.
+
 **Links.** [[identity]], [[net-guard]].
