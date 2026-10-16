@@ -2,7 +2,8 @@
 // needs (book edit 2026-10-13-p127l-to-third-lane, Amendment 4; architecture record 2026-10-13-p127l-local-gaps,
 // Amendments 1 and 2). The preflight runs in full on the local file too; this catches a weakening it would allow, in
 // either direction, naming the service and the key. Every service key is compared, `environment` and `env_file` too
-// (item 11 holds over item 14: step book 03:46Z, book edit 2026-10-14-p134d-split, "verify-903-8b2abfc S1").
+// (item 11 holds over item 14: step book 03:46Z, book edit 2026-10-14-p134d-split, "verify-903-8b2abfc S1"). A
+// local-only service has no dev twin, so its environment and env_file are pinned here instead (P1.35r I-2).
 import { execFileSync } from "node:child_process";
 import {
   lstatSync,
@@ -213,6 +214,11 @@ function drift(dev: Compose, local: Compose): string[] {
   return problems;
 }
 
+/** Why a key and its value as written carry a secret other than as allowed, or null. Main has no such predicate. */
+const secretRefusal = (_key: string, _value: string | null): string | null => null;
+/** Each way a local-only service's environment or env_file is off its pin. Main compares neither. */
+const pinDrift = (_s: Service, _environment: Record<string, string>, _envFiles: string[]): string[] => [];
+
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const base58 = (bytes: number[]): string => {
   let value = bytes.reduce((n, b) => n * 256n + BigInt(b), 0n);
@@ -375,6 +381,22 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
     expect(swapped).toContain("pds: env_file differs");
   });
 
+  // P1.35r (verify-903-7742397 N-e, N-f): the env_file folder rule against weaker rewrites. A prefix or substring
+  // match would pass the first two, and a rule that only compares local's folder with dev's would pass the third.
+  const pdsEnvFile = (compose: Compose, path: string): Compose =>
+    editService(compose, "pds", (s) => ({ ...s, envFiles: [path] }));
+  test.each([
+    { name: "an entry under a sub-folder", dev, local: pdsEnvFile(local, `${ENV_DIR}/sub/pds.env`) },
+    { name: "an entry under a near-named folder", dev, local: pdsEnvFile(local, "../../unset-dev-env-old/pds.env") },
+    {
+      name: "both files moved to the same other folder",
+      dev: pdsEnvFile(dev, "../../elsewhere/pds.env"),
+      local: pdsEnvFile(local, "../../elsewhere/pds.env"),
+    },
+  ])("an_env_file_outside_the_env_folder_is_named: $name", ({ dev: d, local: l }) => {
+    expect(drift(d, l)).toContain("pds: env_file differs");
+  });
+
   test("the_app_site_and_its_two_keys_come_together", () => {
     // Step book 04:03Z: the edge's APP_HOST and APP_UPSTREAM exist only with item 12's app-site mount, and only so.
     const together = "edge: the app site and APP_HOST and APP_UPSTREAM do not come together";
@@ -442,6 +464,152 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
       ["web", { literal: "/etc/unset-dev-trust/root.pem" }],
     ]);
     expect(trusting(dev)).toEqual([]);
+  });
+});
+
+/**
+ * P1.35r I-2: a local-only service skips environmentDrift, since dev has nothing to compare it with, so a key that
+ * changes its trust (TLS, app settings) or an env file could join it unseen. Its environment and env_file are pinned.
+ */
+describe("local-only services' environment and env_file (P1.35r I-2)", () => {
+  const dev = parse("compose.dev.yaml");
+  const local = parse("compose.local.yaml");
+  const reader = (edit: (s: Service) => Service): Compose => editService(local, TOKEN_READER, edit);
+  const readerService = local.services.find((s) => s.name === TOKEN_READER) as Service;
+  const SECRET = "carries a secret other than as a /run/secrets file or a required reference";
+
+  test.each([
+    {
+      name: "APP_HOST on the reader",
+      local: reader((s) => ({ ...s, environment: [["APP_HOST", { ref: "APP_HOST" }]] })),
+      problem: `${TOKEN_READER}: environment APP_HOST is not as pinned`,
+    },
+    {
+      name: "NODE_TLS_REJECT_UNAUTHORIZED on the reader",
+      local: reader((s) => ({ ...s, environment: [["NODE_TLS_REJECT_UNAUTHORIZED", { literal: "0" }]] })),
+      problem: `${TOKEN_READER}: environment NODE_TLS_REJECT_UNAUTHORIZED is not as pinned`,
+    },
+    {
+      name: "an unlisted env_file on the reader",
+      local: reader((s) => ({ ...s, envFiles: [`${ENV_DIR}/pds.env`] })),
+      problem: `${TOKEN_READER}: env_file is not as pinned`,
+    },
+    {
+      name: "a repeated key on the reader",
+      local: reader((s) => ({
+        ...s,
+        environment: [
+          ["PORT", { literal: "1" }],
+          ["PORT", { literal: "1" }],
+        ],
+      })),
+      problem: `${TOKEN_READER}: environment repeats a key`,
+    },
+    {
+      name: "a literal under a listed word on the reader",
+      local: reader((s) => ({ ...s, environment: [["PLC_DB_PASSWORD", { literal: "literal" }]] })),
+      problem: `${TOKEN_READER}: environment PLC_DB_PASSWORD ${SECRET}`,
+    },
+    {
+      name: "a local-only service with no pin",
+      local: { ...local, services: [...local.services, { ...readerService, name: "seed" }] },
+      problem: "seed has no environment and env_file pin",
+    },
+    {
+      name: "a pin whose service is gone",
+      local: { ...local, services: local.services.filter((s) => s.name !== TOKEN_READER) },
+      problem: `${TOKEN_READER} is pinned but not in the local file`,
+    },
+  ])("a_local_only_service_off_its_pin_is_named: $name", ({ local: changed, problem }) => {
+    expect(drift(dev, changed)).toContain(problem);
+  });
+
+  test("a_secret_in_the_pin_is_refused", () => {
+    // The same predicate holds in the pin as in compose (architecture 12:40Z), so no secret enters this file.
+    expect(pinDrift(readerService, { PLC_DB_PASSWORD: "literal" }, [])).toContain(
+      `${TOKEN_READER}: pin PLC_DB_PASSWORD ${SECRET}`,
+    );
+  });
+
+  test("secret_bearing_values_only_as_files_or_required_references", () => {
+    // Architecture 12:40Z (the record's section "Architecture on verify-910-a686fe0 S3"): the three accepted forms, and
+    // keys outside the predicate. A key is secret-bearing by whole `_`-separated words, never by substring.
+    const accepted: [string, string][] = [
+      ["POSTGRES_PASSWORD_FILE", "/run/secrets/pg_superuser_password"],
+      ["PG_PASSWORD_FILE", "/run/secrets/migrate_pg_password"],
+      ["PLC_DB_PASSWORD", "${PLC_DB_PASSWORD:?set it in unset-dev-env}"],
+      ["DATABASE_URL", "postgres://plc:${PLC_DB_PASSWORD:?set it}@plc-db/plc"],
+      ["PORT", "2582"],
+      ["PDS_DID_PLC_URL", "http://plc:2582"],
+      ["KEYBOARD_LAYOUT", "literal"],
+      ["PASSAGE", "literal"],
+    ];
+    for (const [key, value] of accepted) expect(secretRefusal(key, value), `${key}=${value}`).toBeNull();
+  });
+
+  test.each([
+    // The step's minimum reds.
+    { name: "a literal under a listed word", key: "PLC_DB_PASSWORD", value: "literal" },
+    { name: "a default", key: "PLC_DB_PASSWORD", value: "${PLC_DB_PASSWORD:-x}" },
+    { name: "a bare key", key: "PLC_DB_PASSWORD", value: null },
+    { name: "a userinfo URL with a literal password", key: "DATABASE_URL", value: "postgres://plc:literal@plc-db/plc" },
+    { name: "a *_FILE key outside /run/secrets/", key: "PG_PASSWORD_FILE", value: "/etc/pg_password" },
+    // Each other refused form the ruling names.
+    { name: "a plain reference", key: "PDS_JWT_SECRET", value: "${PDS_JWT_SECRET}" },
+    { name: "a default without the colon", key: "API_TOKEN", value: "${API_TOKEN-x}" },
+    { name: "an alternative", key: "API_TOKEN", value: "${API_TOKEN:+x}" },
+    { name: "an alternative without the colon", key: "API_TOKEN", value: "${API_TOKEN+x}" },
+    { name: "a required reference without a message", key: "API_TOKEN", value: "${API_TOKEN:?}" },
+    { name: "a required reference without the colon", key: "API_TOKEN", value: "${API_TOKEN?set it}" },
+    { name: "a reference nested in the message", key: "API_TOKEN", value: "${API_TOKEN:?$API_TOKEN_HINT}" },
+    { name: "a required reference with a blank message", key: "API_TOKEN", value: "${API_TOKEN:? }" },
+    { name: "an unbraced reference", key: "API_TOKEN", value: "$API_TOKEN" },
+    { name: "a name not in capitals", key: "API_TOKEN", value: "${api_token:?set it}" },
+    { name: "a composite", key: "SIGNING_KEY", value: "prefix-${SIGNING_KEY:?set it}" },
+    { name: "a doubled dollar, which is a literal", key: "SIGNING_KEY", value: "$${SIGNING_KEY:?set it}" },
+    { name: "a userinfo URL without a password part", key: "DATABASE_URL", value: "postgres://plc@plc-db/plc" },
+    {
+      name: "a reference as the user, with no password",
+      key: "UPSTREAM",
+      value: "https://${API_TOKEN:?set it}@plc-db/",
+    },
+    { name: "a userinfo URL whose password defaults", key: "DATABASE_URL", value: "postgres://plc:${P:-x}@plc-db/plc" },
+    { name: "a userinfo URL with two references", key: "DATABASE_URL", value: "postgres://${U:?u}:${P:?p}@plc-db/plc" },
+    {
+      name: "a second userinfo URL with a literal password",
+      key: "DATABASE_URL",
+      value: "postgres://plc:${P:?p}@plc-db/plc?replica=postgres://plc:literal@plc-db-2/plc",
+    },
+    { name: "a userinfo URL under any key", key: "UPSTREAM", value: "https://plc:literal@plc-db/" },
+    { name: "a *_FILE path that climbs out", key: "PG_PASSWORD_FILE", value: "/run/secrets/../pg_password" },
+    { name: "a *_FILE path that is the folder", key: "PG_PASSWORD_FILE", value: "/run/secrets/" },
+    { name: "a *_FILE path with a reference", key: "PG_PASSWORD_FILE", value: "/run/secrets/${PG_SECRET_NAME}" },
+    { name: "a /run/secrets path on a key not *_FILE", key: "PLC_DB_PASSWORD", value: "/run/secrets/plc_db_password" },
+    // A listed word in any case is still the word.
+    { name: "a literal under a lower-case word", key: "plc_db_password", value: "literal" },
+    // What the URL reading must not miss: a reference elsewhere, a question mark in a message, a URL in a message.
+    {
+      name: "a userinfo URL with an unbraced reference",
+      key: "DATABASE_URL",
+      value: "postgres://plc:${PLC_DB_PASSWORD:?set it}@plc-db/$PLC_DB",
+    },
+    {
+      name: "a literal password after a message with a question mark",
+      key: "DATABASE_URL",
+      value: "postgres://${PLC_DB_USER:?who?}:literal@plc-db/plc",
+    },
+    {
+      name: "a userinfo URL in a composite's message",
+      key: "UPSTREAM",
+      value: "x-${X:?postgres://plc:literal@plc-db}",
+    },
+    {
+      name: "a value holding the mask character",
+      key: "DATABASE_URL",
+      value: "postgres://plc:\u0000@plc-db/plc?db=${PLC_DB_PASSWORD:?set it}",
+    },
+  ])("a_secret_bearing_value_is_refused: $name", ({ key, value }) => {
+    expect(secretRefusal(key, value)).toBe(`${key} ${SECRET}`);
   });
 });
 

@@ -13,7 +13,14 @@ import { networkTableProblems, parseNetworkTable, pdsNeighbours } from "./prefli
 import { c9 } from "./preflight/checks/secrets.ts";
 import { switchesProtectionOff } from "./preflight/checks/settings.ts";
 import type { Outcome } from "./preflight/checks/types.ts";
-import { type Compose, parseCompose, parseStrictData, type Service, TOKEN_READER } from "./preflight/compose-parse.ts";
+import {
+  type Compose,
+  type Hardening,
+  parseCompose,
+  parseStrictData,
+  type Service,
+  TOKEN_READER,
+} from "./preflight/compose-parse.ts";
 import { loadInputs } from "./preflight/inputs.ts";
 
 const DEPLOYMENT = import.meta.dirname;
@@ -56,6 +63,22 @@ const nodeBuilt = (s: Service): boolean =>
   NODE_DOCKERFILES.has(join("deployment", s.build.context, s.build.dockerfile).replace(/^\.\.\//, ""));
 /** A Node service: one built from our Node image, or the PDS, which runs Node too (findings F-32 covers both). */
 const runsNode = (s: Service): boolean => nodeBuilt(s) || s.name === "pds";
+
+/** A service's limits, by their Compose keys, as both compose files write them. */
+type LimitRow = { mem_limit: string; cpus: number; pids_limit: number };
+/** The one table, beside networks.dev.json, that pins every service's limits by value in both files (P1.35r I-1). */
+const LIMITS = "limits.dev.json";
+const readLimits = (): Record<string, LimitRow> => JSON.parse(read(LIMITS)) as Record<string, LimitRow>;
+
+/** Each limit of `compose` off the table. Main's rule for now: each limit is present (limitProblems), at any value. */
+function limitsDrift(_table: Record<string, LimitRow>, compose: Compose): string[] {
+  return compose.services.flatMap((s) => limitProblems(s, false));
+}
+/** A copy of `compose` with `name`'s hardening changed. */
+const limited = (compose: Compose, name: string, change: Partial<Hardening>): Compose => ({
+  ...compose,
+  services: compose.services.map((s) => (s.name === name ? { ...s, hardening: { ...s.hardening, ...change } } : s)),
+});
 
 type LockEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
 const readLock = (): Record<string, LockEntry> =>
@@ -260,6 +283,46 @@ describe("compose.dev.yaml (P1.29)", () => {
       hardening: { ...web.hardening, memLimit: "512m" },
     };
     expect(limitProblems(ninety, true)).toEqual(["web's heap is over 75 % of mem_limit"]);
+  });
+
+  test("compose_limits_match_table", () => {
+    // P1.35r I-1: the compose tests checked only that each limit is there, so a raised one let a service starve the
+    // host. Every service's mem_limit, cpus and pids_limit, in both files, is the table's, and every row is used.
+    const table = readLimits();
+    expect(limitsDrift(table, dev()), FILE).toEqual([]);
+    expect(limitsDrift(table, local()), LOCAL).toEqual([]);
+    const services = new Set([...dev().services, ...local().services].map((s) => s.name));
+    expect(Object.keys(table).filter((name) => !services.has(name))).toEqual([]);
+  });
+
+  const { [TOKEN_READER]: _reader, ...withoutReader } = readLimits();
+  test.each([
+    {
+      name: "pids_limit 4096 on the reader",
+      table: readLimits(),
+      compose: limited(local(), TOKEN_READER, { pidsLimit: 4096 }),
+      problem: `${TOKEN_READER}: pids_limit is 4096, ${LIMITS} says 32`,
+    },
+    {
+      name: "mem_limit raised on web",
+      table: readLimits(),
+      compose: limited(dev(), "web", { memLimit: "1g" }),
+      problem: `web: mem_limit is 1g, ${LIMITS} says 512m`,
+    },
+    {
+      name: "cpus removed from edge",
+      table: readLimits(),
+      compose: limited(local(), "edge", { cpus: null }),
+      problem: `edge: cpus is missing, ${LIMITS} says 0.5`,
+    },
+    {
+      name: "a service missing from the table",
+      table: withoutReader,
+      compose: local(),
+      problem: `${TOKEN_READER} has no row in ${LIMITS}`,
+    },
+  ])("a_limit_off_the_table_is_named: $name", ({ table, compose, problem }) => {
+    expect(limitsDrift(table, compose)).toContain(problem);
   });
 
   test("postgres_only_on_internal_networks", () => {
