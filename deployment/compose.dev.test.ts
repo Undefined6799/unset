@@ -519,10 +519,10 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       LOG_ENABLED: "false",
       NODE_OPTIONS: "--max-old-space-size=768",
     });
-    // The local PDS differs only by its PLC and the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1).
+    // The local PDS differs only by the one dev root it trusts (P1.34d items 5 and 11; verify-903 M1). Both publish to
+    // plc.directory (ADR 0023).
     expect(Object.fromEntries(envOf(service(local(), "pds")))).toEqual({
       ...Object.fromEntries(env),
-      PDS_DID_PLC_URL: "http://plc:2582",
       NODE_EXTRA_CA_CERTS: "/etc/unset-dev-trust/root.pem",
     });
   });

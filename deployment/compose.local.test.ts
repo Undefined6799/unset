@@ -44,14 +44,12 @@ const ADDED: Record<string, { mounts?: Mount[]; secrets?: string[]; networks?: s
   edge: { secrets: ["local_tls_cert", "local_tls_key"] },
 };
 /**
- * The environment values the local file may set where dev differs, by service and key (item 11): the PLC URL on pds,
- * the trusted root on pds and web, and `UNSET_ENV` once P1.34z writes `local`. The edge's app-site keys are APP_SITE's.
+ * The environment values the local file may set where dev differs, by service and key (item 11): the trusted root on
+ * pds and web, and `UNSET_ENV` once P1.34z writes `local`. The PLC URL is not among them: both PDSes publish to
+ * plc.directory (ADR 0023). The edge's app-site keys are APP_SITE's.
  */
 const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
-  pds: {
-    PDS_DID_PLC_URL: { literal: "http://plc:2582" },
-    NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" },
-  },
+  pds: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
   web: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
 };
 const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
