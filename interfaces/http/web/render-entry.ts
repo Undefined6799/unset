@@ -23,7 +23,11 @@ export type WebRenderImporter = () => Promise<Partial<WebRender>>;
 const importServerBuild: WebRenderImporter = () => import("@unset/apps-web/server");
 
 /** Every page in `screens`; typed as a record so a page added to apps/web fails typecheck until it is listed here. */
-const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = { login: true, loginContinue: true };
+const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = {
+  login: true,
+  loginContinue: true,
+  signedOut: true,
+};
 
 function hasEveryScreen(screens: unknown): screens is WebRender["screens"] {
   if (typeof screens !== "object" || screens === null) return false;

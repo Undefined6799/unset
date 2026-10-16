@@ -15,7 +15,7 @@ checked: 2026-10-16
 # web
 
 **What it owns.** The screens of unset.sh: the page shell (`src/document.tsx`), the screens under `src/screens/`
-(P2.05: `Login`, `LoginContinue`), and the islands runtime under `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
+(P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`), and the islands runtime under `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
 
 **Entry points.**
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build

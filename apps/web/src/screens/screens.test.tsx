@@ -89,3 +89,14 @@ describe("continue screen", () => {
     expect(page).not.toContain('q="<b>');
   });
 });
+
+describe("signed-out screen", () => {
+  test("signed_out_links_to_the_pds_account_and_sign_in", () => {
+    const page = html(screens.signedOut({ pdsHost: "pds.example" }));
+    expect(page).toContain("You are signed out");
+    expect(page).toContain("our sign-in server; it is the only place you type your password");
+    const links = tags(page, "a").map((a) => a.href);
+    expect(links).toEqual(["https://pds.example/account", "/login"]);
+    expect(page).not.toContain("<script");
+  });
+});

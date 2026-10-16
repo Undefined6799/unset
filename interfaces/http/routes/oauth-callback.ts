@@ -13,7 +13,7 @@ import type { ErrorCode } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import { sessionCookieValue, sessionSetCookie } from "../session-cookie.ts";
-import { clearNonceCookie, nonceFromCookies, parseAppState } from "./app-state.ts";
+import { clearNonceCookie, clearSignedOutCookie, nonceFromCookies, parseAppState } from "./sign-in-state.ts";
 
 export type CallbackDeps = {
   /** infrastructure/pds completeAuthorization over the one OAuth client. */
@@ -82,7 +82,8 @@ export function oauthCallbackRoutes(deps: CallbackDeps): Route[] {
       return deny("login.failed", spent);
     }
     deps.log.info("auth.login_succeeded");
-    return redirect(state.next ?? "/me", [...spent, sessionSetCookie(created.cookieValue, deps.sessionMaxAgeS)]);
+    const cookies = [...spent, clearSignedOutCookie(), sessionSetCookie(created.cookieValue, deps.sessionMaxAgeS)];
+    return redirect(state.next ?? "/me", cookies);
   }
 
   return [

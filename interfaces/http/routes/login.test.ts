@@ -37,7 +37,7 @@ type World = {
 /** The login routes on a kit server, with the network doubles recording what reached them. */
 function setup(world: World = {}) {
   const resolved: string[] = [];
-  const authorized: { input: string; appState: Record<string, unknown> }[] = [];
+  const authorized: { input: string; appState: Record<string, unknown>; prompt?: string }[] = [];
   let nonces = 0;
   const lines: Record<string, unknown>[] = [];
   const log = createLogger({
@@ -68,8 +68,8 @@ function setup(world: World = {}) {
       nonces += 1;
       return NONCE;
     },
-    authorize: async (input, { appState }) => {
-      authorized.push({ input, appState: JSON.parse(appState) });
+    authorize: async (input, { appState, prompt }) => {
+      authorized.push({ input, appState: JSON.parse(appState), ...(prompt ? { prompt } : {}) });
       return world.authorized ?? { ok: true, url: new URL(AS_URL) };
     },
     pdsHost: PDS,
@@ -215,6 +215,14 @@ describe("POST /login", () => {
     // A local stack that allows plain HTTP may continue to it.
     const local = setup({ authorized: insecure, allowHttp: true });
     expect(location(await local.send("/login", { form: "handle=alice" }))).toBe("/login/continue");
+  });
+
+  test("login_prompt_login_after_signout", async () => {
+    // After a sign-out, the server asks for the password again rather than reusing its own session (P2.08).
+    const { send, authorized } = setup();
+    await send("/login", { form: "handle=alice", cookie: "__Host-signed_out=1" });
+    await send("/login", { form: "handle=alice" });
+    expect(authorized.map((a) => a.prompt)).toEqual(["login", undefined]);
   });
 
   test("login_rate_limited", async () => {

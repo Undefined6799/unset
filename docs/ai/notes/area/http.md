@@ -36,7 +36,7 @@ and return path in the sealed appState, then sets `__Host-oauth_nonce` (Lax, 600
 (Strict, 120 s, the authorization URL in base64url) and answers 303 to GET /login/continue, which renders a meta
 refresh to that cookie's URL. Every failure goes back to `/login?error=<code>`. The target never rides in a query, and
 there is no table for it: the cookie can only send a browser where its own POST pointed it.
-`routes/app-state.ts` holds both halves of the binding: the appState shape and the nonce cookie.
+`routes/sign-in-state.ts` holds both halves of the binding: the appState shape and the nonce cookie.
 
 **The callback (P2.06).** `routes/oauth-callback.ts`, the one GET that mutates (P1.07's GET_MUTATION_EXCEPTIONS):
 completeAuthorization, then in order the appState shape, the nonce cookie against the appState (constant time; a
@@ -44,6 +44,12 @@ mismatch keeps the cookie, another tab may own it), the P1.16 consume, the expec
 insufficient grant is revoked), then a P2.03 session in its own transaction, rotating the request's old `__Host-sid`.
 It redirects to the stored `next` or `/me`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
 {code}`), never a DID. Not yet: `app.account` and onboarding, the email read, `invalidateHandle` (later steps).
+
+**Signing out (P2.08).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's session, clears
+`__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`; the callback clears it.
+GET /signed-out points to the PDS account page. The OAuth token set is kept (other browsers share it). Not yet: "sign out
+everywhere" (needs P2.04s's `destroyAllForDid`) and revoking the grant when the last browser signs out (needs a count of
+the DID's sessions from the session store, trusted base).
 
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only

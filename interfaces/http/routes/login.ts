@@ -17,7 +17,7 @@ import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import type { WebRender } from "../web/render-entry.ts";
-import { appStateOf, cookieValue, nonceCookie } from "./app-state.ts";
+import { appStateOf, nonceCookie, signedOutFrom, targetCookie, targetFromCookies } from "./sign-in-state.ts";
 
 export type LoginDeps = {
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
@@ -27,7 +27,10 @@ export type LoginDeps = {
   resolveHandle: (handle: Handle) => Promise<HandleResolution>;
   /** A P1.16 `login.nonce`, valid 10 minutes. */
   issueNonce: (deadline: AbortSignal) => Promise<string>;
-  authorize: (input: string, options: { appState: string; deadline: AbortSignal }) => Promise<AuthorizeResult>;
+  authorize: (
+    input: string,
+    options: { appState: string; prompt?: "login"; deadline: AbortSignal },
+  ) => Promise<AuthorizeResult>;
   /** Our PDS's host: the chooser's authorization server is `https://` and this. */
   pdsHost: string;
   /** What a name typed without a dot is completed with. */
@@ -42,8 +45,6 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
-const TARGET_COOKIE = "__Host-login_target";
-const TARGET_TTL_S = 120;
 const MAX_PREFILL = 253;
 
 /** The one value of `name` in the form, or null when it is missing or repeated. */
@@ -88,10 +89,11 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   }
 
   /** startAuth: the nonce, the authorization, then the two cookies and the continue page. */
-  async function startAuth(account: Account, next: SafePath | null, deadline: AbortSignal): Promise<Response> {
+  async function startAuth(request: Request, account: Account, next: SafePath | null, deadline: AbortSignal) {
     const nonce = await deps.issueNonce(deadline);
     const appState = appStateOf({ nonce, expectedDid: account.expectedDid, next });
-    const result = await deps.authorize(account.input, { appState, deadline });
+    const prompt = signedOutFrom(request.headers.get("cookie")) ? ({ prompt: "login" } as const) : {};
+    const result = await deps.authorize(account.input, { appState, ...prompt, deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
     if (!result.ok) return back(`login.${result.reason}`, next);
     const target = deps.safeHref(result.url.href, schemes);
@@ -99,17 +101,13 @@ export function loginRoutes(deps: LoginDeps): Route[] {
       deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
       return back("login.failed", next);
     }
-    return redirect("/login/continue", [
-      nonceCookie(nonce),
-      `${TARGET_COOKIE}=${Buffer.from(target).toString("base64url")}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${TARGET_TTL_S}`,
-    ]);
+    return redirect("/login/continue", [nonceCookie(nonce), targetCookie(target)]);
   }
 
   /** The target this browser's POST stored, if it is still a link of an allowed kind. */
   function storedTarget(request: Request): SafeHref | null {
-    const encoded = cookieValue(request.headers.get("cookie"), TARGET_COOKIE);
-    if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
-    return deps.safeHref(Buffer.from(encoded, "base64url").toString("utf8"), schemes);
+    const stored = targetFromCookies(request.headers.get("cookie"));
+    return stored === null ? null : deps.safeHref(stored, schemes);
   }
 
   return [
@@ -145,7 +143,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         const next = safeReturnPath(single(form, "next"));
         const account = await chooseAccount(form);
         if (typeof account === "string") return back(account, next);
-        return startAuth(account, next, deadline);
+        return startAuth(request, account, next, deadline);
       },
     }),
     defineRoute({
