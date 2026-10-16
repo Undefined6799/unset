@@ -12,9 +12,13 @@ const missing = () => Promise.reject(Object.assign(new Error("Cannot find module
 test("ssr_loader_fails_startup_when_missing", async () => {
   await expect(loadWebRender(missing)).rejects.toThrow(/did not load; run npm run build/);
   await expect(loadWebRender(async () => ({ renderPage: (() => "") as never }))).rejects.toThrow(
-    /does not export renderPage and islandName/,
+    /does not export renderPage, islandName and screens/,
   );
-  const good = { renderPage: (() => ({ html: "", tooLarge: [] })) as never, islandName: (() => "x") as never };
+  const partial = { renderPage: (() => ({ html: "", tooLarge: [] })) as never, islandName: (() => "x") as never };
+  await expect(loadWebRender(async () => partial)).rejects.toThrow(
+    /does not export renderPage, islandName and screens/,
+  );
+  const good = { ...partial, screens: {} as never };
   await expect(loadWebRender(async () => good)).resolves.toEqual(good);
 });
 
@@ -24,4 +28,5 @@ test("ssr_loader_loads_the_real_build", async () => {
   const render = await loadWebRender();
   expect(render.islandName("src/islands/demo.island.tsx")).toBe("demo");
   expect(typeof render.renderPage).toBe("function");
+  expect(typeof render.screens.login).toBe("function");
 }, 60_000);
