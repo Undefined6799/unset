@@ -8,6 +8,7 @@
     ".": "./index.ts"
   },
   "dependencies": {
+    "@unset/domains-identity": "*",
     "@unset/shared-errors": "*",
     "@unset/shared-log": "*"
   }

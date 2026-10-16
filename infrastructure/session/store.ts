@@ -1,13 +1,15 @@
 // The browser session store (P2.03; plan section 2 rule 7, section 5.3 "Sessions"). A cookie is 32 random bytes in
 // base64url, and app.session keys a session by sha256 of those bytes, so a stolen row is not a cookie. Every expiry
-// is judged by the database's now(), one clock for every replica. create, destroy and setEmailConfirmed run on the
-// client the caller passes (its transaction, so a sign-in commits with the rest of its work); read takes its own
-// connections through `withDb`, outside any transaction the handler holds (a GET handler's is read-only, P1.07).
+// is judged by the database's now(), one clock for every replica. A session lasts only while its DID has a stored
+// OAuth token set (P2.04s). create, destroy, destroyAllForDid and setEmailConfirmed run on the client the caller passes
+// (its transaction, so a sign-in commits with the rest of its work); read takes its own connections through `withDb`,
+// outside any transaction the handler holds (a GET handler's is read-only, P1.07).
 // Like infrastructure/audit, this workspace never imports the driver or infrastructure/postgres (architecture matrix
 // row `infrastructure`): the composition root passes postgres's withClient over the web pool as `withDb`.
 // It moved here from infrastructure/postgres/session/ (P2.03c). The comment in migration 0011 still names the old
 // folder; applied migrations are locked by their checksums (infrastructure/postgres/migrate.ts), so it stays.
 import { createHash, randomBytes } from "node:crypto";
+import type { Did } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import type { Logger } from "@unset/shared-log";
 
@@ -25,7 +27,7 @@ type Db = SessionDb;
 /** Idle and absolute lifetimes, and the least time between two touches, in seconds (interfaces/http config). */
 export type SessionLimits = { readonly idleS: number; readonly absoluteS: number; readonly touchIntervalS: number };
 export type Session = {
-  readonly did: string;
+  readonly did: Did;
   readonly idHash: Buffer;
   readonly createdAt: Date;
   /** P2.11's cache of the PDS's answer; null until checked. */
@@ -39,12 +41,30 @@ export type SessionRequest = {
 };
 /** The request's session, and whether the response must clear the cookie (unknown, malformed or expired). */
 export type SessionRead = { readonly session: Session | null; readonly clearCookie: boolean };
+/**
+ * Why every session of a DID ends: app.end_sessions_for_did's closed list (migration 0014), shared with P3.06. Phase 2
+ * uses user_signout_all (P2.08), underage (P2.12) and auth_dead (P2.07); session.reasons_match_check keeps the two equal.
+ */
+export const END_SESSIONS_REASONS = [
+  "deactivated",
+  "takendown",
+  "suspended",
+  "deleted",
+  "unknown",
+  "mod_suspended",
+  "mod_end_sessions",
+  "user_signout_all",
+  "underage",
+  "auth_dead",
+] as const;
+export type EndSessionsReason = (typeof END_SESSIONS_REASONS)[number];
 
 export type SessionStore = {
-  create(db: Db, did: string, options?: { readonly replacingCookie?: string }): Promise<CreatedSession>;
+  create(db: Db, did: Did, options?: { readonly replacingCookie?: string }): Promise<CreatedSession>;
   read(request: SessionRequest): Promise<SessionRead>;
   destroy(db: Db, idHash: Buffer): Promise<void>;
-  setEmailConfirmed(db: Db, target: Buffer | { readonly did: string }, value: boolean): Promise<void>;
+  destroyAllForDid(tx: Db, did: Did, why: EndSessionsReason): Promise<number>;
+  setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean): Promise<void>;
   sweep(db: Db): Promise<number>;
 };
 export type CreatedSession = { readonly cookieValue: string; readonly expiresAt: Date };
@@ -52,7 +72,6 @@ export type CreatedSession = { readonly cookieValue: string; readonly expiresAt:
 const ID_BYTES = 32;
 /** Canonical unpadded base64url of 32 bytes. */
 const COOKIE_VALUE = /^[A-Za-z0-9_-]{43}$/;
-const UNIQUE_VIOLATION = "23505";
 const NONE: SessionRead = { session: null, clearCookie: false };
 const CLEAR: SessionRead = { session: null, clearCookie: true };
 
@@ -65,41 +84,36 @@ function idHashOf(cookieValue: string): Buffer | null {
   return bytes.length === ID_BYTES && bytes.toString("base64url") === cookieValue ? sha256(bytes) : null;
 }
 
+/** `did` comes from a `types.did` column, which holds only DIDs that parsed when they were written. */
 type SessionRow = {
-  did: string;
+  did: Did;
   created_at: Date;
   email_confirmed: boolean | null;
   expired: boolean;
   touch_due: boolean;
+  has_token_set: boolean;
 };
 
 export function createSessionStore(options: {
   readonly withDb: WithSessionDb;
   readonly limits: SessionLimits;
   readonly log: Logger;
-  readonly random?: (bytes: number) => Buffer;
 }): SessionStore {
-  const { withDb, limits, log, random = randomBytes } = options;
+  const { withDb, limits, log } = options;
   const memo = new WeakMap<object, Promise<SessionRead>>();
 
   /** Rotation first (this browser's previous session dies, whoever it belonged to), then a fresh id. */
-  async function create(db: Db, did: string, { replacingCookie }: { readonly replacingCookie?: string } = {}) {
+  async function create(db: Db, did: Did, { replacingCookie }: { readonly replacingCookie?: string } = {}) {
     const previous = replacingCookie === undefined ? null : idHashOf(replacingCookie);
     if (previous !== null) await destroy(db, previous);
-    // A repeated id is astronomically unlikely (2^-256); one retry with a new id, then the error stands.
-    for (let attempt = 1; ; attempt++) {
-      const id = random(ID_BYTES);
-      try {
-        const { rows } = await db.query<{ expires_at: Date }>(
-          "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) " +
-            "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3)) RETURNING absolute_expires_at AS expires_at",
-          [sha256(id), did, limits.absoluteS],
-        );
-        return { cookieValue: id.toString("base64url"), expiresAt: (rows[0] as { expires_at: Date }).expires_at };
-      } catch (error) {
-        if (attempt > 1 || (error as { code?: unknown }).code !== UNIQUE_VIOLATION) throw error;
-      }
-    }
+    // A repeated id (2^-256) violates the primary key, and the caller's transaction fails closed (P2.03 step 1c).
+    const id = randomBytes(ID_BYTES);
+    const { rows } = await db.query<{ expires_at: Date }>(
+      "INSERT INTO app.session (id_hash, did, created_at, last_seen_at, absolute_expires_at) " +
+        "VALUES ($1, $2, now(), now(), now() + make_interval(secs => $3)) RETURNING absolute_expires_at AS expires_at",
+      [sha256(id), did, limits.absoluteS],
+    );
+    return { cookieValue: id.toString("base64url"), expiresAt: (rows[0] as { expires_at: Date }).expires_at };
   }
 
   /**
@@ -123,20 +137,27 @@ export function createSessionStore(options: {
     // route that needs a session falls back to anonymous.
     const row = await withDb(deadline, async (db) => {
       const found = await lookup(db, idHash);
-      if (found?.expired) await destroy(db, idHash);
+      if (found !== undefined && (found.expired || !found.has_token_set)) await destroy(db, idHash);
       return found;
     }).catch(unavailable);
-    if (row === undefined || row.expired) return CLEAR;
+    if (row === undefined || row.expired || !row.has_token_set) return CLEAR;
     if (row.touch_due) await touch(idHash, deadline);
     const session = { did: row.did, idHash, createdAt: row.created_at, emailConfirmed: row.email_confirmed };
     return { session, clearCookie: false };
   }
 
+  /**
+   * The session row, with whether its DID still has a stored OAuth token set (P2.04s): the library deletes the set when
+   * the grant is dead (refresh refused, revoked, sign out everywhere), and that ends every browser session on it. The
+   * library's own delete hook cannot do this, as it also fires on every sign-in (P2.04 step 7).
+   */
   async function lookup(db: Db, idHash: Buffer): Promise<SessionRow | undefined> {
     const { rows } = await db.query<SessionRow>(
-      "SELECT did, created_at, email_confirmed, " +
-        "now() > absolute_expires_at OR now() > last_seen_at + make_interval(secs => $2) AS expired, " +
-        "now() - last_seen_at > make_interval(secs => $3) AS touch_due FROM app.session WHERE id_hash = $1",
+      "SELECT s.did, s.created_at, s.email_confirmed, " +
+        "now() > s.absolute_expires_at OR now() > s.last_seen_at + make_interval(secs => $2) AS expired, " +
+        "now() - s.last_seen_at > make_interval(secs => $3) AS touch_due, " +
+        "EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did) AS has_token_set " +
+        "FROM app.session s WHERE s.id_hash = $1",
       [idHash, limits.idleS, limits.touchIntervalS],
     );
     return rows[0];
@@ -155,8 +176,17 @@ export function createSessionStore(options: {
     await db.query("DELETE FROM app.session WHERE id_hash = $1", [idHash]);
   }
 
+  /**
+   * Ends every session of `did`, and its token set unless `why` is deactivated, inside the caller's transaction, so
+   * the caller's own change commits with it. The SQL is the definer's only (migration 0014); it returns the count.
+   */
+  async function destroyAllForDid(tx: Db, did: Did, why: EndSessionsReason) {
+    const { rows } = await tx.query<{ ended: number }>("SELECT app.end_sessions_for_did($1, $2) AS ended", [did, why]);
+    return (rows[0] as { ended: number }).ended;
+  }
+
   /** P2.11's cache, for one session or for every session of a DID. */
-  async function setEmailConfirmed(db: Db, target: Buffer | { readonly did: string }, value: boolean) {
+  async function setEmailConfirmed(db: Db, target: Buffer | { readonly did: Did }, value: boolean) {
     const set = "UPDATE app.session SET email_confirmed = $2, email_checked_at = now()";
     if (Buffer.isBuffer(target)) await db.query(`${set} WHERE id_hash = $1`, [target, value]);
     else await db.query(`${set} WHERE did = $1`, [target.did, value]);
@@ -173,7 +203,7 @@ export function createSessionStore(options: {
     return count;
   }
 
-  return { create, read, destroy, setEmailConfirmed, sweep };
+  return { create, read, destroy, destroyAllForDid, setEmailConfirmed, sweep };
 }
 
 function unavailable(error: unknown): never {

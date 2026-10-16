@@ -154,6 +154,9 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.end_sessions_for_did": {
+      "web": ["EXECUTE"]
+    },
     "app.oauth_state": {
       "web": {
         "columns": {

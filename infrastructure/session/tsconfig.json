@@ -1,5 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" },
-  "references": [{ "path": "../../shared/errors" }, { "path": "../../shared/log" }]
+  "references": [
+    { "path": "../../domains/identity" },
+    { "path": "../../shared/errors" },
+    { "path": "../../shared/log" }
+  ]
 }

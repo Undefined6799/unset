@@ -184,7 +184,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 |---|---|---|---|---|
 | V7.1.1 | The user's session inactivity timeout and absolute maximum session lifetime are … | open |  | — |
 | V7.1.2 | The documentation defines how many concurrent (parallel) sessions are allowed for one … | open |  | — |
-| V7.1.3 | All systems that create and manage user sessions as part of a federated identity … | open |  | — |
+| V7.1.3 | All systems that create and manage user sessions as part of a federated identity … | partial | `test:tests/integration/session/store.test.ts#session.no_token_set_ends` | — |
 | V7.2.1 | The application performs all session token verification using a trusted, backend service | open |  | — |
 | V7.2.2 | The application uses either self-contained or reference tokens that are dynamically … | open |  | — |
 | V7.2.3 | If reference tokens are used to represent user sessions, they are unique and generated … | covered | `test:tests/integration/session/store.test.ts#session.create_stores_hash_only`, `test:tests/integration/session/store.test.ts#session.rotation` | P2.03 |
@@ -192,7 +192,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V7.3.1 | There is an inactivity timeout such that re-authentication is enforced according to risk … | partial | `test:tests/integration/session/store.test.ts#session.idle_expiry`, `step:P2.06` | P2.06 |
 | V7.3.2 | There is an absolute maximum session lifetime such that re-authentication is enforced … | partial | `test:tests/integration/session/store.test.ts#session.absolute_expiry`, `step:P2.06` | P2.06 |
 | V7.4.1 | When session termination is triggered (such as logout or expiration), the application … | open | `step:P2.08` | P2.08 |
-| V7.4.2 | The application terminates all active sessions when a user account is disabled or deleted … | open |  | — |
+| V7.4.2 | The application terminates all active sessions when a user account is disabled or deleted … | partial | `test:tests/integration/session/store.test.ts#end_sessions.deletes_did_sessions`, `test:tests/integration/session/store.test.ts#end_sessions.keeps_token_set_when_deactivated`, `step:P3.06` | P3.06 |
 | V7.4.3 | The application gives the option to terminate all other active sessions after a … | open | `step:P2.08` | P2.08 |
 | V7.4.4 | All pages that require authentication have easy and visible access to logout functionality | open | `step:P2.13` | P2.13 |
 | V7.4.5 | Application administrators are able to terminate active sessions for an individual user … | open |  | — |
