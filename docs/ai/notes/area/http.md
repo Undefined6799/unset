@@ -36,6 +36,14 @@ and return path in the sealed appState, then sets `__Host-oauth_nonce` (Lax, 600
 (Strict, 120 s, the authorization URL in base64url) and answers 303 to GET /login/continue, which renders a meta
 refresh to that cookie's URL. Every failure goes back to `/login?error=<code>`. The target never rides in a query, and
 there is no table for it: the cookie can only send a browser where its own POST pointed it.
+`routes/app-state.ts` holds both halves of the binding: the appState shape and the nonce cookie.
+
+**The callback (P2.06).** `routes/oauth-callback.ts`, the one GET that mutates (P1.07's GET_MUTATION_EXCEPTIONS):
+completeAuthorization, then in order the appState shape, the nonce cookie against the appState (constant time; a
+mismatch keeps the cookie, another tab may own it), the P1.16 consume, the expected DID, `grantCovers` (an
+insufficient grant is revoked), then a P2.03 session in its own transaction, rotating the request's old `__Host-sid`.
+It redirects to the stored `next` or `/me`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
+{code}`), never a DID. Not yet: `app.account` and onboarding, the email read, `invalidateHandle` (later steps).
 
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only

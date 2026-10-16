@@ -52,6 +52,11 @@
       "method": "GET",
       "path": "/login/continue",
       "status": 303
+    },
+    {
+      "method": "GET",
+      "path": "/oauth/callback",
+      "status": 303
     }
   ]
 }

@@ -5,11 +5,17 @@
 // pass the source, which only Vitest can compile (it has import.meta.glob and CSS Modules).
 // P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
 // connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
-// the identity network and P1.16's nonces.
+// the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool.
 import { fileURLToPath } from "node:url";
 import { createDidResolver, resolveHandle } from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
-import { authorize, createIdentityNetwork, createOAuthClient, type SavedSession } from "@unset/infrastructure-pds";
+import {
+  authorize,
+  completeAuthorization,
+  createIdentityNetwork,
+  createOAuthClient,
+  type SavedSession,
+} from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
   connectionOf,
@@ -21,8 +27,10 @@ import {
   createSingleUseStore,
   PURPOSES,
   withClient,
+  withTransaction,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
+import { createSessionStore } from "@unset/infrastructure-session";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
@@ -30,6 +38,7 @@ import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { loginRoutes } from "./routes/login.ts";
+import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { loadWebBuild } from "./web/build.ts";
@@ -125,11 +134,32 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     allowHttp: cfg.OAUTH_ALLOW_HTTP,
     log,
   });
+  const sessions = createSessionStore({
+    withDb: (deadline, fn) => withClient(oauth.pool, deadline, fn),
+    limits: {
+      idleS: cfg.SESSION_IDLE_S,
+      absoluteS: cfg.SESSION_ABSOLUTE_S,
+      touchIntervalS: cfg.SESSION_TOUCH_INTERVAL_S,
+    },
+    log,
+  });
+  const callback = oauthCallbackRoutes({
+    complete: (query) => completeAuthorization(oauth.client, query, log),
+    consumeNonce: (nonce, deadline) =>
+      withClient(oauth.pool, deadline, (db) => nonces.consume(db, "login.nonce", nonce)),
+    createSession: (did, replacingCookie, deadline) =>
+      withTransaction(oauth.pool, deadline, (tx) =>
+        sessions.create(tx, did, replacingCookie === null ? {} : { replacingCookie }),
+      ),
+    sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
+    log,
+  });
   const routes = [
     ...prefsRoutes(),
     ...assetsRoutes(build.files),
     ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
     ...login,
+    ...callback,
   ];
   return {
     server: createServer({ config: cfg, routes, policies, log, onClose: oauth.onClose }),

@@ -30,6 +30,11 @@ export const ERROR_CODES = {
   "login.pds_unreachable": { status: 503, public: true },
   "login.failed": { status: 500, public: true },
   "login.expired": { status: 400, public: true },
+  // P2.06, the callback.
+  "login.state_mismatch": { status: 400, public: true },
+  "login.consent_denied": { status: 403, public: true },
+  "login.scope_insufficient": { status: 403, public: true },
+  "login.account_mismatch": { status: 403, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 
