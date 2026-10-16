@@ -21,6 +21,8 @@ checked: 2026-10-16
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build
   manifest in as props. Screens leave through its `screens` object (`screens.login(props)`), never by file, so
   production gets them from the server build like `renderPage`; the render loader refuses a build without it.
+  It also re-exports the kit's `safeHref` for the server (P2.05): plain Node cannot load `@unset/shared-ui`, whose
+  index reaches the `.tsx` components, so `interfaces/http` imports the kit only as types (`prod_entry_reaches_no_tsx`).
 - `src/islands/runtime/bootstrap.ts` is the one browser entry, loaded only on pages that have an island.
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers every CSS Module into the stylesheets each page links). The
