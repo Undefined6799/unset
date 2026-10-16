@@ -29,3 +29,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0019](0019-verified-agent-merges.md) | Verified agent merges: a verifier session merges checked agent PRs (P0.15) | Accepted on merge (2026-10-12) |
 | [0020](0020-permanent-choices.md) | Permanent choices: Matrix server name, Tailnet Lock custody, permission set NSID (P1.32) | Accepted on merge of #753 (the admin RP id gets its own ADR) |
 | [0021](0021-atproto-oauth-client.md) | @atproto/oauth-client-node as the OAuth client (P2.04) | Proposed (awaiting Alex) |
+| [0022](0022-web-egress-and-shared-plc.md) | web gets its own egress network; we use the shared PLC (P2.05e) | Proposed (awaiting Alex) |

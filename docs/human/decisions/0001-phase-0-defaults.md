@@ -426,3 +426,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **ADR 0019 landing (2026-10-12):** Alex merged ADR 0019 in #607 at 04:23:21Z with its status still proposed; the
   follow-up pull request set it to accepted and carried his CLAUDE.md Merging line. Agent merges under ADR 0019 begin
   only once that follow-up is on main.
+- **Shared PLC and web egress (Alex, 2026-10-16, in the sign-in thread; own record:
+  [0022](0022-web-egress-and-shared-plc.md)):** we host no PLC directory; `web` reads DID documents from the shared
+  `plc.directory` in every environment, and P1.34v, P1.34y and P1.34z are dropped. `web` gets its own non-internal
+  network, `web_egress`, which no other service joins, with net-guard as its only way out. It replaces the "web has no
+  way out" ruling (architecture 02:05Z, option C) for `web` only. Step P2.05e.
