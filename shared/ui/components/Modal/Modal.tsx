@@ -3,9 +3,9 @@
 // <dialog> stays closed, so it is neither shown nor read. The trigger is the modal island (P1.24j, ModalTrigger.tsx),
 // which opens it with showModal(), bringing the focus trap, Escape and the backdrop from the platform, and returns
 // focus to the trigger.
+import { IslandSlot } from "@unset/shared-islands";
 import { type ReactNode, useId } from "react";
 import modal from "../../islands/modal.island.tsx";
-import { IslandSlot } from "../../islands/slot.ts";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import styles from "./Modal.module.css";

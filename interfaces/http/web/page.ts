@@ -2,8 +2,8 @@
 // build go to apps/web's render entry as props, and the response carries the headers documentPrefs chose (app pages
 // private and varying on Cookie; public pages neither, so their bytes never depend on a cookie).
 import type { RouteGroup } from "@unset/shared-http";
+import type { IslandDefinition } from "@unset/shared-islands";
 import type { Logger } from "@unset/shared-log";
-import type { IslandDefinition } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import { documentPrefs } from "../prefs/theme.ts";
 import type { WebBuild } from "./build.ts";

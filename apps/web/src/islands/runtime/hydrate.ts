@@ -1,7 +1,7 @@
 // Client side of the islands (P1.23; plan §5.1 and the book's bootstrap algorithm): hydrate each [data-island] from
 // its JSON props. Any failure leaves that island as its server markup and never blocks another; nothing is reported
 // anywhere but the console (plan §6: no real-user monitoring).
-import { type IslandDefinition, type IslandProps, readProps } from "@unset/shared-ui";
+import { type IslandDefinition, type IslandProps, readProps } from "@unset/shared-islands";
 import { createElement, type FunctionComponent } from "react";
 import type { hydrateRoot } from "react-dom/client";
 

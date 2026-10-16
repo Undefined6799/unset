@@ -31,11 +31,11 @@ including the confirm box for sign-out everywhere), and the islands runtime unde
   with `scripts/ui/css-scope.ts`, so server markup matches the client selectors.
 
 **How data flows.** Request → `interfaces/http` → `render.tsx` props → server-rendered HTML. An island's props
-travel as a JSON script (`shared/ui/islands/props.ts`) and are checked again in the browser before hydration. A
+travel as a JSON script from [[islands]] and are checked again in the browser before hydration. A
 failed island stays as its server markup and only logs to the console.
 
 **Rules worth knowing.**
-- Islands may import only `shared/ui` and `react/jsx-runtime` (P1.23q's island-import-boundary).
+- Islands may import `shared/ui`, `shared/islands` and `react/jsx-runtime` (island-import-boundary, P1.23q, P1.25o).
 - Island budgets: 15 KB each and 75 KB in total, gzipped (P1.23q).
 - Every `*.island.tsx` under `src/islands/` or `shared/ui/islands/` must keep its own lazy chunk: a dynamic entry
   that no entry reaches through static `imports`. `scripts/budgets/island.ts` refuses otherwise before the size gate,

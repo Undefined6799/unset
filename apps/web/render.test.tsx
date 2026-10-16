@@ -1,5 +1,5 @@
 // Server render of pages and islands (P1.23's Done-when list), through the render entry interfaces/http calls.
-import { defineIsland, type IslandDefinition, IslandSlot, type JsonValue } from "@unset/shared-ui";
+import { defineIsland, type IslandDefinition, IslandSlot, type JsonValue } from "@unset/shared-islands";
 import { describe, expect, test } from "vitest";
 import {
   type Assets,

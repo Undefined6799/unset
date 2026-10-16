@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The bootstrap's isolation (P1.23; the Playwright pair bootstrap_isolates_failure and csp_no_violations runs in
 // P1.26 on a production build): one island failing to load, read or validate never stops another from hydrating.
-import { defineIsland, type IslandDefinition } from "@unset/shared-ui";
+import { defineIsland, type IslandDefinition } from "@unset/shared-islands";
 import { act } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";

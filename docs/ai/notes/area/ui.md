@@ -3,7 +3,7 @@ id: ui
 type: area
 status: current
 areas: ["[[ui]]"]
-summary: "Hub for shared/ui: design tokens, fonts, icons, the kit components, island helpers and safeHref."
+summary: "Hub for shared/ui: design tokens, fonts, icons, the kit components and safeHref."
 code: [shared/ui/index.ts]
 sources: []
 importance: normal
@@ -29,14 +29,12 @@ checked: 2026-10-16
   They render on the server with no JS; field parts shared by Input, Textarea, Select, Checkbox and RadioGroup are in
   `components/Input/field.tsx`. `css-modules.d.ts` types the class maps. `showcase/` renders every built component
   for P1.26's axe and target-size checks. `index.ts` exports only the four the first screens use (Button, Callout,
-  Input, Link; P2.05). The boot chunk imports the index (`readProps`), which once pulled the kit into boot (P1.25h;
-  architecture record 2026-10-07-p125h-boot-chunk.md); measured at P2.05, rolldown drops the unused re-exports: no
-  component code in boot, island JS 75,387 gzip bytes against 75,446 before. Re-measure with
-  `scripts/budgets/island.ts` before exporting more.
-- `islands/`: what an island file exports, the props serialiser, `IslandSlot` (how a kit component places an island)
-  and the kit's `*.island.tsx` files; each island's component sits beside its kit component. `src/islands/readProps.ts`
-  reads props in the browser. P1.25i copied define, props, readProps and slot into [[islands]] (`shared/islands/`).
-  These originals still ship; importers move in P1.25p.
+  Input, Link; P2.05). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
+  after an earlier re-export pulled the kit into boot (P1.25h; architecture record 2026-10-07-p125h-boot-chunk.md).
+  Re-measure with `scripts/budgets/island.ts` before exporting more components.
+- `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,
+  the props serialiser and the browser reader are [[islands]] (`@unset/shared-islands`); this index does not
+  re-export them. `islands/props.ts` and `src/islands/readProps.ts` stay until P1.25e.
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
