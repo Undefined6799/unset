@@ -42,7 +42,7 @@ describe("logger hardening", () => {
   });
 
   test.each([
-    ["did:plc", "user did:plc:ewvi7nxzyoun6zhxrhs64oiz"],
+    ["did:plc", "user did:plc:eeeeeeeeeeeeeeeeeeeeeeee"],
     ["did:web", "user did:web:alice.example.com"],
     ["ipv4 next to a word", "client_10.0.0.1"],
     ["ipv4 after a letter", "v192.168.1.1x"],
@@ -66,7 +66,7 @@ describe("logger hardening", () => {
   test("logger_route_rejects_raw_paths", () => {
     const { log, records } = capture();
     const routes = [
-      "/@alice.bsky.social",
+      "/@alice.example.com",
       "/profile/did:plc:abc",
       "/u/10.0.0.1",
       `/reset/${"a1".repeat(20)}`,

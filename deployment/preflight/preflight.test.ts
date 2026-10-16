@@ -14,6 +14,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -23,8 +24,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { pdsNeighbours } from "./checks/networks.ts";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
-import { type Deps, preflight, type Run } from "./index.ts";
+import { type Deps, preflight, printable, type Run } from "./index.ts";
+import { loadInputs } from "./inputs.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes: number[]): string {
@@ -78,12 +81,15 @@ services:
   web:
     image: ${WEB}
     user: "65532:65532"
+    networks: [back]
     secrets: [db_password]
     environment:
       FINGERPRINT_CHECK: arachnid
 secrets:
   db_password:
     file: ../../unset-dev-secrets/db_password
+networks:
+  back: {}
 `;
 const LOCK = {
   edge: { ref: EDGE, origin: "first-party", verify: "cosign-key" },
@@ -91,6 +97,7 @@ const LOCK = {
   web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
 };
 const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
+// The dev PDS's own handle domain (0x40.space): the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".0x40.space" };
 const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"].concat([
   "C13",
@@ -125,8 +132,14 @@ type Stack = {
   /** Extra files under the root, by repository-relative path (Dockerfiles a build names, P1.30y). */
   files?: Record<string, string>;
 };
-/** The all-good stack's table: every service on Compose's implicit default network. */
-const TABLE = { default: { internal: false, members: ["edge", "pds", "web"] } };
+/**
+ * The all-good stack's table: the edge and the PDS on Compose's implicit default network, and web on its own, since only
+ * the edge may share a network with the PDS (architecture 2026-10-15 02:05Z, option C point 4).
+ */
+const TABLE = {
+  default: { internal: false, members: ["edge", "pds"] },
+  back: { internal: false, members: ["web"] },
+};
 const dirs: string[] = [];
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
@@ -136,6 +149,8 @@ afterAll(() => {
 const secretsOf = (root: string) => join(dirname(root), "unset-dev-secrets");
 /** The folder of the env files Compose reads: `unset-dev-env` beside the checkout. */
 const envOf = (root: string) => join(dirname(root), "unset-dev-env");
+/** The dev root CA's key folder: `unset-dev-ca` beside the checkout (P1.33w). */
+const devCaOf = (root: string) => join(dirname(root), "unset-dev-ca");
 
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
@@ -298,14 +313,15 @@ describe("preflight", () => {
   });
 
   test("c2_image_not_ours_or_unlocked_fails", async () => {
-    // Not the lock's edge ref, so C18 fails too (P1.30w), and C25, because the edge adds a capability (P1.30x).
+    // Not the lock's edge ref, so C18 fails too (P1.30w), C25, because the edge adds a capability (P1.30x), and C17,
+    // because a service that is not the edge shares a network with the PDS (P1.35o).
     for (const image of [
       `docker.io/library/caddy@${digest("a")}`,
       "ghcr.io/undefined6799/edge:latest",
       `ghcr.io/undefined6799/edge@${digest("c")}`,
     ]) {
       const result = await check({ compose: COMPOSE.replace(EDGE, image) });
-      expect(failed(result.lines), image).toEqual(["C2", "C18", "C25"]);
+      expect(failed(result.lines), image).toEqual(["C2", "C17", "C18", "C25"]);
       expect(result.code, image).toBe(1);
     }
   });
@@ -313,13 +329,13 @@ describe("preflight", () => {
   test("missing_input_fails_check_not_run", async () => {
     const result = await check({ lock: null });
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);
-    // C18 reads the lock's edge ref (P1.30w), and C25 does for the edge's cap_add (P1.30x), so both fail closed with
-    // the lock too, and without the edge entry alone.
-    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C18", "C25"]);
+    // C18 reads the lock's edge ref (P1.30w), C25 does for the edge's cap_add (P1.30x), and C17 to know the edge beside
+    // the PDS (P1.35o), so all three fail closed without the lock, and without the edge entry alone.
+    expect(failed(result.lines)).toEqual(["C2", "C3", "C4", "C5", "C17", "C18", "C25"]);
     expect(result.code).toBe(1);
     const { edge: _, ...noEdge } = LOCK;
     const unlisted = (await check({ lock: noEdge })).lines;
-    expect(failed(unlisted)).toEqual(["C2", "C18", "C25"]);
+    expect(failed(unlisted)).toEqual(["C2", "C17", "C18", "C25"]);
     expect(unlisted).toContain("FAIL C18 input missing: the lock's edge entry");
   });
 
@@ -677,6 +693,106 @@ describe("preflight", () => {
     expect(twice.lines).toContain(`FAIL C9 ${secret(hard.root)} has more than one hard link`);
   });
 
+  // P1.33w, P1.34d item 6 (record 2026-10-12-p134c-p134d-local-dev-root-ca, point 6): nothing ever binds the dev root
+  // CA's key folder, `unset-dev-ca` beside the checkout, whether it exists yet or not.
+  test("c9_bind_mount_reaching_dev_ca_fails", async () => {
+    const binding = (source: string) =>
+      COMPOSE.replace(
+        "    env_file: ../../unset-dev-env/pds.env",
+        `    env_file: ../../unset-dev-env/pds.env\n    volumes:\n      - ${source}:/srv:ro`,
+      );
+    const reaches = "FAIL C9 pds binds a path that reaches the dev CA folder";
+    const bind = async (source: string, setUp: (root: string) => void = () => undefined) => {
+      const s = stack({ compose: binding(source) });
+      setUp(s.root);
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    const made = (root: string) => {
+      mkdirSync(devCaOf(root), { mode: 0o700 });
+      writeFileSync(join(devCaOf(root), "root.key"), "fixture\n", { mode: 0o400 });
+    };
+    for (const source of ["../../unset-dev-ca", "../../unset-dev-ca/root.key", "../../unset-dev-ca/newdir"]) {
+      expect((await bind(source, made)).lines, source).toContain(reaches);
+    }
+    // Before the folder exists: Compose would create it as root, and the root key would land in a bound folder. A child
+    // of the missing folder too.
+    expect((await bind("../../unset-dev-ca")).lines).toContain(reaches);
+    expect((await bind("../../unset-dev-ca/newdir")).lines).toContain(reaches);
+    // A parent of the folder, with no secrets folder or env file that would be refused first.
+    const bare = (source: string) =>
+      binding(source)
+        .replace("    env_file: ../../unset-dev-env/pds.env\n", "")
+        .replace("    secrets: [db_password]\n", "")
+        .replace("secrets:\n  db_password:\n    file: ../../unset-dev-secrets/db_password\n", "");
+    for (const made of [false, true]) {
+      const s = stack({ compose: bare("../..") });
+      if (made) mkdirSync(devCaOf(s.root), { mode: 0o700 });
+      const parent = await preflight(["--env", "prod", "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+      });
+      expect(
+        parent.lines.filter((line) => / C9 /.test(line)),
+        String(made),
+      ).toEqual([reaches]);
+    }
+    // The folder itself a link to another place: a bind of that place reaches it by its real path.
+    const moved = (root: string) => {
+      mkdirSync(join(dirname(root), "store/ca"), { recursive: true, mode: 0o700 });
+      chmodSync(join(dirname(root), "store"), 0o755);
+      symlinkSync("store/ca", devCaOf(root));
+    };
+    const movedLines = (await bind("../../store", moved)).lines;
+    expect(movedLines).toContain(reaches);
+    // And C26 refuses the folder itself: no dev CA folder, real or a link, belongs on a prod host (verify-887 N5).
+    expect(movedLines).toContain("FAIL C26 dev CA folder present on a prod host");
+    // A link in the project that resolves into it.
+    const linked = (root: string) => {
+      made(root);
+      symlinkSync(devCaOf(root), join(root, "deployment/alias"));
+    };
+    expect((await bind("./alias", linked)).lines).toContain(reaches);
+    // A second name no link explains (a host bind mount), by (dev, ino).
+    const s = stack({ compose: binding("/srv/alias") });
+    made(s.root);
+    const folder = devCaOf(s.root);
+    const alias = await preflight(["--env", "prod", "--compose", s.file], {
+      root: s.root,
+      run: fakeRun().run,
+      ...fakeFs(s.root),
+      realpath: (path) => path,
+      stat: (path) =>
+        path === "/srv/alias" ? statSync(folder) : path.startsWith(dirname(folder)) ? statOrNull(path) : null,
+    });
+    expect(alias.lines).toContain(reaches);
+    // A sibling whose name only starts with the folder's name is not inside it.
+    const old = await bind("../../unset-dev-ca-old", (root) => {
+      mkdirSync(`${devCaOf(root)}-old`);
+      chmodSync(`${devCaOf(root)}-old`, 0o755);
+    });
+    expect(failed(old.lines)).toEqual([]);
+  });
+
+  // P1.33w (verify-861 S1): a file secret or env file in the dev CA folder is bind-mounted or read like any other, so
+  // the folder is refused there too, whoever owns the file.
+  test("c9_secret_or_env_file_in_dev_ca_fails", async () => {
+    const inCa = "FAIL C9 a secret or env file is in the dev CA folder";
+    const run = async (compose: string, file: string) => {
+      const s = stack({ compose });
+      mkdirSync(devCaOf(s.root), { mode: 0o700 });
+      writeFileSync(join(devCaOf(s.root), file), "fixture=1\n", { mode: 0o400 });
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    const secret = await run(
+      COMPOSE.replace("../../unset-dev-secrets/db_password", "../../unset-dev-ca/root.key"),
+      "root.key",
+    );
+    expect(secret.lines.filter((line) => / C9 /.test(line))).toEqual([inCa]);
+    const env = await run(COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-ca/pds.env"), "pds.env");
+    expect(env.lines.filter((line) => / C9 /.test(line))).toEqual([inCa]);
+  });
+
   // P1.27a (architecture, Amendment 2): secrets reach containers only through `secrets:`. A bind mount whose real
   // source is the secrets folder, lies inside it, or contains it would hand the files over with no owner check.
   test("c9_bind_mount_reaching_secrets_fails", async () => {
@@ -787,7 +903,7 @@ describe("preflight", () => {
     // A second name for the folder that no link explains (a host bind mount): matched by (dev, ino), both ways.
     const aliased = stack({ compose: binding("/srv/alias") });
     const folder = secretsOf(aliased.root);
-    const asFolder = (path: string) => statSync(path === "/srv/alias" ? folder : path);
+    const asFolder = (path: string) => statOrNull(path === "/srv/alias" ? folder : path);
     const alias = await preflight(["--env", "prod", "--compose", aliased.file], {
       root: aliased.root,
       run: fakeRun().run,
@@ -813,7 +929,7 @@ describe("preflight", () => {
         realpath: (path) => path,
         stat: (path) => {
           const to = path in named ? named[path] : path;
-          return to === null || to === undefined ? null : statSync(to);
+          return to === null || to === undefined ? null : statOrNull(to);
         },
       });
     };
@@ -1461,6 +1577,8 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   }
 
   test("c15_subdomain_entry_refused", async () => {
+    // About our own suffix: C15 refuses handle domains under the profile domain (0x40.me), so the test needs it. The
+    // label is a one-letter placeholder (P1.35i), reserved when handle registration lands (P2.09).
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".pds.example.test,x.0x40.me" } });
     await expectOnly("C15", { pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".x.0x40.me" } });
   });
@@ -1560,15 +1678,15 @@ describe("preflight C17 (P1.30t)", () => {
   // Two declared networks and the implicit default, in both service forms (compose-spec 05-services.md "networks").
   const NETWORKED = COMPOSE.replace(
     '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
-    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]\n      inner:',
+    '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks:\n      front:\n        priority: 1\n      inner:',
   )
     .replace(
       "    env_file: ../../unset-dev-env/pds.env",
       "    env_file: ../../unset-dev-env/pds.env\n    networks: [inner]",
     )
-    .replace("\nsecrets:", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\nsecrets:");
+    .replace("\nnetworks:\n", "\nnetworks:\n  front: {}\n  inner:\n    internal: true\n");
   const NETWORKED_TABLE = {
-    default: { internal: false, members: ["web"] },
+    back: { internal: false, members: ["web"] },
     front: { internal: false, members: ["edge"] },
     inner: { internal: true, members: ["edge", "pds"] },
   };
@@ -1589,26 +1707,51 @@ describe("preflight C17 (P1.30t)", () => {
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]',
           '    ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]\n    networks: [default, pds_net]',
         )
-        .replace(`    image: ${WEB}`, `    image: ${WEB}\n    networks: ${webNetworks}`)
-        .replace("\nsecrets:", "\nnetworks:\n  pds_net:\n    internal: true\nsecrets:");
+        .replace("    networks: [back]", `    networks: ${webNetworks}`)
+        .replace("\nnetworks:\n", "\nnetworks:\n  pds_net:\n    internal: true\n");
     const table = {
       default: { internal: false, members: ["edge", "web"] },
+      back: { internal: false, members: [] },
       pds_net: { internal: true, members: ["edge", "pds"] },
     };
     expect(failed((await check({ compose: withPdsNetwork("[default]"), networks: table })).lines)).toEqual([]);
+    // The table cannot admit it either: only the edge may share a network with the PDS (option C point 4).
     expect(await expectOnly("C17", { compose: withPdsNetwork("[default, pds_net]"), networks: table })).toBe(
-      "FAIL C17 web is on pds_net, the table says not",
+      "FAIL C17 web shares a network with the pds; web is on pds_net, the table says not",
+    );
+    const admitted = { ...table, pds_net: { internal: true, members: ["edge", "pds", "web"] } };
+    expect(await expectOnly("C17", { compose: withPdsNetwork("[default, pds_net]"), networks: admitted })).toBe(
+      "FAIL C17 web shares a network with the pds",
+    );
+  });
+
+  test("c17_neighbours_are_known_by_image", async () => {
+    // Architecture 2026-10-15 03:05Z, F3: a PDS and the edge are known by the image they run, never by name alone.
+    const c17 = async (compose: string, networks: object = TABLE) =>
+      (await check({ compose, networks })).lines.find((line) => / C17 /.test(line));
+    const beside = (name: string, image: string) =>
+      COMPOSE.replace("  web:\n", `  ${name}:\n    image: ${image}\n  web:\n`);
+    const withMember = (name: string) => ({ ...TABLE, default: { internal: false, members: ["edge", "pds", name] } });
+    // A second service running the PDS image, under another name, is a second PDS.
+    expect(await c17(beside("relay", PDS), withMember("relay"))).toBe("FAIL C17 pds and relay both run the pds");
+    // A service named edge that runs another image is no edge.
+    expect(await c17(COMPOSE.replace(`    image: ${EDGE}\n`, `    image: ${WEB}\n`))).toBe(
+      "FAIL C17 edge shares a network with the pds",
+    );
+    // Nor is a service whose name merely starts with edge (verify-895 N5).
+    expect(await c17(beside("edge-proxy", WEB), withMember("edge-proxy"))).toBe(
+      "FAIL C17 edge-proxy shares a network with the pds",
     );
   });
 
   test("c17_default_network_counted", async () => {
     // A service with no networks key joins `default`, so a table without it, or without one of its members, fails.
     await expectOnly("C17", { networks: {} });
-    await expectOnly("C17", { networks: { default: { internal: false, members: ["edge", "pds"] } } });
+    await expectOnly("C17", { networks: { ...TABLE, default: { internal: false, members: ["edge"] } } });
     // A top-level networks.default changes that network's settings.
-    const internal = COMPOSE.replace("\nsecrets:", "\nnetworks:\n  default:\n    internal: true\nsecrets:");
+    const internal = COMPOSE.replace("\nnetworks:\n", "\nnetworks:\n  default:\n    internal: true\n");
     await expectOnly("C17", { compose: internal });
-    const table = { default: { internal: true, members: ["edge", "pds", "web"] } };
+    const table = { ...TABLE, default: { internal: true, members: ["edge", "pds"] } };
     expect(failed((await check({ compose: internal, networks: table })).lines)).toEqual([]);
   });
 
@@ -1617,15 +1760,12 @@ describe("preflight C17 (P1.30t)", () => {
     const outer = { ...NETWORKED_TABLE, inner: { internal: false, members: ["edge", "pds"] } };
     expect(await expectOnly("C17", { compose: NETWORKED, networks: outer })).toContain("inner: internal differs");
     // An attachment key outside the four the subset reads, an empty list, and a network no file defines are refused.
-    const mac = NETWORKED.replace(
-      '        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]',
-      "        mac_address: 02:42:ac:11:00:02",
-    );
+    const mac = NETWORKED.replace("        priority: 1", "        mac_address: 02:42:ac:11:00:02");
     await cannotRun({ compose: mac, networks: NETWORKED_TABLE }, /mac_address/);
     const empty = NETWORKED.replace("networks: [inner]", "networks: []");
     await cannotRun({ compose: empty, networks: NETWORKED_TABLE }, /empty/);
-    const undefinedNetwork = NETWORKED.replace("networks: [inner]", "networks: [back]");
-    await cannotRun({ compose: undefinedNetwork, networks: NETWORKED_TABLE }, /network back is not defined/);
+    const undefinedNetwork = NETWORKED.replace("networks: [inner]", "networks: [gone]");
+    await cannotRun({ compose: undefinedNetwork, networks: NETWORKED_TABLE }, /network gone is not defined/);
   });
 
   test("c17_external_network_refused", async () => {
@@ -1674,6 +1814,8 @@ describe("preflight C17 (P1.30t)", () => {
     const variants: [string, string][] = [
       ["pds-token-reader-2", unlogged(reader.replace("  pds-token-reader:", "  pds-token-reader-2:"))],
       ["pds-token", unlogged(reader.replace("  pds-token-reader:", "  pds-token:"))],
+      // verify-876 N3: another name ending in -reader is not the reader.
+      ["pds-email-reader", unlogged(reader.replace("  pds-token-reader:", "  pds-email-reader:"))],
       // Case counts too: the parser takes any service name as written.
       ["PDS-Token-Reader", unlogged(reader.replace("  pds-token-reader:", "  PDS-Token-Reader:"))],
       ["pds-token-reader", reader.replace("    profiles: [tools]\n", "")],
@@ -1693,6 +1835,19 @@ describe("preflight C17 (P1.30t)", () => {
     expect(await expectOnly("C17", { compose: NETWORKED, networks: extra })).toContain("web is not on front");
     const fewer = { ...NETWORKED_TABLE, inner: { internal: true, members: ["edge"] } };
     expect(await expectOnly("C17", { compose: NETWORKED, networks: fewer })).toContain("pds is on inner");
+  });
+
+  test("c17_local_only_networks_refused_outside_local", async () => {
+    // Architecture 2026-10-15 02:32Z: a PLC network belongs to the local stack alone, so dev and prod refuse one even
+    // when their table lists it; under local, one the local-only list does not name is refused by the table.
+    const plc = (compose: string) =>
+      compose.replace("    networks: [back]", "    networks: [plc_web]").replace("  back: {}", "  plc_web: {}");
+    const table = { default: TABLE.default, plc_web: { internal: false, members: ["web"] } };
+    expect(await expectOnly("C17", { compose: plc(COMPOSE), networks: table })).toBe(
+      "FAIL C17 network plc_web is local only",
+    );
+    const dev = await check({ compose: plc(DEV), pdsEnv: DEV_ENV, networks: table }, "dev");
+    expect(dev.lines).toContain("FAIL C17 network plc_web is local only");
   });
 
   test("c17_table_duplicate_key_refused", async () => {
@@ -1757,9 +1912,10 @@ describe("preflight C25 (P1.30x)", () => {
 
   test("c25_edge_image_built_from_another_dockerfile_fails", async () => {
     const compose = built("edge", EDGE, "deployment/images/node-app.Dockerfile");
-    expect(await expectOnly("C25", { compose, files: DOCKERFILES })).toBe(
-      "FAIL C25 edge adds a capability but its image and build name different images",
-    );
+    const result = await check({ compose, files: DOCKERFILES });
+    // A mismatched edge is no edge, so C17 also refuses it beside the PDS (P1.35o, architecture 03:05Z F3).
+    expect(failed(result.lines)).toEqual(["C17", "C25"]);
+    expect(result.lines).toContain("FAIL C25 edge adds a capability but its image and build name different images");
   });
 
   test("c25_other_image_built_from_the_edge_dockerfile_fails", async () => {
@@ -1888,6 +2044,41 @@ describe("preflight C26 and C27 (P1.30y)", () => {
         dockerfile,
       ).toBe("FAIL C26 web builds an image whose name another Dockerfile also takes");
     }
+  });
+
+  // P1.33w, P1.34d item 6 (record 2026-10-12-p134c-p134d-local-dev-root-ca, point 6): the dev root CA's key folder,
+  // beside the checkout like the secrets folder, is never sent to the daemon either.
+  test("c26_build_context_reaching_dev_ca_fails", async () => {
+    const reaches = "FAIL C26 web builds from a context that reaches the dev CA folder";
+    const run = async (context: string, dockerfile: string, setUp: (root: string) => void = () => undefined) => {
+      const s = stack({ compose: webBuilds(context, dockerfile), files: DOCKERFILES });
+      mkdirSync(devCaOf(s.root), { mode: 0o700 });
+      setUp(s.root);
+      return preflight(["--env", "prod", "--compose", s.file], { root: s.root, run: fakeRun().run, ...fakeFs(s.root) });
+    };
+    expect((await run("../../unset-dev-ca", "../repo/deployment/images/node-app.Dockerfile")).lines).toContain(reaches);
+    const within = (root: string) => mkdirSync(join(devCaOf(root), "sub"), { mode: 0o700 });
+    expect(
+      (await run("../../unset-dev-ca/sub", "../../repo/deployment/images/node-app.Dockerfile", within)).lines,
+    ).toContain(reaches);
+    // Reached only through a link to the folder.
+    const link = (root: string) => void symlinkSync(devCaOf(root), join(dirname(root), "calink"));
+    expect((await run("../../calink", "../repo/deployment/images/node-app.Dockerfile", link)).lines).toContain(reaches);
+    // Before the folder exists too: a context that names it would send whatever lands there later.
+    const s = stack({
+      compose: webBuilds("../../unset-dev-ca", "../repo/deployment/images/node-app.Dockerfile"),
+      files: DOCKERFILES,
+    });
+    const missingFolder = await preflight(["--env", "prod", "--compose", s.file], {
+      root: s.root,
+      run: fakeRun().run,
+      ...fakeFs(s.root),
+    });
+    expect(missingFolder.lines).toContain(reaches);
+    // The usual root context does not reach it: the folder sits beside the checkout, not in it. Only P1.35a's rule that
+    // a prod host has no dev CA folder at all refuses.
+    const usual = (await run("..", "deployment/images/node-app.Dockerfile")).lines;
+    expect(usual.filter((line) => / C26 /.test(line))).toEqual(["FAIL C26 dev CA folder present on a prod host"]);
   });
 
   // P1.27u (architecture record 2026-10-12-p127u-bind-ancestors-and-build-context, (b)): a build context is sent to the
@@ -2240,14 +2431,14 @@ describe("preflight --env local (P1.27l)", () => {
       dev: PASSED,
       "no lock": NO_LOCK,
       "dev no lock": NO_LOCK,
-      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       unsigned: [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       platform: [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
-      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
-      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
+      "dev build only": ["FAIL C2 web image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       "no key": [PASSED[0], ...NO_KEY, PASSED[3]],
       "dev no key": [PASSED[0], ...NO_KEY, PASSED[3]],
-      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/… by digest", ...PASSED.slice(1)],
+      "dev not ours": ["FAIL C2 edge image is not ghcr.io/undefined6799/... by digest", ...PASSED.slice(1)],
       "dev unsigned": [PASSED[0], "FAIL C3 edge: signature does not verify: bad", ...PASSED.slice(2)],
       "prod platform": [...PASSED.slice(0, 3), "FAIL C5 edge is not a multi-arch index"],
     });
@@ -2273,7 +2464,8 @@ services:
     ports: ["127.0.0.1:80:80", "127.0.0.1:443:443"]
     secrets: [local_tls_cert, local_tls_key]
     volumes:
-      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro
+      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
+      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
       - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
     environment:
       PDS_HOST: pds.localhost
@@ -2291,7 +2483,10 @@ services:
       context: ..
       dockerfile: deployment/images/node-app.Dockerfile
     user: "65532:65532"
+    networks: [back]
     secrets: [db_password]
+    environment:
+      PUBLIC_ORIGIN: https://app.localhost
 secrets:
   db_password:
     file: ../../unset-dev-secrets/db_password
@@ -2299,6 +2494,8 @@ secrets:
     file: ../../unset-dev-secrets/local_tls_cert
   local_tls_key:
     file: ../../unset-dev-secrets/local_tls_key
+networks:
+  back: {}
 `;
   /**
    * The handle domain is the PDS's own, and local runs without email: no SMTP URL is set (Alex's "Local only" mail card,
@@ -2320,12 +2517,104 @@ secrets:
     "deployment/mirror.list.json": MIRROR,
   };
   const LOCAL_LAST = "LOCAL unsigned, local-only stack: never deploy it";
+  /**
+   * A throwaway dev root and leaves it signs, made by openssl as the runbook does (P1.33x): the root name-constrained to
+   * the two local hosts, each leaf with `san` as its subjectAltName.
+   */
+  const pki = mkdtempSync(join(tmpdir(), "local-leaf-"));
+  /** The runbook's name constraints (record 2026-10-12-p134c-p134d-local-dev-root-ca, item 2 and Amendment 2). */
+  const LOCAL_CONSTRAINTS =
+    "permitted;DNS:app.localhost,permitted;DNS:pds.localhost,excluded;IP:0.0.0.0/0.0.0.0,excluded;IP:::/::";
+  dirs.push(pki);
+  const openssl = (...args: string[]) => execFileSync("openssl", args, { cwd: pki, stdio: ["ignore", "pipe", "pipe"] });
+  openssl(
+    ..."req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout root.key -out root.pem -days 30".split(
+      " ",
+    ),
+    ...["-subj", "/CN=throwaway root", "-addext", "basicConstraints=critical,CA:TRUE,pathlen:0"],
+    ...["-addext", "keyUsage=critical,keyCertSign,cRLSign"],
+    ...["-addext", `nameConstraints=critical,${LOCAL_CONSTRAINTS}`],
+  );
+  const DEV_ROOT = readFileSync(join(pki, "root.pem"), "utf8");
+  /** Another root under the same name with its own key, and the same key under another name: each signature check alone. */
+  const rootLike = (out: string, key: string, subject: string) => {
+    openssl(...`req -x509 -nodes -days 30 -out ${out} -subj`.split(" "), subject, ...key.split(" "));
+    return readFileSync(join(pki, out), "utf8");
+  };
+  // Without key identifiers, so only the signature tells this root from the real one (OpenSSL's issuer check also
+  // compares the leaf's authority key id with the root's subject key id when both are present).
+  const SAME_NAME_ROOT = rootLike(
+    "same-name.pem",
+    "-newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout other.key -addext subjectKeyIdentifier=none",
+    "/CN=throwaway root",
+  );
+  const SAME_KEY_ROOT = rootLike("same-key.pem", "-key root.key", "/CN=another root");
+  let leaves = 0;
+  const leafPem = (san: string | null, { days = 30, ca = false, issuer = "root", akid = true } = {}): string => {
+    const name = `leaf${leaves++}`;
+    openssl(
+      ...`req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ${name}.key -out ${name}.pem`.split(" "),
+      ...["-days", String(days), "-subj", "/CN=app.localhost", "-CA", `${issuer}.pem`, "-CAkey", `${issuer}.key`],
+      ...["-addext", `basicConstraints=critical,CA:${ca ? "TRUE" : "FALSE"}`],
+      ...(san === null ? [] : ["-addext", `subjectAltName=${san}`]),
+      ...(akid ? [] : ["-addext", "authorityKeyIdentifier=none"]),
+    );
+    return readFileSync(join(pki, `${name}.pem`), "utf8");
+  };
+  const LEAF = leafPem("DNS:app.localhost,DNS:pds.localhost");
+  // `openssl ca` sets exact validity dates, which `req -x509` (3.0) cannot: notBefore and notAfter as days from now.
+  writeFileSync(
+    join(pki, "ca.cnf"),
+    "[ca]\ndefault_ca = d\n[d]\ndatabase = index.txt\nnew_certs_dir = .\nserial = serial\ndefault_md = sha256\n" +
+      "policy = p\nunique_subject = no\ncopy_extensions = copy\n[p]\ncommonName = supplied\n",
+  );
+  writeFileSync(join(pki, "index.txt"), "");
+  writeFileSync(join(pki, "serial"), "01\n");
+  const stamp = (days: number) =>
+    `${new Date(Date.now() + days * 86_400_000).toISOString().replace(/[-:T]/g, "").slice(2, 14)}Z`;
+  const datedPem = (kind: "root" | "leaf", from: number, to: number): string => {
+    const name = `dated${leaves++}`;
+    const subject = kind === "root" ? "/CN=throwaway root" : "/CN=app.localhost";
+    const ext =
+      kind === "root"
+        ? ["basicConstraints=critical,CA:TRUE,pathlen:0", "keyUsage=critical,keyCertSign,cRLSign"]
+        : ["basicConstraints=critical,CA:FALSE", "subjectAltName=DNS:app.localhost,DNS:pds.localhost"];
+    openssl(
+      ...`req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ${name}.key -out ${name}.csr`.split(" "),
+      ...["-subj", subject, ...ext.flatMap((e) => ["-addext", e])],
+    );
+    const signer =
+      kind === "root" ? ["-selfsign", "-keyfile", `${name}.key`] : ["-cert", "root.pem", "-keyfile", "root.key"];
+    openssl(
+      ...`ca -batch -notext -config ca.cnf -in ${name}.csr -out ${name}.pem`.split(" "),
+      ...signer,
+      ...["-startdate", stamp(from), "-enddate", stamp(to)],
+    );
+    return readFileSync(join(pki, `${name}.pem`), "utf8");
+  };
   /** The edge Dockerfile itself, built from the root: the path is right, but C26 refuses the context. */
   const OFF_CONTEXT_EDGE = "      context: ..\n      dockerfile: deployment/edge/Dockerfile\n";
   /** The local stack after `edit`, with its leaf secret files written beside the other secrets. */
   async function local(
     edit: (text: string) => string = (text) => text,
-    { links = {}, remove = [], ...s }: Stack & { links?: Record<string, string>; remove?: string[] } = {},
+    {
+      links = {},
+      remove = [],
+      leaf = LEAF,
+      devRoot = DEV_ROOT,
+      caRoot = devRoot,
+      setUp = () => undefined,
+      deps = {},
+      ...s
+    }: Stack & {
+      links?: Record<string, string>;
+      remove?: string[];
+      leaf?: string | null;
+      devRoot?: string | null;
+      caRoot?: string | null;
+      setUp?: (root: string) => void;
+      deps?: Partial<Deps>;
+    } = {},
   ) {
     const { root, file } = stack({
       compose: edit(LOCAL),
@@ -2339,12 +2628,24 @@ secrets:
       chmodSync(join(secretsOf(root), name), 0o400);
     }
     chmodSync(join(root, "deployment/edge/local"), 0o755);
+    if (leaf !== null) writeFileSync(join(envOf(root), "local-leaf.pem"), leaf);
+    if (devRoot !== null) {
+      mkdirSync(join(dirname(root), "unset-dev-trust"), { recursive: true });
+      writeFileSync(join(dirname(root), "unset-dev-trust/root.pem"), devRoot);
+      chmodSync(join(dirname(root), "unset-dev-trust/root.pem"), 0o644);
+    }
+    // Local needs the dev CA (P1.35a): the folder with its key and its root, one link each.
+    mkdirSync(devCaOf(root), { mode: 0o700 });
+    writeFileSync(join(devCaOf(root), "root.key"), "fixture\n", { mode: 0o400 });
+    if (caRoot !== null) writeFileSync(join(devCaOf(root), "root.pem"), caRoot, { mode: 0o600 });
     for (const [path, target] of Object.entries(links)) symlinkSync(target, join(root, path));
     for (const path of remove) rmSync(join(root, path));
+    setUp(root);
     const result = await preflight(["--env", "local", "--compose", file], {
       root,
       run: fakeRun().run,
       ...fakeFs(root),
+      ...deps,
     });
     return { ...result, root };
   }
@@ -2387,6 +2688,105 @@ secrets:
     }
   });
 
+  test("local_c17_plc_beside_the_pds_only_as_ruled", () => {
+    // Architecture 2026-10-15 03:05Z, F1: the PDS publishes to http://plc:2582, so under --env local the PLC may share
+    // `plc_pds` with it, and only there, only the two of them, and only running the base lock's localOnly plc entry.
+    // pdsNeighbours is called directly: until P1.34v lists plc_pds as local-only, C17 refuses the network itself.
+    const PLC = { ref: "docker.io/example/plc", tag: "0.0.1", digest: digest("e") };
+    const PLC_IMAGE = `${PLC.ref}:${PLC.tag}@${PLC.digest}`;
+    const withPlc = (plc: unknown) => JSON.stringify({ ...JSON.parse(BASES), plc });
+    const bases = (localOnly: unknown) =>
+      withPlc({ ...PLC, source: "upstream", stage: "runtime", buildStage: false, localOnly });
+    const shape = ({ name = "plc", image = PLC_IMAGE, network = "plc_pds", plcAlso = "", webAlso = "" } = {}) =>
+      LOCAL.replace(
+        "    env_file: ../../unset-dev-env/pds.env\n",
+        `    env_file: ../../unset-dev-env/pds.env\n    networks: [default, ${network}]\n`,
+      )
+        .replace("    networks: [back]\n", `    networks: [back${webAlso}]\n`)
+        .replace(
+          "\nsecrets:\n  db_password:",
+          `\n  ${name}:\n    image: ${image}\n    networks: [${network}${plcAlso}]\nsecrets:\n  db_password:`,
+        )
+        .replace("\nnetworks:\n  back: {}\n", `\nnetworks:\n  back: {}\n  ${network}:\n    internal: true\n`);
+    const neighbours = (compose: string, basesText = bases(true), env = "local") => {
+      const { root, file } = stack({
+        compose,
+        pdsEnv: LOCAL_ENV,
+        lock: env === "local" ? null : LOCK,
+        files: { ...LOCAL_FILES, "deployment/images/bases.lock.json": basesText },
+      });
+      return pdsNeighbours(
+        loadInputs(["--env", env, "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) }).inputs,
+      );
+    };
+    const plcNeighbour = ["plc shares a network with the pds"];
+    expect(neighbours(shape())).toEqual([]);
+    // The same compose under dev and under prod.
+    expect(neighbours(shape(), bases(true), "dev")).toEqual(plcNeighbour);
+    expect(neighbours(shape(), bases(true), "prod")).toEqual(plcNeighbour);
+    // No plc entry, or a malformed one, is no exemption (architecture 03:05Z addendum).
+    expect(neighbours(shape(), BASES)).toEqual(plcNeighbour);
+    for (const plc of ["x", null, [], { ...PLC, localOnly: true, digest: undefined }]) {
+      expect(neighbours(shape(), withPlc(plc)), JSON.stringify(plc)).toEqual(plcNeighbour);
+    }
+    // A malformed entry exempts nothing, even for a service that spells out the same broken string (verify-906 S2,
+    // and verify-906-3e62ab9 N-a for the last five rows).
+    const broken: [object, string][] = [
+      [{ ref: PLC.ref, tag: PLC.tag }, `${PLC.ref}:${PLC.tag}@undefined`],
+      [{ ...PLC, digest: "" }, `${PLC.ref}:${PLC.tag}@`],
+      [{ ref: PLC.ref, digest: PLC.digest }, `${PLC.ref}:undefined@${PLC.digest}`],
+      [{ ...PLC, digest: 1 }, `${PLC.ref}:${PLC.tag}@1`],
+      [{ ...PLC, ref: "" }, `:${PLC.tag}@${PLC.digest}`],
+      [{ ...PLC, tag: "" }, `${PLC.ref}:@${PLC.digest}`],
+      // A digest that is not a string but reads as the right one, and a short one.
+      [{ ...PLC, digest: [PLC.digest] }, PLC_IMAGE],
+      [{ ...PLC, digest: `sha256:${"e".repeat(63)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}`],
+      [{ ...PLC, digest: `sha256:${"E".repeat(64)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`],
+      [{ tag: PLC.tag, digest: PLC.digest }, `undefined:${PLC.tag}@${PLC.digest}`],
+      [{ ...PLC, ref: [PLC.ref] }, PLC_IMAGE],
+      [{ ...PLC, digest: `${PLC.digest}0` }, `${PLC_IMAGE}0`],
+      [{ ...PLC, digest: `x${PLC.digest}` }, `${PLC.ref}:${PLC.tag}@x${PLC.digest}`],
+      [{ ...PLC, digest: `sha384:${"e".repeat(64)}` }, `${PLC.ref}:${PLC.tag}@sha384:${"e".repeat(64)}`],
+    ];
+    for (const [entry, image] of broken) {
+      const plc = { ...entry, source: "upstream", stage: "runtime", buildStage: false, localOnly: true };
+      expect(neighbours(shape({ image: JSON.stringify(image) }), withPlc(plc)), image).toEqual(plcNeighbour);
+    }
+    // Exactly the entry's image: one digest character, no digest, no tag, another tag, or the digest's case.
+    for (const image of [
+      `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}f`,
+      `${PLC.ref}:${PLC.tag}`,
+      `${PLC.ref}@${PLC.digest}`,
+      `${PLC.ref}:0.0.2@${PLC.digest}`,
+      `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`,
+    ]) {
+      expect(neighbours(shape({ image })), image).toEqual(plcNeighbour);
+    }
+    // The localOnly entry under another key is no plc entry.
+    const otherKey = JSON.stringify({ ...JSON.parse(BASES), directory: { ...PLC, localOnly: true } });
+    expect(neighbours(shape(), otherKey)).toEqual(plcNeighbour);
+    // The entry is not marked localOnly.
+    expect(neighbours(shape(), withPlc({ ...PLC, source: "upstream", stage: "runtime", buildStage: false }))).toEqual(
+      plcNeighbour,
+    );
+    for (const localOnly of [false, null, "true", 1]) {
+      expect(neighbours(shape(), bases(localOnly)), String(localOnly)).toEqual(plcNeighbour);
+    }
+    // plc on another network it shares with the PDS.
+    expect(neighbours(shape({ plcAlso: ", default" }))).toEqual(plcNeighbour);
+    // A third member on plc_pds.
+    expect(neighbours(shape({ webAlso: ", plc_pds" }))).toEqual([
+      "web shares a network with the pds",
+      "plc shares a network with the pds",
+    ]);
+    // A service named plc that runs another image.
+    expect(neighbours(shape({ image: `docker.io/example/other:0.0.1@${digest("f")}` }))).toEqual(plcNeighbour);
+    // The PLC's image under another name, on another network with the PDS.
+    expect(neighbours(shape({ name: "directory", network: "plc_web" }))).toEqual([
+      "directory shares a network with the pds",
+    ]);
+  });
+
   test("local_unsigned_never_hides_a_failure", async () => {
     const { code, lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_INVITE_REQUIRED: "false" } });
     expect(failed(lines)).toEqual(["C7"]);
@@ -2396,6 +2796,419 @@ secrets:
     // Crawling stays off on local as on dev.
     const crawled = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_CRAWLERS: "https://bsky.network" } });
     expect(failed(crawled.lines)).toEqual(["C7"]);
+  });
+
+  test("local_c26_dev_ca_files_have_one_link", async () => {
+    // P1.33w (architecture on verify-861; book edit 2026-10-14-p134d-split, last section): a second name for a CA file,
+    // inside the checkout above all, is where a build context or a bind would carry the key; the path and identity
+    // tests cannot see it, so every regular file in unset-dev-ca has exactly one link.
+    const run = async (link: (root: string) => string | null) => {
+      let key = "";
+      const result = await local((text) => text, {
+        setUp: (root: string) => {
+          key = join(devCaOf(root), "root.key");
+          const to = link(root);
+          if (to !== null) linkSync(key, to);
+        },
+      });
+      return { line: result.lines.find((line) => / C26 /.test(line)), key };
+    };
+    expect((await run(() => null)).line).toBe("PASS C26 ok");
+    for (const where of [
+      (root: string) => join(root, "deployment/ca-copy"),
+      (root: string) => join(dirname(root), "ca-copy"),
+    ]) {
+      const { line, key } = await run(where);
+      expect(line).toBe(`FAIL C26 dev CA file has extra hard links: ${key}`);
+    }
+  });
+
+  test("c26_dev_ca_folder_is_judged_by_lstat_in_every_env", async () => {
+    // P1.35a (architecture on verify-861-9ae3539, record 2026-10-12-p134c-p134d-local-dev-root-ca, last sections): the
+    // folder is a real directory, walked by our own lstat recursion that follows no link; every error refuses, local
+    // needs the folder, dev judges it when present, and prod refuses it outright.
+    const c26 = (lines: string[]) => lines.find((line) => /^[A-Z]+ C26 /.test(line));
+    const onLocal = async (setUp: (root: string) => void, deps: Partial<Deps> = {}) =>
+      c26((await local((text) => text, { setUp, deps })).lines);
+    const onEnv = async (env: "dev" | "prod", setUp: (root: string) => void) => {
+      const s = stack();
+      setUp(s.root);
+      const result = await preflight(["--env", env, "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+      });
+      return c26(result.lines);
+    };
+    const folder = (root: string) => devCaOf(root);
+    const made = (root: string) => {
+      mkdirSync(folder(root), { mode: 0o700 });
+      writeFileSync(join(folder(root), "root.key"), "fixture\n", { mode: 0o400 });
+    };
+    let seen = "";
+    const note = (path: string) => {
+      seen = path;
+      return path;
+    };
+    expect(await onLocal(() => undefined)).toBe("PASS C26 ok");
+    // S1: local needs the folder; a link or a file in its place is not one.
+    expect(await onLocal((root) => rmSync(folder(root), { recursive: true }))).toBe(
+      "FAIL C26 input missing: unset-dev-ca",
+    );
+    const moved = (root: string) => {
+      renameSync(folder(root), join(dirname(root), "store-ca"));
+      symlinkSync("store-ca", note(folder(root)));
+    };
+    expect(await onLocal(moved)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    const file = (root: string) => {
+      rmSync(folder(root), { recursive: true });
+      writeFileSync(note(folder(root)), "fixture\n");
+    };
+    expect(await onLocal(file)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    // S3: root.pem at the top and sub/x below, each hard-linked into the checkout on its own, are each refused.
+    for (const entry of ["root.pem", "sub/x"]) {
+      const linked = (root: string) => {
+        mkdirSync(join(folder(root), "sub"), { mode: 0o700 });
+        for (const name of ["root.pem", "sub/x"]) writeFileSync(join(folder(root), name), "fixture\n");
+        linkSync(note(join(folder(root), entry)), join(root, "deployment/ca-copy"));
+      };
+      expect(await onLocal(linked), entry).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    }
+    // N1: a link inside the folder, here to a folder outside it, is never followed.
+    const pointing = (root: string) => {
+      mkdirSync(join(dirname(root), "outside"));
+      symlinkSync(join(dirname(root), "outside"), note(join(folder(root), "out")));
+    };
+    expect(await onLocal(pointing)).toBe(`FAIL C26 dev CA folder holds a link: ${seen}`);
+    // Only regular files and real folders: a FIFO refuses even with one link.
+    const fifo = (root: string) => void execFileSync("mkfifo", [note(join(folder(root), "pipe"))]);
+    expect(await onLocal(fifo)).toBe(`FAIL C26 dev CA folder holds something other than files and folders: ${seen}`);
+    // An entry the walk cannot read (mode 000, under any uid): a listing that throws and an entry lstat cannot see.
+    const sub = (root: string) => mkdirSync(note(join(folder(root), "sub")), { mode: 0o700 });
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const unlisted = await onLocal(sub, {
+      readdir: (path) => {
+        if (path.endsWith("/unset-dev-ca/sub")) throw denied;
+        return readdirSync(path, { encoding: "buffer" });
+      },
+    });
+    expect(unlisted).toBe(`FAIL C26 dev CA folder entry cannot be read: ${seen}`);
+    // The fixture's own lstat, which reads the secrets as the web uid's, for every path but the one it cannot see.
+    let at = "";
+    const blind = (hide: (root: string) => string) => (path: string) =>
+      path === hide(at) ? null : (fakeFs(at).lstat?.(path) ?? null);
+    const unseen = await onLocal(
+      (root) => {
+        at = root;
+        sub(root);
+      },
+      { lstat: blind((root) => join(folder(root), "sub")) },
+    );
+    expect(unseen).toBe(`FAIL C26 dev CA folder entry cannot be read: ${seen}`);
+    // The folder itself unreadable: lstat sees nothing, but it is there, so it is not absent either. (A realpath that
+    // throws already fails C26 in the context checks that run first.)
+    const hidden = await onLocal(
+      (root) => {
+        at = root;
+      },
+      { lstat: blind(folder) },
+    );
+    expect(hidden).toMatch(/^FAIL C26 dev CA folder cannot be read: \/.+\/unset-dev-ca$/);
+    // S2: dev passes without the folder and judges it when present; prod refuses its presence.
+    expect(await onEnv("dev", () => undefined)).toBe("PASS C26 ok");
+    expect(await onEnv("dev", made)).toBe("PASS C26 ok");
+    const hardLinked = (root: string) => {
+      made(root);
+      linkSync(note(join(folder(root), "root.key")), join(root, "deployment/ca-copy"));
+    };
+    expect(await onEnv("dev", hardLinked)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    expect(await onEnv("prod", () => undefined)).toBe("PASS C26 ok");
+    expect(await onEnv("prod", made)).toBe("FAIL C26 dev CA folder present on a prod host");
+  });
+
+  test("c26_dev_ca_walk_edges_are_pinned", async () => {
+    // P1.35m (verify-887 S1, S2, N1-N3; architecture 2026-10-15 02:08Z, last section of record
+    // 2026-10-12-p134c-p134d-local-dev-root-ca): every depth, every entry type, names by their exact bytes, the folder's
+    // own errors, and a folder swapped while it is walked.
+    const c26 = (lines: string[]) => lines.find((line) => /^[A-Z]+ C26 /.test(line));
+    const folder = (root: string) => devCaOf(root);
+    const onLocal = async (setUp: (root: string) => void, deps: Partial<Deps> = {}) =>
+      c26((await local((text) => text, { setUp, deps })).lines);
+    const onEnv = async (env: "dev" | "prod", setUp: (root: string) => void, deps: Partial<Deps> = {}) => {
+      const s = stack();
+      setUp(s.root);
+      const result = await preflight(["--env", env, "--compose", s.file], {
+        root: s.root,
+        run: fakeRun().run,
+        ...fakeFs(s.root),
+        ...deps,
+      });
+      return c26(result.lines);
+    };
+    const made = (root: string) => {
+      mkdirSync(folder(root), { mode: 0o700 });
+      writeFileSync(join(folder(root), "root.key"), "fixture\n", { mode: 0o400 });
+    };
+    let seen = "";
+    const note = (path: string) => {
+      seen = path;
+      return path;
+    };
+    const other = (path: string) => `FAIL C26 dev CA folder holds something other than files and folders: ${path}`;
+    // Depth 3: a hard-linked file and a FIFO are judged as at the top.
+    const deep = (root: string) => mkdirSync(join(folder(root), "a/b"), { recursive: true, mode: 0o700 });
+    const deepLink = (root: string) => {
+      deep(root);
+      writeFileSync(note(join(folder(root), "a/b/k")), "fixture\n");
+      linkSync(seen, join(root, "deployment/ca-copy"));
+    };
+    expect(await onLocal(deepLink)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    const deepFifo = (root: string) => {
+      deep(root);
+      execFileSync("mkfifo", [note(join(folder(root), "a/b/pipe"))]);
+    };
+    expect(await onLocal(deepFifo)).toBe(other(seen));
+    // A dot name is an entry like any other.
+    const dot = (root: string) => linkSync(join(folder(root), "root.key"), note(join(folder(root), ".hidden")));
+    expect(await onLocal(dot)).toBe(`FAIL C26 dev CA file has extra hard links: ${seen}`);
+    // A socket and a device, through the lstat (mknod needs root): neither is a regular file.
+    let at = "";
+    const typed = (kind: "isSocket" | "isCharacterDevice" | "isBlockDevice") => (path: string) => {
+      const info = fakeFs(at).lstat?.(path) ?? null;
+      if (info === null || path !== join(folder(at), "node")) return info;
+      return Object.assign(Object.create(Object.getPrototypeOf(info)), info, {
+        isFile: () => false,
+        isDirectory: () => false,
+        isSymbolicLink: () => false,
+        [kind]: () => true,
+      });
+    };
+    for (const kind of ["isSocket", "isCharacterDevice", "isBlockDevice"] as const) {
+      const node = (root: string) => {
+        at = root;
+        writeFileSync(note(join(folder(root), "node")), "fixture\n");
+      };
+      expect(await onLocal(node, { lstat: typed(kind) }), kind).toBe(other(seen));
+    }
+    // An entry the walk cannot see at depth 2.
+    const blind = (hide: (root: string) => string) => (path: string) =>
+      path === hide(at) ? null : (fakeFs(at).lstat?.(path) ?? null);
+    const unseen = (root: string) => {
+      at = root;
+      deep(root);
+      note(join(folder(root), "a/b"));
+    };
+    expect(await onLocal(unseen, { lstat: blind((root) => join(folder(root), "a/b")) })).toBe(
+      `FAIL C26 dev CA folder entry cannot be read: ${seen}`,
+    );
+    // N3: the folder's own listing failing is the folder's error, not an entry's.
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const unlisted = await onLocal((root) => note(folder(root)), {
+      readdir: (path) => {
+        if (path.endsWith("/unset-dev-ca")) throw denied;
+        return readdirSync(path, { encoding: "buffer" });
+      },
+    });
+    expect(unlisted).toBe(`FAIL C26 dev CA folder cannot be read: ${seen}`);
+    // Dev judges a present folder as local does: a link in its place, and a link inside it.
+    const moved = (root: string) => {
+      made(root);
+      renameSync(folder(root), join(dirname(root), "store-ca"));
+      symlinkSync("store-ca", note(folder(root)));
+    };
+    expect(await onEnv("dev", moved)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    const inside = (root: string) => {
+      made(root);
+      mkdirSync(join(dirname(root), "outside"));
+      symlinkSync(join(dirname(root), "outside"), note(join(folder(root), "out")));
+    };
+    expect(await onEnv("dev", inside)).toBe(`FAIL C26 dev CA folder holds a link: ${seen}`);
+    // A folder lstat cannot see and realpath cannot resolve is there, so neither dev nor prod passes it.
+    const realpathDenied = (path: string) => {
+      if (path === folder(at)) throw denied;
+      return statOrNull(path) === null ? null : realpathSync(path);
+    };
+    for (const env of ["dev", "prod"] as const) {
+      const hidden = (root: string) => {
+        at = root;
+        made(root);
+        note(folder(root));
+      };
+      expect(await onEnv(env, hidden, { lstat: blind(folder), realpath: realpathDenied }), env).toBe(
+        `FAIL C26 dev CA folder cannot be read: ${seen}`,
+      );
+    }
+    // N1: a self-loop link in the folder's place, with the local stack's builds, refuses by the folder's own message.
+    const loop = (root: string) => {
+      rmSync(folder(root), { recursive: true });
+      symlinkSync("unset-dev-ca", note(folder(root)));
+    };
+    expect(await onLocal(loop)).toBe(`FAIL C26 dev CA folder is not a real directory: ${seen}`);
+    // S2: names by their exact bytes. A name that is not UTF-8 is refused before any lstat, alone or beside a clean
+    // file under the name the lossy decode would give it (U+FFFD), whether it is a hard-linked key or a link out.
+    const bytes = (root: string) => Buffer.concat([Buffer.from(`${folder(root)}/`), Buffer.from([0xff])]);
+    const notUtf8 = (path: string) => `FAIL C26 dev CA folder holds a name that is not UTF-8, in: ${path}`;
+    const lone = (root: string) => {
+      note(folder(root));
+      writeFileSync(bytes(root), "fixture\n");
+    };
+    expect(await onLocal(lone)).toBe(notUtf8(seen));
+    const replaced = (root: string) => join(folder(root), "\u{fffd}");
+    const beside = (root: string) => {
+      note(folder(root));
+      writeFileSync(replaced(root), "fixture\n");
+      writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+      linkSync(join(root, "deployment/ca-copy"), bytes(root));
+    };
+    expect(await onLocal(beside)).toBe(notUtf8(seen));
+    const besideLink = (root: string) => {
+      note(folder(root));
+      writeFileSync(replaced(root), "fixture\n");
+      symlinkSync(dirname(root), bytes(root));
+    };
+    expect(await onLocal(besideLink)).toBe(notUtf8(seen));
+    // A valid UTF-8 name holding U+FFFD is judged like any other, and printed escaped.
+    const fffd = (root: string) => {
+      writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+      linkSync(join(root, "deployment/ca-copy"), replaced(root));
+    };
+    expect(await onLocal(fffd)).toMatch(/^FAIL C26 dev CA file has extra hard links: \/.+\/unset-dev-ca\/\\u\{fffd\}$/);
+    // A folder swapped for another while it is walked: the walk saw clean entries, but not the folder that stays.
+    const swapped = await onLocal((root) => note(folder(root)), {
+      readdir: (path) => {
+        const names = readdirSync(path, { encoding: "buffer" });
+        if (path === seen) {
+          renameSync(seen, `${seen}-old`);
+          mkdirSync(seen, { mode: 0o700 });
+          for (const name of names) writeFileSync(join(seen, name.toString()), "fixture\n");
+        }
+        return names;
+      },
+    });
+    expect(swapped).toBe(`FAIL C26 dev CA folder changed while it was checked: ${seen}`);
+  });
+
+  test("preflight_prints_names_escaped", async () => {
+    // P1.35m (architecture 2026-10-15 02:08Z, N2; SE-7): a name is the deploy user's text, and a person reads the
+    // lines. A newline cannot forge a PASS line, and a carriage return and an erase cannot hide a FAIL on a terminal.
+    for (const name of ["x\nPASS C26 ok", "x\r\x1b[2K"]) {
+      let path = "";
+      const { lines } = await local((text) => text, {
+        setUp: (root) => {
+          path = join(devCaOf(root), name);
+          writeFileSync(join(root, "deployment/ca-copy"), "fixture\n");
+          linkSync(join(root, "deployment/ca-copy"), path);
+        },
+      });
+      expect(lines.filter((line) => /C26/.test(line))).toEqual([
+        `FAIL C26 dev CA file has extra hard links: ${printable(path)}`,
+      ]);
+      expect(lines.every((line) => /^[\x20-\x7e]*$/.test(line))).toBe(true);
+    }
+    expect(printable("a\\b\x00\x1f\x7f\x80\x9f\xa0\u{fffd}\u{1f600}\ud800 é")).toBe(
+      "a\\\\b\\x00\\x1f\\x7f\\x80\\x9f\\xa0\\u{fffd}\\u{1f600}\\u{d800} \\xe9",
+    );
+  });
+
+  test("local_c17_unlisted_plc_network_fails", async () => {
+    // Architecture 2026-10-15 02:32Z: under local, C17 expects networks.dev.json plus the local-only list, both ways.
+    const { lines } = await local((text) =>
+      text
+        .replace("    networks: [back]", "    networks: [back, plc_web]")
+        .replace("  back: {}", "  back: {}\n  plc_web:\n    internal: true"),
+    );
+    expect(lines.find((line) => / C17 /.test(line))).toBe("FAIL C17 network plc_web is not in the table");
+    // Nor may the table admit it: networks.dev.json gets no local-only rows, under any env (verify-903 S3).
+    const listed = { ...TABLE, plc_web: { internal: true, members: ["web"] } };
+    const admitted = await local(
+      (text) =>
+        text
+          .replace("    networks: [back]", "    networks: [back, plc_web]")
+          .replace("  back: {}", "  back: {}\n  plc_web:\n    internal: true"),
+      { networks: listed },
+    );
+    expect(admitted.lines.find((line) => / C17 /.test(line))).toBe(
+      "FAIL C17 the network table lists plc_web, a local-only network",
+    );
+    const prod = await check({ networks: listed });
+    expect(prod.lines.find((line) => / C17 /.test(line))).toBe(
+      "FAIL C17 the network table lists plc_web, a local-only network",
+    );
+  });
+
+  test("local_c17_runs_the_pds_neighbour_rule", async () => {
+    // C17 judges the PDS's neighbours under local too (#742 item 11), even where the table admits one. The PLC cases
+    // call pdsNeighbours directly until P1.34v, so this is the case that reaches it through C17 (verify-903-2f7413d).
+    const admitted = { ...TABLE, default: { internal: false, members: ["edge", "pds", "web"] } };
+    const { lines } = await local((text) => text.replace("    networks: [back]", "    networks: [back, default]"), {
+      networks: admitted,
+    });
+    expect(lines.find((line) => / C17 /.test(line))).toBe("FAIL C17 web shares a network with the pds");
+  });
+
+  test("local_c26_dev_trust_folder_holds_only_root_pem", async () => {
+    // P1.33g (record 2026-10-12-p134c-p134d-local-dev-root-ca, "Architecture confirmation", condition 1): the folder
+    // pds and web bind is a real directory holding exactly root.pem, a regular file with one link that no group or
+    // other user can write. Every error refuses, naming the path.
+    const c26 = (lines: string[]) => lines.find((line) => /^[A-Z]+ C26 /.test(line));
+    const onLocal = async (setUp: (root: string) => void, options: { devRoot?: null; deps?: Partial<Deps> } = {}) =>
+      c26((await local((text) => text, { setUp, ...options })).lines);
+    const trust = (root: string) => join(dirname(root), "unset-dev-trust");
+    let seen = "";
+    const note = (path: string) => {
+      seen = path;
+      return path;
+    };
+    expect(await onLocal(() => undefined)).toBe("PASS C26 ok");
+    expect(await onLocal(() => undefined, { devRoot: null })).toBe("FAIL C26 input missing: unset-dev-trust");
+    const empty = (root: string) => rmSync(join(trust(root), "root.pem"));
+    expect(await onLocal(empty)).toBe("FAIL C26 input missing: unset-dev-trust/root.pem");
+    const extra = (root: string) => writeFileSync(note(join(trust(root), "extra.pem")), "fixture\n");
+    expect(await onLocal(extra)).toBe(`FAIL C26 dev trust folder holds something other than root.pem: ${seen}`);
+    const linked = (root: string) => linkSync(note(join(trust(root), "root.pem")), join(root, "deployment/trust-copy"));
+    expect(await onLocal(linked)).toBe(`FAIL C26 dev trust root has extra hard links: ${seen}`);
+    for (const mode of [0o664, 0o646]) {
+      const writable = (root: string) => chmodSync(note(join(trust(root), "root.pem")), mode);
+      expect(await onLocal(writable), mode.toString(8)).toBe(
+        `FAIL C26 dev trust root is writable by group or other: ${seen}`,
+      );
+    }
+    const pointed = (root: string) => {
+      renameSync(join(trust(root), "root.pem"), join(dirname(root), "elsewhere.pem"));
+      symlinkSync(join(dirname(root), "elsewhere.pem"), note(join(trust(root), "root.pem")));
+    };
+    expect(await onLocal(pointed)).toBe(`FAIL C26 dev trust root is not a regular file: ${seen}`);
+    const moved = (root: string) => {
+      renameSync(trust(root), join(dirname(root), "store-trust"));
+      symlinkSync("store-trust", note(trust(root)));
+    };
+    expect(await onLocal(moved)).toBe(`FAIL C26 dev trust folder is not a real directory: ${seen}`);
+    const denied = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    const unlisted = await onLocal((root) => note(trust(root)), {
+      deps: {
+        readdir: (path) => {
+          if (path.endsWith("/unset-dev-trust")) throw denied;
+          return readdirSync(path, { encoding: "buffer" });
+        },
+      },
+    });
+    expect(unlisted).toBe(`FAIL C26 dev trust folder cannot be read: ${seen}`);
+    // The fixture's own lstat for every path but the one it cannot see: there, but unreadable, so never absent.
+    let at = "";
+    const blind = (hide: (root: string) => string) => (path: string) =>
+      path === hide(at) ? null : (fakeFs(at).lstat?.(path) ?? null);
+    const unseen = async (hide: (root: string) => string) =>
+      onLocal(
+        (root) => {
+          at = root;
+          note(hide(root));
+        },
+        { deps: { lstat: blind(hide) } },
+      );
+    expect(await unseen(trust)).toBe(`FAIL C26 dev trust folder cannot be read: ${seen}`);
+    expect(await unseen((root) => join(trust(root), "root.pem"))).toBe(
+      `FAIL C26 dev trust root cannot be read: ${seen}`,
+    );
   });
 
   test("local_c2_admits_builds_and_run_only_vendor_images", async () => {
@@ -2467,6 +3280,28 @@ secrets:
         "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
         (text) => text.replace("secrets:\n  db_password", `${reader(`${node.ref}:${node.tag}`, TOOLS)}\n  db_password`),
       ],
+      // verify-851 S1: any other digest, digest with no tag, and another *-reader service are all refused.
+      [
+        "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+        (text) =>
+          text.replace(
+            "secrets:\n  db_password",
+            `${reader(`${node.ref}:${node.tag}@sha256:${"0".repeat(64)}`, TOOLS)}\n  db_password`,
+          ),
+      ],
+      [
+        "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
+        (text) =>
+          text.replace("secrets:\n  db_password", `${reader(`${node.ref}@${node.digest}`, TOOLS)}\n  db_password`),
+      ],
+      [
+        "FAIL C2 token-reader runs the node base, which only pds-token-reader may",
+        (text) =>
+          text.replace(
+            "secrets:\n  db_password",
+            `  token-reader:\n    image: ${NODE}\n${TOOLS}secrets:\n  db_password`,
+          ),
+      ],
     ];
     for (const [line, edit] of refused) expect(await c2(edit), line).toBe(line);
     // Only the runtime entry: a node builder stage in the lock is never run unbuilt, even as the reader.
@@ -2484,6 +3319,202 @@ secrets:
     expect(asBuilder.lines.find((line) => / C2 /.test(line))).toBe(
       "FAIL C2 pds-token-reader image is not a run-only vendor image by tag and digest",
     );
+  });
+
+  test("local_c18_app_host_is_the_web_origins_host", async () => {
+    // P1.33x (record 2026-10-12-p134c-p134d-local-dev-root-ca, Amendment 3): a missing or stale APP_HOST gives the edge
+    // the wrong alias, so it must be a hostname and exactly the host of web's PUBLIC_ORIGIN. Reasons are fixed words.
+    const c18 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C18 /.test(line));
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    const appHost = "      APP_HOST: app.localhost\n";
+    const origin = "      PUBLIC_ORIGIN: https://app.localhost\n";
+    const cases: [string, (text: string) => string][] = [
+      ["FAIL C18 APP_HOST is missing", (text) => text.replace(appHost, "")],
+      ["FAIL C18 APP_HOST is missing", (text) => text.replace(appHost, '      APP_HOST: ""\n')],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: app_localhost\n")],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: app.localhost:443\n")],
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://old.localhost\n"),
+      ],
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://app.localhost.example.test\n"),
+      ],
+      // verify-869 S3: the host must equal APP_HOST, never merely end with it.
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://old-app.localhost\n"),
+      ],
+      [
+        "FAIL C18 APP_HOST is not the host of web's PUBLIC_ORIGIN",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: https://x.app.localhost\n"),
+      ],
+      // verify-869 S1 and S3: an IPv4 address (with an origin to match), uppercase and a trailing dot.
+      [
+        "FAIL C18 APP_HOST is not a hostname",
+        (text) =>
+          text
+            .replace(appHost, "      APP_HOST: 192.0.2.1\n")
+            .replace(origin, "      PUBLIC_ORIGIN: https://192.0.2.1\n"),
+      ],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: APP.localhost\n")],
+      ["FAIL C18 APP_HOST is not a hostname", (text) => text.replace(appHost, "      APP_HOST: app.localhost.\n")],
+      ["FAIL C18 web's PUBLIC_ORIGIN is not a URL", (text) => text.replace(`    environment:\n${origin}`, "")],
+      [
+        "FAIL C18 web's PUBLIC_ORIGIN is not a URL",
+        (text) => text.replace(origin, "      PUBLIC_ORIGIN: app.localhost\n"),
+      ],
+    ];
+    for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+  });
+
+  test("local_c18_pds_host_is_the_pds_hostname", async () => {
+    // P1.35g (verify-876 S1, architecture ~00:27Z): under local nothing else ties the edge's PDS_HOST to the PDS's own
+    // name (C21 is skipped), so PDS_HOST is a hostname, never an IPv4 address, and equals PDS_HOSTNAME once both are
+    // lower case with no trailing dot and no port. Reasons name the variables and never echo a value.
+    const c18 = async (edit: (text: string) => string, leaf?: string) =>
+      (await local(edit, leaf === undefined ? {} : { leaf })).lines.find((line) => / C18 /.test(line));
+    const pdsHost = "      PDS_HOST: pds.localhost\n";
+    const hostname = "      PDS_HOSTNAME: pds.localhost\n";
+    const named = (value: string) => (text: string) => text.replace(hostname, `      PDS_HOSTNAME: ${value}\n`);
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    for (const value of ["PDS.localhost", "pds.localhost.", "pds.localhost:2583", '"PDS.Localhost.:443"']) {
+      expect(await c18(named(value)), value).toBe("PASS C18 ok");
+    }
+    const cases: [string, (text: string) => string, string?][] = [
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named("other.localhost")],
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named("x.pds.localhost")],
+      [
+        "FAIL C18 input missing: the pds service's PDS_HOSTNAME",
+        (text) => text.replace(`    environment:\n${hostname}`, ""),
+      ],
+      ["FAIL C18 input missing: the edge's PDS_HOST", (text) => text.replace(pdsHost, "")],
+      ["FAIL C18 PDS_HOST is not a hostname", (text) => text.replace(pdsHost, "      PDS_HOST: pds_localhost\n")],
+      // The IPv4 red fixture: a leaf naming the address and an edge serving it, with the PDS named the same.
+      [
+        "FAIL C18 PDS_HOST is not a hostname",
+        (text) => named("192.0.2.2")(text.replace(pdsHost, "      PDS_HOST: 192.0.2.2\n")),
+        leafPem("DNS:app.localhost,DNS:192.0.2.2"),
+      ],
+    ];
+    for (const [line, edit, leaf] of cases) expect(await c18(edit, leaf), line).toBe(line);
+  });
+
+  test("local_c18_judges_the_leaf_copy", async () => {
+    // P1.33x (record 2026-10-12-p134c-p134d-local-dev-root-ca, Amendment 2 and the 2026-10-14 ruling): the public copy
+    // of the leaf names exactly APP_HOST and PDS_HOST, no IP, is no CA, comes from the dev root and has 14 days left.
+    const c18 = async (options: { leaf?: string | null; devRoot?: string | null }) =>
+      (await local((text) => text, options)).lines.find((line) => / C18 /.test(line));
+    expect(await c18({})).toBe("PASS C18 ok");
+    // The order of the names does not matter.
+    expect(await c18({ leaf: leafPem("DNS:pds.localhost,DNS:app.localhost") })).toBe("PASS C18 ok");
+    expect(await c18({ leaf: null })).toMatch(/^FAIL C18 input missing: unset-dev-env\/local-leaf\.pem$/);
+    expect(await c18({ devRoot: null })).toMatch(/^FAIL C18 input missing: unset-dev-trust\/root\.pem$/);
+    const names = "FAIL C18 the local leaf's names are not exactly APP_HOST and PDS_HOST";
+    const cases: [string, { leaf?: string; devRoot?: string }][] = [
+      // An unrelated DNS leaf, a leaf missing one host, one with a third, and a CN-only leaf with no SAN at all.
+      [names, { leaf: leafPem("DNS:other.localhost,DNS:pds.localhost") }],
+      [names, { leaf: leafPem("DNS:app.localhost") }],
+      [names, { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost,DNS:x.app.localhost") }],
+      [names, { leaf: leafPem(null) }],
+      [names, { leaf: leafPem("DNS:app.localhost,email:a@example.test") }],
+      // IP names, alone or beside the two hosts.
+      ["FAIL C18 the local leaf has an IP name", { leaf: leafPem("IP:127.0.0.1") }],
+      ["FAIL C18 the local leaf has an IP name", { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost,IP:::1") }],
+      // A sub-CA, and a leaf from another root.
+      ["FAIL C18 the local leaf is a CA", { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { ca: true }) }],
+      [
+        "FAIL C18 the local leaf is not issued by the dev root",
+        { leaf: LEAF, devRoot: leafPem("DNS:app.localhost,DNS:pds.localhost", { ca: true }) },
+      ],
+      [
+        "FAIL C18 the local leaf is not issued by the dev root",
+        { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { akid: false }), devRoot: SAME_NAME_ROOT },
+      ],
+      ["FAIL C18 the local leaf is not issued by the dev root", { devRoot: SAME_KEY_ROOT }],
+      [
+        "FAIL C18 the local leaf expires within 14 days",
+        { leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { days: 13 }) },
+      ],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: `${LEAF}${LEAF}` }],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: readFileSync(join(pki, "root.key"), "utf8") }],
+      ["FAIL C18 the dev root is not one certificate", { devRoot: "" }],
+      // verify-869 S3: names the DNS pattern refuses, and a PEM with anything after it or CRLF line ends.
+      [names, { leaf: leafPem("DNS:*.localhost,DNS:pds.localhost") }],
+      [names, { leaf: leafPem("DNS:APP.localhost,DNS:pds.localhost") }],
+      [names, { leaf: leafPem("DNS:app.localhost.,DNS:pds.localhost") }],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: `${LEAF}junk\n` }],
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: LEAF.replace(/\n/g, "\r\n") }],
+      // verify-869 S2: both ends of the one link are inside their dates, and the margin is 14 days, not 13.
+      ["FAIL C18 the local leaf is not yet valid", { leaf: datedPem("leaf", 1, 60) }],
+      ["FAIL C18 the local leaf expires within 14 days", { leaf: datedPem("leaf", -1, 13.5) }],
+      ["FAIL C18 the dev root has expired", { devRoot: datedPem("root", -60, -1) }],
+      ["FAIL C18 the dev root is not yet valid", { devRoot: datedPem("root", 1, 60) }],
+      // verify-876 N4: text before the certificate, and the certificate followed by its key.
+      ["FAIL C18 the local leaf copy is not one certificate", { leaf: `note\n${LEAF}` }],
+      [
+        "FAIL C18 the local leaf copy is not one certificate",
+        { leaf: `${LEAF}${readFileSync(join(pki, "leaf0.key"), "utf8")}` },
+      ],
+    ];
+    for (const [line, options] of cases) expect(await c18(options), line).toBe(line);
+    // Fifteen days left passes, and so does an hour past fourteen: the margin is exactly 14 days (verify-876 N2).
+    expect(await c18({ leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { days: 15 }) })).toBe("PASS C18 ok");
+    expect(await c18({ leaf: datedPem("leaf", -1, 14 + 1 / 24) })).toBe("PASS C18 ok");
+  });
+
+  test("local_c18_dev_root_is_the_cas_constrained_root", async () => {
+    // P1.33g (record 2026-10-12-p134c-p134d-local-dev-root-ca, "Architecture confirmation", conditions 2 and 3): the
+    // copy pds and web trust is the dev CA's own root, byte for byte, holds no key, is a CA, and carries the runbook's
+    // name constraints: the two local hosts permitted and every IPv4 and IPv6 address excluded.
+    const c18 = async (options: { leaf?: string; devRoot?: string; caRoot?: string | null }) =>
+      (await local((text) => text, options)).lines.find((line) => / C18 /.test(line));
+    const rootWith = (name: string, extensions: string[]) => {
+      openssl(
+        ...`req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout ${name}.key -out ${name}.pem`.split(
+          " ",
+        ),
+        ...["-days", "30", "-subj", "/CN=throwaway root", ...extensions.flatMap((e) => ["-addext", e])],
+      );
+      return {
+        devRoot: readFileSync(join(pki, `${name}.pem`), "utf8"),
+        leaf: leafPem("DNS:app.localhost,DNS:pds.localhost", { issuer: name }),
+      };
+    };
+    const CA = ["basicConstraints=critical,CA:TRUE,pathlen:0", "keyUsage=critical,keyCertSign,cRLSign"];
+    const EXCLUDED = "excluded;IP:0.0.0.0/0.0.0.0,excluded;IP:::/::";
+    const swapped = `permitted;DNS:pds.localhost,permitted;DNS:app.localhost,${EXCLUDED}`;
+    expect(await c18(rootWith("swapped", [...CA, `nameConstraints=critical,${swapped}`]))).toBe("PASS C18 ok");
+    const copy =
+      "FAIL C18 the dev root copy is not the dev CA's root: unset-dev-trust/root.pem and unset-dev-ca/root.pem";
+    expect(await c18({ caRoot: SAME_KEY_ROOT })).toBe(copy);
+    expect(await c18({ caRoot: `${DEV_ROOT}\n` })).toBe(copy);
+    expect(await c18({ caRoot: null })).toBe("FAIL C18 input missing: unset-dev-ca/root.pem");
+    const key = readFileSync(join(pki, "root.key"), "utf8");
+    expect(await c18({ devRoot: `${DEV_ROOT}${key}` })).toBe("FAIL C18 the dev root copy holds a private key");
+    expect(await c18({ devRoot: `${key}${DEV_ROOT}` })).toBe("FAIL C18 the dev root copy holds a private key");
+    const notCa = rootWith("not-ca", [
+      "basicConstraints=critical,CA:FALSE",
+      `nameConstraints=critical,${LOCAL_CONSTRAINTS}`,
+    ]);
+    expect(await c18(notCa)).toBe("FAIL C18 the dev root is not a CA");
+    const unconstrained = "FAIL C18 the dev root does not carry the local name constraints";
+    const roots: [string, string[]][] = [
+      ["none", CA],
+      ["one-host", [...CA, `nameConstraints=critical,permitted;DNS:app.localhost,${EXCLUDED}`]],
+      ["third-host", [...CA, `nameConstraints=critical,${LOCAL_CONSTRAINTS},permitted;DNS:x.localhost`]],
+      ["ip-open", [...CA, "nameConstraints=critical,permitted;DNS:app.localhost,permitted;DNS:pds.localhost"]],
+      [
+        "v4-only",
+        [
+          ...CA,
+          "nameConstraints=critical,permitted;DNS:app.localhost,permitted;DNS:pds.localhost,excluded;IP:0.0.0.0/0.0.0.0",
+        ],
+      ],
+      ["not-critical", [...CA, `nameConstraints=${LOCAL_CONSTRAINTS}`]],
+    ];
+    for (const [name, extensions] of roots) expect(await c18(rootWith(name, extensions)), name).toBe(unconstrained);
   });
 
   test("local_guards_loopback_ports_and_localhost_pds", async () => {
@@ -2650,13 +3681,7 @@ secrets:
     expect(await c18(volume("../../unset-dev-ca/root.key:/srv/root.key:ro"))).toBe(
       "FAIL C18 the edge binds more than its sites and the local files",
     );
-    // The app site's mount waits for P1.34o's reader (book edit 2026-10-13-p127l-to-third-lane, Amendment 1): until the
-    // reader reads local/app.caddy with the enabled sites, C18 refuses it as any other mount over the sites.
-    const app = "./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro";
-    expect(await c18(volume(app))).toBe("FAIL C18 the edge mounts over /etc/caddy/sites/enabled/app.caddy");
-    expect(await c18(volume("./edge/local/app.caddy:/etc/caddy/sites/enabled/second.caddy:ro"))).toBe(
-      "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/second.caddy",
-    );
+    // The app site is one of the site file mounts now (P1.33y); local_c18_mounts_each_site_file judges those.
     // A volume at the snippet's target is not the file it names, however it is filled.
     const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
     expect(
@@ -2702,6 +3727,52 @@ secrets:
         ),
       ),
     ).toBe("FAIL C18 the edge is not built from deployment/edge/Dockerfile");
+  });
+
+  test("local_c18_mounts_each_site_file", async () => {
+    // P1.33y (book edit 2026-10-13-p134o-after-791, Amendment 1; local-gaps Amendment 3 S2): under local the edge mounts
+    // every sites/*.caddy and local/app.caddy as its own read-only file, never the sites directory.
+    const c18 = async (edit: (text: string) => string) => (await local(edit)).lines.find((line) => / C18 /.test(line));
+    const pds = "      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro\n";
+    const app = "      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro\n";
+    expect(await c18((text) => text)).toBe("PASS C18 ok");
+    const cases: [string, (text: string) => string][] = [
+      [
+        "FAIL C18 the local edge mounts a directory at /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, "      - ./edge/sites/enabled:/etc/caddy/sites/enabled:ro\n"),
+      ],
+      [
+        "FAIL C18 the local edge mounts a directory at /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, `${pds}      - ./edge/sites/enabled:/etc/caddy/sites/enabled/:ro\n`),
+      ],
+      ["FAIL C18 the site pds.caddy is not mounted read-only", (text) => text.replace(pds, pds.replace(":ro\n", "\n"))],
+      [
+        "FAIL C18 the site pds.caddy is not a bind mount",
+        (text) =>
+          text
+            .replace(pds, "      - sites:/etc/caddy/sites/enabled/pds.caddy:ro\n")
+            .replace("\nsecrets:", "\nvolumes:\n  sites: {}\nsecrets:"),
+      ],
+      [
+        "FAIL C18 input missing: the edge's site mounts in /etc/caddy/sites/enabled",
+        (text) => text.replace(pds, "").replace(app, ""),
+      ],
+      ["FAIL C18 the edge config is unreadable: app.caddy: not mounted", (text) => text.replace(app, "")],
+      ["FAIL C18 the edge config is unreadable: pds.caddy: not mounted", (text) => text.replace(pds, "")],
+      [
+        "FAIL C18 the edge config is unreadable: second.caddy: not a site the local stack mounts",
+        (text) => text.replace(app, `${app}${app.replace("enabled/app", "enabled/second")}`),
+      ],
+      [
+        "FAIL C18 the edge mounts over /etc/caddy/sites/enabled/more/pds.caddy",
+        (text) => text.replace(pds, `${pds}${pds.replace("enabled/pds", "enabled/more/pds")}`),
+      ],
+    ];
+    for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+    // verify-876 N5: a site whose source is absent names that input, rather than ending in a check error.
+    expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/absent.caddy:"))).toMatch(
+      /^FAIL C18 input missing: \/.+\/edge\/sites\/absent\.caddy$/,
+    );
   });
 
   // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local

@@ -21,10 +21,12 @@ import {
   readCaddyfile,
   readEdgeConfig,
   type Site,
+  type SiteMount,
 } from "../../edge/caddyfile.ts";
 import type { Compose, Mount, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 import { runsBuilt } from "./build.ts";
+import { appHostProblem, localLeafProblem, pdsHostProblem } from "./local-leaf.ts";
 import { readLock } from "./lock.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass } from "./types.ts";
 
@@ -68,18 +70,14 @@ const overCaddyConfig = (target: string): boolean =>
  * edge must mount nothing else at, under or above /etc/caddy, or the image's Caddyfile is not what runs; the source
  * must be a directory inside the repository's deployment/edge/, so which sites run stays a reviewed repository fact.
  */
-export function edgeSitesDir(
-  compose: Compose,
-  edgeDir: string,
-  localTargets: readonly string[] = [],
-): { dir: string } | Outcome {
+export function edgeSitesDir(compose: Compose, edgeDir: string): { dir: string } | Outcome {
   const edge = compose.services.find((service) => service.name === "edge");
   if (edge === undefined) return missing("the edge service");
   const sites: Mount[] = [];
   for (const mount of edge.mounts) {
     const target = mountTarget(mount);
     if (target === SITES_TARGET) sites.push(mount);
-    else if (overCaddyConfig(target) && !localTargets.includes(target)) return fail(`the edge mounts over ${target}`);
+    else if (overCaddyConfig(target)) return fail(`the edge mounts over ${target}`);
   }
   const [mount, ...others] = sites;
   if (mount === undefined) return missing(`the edge mount at ${SITES_TARGET}`);
@@ -137,7 +135,12 @@ function edgeImage(compose: Compose, edgeRef: string | undefined): Outcome | nul
   return edge.image === edgeRef ? null : fail("the edge service does not run the lock's edge image");
 }
 
-function readZones(edgeDir: string, sitesDir: string, env: SecretMap, mode: EdgeMode = "shipped"): Outcome {
+function readZones(
+  edgeDir: string,
+  sitesDir: string | readonly SiteMount[],
+  env: SecretMap,
+  mode: EdgeMode = "shipped",
+): Outcome {
   const values: Partial<Record<EnvName, string>> = {};
   for (const name of Object.keys(ENV_NAMES) as EnvName[]) {
     const value = env.use(name, (v) => v);
@@ -249,10 +252,9 @@ const shape = (directives: Directive[]): unknown =>
   directives.map(({ name, args, placeholders, block, via }) => [name, args, placeholders, block && shape(block), via]);
 
 /**
- * The files a local edge mounts from deployment/edge/local/, by target: each at most once, read-only, by that name.
- * The app site's mount (local/app.caddy at sites/enabled/app.caddy) waits for P1.34o's reader, which reads that file
- * with the enabled sites; until then the reader would never see what Caddy serves there, so C18 refuses the mount as
- * any other over the sites directory (book edit 2026-10-13-p127l-to-third-lane, Amendment 1: "fail C18 closed").
+ * The files a local edge mounts from deployment/edge/local/ outside the sites, by target: each at most once,
+ * read-only, by that name. The app site, local/app.caddy at sites/enabled/app.caddy, is one of the site mounts, which
+ * the reader judges with the enabled sites (localSiteMounts, P1.33y).
  */
 const LOCAL_MOUNTS: Record<string, { file: string; what: string }> = {
   [`${CADDY_ROOT}/snippets/tls.caddy`]: { file: "tls.caddy", what: "the TLS snippet" },
@@ -273,26 +275,79 @@ function localEdgeZones(inputs: Inputs): Outcome {
   if (edge.secrets.some((name) => !LOCAL_EDGE_SECRETS.includes(name))) {
     return fail("the edge reads a secret other than the dev leaf's");
   }
-  const sites = edgeSitesDir(inputs.compose, inputs.edgeDir, Object.keys(LOCAL_MOUNTS));
-  if (!("dir" in sites)) return sites;
+  const sites = localSiteMounts(edge);
+  if (!Array.isArray(sites)) return sites;
+  const absent = sites.find((site) => !sourceExists(site.source));
+  if (absent !== undefined) return missing(absent.source);
   const files = localFileMounts(edge, inputs.edgeDir);
   if (files !== null) return files;
   const env = inputs.serviceEnv.get("edge");
   if (env === undefined) return missing("the edge service's environment");
-  return readZones(inputs.edgeDir, sites.dir, env, "local");
+  const appHost = env.use("APP_HOST", (value) => value);
+  const host = appHostProblem(inputs, appHost);
+  if (host !== null) return host;
+  const pdsHost = env.use("PDS_HOST", (value) => value);
+  const pds = pdsHostProblem(inputs, pdsHost);
+  if (pds !== null) return pds;
+  const leaf = localLeafProblem(inputs, appHost ?? "", pdsHost ?? "");
+  if (leaf !== null) return leaf;
+  return readZones(inputs.edgeDir, sites, env, "local");
+}
+
+/** A target that names one file directly in the enabled sites directory. */
+const siteFileTarget = (target: string): boolean => posix.dirname(target) === SITES_TARGET;
+
+/**
+ * The enabled sites a local edge mounts, one read-only bind per file at /etc/caddy/sites/enabled/<name>, never the
+ * directory (P1.33y; book edit 2026-10-13-p134o-after-791, Amendment 1; local-gaps Amendment 3 S2). The reader's
+ * mountedSites then requires exactly every sites/*.caddy and local/app.caddy, each from where it belongs. Any other
+ * mount at, under or above /etc/caddy than these and LOCAL_MOUNTS fails.
+ */
+function localSiteMounts(edge: Service): SiteMount[] | Outcome {
+  const sites: SiteMount[] = [];
+  for (const mount of edge.mounts) {
+    const target = mountTarget(mount);
+    if (target === SITES_TARGET) return fail(`the local edge mounts a directory at ${SITES_TARGET}`);
+    if (siteFileTarget(target)) {
+      const site = siteMount(mount, posix.basename(target));
+      if (!("source" in site)) return site;
+      sites.push(site);
+    } else if (overCaddyConfig(target) && LOCAL_MOUNTS[target] === undefined) {
+      return fail(`the edge mounts over ${target}`);
+    }
+  }
+  return sites.length > 0 ? sites : missing(`the edge's site mounts in ${SITES_TARGET}`);
+}
+
+/** Whether `path` names anything at all, a dangling link included; the reader then judges what it is (verify-876 N5). */
+function sourceExists(path: string): boolean {
+  try {
+    EDGE_FILES.kind(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+/** One enabled site's mount: a read-only bind of its file, named `name` in the enabled sites directory. */
+function siteMount(mount: Mount, name: string): SiteMount | Outcome {
+  if (mount.type !== "bind" || mount.source === null) return fail(`the site ${name} is not a bind mount`);
+  if (!mount.readOnly) return fail(`the site ${name} is not mounted read-only`);
+  return { source: mount.source, name };
 }
 
 /**
- * Why the local edge's binds are not exactly its sites plus every one of LOCAL_MOUNTS, each a read-only bind of that
- * one regular file in deployment/edge/local/, or null. A link is refused even when it points inside, so the mount
- * names the file.
+ * Why the local edge's binds are not exactly its site files plus every one of LOCAL_MOUNTS, each a read-only bind of
+ * that one regular file in deployment/edge/local/, or null. A link is refused even when it points inside, so the
+ * mount names the file.
  */
 function localFileMounts(edge: Service, edgeDir: string): Outcome | null {
   const local = EDGE_FILES.realpath(join(edgeDir, "local"));
   const seen = new Set<string>();
   for (const mount of edge.mounts) {
     const target = mountTarget(mount);
-    if (target === SITES_TARGET) continue;
+    if (siteFileTarget(target)) continue;
     const allowed = LOCAL_MOUNTS[target];
     if (allowed === undefined) {
       if (mount.type === "bind") return fail("the edge binds more than its sites and the local files");

@@ -8,10 +8,9 @@
 // ref:tag@digest, and the token reader alone may run the node base (record 2026-10-13-p127l-local-gaps, Amendment
 // 2, point 2, and Amendment 4); C3 to C5 print UNSIGNED. --env dev and --env prod never take this path
 // (c2_to_c5_unchanged_under_dev_and_prod).
-import { join } from "node:path";
-import type { Service } from "../compose-parse.ts";
+import { type Service, TOKEN_READER } from "../compose-parse.ts";
 import { buildProblem } from "./build.ts";
-import { readLock } from "./lock.ts";
+import { exactImage, readBases, readLock } from "./lock.ts";
 import type { VerifyResult } from "./types.ts";
 import { type Check, fail, type Inputs, missing, pass, unsigned } from "./types.ts";
 
@@ -32,7 +31,7 @@ export const c2: Check = {
     const locked = new Set(Object.values(lock).map((entry) => entry.ref));
     for (const { name, image } of inputs.compose.services) {
       const match = image === null ? null : OUR_IMAGE.exec(image);
-      if (match === null) return fail(`${name} image is not ghcr.io/undefined6799/… by digest`);
+      if (match === null) return fail(`${name} image is not ghcr.io/undefined6799/... by digest`);
       if (!locked.has(`${match[1]}${match[2]}`)) return fail(`${name} image is not in the lock`);
     }
     return pass();
@@ -46,11 +45,8 @@ export const c2: Check = {
  */
 export const VENDOR_IMAGES: ReadonlySet<string> = new Set(["ghcr.io/bluesky-social/pds"]);
 
-type BaseEntry = { ref: string; tag: string; digest: string; stage: string; buildStage: boolean };
-
 /** The node runtime base, which the local token reader runs unbuilt (P1.29h). */
 const NODE_BASE = "docker.io/library/node";
-const TOKEN_READER = "pds-token-reader";
 
 /**
  * The images a local stack may run unbuilt, as `ref:tag@digest`. `runOnly` holds the vendor images we run as shipped,
@@ -59,16 +55,15 @@ const TOKEN_READER = "pds-token-reader";
  * postgres), is never one. `readerOnly` holds the node runtime base, which only the token reader may run (record
  * 2026-10-13-p127l-local-gaps, Amendment 2 point 2(b) and Amendment 4).
  */
-function unbuiltImages({ root, readText }: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
-  const bases = readText(join(root, "deployment/images/bases.lock.json"));
+function unbuiltImages(inputs: Inputs): { runOnly: Set<string>; readerOnly: Set<string> } | null {
+  const bases = readBases(inputs);
   if (bases === null) return null;
-  const entries = Object.values(JSON.parse(bases) as Record<string, BaseEntry>);
-  const exact = (b: BaseEntry) => `${b.ref}:${b.tag}@${b.digest}`;
+  const entries = Object.values(bases);
   return {
     runOnly: new Set(
-      entries.filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage).map(exact),
+      entries.filter((b) => VENDOR_IMAGES.has(b.ref) && b.stage === "runtime" && !b.buildStage).map(exactImage),
     ),
-    readerOnly: new Set(entries.filter((b) => b.ref === NODE_BASE && b.stage === "runtime").map(exact)),
+    readerOnly: new Set(entries.filter((b) => b.ref === NODE_BASE && b.stage === "runtime").map(exactImage)),
   };
 }
 
@@ -91,20 +86,27 @@ function localImages(inputs: Inputs) {
   const unbuilt = unbuiltImages(inputs);
   if (unbuilt === null) return missing("deployment/images/bases.lock.json");
   for (const service of inputs.compose.services) {
-    const { name, image, build } = service;
-    if (build !== null) {
-      if (image !== null) return fail(`${name} has both an image and a build`);
-      if (buildProblem(build, inputs) !== null) return fail(`${name} builds from a Dockerfile C26 refuses`);
-    } else if (image === null) {
-      return fail(`${name} has neither an image nor a build`);
-    } else if (unbuilt.readerOnly.has(image)) {
-      const problem = readerProblem(service);
-      if (problem !== null) return fail(problem);
-    } else if (!unbuilt.runOnly.has(image)) {
-      return fail(`${name} image is not a run-only vendor image by tag and digest`);
-    }
+    const problem = localImageProblem(service, unbuilt, inputs);
+    if (problem !== null) return fail(problem);
   }
   return pass();
+}
+
+/** Why one service's image fails C2 under --env local, or null when it passes. */
+function localImageProblem(
+  service: Service,
+  unbuilt: { runOnly: Set<string>; readerOnly: Set<string> },
+  inputs: Inputs,
+): string | null {
+  const { name, image, build } = service;
+  if (build !== null) {
+    if (image !== null) return `${name} has both an image and a build`;
+    return buildProblem(build, inputs) === null ? null : `${name} builds from a Dockerfile C26 refuses`;
+  }
+  if (image === null) return `${name} has neither an image nor a build`;
+  if (unbuilt.readerOnly.has(image)) return readerProblem(service);
+  if (!unbuilt.runOnly.has(image)) return `${name} image is not a run-only vendor image by tag and digest`;
+  return null;
 }
 
 /** C3 to C5 on a local stack: built from the checkout, so nothing was signed and nothing is asked of a registry. */

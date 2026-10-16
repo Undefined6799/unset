@@ -1,5 +1,5 @@
 // tests/support/pds-email-token-read.ts in the container it runs in (P1.29h): the locked Node base unbuilt, as uid 1000
-// with no network, over the account database's folder mounted read-only, as compose.dev.yaml's `pds-token-reader`
+// with no network, over the account database's folder mounted read-only, as compose.local.yaml's `pds-token-reader`
 // runs it. A writer in this process holds the WAL database open the way the running PDS does. Architecture asked for
 // the stopped-PDS path as a test (2026-10-13, on the record 2026-10-13-p129h-local-token-reader): a read-only
 // connection over a read-only mount cannot create the -shm file a cleanly closed WAL database lacks, so SQLite answers
@@ -44,7 +44,7 @@ function runningPds(): DatabaseSync {
 }
 
 /**
- * The reader, run as compose.dev.yaml runs it, logging driver none included (Amendment 2, B1); given a `name`, the
+ * The reader, run as compose.local.yaml runs it, logging driver none included (Amendment 2, B1); given a `name`, the
  * container stays until the caller has inspected and removed it.
  */
 function read(name = "") {

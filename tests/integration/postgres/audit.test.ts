@@ -55,7 +55,7 @@ beforeAll(async () => {
   for (const role of WRITERS) postgres.sql("postgres", `ALTER ROLE ${role} PASSWORD '${passwords[role]}'`);
   as = { web: poolAs("web"), indexer: poolAs("indexer", 8), admin: poolAs("admin") };
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
 
 function poolAs(role: Writer, max = 1): Pool {
   const pool = createPool({
@@ -70,8 +70,6 @@ function poolAs(role: Writer, max = 1): Pool {
     service: "audit-test",
     max,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
   });
   pools.push(pool);
   return pool;

@@ -22,6 +22,8 @@ const PLAN_DEFAULTS: Readonly<Record<string, number>> = {
   "shared/ui": 2500,
   // The UI build runners, moved out of shared/ui by P1.25h; measured on their own (P1.25w).
   "shared/ui-build": 800,
+  // The island runtime P1.25i moves out of shared/ui: 147 lines today, rounded up and at least 300 (P1.25o).
+  "shared/islands": 300,
 };
 
 const COUNTED = /\.(ts|tsx)$/;

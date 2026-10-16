@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { afterAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { parseAllDocuments } from "yaml";
 import { docker } from "../../tests/support/docker.ts";
 import { fail, pass } from "./checks/types.ts";
@@ -94,32 +94,72 @@ describe("compose subset", () => {
   // P1.29a Amendment 1 (/mnt/project-files/unset-plan/book-edits/2026-10-13-p129a-pds-and-edge-in-compose.md): an
   // alias makes a container answer to a name on that network, so only the edge may carry aliases, and only its two
   // hosts, each a whole interpolation. Any other alias could let a container claim the PDS's or the app's name.
-  test("aliases_only_on_the_edge_with_its_two_hosts", () => {
+  test("aliases_only_on_the_edges_edge_and_app_networks_with_its_two_hosts", () => {
+    // Architecture 2026-10-15 02:05Z, option C point 3 (replacing aliases_only_on_the_edge_with_its_two_hosts): only the
+    // edge carries aliases, only on the networks edge and app, and each of them carries exactly its two hosts.
     const hosts = '["${APP_HOST}", "${PDS_HOSTNAME}"]';
-    const stack = (service: string, aliases: string) =>
-      `name: unset-prod\nservices:\n  ${service}:\n    image: x\n    networks:\n      front:\n        aliases: ${aliases}\nnetworks:\n  front: {}\n`;
-    expect(parseCompose(stack("edge", hosts), "c.yaml").services[0]?.networks).toEqual(["front"]);
-    expect(() => parseCompose(stack("edge", '["${PDS_HOSTNAME}", "${APP_HOST}"]'), "c.yaml")).not.toThrow();
-    expect(() => parseCompose(stack("pds", hosts), "c.yaml")).toThrow(
-      new ParseError("c.yaml:7: aliases on pds: only the edge carries aliases"),
-    );
-    const wrong = "c.yaml:7: the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}";
-    for (const aliases of [
-      "[edge]",
-      "[pds.unset.localhost, app.example.test]",
-      '["${PDS_HOSTNAME}"]',
-      '["${APP_HOST}", "${PDS_HOSTNAME}", edge]',
-      '["${APP_HOST}", "${APP_HOST}"]',
-      '["${APP_HOST}", "${PDS_UPSTREAM}"]',
-      '["${APP_HOST}x", "${PDS_HOSTNAME}"]',
-      "${APP_HOST}",
-      "[]",
-    ]) {
-      expect(() => parseCompose(stack("edge", aliases), "c.yaml"), aliases).toThrow(new ParseError(wrong));
+    const stack = (service: string, network: string, aliases: string) =>
+      `name: unset-prod\nservices:\n  ${service}:\n    image: x\n    networks:\n      ${network}:\n        aliases: ${aliases}\nnetworks:\n  ${network}: {}\n`;
+    for (const network of ["edge", "app"]) {
+      expect(parseCompose(stack("edge", network, hosts), "c.yaml").services[0]?.networks).toEqual([network]);
+      expect(() => parseCompose(stack("edge", network, '["${PDS_HOSTNAME}", "${APP_HOST}"]'), "c.yaml")).not.toThrow();
     }
+    const both =
+      "name: unset-prod\nservices:\n  edge:\n    image: x\n    networks:\n" +
+      `      edge:\n        aliases: ${hosts}\n      app:\n        aliases: ${hosts}\nnetworks:\n  edge: {}\n  app: {}\n`;
+    expect(parseCompose(both, "c.yaml").services[0]?.networks).toEqual(["edge", "app"]);
+    for (const service of ["pds", "web"]) {
+      for (const network of ["edge", "app"]) {
+        expect(() => parseCompose(stack(service, network, hosts), "c.yaml")).toThrow(
+          new ParseError(`c.yaml:7: aliases on ${service}: only the edge carries aliases`),
+        );
+      }
+    }
+    for (const network of ["front", "db", "pds_egress", "default"]) {
+      expect(() => parseCompose(stack("edge", network, hosts), "c.yaml"), network).toThrow(
+        new ParseError(`c.yaml:7: aliases on network ${network}: only edge and app carry them`),
+      );
+    }
+    const wrong = "c.yaml:7: the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}";
+    for (const network of ["edge", "app"]) {
+      for (const aliases of [
+        "[edge]",
+        "[pds.unset.localhost, app.example.test]",
+        '["${PDS_HOSTNAME}"]',
+        '["${APP_HOST}"]',
+        '["${APP_HOST}", "${PDS_HOSTNAME}", edge]',
+        '["${APP_HOST}", "${APP_HOST}"]',
+        '["${APP_HOST}", "${PDS_UPSTREAM}"]',
+        '["${APP_HOST}x", "${PDS_HOSTNAME}"]',
+        "${APP_HOST}",
+        "[]",
+      ]) {
+        expect(() => parseCompose(stack("edge", network, aliases), "c.yaml"), `${network} ${aliases}`).toThrow(
+          new ParseError(wrong),
+        );
+      }
+    }
+    // The edge on edge or app with no aliases, in either form, is refused too (verify-895 N3): "each network must carry
+    // exactly both" has no empty case. Other services join both networks bare, and the edge joins others bare.
+    const bare = (networks: string) =>
+      `name: unset-prod\nservices:\n  edge:\n    image: x\n    networks: ${networks}\nnetworks:\n  edge: {}\n  app: {}\n  front: {}\n`;
+    for (const network of ["edge", "app"]) {
+      for (const form of [`[${network}]`, `[front, ${network}]`, `\n      ${network}: {}`, `\n      ${network}:`]) {
+        expect(() => parseCompose(bare(form), "c.yaml"), form).toThrow(
+          new RegExp(`^c\\.yaml:[56]: the edge on network ${network} must carry its aliases$`),
+        );
+      }
+      expect(
+        parseCompose(bare(`[${network}]`).replace("  edge:\n    image", "  web:\n    image"), "c.yaml").services[0]
+          ?.networks,
+      ).toEqual([network]);
+    }
+    const halfBare = both.replace(`      app:\n        aliases: ${hosts}\n`, "      app: {}\n");
+    expect(() => parseCompose(halfBare, "c.yaml")).toThrow(/the edge on network app must carry its aliases/);
+    expect(parseCompose(bare("[front]"), "c.yaml").services[0]?.networks).toEqual(["front"]);
     // Any other `$` under networks is still refused.
     expect(() =>
-      parseCompose(stack("edge", hosts).replace("front:\n        aliases", "${N}:\n        aliases"), "c.yaml"),
+      parseCompose(stack("edge", "edge", hosts).replace("edge:\n        aliases", "${N}:\n        aliases"), "c.yaml"),
     ).toThrow(/\$ in networks/);
   });
   // P1.30u: the edge service's mounts decide which Caddy config runs (C18), so `volumes` is read in a strict subset:
@@ -579,7 +619,7 @@ services:
     restart: unless-stopped
     ports: ["80:80", "443:443", "127.0.0.1:2019:2019"]
     networks:
-      front:
+      edge:
         aliases: ["\${APP_HOST}", "\${PDS_HOSTNAME}"]
       inner:
     volumes:
@@ -621,7 +661,7 @@ services:
       dockerfile: migrate.Dockerfile
     networks: [inner]
 networks:
-  front: {}
+  edge: {}
   inner:
     internal: true
     driver: bridge
@@ -638,15 +678,35 @@ secrets:
 const COMPOSE_CALL_MS = 10_000;
 const COMPOSE_TEST_MS = 60_000;
 
-/** Whether `docker compose` runs here; CI must have it (the architecture record's anti-drift test runs there). */
-const hasCompose = docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
+/**
+ * Whether the agreement tests run (P1.35f). Under CI they always do and nothing is probed: CI must have Compose (the
+ * architecture record's anti-drift test runs there), and a missing or broken one fails each test at its first call.
+ * Off CI, `probe` decides. A probe at module load under CI once failed the whole file before any test ran, killed past
+ * its 10 s budget (run 38646729832). No cause was found in the call itself (strace: three execs, no connect); a stall of
+ * the runner is the residual, unconfirmed explanation (unset-plan/book-edits/2026-10-15-p135f-findings.md). CI is read
+ * as scripts/test/run.ts reads it: exactly "true".
+ */
+function agreementRuns(env: Readonly<Record<string, string | undefined>>, probe: () => boolean): boolean {
+  return env.CI === "true" || probe();
+}
+
+/** How many times this file probed Compose at load: none under CI, one off CI (pinned below, verify-881 S1). */
+let loadProbes = 0;
+const composeRuns = agreementRuns(process.env, () => {
+  loadProbes += 1;
+  return docker(["compose", "version"], { timeoutMs: COMPOSE_CALL_MS }).code === 0;
+});
 
 /**
  * `docker compose version --short`, recorded by each agreement test (ruling F4: CI's Compose is accepted, not pinned).
- * A failed call throws rather than recording an empty version (#677 verifier N-A).
+ * A failed call throws rather than recording an empty version (#677 verifier N-A). `env` replaces the child's
+ * environment, for the test that pins this.
  */
-function composeVersion(): string {
-  const ran = docker(["compose", "version", "--short"], { timeoutMs: COMPOSE_CALL_MS });
+function composeVersion(env?: Readonly<Record<string, string>>): string {
+  const ran = docker(["compose", "version", "--short"], {
+    timeoutMs: COMPOSE_CALL_MS,
+    ...(env === undefined ? {} : { env }),
+  });
   if (ran.code !== 0) throw new Error(`docker compose version exited ${ran.code}`);
   return ran.out.trim();
 }
@@ -849,95 +909,125 @@ describe("compose project directory", () => {
   });
 });
 
+// P1.35f: under CI the agreement tests run without a probe, and a missing or broken Compose fails them at the first
+// call instead of skipping them; off CI the probe decides.
+describe("compose agreement gate", () => {
+  test("ci_runs_the_agreement_without_probing", () => {
+    let probed = 0;
+    const probe = (answer: boolean) => () => {
+      probed += 1;
+      return answer;
+    };
+    expect(agreementRuns({ CI: "true" }, probe(false))).toBe(true);
+    expect(probed).toBe(0);
+    expect(agreementRuns({}, probe(false))).toBe(false);
+    expect(agreementRuns({}, probe(true))).toBe(true);
+    expect(probed).toBe(2);
+  });
+
+  // Unconditional, so it runs in both modes: this run's own load made no probe under CI and exactly one off it.
+  test("this_run_probed_at_load_only_off_ci", () => {
+    expect(loadProbes).toBe(process.env.CI === "true" ? 0 : 1);
+  });
+
+  test("ci_fails_on_a_broken_compose_at_first_call", () => {
+    const bin = mkdtempSync(join(tmpdir(), "compose-gate-"));
+    try {
+      writeFileSync(join(bin, "docker"), "#!/bin/sh\nexit 3\n", { mode: 0o755 });
+      expect(agreementRuns({ CI: "true" }, () => false)).toBe(true);
+      expect(() => composeVersion({ PATH: bin })).toThrow("docker compose version exited 3");
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("compose agreement", () => {
-  const dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  // Made when a test runs, not at collection: a suite skipped off CI then leaves no folder behind (verify-881 N6).
+  let dir = "";
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "compose-parse-"));
+  });
+  afterAll(() => {
+    if (dir !== "") rmSync(dir, { recursive: true, force: true });
+  });
 
   // P1.30 core (step book record 2026-10-07-p130p-as-built): the parser's whole view (name, services, image, ports,
   // env_file, environment, file secrets and, from P1.30t, networks: each service's, its network_mode, and every network
   // with its internal flag) against Compose's, for the fixture and every compose*.yaml in the repository.
-  test.runIf(hasCompose || process.env.CI)(
-    "preflight_matches_compose_config",
-    { timeout: COMPOSE_TEST_MS },
-    async ({ annotate }) => {
-      await annotate(`docker compose version ${composeVersion()}`);
-      const fixture = join(dir, "compose.yaml");
-      writeFileSync(fixture, STACK);
-      writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
-      writeFileSync(join(dir, "pds-admin.secret"), "");
-      const real = repositoryFiles();
-      if (real.length === 0)
-        await annotate(
-          "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
-        );
-      for (const file of [fixture, ...real]) {
-        expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
-      }
-    },
-  );
+  test.runIf(composeRuns)("preflight_matches_compose_config", { timeout: COMPOSE_TEST_MS }, async ({ annotate }) => {
+    await annotate(`docker compose version ${composeVersion()}`);
+    const fixture = join(dir, "compose.yaml");
+    writeFileSync(fixture, STACK);
+    writeFileSync(join(dir, "pds.env"), "PDS_PORT=3000\n");
+    writeFileSync(join(dir, "pds-admin.secret"), "");
+    const real = repositoryFiles();
+    if (real.length === 0)
+      await annotate(
+        "preflight_matches_compose_config: no compose*.yaml in the repository yet, so the fixture alone was compared",
+      );
+    for (const file of [fixture, ...real]) {
+      expect(oursAsCompose(file), file).toEqual(theirsAsOurs(composeConfig(file)));
+    }
+  });
 
   // P1.30a (ruling 2026-10-12-preflight-compose-inputs, F3.5): with and without the env file flag, the preflight interpolates
   // from the file Compose does, on a fixture whose .env and env file disagree; a shell value, which Compose would prefer,
   // makes the preflight refuse to run. Compose runs with only the wrapper's allowlist (F3.3) plus the one name tried.
-  test.runIf(hasCompose || process.env.CI)(
-    "env_file_matches_compose_config",
-    { timeout: COMPOSE_TEST_MS },
-    async ({ annotate }) => {
-      await annotate(`docker compose version ${composeVersion()}`);
-      const inputs = join(dir, "inputs");
-      mkdirSync(inputs);
-      const file = join(inputs, "compose.yaml");
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
-      writeFileSync(file, "name: unset-prod\nservices:\n  pds:\n    image: x\n    environment:\n      HOST: ${HOST}\n");
-      writeFileSync(join(inputs, ".env"), "HOST=dot.example.test\n");
-      const flag = join(inputs, "flag.env");
-      writeFileSync(flag, "HOST=flag.example.test\n");
-      const compose = (args: string[], shell: Record<string, string> = {}) =>
-        execFileSync("docker", ["compose", "-f", file, ...args], {
-          encoding: "utf8",
-          env: { ...allowlisted(), ...shell },
-          timeout: COMPOSE_CALL_MS,
-          killSignal: "SIGKILL",
-        });
-      const theirHost = (extra: string[], shell?: Record<string, string>) =>
-        (JSON.parse(compose([...extra, "config", "--format", "json"], shell)) as Theirs).services.pds?.environment
-          ?.HOST;
-      const ours = (extra: string[], environment: Record<string, string>, want: string | null | undefined) =>
-        preflight(["--env", "prod", "--compose", file, ...extra], {
-          root: dir,
-          run: async () => ({ code: 0, stdout: "", stderr: "" }),
-          environment,
-          checks: [
-            { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
-          ],
-        });
-      // Compose's --env-file is the preflight's --interpolation-env (ruling Amendment 3).
-      const flagPairs: [theirs: string[], ours: string[]][] = [
-        [[], []],
-        [
-          ["--env-file", flag],
-          ["--interpolation-env", flag],
-        ],
-      ];
-      for (const [extra, ourExtra] of flagPairs) {
-        const theirs = theirHost(extra);
-        expect(theirs, extra.join(" ")).toBe(extra.length === 0 ? "dot.example.test" : "flag.example.test");
-        expect(await ours(ourExtra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
-        expect(compose([...extra, "config", "--environment"]).split("\n"), extra.join(" ")).toContain(`HOST=${theirs}`);
-      }
-      // Uninterpolated, Compose shows the reference the parser read; the interpolated value above came from the file.
-      const raw = JSON.parse(compose(["config", "--format", "json", "--no-interpolate"])) as Theirs;
-      expect(raw.services.pds?.environment?.HOST).toBe(oursAsCompose(file).services.pds?.environment.HOST);
-      const shell = { HOST: "shell.example.test" };
-      expect(theirHost(["--env-file", flag], shell)).toBe("shell.example.test");
-      expect(await ours(["--interpolation-env", flag], shell, "shell.example.test")).toEqual({
-        code: 2,
-        lines: ["ERROR HOST is set in the environment"],
+  test.runIf(composeRuns)("env_file_matches_compose_config", { timeout: COMPOSE_TEST_MS }, async ({ annotate }) => {
+    await annotate(`docker compose version ${composeVersion()}`);
+    const inputs = join(dir, "inputs");
+    mkdirSync(inputs);
+    const file = join(inputs, "compose.yaml");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Compose interpolation text, not JS templates.
+    writeFileSync(file, "name: unset-prod\nservices:\n  pds:\n    image: x\n    environment:\n      HOST: ${HOST}\n");
+    writeFileSync(join(inputs, ".env"), "HOST=dot.example.test\n");
+    const flag = join(inputs, "flag.env");
+    writeFileSync(flag, "HOST=flag.example.test\n");
+    const compose = (args: string[], shell: Record<string, string> = {}) =>
+      execFileSync("docker", ["compose", "-f", file, ...args], {
+        encoding: "utf8",
+        env: { ...allowlisted(), ...shell },
+        timeout: COMPOSE_CALL_MS,
+        killSignal: "SIGKILL",
       });
-    },
-  );
+    const theirHost = (extra: string[], shell?: Record<string, string>) =>
+      (JSON.parse(compose([...extra, "config", "--format", "json"], shell)) as Theirs).services.pds?.environment?.HOST;
+    const ours = (extra: string[], environment: Record<string, string>, want: string | null | undefined) =>
+      preflight(["--env", "prod", "--compose", file, ...extra], {
+        root: dir,
+        run: async () => ({ code: 0, stdout: "", stderr: "" }),
+        environment,
+        checks: [
+          { id: "CP", run: (i) => (i.serviceEnv.get("pds")?.use("HOST", (v) => v === want) ? pass() : fail("x")) },
+        ],
+      });
+    // Compose's --env-file is the preflight's --interpolation-env (ruling Amendment 3).
+    const flagPairs: [theirs: string[], ours: string[]][] = [
+      [[], []],
+      [
+        ["--env-file", flag],
+        ["--interpolation-env", flag],
+      ],
+    ];
+    for (const [extra, ourExtra] of flagPairs) {
+      const theirs = theirHost(extra);
+      expect(theirs, extra.join(" ")).toBe(extra.length === 0 ? "dot.example.test" : "flag.example.test");
+      expect(await ours(ourExtra, {}, theirs), extra.join(" ")).toEqual({ code: 0, lines: ["PASS CP ok"] });
+      expect(compose([...extra, "config", "--environment"]).split("\n"), extra.join(" ")).toContain(`HOST=${theirs}`);
+    }
+    // Uninterpolated, Compose shows the reference the parser read; the interpolated value above came from the file.
+    const raw = JSON.parse(compose(["config", "--format", "json", "--no-interpolate"])) as Theirs;
+    expect(raw.services.pds?.environment?.HOST).toBe(oursAsCompose(file).services.pds?.environment.HOST);
+    const shell = { HOST: "shell.example.test" };
+    expect(theirHost(["--env-file", flag], shell)).toBe("shell.example.test");
+    expect(await ours(["--interpolation-env", flag], shell, "shell.example.test")).toEqual({
+      code: 2,
+      lines: ["ERROR HOST is set in the environment"],
+    });
+  });
 
-  test.runIf(hasCompose || process.env.CI)(
+  test.runIf(composeRuns)(
     "project_directory_matches_compose_config",
     { timeout: COMPOSE_TEST_MS },
     async ({ annotate }) => {

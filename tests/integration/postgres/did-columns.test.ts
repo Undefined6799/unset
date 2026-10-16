@@ -43,7 +43,7 @@ beforeAll(async () => {
   await migrateInto("unset");
   postgres.sql("postgres", `ALTER ROLE web PASSWORD '${webPassword}'`);
 }, 120_000);
-afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.close()))), STOP_ALL_MS);
+afterAll(() => stopAllPostgresAfter(() => Promise.all(pools.map((pool) => pool.end()))), STOP_ALL_MS);
 
 function poolFor(database: string, user = "migrator", password = migratorPassword): Pool {
   const pool = createPool({
@@ -51,8 +51,6 @@ function poolFor(database: string, user = "migrator", password = migratorPasswor
     service: "did-columns-test",
     max: 1,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 10_000,
-    idleInTransactionTimeoutMs: 10_000,
   });
   pools.push(pool);
   return pool;
@@ -245,7 +243,7 @@ describe("DID columns", () => {
   test("domain_check", async () => {
     expect(await asWeb(`SELECT '${PLC}'::types.did`)).toBe("ok");
     expect(await asWeb("SELECT 'did:web:example.com'::types.did")).toBe("ok");
-    expect(await asWeb("SELECT 'did:web:sub.example.co.uk'::types.did")).toBe("ok");
+    expect(await asWeb("SELECT 'did:web:sub.example.com'::types.did")).toBe("ok");
     for (const bad of [
       "did:plc:abc",
       `${PLC}a`,

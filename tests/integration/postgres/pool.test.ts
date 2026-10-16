@@ -36,8 +36,6 @@ const poolOf = (connection: PoolOptions["connection"], options: { max?: number; 
     service: "web",
     max: options.max ?? 2,
     connectTimeoutMs: options.connectTimeoutMs ?? 2000,
-    statementTimeoutMs: 2000,
-    idleInTransactionTimeoutMs: 5000,
   });
   pools.push(pool);
   return pool;
@@ -62,25 +60,35 @@ afterAll(() => stopAllPostgresAfter(closePools), STOP_ALL_MS);
 
 /** Closes every pool, dropping what the tests created as migrator first. */
 async function closePools(): Promise<void> {
-  await Promise.all(pools.filter((pool) => pool !== migrator).map((pool) => pool.close()));
+  await Promise.all(pools.filter((pool) => pool !== migrator).map((pool) => pool.end()));
   await withClient(migrator, null, (client) => client.query("DROP TABLE IF EXISTS tx_rows"));
   for (const role of roles) {
     await withClient(migrator, null, (client) =>
       client.query(`REVOKE USAGE ON SCHEMA public FROM ${role}; DROP ROLE ${role}`),
     );
   }
-  await migrator.close();
+  await migrator.end();
 }
 
 /** A fresh role allowed into this database's public schema, and a pool for it. */
-async function setup(options: { max?: number; connectTimeoutMs?: number; connectionLimit?: number } = {}) {
+async function setup(
+  options: {
+    max?: number;
+    connectTimeoutMs?: number;
+    connectionLimit?: number;
+    roleSettings?: Record<string, string>;
+  } = {},
+) {
   const role = `t_${randomBytes(6).toString("hex")}`;
   roles.push(role);
   const password = randomBytes(24).toString("hex");
+  const settings = Object.entries(options.roleSettings ?? {}).map(
+    ([name, value]) => `ALTER ROLE ${role} SET ${name} = '${value}'; `,
+  );
   await withClient(migrator, null, (client) =>
     client.query(
       `CREATE ROLE ${role} LOGIN PASSWORD '${password}' CONNECTION LIMIT ${options.connectionLimit ?? -1}; ` +
-        `GRANT USAGE ON SCHEMA public TO ${role}`,
+        `GRANT USAGE ON SCHEMA public TO ${role}; ${settings.join("")}`,
     ),
   );
   return poolOf({ ...connection, user: role, password }, options);
@@ -94,16 +102,18 @@ const codeOf = (promise: Promise<unknown>) =>
 
 describe("pool", () => {
   test("pool_settings", async () => {
-    const pool = await setup();
-    expect(pool.driver.totalCount).toBe(0);
+    // The role's own settings (migration 0003 sets them from roles.json) are what a pooled session runs with; the pool
+    // adds only its application_name, so no caller holds a second copy of the timeouts.
+    const pool = await setup({ roleSettings: { statement_timeout: "3s", idle_in_transaction_session_timeout: "7s" } });
+    expect(pool.totalCount).toBe(0);
     const settings = await withClient(pool, null, async (client) => {
       const { rows } = await client.query(
         "SELECT current_setting('statement_timeout') AS st, current_setting('idle_in_transaction_session_timeout') AS it, current_setting('application_name') AS app",
       );
       return rows[0];
     });
-    expect(settings).toEqual({ st: "2s", it: "5s", app: "web" });
-    expect(pool.driver.idleCount).toBe(1);
+    expect(settings).toEqual({ st: "3s", it: "7s", app: "web" });
+    expect(pool.idleCount).toBe(1);
   });
 
   test("pool_exhaustion_fails_fast", async () => {
@@ -124,7 +134,7 @@ describe("pool", () => {
     // The pool hands the freed client to the abandoned waiter, which gives it straight back.
     held.release();
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect([pool.driver.totalCount, pool.driver.idleCount, pool.driver.waitingCount]).toEqual([1, 1, 0]);
+    expect([pool.totalCount, pool.idleCount, pool.waitingCount]).toEqual([1, 1, 0]);
     expect(await codeOf(acquire(pool, AbortSignal.abort()))).toBe("http.deadline");
   });
 
@@ -166,7 +176,7 @@ describe("pool", () => {
       "SERIALIZABLE",
     );
     expect(level).toBe("serializable");
-    expect(pool.driver.waitingCount).toBe(0);
+    expect(pool.waitingCount).toBe(0);
   });
 
   test("connection_budget", async () => {

@@ -712,10 +712,12 @@ Edge cases and failures:
 
 Done when (tests):
   - `tap_edge` (book edit 2026-10-13-p129a-build-rulings, Amendment 3; P1.29's networks table): an internal network
-    whose only members are tap and the edge; the edge's attachment carries the `PDS_HOST` alias (`APP_HOST` only if
-    tap calls it); the strict parser accepts aliases on edge attachments only, with the allowed values listed per
-    network. Tests: from tap, `PDS_HOST` resolves to the edge's `tap_edge` address and TLS verifies against the dev
-    root; red: a third service on `tap_edge`; red: an alias on tap's own attachment.
+    whose only members are tap and the edge; the edge's attachment carries the `PDS_HOST` alias; the strict parser
+    accepts aliases on edge attachments only, with the allowed values listed per network. The alias rule widens by
+    exactly one case: the edge service on `tap_edge` carrying only the PDS host; tap stays off every network the PDS is
+    on (book edit 2026-10-15-verify-895-followups, N4 residual). Tests: from tap, `PDS_HOST` resolves to the edge's
+    `tap_edge` address and TLS verifies against the dev root; red: a third service on `tap_edge`; red: an alias on tap's
+    own attachment; red: the app host on `tap_edge`; red: the alias on any non-edge service.
   - `track-callback-enqueues`: a P2.06 callback test → one `app.track_request` row in the same transaction; a
     failed callback leaves none.
   - `backfill-before-track-commit-not-lost`: the stub Tap emits events before returning 200 → every one applied.

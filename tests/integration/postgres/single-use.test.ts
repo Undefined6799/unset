@@ -24,15 +24,13 @@ const poolAs = (role: ProcessRole, max = 1): Pool => {
     service: "single-use-test",
     max,
     connectTimeoutMs: 5000,
-    statementTimeoutMs: 5000,
-    idleInTransactionTimeoutMs: 5000,
   });
   pools.push(pool);
   return pool;
 };
 const web = poolAs("web", 10);
 const retention = poolAs("retention");
-afterAll(() => Promise.all(pools.map((pool) => pool.close())));
+afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 const DID_A = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 const DID_B = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";

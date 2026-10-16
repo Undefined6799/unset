@@ -22,7 +22,7 @@ How to read it:
 
 ## Phase 0 — Repository and guard rails
 
-Depth: **build-ready**. 47 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n; P0.09w and P0.09x added 2026-10-13; P0.09y added 2026-10-14, its row in Phase 4 below P4.07c, which it depends on).
+Depth: **build-ready**. 48 steps (P0.09a retired, P0.09d added; editor pass 2026-10-04 evening; P0.09f, P0.09g, P0.09h, P0.09i, P0.09j, P0.09k, P0.09l, P0.11a and P0.13a added 2026-10-05; P0.07a and P0.09m added 2026-10-06; P0.05b, P0.05c and P0.05d added 2026-10-07; P0.15, P0.15a, P0.16, P0.09t, P0.16a, P0.09n, P0.09o, P0.09p, P0.09q, P0.09r, P0.09s, P0.09u and P0.09v added 2026-10-12; P0.09o folded into P0.09n; P0.09w and P0.09x added 2026-10-13; P0.09y added 2026-10-14, its row in Phase 4 below P4.07c, which it depends on; P0.09z added 2026-10-14).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -62,6 +62,7 @@ Depth: **build-ready**. 47 steps (P0.09a retired, P0.09d added; editor pass 2026
 | P0.09v | Contain Dockerfiles with the native realpath | [SEC] | — | `phase-0.md` |
 | P0.09w | Check the outline: cycles, unknown ids, headings | [ALEX] (typed line) | — | `phase-0.md` |
 | P0.09x | List the cleanup definers as trusted functions | [ALEX] (typed line) | — | `phase-0.md` |
+| P0.09z | Pin the outline check's comparisons (check, SE-6) | [ALEX] (typed line) | P0.09w | `phase-0.md` |
 | P0.09d | AI notes vault and the notes guard (added, Alex 2026-10-04 22:11Z) | — **parallel-safe** (touches only `scripts/guards/` and `docs/ai/`) | P0.06 | `phase-0.md` |
 | P0.10 | Secret scanning, push protection, hardware-key 2FA and offline codes, allowed-signers file | [ALEX] [SEC] | P0.03; runbook PR: P0.07 | `phase-0.md` |
 | P0.11a | Reserved-label list and registrar checklist (agent part of P0.11) | — | P0.04, P0.07 | `phase-0.md` |
@@ -111,6 +112,7 @@ flowchart TD
   P0_09u["P0.09u Pin the syntax subpath"]
   P0_09v["P0.09v Dockerfiles by native realpath"]
   P0_09w["P0.09w Outline graph check"]
+  P0_09z["P0.09z Outline check comparisons pinned"]
   P0_09x["P0.09x Cleanup definers trusted"]
   P0_09y["P0.09y Legal-hold tables guarded"]
   P0_10["P0.10 Secret scanning"]
@@ -134,6 +136,9 @@ flowchart TD
   P0_06 --> P0_07
   P0_07 --> P0_08
   P0_03 --> P0_09
+  P0_05 --> P0_09
+  P0_03 --> P0_09c
+  P0_09w --> P0_09z
   P0_09 --> P0_09a
   P0_07 --> P0_09b
   P0_08 --> P0_09c
@@ -173,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 285 steps: 261 from `phase-1.md`, 24 from `phase-2.md` (including the
+Depth: **build-ready**. 310 steps: 286 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -385,6 +390,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.33u | Make the image secret scan gate (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33s | `phase-1.md` |
 | P1.33v | Scan shipped mirrors with no allow rules (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33u | `phase-1.md` |
 | P1.33c | Accept the PDS scan findings until 2026-11-13 (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35b | Give host-pin a security review owner (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35c | Pin the depcruise rows and image export checks (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35e | Scan the image we built, not a rebuild (check, SE-6) | [SEC] [ALEX] (typed line) | P1.35c | `phase-1.md` |
 | P1.33e | Refuse dev while PDS exceptions remain | [SEC] | P1.33c | `phase-1.md` |
 | P1.34f | Require the interpolation env flag | [SEC] | P1.30a | `phase-1.md` |
 | P1.34p | Refuse secret inputs inside the project | [SEC] | P1.27u | `phase-1.md` |
@@ -409,19 +417,33 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
 | P1.33m | Own the local Postgres init in CODEOWNERS (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d, P1.33m | `phase-1.md` |
-| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card answered 20:43:34Z) | P1.34u, P1.34d | `phase-1.md` |
+| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card answered 20:43:34Z) | P1.34u, P1.34d, P1.35o, P1.35r | `phase-1.md` |
 | P1.34y | Add an inert local PLC policy to net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
 | P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
 | P1.33f | Anchor the depcruise exclude to our outputs (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
-| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h, P1.33f | `phase-1.md` |
+| P1.33o | Keep shared/host-pin a leaf in depcruise (check, SE-6) | [SEC] [ALEX] (typed line) | P1.33i, P1.33h | `phase-1.md` |
 | P1.33j | Use the shared host pin in the token reader | [SEC] | P1.33h | `phase-1.md` |
 | P1.33k | Admit the node base for the token reader | [SEC] | P1.33j | `phase-1.md` |
 | P1.33l | Pin the token reader to the local stack | [SEC] | P1.33j | `phase-1.md` |
 | P1.29i | Judge every outbound PDS key in the token reader | [SEC] | — | `phase-1.md` |
-| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
-| P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.34d, P1.34q | `phase-1.md` |
+| P1.33w | Refuse binds that reach the dev CA folder (split from P1.34d) | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k | `phase-1.md` |
+| P1.33x | Check the local leaf names and expiry (split from P1.34d) | [SEC] | P1.33w | `phase-1.md` |
+| P1.33y | Accept per-file site mounts on local (split from P1.34d) | [SEC] | P1.33x | `phase-1.md` |
+| P1.35a | Close the dev CA folder rule's gaps (after P1.33y) | [SEC] | P1.33y | `phase-1.md` |
+| P1.35f | Root-cause the compose version probe stall | — | — | `phase-1.md` |
+| P1.35g | Refuse an IP address as the local PDS host | [SEC] | — | `phase-1.md` |
+| P1.33g | Document and test the local dev root (split from P1.34d) | [SEC] | P1.35a | `phase-1.md` |
+| P1.35m | Pin the dev CA folder walk's edges | [SEC] | P1.35a | `phase-1.md` |
+| P1.35n | Give web its own network to the edge (split from P1.34d) | [SEC] | — | `phase-1.md` |
+| P1.35o | Pin the app network in the dev compose tests | [SEC] | P1.35n | `phase-1.md` |
+| P1.34d | Trust one dev root CA on the local stack | [SEC] | P1.29a, P1.34c, P1.27l, P1.33t, P1.34q, P1.33k, P1.33w, P1.33x, P1.33y, P1.35a, P1.33g, P1.35n | `phase-1.md` |
+| P1.35p | Close the dev CA preflight and runbook gaps | [SEC] | P1.33g, P1.35m, P1.34d | `phase-1.md` |
+| P1.35r | Pin compose limits and local-only env | [SEC] | P1.34d | `phase-1.md` |
+| P1.35l | Check the PDS host in every env | [SEC] | P1.35g | `phase-1.md` |
+| P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d | `phase-1.md` |
+| P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.33y, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
 | P1.29l | Mirror runs a whole-base build-threshold scan for buildStage bases; fake docker = form; stray TRIVY_* fails | [SEC] | P1.29c | `phase-1.md` |
@@ -440,6 +462,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.31c | Pin the lexicon NSID to the permanent value | — | P1.31 | `phase-1.md` |
 | P1.31e | Admit the private unset-source condition | — | P1.31c | `phase-1.md` |
 | P1.31f | Export the web server through unset-source | — | P1.31e | `phase-1.md` |
+| P1.31g | Lexicons breaking-change check | [SEC] | P1.31, P1.31d | `phase-1.md` |
 | P1.37 | Legal paperwork, round 1 (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.37b | Harden the legal marker docs check | — | P1.37 | `phase-1.md` |
 | P1.36 | Compliance skeletons (pulled forward from slice 2, Alex 23:08Z; test in `scripts/docs/`, check class) | — | P0.07 | `phase-1.md` |
@@ -449,6 +472,13 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.01 | DID and handle resolution | [SEC] | P2.01k, P2.01q, P1.18, P1.34z | `phase-2.md` |
 | P2.01a | The identity network adapter (size split from P2.01) | [SEC] | P2.01 | `phase-2.md` |
 | P2.02 | `verifyHandle(did)` | [SEC] | P2.01 | `phase-2.md` |
+| P1.33r | Share in-flight DID lookups (after P2.02, which it depends on) | [SEC] | P2.01, P2.02 | `phase-1.md` |
+| P1.32b | Share in-flight handle checks (trusted base, split from P1.33r) | [SEC] trusted | P1.33r | `phase-1.md` |
+| P1.32c | Replace the real-looking DID in fixtures | — | — | `phase-1.md` |
+| P1.35h | Test the in-flight rejection path | [SEC] | — | `phase-1.md` |
+| P1.35i | Move test handles to reserved domains | [SEC] | — | `phase-1.md` |
+| P1.35j | Move trusted test handles to reserved domains (trusted) | [SEC] trusted [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35k | Move net-guard test hosts to reserved names (trusted) | [SEC] trusted [ALEX] (typed line) | — | `phase-1.md` |
 | P2.02x | Export verifyHandle from the identity index (split from P2.02, SE-6) | — | P2.02 | `phase-2.md` |
 | P2.03q | Move the session store's trusted path (check part of P2.03; SE-6 q) | [SEC] | — | `phase-2.md` |
 | P2.03x | Add the session table, registry rows and timeouts (split from P2.03) | [SEC] | P1.12, P1.15g | `phase-2.md` |
@@ -649,6 +679,10 @@ flowchart TD
   P1_33u["P1.33u Image secret scan gates"]
   P1_33v["P1.33v Shipped mirrors scanned, no allow rules"]
   P1_33c["P1.33c PDS scan findings accepted"]
+  P1_35b["P1.35b Host-pin security review owner"]
+  P1_35c["P1.35c Depcruise rows and export checks pinned"]
+  P1_35e["P1.35e Built image scanned, not a rebuild"]
+  P1_35c --> P1_35e
   P1_33e["P1.33e Dev refused while exceptions remain"]
   P1_34x["P1.34x Run lists admit chown and chmod only"]
   P1_34r["P1.34r Env reader walks, opens, fstats"]
@@ -679,7 +713,19 @@ flowchart TD
   P1_29i["P1.29i Token reader judges every outbound key"]
   P1_34c["P1.34c Local app site with a dev leaf"]
   P1_34a["P1.34a Edge reader accepts local app site"]
+  P1_33r["P1.33r In-flight DID lookups shared"]
+  P1_32b["P1.32b In-flight handle checks shared"]
+  P1_33r --> P1_32b
+  P1_32c["P1.32c Fixture DIDs replaced"]
+  P1_35h["P1.35h In-flight rejection path tested"]
+  P1_35i["P1.35i Test handles on reserved domains"]
+  P1_35j["P1.35j Trusted test handles on reserved domains"]
+  P1_35k["P1.35k Net-guard test hosts on reserved names"]
+  P1_33w["P1.33w Binds to the dev CA folder refused"]
+  P1_33x["P1.33x Local leaf names and expiry"]
+  P1_33y["P1.33y Per-file site mounts on local"]
   P1_34d["P1.34d PDS trusts one dev root"]
+  P1_33z["P1.33z Local stack in CI"]
   P1_33n["P1.33n Site reader per-file only"]
   P1_27a["P1.27a C9 refuses sticky ancestors"]
   P1_27w["P1.27w Compose only through the wrapper"]
@@ -723,6 +769,7 @@ flowchart TD
   P1_31c["P1.31c NSID cross-pin"]
   P1_31e["P1.31e unset-source condition"]
   P1_31f["P1.31f Web server via unset-source"]
+  P1_31g["P1.31g Lexicons breaking-change check"]
   P1_37["P1.37 Legal paperwork"]
   P1_37b["P1.37b Legal marker check hardening"]
   P1_36["P1.36 Compliance skeletons"]
@@ -891,6 +938,8 @@ flowchart TD
   P1_31 --> P1_31c
   P1_31c --> P1_31e
   P1_31e --> P1_31f
+  P1_31 --> P1_31g
+  P1_31d --> P1_31g
   P1_32 --> P1_32a
   P1_18 --> P2_01
   P2_01 --> P2_02
@@ -1014,10 +1063,39 @@ flowchart TD
   P1_34n --> P1_34k
   P1_34k --> P1_29t
   P1_34d --> P1_29t
+  P1_33k --> P1_33w
+  P1_33w --> P1_33x
+  P1_33x --> P1_33y
+  P1_33y --> P1_34d
+  P1_35a["P1.35a Dev CA folder rule gaps closed"]
+  P1_33y --> P1_35a
+  P1_35a --> P1_34d
+  P1_33g["P1.33g Local dev root documented and tested"]
+  P1_35a --> P1_33g
+  P1_33g --> P1_34d
+  P1_35m["P1.35m Dev CA folder walk edges pinned"]
+  P1_35a --> P1_35m
+  P1_35p["P1.35p Dev CA preflight and runbook gaps closed"]
+  P1_33g --> P1_35p
+  P1_35m --> P1_35p
+  P1_34d --> P1_35p
+  P1_35r["P1.35r Compose limits and local-only env pinned"]
+  P1_34d --> P1_35r
+  P1_35n["P1.35n Web on its own network to the edge"]
+  P1_35n --> P1_34d
+  P1_35o["P1.35o App network pinned in the dev compose tests"]
+  P1_35n --> P1_35o
+  P1_35o --> P1_34v
+  P1_35r --> P1_34v
+  P1_35f["P1.35f Compose probe stall root-caused"]
+  P1_35g["P1.35g IP refused as local PDS host"]
+  P1_35l["P1.35l PDS host checked in every env"]
+  P1_35g --> P1_35l
+  P1_34d --> P1_33z
   P1_34a --> P1_34o
   P1_34o --> P1_34q
   P1_34q --> P1_34d
-  P1_34d --> P1_33n
+  P1_33y --> P1_33n
   P1_34q --> P1_33n
   P1_11k --> P1_33s
   P1_33s --> P1_33u
@@ -1045,7 +1123,6 @@ flowchart TD
   P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33o
-  P1_33f --> P1_33o
   P1_33h --> P1_33j
   P1_33j --> P1_33k
   P1_33k --> P1_34d
@@ -1206,7 +1283,7 @@ Arachnid application, and the Phase 1 exit.
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
-| P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
+| P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.31g, P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
 | P1.37a | Apply for Arachnid Shield access (Alex) | [ALEX] | — | `phase-1.md` |
 | P1.38 | Phase 1 exit | — | P1.26, P1.19, P1.22b, P1.35, P1.33, P1.33p, P1.34, P1.36, P1.37, P1.37a, P1.15s | `phase-1.md` |
@@ -1226,6 +1303,7 @@ flowchart TD
   P1_33d["P1.33d PDS scan exceptions cleared"]
   P1_34["P1.34 unset.ac registered"]
   P1_35["P1.35 Lexicon authority on the dev PDS"]
+  P1_31g["P1.31g Lexicons breaking-change check"]
   P1_27s["P1.27s publish and sign images"]
   P1_27v["P1.27v Renovate image-lock managers"]
   P1_37a["P1.37a Apply for Arachnid Shield access"]
@@ -1245,6 +1323,7 @@ flowchart TD
   P1_33p --> P1_35
   P1_33a --> P1_35
   P1_33p --> P1_38
+  P1_31g --> P1_35
   P1_34 --> P1_35
   P1_35 --> P1_38
   P1_37a --> P1_38
@@ -1273,8 +1352,8 @@ Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.23 | Publish and unpublish | [SEC] | P2.21, P2.22, P1.31, P2.07 | `phase-2.md` |
 | P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
 | P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
-| P2.26aq | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
-| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
+| P2.26f | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
+| P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |
 
 ```mermaid
@@ -1875,6 +1954,8 @@ flowchart LR
 
 | Id | Status |
 |---|---|
+| P1.35d | Reserved: conditional split of P1.35c, the depcruise half (record 2026-10-15-verify-863-866-followups). |
+| P2.26aq | Renamed **P2.26f** (#859; 2026-10-14, book edit 2026-10-14-verify-847-outline-fixes): it broke the one-trailing-letter rule (`00-README.md:65-68`). Same content, class and place. |
 | P2.16a | Retired. The Arachnid Shield API spike moved to **P5.07b** with the real check (decision 23, global resolution 2). |
 | L.01 part A | Now **P1.33a** in Phase 1, before going public (global resolution 8; P1.33p since 2026-10-13). L.01 keeps part B. |
 | L.02's severity definitions | Now **P0.09b**; L.02 keeps only the gate. |
@@ -1953,7 +2034,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09t, P0.09n, P0.09r, P0.09w, P0.09x, P0.09y, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30r, P1.30u, P1.31, P1.33, P1.33a, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33s, P1.33u, P1.33v, P1.34, P1.35, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.34v, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -1967,28 +2048,29 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P0.09r (#722):** a typed line, "yes P0.09r scripts/guards git-env diagnostics", for the classifier path.
 - **P0.09w (#816):** a typed line, "yes P0.09w scripts/docs outline checks", for the classifier path (it supersedes
   "yes docs cycle check scripts/docs").
-- **P0.09x (#825):** a typed line, "yes P0.09x CODEOWNERS trusted functions", for the CODEOWNERS check path; P4.07g waits on
-  it.
-- **P0.09y (#826):** a typed line, "yes P0.09y migration guard", for the `scripts/guards/` and CODEOWNERS check
-  paths; P4.07 waits on it.
+- **P0.09z (#858):** a typed line, "yes P0.09z scripts/docs outline check equality ids".
+- **P1.35b (#872):** a typed line, "yes P1.35b .github/CODEOWNERS scripts/workspace shared/host-pin security review".
+- **P1.35c (#877):** a typed line, "yes P1.35c .github/workflows/images.yml scripts/ci scripts/lint export and
+  entry checks".
+- **P1.35e (#878):** a typed line, "yes P1.35e .github/workflows/images.yml scripts/ci scan the built image".
+- **P1.35j (#885):** a typed line, "yes P1.35j shared/http test handles reserved domains".
+- **P1.35k (#891):** a typed line, "yes P1.35k infrastructure/net-guard test hosts reserved names".
+- **P0.09y (#826):** a typed line, "yes P0.09y .github/CODEOWNERS scripts/guards scripts/workspace", for the
+  `scripts/guards/`, CODEOWNERS and `scripts/workspace/` check paths; P4.07 waits on it.
 - **P1.23h:** a typed line, "yes P1.23h scripts/guards scripts/ci", for the classifier paths.
 - **P1.25o:** a typed line, "yes P1.25o CODEOWNERS".
 - **P1.25q:** a typed line, "yes P1.25q notes.ts" (a check step, not tagged `[ALEX]`).
 - **P1.27r (#347):** his typed words allowing the guard-file edit, then his ruleset setting adding `scan`; deferred
   until after launch.
 - **P1.27s (#184):** a typed line, "yes P1.27s packages: write .github/workflows/publish-images.yml
-  .github/workflows/mirror.yml scripts/guards/workflows.ts scripts/ci .github/CODEOWNERS deployment/sigstore", and the
-  `signing` environment (branch rule and reviewer). Signing is keyless (ADR 0023, "Keyless", 2026-10-14T21:16:36Z), so
-  there is no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers").
+  .github/workflows/mirror.yml .github/workflows/sigstore-root.yml scripts/guards/workflows.ts scripts/ci
+  .github/CODEOWNERS deployment/sigstore" (it replaces the earlier line), and the `signing` environment (branch rule
+  and reviewer). Signing is keyless (ADR 0023, written by P1.27s and accepted when Alex merges it; Alex's "Keyless",
+  2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?"), so there is
+  no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers").
 - **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
   .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
-- **P1.33m:** a typed line, "yes P1.33m .github/CODEOWNERS /deployment/postgres/init-local/".
-- **P1.33f (#846):** a typed line, "yes P1.33f scripts/lint depcruise exclude anchor".
-- **P1.33o (#841):** a typed line, "yes P1.33o scripts/lint .github/CODEOWNERS depcruise shared-host-pin row
-  LEAF_SHARED".
-- **P1.33u (#848):** a typed line, "yes P1.33u .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci secret
-  scan gate".
 - **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
   allow rules".
 - P1.33s is done: merged as 7c56327 (#835).

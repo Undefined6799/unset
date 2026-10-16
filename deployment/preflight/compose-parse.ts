@@ -358,8 +358,11 @@ function profiles(r: Reader, spec: YAMLMap): string[] {
   return ["tools"];
 }
 
-/** The one service that may set `logging`, and must: its stdout is the email token (P1.29h). */
-const TOKEN_READER = "pds-token-reader";
+/**
+ * The one service that may set `logging`, and must: its stdout is the email token (P1.29h). It is also the one service
+ * that may run the node base unbuilt (C2 under local, and compose.dev.test.ts).
+ */
+export const TOKEN_READER = "pds-token-reader";
 
 /**
  * `logging` exactly `{driver: none}`, on the token reader only, which must set it: with driver none Docker keeps no
@@ -630,18 +633,29 @@ const NETWORK_KEYS = new Set(["internal", "driver"]);
 const isEmpty = (node: unknown): boolean => node === null || (isScalar(node) && node.value === null);
 
 /**
- * The only aliases there are: the edge's own two hosts, each a whole interpolation (P1.29a Amendment 1, architecture
- * record 2026-10-13-p129a-pds-and-edge-in-compose). An alias makes a container answer to that name on the network, so
- * any other one could let a container claim the PDS's or the app's host.
+ * The only aliases there are: the edge's own two hosts, each a whole interpolation, on the edge network (where the PDS
+ * reaches them) and the app network (where web does), and nowhere else (P1.29a Amendment 1, architecture record
+ * 2026-10-13-p129a-pds-and-edge-in-compose; architecture 2026-10-15 02:05Z, option C point 3, in book edit
+ * 2026-10-14-p134d-split). An alias makes a container answer to that name on the network, so any other one could let a
+ * container claim the PDS's or the app's host.
  */
 const EDGE_ALIASES = ["${APP_HOST}", "${PDS_HOSTNAME}"];
+const ALIAS_NETWORKS = new Set(["edge", "app"]);
 
-function aliases(r: Reader, node: unknown, service: string): void {
+function aliases(r: Reader, node: unknown, service: string, network: string): void {
   if (service !== "edge") r.fail(node, `aliases on ${service}: only the edge carries aliases`);
+  if (!ALIAS_NETWORKS.has(network)) r.fail(node, `aliases on network ${network}: only edge and app carry them`);
   const values = isSeq(node) ? node.items.map((item) => r.text(item, "alias")) : [];
   const exact = values.length === EDGE_ALIASES.length && EDGE_ALIASES.every((host) => values.includes(host));
   if (!exact) r.fail(node, "the edge's aliases must be exactly ${APP_HOST} and ${PDS_HOSTNAME}");
 }
+
+/** Whether a service's `networks:` mapping gives `network` an attachment with aliases. */
+const aliased = (node: unknown, network: string): boolean =>
+  isMap(node) &&
+  node.items.some(
+    (pair) => isScalar(pair.key) && pair.key.value === network && isMap(pair.value) && pair.value.has("aliases"),
+  );
 
 /** `networks:` on a service, as a list of keys or a map of key to attachment; with neither it is on `default`. */
 function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: string): string[] {
@@ -658,7 +672,7 @@ function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: st
       for (const key of isMap(pair.value) ? pair.value.items : []) {
         const field = r.text(key.key, "attachment key");
         if (!ATTACHMENT_KEYS.has(field)) r.fail(key.key, `network attachment key ${field}`);
-        if (field === "aliases") aliases(r, key.value, service);
+        if (field === "aliases") aliases(r, key.value, service, r.text(pair.key, "network"));
         else r.noDollar(key.value, "networks");
       }
       return r.text(pair.key, "network");
@@ -668,6 +682,9 @@ function serviceNetworks(r: Reader, node: unknown, hasMode: boolean, service: st
   }
   if (names.length === 0) r.fail(node, `networks of ${service} is empty`);
   if (new Set(names).size !== names.length) r.fail(node, `networks of ${service} repeats a network`);
+  // The other half of "each network carries exactly both" (verify-895 N3): the edge on edge or app carries its aliases.
+  const bare = names.find((name) => service === "edge" && ALIAS_NETWORKS.has(name) && !aliased(node, name));
+  if (bare !== undefined) r.fail(node, `the edge on network ${bare} must carry its aliases`);
   return names;
 }
 

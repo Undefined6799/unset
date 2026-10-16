@@ -14,7 +14,7 @@ test track have rows.
 
 | Activity | Purpose | Personal data | Lawful basis | Retention | Processors | Status | Evidence |
 |---|---|---|---|---|---|---|---|
-| Accounts | Run the user's account, profile and sign-in | DID, handle, profile fields, session records | Contract (GDPR Art. 6(1)(b)); PIPEDA consent | Until the account is deleted, then erased by `eraseDid`, with backups within 30 days | None | partial | `doc:docs/human/db/erasure.md`, `step:P2.03` |
+| Accounts | Run the user's account, profile and sign-in | DID, handle, profile fields, session records, the sealed OAuth token set (P2.04) | Contract (GDPR Art. 6(1)(b)); PIPEDA consent | Until the account is deleted, then erased by `eraseDid`, with backups within 30 days | None | partial | `doc:docs/human/db/erasure.md`, `step:P2.03`, `step:P2.04` |
 | E-mail | Send verification and account mail | E-mail address | Contract (GDPR Art. 6(1)(b)); PIPEDA consent | Until the account is deleted | The SMTP provider (row below) | open | `step:P2.11` |
 | SMTP provider | Deliver transactional e-mail | E-mail address, message content | Contract (GDPR Art. 6(1)(b)); PIPEDA consent | The provider's terms, not chosen yet | A paid sending service hosted in Canada or the EU, picked by Alex from the team's shortlist before the first invite (Alex answer 21) | open | `step:P2.15` |
 | Edge logs | Keep the service running and find faults | Status, route template and timing only: no address, path, query or user agent | Legitimate interests (GDPR Art. 6(1)(f)) | 3 days | None | open | `step:P1.28` |

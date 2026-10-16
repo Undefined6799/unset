@@ -15,9 +15,6 @@ export type PoolOptions = {
   readonly max: number;
   /** PG_CONNECT_TIMEOUT_MS: the longest wait for a client, nested inside the caller's deadline. */
   readonly connectTimeoutMs: number;
-  /** The role's `statement_timeout` (2 s on `web`, plan §6.1). */
-  readonly statementTimeoutMs: number;
-  readonly idleInTransactionTimeoutMs: number;
   /**
    * Called once per statement sent on any of this pool's clients, transaction control excepted. Only the query budget
    * test sets it (P1.11t); production composes do not.
@@ -25,15 +22,15 @@ export type PoolOptions = {
   readonly onStatement?: () => void;
 };
 
-export type Pool = {
-  /** The driver pool; only this file touches it. */
-  readonly driver: pg.Pool;
-  readonly connectTimeoutMs: number;
-  /** The P1.04 shutdown close hook: ends every connection. */
-  readonly close: () => Promise<void>;
-};
+/** A role's pool. Take clients only through `acquire` or `withClient` (Semgrep pool-access-single-file); `end()` is the
+ * P1.04 shutdown close hook. */
+export type Pool = pg.Pool;
 
-/** Builds a role's pool. The settings travel in the startup packet (pg 8.23.0 lib/client.js:551-568), not as SETs. */
+/**
+ * Builds a role's pool. Its sessions run with the role's own timeouts, which migration 0003 sets from roles.json
+ * (`ALTER ROLE ... SET`), so they live in one place; the pool sends only its application_name in the startup packet
+ * (pg 8.23.0 lib/client.js:551-568), and a setting sent there would override the role's.
+ */
 export function createPool(options: PoolOptions): Pool {
   const driver = new pg.Pool({
     ...options.connection,
@@ -41,14 +38,12 @@ export function createPool(options: PoolOptions): Pool {
     // node-postgres waits forever by default (findings F-09); this bounds the wait even without a deadline.
     connectionTimeoutMillis: options.connectTimeoutMs,
     application_name: options.service,
-    statement_timeout: options.statementTimeoutMs,
-    idle_in_transaction_session_timeout: options.idleInTransactionTimeoutMs,
   });
   // An idle client's dropped connection is reported here; the pool already discards that client.
   driver.on("error", () => undefined);
   const { onStatement } = options;
   if (onStatement !== undefined) driver.on("connect", (client) => countStatements(client, onStatement));
-  return { driver, connectTimeoutMs: options.connectTimeoutMs, close: () => driver.end() };
+  return driver;
 }
 
 /** Transaction control, which `tx.ts` adds on its own: not a data round trip, so not counted (ruling 2026-10-06). */
@@ -75,7 +70,7 @@ function countStatements(client: pg.PoolClient, onStatement: () => void): void {
  */
 export async function acquire(pool: Pool, deadline: AbortSignal | null): Promise<PoolClient> {
   if (deadline?.aborted) throw new AppError("http.deadline");
-  const pending = pool.driver.connect();
+  const pending = pool.connect();
   if (deadline === null) return pending.catch(busy);
   let onAbort = (): void => undefined;
   const aborted = new Promise<never>((_, reject) => {

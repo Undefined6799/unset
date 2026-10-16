@@ -22,6 +22,12 @@ export {
   migrateThenSyncPasswords,
 } from "./migrate.ts";
 export {
+  createOAuthSessionStore,
+  createOAuthStateStore,
+  type OAuthStateStore,
+  type SealedStore,
+} from "./oauthStores.ts";
+export {
   acquire,
   checkConnectionBudget,
   createPool,
@@ -39,8 +45,6 @@ export {
 } from "./roles.ts";
 export {
   type CatalogColumn,
-  contextIn,
-  parseRegistry,
   SEALED_COLUMNS,
   type SealedColumnId,
   type SealedForm,

@@ -31,7 +31,7 @@ const provided = inject("postgres");
 const database = provided.databases[relative(REPOSITORY, import.meta.filename)] ?? "";
 let statements = 0;
 const pools: Pool[] = [];
-afterAll(() => Promise.all(pools.map((pool) => pool.close())));
+afterAll(() => Promise.all(pools.map((pool) => pool.end())));
 
 function countingPool(): Pool {
   const pool = createPool({
@@ -39,8 +39,6 @@ function countingPool(): Pool {
     service: "query-budget",
     max: 1,
     connectTimeoutMs: 2000,
-    statementTimeoutMs: 2000,
-    idleInTransactionTimeoutMs: 5000,
     onStatement: () => {
       statements += 1;
     },

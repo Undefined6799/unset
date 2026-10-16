@@ -1415,7 +1415,9 @@ Algorithm:
      a. `UPSERT app.account(did, first_seen_at = now())` keeping existing columns.
      b. `created = sessions.create(tx, did, {replacingCookie: request cookie __Host-sid})`.
      DB error → deny `login.failed` (no cookie set). After commit, count `auth.login_succeeded` (no DID).
-  10. `invalidateHandle(did)` (the handle may have changed during sign-up or on the PDS).
+  10. `invalidateHandle(did)` (the handle may have changed during sign-up or on the PDS); the next handle check for
+      this DID in this request uses `consistency: "fresh"` (P1.33r rule (a): read after now), so neither a cached nor
+      an in-flight older DID document answers it.
   11. Email read (best effort, 5 s): `pdsCall(did, getSession)` → `ok` → `sessions.setEmailConfirmed(created, value)`;
       any other outcome → leave null (P2.11 reads it).
   12. Response: set `__Host-sid` (Max-Age 30 d); clear `__Host-signed_out`; 303 to the first that applies:
@@ -2342,8 +2344,10 @@ Done when (tests):
   - `routes.only_two`: GET `/v1/invite.issue`, POST `/v1/anything`, `/xrpc/com.atproto.admin.getAccountInfo` → 404.
   - `boot.missing_secret`: no password file → exit code 1, no secret in stderr.
   - `zero_dependency`: `interfaces/pds-admin/package.json` has no `dependencies` (dev dependencies only for tests).
-  - `reserved.list`: `reserved-labels.json` contains exactly `www, api, admin, account, mail, mta-sts, autoconfig, status`
-    plus the rule "any label starting with `_`"; `check-reserved` against the fake PDS prints one line per label.
+  - `reserved.list`: `reserved-labels.json` contains exactly `www, api, admin, account, mail, mta-sts, autoconfig,
+    status`, the one-letter test labels kept on our own suffixes (as named in P1.35i's and P1.35j's PR bodies, so no
+    real user can hold one; book edit 2026-10-15-verify-875-fixture-wording), and the rule "any label starting with
+    `_`"; `check-reserved` against the fake PDS prints one line per label.
   - `web.issueInvite_mapping`: each pds-admin status → the matching `issueInvite` kind; a NetGuardError → `unavailable`.
 
 Reuse (provisional — for reuse review):
@@ -3995,7 +3999,9 @@ Diagram: see the three sequence diagrams at the top of this file.
 ### P2.26e — Commit the Sigstore trusted root
 Tags: [SEC] trusted            Depends on: P1.27s
 Pulled forward (Q3 B), issue #844, trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
-edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. Order: right after
+edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. It exists because of
+Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you
+keep?" (ADR 0023, written by P1.27s; accepted when Alex merges it). Order: right after
 P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
@@ -4003,11 +4009,14 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
   root version and the file's sha256;
 - trust material fetched at deploy time: the preflight reads only this committed file (P2.26b).
 
-Where: `deployment/sigstore/trusted_root.json` and its test.
+Where: `deployment/sigstore/trusted_root.json` and its test, `deployment/sigstore/trusted_root.test.ts`.
 
-**What:** the file is fetched once through Sigstore's TUF client in a CI job, from the Sigstore public-good root. The PR
-body shows the TUF root version and the file's sha256. Later refreshes are reviewed PRs. Nothing from Alex beyond the
-existing gates.
+**What:** the file comes from a manual run of P1.27s's `sigstore-root.yml`, which fetches it through Sigstore's pinned
+TUF client from the Sigstore public-good root and uploads it as a run artifact (architecture on verify-842-e4f6e94 S5,
+last two sections of book edit 2026-10-13-verify-819-fixes). Order: P1.27s, then that run, then this step. The PR body
+cites the run id, the TUF root version and the file's sha256; the verifier fetches the root independently through the
+same pinned TUF client and confirms the sha256 matches before calling the PR safe. Later refreshes repeat the run plus
+a trusted PR. Nothing from Alex beyond the existing gates.
 
 Size: one data file and about 40 test lines.
 
@@ -4029,7 +4038,9 @@ Where:
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
 - the first `deployment/images.lock.json`, every entry with `"verify": "cosign-keyless"`; there is no `cosign.pub`
-  (ADR 0023; book edit 2026-10-13-verify-819-fixes, the keyless mapping);
+  (ADR 0023, written by P1.27s and accepted when Alex merges it, from Alex's "Keyless", 2026-10-14T21:16:36Z, on
+  "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book edit 2026-10-13-verify-819-fixes,
+  the keyless mapping);
 - the preflight (`deployment/preflight/checks/images.ts`, `types.ts`): `cosignKeyPath` becomes the trusted-root path
   (`deployment/sigstore/trusted_root.json`, P2.26e), and C3 and C4 verify keyless, offline, with the identity per
   workflow (P1.27s);
@@ -4038,7 +4049,12 @@ Where:
   mismatch. The preflight runs on the deploy host with Node, so the deploy runbook's install step matches the
   constants; bumping cosign is a reviewed PR that changes them;
 - `compose.dev.yaml` (every service by digest from the lock; the edge stops being `build:`);
-- the preflight real-file test in `deployment/preflight/`.
+- the preflight real-file test in `deployment/preflight/`;
+- the leftover key path (verify-842-e4f6e94 N8): `deployment/preflight/inputs.ts:344`, where `cosignKeyPath` is set to
+  `deployment/cosign.pub`, and the `cosign.pub` fixtures at `preflight.test.ts:177`, `:2157` and `:2207`.
+
+Its trusted-root fixtures live outside `deployment/sigstore/` (trusted base); a product PR touching that folder fails
+isolation (verify-842-e4f6e94 N9).
 
 `base_digest_matches_lock` for a `"mirror"` entry: the `FROM` must be the entry's mirror path from `mirror.list.json` at
 the lock digest. For the two caddy entries only, the upstream `ref:tag@digest` spelling is also accepted, but only with
@@ -4102,13 +4118,9 @@ Done when, red first, `mirror_entry_refuses_upstream_spelling` shows the upstrea
 
 ### P2.26a — Minimal deploy by verified digest for the test host (added, decision 35 D5)
 
-Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
-`scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
-`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26aq** holds that
-test and `docs/human/runbooks/postmortem-template.md`; this step holds the deploy change and
-`rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
+Split: P2.26f (its own section below) holds the postmortem test and template.
 
-Tags: [SEC]            Depends on: P2.26aq, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
+Tags: [SEC]            Depends on: P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33            Plan: §8 Phase 2 "Minimal digest-verified deploy for the closed-test host" (decision 35 D5; findings F-11); §2 rule 23; rule DL-5
 Where: `deployment/bin/deploy`, `deployment/deploy/{plan.ts, verify.ts, smoke.ts, main.ts}` (pure planning and checks plus a
   thin shell), `deployment/deploy/*.test.ts`, `docs/human/runbooks/deploy-test-host.md`,
   `docs/human/runbooks/postmortem-template.md` (moved here from P5.00, R2-14), `scripts/docs/postmortem.test.ts`
@@ -4197,6 +4209,20 @@ Reuse: P5.03's planned design → this is its first half, written so P5.03 exten
 Not in this step: zero-downtime `docker rollout`, the pre-migration backup and `backup.lock`, the disk check, the 24-hour
   release-drift alert and the production host (P5.03); signing (P1.27); preflight rules (P1.30).
 Diagram: none.
+
+---
+
+### P2.26f — Postmortem template and its docs check (check part of P2.26a; SE-6 `q`)
+Tags: —            Depends on: P2.26
+
+Moved out of P2.26a's section, text unchanged (book edit 2026-10-14-verify-868-fixes, S3; it was P2.26aq, a sub-step
+written inside P2.26a):
+
+Split (SE-6 `q` rule, recount after the 2026-10-05 01:43Z narrowing: only check folders are check paths):
+`scripts/docs/postmortem.test.ts` checks docs content (`postmortem_template_headings`,
+`postmortems_have_no_user_identifiers`), so it is a docs check and stays in `scripts/docs/`. **P2.26f** holds that
+test and `docs/human/runbooks/postmortem-template.md`; P2.26a holds the deploy change and
+`rollback_prints_postmortem_due`, which tests `deployment/deploy/`.
 
 ---
 

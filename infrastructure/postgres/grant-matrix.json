@@ -153,6 +153,27 @@
         },
         "rowPrivileges": ["DELETE"]
       }
+    },
+    "app.oauth_state": {
+      "web": {
+        "columns": {
+          "key": ["SELECT", "INSERT"],
+          "sealed": ["SELECT", "INSERT", "UPDATE"],
+          "expires_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
+    },
+    "app.oauth_session": {
+      "web": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "sealed": ["SELECT", "INSERT", "UPDATE"],
+          "client_kid": ["SELECT", "INSERT", "UPDATE"],
+          "updated_at": ["SELECT", "INSERT", "UPDATE"]
+        },
+        "rowPrivileges": ["DELETE"]
+      }
     }
   }
 }

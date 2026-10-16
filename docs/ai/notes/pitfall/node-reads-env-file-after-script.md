@@ -4,13 +4,13 @@ type: pitfall
 status: current
 areas: ["[[deployment]]"]
 summary: "Node reads --env-file anywhere before a literal --, even after the script name, and runs the file's NODE_OPTIONS."
-code: [deployment/preflight/inputs.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts]
+code: [deployment/preflight/inputs.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts, deployment/preflight/served-leaf.ts]
 sources: [unset-plan/book-edits/2026-10-12-preflight-compose-inputs.md]
 importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-14
+checked: 2026-10-15
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
@@ -40,3 +40,10 @@ Re-checked at P1.27l, which adds `local` to `--env`'s values and the usage text;
 above still hold.
 Re-checked at P1.33k, which drops `stack.ts`'s unused `node:fs` and `node:path` imports left by P1.33h's move to
 `shared/host-pin`; no flag, argv form or child environment changed, and the rules above still hold.
+Re-checked at P1.35a, which adds a `readdir` input to `inputs.ts` for the dev CA folder walk; no flag, argv form or
+env-file read changed, and the rules above still hold.
+Re-checked at P1.34d, which lets `stack.ts` take `--env local` and, after `up`, run `served-leaf.ts` as a third child.
+That child gets the same environment, empty `NODE_OPTIONS` included, and is called as `node served-leaf.ts -- --env
+local`, which refuses any other form; `stack.test.ts` pins the argv. No `--env-file*`, `--require` or `--import` flag
+was added, and the rules above still hold. The four `npm run` scripts call the wrapper the same way, as
+`node deployment/preflight/stack.ts -- up …`.

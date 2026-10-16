@@ -9,7 +9,7 @@ const ENV = {
   TRUSTED_PROXY_MODE: "header",
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   TRUSTED_PROXY_CIDRS: "10.0.0.0/8,fd00::/8",
-  MEDIA_ORIGIN: "https://unsetcdn.net",
+  MEDIA_ORIGIN: "https://media.example.net",
 };
 const load = (env: Record<string, string>) =>
   loadConfig(defineConfig({ ...httpKitConfig }), env, { onUnknownKeys: () => undefined });
@@ -43,7 +43,7 @@ describe("httpKitConfig", () => {
       TRUSTED_PROXY_HOPS: 1,
       HTTP_BODY_LIMIT_BYTES: 65_536,
       RATE_LIMIT_MAX_KEYS: 100_000,
-      MEDIA_ORIGIN: "https://unsetcdn.net",
+      MEDIA_ORIGIN: "https://media.example.net",
       ASSETS_BASE: "",
       DEV_VITE_ORIGIN: "",
     });
@@ -67,10 +67,10 @@ describe("httpKitConfig", () => {
       expect(problems({ ...ENV, MEDIA_ORIGIN: media })).toEqual([{ key: "MEDIA_ORIGIN", reason: "invalid" }]);
     }
     // A TLD outside KNOWN_TLDS cannot be compared, so it is refused rather than guessed.
-    expect(problems({ ...ENV, MEDIA_ORIGIN: "https://media.example.co.uk" })).toEqual([
+    expect(problems({ ...ENV, MEDIA_ORIGIN: "https://sub.example.com" })).toEqual([
       { key: "MEDIA_ORIGIN", reason: "invalid" },
     ]);
-    expect(problems({ ...ENV, MEDIA_ORIGIN: "http://unsetcdn.net" })).toEqual([
+    expect(problems({ ...ENV, MEDIA_ORIGIN: "http://media.example.net" })).toEqual([
       { key: "MEDIA_ORIGIN", reason: "invalid" },
     ]);
     // The media process serves the media origin itself.
@@ -128,7 +128,11 @@ describe("httpKitConfig", () => {
   });
 
   test("host_entries_match_one_label", () => {
-    expect(hostAllowed("alice.0x40.me", [".0x40.me"])).toBe(true);
+    // Our own suffixes, since the test is about them: the kept labels a and b, and evil0x40.me, the one named
+    // look-alike, because no reserved parent keeps a host that ends in our suffix's text without the dot (SE-7a).
+    expect(hostAllowed("a.0x40.me", [".0x40.me"])).toBe(true);
+    // A suffix entry takes one label of any length, shown under a reserved parent since our suffix keeps only a and b.
+    expect(hostAllowed("account.example.com", [".example.com"])).toBe(true);
     expect(hostAllowed("a.b.0x40.me", [".0x40.me"])).toBe(false);
     expect(hostAllowed("0x40.me", [".0x40.me"])).toBe(false);
     expect(hostAllowed("evil0x40.me", [".0x40.me"])).toBe(false);

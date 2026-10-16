@@ -205,7 +205,7 @@ describe("pinnedLookup", () => {
 
 describe("isLoopbackHost only matches real loopback destinations", () => {
   test("does not treat a 127-prefixed HOSTNAME as loopback", () => {
-    for (const host of ["127.attacker.com", "127.0.0.1.evil.test", "localhost.evil.test"]) {
+    for (const host of ["127.attacker.example", "127.0.0.1.evil.test", "localhost.evil.test"]) {
       expect(classifyAddress(host), host).not.toBe("loopback");
       expect(isInternalName(host), host).toBe(false);
     }
@@ -223,11 +223,11 @@ describe("isLoopbackHost only matches real loopback destinations", () => {
       return [{ address: "169.254.169.254", family: 4 }];
     };
     // Link-local (the metadata address) is never "private": even an internal-only policy refuses it.
-    expect(await refusal(resolveVetted("127.attacker.com", { allow: "private" }, { lookup }))).toBe(
+    expect(await refusal(resolveVetted("127.attacker.example", { allow: "private" }, { lookup }))).toBe(
       "egress.private_address",
     );
     expect(asked).toBe(true);
-    expect(await refusal(resolveVetted("127.attacker.com", { allow: "public" }, { lookup }))).toBe(
+    expect(await refusal(resolveVetted("127.attacker.example", { allow: "public" }, { lookup }))).toBe(
       "egress.private_address",
     );
   });

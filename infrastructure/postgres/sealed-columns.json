@@ -1,1 +1,8 @@
-{}
+{
+  "app.oauth_session.sealed": {
+    "rowKey": "did"
+  },
+  "app.oauth_state.sealed": {
+    "rowKey": "key"
+  }
+}

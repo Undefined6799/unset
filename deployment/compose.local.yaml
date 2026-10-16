@@ -1,0 +1,242 @@
+# The local stack (P1.34d; record 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments): compose.dev.yaml's
+# services, built from the same Dockerfiles, with what only a throwaway stack on this machine needs. `npm run local:up`
+# starts it through the same wrapper and preflight as dev, under --env local. Its own file, so no local-only trust
+# reaches the homelab file (Amendment 4 of book edit 2026-10-13-p127l-to-third-lane); compose.local.test.ts holds the
+# two files to the same services, hardening, network flags and loopback ports, and names every difference it allows:
+# - the edge serves the app host as well as the PDS host, both with the dev leaf (its two secrets), each site mounted as
+#   its own read-only file, and the TLS snippet replaced by the local one (P1.27l, P1.33y, P1.34c);
+# - pds and web trust exactly one dev root, unset-dev-trust/root.pem beside the checkout, bound read-only, through
+#   NODE_EXTRA_CA_CERTS (item 5); nothing else is added to what they trust, and no fetch check is turned off (F-25);
+# - the token reader, which reads an account's email token from the PDS's data for the sign-up tests, lives here only
+#   (local-plc Amendment 6, Q2);
+# - the PDS publishes to the local PLC only (C28) and sends no mail (Alex's "Local only" card, 2026-10-14T20:28:12Z).
+#
+# Read under the preflight's strict subset (deployment/preflight/compose-parse.ts), with compose.dev.yaml's rules: no
+# interpolation outside `environment` and network aliases, no `healthcheck`, no `command`, every capability dropped, no
+# new privileges, the image's non-root user on a read-only root, and memory, CPU and process limits.
+name: unset-local
+
+services:
+  postgres:
+    build:
+      context: ..
+      dockerfile: deployment/images/postgres.Dockerfile
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /var/run/postgresql:uid=999,gid=999,mode=0755
+      - /tmp:uid=999,gid=999,mode=1777
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_superuser_password
+    secrets: [pg_superuser_password, pg_migrator_password, pg_tap_password]
+    networks: [db]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deployment/images/migrate.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    environment:
+      UNSET_ENV: dev
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      PG_HOST: postgres
+      PG_DATABASE: unset
+      PG_USER: migrator
+      PG_PASSWORD_FILE: /run/secrets/migrate_pg_password
+      PG_SSLMODE: disable
+      NODE_OPTIONS: --max-old-space-size=192
+    secrets: [migrate_pg_password, pg_web_password, pg_api_password, pg_indexer_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [db]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    restart: "no"
+
+  # As in compose.dev.yaml, but publishing to the local PLC and with no mail settings at all.
+  pds:
+    image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - pdsdata:/home/node
+      - ../../unset-dev-trust:/etc/unset-dev-trust:ro
+    env_file: ../../unset-dev-env/pds.env
+    environment:
+      PDS_HOSTNAME: ${PDS_HOSTNAME}
+      PDS_SERVICE_HANDLE_DOMAINS: ${PDS_SERVICE_HANDLE_DOMAINS}
+      PDS_PORT: "3000"
+      PDS_DATA_DIRECTORY: /home/node/pds
+      PDS_BLOBSTORE_DISK_LOCATION: /home/node/pds/blocks
+      PDS_DID_PLC_URL: http://plc:2582
+      PDS_INVITE_REQUIRED: "true"
+      PDS_CRAWLERS: ""
+      PDS_RATE_LIMITS_ENABLED: "false"
+      PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true"
+      LOG_ENABLED: "false"
+      NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
+      NODE_OPTIONS: --max-old-space-size=768
+    networks: [edge, pds_egress]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 256
+    restart: unless-stopped
+
+  # The edge serves both local names with the dev leaf: each site is its own read-only file, and the local TLS snippet
+  # replaces the shipped one, so every `import tls` names the two leaf secrets (C18 under --env local).
+  edge:
+    build:
+      context: ./edge
+      dockerfile: Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    volumes:
+      - ./edge/sites/pds.caddy:/etc/caddy/sites/enabled/pds.caddy:ro
+      - ./edge/local/app.caddy:/etc/caddy/sites/enabled/app.caddy:ro
+      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro
+      - edgedata:/data
+      - edgeconfig:/config
+    environment:
+      PDS_HOST: ${PDS_HOSTNAME}
+      PDS_UPSTREAM: pds:3000
+      APP_HOST: ${APP_HOST}
+      APP_UPSTREAM: web:8080
+      ACME_EMAIL: ${EDGE_ACME_EMAIL}
+    secrets: [local_tls_cert, local_tls_key]
+    ports:
+      - 127.0.0.1:80:80
+      - 127.0.0.1:443:443
+    depends_on:
+      pds:
+        condition: service_started
+    networks:
+      edge:
+        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
+      app:
+        aliases: ["${APP_HOST}", "${PDS_HOSTNAME}"]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deployment/images/node-app.Dockerfile
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=1777
+    volumes:
+      - ../../unset-dev-trust:/etc/unset-dev-trust:ro
+    environment:
+      UNSET_ENV: dev
+      UNSET_SERVICE: http
+      UNSET_COMMIT: "0000000000000000000000000000000000000000"
+      LISTEN_PORT: "8080"
+      PUBLIC_ORIGIN: ${WEB_PUBLIC_ORIGIN}
+      HTTP_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS}
+      MEDIA_ORIGIN: ${WEB_MEDIA_ORIGIN}
+      # Only the edge reaches web, on the app network, and its upstream snippet drops the client's address, so the
+      # address is the socket's (shared/http/config.ts TRUSTED_PROXY_MODE).
+      TRUSTED_PROXY_MODE: socket
+      NODE_EXTRA_CA_CERTS: /etc/unset-dev-trust/root.pem
+      NODE_OPTIONS: --max-old-space-size=384
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [db, app]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    restart: unless-stopped
+
+  # The local email inbox stand-in (P1.29h; architecture record 2026-10-13-p129h-local-token-reader and its Amendment
+  # 1), moved here from compose.dev.yaml (local-plc Amendment 6, Q2): tests/support/pds-email-token.ts runs it as
+  # `docker compose --profile tools run --rm pds-token-reader /reader/read.ts <did>`, and `up` never starts it. It reads
+  # one account's confirm_email token from the PDS's account database, read-only, and prints only that. The locked Node
+  # base run as shipped, for this service only (compose_images_match_lock): docker-node's entrypoint runs a script path
+  # given as the command with node (docker-library/node 26/trixie-slim/docker-entrypoint.sh). No network, no env, no
+  # secret.
+  pds-token-reader:
+    image: docker.io/library/node:26-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33
+    profiles: [tools]
+    network_mode: none
+    # The token is a credential: no log driver keeps a copy, and the attached stdout still reaches the wrapper
+    # (architecture record 2026-10-13-p129h-local-token-reader, Amendment 2, B1).
+    logging:
+      driver: none
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=1777
+    volumes:
+      - pdsdata:/data:ro
+      - ../tests/support/pds-email-token-read.ts:/reader/read.ts:ro
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 32
+    restart: "no"
+
+networks:
+  db:
+    internal: true
+  app:
+    internal: true
+  edge:
+  pds_egress:
+
+volumes:
+  pgdata:
+  pdsdata:
+  edgedata:
+  edgeconfig:
+
+secrets:
+  pg_superuser_password:
+    file: ../../unset-dev-secrets/pg_superuser_password
+  pg_migrator_password:
+    file: ../../unset-dev-secrets/pg_migrator_password
+  pg_tap_password:
+    file: ../../unset-dev-secrets/pg_tap_password
+  migrate_pg_password:
+    file: ../../unset-dev-secrets/migrate_pg_password
+  pg_web_password:
+    file: ../../unset-dev-secrets/pg_web_password
+  pg_api_password:
+    file: ../../unset-dev-secrets/pg_api_password
+  pg_indexer_password:
+    file: ../../unset-dev-secrets/pg_indexer_password
+  local_tls_cert:
+    file: ../../unset-dev-secrets/local_tls_cert
+  local_tls_key:
+    file: ../../unset-dev-secrets/local_tls_key
