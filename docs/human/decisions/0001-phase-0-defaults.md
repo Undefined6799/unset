@@ -441,4 +441,8 @@ legal paperwork) and remove one process (the account app) while adding three (`a
 - **Public domains (Alex, 2026-10-16 22:42Z; own record: [0025](0025-public-domains.md)):** the app is `unset.sh`,
   the PDS is `unset.ac`, handles are `<user>.unset.im`, and chat is `unset.cc`. The Matrix `server_name` is
   `unset.cc`, so an MXID reads `@localpart:unset.cc`. This supersedes the handle domain `<user>.0x40.me` in Q1
-  above and supersedes ADR 0020. The development PDS hostname is unchanged.
+  above and supersedes ADR 0020.
+- **Development hosts (Alex, 2026-10-16 22:57Z; same record):** the development system is `staging.unset.sh` (the
+  app), `staging.unset.ac` (the PDS), `<user>.staging.unset.im` (handles) and `staging.unset.cc` (chat, and that
+  homeserver's server name). These are subdomains of the four public domains. The development PDS does not mint
+  `.unset.im`. The local throwaway stack stays on `.localhost`.
