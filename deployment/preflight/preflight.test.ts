@@ -1262,11 +1262,71 @@ describe("preflight", () => {
 
   test("c18_sentinel_withheld_end_to_end", async () => {
     // The edge reader's own scrub (P1.30h) is the first layer; the runner withholds whatever still holds a value.
+    // PDS_HOSTNAME carries the sentinel too, so C18 passes its PDS host tie (P1.35l) and reaches the reader.
     const sentinel = "sentinelhost.example.test";
-    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`);
+    const compose = COMPOSE.replace("      PDS_HOST: pds.example.test", `      PDS_HOST: ${sentinel}`).replace(
+      "      PDS_HOSTNAME: pds.example.test",
+      `      PDS_HOSTNAME: ${sentinel}`,
+    );
     const result = await check({ compose, sites: { "probe.caddy": '"{$PDS_HOST}" {\n\trespond 204\n}\n' } });
-    expect(failed(result.lines)).toContain("C18");
+    expect(result.lines.find((line) => / C18 /.test(line))).toMatch(/^FAIL C18 the edge config is unreadable/);
     expect(result.lines.join("\n")).not.toContain(sentinel);
+  });
+
+  test("c18_pds_host_is_the_pds_hostname_in_every_env", async () => {
+    // P1.35l (architecture 02:01Z): dev and prod tie the edge's PDS_HOST to the PDS's own PDS_HOSTNAME as local does
+    // (P1.35g), so the edge never terminates TLS for one name while the PDS issues its OAuth issuer, DID document
+    // endpoint and handles under another. C21 reads only the retirement report (host.ts:18-40). Reasons name the
+    // variables and never echo a value.
+    const pdsHost = "      PDS_HOST: pds.example.test\n";
+    const hostname = "      PDS_HOSTNAME: pds.example.test\n";
+    const host = (value: string) => (text: string) => text.replace(pdsHost, `      PDS_HOST: ${value}\n`);
+    const named = (value: string) => (text: string) => text.replace(hostname, `      PDS_HOSTNAME: ${value}\n`);
+    const mismatch = "FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME";
+    const notHost = "FAIL C18 PDS_HOST is not a hostname";
+    const ipName = "FAIL C18 PDS_HOSTNAME is an IP address";
+    const noHost = "FAIL C18 input missing: the edge's PDS_HOST";
+    const noName = "FAIL C18 input missing: the pds service's PDS_HOSTNAME";
+    const cases: [string, (text: string) => string][] = [
+      [mismatch, named("other.example.test")],
+      [mismatch, named("x.pds.example.test")],
+      [notHost, (text) => host("192.0.2.2")(named("192.0.2.2")(text))],
+      [notHost, host('"2001:db8::2"')],
+      [ipName, named("192.0.2.2")],
+      [ipName, named('"192.0.2.2.:443"')],
+      [ipName, named('"3221225986"')],
+      [ipName, named('"2001:db8::2"')],
+      [ipName, named('"[2001:db8::2]:443"')],
+      [noHost, (text) => text.replace(pdsHost, "")],
+      [noHost, host('""')],
+      [noName, (text) => text.replace(`    environment:\n${hostname}`, "")],
+      [noName, named('""')],
+      // verify-888 N4: each differs from PDS_HOST only in what normalHost must not strip.
+      [mismatch, named('"pds.example.test:abc"')],
+      [mismatch, named("pds.example.test..")],
+      [mismatch, named('" pds.example.test"')],
+    ];
+    for (const [env, compose, pdsEnv] of [
+      ["prod", COMPOSE, {}],
+      ["dev", DEV, DEV_ENV],
+    ] as const) {
+      const c18 = async (edit: (text: string) => string) =>
+        (await check({ compose: edit(compose), pdsEnv }, env)).lines.find((line) => / C18 /.test(line));
+      expect(await c18((text) => text), env).toBe("PASS C18 ok");
+      for (const value of [
+        "PDS.Example.Test",
+        "pds.example.test.",
+        "pds.example.test:2583",
+        '"PDS.Example.Test.:443"',
+      ]) {
+        expect(await c18(named(value)), `${env} ${value}`).toBe("PASS C18 ok");
+      }
+      for (const [line, edit] of cases) expect(await c18(edit), `${env} ${line}`).toBe(line);
+    }
+    // The two pinned prod fixtures, whole: an address standing in for the host, and another name than the PDS's own.
+    const prod = async (edit: (text: string) => string) => (await check({ compose: edit(COMPOSE) })).lines;
+    expect(await prod((text) => host("192.0.2.2")(named("192.0.2.2")(text)))).toContain(notHost);
+    expect(await prod(host("other.example.test"))).toContain(mismatch);
   });
 
   test("preflight_no_skip_flag", async () => {
@@ -1418,7 +1478,12 @@ function inEnvironment(env: Record<string, string>): string {
 
 describe("preflight C13 to C24 (P1.30s)", () => {
   const withEnv = (lines: string) => COMPOSE.replace("      PDS_HOSTNAME: pds.example.test", lines);
-  const host = (name: string) => withEnv(`      PDS_HOSTNAME: ${name}`);
+  /** The PDS named `name`, which the edge serves as its normal form, since C18 ties the two (P1.35l). */
+  const host = (name: string) =>
+    withEnv(`      PDS_HOSTNAME: ${name}`).replace(
+      "      PDS_HOST: pds.example.test",
+      `      PDS_HOST: ${name.toLowerCase().replace(/\.$/, "")}`,
+    );
 
   test("c13_lexicon_authority_did_fails", async () => {
     await expectOnly("C13", { pdsEnv: { PDS_LEXICON_AUTHORITY_DID: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa" } });
@@ -3388,6 +3453,14 @@ networks:
         (text) => text.replace(`    environment:\n${hostname}`, ""),
       ],
       ["FAIL C18 input missing: the edge's PDS_HOST", (text) => text.replace(pdsHost, "")],
+      // verify-888 N6: an empty value is as missing as an absent one.
+      ["FAIL C18 input missing: the edge's PDS_HOST", (text) => text.replace(pdsHost, '      PDS_HOST: ""\n')],
+      ["FAIL C18 input missing: the pds service's PDS_HOSTNAME", named('""')],
+      // verify-888 N4: each red on the mismatch alone, killing normalHost's mutants P15, P16 and P18.
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named('"pds.localhost:abc"')],
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named("pds.localhost..")],
+      ["FAIL C18 PDS_HOST is not the pds service's PDS_HOSTNAME", named('" pds.localhost"')],
+      ["FAIL C18 PDS_HOSTNAME is an IP address", named("192.0.2.2")],
       ["FAIL C18 PDS_HOST is not a hostname", (text) => text.replace(pdsHost, "      PDS_HOST: pds_localhost\n")],
       // The IPv4 red fixture: a leaf naming the address and an edge serving it, with the PDS named the same.
       [
@@ -3771,6 +3844,16 @@ networks:
     expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/absent.caddy:"))).toMatch(
       /^FAIL C18 input missing: \/.+\/edge\/sites\/absent\.caddy$/,
     );
+    // verify-888 N6: any lstat error but ENOENT is a check error, never input missing; a path through a regular file
+    // answers ENOTDIR. And an absent source is named before the local file mounts are judged (edge.ts:280-283).
+    expect(await c18((text) => text.replace("./edge/sites/pds.caddy:", "./edge/sites/pds.caddy/x.caddy:"))).toBe(
+      "FAIL C18 check error",
+    );
+    const tls = "      - ./edge/local/tls.caddy:/etc/caddy/snippets/tls.caddy:ro\n";
+    expect(await c18((text) => text.replace(tls, ""))).toBe("FAIL C18 the TLS snippet is not mounted");
+    expect(
+      await c18((text) => text.replace(tls, "").replace("./edge/sites/pds.caddy:", "./edge/sites/absent.caddy:")),
+    ).toMatch(/^FAIL C18 input missing: \/.+\/edge\/sites\/absent\.caddy$/);
   });
 
   // P1.33t (architecture's Amendment 3, S3, to unset-plan/book-edits/2026-10-13-p127l-local-gaps.md): under local
