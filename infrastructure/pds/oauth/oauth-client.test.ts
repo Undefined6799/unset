@@ -67,6 +67,25 @@ describe("client keys", () => {
     expect(refusal([a], { OAUTH_ACTIVE_KID: "b" })).toContain("OAUTH_ACTIVE_KID");
   });
 
+  test("keys_refuse_bad_ec_material", () => {
+    // The library imports these without complaint and fails only when it signs, at the first sign-in; they must stop
+    // boot as bad config instead.
+    const a = privateJwk("a");
+    const other = privateJwk("b");
+    const cases: Record<string, unknown> = {
+      shortX: { ...a, x: "AAAA" },
+      notBase64url: { ...a, y: "!!!!" },
+      offCurve: { ...a, y: other.y },
+      foreignD: { ...a, d: other.d },
+    };
+    for (const [name, jwk] of Object.entries(cases)) {
+      const message = refusal([jwk]);
+      expect(message, name).toContain("OAUTH_CLIENT_KEYS");
+      expect(message, name).not.toContain(a.d as string);
+    }
+    expect(load([a]).OAUTH_CLIENT_KEYS.kids).toEqual(["a"]);
+  });
+
   test("keys_print_hidden", () => {
     const cfg = load([privateJwk("a"), privateJwk("b")]);
     expect(cfg.OAUTH_CLIENT_KEYS.kids).toEqual(["a", "b"]);

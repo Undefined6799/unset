@@ -2,6 +2,7 @@
 // with ES256, DPoP-bound tokens, @atproto/oauth-client-node 0.5.9. Its state and token sets live in the sealed stores
 // (infrastructure/postgres/oauthStores.ts), a refresh is serialised across replicas by the advisory lock, every
 // request goes through net-guard, and identities resolve through the identity domain (identity-resolvers.ts).
+import { createPrivateKey } from "node:crypto";
 import { inspect } from "node:util";
 // Imported from its own exactly pinned package: the client library re-exports it under a caret range.
 import { JoseKey } from "@atproto/jwk-jose";
@@ -81,7 +82,21 @@ const isPrivateJwk = (value: unknown): value is PrivateJwk => {
   );
 };
 
-/** A JSON array of one to four private ES256 P-256 JWKs with distinct kids; anything else is undefined. */
+/**
+ * Whether the key material is a real P-256 private key: coordinates on the curve and matching `d`. The library accepts
+ * bad material at import and fails only when it signs (@atproto/jwk-jose 0.2.4 JoseKey.fromImportable), which would
+ * let the server boot and refuse every sign-in; Node's JWK import checks the key (crypto.createPrivateKey).
+ */
+function importable(jwk: PrivateJwk): boolean {
+  try {
+    createPrivateKey({ key: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, d: jwk.d }, format: "jwk" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A JSON array of one to four importable private ES256 P-256 JWKs with distinct kids; anything else is undefined. */
 export function parseClientKeys(raw: string): ClientKeys | undefined {
   let value: unknown;
   try {
@@ -91,6 +106,7 @@ export function parseClientKeys(raw: string): ClientKeys | undefined {
   }
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_KEYS || !value.every(isPrivateJwk))
     return undefined;
+  if (!value.every(importable)) return undefined;
   const jwks = value.map(({ kty, crv, alg, kid, x, y, d }) => ({ kty, crv, alg, kid, x, y, d }));
   return new Set(jwks.map((jwk) => jwk.kid)).size === jwks.length ? new ClientKeys(jwks) : undefined;
 }
