@@ -3,8 +3,9 @@
 // at most BUDGET statements, counted by a pool's onStatement hook. Every statement a checked-out client sends counts,
 // inside withTransaction too, except transaction control (BEGIN, COMMIT, ROLLBACK, SAVEPOINT, RELEASE): the budget is
 // about data round trips, and tx.ts adds those on its own (architecture ruling 2026-10-06 (c)). Requests run one at a time, so the count between two
-// requests is that request's. P2.04c gives the web server its pools, but no route of it runs a statement yet: the
-// first route that does passes this test's counting pool into compose(). The web server's config needs secret files
+// requests is that request's. P2.04c gives the web server its pools. P2.05's POST /login runs one statement, the nonce
+// INSERT, and only for a same-origin form, which a fixture request (no body, no Origin) never is; a route whose
+// statements a fixture can reach passes this test's counting pool into compose(). The web server's config needs secret files
 // (P2.04c), which a JSON fixture cannot hold, so its env gets them from interfaces/http/test-env.ts at run time.
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

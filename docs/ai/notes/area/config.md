@@ -23,7 +23,8 @@ checked: 2026-10-16
 - `schema.ts`: field kinds. A field parses one string and may carry a rule across keys, so merging the field merges
   its rule.
 - `secret.ts`: `Secret` prints as `[secret]` everywhere; the value leaves only through `reveal()`.
-- `netGuard.ts`: the net-guard fields every egress-making entrypoint merges in.
+- `netGuard.ts`: the net-guard fields every egress-making entrypoint merges in, and `HOSTNAME`, the exact-hostname
+  pattern a `str` field reuses (the web server's `PDS_HOSTNAME` and `HANDLE_SUFFIX`, P2.05).
 - `permanent.ts`: values that can never change after first use (the Matrix `server_name`, the permission set NSID),
   Alex's answers recorded in ADR 0020 and pinned by `permanent.test.ts` (P1.32). They are constants, not config keys.
 

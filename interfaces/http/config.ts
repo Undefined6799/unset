@@ -3,7 +3,7 @@
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { sealFields } from "@unset/infrastructure-seal";
-import { defineEntrypointConfig, int, netGuardFields, str, url, withRule } from "@unset/shared-config";
+import { defineEntrypointConfig, HOSTNAME, int, netGuardFields, str, url, withRule } from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
 
 /**
@@ -37,6 +37,16 @@ export const identityConfig = {
   DID_DOC_CACHE_MAX: int({ min: 1, max: 100_000, default: 10_000 }),
 };
 
+/**
+ * Signing in (P2.05). Our PDS is the authorization server the "Use … sign-in" button opens; the reference PDS's issuer
+ * is its public URL, `https://` and this host. A name typed without a dot is completed with HANDLE_SUFFIX, the PDS's
+ * own `PDS_SERVICE_HANDLE_DOMAINS` value (one suffix, leading dot: `.0x40.me`, dev `.0x40.space`).
+ */
+export const loginConfig = {
+  PDS_HOSTNAME: str({ pattern: HOSTNAME }),
+  HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
+};
+
 export const config = defineEntrypointConfig({
   ...httpKitConfig,
   ...sessionConfig,
@@ -47,6 +57,7 @@ export const config = defineEntrypointConfig({
   ...netGuardFields,
   ...identityConfig,
   ...oauthFields,
+  ...loginConfig,
   /** apps/web's browser build, the directory holding `.vite/manifest.json` (P1.23). Empty means apps/web/dist/client. */
   WEB_BUILD_DIR: str({ default: "" }),
 });
