@@ -23,7 +23,7 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-function setup(world: { session?: Session | null; destroyFails?: boolean } = {}) {
+function setup(world: { session?: Session | null; destroyFails?: boolean; remaining?: number } = {}) {
   const destroyed: Session[] = [];
   const lines: Record<string, unknown>[] = [];
   const log = createLogger({
@@ -37,6 +37,17 @@ function setup(world: { session?: Session | null; destroyFails?: boolean } = {})
     destroySession: async (session) => {
       if (world.destroyFails) throw new Error("db down");
       destroyed.push(session);
+      // Another browser still holds a session, so this path must not revoke the shared grant.
+      return world.remaining ?? 1;
+    },
+    destroyAllSessions: async () => {
+      throw new Error("everywhere is not this test");
+    },
+    revokeGrant: async () => {
+      throw new Error("revoke is not this test");
+    },
+    deleteTokenSet: async () => {
+      throw new Error("token delete is not this test");
     },
     page: (page) =>
       pageResponse(
@@ -54,7 +65,7 @@ function setup(world: { session?: Session | null; destroyFails?: boolean } = {})
     log,
   };
   const server = createServer({ config: CONFIG, routes: logoutRoutes(deps), policies, log });
-  const send = (path: string, init: { method?: string; site?: "same-origin" | "cross-site" } = {}) => {
+  const send = (path: string, init: { method?: string; site?: "same-origin" | "cross-site"; body?: string } = {}) => {
     const method = init.method ?? "POST";
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1", cookie: "__Host-sid=x" });
     if (method === "GET") return server.request(new Request(`${ORIGIN}${path}`, { headers }), "10.0.0.1");
@@ -62,7 +73,7 @@ function setup(world: { session?: Session | null; destroyFails?: boolean } = {})
     headers.set("content-type", "application/x-www-form-urlencoded");
     headers.set("sec-fetch-site", site);
     headers.set("origin", site === "same-origin" ? ORIGIN : "https://evil.example");
-    return server.request(new Request(`${ORIGIN}${path}`, { method, headers, body: "" }), "10.0.0.1");
+    return server.request(new Request(`${ORIGIN}${path}`, { method, headers, body: init.body ?? "" }), "10.0.0.1");
   };
   return { send, destroyed, lines };
 }
@@ -126,6 +137,37 @@ describe("POST /logout", () => {
   });
 });
 
+describe("POST /logout/everywhere", () => {
+  test("logout_everywhere_requires_confirm", async () => {
+    const { send, destroyed } = setup();
+    const response = await send("/logout/everywhere");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/settings?error=logout.confirm_required");
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(destroyed).toEqual([]);
+  });
+
+  test("logout_everywhere_get_405", async () => {
+    const { send, destroyed } = setup();
+    expect((await send("/logout/everywhere", { method: "GET" })).status).toBe(405);
+    expect(destroyed).toEqual([]);
+  });
+
+  test("logout_everywhere_csrf", async () => {
+    const { send, destroyed } = setup();
+    expect((await send("/logout/everywhere", { site: "cross-site", body: "confirm=yes" })).status).toBe(403);
+    expect(destroyed).toEqual([]);
+  });
+
+  test("logout_everywhere_no_session_idempotent", async () => {
+    const { send, destroyed } = setup({ session: null });
+    const response = await send("/logout/everywhere");
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.getSetCookie()).toEqual(SIGNED_OUT);
+    expect(destroyed).toEqual([]);
+  });
+});
+
 test("signed_out_page", async () => {
   const { send } = setup({ session: null });
   const response = await send("/signed-out", { method: "GET" });
@@ -133,6 +175,19 @@ test("signed_out_page", async () => {
   const html = await response.text();
   expect(html).toContain("You are signed out");
   expect(html).toContain('href="https://pds.unset.test/account"');
+});
+
+test("signed_out_everywhere_names_an_unconfirmed_revoke", async () => {
+  const { send } = setup({ session: null });
+  const response = await send("/signed-out?scope=everywhere&error=logout.revoke_unconfirmed", { method: "GET" });
+  const html = await response.text();
+  expect(html).toContain("every browser");
+  expect(html).toContain("could not confirm the sign-in server ended access");
+  // A crafted scope or error is not a sentence.
+  const ignored = await setup({ session: null }).send("/signed-out?scope=all&error=login.failed", { method: "GET" });
+  const quiet = await ignored.text();
+  expect(quiet).not.toContain("every browser");
+  expect(quiet).not.toContain("Sign-in could not start");
 });
 
 test("signed_out_sends_a_signed_in_visitor_to_me", async () => {

@@ -63,6 +63,10 @@ const EVENTS = [
   "auth.login_denied",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
+  // P2.08a, signing out of every browser, and a revocation the authorization server did not confirm. No DID.
+  "auth.logout_everywhere",
+  "auth.revoke_unconfirmed",
+  "oauth.revoke_failed",
   // P2.13, the handle check: an error it did not expect (the class as kind, never the DID); the verdict is unavailable.
   "handle.verify_failed",
 ] as const;

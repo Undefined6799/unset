@@ -1,6 +1,6 @@
 // The signed-in home (P2.13; plan §5.4). For now the account at a glance: the handle, shown only when it resolves
-// back to the DID (P2.02), the DID itself, the PDS account link and a sign-out form that posts with no script. The
-// profile, privacy and invite blocks join it in their own steps.
+// back to the DID (P2.02), the DID itself, the PDS account link, a sign-out form and a confirm box that signs out
+// every browser (P2.08a). Both post with no script. The profile, privacy and invite blocks join them in their own steps.
 import { Button, Link, safeHref } from "@unset/shared-ui";
 
 export type MeProps = {
@@ -28,6 +28,13 @@ export function Me({ handle, did, handleUnavailable, pdsHost }: MeProps) {
       )}
       <form method="post" action="/logout">
         <Button type="submit">Sign out</Button>
+      </form>
+      <form method="post" action="/logout/everywhere">
+        <label>
+          <input type="checkbox" name="confirm" value="yes" />
+          Sign out of every browser
+        </label>
+        <Button type="submit">Sign out everywhere</Button>
       </form>
     </main>
   );

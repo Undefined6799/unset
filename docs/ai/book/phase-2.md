@@ -1730,6 +1730,10 @@ Reuse (provisional — for reuse review):
     here the issuer verified by OAuth replaces the allowlist.
 Not in this step: ending PDS browser sessions (the user does it at the PDS); chat logout (P6.16); account-state-driven
   session ends (P3.06).
+As built: #939 used the id P2.08 for this-browser logout only. The remainder is P2.08a (one letter, commit-msg guard).
+  The session count is the SELECT in `interfaces/http/logout-sessions.ts`, not a new store method, because
+  `infrastructure/session` is trusted base (SE-6) and cannot share a PR with the routes. The catalog key is `error=`
+  (plan §2 rule 15, `withErrorParam`), where this step wrote `e=`.
 Diagram: see "State diagram: app session lifecycle".
 
 ### P2.11 — Email-verify gate
