@@ -7,7 +7,7 @@ summary: "Hub for shared/ui: design tokens, fonts, icons, the kit components, is
 code: [shared/ui/index.ts]
 sources: []
 importance: normal
-related: ["[[web]]", "[[ui-build]]", "[[copied-svg-committed-as-txt]]"]
+related: ["[[web]]", "[[ui-build]]", "[[islands]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
 checked: 2026-10-16
@@ -35,7 +35,8 @@ checked: 2026-10-16
   `scripts/budgets/island.ts` before exporting more.
 - `islands/`: what an island file exports, the props serialiser, `IslandSlot` (how a kit component places an island)
   and the kit's `*.island.tsx` files; each island's component sits beside its kit component. `src/islands/readProps.ts`
-  reads props in the browser.
+  reads props in the browser. P1.25i copied define, props, readProps and slot into [[islands]] (`shared/islands/`).
+  These originals still ship; importers move in P1.25p.
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
