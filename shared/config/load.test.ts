@@ -248,3 +248,35 @@ describe("bootOrExit", () => {
     expect(run.stdout).toBe("booted");
   });
 });
+
+describe("exitOnConfigError", () => {
+  // A boot check that runs after the config loaded (the web server's connection budget, P2.04c) throws ConfigError
+  // asynchronously; it must leave the process the way bootOrExit does, not as an unhandled rejection.
+  const run = (thrown: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "config-boot-check-"));
+    dirs.push(dir);
+    const script = join(dir, "check.ts");
+    const index = join(import.meta.dirname, "index.ts");
+    writeFileSync(
+      script,
+      `import { ConfigError, exitOnConfigError } from ${JSON.stringify(index)};\n` +
+        `await Promise.reject(${thrown}).catch(exitOnConfigError);\n` +
+        'process.stdout.write("listened");\n',
+    );
+    return spawnSync(process.execPath, [script], { env: { PATH: process.env.PATH }, encoding: "utf8" });
+  };
+
+  test("boot_check_config_error_exits_78", () => {
+    const result = run('new ConfigError([{ key: "PG_POOL_MAX", reason: "invalid" }])');
+    expect(result.status).toBe(78);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe('{"event":"config.invalid","key":"PG_POOL_MAX","reason":"invalid"}');
+  });
+
+  test("boot_check_other_error_still_throws", () => {
+    const result = run('new Error("connect refused")');
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("connect refused");
+  });
+});
