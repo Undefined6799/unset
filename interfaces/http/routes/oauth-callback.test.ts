@@ -101,6 +101,7 @@ describe("GET /oauth/callback", () => {
     expect(created).toEqual([{ did: DID, replacing: null }]);
     expect(cookies(response)).toEqual([
       CLEAR_NONCE,
+      "__Host-signed_out=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
       `__Host-sid=${SID}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000`,
     ]);
     expect(events(lines).map((line) => line.event)).toEqual(["auth.login_succeeded"]);
