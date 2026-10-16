@@ -173,6 +173,8 @@ describe("POST /login", () => {
     const cases: [World, string, string][] = [
       [{}, "handle=not%20a%20handle", "login.handle_invalid"],
       [{}, "handle=did:nope:x", "login.handle_invalid"],
+      // DIDs are case-sensitive: an uppercase did:plc is refused, never lowercased into another account.
+      [{}, `handle=did:plc:${"A".repeat(24)}`, "login.handle_invalid"],
       [{ resolution: { status: "not_found" } }, "handle=alice", "login.handle_not_found"],
       [{ resolution: { status: "unavailable" } }, "handle=alice", "login.identity_unavailable"],
     ];
