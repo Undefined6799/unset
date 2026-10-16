@@ -59,6 +59,7 @@ function setup(world: World = {}) {
         page,
       ),
     screens: web.screens,
+    safeHref: web.safeHref,
     resolveHandle: async (handle: Handle) => {
       resolved.push(handle);
       return world.resolution ?? { status: "found", did: DID as never, via: "dns" };
