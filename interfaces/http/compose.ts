@@ -3,26 +3,98 @@
 // render is apps/web's server build, loaded once, unless the caller passes one. main.ts never does, so production
 // runs only the build and its import graph holds no app source (architecture Amendment 2026-10-06 21:05Z); tests
 // pass the source, which only Vitest can compile (it has import.meta.glob and CSS Modules).
+// P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
+// connection; `boot` checks the connection budget before the server listens.
 import { fileURLToPath } from "node:url";
+import { createDidResolver } from "@unset/domains-identity";
+import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
+import { createIdentityNetwork, createOAuthClient, type SavedSession } from "@unset/infrastructure-pds";
+import {
+  checkConnectionBudget,
+  connectionOf,
+  createLockPool,
+  createOAuthSessionStore,
+  createOAuthStateStore,
+  createPool,
+  createRequestLock,
+  withClient,
+} from "@unset/infrastructure-postgres";
+import { createSealer } from "@unset/infrastructure-seal";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
-import { createLogger } from "@unset/shared-log";
+import { createLogger, type Logger } from "@unset/shared-log";
 import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { loadWebBuild } from "./web/build.ts";
 import { type PageDeps, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
+type WebConfig = Config<(typeof config)["fields"]>;
+
 export type Services = {
   server: ReturnType<typeof createServer>;
   /** Renders a page; the page routes (P1.25 onwards) call it. */
   page: (page: Parameters<typeof pageResponse>[1]) => Response;
+  /** The OAuth client the sign-in routes (P2.05, P2.06) take. */
+  oauth: Awaited<ReturnType<typeof createOAuthClient>>["client"];
+  /** Boot checks that need the database, run once before the server listens. */
+  boot: () => Promise<void>;
 };
 
+/** `web`'s two pools, the OAuth client over them, and what closes them; nothing here opens a connection. */
+async function composeOAuth(cfg: WebConfig, log: Logger) {
+  const connection = connectionOf(cfg);
+  const pool = createPool({
+    connection,
+    service: "web",
+    max: cfg.PG_POOL_MAX,
+    connectTimeoutMs: cfg.PG_CONNECT_TIMEOUT_MS,
+  });
+  const lockPool = createLockPool({ connection, service: "web-lock", max: cfg.LOCK_POOL_MAX, log });
+  const sealer = createSealer(cfg.SEAL_KEYRING);
+  const guard = createNetGuard({
+    internalHosts: cfg.NETGUARD_INTERNAL_HOSTS,
+    allowLoopback: cfg.NETGUARD_ALLOW_LOOPBACK,
+    commit: cfg.UNSET_COMMIT,
+  });
+  const plcUrl = new URL(cfg.PLC_URL);
+  const network = createIdentityNetwork({
+    guard,
+    plcUrl,
+    httpTimeoutMs: cfg.IDENTITY_HTTP_TIMEOUT_MS,
+    dnsTimeoutMs: cfg.IDENTITY_DNS_TIMEOUT_MS,
+  });
+  const resolveDid = createDidResolver({
+    network,
+    plcUrl,
+    cacheTtlS: cfg.DID_DOC_CACHE_TTL_S,
+    cacheMax: cfg.DID_DOC_CACHE_MAX,
+  });
+  const { client } = await createOAuthClient({
+    origin: cfg.PUBLIC_ORIGIN,
+    keys: cfg.OAUTH_CLIENT_KEYS,
+    activeKid: cfg.OAUTH_ACTIVE_KID,
+    stateStore: createOAuthStateStore({ pool, sealer, log }),
+    sessionStore: createOAuthSessionStore<SavedSession>({ pool, sealer, log }),
+    requestLock: createRequestLock(lockPool),
+    fetch: libraryFetch(guard),
+    network,
+    resolveDid,
+    allowHttp: cfg.OAUTH_ALLOW_HTTP,
+    log,
+  });
+  const boot = () =>
+    withClient(pool, null, (db) =>
+      checkConnectionBudget(db, [cfg.PG_POOL_MAX, cfg.LOCK_POOL_MAX], cfg.PG_MAX_REPLICAS),
+    );
+  return { client, boot, onClose: [() => pool.end(), () => lockPool.pool.end()] };
+}
+
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
-export async function compose(cfg: Config<(typeof config)["fields"]>, web?: WebRender): Promise<Services> {
+export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services> {
   const log = createLogger({ service: cfg.UNSET_SERVICE, commit: cfg.UNSET_COMMIT, env: cfg.UNSET_ENV });
   const render = web ?? (await loadWebRender());
   const build = loadWebBuild(cfg.WEB_BUILD_DIR === "" ? DEFAULT_WEB_BUILD : cfg.WEB_BUILD_DIR, render.islandName);
@@ -33,6 +105,16 @@ export async function compose(cfg: Config<(typeof config)["fields"]>, web?: WebR
     env: cfg.UNSET_ENV,
     log,
   };
-  const routes = [...prefsRoutes(), ...assetsRoutes(build.files)];
-  return { server: createServer({ config: cfg, routes, policies, log }), page: (page) => pageResponse(deps, page) };
+  const oauth = await composeOAuth(cfg, log);
+  const routes = [
+    ...prefsRoutes(),
+    ...assetsRoutes(build.files),
+    ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
+  ];
+  return {
+    server: createServer({ config: cfg, routes, policies, log, onClose: oauth.onClose }),
+    page: (page) => pageResponse(deps, page),
+    oauth: oauth.client,
+    boot: oauth.boot,
+  };
 }

@@ -10,7 +10,7 @@ importance: high
 related: ["[[config]]"]
 replaced_by: null
 tags: [pitfall, config, http, tests]
-checked: 2026-10-06
+checked: 2026-10-16
 ---
 # A new required config key breaks six tests at once
 
@@ -25,5 +25,10 @@ it only warns about (`shared/config/load.ts`). Adding the key to the test envs f
 **The rule.** Land a small product prelude PR first that adds the key to each fixed test env (the P1.05e pattern),
 then the PR that makes it required. Use realistic test values, never values the new rule rejects (for a CIDR list,
 never `0.0.0.0/0`).
+
+**The image check too.** The images workflow starts the web image with `deployment/images/web.test.env` alone: no
+secret files and no database (`.github/workflows/images.yml`, a checks path). A required `secretFile` key, or a boot
+check that needs Postgres before `listen`, keeps that image from ever becoming healthy, and the fix is a checks PR that
+must land first (P2.04c, #928).
 
 **Repair.** Easy; it only costs an extra PR and a wait for the merge.

@@ -6,6 +6,11 @@
   "license": "AGPL-3.0-only",
   "dependencies": {
     "@unset/apps-web": "*",
+    "@unset/domains-identity": "*",
+    "@unset/infrastructure-net-guard": "*",
+    "@unset/infrastructure-pds": "*",
+    "@unset/infrastructure-postgres": "*",
+    "@unset/infrastructure-seal": "*",
     "@unset/shared-config": "*",
     "@unset/shared-http": "*",
     "@unset/shared-log": "*",

@@ -9,21 +9,13 @@ import { loadConfig } from "@unset/shared-config";
 import { afterAll, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
+import { webTestEnv } from "../test-env.ts";
 import { loadWebBuild, parseWebBuild } from "./build.ts";
 
 const TESTDATA = fileURLToPath(new URL("./testdata/", import.meta.url));
-const ENV = {
-  UNSET_ENV: "test",
-  UNSET_SERVICE: "http",
-  UNSET_COMMIT: "c".repeat(40),
-  LISTEN_PORT: "8080",
-  PUBLIC_ORIGIN: "https://unset.test",
-  HTTP_ALLOWED_HOSTS: "unset.test",
-  MEDIA_ORIGIN: "https://unset-media.test",
-  TRUSTED_PROXY_MODE: "header",
-  TRUSTED_PROXY_HEADER: "x-forwarded-for",
-  TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-};
+const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
+afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
+const ENV = webTestEnv(SECRETS);
 const BOOT = "src/islands/runtime/bootstrap.ts";
 const empty = mkdtempSync(join(tmpdir(), "web-build-"));
 afterAll(() => rmSync(empty, { recursive: true, force: true }));

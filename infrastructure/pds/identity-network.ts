@@ -11,6 +11,7 @@ import {
   resolveTxt,
   type TxtOptions,
 } from "@unset/infrastructure-net-guard";
+import { ConfigError } from "@unset/shared-config";
 
 export type IdentityNetworkOptions = {
   readonly guard: NetGuard;
@@ -66,7 +67,8 @@ function failure(error: unknown): Failure {
 export function createIdentityNetwork(options: IdentityNetworkOptions): IdentityNetwork {
   const { plcUrl } = options;
   if (plc.kind !== "fixed" || plcUrl.protocol !== "https:" || !plc.hosts.includes(plcUrl.hostname)) {
-    throw new TypeError("PLC_URL must be https on a host net-guard's plc policy allows");
+    // A configuration mistake, so the server exits 78 with config.invalid like any other bad key.
+    throw new ConfigError([{ key: "PLC_URL", reason: "invalid" }]);
   }
   return {
     async get(url: URL, request: FetchRequest): Promise<HttpOutcome> {

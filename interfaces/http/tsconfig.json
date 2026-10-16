@@ -11,6 +11,21 @@
       "path": "../../apps/web"
     },
     {
+      "path": "../../domains/identity"
+    },
+    {
+      "path": "../../infrastructure/net-guard"
+    },
+    {
+      "path": "../../infrastructure/pds"
+    },
+    {
+      "path": "../../infrastructure/postgres"
+    },
+    {
+      "path": "../../infrastructure/seal"
+    },
+    {
       "path": "../../shared/config"
     },
     {

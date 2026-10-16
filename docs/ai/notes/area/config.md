@@ -10,7 +10,7 @@ importance: normal
 related: ["[[net-guard]]", "[[new-required-config-key-breaks-test-envs]]"]
 replaced_by: null
 tags: [area, config]
-checked: 2026-10-12
+checked: 2026-10-16
 ---
 # config
 
@@ -18,7 +18,8 @@ checked: 2026-10-12
 
 **Files.**
 - `load.ts`: reads the environment once at boot and refuses to start on any missing or invalid key. Problems name
-  keys and reasons, never values.
+  keys and reasons, never values. `exitOnConfigError` gives a check that runs after loading (the web server's
+  connection budget, P2.04c) the same exit 78 and `config.invalid` lines; other errors pass through.
 - `schema.ts`: field kinds. A field parses one string and may carry a rule across keys, so merging the field merges
   its rule.
 - `secret.ts`: `Secret` prints as `[secret]` everywhere; the value leaves only through `reveal()`.

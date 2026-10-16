@@ -35,5 +35,23 @@
     "rateLimit": "exempt",
     "mutates": false,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck"]
+  },
+  {
+    "method": "GET",
+    "path": "/oauth-client-metadata.json",
+    "group": "app",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
+    "path": "/oauth/jwks.json",
+    "group": "app",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   }
 ]

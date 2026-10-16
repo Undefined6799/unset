@@ -1,7 +1,7 @@
 // Typed configuration for every entrypoint (P1.02). Read once at boot with `bootOrExit`; secrets print as
 // `[secret]` and leave only through `Secret.reveal()`.
 export type { LoadOptions, Problem, Reason } from "./load.ts";
-export { bootOrExit, ConfigError, describeConfig, loadConfig } from "./load.ts";
+export { bootOrExit, ConfigError, describeConfig, exitOnConfigError, loadConfig } from "./load.ts";
 export { netGuardFields } from "./netGuard.ts";
 export { MATRIX_SERVER_NAME, PERMISSION_SET_NSID } from "./permanent.ts";
 export type { Config, Field, Fields, Kind, Rule, Schema } from "./schema.ts";

@@ -1,27 +1,25 @@
 // POST /prefs/theme through the composed web server, so the kit's real checks (method, media type, body limit, CSRF
 // gate) run in front of the handler exactly as in production.
+
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
-import { describe, expect, test } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
 import { THEME_COOKIE } from "../prefs/theme.ts";
+import { webTestEnv } from "../test-env.ts";
 
 const ORIGIN = "https://unset.test";
-const ENV = {
-  UNSET_ENV: "test",
-  UNSET_SERVICE: "http",
-  UNSET_COMMIT: "c".repeat(40),
-  LISTEN_PORT: "8080",
+const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
+afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
+const ENV = webTestEnv(SECRETS, {
   PUBLIC_ORIGIN: ORIGIN,
-  HTTP_ALLOWED_HOSTS: "unset.test",
-  MEDIA_ORIGIN: "https://unset-media.test",
-  TRUSTED_PROXY_MODE: "header",
-  TRUSTED_PROXY_HEADER: "x-forwarded-for",
-  TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
   WEB_BUILD_DIR: fileURLToPath(new URL("../web/testdata/", import.meta.url)),
-};
+});
 const FORM = "application/x-www-form-urlencoded";
 const YEAR = "Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=31536000";
 
