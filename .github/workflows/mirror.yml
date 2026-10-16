@@ -59,6 +59,16 @@ jobs:
           failed=0
           while IFS=$'\t' read -r source stage; do
             case "$source" in *@sha256:*) ;; *) echo "not pinned by digest: $source"; exit 1 ;; esac
+            # P1.33c (Alex's typed line "yes PDS exceptions .github/trivyignore.pds.yaml
+            # .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci", 2026-10-16):
+            # only ghcr.io/bluesky-social/pds reads the PDS ignore file. Every other source,
+            # including caddy:2.11.7-alpine, keeps the shared file.
+            ignorefile=.github/trivyignore.yaml
+            case "$source" in
+              ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)
+                ignorefile=.github/trivyignore.pds.yaml
+                ;;
+            esac
             # P1.29v (Alex's card "Skip stripped files", 2026-10-07T18:56:42Z): the paths a runtime entry's lock entry
             # declares `stripped` are left out of this vulnerability scan, because every final stage on the base
             # deletes them (stripped_paths_removed_in_every_final_stage). images.yml's vulnerability scan of each
@@ -86,7 +96,7 @@ jobs:
                 { echo "### HIGH findings in build-only base $source"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
                 docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
                   image --exit-code 2 --severity HIGH \
-                  --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "$source" \
+                  --ignore-unfixed --ignorefile "$ignorefile" --timeout 10m "$source" \
                   | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
                 echo '```' >> "$GITHUB_STEP_SUMMARY"
                 case "$status" in
@@ -100,7 +110,7 @@ jobs:
             status=0
             docker run --rm -v "$PWD:/repo:ro" -v "$cache:/root/.cache/trivy" -w /repo "$TRIVY_IMAGE" \
               image --exit-code 1 --severity "$severity" \
-              --ignore-unfixed --ignorefile .github/trivyignore.yaml --timeout 10m "${skip[@]}" "$source" || status=$?
+              --ignore-unfixed --ignorefile "$ignorefile" --timeout 10m "${skip[@]}" "$source" || status=$?
             if [ "$status" -ne 0 ]; then
               echo "::error title=mirror::scan failed (exit $status) for $source"
               failed=$((failed + 1))

@@ -51,6 +51,7 @@ for ((i = 0; i < \${#args[@]}; i++)); do
     --severity) severity="\${args[i+1]}" ;;
     --skip-dirs) dirs+=("\${args[i+1]#/}") ;;
     --skip-files) files+=("\${args[i+1]#/}") ;;
+    --ignorefile) echo "ignore $source \${args[i+1]}" >> "$FAKE_CALLS" ;;
   esac
 done
 echo "scan $source $severity" >> "$FAKE_CALLS"
@@ -106,12 +107,14 @@ function scan(entries: Entry[], findings: string[][], lock: Record<string, LockE
   const calls = logged.filter((line) => line.startsWith("scan "));
   const skips = logged.filter((line) => line.startsWith("skip ")).map((line) => line.slice("skip ".length));
   const caches = logged.filter((line) => line.startsWith("cache ")).map((line) => line.slice("cache ".length));
+  const ignores = logged.filter((line) => line.startsWith("ignore ")).map((line) => line.slice("ignore ".length));
   return {
     code: ran.status,
     out: ran.stdout + ran.stderr,
     calls,
     skips,
     caches,
+    ignores,
     summary: readFileSync(env.GITHUB_STEP_SUMMARY, "utf8"),
   };
 }
@@ -143,8 +146,8 @@ describe("mirror scan per stage", () => {
       expect(missing.out).toContain(`no known stage for ${SOURCE.builder}`);
       expect(missing.calls).toEqual([]);
     }
-    // Every scan keeps --ignore-unfixed and the ignore file.
-    expect(scanStep.match(/--ignore-unfixed --ignorefile \.github\/trivyignore\.yaml/g)?.length).toBe(2);
+    // Every scan keeps --ignore-unfixed. Which ignore file is pds_ignorefile_wired_to_pds_scan_only.
+    expect(scanStep.match(/--ignore-unfixed --ignorefile "\$ignorefile"/g)?.length).toBe(2);
   });
 
   test("mirror_scan_step_sets_pipefail_shell", () => {
@@ -206,8 +209,9 @@ describe("mirror scan per stage", () => {
     for (const [id, ignore] of [
       ["images", "/dev/null"],
       ["edge", "/dev/null"],
-      // P1.34m: the PR-time scan of a newly pinned runtime base keeps the mirror's runtime rule and ignore file.
-      ["pins", ".github/trivyignore.yaml"],
+      // P1.34m: the PR-time scan of a newly pinned runtime base keeps the mirror's runtime rule.
+      // The file itself is chosen per source (pds_ignorefile_wired_to_pds_scan_only).
+      ["pins", '"\\$ignorefile"'],
     ] as const) {
       const runs = (jobs[id]?.steps ?? []).map((step) => step.run ?? "").join("\n");
       expect(runs, id).toMatch(
@@ -277,5 +281,48 @@ describe("mirror scan per stage", () => {
     expect(high.skips).toEqual([`${builder} dirs= files=`, `${builder} dirs= files=`]);
     const critical = scan(entries, [[builder, "CRITICAL", `${npm.slice(1)}/package.json`]], lock);
     expect(critical.code).not.toBe(0);
+  });
+
+  test("pds_ignorefile_wired_to_pds_scan_only", () => {
+    const pds = `ghcr.io/bluesky-social/pds:0.4.5037${digest(4)}`;
+    const lookalike = `ghcr.io/bluesky-social/pds-extra:1${digest(6)}`;
+    const caddy = `docker.io/library/caddy:2.11.7-alpine${digest(5)}`;
+    const ran = scan(
+      [
+        { source: caddy, stage: "runtime" },
+        { source: pds, stage: "runtime" },
+        { source: lookalike, stage: "runtime" },
+        { source: SOURCE.builder, stage: "build" },
+      ],
+      [],
+    );
+    expect(ran.code, ran.out).toBe(0);
+    expect(ran.ignores).toEqual([
+      `${caddy} .github/trivyignore.yaml`,
+      `${pds} .github/trivyignore.pds.yaml`,
+      `${lookalike} .github/trivyignore.yaml`,
+      `${SOURCE.builder} .github/trivyignore.yaml`,
+      `${SOURCE.builder} .github/trivyignore.yaml`,
+    ]);
+    // The PDS file is selected by the case, never passed as the default --ignorefile literal.
+    expect(scanStep).toContain("ignorefile=.github/trivyignore.yaml");
+    expect(scanStep).toContain("ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)");
+    expect(scanStep).not.toMatch(/--ignorefile \.github\/trivyignore\.pds\.yaml/);
+
+    const jobs = workflow("images.yml").jobs;
+    const runsOf = (id: string) => (jobs[id]?.steps ?? []).map((item) => item.run ?? "").join("\n");
+    const pins = runsOf("pins");
+    expect(pins).toContain("ignorefile=.github/trivyignore.yaml");
+    expect(pins).toContain("ghcr.io/bluesky-social/pds:*|ghcr.io/bluesky-social/pds@*)");
+    expect(pins).toContain('--ignorefile "$ignorefile"');
+    expect(pins).not.toMatch(/--ignorefile \.github\/trivyignore\.pds\.yaml/);
+    for (const id of ["images", "edge", "scan-image", "scan-export"]) {
+      const runs = runsOf(id);
+      expect(runs, id).not.toContain("trivyignore.pds.yaml");
+    }
+    // P1.33u: the secret scan of our own images reads no ignore file.
+    expect(runsOf("scan-export")).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
+    expect(runsOf("images")).toContain("--ignorefile /dev/null");
+    expect(runsOf("edge")).toContain("--ignorefile /dev/null");
   });
 });
