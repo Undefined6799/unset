@@ -23,11 +23,14 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-function setup(world: { session?: Session | null; verdict?: HandleVerdict } = {}) {
+function setup(world: { session?: Session | null; clearCookie?: boolean; verdict?: HandleVerdict } = {}) {
   const checked: string[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
   const deps: MeDeps = {
-    readSession: async () => (world.session === undefined ? SESSION : world.session),
+    readSession: async () => ({
+      session: world.session === undefined ? SESSION : world.session,
+      clearCookie: world.clearCookie ?? false,
+    }),
     verifyHandle: async (did) => {
       checked.push(did);
       return world.verdict ?? { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
@@ -85,6 +88,12 @@ describe("GET /me", () => {
     const html = await (await setup({ verdict: { status: "invalid", checkedAt: 0 } }).get()).text();
     expect(html).toContain("handle.invalid");
     expect(html).not.toContain("could not check");
+  });
+
+  test("me_clears_a_dead_session_cookie", async () => {
+    const response = await setup({ session: null, clearCookie: true }).get();
+    expect(response.status).toBe(303);
+    expect(response.headers.getSetCookie()).toContain("__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0");
   });
 
   test("me_guards_signed_out", async () => {

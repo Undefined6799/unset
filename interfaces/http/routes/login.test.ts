@@ -8,6 +8,7 @@ import { join } from "node:path";
 import * as web from "@unset/apps-web";
 import type { Handle, HandleResolution } from "@unset/domains-identity";
 import type { AuthorizeResult } from "@unset/infrastructure-pds";
+import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
@@ -31,6 +32,7 @@ const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN })
 type World = {
   /** Whether the request carries a live session. */
   signedIn?: boolean;
+  clearCookie?: boolean;
   resolution?: HandleResolution;
   authorized?: AuthorizeResult;
   allowHttp?: boolean;
@@ -62,7 +64,10 @@ function setup(world: World = {}) {
       ),
     screens: web.screens,
     safeHref: web.safeHref,
-    signedIn: async () => world.signedIn ?? false,
+    readSession: async () => ({
+      session: world.signedIn ? ({ did: DID } as Session) : null,
+      clearCookie: world.clearCookie ?? false,
+    }),
     resolveHandle: async (handle: Handle) => {
       resolved.push(handle);
       return world.resolution ?? { status: "found", did: DID as never, via: "dns" };
@@ -112,11 +117,18 @@ describe("GET /login", () => {
     expect([nonces(), authorized.length, resolved.length]).toEqual([0, 0, 0]);
   });
 
+  test("login_clears_a_dead_session_cookie", async () => {
+    const response = await setup({ clearCookie: true }).send("/login");
+    expect(response.headers.getSetCookie()).toContain("__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0");
+  });
+
   test("login_signed_in_redirect", async () => {
     const { send } = setup({ signedIn: true });
     const response = await send("/login");
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/me");
+    // A sign-in that failed in a still-signed-in browser comes back with its error, and stays to show it.
+    expect((await send("/login?error=login.consent_denied")).status).toBe(200);
   });
 
   test("login_get_drops_an_unsafe_next", async () => {
