@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[ui-build]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-07
+checked: 2026-10-16
 ---
 # ui
 
@@ -28,9 +28,11 @@ checked: 2026-10-07
 - `components/<Name>/`: the kit, one folder per sheet component (TSX, `.module.css` in `@layer components`, test).
   They render on the server with no JS; field parts shared by Input, Textarea, Select, Checkbox and RadioGroup are in
   `components/Input/field.tsx`. `css-modules.d.ts` types the class maps. `showcase/` renders every built component
-  for P1.26's axe and target-size checks. `index.ts` does not export the components: the browser's boot chunk imports
-  the index (`readProps`), so a component export pulls the kit and its islands into boot (P1.25h; architecture record
-  2026-10-07-p125h-boot-chunk.md). The island runtime moves to its own workspace first.
+  for P1.26's axe and target-size checks. `index.ts` exports only the four the first screens use (Button, Callout,
+  Input, Link; P2.05). The boot chunk imports the index (`readProps`), which once pulled the kit into boot (P1.25h;
+  architecture record 2026-10-07-p125h-boot-chunk.md); measured at P2.05, rolldown drops the unused re-exports: no
+  component code in boot, island JS 75,387 gzip bytes against 75,446 before. Re-measure with
+  `scripts/budgets/island.ts` before exporting more.
 - `islands/`: what an island file exports, the props serialiser, `IslandSlot` (how a kit component places an island)
   and the kit's `*.island.tsx` files; each island's component sits beside its kit component. `src/islands/readProps.ts`
   reads props in the browser.

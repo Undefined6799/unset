@@ -11,6 +11,9 @@
   },
   "references": [
     {
+      "path": "../../shared/errors"
+    },
+    {
       "path": "../../shared/ui"
     }
   ],

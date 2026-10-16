@@ -22,6 +22,14 @@ export const ERROR_CODES = {
   "db.busy": { status: 503, public: true },
   // P1.22: a preference form sent a value outside its allowlist; only the write path uses it, never a cookie read.
   "prefs.invalid": { status: 400, public: true },
+  // P2.05, signing in: each is shown on the sign-in form (`/login?error=`), never with the handle that caused it.
+  "login.handle_invalid": { status: 400, public: true },
+  "login.handle_not_found": { status: 404, public: true },
+  "login.handle_unverified": { status: 400, public: true },
+  "login.identity_unavailable": { status: 503, public: true },
+  "login.pds_unreachable": { status: 503, public: true },
+  "login.failed": { status: 500, public: true },
+  "login.expired": { status: 400, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 
