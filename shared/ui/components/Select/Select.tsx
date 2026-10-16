@@ -1,9 +1,9 @@
 // Select (P1.24; sheet components/Select/README.md, v45): the native <select>, styled like Input with a ▾ caret.
 // It works with no JS and posts with its form; the sheet's listbox is the select island (P1.24b), placed by
 // IslandSlot, which takes over from this one when it loads and keeps it as the form value.
+import { IslandSlot } from "@unset/shared-islands";
 import { useId } from "react";
 import select from "../../islands/select.island.tsx";
-import { IslandSlot } from "../../islands/slot.ts";
 import { classNames } from "../../src/class-names.ts";
 import { Field, type FieldMessages, fieldIds } from "../Input/field.tsx";
 import inputStyles from "../Input/Input.module.css";

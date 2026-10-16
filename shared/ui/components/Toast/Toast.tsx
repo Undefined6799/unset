@@ -3,8 +3,8 @@
 // or `role="alert"` for an error), so screen readers announce what appears in it. With no JS the server prints the
 // toast into the page after a form post, and the close control is a plain link back to the same page; the toast
 // island (P1.24b), placed by IslandSlot, closes it in place. It never hides on a timer.
+import { IslandSlot } from "@unset/shared-islands";
 import { type ReactNode, useId } from "react";
-import { IslandSlot } from "../../islands/slot.ts";
 import toast from "../../islands/toast.island.tsx";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";

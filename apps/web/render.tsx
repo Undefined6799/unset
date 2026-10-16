@@ -1,6 +1,6 @@
 // The render entry of apps/web (P1.23; ADG §1): the one module interfaces/http imports. The interface passes the
 // request's preferences and the parsed build manifest as props; apps/web never reads files or config itself.
-import type { IslandDefinition } from "@unset/shared-ui";
+import type { IslandDefinition } from "@unset/shared-islands";
 import type { ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { type Assets, Document, type PagePrefs } from "./src/document.tsx";

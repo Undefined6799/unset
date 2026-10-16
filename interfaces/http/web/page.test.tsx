@@ -1,7 +1,7 @@
 // Page responses with P1.22's preferences wired in (P1.23 carries the two document tests P1.22 moved here).
 import { Island, renderPage } from "@unset/apps-web";
+import { defineIsland, type IslandDefinition } from "@unset/shared-islands";
 import { createLogger } from "@unset/shared-log";
-import { defineIsland, type IslandDefinition } from "@unset/shared-ui";
 import { expect, test } from "vitest";
 import { THEME_COOKIE } from "../prefs/theme.ts";
 import { type PageDeps, pageResponse } from "./page.ts";

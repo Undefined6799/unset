@@ -38,6 +38,9 @@
       "path": "../../shared/http"
     },
     {
+      "path": "../../shared/islands"
+    },
+    {
       "path": "../../shared/log"
     },
     {

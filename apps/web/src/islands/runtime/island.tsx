@@ -6,7 +6,7 @@ import {
   type IslandRenderer,
   SerializeError,
   serializeProps,
-} from "@unset/shared-ui";
+} from "@unset/shared-islands";
 import { createContext, createElement, type FunctionComponent, type ReactNode, useContext } from "react";
 
 class IslandError extends Error {

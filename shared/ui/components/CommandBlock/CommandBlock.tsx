@@ -2,9 +2,9 @@
 // led by an `ink-muted` prompt that is never copied, with optional output 2px below, where `[ok]`, `[err]` and
 // `[info]` at the start of a line become a Tag and `#` lines are muted. The copy control is the copy island (P1.24j),
 // placed by IslandSlot: with no JS there is no button and the command stays selectable.
+import { IslandSlot } from "@unset/shared-islands";
 import { useId } from "react";
 import copy from "../../islands/copy.island.tsx";
-import { IslandSlot } from "../../islands/slot.ts";
 import { Tag } from "../Tag/Tag.tsx";
 import styles from "./CommandBlock.module.css";
 

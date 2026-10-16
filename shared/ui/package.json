@@ -8,6 +8,7 @@
     ".": "./index.ts"
   },
   "dependencies": {
+    "@unset/shared-islands": "*",
     "react": "19.3.0"
   },
   "devDependencies": {
