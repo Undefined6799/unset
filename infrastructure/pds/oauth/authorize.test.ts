@@ -174,8 +174,12 @@ describe("authorize", () => {
   });
 
   test("authorize_server_unreachable", async () => {
-    const timedOut = await setup({ server: () => Promise.reject(new NetGuardError("egress.timeout")) });
-    expect(await timedOut.run(PDS)).toEqual({ ok: false, reason: "pds_unreachable" });
+    // P2.05: net-guard `timeout | connect | dns | tls` is an unreachable server; every DNS failure counts.
+    const codes = ["egress.timeout", "egress.connect", "egress.tls"] as const;
+    for (const code of [...codes, "egress.dns_failed", "egress.dns_no_record", "egress.dns_timeout"] as const) {
+      const refused = await setup({ server: () => Promise.reject(new NetGuardError(code)) });
+      expect(await refused.run(PDS), code).toEqual({ ok: false, reason: "pds_unreachable" });
+    }
     const down = await setup({ par: [() => json({ error: "server_error" }, 503)] });
     expect(await down.run(PDS)).toEqual({ ok: false, reason: "pds_unreachable" });
   });
