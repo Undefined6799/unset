@@ -18,8 +18,20 @@ test("ssr_loader_fails_startup_when_missing", async () => {
   await expect(loadWebRender(async () => partial)).rejects.toThrow(
     /does not export renderPage, islandName and screens/,
   );
-  const good = { ...partial, screens: {} as never };
+  const page = () => null;
+  const good = { ...partial, screens: { login: page, loginContinue: page } as never };
   await expect(loadWebRender(async () => good)).resolves.toEqual(good);
+});
+
+test("ssr_loader_needs_each_screen", async () => {
+  // A stale or partial build that exports `screens` without one of the pages fails startup, not the first request.
+  const base = { renderPage: (() => ({ html: "", tooLarge: [] })) as never, islandName: (() => "x") as never };
+  const page = () => null;
+  for (const screens of [{}, { login: page }, { loginContinue: page }, { login: page, loginContinue: "x" }]) {
+    await expect(loadWebRender(async () => ({ ...base, screens: screens as never }))).rejects.toThrow(
+      /does not export renderPage, islandName and screens/,
+    );
+  }
 });
 
 test("ssr_loader_loads_the_real_build", async () => {
