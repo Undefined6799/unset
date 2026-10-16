@@ -58,10 +58,12 @@ const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/;
 const MIN_DEADLINE_MS = 1000;
 const MAX_DEADLINE_MS = 120_000;
 /**
- * A path template segment: a parameter (`:name`, `@:name`), a final `*`, or a lowercase literal. It is the segment
- * rule of shared/log's route check, so every template logs as itself (test request_log_uses_template).
+ * A path template segment: a parameter (`:name`, `@:name`), a final `*`, or a lowercase literal, which may name a
+ * `.json` or `.txt` file (P2.04k: the OAuth client metadata and JWKS documents, security.txt). It is the segment rule
+ * of shared/log's route check, so every template logs as itself (test request_log_uses_template).
  */
-const SEGMENT = /^(?:@?:[A-Za-z][A-Za-z0-9_]*|\*|[a-z]{1,32}(?:[-_][a-z]{1,32}){0,3}|\.well-known|)$/;
+const SEGMENT =
+  /^(?:@?:[A-Za-z][A-Za-z0-9_]*|\*|[a-z]{1,32}(?:[-_][a-z]{1,32}){0,3}(?:\.(?:json|txt))?|\.well-known|)$/;
 
 function checkPath(path: string): void {
   const segments = path.split("/").slice(1);

@@ -314,6 +314,26 @@ describe("startup checks", () => {
     }
   });
 
+  test("paths_may_name_a_json_or_txt_file", () => {
+    // P2.04k: the OAuth client metadata and JWKS documents (P2.04) and security.txt (P2.15) are fixed file names.
+    for (const path of ["/oauth-client-metadata.json", "/oauth/jwks.json", "/.well-known/security.txt"]) {
+      expect(page({ method: "GET", path }).path).toBe(path);
+    }
+    // Only those two extensions, once, on a lowercase literal: never a parameter, a bare dot or another suffix.
+    for (const path of [
+      "/a.b.json",
+      "/a.",
+      "/.json",
+      "/a.JSON",
+      "/a.html",
+      "/alice.example",
+      "/:file.json",
+      "/a.json/b.",
+    ]) {
+      expect(() => page({ method: "GET", path }), path).toThrow(/template/);
+    }
+  });
+
   test("route_table_lists_middleware", () => {
     const { server } = kit();
     const get = { accepts: [], bodyLimit: undefined, mutates: false, deadlineMs: undefined };
