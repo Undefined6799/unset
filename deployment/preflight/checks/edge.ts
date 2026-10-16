@@ -377,18 +377,33 @@ function localFileMount(mount: Mount, allowed: { file: string; what: string }, l
   return null;
 }
 
+/** C18 under dev and prod: the edge serves the PDS's own name (P1.35l), then runs the lock's edge with its sites. */
+function deployedEdgeZones(inputs: Inputs): Outcome {
+  const lock = readLock(inputs);
+  if (lock === null) return missing(inputs.lockPath);
+  const env = inputs.serviceEnv.get("edge");
+  const pds = pdsHostProblem(
+    inputs,
+    env?.use("PDS_HOST", (value) => value),
+  );
+  if (pds !== null) return pds;
+  const ref = lock.edge?.ref;
+  return edgeZones(inputs.compose, inputs.edgeDir, env, typeof ref === "string" ? ref : undefined);
+}
+
 export const c18: Check = {
   id: "C18",
   run: (inputs) => {
-    if (inputs.env === "local") return localEdgeZones(inputs);
-    const lock = readLock(inputs);
-    if (lock === null) return missing(inputs.lockPath);
-    const ref = lock.edge?.ref;
-    return edgeZones(
-      inputs.compose,
-      inputs.edgeDir,
-      inputs.serviceEnv.get("edge"),
-      typeof ref === "string" ? ref : undefined,
-    );
+    switch (inputs.env) {
+      case "local":
+        return localEdgeZones(inputs);
+      case "dev":
+      case "prod":
+        return deployedEdgeZones(inputs);
+      default: {
+        const unknown: never = inputs.env;
+        return fail(`no C18 rule for the env ${String(unknown)}`);
+      }
+    }
   },
 };
