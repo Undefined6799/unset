@@ -1,6 +1,6 @@
 // After signing out (P2.08; plan §5.3 "Logout"). Signing out of unset.sh does not end the session on the sign-in
 // server, so the page points there; on a shared computer that is the step that matters.
-import { Link, type SafeHref, safeHref } from "@unset/shared-ui";
+import { Link, safeHref } from "@unset/shared-ui";
 
 export type SignedOutProps = {
   /** Our PDS's host; its account page is where its own browser session ends. */
@@ -9,6 +9,7 @@ export type SignedOutProps = {
 
 export function SignedOut({ pdsHost }: SignedOutProps) {
   const account = safeHref(`https://${pdsHost}/account`, ["https:"]);
+  const signIn = safeHref("/login", ["path"]);
   return (
     <main>
       <h1>You are signed out</h1>
@@ -21,9 +22,11 @@ export function SignedOut({ pdsHost }: SignedOutProps) {
           {`Your account on ${pdsHost}`}
         </Link>
       )}
-      <Link href={"/login" as SafeHref} variant="standalone">
-        Sign in again
-      </Link>
+      {signIn === null ? null : (
+        <Link href={signIn} variant="standalone">
+          Sign in again
+        </Link>
+      )}
     </main>
   );
 }
