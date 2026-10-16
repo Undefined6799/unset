@@ -405,8 +405,9 @@ function checkProviders(env: Map<string, string>): void {
 /**
  * Every outbound key that is set names the local stack: a loopback address, a local name, or one of the stack's own
  * services by its Compose label (a single-label host such as the local PLC's). An unset key sends nothing, except
- * PDS_DID_PLC_URL, whose default is the public directory (record 2026-10-13-local-plc), so until the local PLC exists
- * this refuses every stack.
+ * PDS_DID_PLC_URL, whose default is the public directory (record 2026-10-13-local-plc). Every PDS now publishes there
+ * (C28, ADR 0023), so this refuses every stack: no seed confirms a new account's email, since each would be a new
+ * public DID.
  */
 function checkOutbound(docker: Docker, env: Map<string, string>, isLocal: (name: string) => boolean): void {
   if ((env.get("PDS_DID_PLC_URL") ?? "") === "") refuse("PDS_DID_PLC_URL is unset, so the PDS uses the public PLC");

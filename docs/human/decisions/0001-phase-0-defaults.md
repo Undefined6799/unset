@@ -431,3 +431,7 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   `plc.directory` in every environment, and P1.34v, P1.34y and P1.34z are dropped. `web` gets its own non-internal
   network, `web_egress`, which no other service joins, with net-guard as its only way out. It replaces the "web has no
   way out" ruling (architecture 02:05Z, option C) for `web` only. Step P2.05e.
+- **The local PDS and the shared PLC (Alex, 2026-10-16, in the sign-in thread; own record:
+  [0023](0023-local-pds-publishes-to-shared-plc.md)):** the local PDS publishes to `plc.directory` like dev and prod,
+  and C28 requires exactly that URL in every env. Its test accounts are a few fixed ones, made once by hand and reused;
+  nothing creates accounts per run, and the email-token reader keeps refusing every stack. Step P1.34t.

@@ -2503,7 +2503,7 @@ networks:
    */
   const LOCAL_ENV = {
     PDS_SERVICE_HANDLE_DOMAINS: ".pds.localhost",
-    PDS_DID_PLC_URL: "http://plc:2582",
+    PDS_DID_PLC_URL: "https://plc.directory",
     PDS_EMAIL_SMTP_URL: null,
     PDS_MODERATION_EMAIL_SMTP_URL: null,
     PDS_MODERATION_EMAIL_ADDRESS: null,
@@ -2663,28 +2663,26 @@ networks:
     expect(code).toBe(0);
   });
 
-  test("local_c28_admits_only_the_local_plc", async () => {
-    // local-plc Amendment 4: seeds and probes run here, so the PDS must never reach the public directory; only the local
-    // PLC's exact internal URL passes, and unset (the PDS's plc.directory default) fails.
+  test("local_c28_admits_only_the_public_plc", async () => {
+    // ADR 0023 (Alex, 2026-10-16): we run no PLC of our own, so the local PDS publishes to plc.directory like dev and
+    // prod, spelled out exactly; the local PLC's old URL, unset and look-alikes fail.
     const c28 = async (value: string | null) =>
       (await local((text) => text, { pdsEnv: { ...LOCAL_ENV, PDS_DID_PLC_URL: value } })).lines.find((line) =>
         / C28 /.test(line),
       );
-    expect(await c28("http://plc:2582")).toBe("PASS C28 ok");
+    expect(await c28("https://plc.directory")).toBe("PASS C28 ok");
     expect(await c28(null)).toBe("FAIL C28 PDS_DID_PLC_URL missing");
     for (const value of [
       "",
-      "https://plc.directory",
-      "http://plc:2582/",
-      "http://plc:2583",
-      "https://plc:2582",
-      "http://plc.localhost:2582",
-      "http://plc:2582.example.test",
-      "http://evil.example/http://plc:2582",
-      "'http://plc:2582 '",
-      "http://user@plc:2582",
+      "http://plc:2582",
+      "https://plc.directory/",
+      "http://plc.directory",
+      "https://plc.directory.example.test",
+      "https://evil.example/https://plc.directory",
+      "'https://plc.directory '",
+      "https://user@plc.directory",
     ]) {
-      expect(await c28(value), value).toBe("FAIL C28 PDS_DID_PLC_URL is not the local PLC");
+      expect(await c28(value), value).toBe("FAIL C28 PDS_DID_PLC_URL is not the public PLC");
     }
   });
 

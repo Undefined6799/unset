@@ -30,3 +30,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0020](0020-permanent-choices.md) | Permanent choices: Matrix server name, Tailnet Lock custody, permission set NSID (P1.32) | Accepted on merge of #753 (the admin RP id gets its own ADR) |
 | [0021](0021-atproto-oauth-client.md) | @atproto/oauth-client-node as the OAuth client (P2.04) | Proposed (awaiting Alex) |
 | [0022](0022-web-egress-and-shared-plc.md) | web gets its own egress network; we use the shared PLC (P2.05e) | Proposed (awaiting Alex) |
+| [0023](0023-local-pds-publishes-to-shared-plc.md) | The local PDS publishes to the shared PLC, with a few fixed test accounts (P1.34t) | Proposed (awaiting Alex) |
