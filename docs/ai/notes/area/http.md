@@ -52,6 +52,11 @@ throws. POST /logout/everywhere requires `confirm=yes`, revokes first, then `des
 `logout-sessions.ts` (the book's SELECT, same transaction as the delete). `infrastructure/session` stays untouched:
 it is trusted base, so a store method cannot share this PR. GET /signed-out points at the PDS account page.
 
+**Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
+sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
+pass/refresh/verify decision for other pages is `emailGate` in the identity domain. Not yet wired onto `/me` or the
+callback: P2.12 owns that guard order.
+
 **The signed-in home (P2.13).** `routes/me.ts`: GET /me reads the session (none → `/login?next=/me`), shows the handle
 only when P2.02's `verifyHandle` (wired in compose with HANDLE_* config, sharing the DID resolver's cache) confirms it,
 else `handle.invalid`, plus the DID, the PDS account link and the sign-out form. GET /login sends a signed-in visitor

@@ -75,6 +75,16 @@
     },
     {
       "method": "GET",
+      "path": "/verify-email",
+      "status": 303
+    },
+    {
+      "method": "POST",
+      "path": "/verify-email/reconsent",
+      "status": 415
+    },
+    {
+      "method": "GET",
       "path": "/me",
       "status": 303
     }

@@ -16,6 +16,7 @@ import {
   completeAuthorization,
   createIdentityNetwork,
   createOAuthClient,
+  createPdsCall,
   type SavedSession,
 } from "@unset/infrastructure-pds";
 import {
@@ -46,6 +47,7 @@ import { meRoutes } from "./routes/me.ts";
 import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
+import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
 import { loadWebBuild } from "./web/build.ts";
 import { type PageDeps, pageResponse } from "./web/page.ts";
@@ -187,6 +189,33 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pdsHost: cfg.PDS_HOSTNAME,
     log,
   });
+  const pds = createPdsCall({
+    client: oauth.client,
+    endSessions: (did) =>
+      withTransaction(oauth.pool, null, (tx) => sessions.destroyAllForDid(tx, did, "auth_dead")).then(() => undefined),
+    tokenSetRemains: (did) =>
+      withClient(oauth.pool, null, async (db) => {
+        const found = await db.query("SELECT 1 FROM app.oauth_session WHERE did = $1", [did]);
+        return found.rowCount === 1;
+      }),
+    log,
+  });
+  const verifyEmail = verifyEmailRoutes({
+    readSession: async (request, deadline) => (await readSession(request, deadline)).session,
+    setEmailConfirmed: (idHash, value, deadline) =>
+      withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value)),
+    sessionInfo: (did, deadline) =>
+      pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did),
+    issueNonce: (deadline) =>
+      withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
+    authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
+    safeHref: render.safeHref,
+    allowHttp: cfg.OAUTH_ALLOW_HTTP,
+    page,
+    screens: render.screens,
+    pdsHost: cfg.PDS_HOSTNAME,
+    log,
+  });
   const me = meRoutes({
     readSession,
     verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
@@ -201,6 +230,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...login,
     ...callback,
     ...logout,
+    ...verifyEmail,
     ...me,
   ];
   return {
