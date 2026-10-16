@@ -1,4 +1,4 @@
-// P2.05a (authorize.ts): a sign-in started against a stand-in authorization server, through the real library client
+// P2.05a (sign-in.ts): a sign-in started against a stand-in authorization server, through the real library client
 // (@atproto/oauth-client 0.8.9) over our identity resolvers. Only the network and the server are doubles (TE-1), so
 // each outcome is pinned to the error the library really throws, not to a shape written here. The successful runs
 // start from the issuer (the PDS chooser), so no DID document here claims a handle: reading that claim belongs to
@@ -9,7 +9,7 @@ import { NetGuardError } from "@unset/infrastructure-net-guard";
 import { scopeString, scopeStringFallback } from "@unset/shared-lexicons";
 import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
 import { describe, expect, test } from "vitest";
-import { authorize } from "./authorize.ts";
+import { authorize } from "./sign-in.ts";
 import {
   type ClientKeys,
   createOAuthClient,

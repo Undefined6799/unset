@@ -2,7 +2,7 @@
 // OAuth client (P2.04) with its keys, metadata and scope check, and the start of a sign-in (P2.05).
 
 export { createIdentityNetwork, type IdentityNetworkOptions } from "./identity-network.ts";
-export { type AuthorizeFailure, type AuthorizeOptions, type AuthorizeResult, authorize } from "./oauth/authorize.ts";
+export { type AuthorizeFailure, type AuthorizeOptions, type AuthorizeResult, authorize } from "./oauth/sign-in.ts";
 export {
   ClientKeys,
   clientMetadata,
