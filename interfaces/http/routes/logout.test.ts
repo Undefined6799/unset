@@ -127,10 +127,17 @@ describe("POST /logout", () => {
 });
 
 test("signed_out_page", async () => {
-  const { send } = setup();
+  const { send } = setup({ session: null });
   const response = await send("/signed-out", { method: "GET" });
   expect(response.status).toBe(200);
   const html = await response.text();
   expect(html).toContain("You are signed out");
   expect(html).toContain('href="https://pds.unset.test/account"');
+});
+
+test("signed_out_sends_a_signed_in_visitor_to_me", async () => {
+  // A browser that is signed in again (Back after a new sign-in, or a typed URL) is not told it is signed out.
+  const response = await setup().send("/signed-out", { method: "GET" });
+  expect(response.status).toBe(303);
+  expect(response.headers.get("location")).toBe("/me");
 });

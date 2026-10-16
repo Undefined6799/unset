@@ -67,6 +67,11 @@
       "method": "GET",
       "path": "/signed-out",
       "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/me",
+      "status": 303
     }
   ]
 }

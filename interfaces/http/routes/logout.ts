@@ -59,13 +59,18 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
       group: "app",
       rateLimit: "default",
       session: "none",
-      handler: ({ request }) =>
-        deps.page({
+      handler: async ({ request, deadline }) => {
+        // A browser signed in again (Back after a new sign-in, a typed URL) is not told it is signed out.
+        if ((await deps.readSession(request, deadline)) !== null) {
+          return new Response(null, { status: 303, headers: { location: "/me", "cache-control": "no-store" } });
+        }
+        return deps.page({
           group: "app",
           request,
           title: "Signed out",
           body: deps.screens.signedOut({ pdsHost: deps.pdsHost }),
-        }),
+        });
+      },
     }),
   ];
 }

@@ -10,12 +10,14 @@
 import type { Did, Handle, HandleResolution } from "@unset/domains-identity";
 import { parseDid, parseHandle } from "@unset/domains-identity";
 import type { AuthorizeResult } from "@unset/infrastructure-pds";
+import type { SessionRead } from "@unset/infrastructure-session";
 import { type ErrorCode, readErrorParam, withErrorParam } from "@unset/shared-errors";
 import { defineRoute, type Route, type RouteGroup, type SafePath, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 // A whole-statement type import: Node erases it, so the server never loads the kit (its index reaches .tsx files).
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
+import { sessionClearCookie } from "../session-cookie.ts";
 import type { WebRender } from "../web/render-entry.ts";
 import { appStateOf, nonceCookie, signedOutFrom, targetCookie, targetFromCookies } from "./sign-in-state.ts";
 
@@ -24,6 +26,8 @@ export type LoginDeps = {
   screens: WebRender["screens"];
   /** The kit's link validator, from the render build. */
   safeHref: WebRender["safeHref"];
+  /** P2.03's read of the request's session cookie: a live session, and whether a dead cookie should be cleared. */
+  readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
   resolveHandle: (handle: Handle) => Promise<HandleResolution>;
   /** A P1.16 `login.nonce`, valid 10 minutes. */
   issueNonce: (deadline: AbortSignal) => Promise<string>;
@@ -117,16 +121,22 @@ export function loginRoutes(deps: LoginDeps): Route[] {
       group: "app",
       rateLimit: "default",
       session: "none",
-      handler: ({ request }) => {
+      handler: async ({ request, deadline }) => {
         const query = new URL(request.url).searchParams;
+        const error = readErrorParam(query);
+        const { session, clearCookie } = await deps.readSession(request, deadline);
+        // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
+        if (session !== null && error === null) return redirect("/me");
         const body = deps.screens.login({
           handle: (query.get("handle") ?? "").slice(0, MAX_PREFILL),
           next: safeReturnPath(query.get("next")),
-          error: readErrorParam(query),
+          error,
           pdsHost: deps.pdsHost,
           handleDomain: deps.handleDomain,
         });
-        return deps.page({ group: "app", request, title: "Sign in", body });
+        const response = deps.page({ group: "app", request, title: "Sign in", body });
+        if (clearCookie) response.headers.append("set-cookie", sessionClearCookie());
+        return response;
       },
     }),
     defineRoute({
