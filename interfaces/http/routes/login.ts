@@ -17,7 +17,7 @@ import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import type { WebRender } from "../web/render-entry.ts";
-import { appStateOf, cookieValue, nonceCookie, signedOutFrom } from "./sign-in-state.ts";
+import { appStateOf, nonceCookie, signedOutFrom, targetCookie, targetFromCookies } from "./sign-in-state.ts";
 
 export type LoginDeps = {
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
@@ -45,8 +45,6 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
-const TARGET_COOKIE = "__Host-login_target";
-const TARGET_TTL_S = 120;
 const MAX_PREFILL = 253;
 
 /** The one value of `name` in the form, or null when it is missing or repeated. */
@@ -103,17 +101,13 @@ export function loginRoutes(deps: LoginDeps): Route[] {
       deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
       return back("login.failed", next);
     }
-    return redirect("/login/continue", [
-      nonceCookie(nonce),
-      `${TARGET_COOKIE}=${Buffer.from(target).toString("base64url")}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${TARGET_TTL_S}`,
-    ]);
+    return redirect("/login/continue", [nonceCookie(nonce), targetCookie(target)]);
   }
 
   /** The target this browser's POST stored, if it is still a link of an allowed kind. */
   function storedTarget(request: Request): SafeHref | null {
-    const encoded = cookieValue(request.headers.get("cookie"), TARGET_COOKIE);
-    if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
-    return deps.safeHref(Buffer.from(encoded, "base64url").toString("utf8"), schemes);
+    const stored = targetFromCookies(request.headers.get("cookie"));
+    return stored === null ? null : deps.safeHref(stored, schemes);
   }
 
   return [

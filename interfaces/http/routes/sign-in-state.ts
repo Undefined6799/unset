@@ -20,6 +20,10 @@ const NONCE_COOKIE = "__Host-oauth_nonce";
 const NONCE_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Lax";
 const NONCE_TTL_S = 600;
 const SIGNED_OUT_COOKIE = "__Host-signed_out";
+/** The authorization URL waiting for /login/continue (P2.05): Strict, because only our own 303 leads there. */
+const TARGET_COOKIE = "__Host-login_target";
+const TARGET_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
+const TARGET_TTL_S = 120;
 const SIGNED_OUT_TTL_S = 2_592_000;
 
 export function appStateOf(state: AppState): string {
@@ -52,6 +56,15 @@ export const nonceFromCookies = (header: string | null): string | null => cookie
 
 export const signedOutCookie = (): string => `${SIGNED_OUT_COOKIE}=1; ${NONCE_ATTRIBUTES}; Max-Age=${SIGNED_OUT_TTL_S}`;
 export const clearSignedOutCookie = (): string => `${SIGNED_OUT_COOKIE}=; ${NONCE_ATTRIBUTES}; Max-Age=0`;
+
+export const targetCookie = (target: string): string =>
+  `${TARGET_COOKIE}=${Buffer.from(target).toString("base64url")}; ${TARGET_ATTRIBUTES}; Max-Age=${TARGET_TTL_S}`;
+/** The stored target as text, or null when the cookie is missing, doubled or not base64url. */
+export function targetFromCookies(header: string | null): string | null {
+  const encoded = cookieValue(header, TARGET_COOKIE);
+  if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
+  return Buffer.from(encoded, "base64url").toString("utf8");
+}
 export const signedOutFrom = (header: string | null): boolean => cookieValue(header, SIGNED_OUT_COOKIE) === "1";
 
 /** The value of the cookie `name` when exactly one is sent: two mean a confused or planted jar, and neither counts. */
