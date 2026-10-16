@@ -115,6 +115,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   const login = loginRoutes({
     page,
     screens: render.screens,
+    safeHref: render.safeHref,
     resolveHandle: (handle) => resolveHandle(oauth.network, handle),
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
