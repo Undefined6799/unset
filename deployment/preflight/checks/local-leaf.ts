@@ -10,6 +10,7 @@
 import { X509Certificate } from "node:crypto";
 import { dirname, join } from "node:path";
 import { ENV_NAMES } from "../../edge/caddyfile.ts";
+import { certificateExtensions, DerError, der, type Extension } from "./der.ts";
 import { fail, type Inputs, missing, type Outcome } from "./types.ts";
 
 /**
@@ -23,20 +24,22 @@ const CA_ROOT = "unset-dev-ca/root.pem";
 const PEM = /^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$/;
 const DNS = /^DNS:([a-z0-9.-]+)$/;
 const DAY_MS = 86_400_000;
-/** id-ce-nameConstraints, 2.5.29.30, with its tag and length. */
-const NAME_CONSTRAINTS_OID = Buffer.from([0x06, 0x03, 0x55, 0x1d, 0x1e]);
 
 /**
  * Why the local leaf copy is not one certificate for exactly APP_HOST and PDS_HOST, issued by the dev root, with both in
  * their validity dates.
  */
 export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: string): Outcome | null {
-  const leaf = certificate(inputs, LEAF, "the local leaf copy is not one certificate");
-  if (!(leaf instanceof X509Certificate)) return leaf;
+  const leafCopy = certificate(inputs, LEAF, "the local leaf copy is not one certificate");
+  if ("reason" in leafCopy) return leafCopy;
   const copy = rootCopyProblem(inputs);
   if (copy !== null) return copy;
-  const root = certificate(inputs, ROOT, "the dev root is not one certificate");
-  if (!(root instanceof X509Certificate)) return root;
+  const rootCopy = certificate(inputs, ROOT, "the dev root is not one certificate");
+  if ("reason" in rootCopy) return rootCopy;
+  // Malformed before anything relies on OpenSSL's reading of it: OpenSSL accepts a long-form length and re-encodes it.
+  const extensions = rootExtensions(rootCopy.der);
+  if (!Array.isArray(extensions)) return fail(extensions);
+  const [leaf, root] = [leafCopy.x509, rootCopy.x509];
   const now = Date.now();
   if (root.validFromDate.getTime() > now) return fail("the dev root is not yet valid");
   if (root.validToDate.getTime() <= now) return fail("the dev root has expired");
@@ -46,9 +49,8 @@ export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: strin
   const served = servedProblem(leaf, appHost, pdsHost, now);
   if (served !== null) return fail(served);
   if (!root.ca) return fail("the dev root is not a CA");
-  if (!hasLocalConstraints(root, appHost, pdsHost))
-    return fail("the dev root does not carry the local name constraints");
-  return null;
+  const limits = rootLimitsProblem(extensions, appHost, pdsHost);
+  return limits === null ? null : fail(limits);
 }
 
 /** Why the leaf does not name exactly APP_HOST and PDS_HOST, with no IP, inside its dates and 14 days from the end. */
@@ -100,44 +102,72 @@ export function appHostProblem(inputs: Inputs, appHost: string | undefined): Out
   return null;
 }
 
-/** The one PEM certificate at `path` beside the checkout, or why not, with `invalid` when it is not one certificate. */
-function certificate(inputs: Inputs, path: string, invalid: string): X509Certificate | Outcome {
+/**
+ * The one PEM certificate at `path` beside the checkout, as node:crypto reads it and as its own bytes, or why not, with
+ * `invalid` when it is not one certificate. The bytes are the PEM's, never `raw`, which OpenSSL re-encodes; base64 that
+ * does not encode back to the same text is refused, so the bytes walked are the bytes OpenSSL parsed.
+ */
+function certificate(inputs: Inputs, path: string, invalid: string): { x509: X509Certificate; der: Buffer } | Outcome {
   const text = readBeside(inputs, path);
   if (typeof text !== "string") return text;
   if (!PEM.test(text)) return fail(invalid);
+  const body = text.replace(/-----[A-Z ]+-----|\n/g, "");
+  const bytes = Buffer.from(body, "base64");
+  if (bytes.toString("base64") !== body) return fail(invalid);
   try {
-    return new X509Certificate(text);
+    return { x509: new X509Certificate(text), der: bytes };
   } catch {
     return fail(invalid);
   }
 }
 
-/**
- * Whether the root carries the runbook's critical name constraints exactly (item 2 and Amendment 2 of the record): the
- * two local hosts permitted, in either order, and every IPv4 and IPv6 address excluded. node:crypto exposes no name
- * constraints (Node v26.10.0, measured: neither X509Certificate nor toLegacyObject() has them), so the extension's
- * DER encoding (RFC 5280
- * section 4.2.1.10: id-ce 30, GeneralSubtrees of dNSName [2] and iPAddress [7] address plus mask) is built and found in
- * the certificate's bytes.
- */
-function hasLocalConstraints(root: X509Certificate, appHost: string, pdsHost: string): boolean {
-  return [
-    [appHost, pdsHost],
-    [pdsHost, appHost],
-  ].some((hosts) => root.raw.includes(nameConstraints(hosts)));
+/** The root's extensions, or why its encoding is refused: not DER anywhere, or one extension given twice (S1). */
+function rootExtensions(root: Buffer): Extension[] | string {
+  let extensions: Extension[];
+  try {
+    extensions = certificateExtensions(root);
+  } catch (error) {
+    if (error instanceof DerError) return "the dev root is not DER";
+    throw error;
+  }
+  const oids = new Set(extensions.map((extension) => extension.oid));
+  return oids.size === extensions.length ? extensions : "the dev root repeats an extension";
 }
 
+/** id-ce 19, 15 and 30 (RFC 5280 sections 4.2.1.9, 4.2.1.3, 4.2.1.10), as the OID's content octets in hex. */
+const BASIC_CONSTRAINTS = "551d13";
+const KEY_USAGE = "551d0f";
+const NAME_CONSTRAINTS = "551d1e";
+/** BasicConstraints { cA TRUE, pathLenConstraint 0 }: the root signs leaves and no other CA (N3). */
+const CA_FOR_LEAVES = der(0x30, der(0x01, Buffer.from([0xff])), der(0x02, Buffer.from([0])));
+/** KeyUsage with exactly keyCertSign (bit 5) and cRLSign (bit 6): 0x06, its last bit unused (X.690 11.2.2). */
+const SIGNS_ONLY = der(0x03, Buffer.from([0x01, 0x06]));
+
+/**
+ * Why the root's own limits are not the runbook's, each extension critical and byte for byte (N3, S1; item 2 and
+ * Amendment 2 of the record): a CA for leaves only, signing only certificates and CRLs, and exactly one name
+ * constraints extension permitting the two local hosts, in either order, and excluding every IPv4 and IPv6 address.
+ */
+function rootLimitsProblem(extensions: Extension[], appHost: string, pdsHost: string): string | null {
+  const exact = (oid: string, value: Buffer) =>
+    extensions.some((extension) => extension.oid === oid && extension.critical && extension.value.equals(value));
+  if (!exact(BASIC_CONSTRAINTS, CA_FOR_LEAVES)) {
+    return "the dev root's basic constraints are not critical CA:TRUE, pathlen:0";
+  }
+  if (!exact(KEY_USAGE, SIGNS_ONLY)) return "the dev root's key usage is not critical keyCertSign and cRLSign";
+  const hosts = [
+    [appHost, pdsHost],
+    [pdsHost, appHost],
+  ];
+  if (!hosts.some((order) => exact(NAME_CONSTRAINTS, nameConstraints(order)))) {
+    return "the dev root does not carry the local name constraints";
+  }
+  return null;
+}
+
+/** NameConstraints: the hosts as dNSName [2] subtrees permitted [0]; 0.0.0.0/0 and ::/0 as iPAddress [7] excluded [1]. */
 function nameConstraints(hosts: string[]): Buffer {
   const permitted = der(0xa0, ...hosts.map((host) => der(0x30, der(0x82, Buffer.from(host, "ascii")))));
   const excluded = der(0xa1, der(0x30, der(0x87, Buffer.alloc(8))), der(0x30, der(0x87, Buffer.alloc(32))));
-  const critical = der(0x01, Buffer.from([0xff]));
-  return der(0x30, NAME_CONSTRAINTS_OID, critical, der(0x04, der(0x30, permitted, excluded)));
-}
-
-/** One DER tag-length-value; lengths up to 65535, far beyond two host names. */
-function der(tag: number, ...parts: Buffer[]): Buffer {
-  const body = Buffer.concat(parts);
-  const n = body.length;
-  const length = n < 0x80 ? [n] : n < 0x100 ? [0x81, n] : [0x82, n >> 8, n & 0xff];
-  return Buffer.concat([Buffer.from([tag, ...length]), body]);
+  return der(0x30, permitted, excluded);
 }

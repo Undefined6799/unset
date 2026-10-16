@@ -24,6 +24,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { children, der, type Tlv } from "./checks/der.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
 import { type Deps, preflight, printable, type Run } from "./index.ts";
@@ -3586,6 +3587,87 @@ networks:
       ["not-critical", [...CA, `nameConstraints=${LOCAL_CONSTRAINTS}`]],
     ];
     for (const [name, extensions] of roots) expect(await c18(rootWith(name, extensions)), name).toBe(unconstrained);
+
+    // P1.35p N3 (verify-896): basicConstraints critical with cA true and pathlen 0, keyUsage critical with exactly
+    // keyCertSign and cRLSign, as the runbook's recipe makes them. Each of these passed on main.
+    const NC = `nameConstraints=critical,${LOCAL_CONSTRAINTS}`;
+    const KU = "keyUsage=critical,keyCertSign,cRLSign";
+    const basic = "FAIL C18 the dev root's basic constraints are not critical CA:TRUE, pathlen:0";
+    const usage = "FAIL C18 the dev root's key usage is not critical keyCertSign and cRLSign";
+    const loose: [string, string[], string][] = [
+      ["no-pathlen", ["basicConstraints=critical,CA:TRUE", KU, NC], basic],
+      ["pathlen-1", ["basicConstraints=critical,CA:TRUE,pathlen:1", KU, NC], basic],
+      ["basic-not-critical", ["basicConstraints=CA:TRUE,pathlen:0", KU, NC], basic],
+      ["digital-signature", [CA[0] as string, `${KU},digitalSignature`, NC], usage],
+      ["usage-not-critical", [CA[0] as string, "keyUsage=keyCertSign,cRLSign", NC], usage],
+    ];
+    for (const [name, extensions, line] of loose) expect(await c18(rootWith(name, extensions)), name).toBe(line);
+  });
+
+  test("local_c18_walks_the_dev_root_as_der", async () => {
+    // P1.35p S1 (verify-896): the name constraints are found by a strict DER walk of the root's own PEM bytes, not a
+    // byte search of node:crypto's re-encoding. Each root below keeps the dev root's key and name, so the leaf still
+    // verifies; only its extensions or its encoding change, and none is signed anew, since C18 checks the leaf's
+    // signature with the root's key and never the root's own.
+    const c18 = async (devRoot: string) =>
+      (await local((text) => text, { devRoot })).lines.find((line) => / C18 /.test(line));
+    const pemBytes = (pem: string) => Buffer.from(pem.replace(/-----[A-Z ]+-----|\n/g, ""), "base64");
+    const pem = (bytes: Buffer) =>
+      `-----BEGIN CERTIFICATE-----\n${bytes
+        .toString("base64")
+        .match(/.{1,64}/g)
+        ?.join("\n")}\n-----END CERTIFICATE-----\n`;
+    const [certificate] = children(pemBytes(DEV_ROOT));
+    const [tbs, algorithm, signature] = children((certificate as Tlv).value) as [Tlv, Tlv, Tlv];
+    const fields = children(tbs.value);
+    const list = children((children((fields.at(-1) as Tlv).value)[0] as Tlv).value).map((tlv) => tlv.bytes);
+    const isNameConstraints = (ext: Buffer) =>
+      (children(children(ext)[0]?.value as Buffer)[0] as Tlv).value.toString("hex") === "551d1e";
+    const constraints = list.find(isNameConstraints) as Buffer;
+    /** The dev root with its extension list edited, and its outer SEQUENCE written by `outer`. */
+    const rebuilt = (edit: (ext: Buffer[]) => Buffer[], outer = (body: Buffer) => der(0x30, body)) => {
+      const extensions = der(0xa3, der(0x30, ...edit(list)));
+      const body = der(0x30, ...fields.slice(0, -1).map((field) => field.bytes), extensions);
+      return pem(outer(Buffer.concat([body, algorithm.bytes, signature.bytes])));
+    };
+    expect(await c18(rebuilt((ext) => ext))).toBe("PASS C18 ok");
+    // Base64 with stray bits in its last character decodes the same in OpenSSL and Buffer, but only canonical text is
+    // walked, so the bytes C18 judges are exactly the text.
+    // An unknown, non-critical extension of 0 to 2 octets sets the length so the base64 always ends in padding.
+    const padded = [0, 1, 2]
+      .map((n) =>
+        rebuilt((ext) => [...ext, der(0x30, der(0x06, Buffer.from([0x2a, 0x03, 0x05])), der(0x04, Buffer.alloc(n)))]),
+      )
+      .find((text) => /=\n-----END/.test(text)) as string;
+    const stray = padded.replace(/([A-Za-z0-9+/])(=+\n-----END)/, (_, last: string, end: string) => {
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      return `${alphabet[alphabet.indexOf(last) ^ 1]}${end}`;
+    });
+    expect(await c18(padded)).toBe("PASS C18 ok");
+    expect(await c18(stray)).toBe("FAIL C18 the dev root is not one certificate");
+    const notDer = "FAIL C18 the dev root is not DER";
+    const unconstrained = "FAIL C18 the dev root does not carry the local name constraints";
+    // The expected extension's bytes hidden inside another extension (OID 1.2.3.4), which a byte search finds.
+    const hidden = der(0x30, der(0x06, Buffer.from([0x2a, 0x03, 0x04])), der(0x04, constraints));
+    expect(await c18(rebuilt((ext) => ext.map((e) => (e === constraints ? hidden : e))))).toBe(unconstrained);
+    expect(await c18(rebuilt((ext) => [...ext, constraints]))).toBe("FAIL C18 the dev root repeats an extension");
+    // A long-form length where the short form fits: the whole certificate's (node:crypto's raw re-encodes it, so the
+    // byte search passed), and the name constraints extension's own.
+    const long = (body: Buffer) =>
+      Buffer.concat([Buffer.from([0x30, 0x83, 0, body.length >> 8, body.length & 0xff]), body]);
+    expect(await c18(rebuilt((ext) => ext, long))).toBe(notDer);
+    const longExtension = Buffer.concat([Buffer.from([0x30, 0x81]), constraints.subarray(1)]);
+    expect(await c18(rebuilt((ext) => ext.map((e) => (e === constraints ? longExtension : e))))).toBe(notDer);
+    // An extra permitted subtree, and trailing bytes after the expected value inside its OCTET STRING.
+    const [oid, flag, value] = children((children(constraints)[0] as Tlv).value) as [Tlv, Tlv, Tlv];
+    const withValue = (bytes: Buffer) => der(0x30, oid.bytes, flag.bytes, der(0x04, bytes));
+    const trailing = withValue(Buffer.concat([value.value, Buffer.from([0x05, 0x00])]));
+    expect(await c18(rebuilt((ext) => ext.map((e) => (e === constraints ? trailing : e))))).toBe(unconstrained);
+    const [subtrees] = children(value.value) as [Tlv];
+    const [permitted, excluded] = children(subtrees.value) as [Tlv, Tlv];
+    const third = der(0x30, der(0x82, Buffer.from("x.localhost", "ascii")));
+    const wider = withValue(der(0x30, der(0xa0, permitted.value, third), excluded.bytes));
+    expect(await c18(rebuilt((ext) => ext.map((e) => (e === constraints ? wider : e))))).toBe(unconstrained);
   });
 
   test("local_c18_reads_each_root_only_as_a_regular_file", async () => {
