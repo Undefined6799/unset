@@ -10,7 +10,7 @@ importance: normal
 related: ["[[identity]]", "[[net-guard]]"]
 replaced_by: null
 tags: [area, pds]
-checked: 2026-10-15
+checked: 2026-10-16
 ---
 # pds
 
@@ -33,5 +33,12 @@ identity domain (the one file outside it allowed to name `alsoKnownAs`). `oauth/
 covers what a session needs, with the library's matcher. Its `onSessionDeleted` hook only logs: the library fires it
 on every callback, so it must never end app sessions. Any `@atproto/oauth-client-node` import lives in this folder only
 (vendor-sdk-one-adapter), tests included.
+
+**Starting a sign-in (P2.05).** `oauth/authorize.ts` calls the library's `authorize` with our appState, retries once
+with the written-out scope when the server answers `invalid_scope` (it cannot resolve our permission set), and turns
+the library's errors into five outcomes: `handle_unverified`, `handle_not_found`, `identity_unavailable`,
+`pds_unreachable`, `failed`. Two of them rest on library internals, the identity step's message prefix and the
+"does not include the handle" message; `authorize.test.ts` runs the real client against a stand-in server, so a
+library upgrade that changes either fails there.
 
 **Links.** [[identity]], [[net-guard]].

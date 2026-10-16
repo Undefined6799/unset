@@ -52,6 +52,10 @@ const EVENTS = [
   // P2.04, the OAuth client: the library dropped a token set (on every callback, on sign-out, or a failed refresh),
   // with one reason word: revoked, refresh_failed, invalid or other. It ends no app session.
   "oauth.session_deleted",
+  // P2.05, starting a sign-in: the server refused our permission set, so the scope was written out (no field), and a
+  // failure that is none of the expected ones (the error class as kind, never its message).
+  "oauth.scope_fallback_used",
+  "oauth.authorize_failed",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
