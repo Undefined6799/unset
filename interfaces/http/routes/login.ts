@@ -13,13 +13,16 @@ import type { AuthorizeResult } from "@unset/infrastructure-pds";
 import { type ErrorCode, readErrorParam, withErrorParam } from "@unset/shared-errors";
 import { defineRoute, type Route, type RouteGroup, type SafePath, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
-import { type HrefScheme, type SafeHref, safeHref } from "@unset/shared-ui";
+// A whole-statement type import: Node erases it, so the server never loads the kit (its index reaches .tsx files).
+import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import type { WebRender } from "../web/render-entry.ts";
 
 export type LoginDeps = {
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
   screens: WebRender["screens"];
+  /** The kit's link validator, from the render build. */
+  safeHref: WebRender["safeHref"];
   resolveHandle: (handle: Handle) => Promise<HandleResolution>;
   /** A P1.16 `login.nonce`, valid 10 minutes. */
   issueNonce: (deadline: AbortSignal) => Promise<string>;
@@ -107,7 +110,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
     const result = await deps.authorize(account.input, { appState, deadline });
     // A failure leaves the nonce unused: it never reached a browser, and it expires on its own.
     if (!result.ok) return back(`login.${result.reason}`, next);
-    const target = safeHref(result.url.href, schemes);
+    const target = deps.safeHref(result.url.href, schemes);
     if (target === null) {
       deps.log.warn("oauth.authorize_failed", { kind: "insecure_target" });
       return back("login.failed", next);
@@ -122,7 +125,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   function storedTarget(request: Request): SafeHref | null {
     const encoded = cookieValue(request.headers.get("cookie"), TARGET_COOKIE);
     if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
-    return safeHref(Buffer.from(encoded, "base64url").toString("utf8"), schemes);
+    return deps.safeHref(Buffer.from(encoded, "base64url").toString("utf8"), schemes);
   }
 
   return [
