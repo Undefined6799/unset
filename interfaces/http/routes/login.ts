@@ -81,12 +81,14 @@ export function loginRoutes(deps: LoginDeps): Route[] {
   async function chooseAccount(form: URLSearchParams): Promise<Account | ErrorCode> {
     const typed = (single(form, "handle") ?? "").trim();
     if (single(form, "intent") === "chooser" || typed === "") return { input: issuer, expectedDid: null };
-    const name = typed.replace(/^@/, "").toLowerCase();
+    const name = typed.replace(/^@/, "");
     if (name.startsWith("did:")) {
+      // DIDs are case-sensitive: parsed as typed, never lowercased into another account.
       const did = parseDid(name);
       return did === null ? "login.handle_invalid" : { input: did, expectedDid: did };
     }
-    const handle = parseHandle(name.includes(".") ? name : `${name}.${deps.handleDomain}`);
+    const lower = name.toLowerCase();
+    const handle = parseHandle(lower.includes(".") ? lower : `${lower}.${deps.handleDomain}`);
     if (handle === null) return "login.handle_invalid";
     // Resolved here for the not-found / unavailable split before any server is asked; the library resolves again and
     // checks that the DID document claims the handle (P2.05a), and P2.06 refuses a different account.
