@@ -24,6 +24,8 @@ export type LoginDeps = {
   screens: WebRender["screens"];
   /** The kit's link validator, from the render build. */
   safeHref: WebRender["safeHref"];
+  /** Whether the request carries a live P2.03 session; a signed-in visitor has nothing to sign in to. */
+  signedIn: (request: Request, deadline: AbortSignal) => Promise<boolean>;
   resolveHandle: (handle: Handle) => Promise<HandleResolution>;
   /** A P1.16 `login.nonce`, valid 10 minutes. */
   issueNonce: (deadline: AbortSignal) => Promise<string>;
@@ -117,7 +119,8 @@ export function loginRoutes(deps: LoginDeps): Route[] {
       group: "app",
       rateLimit: "default",
       session: "none",
-      handler: ({ request }) => {
+      handler: async ({ request, deadline }) => {
+        if (await deps.signedIn(request, deadline)) return redirect("/me");
         const query = new URL(request.url).searchParams;
         const body = deps.screens.login({
           handle: (query.get("handle") ?? "").slice(0, MAX_PREFILL),

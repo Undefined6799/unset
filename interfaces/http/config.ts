@@ -35,6 +35,10 @@ export const identityConfig = {
   IDENTITY_DNS_TIMEOUT_MS: int({ min: 500, max: 10_000, default: 2000 }),
   DID_DOC_CACHE_TTL_S: int({ min: 1, max: 3600, default: 300 }),
   DID_DOC_CACHE_MAX: int({ min: 1, max: 100_000, default: 10_000 }),
+  /** P2.02's handle check, wired by P2.13: how long a verified and an invalid verdict are kept, and how many. */
+  HANDLE_VERIFY_TTL_S: int({ min: 1, max: 3600, default: 600 }),
+  HANDLE_INVALID_TTL_S: int({ min: 1, max: 3600, default: 60 }),
+  HANDLE_CACHE_MAX: int({ min: 1, max: 100_000, default: 10_000 }),
 };
 
 /**

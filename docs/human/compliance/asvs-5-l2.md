@@ -194,7 +194,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V7.4.1 | When session termination is triggered (such as logout or expiration), the application … | partial | `test:interfaces/http/routes/logout.test.ts#logout_this_browser`, `test:tests/integration/session/store.test.ts#session.rotation`, `step:P2.08` | P2.08 |
 | V7.4.2 | The application terminates all active sessions when a user account is disabled or deleted … | partial | `test:tests/integration/session/store.test.ts#end_sessions.deletes_did_sessions`, `test:tests/integration/session/store.test.ts#end_sessions.keeps_token_set_when_deactivated`, `step:P3.06` | P3.06 |
 | V7.4.3 | The application gives the option to terminate all other active sessions after a … | open | `step:P2.08` | P2.08 |
-| V7.4.4 | All pages that require authentication have easy and visible access to logout functionality | open | `step:P2.13` | P2.13 |
+| V7.4.4 | All pages that require authentication have easy and visible access to logout functionality | partial | `test:apps/web/src/screens/screens.test.tsx#me_shows_the_account_and_sign_out`, `step:P2.13` | P2.13 |
 | V7.4.5 | Application administrators are able to terminate active sessions for an individual user … | open |  | — |
 | V7.5.1 | The application requires full re-authentication before allowing modifications to … | open |  | — |
 | V7.5.2 | Users are able to view and (having authenticated again with at least one factor) … | open | `step:P2.08` | P2.08 |

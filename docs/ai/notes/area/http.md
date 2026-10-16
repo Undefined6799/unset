@@ -51,6 +51,11 @@ GET /signed-out points to the PDS account page. The OAuth token set is kept (oth
 everywhere" (needs P2.04s's `destroyAllForDid`) and revoking the grant when the last browser signs out (needs a count of
 the DID's sessions from the session store, trusted base).
 
+**The signed-in home (P2.13).** `routes/me.ts`: GET /me reads the session (none → `/login?next=/me`), shows the handle
+only when P2.02's `verifyHandle` (wired in compose with HANDLE_* config, sharing the DID resolver's cache) confirms it,
+else `handle.invalid`, plus the DID, the PDS account link and the sign-out form. GET /login sends a signed-in visitor
+to /me. Not yet: the app shell (P1.25), the profile, privacy and invite blocks, onboarding guards.
+
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only
 from tests, which pass `import * as web from "@unset/apps-web"`; a new test that composes the server must pass it too,
