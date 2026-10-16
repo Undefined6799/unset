@@ -1,8 +1,7 @@
 // The atproto network behind small contracts (guideline §1): the identity domain's DID and handle lookups, and the one
-// OAuth client (P2.04) with its keys, metadata and scope check, and the start of a sign-in (P2.05).
+// OAuth client (P2.04) with its keys, metadata and scope check, and the start and end of a sign-in (P2.05, P2.06).
 
 export { createIdentityNetwork, type IdentityNetworkOptions } from "./identity-network.ts";
-export { type AuthorizeFailure, type AuthorizeOptions, type AuthorizeResult, authorize } from "./oauth/sign-in.ts";
 export {
   ClientKeys,
   clientMetadata,
@@ -15,3 +14,13 @@ export {
   type SavedState,
 } from "./oauth/oauth-client.ts";
 export { grantCovers, SCOPE_METADATA } from "./oauth/scopes.ts";
+export {
+  type AuthorizeFailure,
+  type AuthorizeOptions,
+  type AuthorizeResult,
+  authorize,
+  type CallbackFailure,
+  type CallbackResult,
+  type CompletedSignIn,
+  completeAuthorization,
+} from "./oauth/sign-in.ts";

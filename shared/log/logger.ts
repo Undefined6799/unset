@@ -56,6 +56,11 @@ const EVENTS = [
   // failure that is none of the expected ones (the error class as kind, never its message).
   "oauth.scope_fallback_used",
   "oauth.authorize_failed",
+  // P2.06, completing it: a callback failure that is none of the expected ones (the error class, or a fixed word, as
+  // kind), and the sign-in's outcome as service-wide counts with no DID (plan §6 "no user sign-in records").
+  "oauth.callback_failed",
+  "auth.login_succeeded",
+  "auth.login_denied",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 
