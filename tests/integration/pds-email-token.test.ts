@@ -397,7 +397,8 @@ describe("tests/support/pds-email-token.ts", () => {
       ],
       ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "unset.ac" } })],
       ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "evil.localhost.example" } })],
-      ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "pdslocalhost" } })],
+      // A name ending in .localhost's text without its dot (SE-7a: a suffix-boundary name sits under notlocalhost).
+      ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "pds.notlocalhost" } })],
       ["PDS_HOSTNAME is not local", (w) => ({ ...w, pdsEnv: { ...w.pdsEnv, PDS_HOSTNAME: "localhost" } })],
       [
         "a handle domain is not local",
@@ -434,7 +435,8 @@ describe("tests/support/pds-email-token.ts", () => {
         // Look-alikes of the local names (S2'): .localhost is a suffix with its dot, never a substring.
         ["PDS_DID_PLC_URL", "https://localhost.evil.example"],
         ["PDS_DID_PLC_URL", "https://evil-localhost.example"],
-        ["PDS_DID_PLC_URL", "https://evillocalhost"],
+        // Ends in .localhost's text without its dot (SE-7a's suffix-boundary shape, under notlocalhost).
+        ["PDS_DID_PLC_URL", "https://evil.notlocalhost"],
         ["PDS_DID_PLC_URL", "https://pds.example.test.evil.example"],
         ["PDS_DID_PLC_URL", "http://[::ffff:127.0.0.1]:2582"],
         // Loopback is a whole address, never a prefix (coordinator's verify of #803 at 94ab296, S2).
