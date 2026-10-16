@@ -49,6 +49,8 @@ export const identityConfig = {
 export const loginConfig = {
   PDS_HOSTNAME: str({ pattern: HOSTNAME }),
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
+  /** How long a confirmed-email cache is trusted before the PDS is asked again (P2.11). */
+  EMAIL_RECHECK_S: int({ min: 60, max: 86_400, default: 900 }),
 };
 
 export const config = defineEntrypointConfig({
