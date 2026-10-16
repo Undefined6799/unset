@@ -36,7 +36,7 @@ and return path in the sealed appState, then sets `__Host-oauth_nonce` (Lax, 600
 (Strict, 120 s, the authorization URL in base64url) and answers 303 to GET /login/continue, which renders a meta
 refresh to that cookie's URL. Every failure goes back to `/login?error=<code>`. The target never rides in a query, and
 there is no table for it: the cookie can only send a browser where its own POST pointed it.
-`routes/app-state.ts` holds both halves of the binding: the appState shape and the nonce cookie.
+`routes/sign-in-state.ts` holds both halves of the binding: the appState shape and the nonce cookie.
 
 **The callback (P2.06).** `routes/oauth-callback.ts`, the one GET that mutates (P1.07's GET_MUTATION_EXCEPTIONS):
 completeAuthorization, then in order the appState shape, the nonce cookie against the appState (constant time; a

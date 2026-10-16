@@ -1,6 +1,7 @@
-// What binds a sign-in to the browser that started it (plan §2 rule 2): the appState POST /login writes (P2.05) and
-// the callback reads back (P2.06), and the `__Host-oauth_nonce` cookie holding the same P1.16 nonce. The library keeps
-// the appState sealed and single-use in app.oauth_state; the authorization server never sees it.
+// The browser state of signing in (plan §2 rule 2; §5.3). What binds a sign-in to the browser that started it: the
+// appState POST /login writes (P2.05) and the callback reads back (P2.06), and the `__Host-oauth_nonce` cookie holding
+// the same P1.16 nonce. The library keeps the appState sealed and single-use in app.oauth_state; the authorization
+// server never sees it.
 import { type Did, parseDid } from "@unset/domains-identity";
 import { type SafePath, safeReturnPath } from "@unset/shared-http";
 

@@ -13,7 +13,7 @@ import type { ErrorCode } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import { sessionCookieValue, sessionSetCookie } from "../session-cookie.ts";
-import { clearNonceCookie, nonceFromCookies, parseAppState } from "./app-state.ts";
+import { clearNonceCookie, nonceFromCookies, parseAppState } from "./sign-in-state.ts";
 
 export type CallbackDeps = {
   /** infrastructure/pds completeAuthorization over the one OAuth client. */
