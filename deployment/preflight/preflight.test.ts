@@ -3588,6 +3588,26 @@ networks:
     for (const [name, extensions] of roots) expect(await c18(rootWith(name, extensions)), name).toBe(unconstrained);
   });
 
+  test("local_c18_reads_each_root_only_as_a_regular_file", async () => {
+    // P1.35p S2 (verify-896): a FIFO with no writer at either root path blocked a plain read for ever, so the run never
+    // ended. Each is read the way env files are (regular-file.ts) and refused at once, naming the path.
+    const fifo = (path: string) => {
+      mkdirSync(dirname(path), { recursive: true });
+      execFileSync("mkfifo", ["-m", "0644", path]);
+    };
+    const c18 = async (options: Parameters<typeof local>[1]) =>
+      (await local((text) => text, options)).lines.find((line) => / C18 /.test(line));
+    expect(await c18({ devRoot: null, setUp: (root) => fifo(join(dirname(root), "unset-dev-trust/root.pem")) })).toBe(
+      "FAIL C18 unset-dev-trust/root.pem is not a regular file",
+    );
+    expect(await c18({ caRoot: null, setUp: (root) => fifo(join(devCaOf(root), "root.pem")) })).toBe(
+      "FAIL C18 unset-dev-ca/root.pem is not a regular file",
+    );
+    expect(await c18({ leaf: null, setUp: (root) => fifo(join(envOf(root), "local-leaf.pem")) })).toBe(
+      "FAIL C18 unset-dev-env/local-leaf.pem is not a regular file",
+    );
+  });
+
   test("local_guards_loopback_ports_and_localhost_pds", async () => {
     for (const ports of ['["80:80", "127.0.0.1:443:443"]', '["0.0.0.0:80:80", "127.0.0.1:443:443"]']) {
       const { lines, code } = await local((text) => text.replace('["127.0.0.1:80:80", "127.0.0.1:443:443"]', ports));

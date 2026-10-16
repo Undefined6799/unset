@@ -31,14 +31,12 @@ const NAME_CONSTRAINTS_OID = Buffer.from([0x06, 0x03, 0x55, 0x1d, 0x1e]);
  * their validity dates.
  */
 export function localLeafProblem(inputs: Inputs, appHost: string, pdsHost: string): Outcome | null {
-  const leaf = certificate(inputs, LEAF);
-  if (leaf === null) return missing(LEAF);
-  if (leaf === "invalid") return fail("the local leaf copy is not one certificate");
+  const leaf = certificate(inputs, LEAF, "the local leaf copy is not one certificate");
+  if (!(leaf instanceof X509Certificate)) return leaf;
   const copy = rootCopyProblem(inputs);
   if (copy !== null) return copy;
-  const root = certificate(inputs, ROOT);
-  if (root === null) return missing(ROOT);
-  if (root === "invalid") return fail("the dev root is not one certificate");
+  const root = certificate(inputs, ROOT, "the dev root is not one certificate");
+  if (!(root instanceof X509Certificate)) return root;
   const now = Date.now();
   if (root.validFromDate.getTime() > now) return fail("the dev root is not yet valid");
   if (root.validToDate.getTime() <= now) return fail("the dev root has expired");
@@ -73,14 +71,22 @@ function servedProblem(leaf: X509Certificate, appHost: string, pdsHost: string, 
  * it refuses first. Equal text is equal bytes here: the copy must also pass PEM's ASCII-only pattern, and no non-ASCII
  * byte decodes to ASCII.
  */
-function rootCopyProblem({ root, readText }: Inputs): Outcome | null {
-  const copy = readText(join(dirname(root), ROOT));
-  if (copy === null) return missing(ROOT);
+function rootCopyProblem(inputs: Inputs): Outcome | null {
+  const copy = readBeside(inputs, ROOT);
+  if (typeof copy !== "string") return copy;
   if (copy.includes("PRIVATE KEY")) return fail("the dev root copy holds a private key");
-  const original = readText(join(dirname(root), CA_ROOT));
-  if (original === null) return missing(CA_ROOT);
+  const original = readBeside(inputs, CA_ROOT);
+  if (typeof original !== "string") return original;
   if (copy !== original) return fail(`the dev root copy is not the dev CA's root: ${ROOT} and ${CA_ROOT}`);
   return null;
+}
+
+/** A file beside the checkout as text, or why not: absent is input missing, and only a regular file is read (S2). */
+function readBeside({ root, readRegular }: Inputs, path: string): string | Outcome {
+  const text = readRegular(join(dirname(root), path));
+  if (text === null) return missing(path);
+  if (text === "not a regular file") return fail(`${path} is not a regular file`);
+  return text;
 }
 
 /** APP_HOST is a hostname and exactly the host web's PUBLIC_ORIGIN names (Amendment 3); reasons are fixed words. */
@@ -94,14 +100,15 @@ export function appHostProblem(inputs: Inputs, appHost: string | undefined): Out
   return null;
 }
 
-function certificate({ root, readText }: Inputs, path: string): X509Certificate | "invalid" | null {
-  const text = readText(join(dirname(root), path));
-  if (text === null) return null;
-  if (!PEM.test(text)) return "invalid";
+/** The one PEM certificate at `path` beside the checkout, or why not, with `invalid` when it is not one certificate. */
+function certificate(inputs: Inputs, path: string, invalid: string): X509Certificate | Outcome {
+  const text = readBeside(inputs, path);
+  if (typeof text !== "string") return text;
+  if (!PEM.test(text)) return fail(invalid);
   try {
     return new X509Certificate(text);
   } catch {
-    return "invalid";
+    return fail(invalid);
   }
 }
 

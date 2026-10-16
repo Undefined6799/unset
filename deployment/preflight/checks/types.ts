@@ -47,6 +47,11 @@ export type Inputs = WalkInputs & {
   /** The repository's `deployment/edge`, whose Caddyfile and snippets the edge image carries (C18). */
   edgeDir: string;
   readText: (path: string) => string | null;
+  /**
+   * A file's text read only as a regular file (regular-file.ts): null when nothing is there, `"not a regular file"` for a
+   * FIFO, a folder or a device, which a plain read could block on (P1.35p S2); any other error throws.
+   */
+  readRegular: (path: string) => string | null | "not a regular file";
   /** Each env file's `dev:ino` as it was read (P1.34p): C9 fails a file it then finds as another file. */
   envReads: ReadonlyMap<string, string>;
   stat: (path: string) => Stats | null;

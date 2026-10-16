@@ -338,6 +338,10 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     networkTablePath: join(deps.root, `deployment/networks.${networkTable(env)}.json`),
     edgeDir: join(deps.root, "deployment/edge"),
     readText,
+    readRegular: (path) => {
+      const read = readRegular(path);
+      return read === null || read === NOT_REGULAR ? read : read.text;
+    },
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
     realpath: deps.realpath ?? realpathOrNull,
