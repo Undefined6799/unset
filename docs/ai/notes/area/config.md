@@ -26,7 +26,7 @@ checked: 2026-10-16
 - `netGuard.ts`: the net-guard fields every egress-making entrypoint merges in, and `HOSTNAME`, the exact-hostname
   pattern a `str` field reuses (the web server's `PDS_HOSTNAME` and `HANDLE_SUFFIX`, P2.05).
 - `permanent.ts`: values that can never change after first use (the Matrix `server_name`, the permission set NSID),
-  Alex's answers recorded in ADR 0020 and pinned by `permanent.test.ts` (P1.32). They are constants, not config keys.
+  Alex's answers recorded in ADR 0025 and pinned by `permanent.test.ts` (P1.32). They are constants, not config keys.
 
 **How data flows.** Each `interfaces/*/config.ts` merges the fields it needs → `bootOrExit` at startup → typed
 values to the composition root. Never print resolved config or the environment.

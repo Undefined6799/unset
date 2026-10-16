@@ -42,9 +42,9 @@ describe("parseHandle", () => {
     const cases: [string, string | null][] = [
       ["alice.example.com", "alice.example.com"],
       ["example.com", "example.com"],
-      // 0x40.me is our own handle domain and the only two-letter TLD a test may use (RFC 2606 and 6761 name none);
-      // the one-letter label x is listed for P2.09's reserved handles (P1.35i).
-      ["x.0x40.me", "x.0x40.me"],
+      // unset.im is our handle domain and the only two-letter TLD a test may use (RFC 2606 and 6761 name none);
+      // the one-letter label x is listed for P2.09's reserved handles (P1.35i). ADR 0025.
+      ["x.unset.im", "x.unset.im"],
       ["Alice.Example.COM", "alice.example.com"],
       ["@alice.example.com", "alice.example.com"],
       ["  alice.example.com\t", "alice.example.com"],

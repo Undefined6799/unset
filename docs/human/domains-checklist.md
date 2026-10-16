@@ -9,6 +9,8 @@ It must support DNSSEC DS submission for `.ac` and hardware-key (WebAuthn) 2FA. 
 
 ## 2. Register
 - `unset.ac` (production PDS).
+- `unset.im` (handles, ADR 0025).
+- `unset.cc` (chat, ADR 0025).
 - The media domain. It must be its own registrable domain, never a subdomain of the app or the PDS. Candidates:
   - `unsetcdn.net` (the plan's example)
   - `unsetmedia.net`
@@ -21,6 +23,8 @@ It must support DNSSEC DS submission for `.ac` and hardware-key (WebAuthn) 2FA. 
   - `unset.ca` (Ontario)
 
 For each: auto-renew on, registrar lock on, WHOIS privacy on.
+
+Development is not a separate registration. It is the label `staging` on the four public domains: `staging.unset.sh` (app), `staging.unset.ac` (PDS), `staging.unset.im` (handles), `staging.unset.cc` (chat). ADR 0025, Alex 2026-10-16 22:57Z.
 
 ## 3. Turn on DNSSEC
 1. Turn on DNSSEC at the DNS host.

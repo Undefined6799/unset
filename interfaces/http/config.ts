@@ -44,7 +44,8 @@ export const identityConfig = {
 /**
  * Signing in (P2.05). Our PDS is the authorization server the "Use … sign-in" button opens; the reference PDS's issuer
  * is its public URL, `https://` and this host. A name typed without a dot is completed with HANDLE_SUFFIX, the PDS's
- * own `PDS_SERVICE_HANDLE_DOMAINS` value (one suffix, leading dot: `.0x40.me`, dev `.0x40.space`).
+ * own `PDS_SERVICE_HANDLE_DOMAINS` value (one suffix, leading dot: production `.unset.im`, development
+ * `.staging.unset.im`; ADR 0025).
  */
 export const loginConfig = {
   PDS_HOSTNAME: str({ pattern: HOSTNAME }),
