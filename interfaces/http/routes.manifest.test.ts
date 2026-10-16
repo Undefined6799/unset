@@ -14,6 +14,7 @@ import { afterAll, expect, test } from "vitest";
 import { compose } from "./compose.ts";
 import { config } from "./config.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { loginRoutes } from "./routes/login.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { webTestEnv } from "./test-env.ts";
@@ -38,6 +39,7 @@ const drift = (table: readonly Entry[], committed: readonly Entry[]): string[] =
 const POLICIES = {
   default: [{ capacity: 60, refillPerSec: 5, scope: "ip" }],
   page: [{ capacity: 60, refillPerSec: 5, scope: "ip" }],
+  login: [{ capacity: 10, refillPerSec: 1, scope: "ip" }],
 } as const;
 const manifest: Entry[] = JSON.parse(readFileSync(new URL("./routes.manifest.json", import.meta.url), "utf8"));
 
@@ -65,6 +67,19 @@ test("route_manifest_names_an_extra_route", async () => {
       ...prefsRoutes(),
       ...assetsRoutes(new Map()),
       ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
+      // Only the table entries matter here, so the sign-in routes get dependencies that are never called.
+      ...loginRoutes({
+        page: () => new Response(),
+        screens: web.screens,
+        safeHref: web.safeHref,
+        resolveHandle: async () => ({ status: "unavailable" }),
+        issueNonce: async () => "",
+        authorize: async () => ({ ok: false, reason: "failed" }),
+        pdsHost: cfg.PDS_HOSTNAME,
+        handleDomain: cfg.HANDLE_SUFFIX.slice(1),
+        allowHttp: false,
+        log,
+      }),
       extra,
     ],
     policies: POLICIES,

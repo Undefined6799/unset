@@ -31,3 +31,11 @@ test("prod_entry_imports_no_app_source", async () => {
   expect(graph).toContain("interfaces/http/web/render-entry.ts");
   expect([...graph].filter((path) => path.startsWith("apps/"))).toEqual([]);
 }, 30_000);
+
+test("prod_entry_reaches_no_tsx", async () => {
+  // Node 26 strips types from .ts but refuses .tsx (ERR_UNKNOWN_FILE_EXTENSION), and Vitest compiles .tsx itself, so
+  // only this walk, before the image's health check, sees a value import that reaches the kit's components (P2.05).
+  // UI code reaches the server through the render build alone (render-entry.ts).
+  const graph = await staticGraph(ENTRY);
+  expect([...graph].filter((path) => path.endsWith(".tsx"))).toEqual([]);
+}, 30_000);

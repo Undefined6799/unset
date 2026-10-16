@@ -32,6 +32,8 @@ export function webSecretEnv(dir: string): Record<string, string> {
     PLC_URL: "https://plc.directory",
     OAUTH_CLIENT_KEYS_FILE: secret("oauth_client_keys", JSON.stringify([clientKeyJwk("A")])),
     OAUTH_ACTIVE_KID: "A",
+    PDS_HOSTNAME: "pds.unset.test",
+    HANDLE_SUFFIX: ".pds.unset.test",
   };
 }
 
