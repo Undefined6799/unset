@@ -1294,6 +1294,7 @@ describe("preflight", () => {
       [notHost, host('"2001:db8::2"')],
       [ipName, named("192.0.2.2")],
       [ipName, named('"192.0.2.2.:443"')],
+      [ipName, named('"3221225986"')],
       [ipName, named('"2001:db8::2"')],
       [ipName, named('"[2001:db8::2]:443"')],
       [noHost, (text) => text.replace(pdsHost, "")],

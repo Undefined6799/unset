@@ -1,6 +1,5 @@
 // C18's tie between the edge's PDS_HOST and the PDS's own PDS_HOSTNAME, in every env (P1.35g under local; P1.35l for
 // dev and prod, architecture 02:01Z). C21 reads only the retirement report (host.ts:18-40), so nothing else ties them.
-import { isIP } from "node:net";
 import { ENV_NAMES } from "../../edge/caddyfile.ts";
 import { fail, type Inputs, missing, type Outcome } from "./types.ts";
 
@@ -23,11 +22,11 @@ export function pdsHostProblem(inputs: Inputs, pdsHost: string | undefined): Out
 const normalHost = (host: string): string => host.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
 
 /**
- * An IPv4 or IPv6 address, bare, bracketed or with a port, or a name whose last label is all digits, which a resolver
- * may read as IPv4 (verify-869 S1). node:net isIP (Node v26.11.1 doc/api/net.md) takes no brackets and no port, and
- * normalHost would cut a bare IPv6 address's last group as a port, so the value is also tried whole.
+ * An IP address as written in a host: IPv6 bracketed or bare (a hostname holds at most one colon, before its port), or
+ * IPv4 as a name whose last label is all digits, which a resolver reads as an address (verify-869 S1). Lexical, since
+ * the egress guard keeps node:net in infrastructure/net-guard.
  */
 function ipLiteral(host: string): boolean {
-  const bare = normalHost(host).replace(/^\[(.*)\]$/, "$1");
-  return isIP(host) !== 0 || isIP(bare) !== 0 || /\.\d+$/.test(bare);
+  if (host.startsWith("[") || host.split(":").length > 2) return true;
+  return /(^|\.)\d+$/.test(normalHost(host));
 }
