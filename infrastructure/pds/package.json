@@ -8,7 +8,7 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@atproto/api": "0.24.2",
+    "@atproto/api": "0.24.3",
     "@atproto/jwk-jose": "0.2.4",
     "@atproto/oauth-client-node": "0.5.9",
     "@atproto/oauth-scopes": "0.5.13",
