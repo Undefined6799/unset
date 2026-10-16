@@ -41,4 +41,10 @@ the library's errors into five outcomes: `handle_unverified`, `handle_not_found`
 "does not include the handle" message; `sign-in.test.ts` runs the real client against a stand-in server, so a
 library upgrade that changes either fails there.
 
+**Completing it (P2.06).** `completeAuthorization` in the same file hands the callback query to the library, which
+spends its state, checks `iss`, exchanges the code and checks the token's `sub` against its DID document's PDS and
+issuer. It returns the DID, issuer, appState and the granted scope (read from the stored set without a refresh) and a
+`revoke`; failures are `consent_denied`, `expired` (no stored state: unknown, expired or replayed), `pds_unreachable`
+and `failed`. The interface decides the rest (nonce, expected account, grant, session).
+
 **Links.** [[identity]], [[net-guard]].

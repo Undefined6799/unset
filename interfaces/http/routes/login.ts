@@ -17,7 +17,7 @@ import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
 import type { ReactNode } from "react";
 import type { WebRender } from "../web/render-entry.ts";
-import { appStateOf } from "./app-state.ts";
+import { appStateOf, cookieValue, nonceCookie } from "./app-state.ts";
 
 export type LoginDeps = {
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
@@ -42,9 +42,7 @@ type Account = { readonly input: string; readonly expectedDid: Did | null };
 
 const FORM = "application/x-www-form-urlencoded";
 const BODY_LIMIT_BYTES = 2048;
-const NONCE_COOKIE = "__Host-oauth_nonce";
 const TARGET_COOKIE = "__Host-login_target";
-const NONCE_TTL_S = 600;
 const TARGET_TTL_S = 120;
 const MAX_PREFILL = 253;
 
@@ -52,16 +50,6 @@ const MAX_PREFILL = 253;
 function single(form: URLSearchParams, name: string): string | null {
   const values = form.getAll(name);
   return values.length === 1 ? (values[0] ?? null) : null;
-}
-
-/** The value of the cookie `name` when exactly one is sent: two mean a confused or planted jar, and neither counts. */
-function cookieValue(header: string | null, name: string): string | null {
-  const values = (header ?? "")
-    .split(";")
-    .map((pair) => pair.trim())
-    .filter((pair) => pair.startsWith(`${name}=`))
-    .map((pair) => pair.slice(name.length + 1));
-  return values.length === 1 ? (values[0] as string) : null;
 }
 
 const redirect = (location: string, setCookies: readonly string[] = []): Response => {
@@ -112,7 +100,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
       return back("login.failed", next);
     }
     return redirect("/login/continue", [
-      `${NONCE_COOKIE}=${nonce}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${NONCE_TTL_S}`,
+      nonceCookie(nonce),
       `${TARGET_COOKIE}=${Buffer.from(target).toString("base64url")}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${TARGET_TTL_S}`,
     ]);
   }
