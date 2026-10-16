@@ -14,6 +14,7 @@ import { afterAll, expect, test } from "vitest";
 import { compose } from "./compose.ts";
 import { config } from "./config.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { webTestEnv } from "./test-env.ts";
 
@@ -60,7 +61,12 @@ test("route_manifest_names_an_extra_route", async () => {
   const extra = defineRoute(spec);
   const server = createServer({
     config: cfg,
-    routes: [...prefsRoutes(), ...assetsRoutes(new Map()), extra],
+    routes: [
+      ...prefsRoutes(),
+      ...assetsRoutes(new Map()),
+      ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
+      extra,
+    ],
     policies: POLICIES,
     log,
   });

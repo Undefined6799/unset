@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-07
+checked: 2026-10-16
 ---
 # http
 
@@ -21,6 +21,14 @@ all six servers are built from.
 the manifest), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme cookie, applied on the server) and
 `web/` (reads Vite's manifest once at startup and renders pages through apps/web). `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.
+
+**The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
+identity network and DID resolver, and the one OAuth client over them, and returns it as `oauth` for the sign-in
+routes; building opens no connection. `boot()` checks the connection budget and `main.ts` runs it before `listen`;
+the pools close in the drain hooks. `routes/oauth-metadata.ts` serves `/oauth-client-metadata.json` (the
+`client_id`) and `/oauth/jwks.json`. A test that composes the server takes its env from `interfaces/http/test-env.ts`,
+which writes the secrets to files; the runtime image copies each package the server imports, and
+`web_image_boots_to_config_check` fails when one is missing.
 
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only

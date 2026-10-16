@@ -101,8 +101,10 @@ const ALLOWED: ReadonlySet<string> = new Set([
   "island",
 ]);
 const ROUTE_TEMPLATE = /^\/[A-Za-z0-9_\-/:@.*]*$/;
-/** A route segment a template may hold: a parameter, a wildcard or a word literal. A handle, id or token is none. */
-const ROUTE_SEGMENT = /^(?:@?:[A-Za-z][A-Za-z0-9_]*|\*|[a-z]{1,32}(?:[-_][a-z]{1,32}){0,3}|\.well-known|)$/;
+/** A route segment a template may hold: a parameter, a wildcard or a word literal (which may name a .json or .txt file,
+ * P2.04k). A handle, id or token is none. */
+const ROUTE_SEGMENT =
+  /^(?:@?:[A-Za-z][A-Za-z0-9_]*|\*|[a-z]{1,32}(?:[-_][a-z]{1,32}){0,3}(?:\.(?:json|txt))?|\.well-known|)$/;
 /** A random per-request id: a UUID or 16 to 64 base64url characters. Anything else is not a request id. */
 const REQUEST_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{16,64})$/;
 /** A SQLSTATE is five digits or uppercase letters (postgresql.org/docs/18/errcodes-appendix.html). */
