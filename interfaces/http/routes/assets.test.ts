@@ -8,6 +8,7 @@ import { loadConfig } from "@unset/shared-config";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
+import { webTestEnv } from "../test-env.ts";
 
 // A build directory: the committed test manifest, the files it lists, and one file it does not list.
 const BUILD = mkdtempSync(join(tmpdir(), "web-build-"));
@@ -22,19 +23,9 @@ const FILES: Record<string, string> = {
   "stray-T3st0005.js": "not listed in the manifest\n",
 };
 for (const [name, text] of Object.entries(FILES)) writeFileSync(join(BUILD, "assets", name), text);
-const ENV = {
-  UNSET_ENV: "test",
-  UNSET_SERVICE: "http",
-  UNSET_COMMIT: "c".repeat(40),
-  LISTEN_PORT: "8080",
-  PUBLIC_ORIGIN: "https://unset.test",
-  HTTP_ALLOWED_HOSTS: "unset.test",
-  MEDIA_ORIGIN: "https://unset-media.test",
-  TRUSTED_PROXY_MODE: "header",
-  TRUSTED_PROXY_HEADER: "x-forwarded-for",
-  TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-  WEB_BUILD_DIR: BUILD,
-};
+const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
+afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
+const ENV = webTestEnv(SECRETS, { WEB_BUILD_DIR: BUILD });
 const { server } = await compose(loadConfig(config, ENV), web);
 const get = (path: string, method = "GET") =>
   server.request(new Request(`https://unset.test${path}`, { method, headers: { host: "unset.test" } }), "10.0.0.1");

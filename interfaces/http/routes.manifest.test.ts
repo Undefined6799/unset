@@ -1,32 +1,29 @@
 // The committed route manifest is the route table (P1.04, findings F-27): a new route or a changed option shows in
 // the PR diff, where CODEOWNERS sends it to security review.
-import { readFileSync } from "node:fs";
+
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
-import { expect, test } from "vitest";
+import { afterAll, expect, test } from "vitest";
 import { compose } from "./compose.ts";
 import { config } from "./config.ts";
 import { assetsRoutes } from "./routes/assets.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
+import { webTestEnv } from "./test-env.ts";
 
 const COMMIT = "c".repeat(40);
-const ENV = {
-  UNSET_ENV: "test",
-  UNSET_SERVICE: "http",
+const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
+afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
+const ENV = webTestEnv(SECRETS, {
   UNSET_COMMIT: COMMIT,
-  LISTEN_PORT: "8080",
-  PUBLIC_ORIGIN: "https://unset.test",
-  HTTP_ALLOWED_HOSTS: "unset.test",
-  MEDIA_ORIGIN: "https://unset-media.test",
-  TRUSTED_PROXY_MODE: "header",
-  TRUSTED_PROXY_HEADER: "x-forwarded-for",
-  TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
   WEB_BUILD_DIR: fileURLToPath(new URL("./web/testdata/", import.meta.url)),
-};
+});
 type Entry = { method: string; path: string };
 /** Each route keyed by "METHOD path", as JSON keeps it: an unset option is absent, as in the committed file. */
 const byRoute = (routes: readonly Entry[]) =>
