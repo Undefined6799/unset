@@ -148,6 +148,7 @@ describe("authorize", () => {
     const [body] = pars;
     expect(body?.get("scope")).toBe(scopeString());
     expect(body?.get("prompt")).toBe("login");
+    expect(body?.get("code_challenge_method")).toBe("S256");
     // The server gets the library's own random state; ours rides only in the stored, sealed state.
     expect(body?.get("state")).toMatch(/^[A-Za-z0-9_-]{16,}$/);
     expect([...states.values()].map((state) => state.appState)).toEqual([APP_STATE]);
