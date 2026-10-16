@@ -69,6 +69,8 @@ function setup(world: { session?: Session | null; destroyFails?: boolean } = {})
 
 const SIGNED_OUT = [
   "__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+  "__Host-oauth_nonce=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+  "__Host-login_target=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0",
   "__Host-signed_out=1; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000",
 ];
 
@@ -106,10 +108,21 @@ describe("POST /logout", () => {
   });
 
   test("logout_db_failure_keeps_the_cookie", async () => {
+    // Book P2.08 step 3: a failed delete is a retryable 503, and the cookie stays so the retry finds it.
     const { send } = setup({ destroyFails: true });
     const response = await send("/logout");
-    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(response.status).toBe(503);
     expect(response.headers.getSetCookie()).toEqual([]);
+  });
+
+  test("logout_drops_a_pending_sign_in", async () => {
+    // A sign-in started before signing out must not finish after it: its authorization URL was made without
+    // prompt=login, so /login/continue and the callback could sign the browser straight back in.
+    for (const session of [SESSION, null]) {
+      const cookies = (await setup({ session }).send("/logout")).headers.getSetCookie();
+      expect(cookies).toContain("__Host-oauth_nonce=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0");
+      expect(cookies).toContain("__Host-login_target=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0");
+    }
   });
 });
 
