@@ -4,11 +4,12 @@
 // runs only the build and its import graph holds no app source (architecture Amendment 2026-10-06 21:05Z); tests
 // pass the source, which only Vitest can compile (it has import.meta.glob and CSS Modules).
 // P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
-// connection; `boot` checks the connection budget before the server listens.
+// connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
+// the identity network and P1.16's nonces.
 import { fileURLToPath } from "node:url";
-import { createDidResolver } from "@unset/domains-identity";
+import { createDidResolver, resolveHandle } from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
-import { createIdentityNetwork, createOAuthClient, type SavedSession } from "@unset/infrastructure-pds";
+import { authorize, createIdentityNetwork, createOAuthClient, type SavedSession } from "@unset/infrastructure-pds";
 import {
   checkConnectionBudget,
   connectionOf,
@@ -17,6 +18,8 @@ import {
   createOAuthStateStore,
   createPool,
   createRequestLock,
+  createSingleUseStore,
+  PURPOSES,
   withClient,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
@@ -26,6 +29,7 @@ import { createLogger, type Logger } from "@unset/shared-log";
 import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { loginRoutes } from "./routes/login.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { loadWebBuild } from "./web/build.ts";
@@ -90,7 +94,7 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     withClient(pool, null, (db) =>
       checkConnectionBudget(db, [cfg.PG_POOL_MAX, cfg.LOCK_POOL_MAX], cfg.PG_MAX_REPLICAS),
     );
-  return { client, boot, onClose: [() => pool.end(), () => lockPool.pool.end()] };
+  return { client, network, pool, boot, onClose: [() => pool.end(), () => lockPool.pool.end()] };
 }
 
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
@@ -106,14 +110,29 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   };
   const oauth = await composeOAuth(cfg, log);
+  const page: Services["page"] = (input) => pageResponse(deps, input);
+  const nonces = createSingleUseStore({ log });
+  const login = loginRoutes({
+    page,
+    screens: render.screens,
+    resolveHandle: (handle) => resolveHandle(oauth.network, handle),
+    issueNonce: (deadline) =>
+      withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
+    authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
+    pdsHost: cfg.PDS_HOSTNAME,
+    handleDomain: cfg.HANDLE_SUFFIX.slice(1),
+    allowHttp: cfg.OAUTH_ALLOW_HTTP,
+    log,
+  });
   const routes = [
     ...prefsRoutes(),
     ...assetsRoutes(build.files),
     ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
+    ...login,
   ];
   return {
     server: createServer({ config: cfg, routes, policies, log, onClose: oauth.onClose }),
-    page: (page) => pageResponse(deps, page),
+    page,
     oauth: oauth.client,
     boot: oauth.boot,
   };

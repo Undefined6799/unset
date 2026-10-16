@@ -37,6 +37,21 @@
       "method": "GET",
       "path": "/oauth/jwks.json",
       "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/login",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/login",
+      "status": 415
+    },
+    {
+      "method": "GET",
+      "path": "/login/continue",
+      "status": 303
     }
   ]
 }

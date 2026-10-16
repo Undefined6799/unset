@@ -53,5 +53,42 @@
     "rateLimit": "default",
     "mutates": false,
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
+    "path": "/login",
+    "group": "app",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "POST",
+    "path": "/login",
+    "group": "app",
+    "accepts": ["application/x-www-form-urlencoded"],
+    "bodyLimit": 2048,
+    "rateLimit": "login",
+    "mutates": true,
+    "middleware": [
+      "requestId",
+      "hostCheck",
+      "trustedProxy",
+      "methodCheck",
+      "contentTypeCheck",
+      "bodyLimit",
+      "rateLimitIp",
+      "csrf"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/login/continue",
+    "group": "app",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   }
 ]
