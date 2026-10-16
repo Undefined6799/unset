@@ -1,5 +1,6 @@
 import type { NetGuardCode, Policy, TxtResolver } from "@unset/infrastructure-net-guard";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
+import { ConfigError } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
 import { createIdentityNetwork } from "./index.ts";
 
@@ -136,11 +137,17 @@ describe("identity network on net-guard", () => {
   });
 
   test("plc_url_must_be_the_plc_policy_host", () => {
+    // A configuration mistake, refused as one: the server exits 78 with `config.invalid PLC_URL` (review on #928).
     const { guard } = guardAnswering(async () => ({ status: 200, body: new Uint8Array() }));
     for (const plcUrl of ["https://plc.example.com", "http://plc.directory"]) {
-      expect(() =>
-        createIdentityNetwork({ guard, plcUrl: new URL(plcUrl), httpTimeoutMs: 1, dnsTimeoutMs: 1 }),
-      ).toThrow(TypeError);
+      let thrown: unknown;
+      try {
+        createIdentityNetwork({ guard, plcUrl: new URL(plcUrl), httpTimeoutMs: 1, dnsTimeoutMs: 1 });
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, plcUrl).toBeInstanceOf(ConfigError);
+      expect((thrown as ConfigError).problems).toEqual([{ key: "PLC_URL", reason: "invalid" }]);
     }
   });
 
