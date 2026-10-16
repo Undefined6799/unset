@@ -184,7 +184,8 @@ services:
       # The OAuth client (P2.04c, P2.04w): Postgres as web, whose pools must fit the role's 40 connections across three
       # replicas with the 8-connection lock pool (checkConnectionBudget), so 5; the seal keyring and the client keys as
       # mounted files; our own PDS as net-guard's one internal host, reached through the edge's alias on the app
-      # network; the key new sign-ins sign with. PLC_URL is the public directory until P1.34z points local at its own.
+      # network; the key new sign-ins sign with. PLC_URL is the shared public directory: we run no PLC of our own, and
+      # web reaches it, like every outside host, through web_egress and net-guard (ADR 0022).
       PG_HOST: postgres
       PG_DATABASE: unset
       PG_USER: web
@@ -202,7 +203,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    networks: [db, app]
+    networks: [db, app, web_egress]
     mem_limit: 512m
     cpus: 1
     pids_limit: 128
@@ -212,14 +213,17 @@ networks:
   db:
     internal: true
   # web's only way to the edge. web reaches the PDS only through the edge's aliases on this network, never directly.
-  # Internal, so web still has no way out. Record: the 02:05Z (option C) and 02:21Z sections of
-  # unset-plan/book-edits/2026-10-14-p134d-split.md.
+  # Internal: web's one way out is web_egress below. Record: the 02:05Z (option C) and 02:21Z sections of
+  # unset-plan/book-edits/2026-10-14-p134d-split.md, and ADR 0022 for web_egress.
   app:
     internal: true
   # Only the edge shares a network with the PDS's HTTP port: the PDS trusts every private address as a proxy (step book
   # P1.29, "Networks"). pds_egress is the PDS's own way out (PLC, DID and handle resolution, client metadata).
   edge:
   pds_egress:
+  # web's own way out (ADR 0022): the shared PLC, handle resolution and other servers' OAuth metadata. Only web joins
+  # it, and every request web makes goes through net-guard (resolve, vet, pin, no redirects, private ranges refused).
+  web_egress:
 
 volumes:
   pgdata:
