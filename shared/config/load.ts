@@ -158,7 +158,16 @@ export function bootOrExit<F extends Fields>(schema: Schema<F>): Config<F> {
       writeLine({ event: "config.load_failed" });
       process.exit(1);
     }
-    for (const { key, reason } of error.problems) writeLine({ event: "config.invalid", key, reason });
-    process.exit(EX_CONFIG);
+    return exitOnConfigError(error);
   }
+}
+
+/**
+ * For a boot check that runs after the config loaded and may still refuse it (the web server's connection budget):
+ * a `ConfigError` exits exactly as bootOrExit does; anything else is thrown on unchanged.
+ */
+export function exitOnConfigError(error: unknown): never {
+  if (!(error instanceof ConfigError)) throw error;
+  for (const { key, reason } of error.problems) writeLine({ event: "config.invalid", key, reason });
+  process.exit(EX_CONFIG);
 }
