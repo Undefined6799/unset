@@ -1,5 +1,11 @@
 // Shared UI (MIT). P1.10: the island props serialiser (server) and reader (client).
 // P1.23: what an island file exports.
+
+// P2.05: the kit components the first screens use (P1.25 exports the rest with the app shell).
+export { Button, type ButtonProps } from "./components/Button/Button.tsx";
+export { Callout, type CalloutProps } from "./components/Callout/Callout.tsx";
+export { Input, type InputProps } from "./components/Input/Input.tsx";
+export { Link, type LinkProps } from "./components/Link/Link.tsx";
 export {
   defineIsland,
   ISLAND_MAX_PROPS_BYTES,

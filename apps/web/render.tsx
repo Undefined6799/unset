@@ -6,11 +6,23 @@ import { renderToString } from "react-dom/server";
 import { type Assets, Document, type PagePrefs } from "./src/document.tsx";
 import { type IslandEnv, newIslandRun } from "./src/islands/runtime/island.tsx";
 import { byName } from "./src/islands/runtime/registry.ts";
+import { Login, type LoginProps } from "./src/screens/Login.tsx";
+import { LoginContinue, type LoginContinueProps } from "./src/screens/LoginContinue.tsx";
 
 export type { Assets, PagePrefs } from "./src/document.tsx";
 export { Island, IslandPropsInvalid, IslandPropsTooLarge, IslandUnknown } from "./src/islands/runtime/island.tsx";
 export type { BuildManifest } from "./src/islands/runtime/manifest.ts";
 export { islandName } from "./src/islands/runtime/registry.ts";
+export type { LoginContinueProps, LoginProps };
+
+/**
+ * The pages the web server renders, each built from the props it passes (P2.05). The server reaches screens only
+ * through this object, so production loads them from the server build like the rest of this entry.
+ */
+export const screens = {
+  login: (props: LoginProps): ReactNode => <Login {...props} />,
+  loginContinue: (props: LoginContinueProps): ReactNode => <LoginContinue {...props} />,
+};
 
 /** Every island in the repository, found at build time. */
 export const ISLANDS: ReadonlyMap<string, IslandDefinition> = byName(

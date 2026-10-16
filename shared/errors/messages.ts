@@ -20,4 +20,11 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "service.unavailable": "This is unavailable right now. Try again soon.",
   "db.busy": "We're busy right now. Try again in a moment.",
   "prefs.invalid": "That choice is not one of the options.",
+  "login.handle_invalid": "That is not a handle. A handle looks like a domain name.",
+  "login.handle_not_found": "No account uses that handle.",
+  "login.handle_unverified": "That handle is not confirmed by its account.",
+  "login.identity_unavailable": "That handle could not be looked up right now. Try again soon.",
+  "login.pds_unreachable": "The account's sign-in server could not be reached. Try again soon.",
+  "login.failed": "Sign-in could not start. Try again.",
+  "login.expired": "That sign-in step expired. Start again.",
 };

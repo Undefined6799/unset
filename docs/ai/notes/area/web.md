@@ -10,16 +10,17 @@ importance: normal
 related: ["[[http]]", "[[ui]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-10-06
+checked: 2026-10-16
 ---
 # web
 
-**What it owns.** The screens of unset.sh: the page shell (`src/document.tsx`), and the islands runtime under
-`src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
+**What it owns.** The screens of unset.sh: the page shell (`src/document.tsx`), the screens under `src/screens/`
+(P2.05: `Login`, `LoginContinue`), and the islands runtime under `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
 
 **Entry points.**
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build
-  manifest in as props.
+  manifest in as props. Screens leave through its `screens` object (`screens.login(props)`), never by file, so
+  production gets them from the server build like `renderPage`; the render loader refuses a build without it.
 - `src/islands/runtime/bootstrap.ts` is the one browser entry, loaded only on pages that have an island.
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers every CSS Module into the stylesheets each page links). The
