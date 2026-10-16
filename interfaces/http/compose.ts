@@ -134,9 +134,9 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     },
     log,
   });
-  const readSession = async (request: Request, deadline: AbortSignal) => {
+  const readSession = (request: Request, deadline: AbortSignal) => {
     const cookieValue = sessionCookieValue(request.headers.get("cookie"));
-    return (await sessions.read({ key: request, cookieValue, deadline })).session;
+    return sessions.read({ key: request, cookieValue, deadline });
   };
   const handles = createHandleVerifier({
     network: oauth.network,
@@ -151,7 +151,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     page,
     screens: render.screens,
     safeHref: render.safeHref,
-    signedIn: async (request, deadline) => (await readSession(request, deadline)) !== null,
+    readSession,
     resolveHandle: (handle) => resolveHandle(oauth.network, handle),
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
@@ -173,7 +173,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   });
   const logout = logoutRoutes({
-    readSession,
+    readSession: async (request, deadline) => (await readSession(request, deadline)).session,
     destroySession: (session, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) => sessions.destroy(tx, session.idHash)),
     page,

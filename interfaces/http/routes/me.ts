@@ -2,13 +2,15 @@
 // shown only when it resolves back to the DID (P2.02 verifyHandle, cached); an outage degrades that one line, never
 // the page. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
 import { type Did, displayHandle, type HandleVerdict } from "@unset/domains-identity";
-import type { Session } from "@unset/infrastructure-session";
+import type { SessionRead } from "@unset/infrastructure-session";
 import { defineRoute, type Route, type RouteGroup } from "@unset/shared-http";
 import type { ReactNode } from "react";
+import { sessionClearCookie } from "../session-cookie.ts";
 import type { WebRender } from "../web/render-entry.ts";
 
 export type MeDeps = {
-  readSession: (request: Request, deadline: AbortSignal) => Promise<Session | null>;
+  /** P2.03's read of the request's session cookie: a live session, and whether a dead cookie should be cleared. */
+  readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
   verifyHandle: (did: Did, signal: AbortSignal) => Promise<HandleVerdict>;
   page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
   screens: WebRender["screens"];
@@ -24,12 +26,14 @@ export function meRoutes(deps: MeDeps): Route[] {
       rateLimit: "default",
       session: "none",
       handler: async ({ request, deadline }) => {
-        const session = await deps.readSession(request, deadline);
+        const { session, clearCookie } = await deps.readSession(request, deadline);
         if (session === null) {
-          return new Response(null, {
-            status: 303,
-            headers: { location: `/login?${new URLSearchParams({ next: "/me" })}`, "cache-control": "no-store" },
+          const headers = new Headers({
+            location: `/login?${new URLSearchParams({ next: "/me" })}`,
+            "cache-control": "no-store",
           });
+          if (clearCookie) headers.append("set-cookie", sessionClearCookie());
+          return new Response(null, { status: 303, headers });
         }
         // The session store keeps only DIDs this server wrote after the callback parsed them.
         const did = session.did as Did;
