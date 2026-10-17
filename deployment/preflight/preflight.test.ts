@@ -3158,6 +3158,28 @@ networks:
       },
     });
     expect(swapped).toBe(`FAIL C26 dev CA folder changed while it was checked: ${seen}`);
+    // P1.35p N2 (verify-901): every folder the walk visits is checked again after it, not only the top one, so a
+    // sub-folder swapped and left swapped refuses too. A swap made and reverted entirely within the walk (by the deploy
+    // user or root) stays a residual.
+    const sub = (root: string) => join(folder(root), "sub");
+    const nested = (root: string) => {
+      note(sub(root));
+      mkdirSync(sub(root), { mode: 0o700 });
+      writeFileSync(join(sub(root), "x"), "fixture\n");
+    };
+    const subSwapped = await onLocal(nested, {
+      readdir: (path) => {
+        const names = readdirSync(path, { encoding: "buffer" });
+        if (path === seen) {
+          renameSync(seen, join(dirname(dirname(seen)), "sub-old"));
+          mkdirSync(seen, { mode: 0o700 });
+          for (const name of names) writeFileSync(join(seen, name.toString()), "fixture\n");
+        }
+        return names;
+      },
+    });
+    expect(subSwapped).toBe(`FAIL C26 dev CA folder changed while it was checked: ${seen}`);
+    expect(await onLocal(nested)).toBe("PASS C26 ok");
   });
 
   test("preflight_prints_names_escaped", async () => {

@@ -190,12 +190,17 @@ function devCaFolderProblem(inputs: Inputs): Outcome | null {
   }
   if (inputs.env === "prod") return fail("dev CA folder present on a prod host");
   if (!info.isDirectory()) return fail(`dev CA folder is not a real directory: ${folder}`);
-  const problem = devCaEntryProblem(folder, inputs, "dev CA folder");
+  const visited = new Map<string, Stats>([[folder, info]]);
+  const problem = devCaEntryProblem(folder, inputs, visited, "dev CA folder");
   if (problem !== null) return fail(problem);
-  // A folder swapped while it was walked: the race stays a residual, but a swap left in place is caught (02:08Z).
-  const after = inputs.lstat(folder);
-  if (after === null || after.dev !== info.dev || after.ino !== info.ino) {
-    return fail(`dev CA folder changed while it was checked: ${folder}`);
+  // Every folder the walk entered is still the one it read, the top one first (02:08Z; P1.35p N2, verify-901): a swap
+  // left in place is caught at any depth. A swap made and reverted entirely within the walk (deploy user or root) stays
+  // a residual.
+  for (const [path, before] of visited) {
+    const after = inputs.lstat(path);
+    if (after === null || after.dev !== before.dev || after.ino !== before.ino) {
+      return fail(`dev CA folder changed while it was checked: ${path}`);
+    }
   }
   return null;
 }
@@ -212,9 +217,15 @@ function isAbsent(path: string, inputs: Inputs): boolean {
 /**
  * Why an entry under the dev CA folder is refused, or null. Our own recursion by lstat follows no link (a recursive
  * readdir follows linked folders, Node v26.10.0 doc/api/fs.md, fs.readdirSync `recursive`): the folder holds only
- * regular files with one link each and real folders. `what` names `dir` when its listing fails.
+ * regular files with one link each and real folders. Each folder entered goes into `visited` with the lstat it was
+ * judged by. `what` names `dir` when its listing fails.
  */
-function devCaEntryProblem(dir: string, inputs: Inputs, what = "dev CA folder entry"): string | null {
+function devCaEntryProblem(
+  dir: string,
+  inputs: Inputs,
+  visited: Map<string, Stats>,
+  what = "dev CA folder entry",
+): string | null {
   let names: string[] | Buffer;
   try {
     names = utf8Names(inputs.readdir(dir));
@@ -227,7 +238,8 @@ function devCaEntryProblem(dir: string, inputs: Inputs, what = "dev CA folder en
     const info = inputs.lstat(path);
     if (info === null) return `dev CA folder entry cannot be read: ${path}`;
     if (info.isSymbolicLink()) return `dev CA folder holds a link: ${path}`;
-    const problem = info.isDirectory() ? devCaEntryProblem(path, inputs) : fileProblem(path, info);
+    if (info.isDirectory()) visited.set(path, info);
+    const problem = info.isDirectory() ? devCaEntryProblem(path, inputs, visited) : fileProblem(path, info);
     if (problem !== null) return problem;
   }
   return null;
