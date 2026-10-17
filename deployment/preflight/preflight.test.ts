@@ -3118,7 +3118,8 @@ networks:
     // S2: names by their exact bytes. A name that is not UTF-8 is refused before any lstat, alone or beside a clean
     // file under the name the lossy decode would give it (U+FFFD), whether it is a hard-linked key or a link out.
     const bytes = (root: string) => Buffer.concat([Buffer.from(`${folder(root)}/`), Buffer.from([0xff])]);
-    const notUtf8 = (path: string) => `FAIL C26 dev CA folder holds a name that is not UTF-8, in: ${path}`;
+    // P1.35p N3 (verify-901): the refusal names the entry by its raw bytes, escaped, with its folder.
+    const notUtf8 = (path: string) => `FAIL C26 dev CA folder holds a name that is not UTF-8: ${path}/\\xff`;
     const lone = (root: string) => {
       note(folder(root));
       writeFileSync(bytes(root), "fixture\n");
@@ -3236,6 +3237,10 @@ networks:
     expect(await onLocal(empty)).toBe("FAIL C26 input missing: unset-dev-trust/root.pem");
     const extra = (root: string) => writeFileSync(note(join(trust(root), "extra.pem")), "fixture\n");
     expect(await onLocal(extra)).toBe(`FAIL C26 dev trust folder holds something other than root.pem: ${seen}`);
+    // P1.35p N3 (verify-901): a name that is not UTF-8 is named by its raw bytes, escaped, as in the dev CA folder.
+    const raw = (root: string) =>
+      writeFileSync(Buffer.concat([Buffer.from(`${note(trust(root))}/`), Buffer.from([0x61, 0xff])]), "fixture\n");
+    expect(await onLocal(raw)).toBe(`FAIL C26 dev trust folder holds something other than root.pem: ${seen}/a\\xff`);
     const linked = (root: string) => linkSync(note(join(trust(root), "root.pem")), join(root, "deployment/trust-copy"));
     expect(await onLocal(linked)).toBe(`FAIL C26 dev trust root has extra hard links: ${seen}`);
     for (const mode of [0o664, 0o646]) {
