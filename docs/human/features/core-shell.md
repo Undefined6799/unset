@@ -6,6 +6,12 @@ rail; on phones, a bottom bar contains Menu, Home and the account avatar. Menu o
 use native hover tooltips and accessible link names. The phone popup supports Close, outside click and Escape
 without JavaScript.
 
+On screen, the main region scrolls inside the space between the header and navigation. This keeps keyboard-focused
+controls visible even in short or zoomed phone viewports; padding below a fixed bar alone does not provide that
+guarantee. Print keeps normal document flow. To check it, open the account page at 390×320 and 320×400 and traverse
+the controls with Tab and Shift+Tab: the confirmation checkbox and both sign-out buttons must remain clear of the
+header and bottom bar. The skip link must focus the main region with its heading visible.
+
 `apps/web/src/shell/AppShell.tsx` chooses destinations and composes the layout. `shared/ui/components/Navigation/`
 owns reusable navigation, using the existing Avatar, Icon, tokens and native browser popover controls. The existing
 Header provides a compact brand-only mode. CSS stays in the components/screens cascade layers. No new dependency,
@@ -31,3 +37,5 @@ The local Navigation README is registered in the UI inventory as the extension a
 sheet copy and generated tokens remain unchanged. Native interaction behavior follows the
 [HTML Living Standard](https://html.spec.whatwg.org/multipage/popover.html), read 2026-10-17; rendering uses the
 repository's React 19.3.0 and React DOM 19.3.0.
+The bounded content area's overflow follows [CSS Overflow Level 3](https://www.w3.org/TR/css-overflow-3/#overflow-properties)
+(7 October 2025 working draft), with keyboard behavior checked in the production browser render.

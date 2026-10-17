@@ -33,6 +33,8 @@ login, continue, signed-out, verify-email and `/<DID>` render inside the shell (
 brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
 visually hidden heading. The interface supplies the active destination and a verified account name when available;
 the anonymous public homepage still reads no cookies. Native popovers keep the phone menu usable without JS.
+On screen, core main is a scroll area bounded by the header and navigation; bottom padding alone left keyboard
+focus hidden behind the phone bar at short viewport heights. Print keeps normal flow.
 The interface supplies `accountPath` from the session DID; the anonymous fallback `/did` resolves the user's own
 destination through existing app gates. `/me` is a compatibility redirect. The current DID page is still owner-only;
 public profile content and the editor remain separate work (P2.21).

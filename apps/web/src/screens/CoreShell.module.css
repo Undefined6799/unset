@@ -1,16 +1,18 @@
-/* Core shell geometry from the approved Figma shell; the kit owns the header and navigation. */
+/* The content scrolls inside the chrome so keyboard focus cannot pass behind it. */
 @layer screens {
-  .main {
-    margin-left: calc(var(--space-6) * 3);
-    padding: var(--space-12);
-    overflow-wrap: anywhere;
-  }
-
-  @media (max-width: 767px) {
+  @media screen {
     .main {
-      --bottom: calc(60px + max(20px, env(safe-area-inset-bottom)));
-      margin-left: 0;
-      padding: var(--space-4) var(--space-4) calc(var(--space-4) + var(--bottom));
+      box-sizing: border-box;
+      height: calc(100dvh - 64px);
+      overflow: auto;
+      margin-left: calc(var(--space-6) * 3);
+      padding: var(--space-12);
+      overflow-wrap: anywhere;
+      @media (max-width: 767px) {
+        height: calc(100dvh - 116px - max(20px, env(safe-area-inset-bottom)));
+        margin-left: 0;
+        padding: var(--space-4);
+      }
     }
   }
 }

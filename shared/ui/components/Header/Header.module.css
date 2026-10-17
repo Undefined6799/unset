@@ -21,9 +21,6 @@
   }
 
   .brand {
-    position: sticky;
-    top: 0;
-    z-index: var(--z-sticky);
     background: var(--color-ground);
     & .bar {
       height: 63px;
