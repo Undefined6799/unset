@@ -4,12 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
-import {
-  createOAuthSessionStore,
-  createPool,
-  withClient,
-  withTransaction,
-} from "@unset/infrastructure-postgres";
+import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore, type SessionLimits } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
