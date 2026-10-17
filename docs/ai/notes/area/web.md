@@ -7,10 +7,10 @@ summary: "Hub for apps/web: the public site's pages, page shell and island runti
 code: [apps/web/render.tsx]
 sources: []
 importance: normal
-related: ["[[http]]", "[[ui]]"]
+related: ["[[http]]", "[[ui]]", "[[islands]]"]
 replaced_by: null
 tags: [area, web]
-checked: 2026-10-16
+checked: 2026-10-17
 ---
 # web
 
@@ -25,6 +25,9 @@ including the confirm box for sign-out everywhere), and the islands runtime unde
   It also re-exports the kit's `safeHref` for the server (P2.05): plain Node cannot load `@unset/shared-ui`, whose
   index reaches the `.tsx` components, so `interfaces/http` imports the kit only as types (`prod_entry_reaches_no_tsx`).
 - `src/islands/runtime/bootstrap.ts` is the one browser entry, loaded only on pages that have an island.
+  The runtime takes the island types (`IslandDefinition`, `IslandProps`, `IslandRenderer`), `readProps` and
+  `serializeProps` from `@unset/shared-islands` ([[islands]]), through its index only; nothing comes from a subpath
+  or from `@unset/shared-ui` (P1.25p).
 - `vite.config.ts` builds twice (P1.23c). The browser build writes `dist/client` (each `*.island.tsx` its own lazy
   chunk, plus the `src/styles.ts` entry that gathers every CSS Module into the stylesheets each page links). The
   `--ssr render.tsx` build writes `dist/server/render.js`, which production runs. Both, and Vitest, name classes
@@ -42,4 +45,4 @@ failed island stays as its server markup and only logs to the console.
   so an island inlined into boot can no longer drop out of the count unseen (P1.25l).
 - No inline script or style on any page (CSP).
 
-**Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[http]].
+**Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].
