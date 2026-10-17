@@ -53,7 +53,7 @@ jobs:
           trap cleanup EXIT
           node tests/e2e/fixtures/servers.ts wait
           npx playwright test --config tests/e2e/playwright.config.ts
-          node scripts/assert-tests-ran.ts tests/e2e/report.json
+          node scripts/test/assert-tests-ran.ts tests/e2e/report.json
           pa11y-ci --config .pa11yci.json > pa11y-results.json
           lhci autorun --config ./lighthouserc.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -4,7 +4,7 @@ type: area
 status: current
 areas: ["[[tests]]"]
 summary: "Hub for tests/: Postgres integration tests and the browser accessibility harness."
-code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/assert-tests-ran.ts, .github/workflows/e2e.yml]
+code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/test/assert-tests-ran.ts, .github/workflows/e2e.yml]
 sources: []
 importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
@@ -24,9 +24,12 @@ still open `http://127.0.0.1:8080`, and `ASSETS_BASE` stays on that listener. Th
 that build (Node cannot load its TSX), so the fixture server loads it with Vite's `ssrLoadModule` and the
 production stylesheet. The toast fixture's `Island` is the production server build, the same module the
 render loader imports, so it shares that build's `IslandRunContext`.
-`scripts/assert-tests-ran.ts` reads Playwright's JSON report. pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are
-installed in the `e2e` job only; their trees fail `npm audit --audit-level=high`, so they are not in the
-lockfile. Lighthouse's upload target is `filesystem`.
+`scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
+covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
+only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
+caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
+mark link, whose name is an SVG `aria-label`, and contrast on a button whose fill is
+`::before`. Lighthouse's upload target is `filesystem`.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

@@ -83,7 +83,7 @@ function todayUtc(): string {
 
 const invoked = process.argv[1];
 if (invoked !== undefined && import.meta.url === pathToFileURL(invoked).href) {
-  const root = join(import.meta.dirname, "..");
+  const root = join(import.meta.dirname, "../..");
   const reportPath = process.argv[2] ?? join(root, "tests/e2e/report.json");
   const report = JSON.parse(readFileSync(reportPath, "utf8")) as PlaywrightReport;
   const found = problems(report, discoverSpecs(join(root, "tests/e2e")), SKIP_ALLOWANCE, todayUtc());
