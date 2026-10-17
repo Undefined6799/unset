@@ -2178,3 +2178,11 @@ P1.29s, P1.29t and P2.13a aligned with ADR 0023 (and ADR 0022's dropped local PL
 P1.29t no longer depends on P1.34v or P1.34z. P2.13a stays [STOP]; its Depends on line is unchanged. Nothing creates
 accounts per run. Ordering check re-run (`heading_matches_row`, `outline_dependency_ids_exist`,
 `outline_graph_acyclic`).
+
+## Book edit (2026-10-17, Alice/Bob test-only verified exception)
+
+Alex named two internal handles, `alice.unset.im` and `bob.unset.im`, and chose B: real users still hit P2.11
+(unconfirmed email cannot use `/me`); a test-only exception treats those two as verified so agents can sign in and
+use the app; their emails are not confirmed; email confirmation stays for recovery and as a second factor. P2.11 is
+not rewritten as optional. P2.13a's browser scenario skips in-browser email confirmation on those two accounts and
+stays [STOP]. The exception must not exist in production. The local mechanism is not invented here.

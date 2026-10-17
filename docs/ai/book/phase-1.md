@@ -12491,34 +12491,42 @@ P1.29h, P1.29s, P1.29t.
    (B2', the shared socket pin, after P1.33h) and P1.29i (S2', every outbound key) (book edit 2026-10-13-host-pin-steps,
    Amendments 3 and 4).
 9. **P1.29s "Add the local precheck; create no accounts per run"** ([SEC]; depends on P1.29a, P1.34t, P1.34d, P1.33b;
-   ADRs 0022 and 0023; book edit 2026-10-17-p129s-adr0023-rescope). The local PLC steps P1.34v and P1.34z are dropped
-   (ADR 0022) and are not dependencies. The email-token reader (P1.29h, P1.29i) keeps refusing every stack, so this
-   step does not wait on it and does not call it.
+   ADRs 0022 and 0023; book edits 2026-10-17-p129s-adr0023-rescope, 2026-10-17-p129s-alex-handles and
+   2026-10-17-p129s-verified-exception). The local PLC steps P1.34v and P1.34z are dropped (ADR 0022) and are not
+   dependencies. The email-token reader (P1.29h, P1.29i) keeps refusing every stack, so this step does not wait on it
+   and does not call it.
    `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path) and the `dev:up` / `local:up` wiring of
    it. No `scripts/dev-seed.ts`, no compose `seed` service, no `createAccount`, no generated passwords, no
-   `.seeded.json`. A few fixed test accounts are made once by hand, with an invite code and the PDS's own account
-   creation, and reused (ADR 0023). This step does not name their handles, passwords, DIDs or emails. Test handles stay
-   under the local/dev root's constrained names, with no public DNS. `dev-precheck` still refuses when the PDS
-   `describeServer` DID is neither the expected local DID nor absent, when the env names a production host, and when
-   `preflight --env local` fails. `local:up` never creates an account. The P1.35r seed-service limits row, seed env
-   pins, and the compose `logging: {driver: "none"}` allowlist for a seed service are cancelled. Tests, red first:
+   `.seeded.json`. Fixed test accounts are made once by hand, with an invite code and the PDS's own account creation,
+   and reused (ADR 0023). They begin with two internal handles, `alice.unset.im` and `bob.unset.im` (Alex, 2026-10-17,
+   B). Agents must be able to sign in as them. Their emails are not confirmed. A test-only exception treats these two
+   as verified so agents can sign in and use the app. Real users still hit P2.11: unconfirmed email cannot use `/me`.
+   Email confirmation stays in the product for account recovery and as a second factor; this step does not invent a
+   2FA design and does not rewrite P2.11 as optional. The exception must not exist in production (fail closed; no
+   admin bypass, no forged membership, no "lock down later" path). This step does not invent the local mechanism (see
+   the book-edit PR). This step does not name their passwords, DIDs or mailbox addresses. `dev-precheck` still refuses when the PDS `describeServer` DID is neither the
+   expected local DID nor absent, when the env names a production host, and when `preflight --env local` fails.
+   `local:up` never creates an account. The P1.35r seed-service limits row, seed env pins, and the compose
+   `logging: {driver: "none"}` allowlist for a seed service are cancelled. Tests, red first:
    `precheck_refuses_unknown_pds_did`; `precheck_refuses_production_host`; `local_up_creates_no_account`;
    `no_seed_service_in_compose`; `no_create_account_in_scripts`; `email_token_reader_still_refuses_every_stack`.
 10. **P1.29t "Test the running local stack"** ([SEC]; depends on P1.29a, P1.29s, P1.34d, P1.34k, P1.34t; ADRs 0022 and
-    0023; book edit 2026-10-17-p129s-adr0023-rescope): it runs on the local stack only (`local:up`); no probe runs under
+    0023; book edits 2026-10-17-p129s-adr0023-rescope, 2026-10-17-p129s-alex-handles and
+    2026-10-17-p129s-verified-exception): it runs on the local stack only (`local:up`); no probe runs under
     dev (architecture's Amendment 4 of 2026-10-13-local-plc, point 1, and Amendment 6, S3). Nothing in this step creates
     an account or calls the email-token reader. Its first assertion, before any browser flow, is a probe from inside the
     PDS container: an HTTPS GET of web's `client_id`, resolved through the edge's network aliases (Amendment 1),
     succeeds, the chain verifies against the dev root, and the body parses as client metadata. If the PDS's own fetch
     refuses the app host's private address, the builder stops and sends architecture the exact error and the PDS
     version; no workaround (book edit 2026-10-12-p134c-p134d-local-dev-root-ca). Then `pds_device_row_has_no_client_ip`
-    (the edge, the PDS and an OAuth sign-in on one of the fixed test accounts; this step does not create that account)
-    and `net_guard_resolve_pin_in_image`. It also asserts P1.29a's PDS user and volume, red first: `id -u` is 1000, the
-    data directory is owned by 1000, and a write succeeds; a root-owned volume fails the test, not the boot silently
-    (book edit 2026-10-13-p129a-build-rulings). From inside the PDS, `APP_HOST` and `PDS_HOST` each resolve to the
-    edge's runtime address and the TLS chain verifies against the dev root (Amendment 1). If the CI job that runs them
-    needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread measures it, and it
-    needs Alex's typed line.
+    (the edge, the PDS and an OAuth sign-in as `alice.unset.im` or `bob.unset.im`; this step does not create that
+    account; their emails are not confirmed; the test-only verified exception for these two is P2.13a's, and must not
+    exist in production) and `net_guard_resolve_pin_in_image`. It also asserts P1.29a's PDS user and volume, red first: `id -u`
+    is 1000, the data directory is owned by 1000, and a write succeeds; a root-owned volume fails the test, not the
+    boot silently (book edit 2026-10-13-p129a-build-rulings). From inside the PDS, `APP_HOST` and `PDS_HOST` each
+    resolve to the edge's runtime address and the TLS chain verifies against the dev root (Amendment 1). If the CI job
+    that runs them needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread
+    measures it, and it needs Alex's typed line.
 11. **P1.29y "Fold the old image jobs into the scan matrix"** ([SEC] [ALEX], check: `.github/workflows/images.yml`,
     `scripts/ci/list-dockerfiles.ts`, `image-workflows.test.ts`, `mirror-scan.test.ts`, kind/build; issue #581; depends
     on P1.29w (merged, #571) and P1.29v (merged, #583), which also edits images.yml; owner Phase 2 or the third lane,
@@ -12658,8 +12666,8 @@ bump. If P1.29t cannot run it, it moves to the preflight.
 **Size:** ~230 lines of YAML, ~220 script lines, ~250 test lines.
 
 **Goal:** One command brings up a hardened development stack — Postgres, migrator, the local PDS, the edge — on
-networks where only the edge can reach the PDS's HTTP port. Test accounts are a few fixed ones made once by hand
-(ADR 0023); nothing creates accounts per run.
+networks where only the edge can reach the PDS's HTTP port. Test accounts begin with `alice.unset.im` and
+`bob.unset.im`, made once by hand (ADR 0023; Alex, 2026-10-17, B); nothing creates accounts per run.
 
 **Inputs:** P1.11 migrator image and Postgres settings; P1.27 images and lock; P1.28 edge image and config; the dev
 PDS hostname `0x40.space` (plan §5.3 and decision 20); `shared/lexicons/published.lock.json` (P1.31g/P1.35).
@@ -12721,9 +12729,15 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
 - `dev-precheck` (run by `npm run local:up` / `dev:up` before `docker compose up`): refuses when the PDS answers
   `describeServer` with a DID that is neither the expected local DID nor absent (protects against the old
   prototype PDS), when the env names a production host, and when `preflight` for that env (P1.30) fails.
-- Test accounts: a few fixed ones, made once by hand with an invite code and the PDS's own account creation, and
-  reused (ADR 0023). Nothing creates accounts per run. The email-token reader keeps refusing every stack. This spec
-  does not name handles, passwords, DIDs or emails.
+- Test accounts: made once by hand with an invite code and the PDS's own account creation, and reused (ADR 0023).
+  They begin with two internal handles, `alice.unset.im` and `bob.unset.im` (Alex, 2026-10-17, B). Agents must be able
+  to sign in as them. Their emails are not confirmed. A test-only exception treats these two as verified so agents can
+  sign in and use the app. Real users still hit P2.11: unconfirmed email cannot use `/me`. Email confirmation stays in
+  the product for account recovery and as a second factor; this spec does not invent a 2FA design and does not rewrite
+  P2.11 as optional. The exception must not exist in production (fail closed; no admin bypass, no forged membership,
+  no "lock down later" path). This spec does not invent the local mechanism (see the book-edit PR). Nothing creates
+  accounts per run. The email-token reader keeps refusing every stack. This spec does not name passwords, DIDs or
+  mailbox addresses.
 
 **Algorithm:**
 ```text
@@ -12777,10 +12791,11 @@ There is no dev-seed. The createAccount / invite-code / .seeded.json algorithm t
   exists). P1.30 C7 still checks the deployed env at preflight; nothing deploys before P1.28 and every P1.29 part are
   merged.
 - `pds_device_row_has_no_client_ip` (integration, local stack; moved from P1.30, book edit 2026-10-07-p130-split): sign
-  in through the edge from a test client as one of the fixed test accounts (P1.29t does not create the account), then
-  read the PDS `device` table's `ipAddress` → it equals the edge's address on `edge`, read at run time with
-  `docker inspect`, never the client's. P1.29t (book edit 2026-10-07-p129-split) is the first step that runs the stack
-  with the edge in front of the PDS.
+  in through the edge from a test client as `alice.unset.im` or `bob.unset.im` (P1.29t does not create the account;
+  their emails are not confirmed; the test-only verified exception for these two is P2.13a's), then read the PDS
+  `device` table's `ipAddress` → it equals the edge's address on `edge`, read at run time with `docker inspect`, never
+  the client's. P1.29t (book edit 2026-10-07-p129-split) is the first step that runs the stack with the edge in front
+  of the PDS.
 - P1.29s (book edit 2026-10-17-p129s-adr0023-rescope), red first: `local_up_creates_no_account`;
   `no_seed_service_in_compose`; `no_create_account_in_scripts`; `email_token_reader_still_refuses_every_stack`;
   `precheck_refuses_production_host`.
