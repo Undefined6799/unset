@@ -603,6 +603,25 @@ describe("stack wrapper (P1.27w)", () => {
     });
   });
 
+  test("main_escapes_what_it_prints", () => {
+    // P1.35p S1 (verify-901): a COMPOSE_* name comes from the caller's environment, so one holding a newline forged a
+    // PASS line under the refusal, and one holding \r\x1b[2K erased the line it was on. main prints it escaped.
+    const lines: string[] = [];
+    const from = { "COMPOSE_X\nPASS C9 ok": "1", "COMPOSE_Y\r\x1b[2K": "1" };
+    expect(
+      main(
+        UP,
+        from,
+        runner(() => 0),
+        (line) => lines.push(line),
+        SOCKET,
+      ),
+    ).toBe(2);
+    expect(lines).toEqual([
+      "stack: unset COMPOSE_X\\x0aPASS C9 ok, COMPOSE_Y\\x0d\\x1b[2K: Compose reads only the files given here\n",
+    ]);
+  });
+
   test("main_prints_one_fixed_line_and_exits_2", () => {
     // P1.34s, nit 2: a refusal or a failed child is one line on stderr and exit 2; a run that passes exits 0.
     const lines: string[] = [];
