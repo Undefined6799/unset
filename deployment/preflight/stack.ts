@@ -21,7 +21,7 @@ import { spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { hostWalk, localDockerHost, UsageError, type WalkInputs } from "../../shared/host-pin/index.ts";
+import { hostWalk, localDockerHost, UsageError, type WalkInputs } from "@unset/shared-host-pin";
 import { printable } from "./printable.ts";
 
 /** The only variables a child sees: where commands are, the home directory, and how the Docker CLI is configured. */

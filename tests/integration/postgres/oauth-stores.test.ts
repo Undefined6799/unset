@@ -2,16 +2,16 @@
 // real Postgres, connected as `web` (TE-2). What they store is sealed, bound to its row, and read back only before it
 // expires; a row that does not open is deleted and reads as missing.
 import { relative } from "node:path";
-import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
-import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
-import { afterAll, describe, expect, inject, test } from "vitest";
 import {
   createOAuthSessionStore,
   createOAuthStateStore,
   createPool,
   type Pool,
   withClient,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
+import { afterAll, describe, expect, inject, test } from "vitest";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";

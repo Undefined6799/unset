@@ -12,8 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { DEFAULT_DOCKER_HOST, localDockerHost, type WalkInputs } from "@unset/shared-host-pin";
 import { describe, expect, test } from "vitest";
-import { DEFAULT_DOCKER_HOST, localDockerHost, type WalkInputs } from "../../shared/host-pin/index.ts";
 import { CHILD_ENV as READER_CHILD_ENV } from "../../tests/support/pds-email-token.ts";
 import {
   CHILD_ENV_NAMES,

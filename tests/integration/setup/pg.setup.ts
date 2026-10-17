@@ -7,9 +7,9 @@
 import { randomBytes } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { join, relative } from "node:path";
+import { createPool, migrate, type PoolClient, withClient } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
 import type { TestProject } from "vitest/node";
-import { createPool, migrate, type PoolClient, withClient } from "../../../infrastructure/postgres/index.ts";
 import { failAfterCleanup } from "../../support/docker.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 

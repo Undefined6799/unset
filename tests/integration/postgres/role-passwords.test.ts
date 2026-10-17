@@ -6,8 +6,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createLogger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   createPool,
   type MigrateServiceResult,
@@ -16,7 +14,9 @@ import {
   type PasswordSyncResult,
   syncRolePasswords,
   withClient,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createLogger } from "@unset/shared-log";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { cleanUpAll, docker } from "../../support/docker.ts";
 import { type PostgresContainer, randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 

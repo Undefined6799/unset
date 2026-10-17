@@ -5,7 +5,6 @@
 // files (P1.12t), so this file starts its own container through the one test helper, as migrate.test.ts does.
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   acquire,
   checkConnectionBudget,
@@ -14,7 +13,8 @@ import {
   type PoolOptions,
   withClient,
   withTransaction,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   type PostgresContainer,
   randomPassword,

@@ -2,8 +2,8 @@
 // database, cloned from the migrated template (P1.11t), and are owned by migrator, except `audit`, which migration
 // 0003 hands to audit_owner. Their grants are the grant-matrix test's (tests/integration/postgres/grants.test.ts).
 import { relative } from "node:path";
+import { createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, describe, expect, inject, test } from "vitest";
-import { createPool, withClient } from "../../../infrastructure/postgres/index.ts";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";

@@ -7,9 +7,6 @@
 // migrator in a throwaway database, and the domain check and the rewrap run as `web`, the role that writes.
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
-import { createSealer, type Keyring, parseKeyring, sealContext } from "@unset/infrastructure-seal";
-import { createLogger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   checkExit,
   createPool,
@@ -21,7 +18,10 @@ import {
   type SealedRegistry,
   sealedColumns,
   withClient,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createSealer, type Keyring, parseKeyring, sealContext } from "@unset/infrastructure-seal";
+import { createLogger } from "@unset/shared-log";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   type PostgresContainer,
   randomPassword,

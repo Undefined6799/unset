@@ -4,8 +4,8 @@
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, relative } from "node:path";
+import { createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, describe, expect, inject, test } from "vitest";
-import { createPool, withClient } from "../../../infrastructure/postgres/index.ts";
 import { failAfterCleanup } from "../../support/docker.ts";
 import { ownContainers, STOP_ALL_MS, stopAllPostgres } from "../../support/postgres.ts";
 import { startTestDatabase } from "./pg.setup.ts";

@@ -10,7 +10,7 @@ importance: high
 related: ["[[tests]]", "[[postgres]]"]
 replaced_by: null
 tags: [pitfall, tests, postgres]
-checked: 2026-10-15
+checked: 2026-10-17
 ---
 # Postgres tests need Docker and never skip
 
@@ -36,5 +36,8 @@ the setup's first (P1.11c). The setup starts Postgres inside that same `try`, si
 teardown; a start that fails removes its own container and secrets folder and reports a killed removal with its
 failure; and a hook that closes pools first uses `stopAllPostgresAfter(close)`, so a rejected close still stops
 the containers (P1.11f).
+
+Re-checked at P1.01a: `pg.setup.ts` imports `@unset/infrastructure-postgres` by package name; the Docker start
+path, fail-not-skip rule, and cleanup helpers are unchanged.
 
 **Repair.** Nothing to repair; it is a property of the environment.

@@ -9,13 +9,7 @@
 
 import type { Stats } from "node:fs";
 import { dirname, join } from "node:path";
-import {
-  FILESYSTEM_NAMES,
-  foreignFilesystem,
-  resolveChecked,
-  WALK_REASONS,
-  within,
-} from "../../../shared/host-pin/index.ts";
+import { FILESYSTEM_NAMES, foreignFilesystem, resolveChecked, WALK_REASONS, within } from "@unset/shared-host-pin";
 import { type Check, fail, type Inputs, type MountedSecret, missing, type Outcome, pass } from "./types.ts";
 
 export const c9: Check = {
