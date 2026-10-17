@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import styles from "../screens/CoreShell.module.css";
 import { SHELL } from "./messages.ts";
 
-/** A fixed path on our origin as the kit's SafeHref; a path that fails safeHref is a programming error. */
+/** A path on our origin as the kit's SafeHref; a path that fails safeHref is a programming error. */
 function path(href: string): SafeHref {
   const safe = safeHref(href, ["path"]);
   if (safe === null) throw new Error(`shell link is not a path: ${href}`);
@@ -30,7 +30,7 @@ const COLUMNS = [
 export type AppShellProps = {
   error: ErrorCode | null;
   /** Display state supplied by the route; never resolves identity or authenticates here. */
-  navigation?: Readonly<{ active?: "home" | "account" | "settings"; accountName?: string }>;
+  navigation?: Readonly<{ active?: "home" | "account" | "settings"; accountName?: string; accountPath?: string }>;
   children: ReactNode;
 };
 
@@ -49,7 +49,7 @@ export function AppShell({ error, navigation, children }: AppShellProps) {
         <Header brandOnly />
         <Navigation
           account={{
-            href: path("/me"),
+            href: path(navigation.accountPath ?? "/did"),
             label: SHELL.profile,
             current: navigation.active === "account",
             ...(navigation.accountName === undefined ? {} : { name: navigation.accountName }),

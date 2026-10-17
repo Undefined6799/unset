@@ -11,13 +11,21 @@ owns reusable navigation, using the existing Avatar, Icon, tokens and native bro
 Header provides a compact brand-only mode. CSS stays in the components/screens cascade layers. No new dependency,
 island, business rule or data source is introduced.
 
-The HTTP routes pass display state through `PageSpec` and `ShellOptions`. `/me` receives an avatar initial only
+The HTTP routes pass display state through `PageSpec` and `ShellOptions`. `/<DID>` receives an avatar initial only
 from a verified handle. `/` stays public and cookie-independent, including for signed-in browsers; its account
-control uses anonymous artwork. Account opens `/me`, and Settings opens `/settings/profile`, through their existing
-session, onboarding and email gates. Sign-in continues through the existing app-initiated PDS OAuth flow.
+control uses anonymous artwork and links to `/did`, which resolves the signed-in user's `/<DID>` URL. Pages with a
+verified session link directly to that DID. Legacy `/me` links also redirect there. Settings opens `/settings/profile`.
+The existing session, onboarding and email gates apply to all these destinations. OAuth and onboarding return to
+`/did` by default. Sign-in continues through the existing app-initiated PDS OAuth flow.
 
-Public `/<DID>` profiles and profile persistence are separate work. The existing identity page and Settings
-placeholder remain connected; the shell does not present demo records or a save action without storage.
+The current `/<DID>` page is an owner-only account summary: the route validates the DID, opens the existing app gate,
+then checks ownership before resolving a handle or rendering any account details. A different DID returns 404.
+The page and shortcuts are private and uncached; the page is also unindexed. Public profile content and profile
+persistence are separate work. The Settings placeholder does not present a save action without storage.
+
+The DID parameter route follows all explicit routes. The existing router still determines wrong-method responses:
+an unmatched one-segment GET is now validated as a DID and returns 404 (including GET `/logout`); an unsupported
+POST to a one-segment path returns 405. No shared router behavior or security mechanism is changed.
 
 The local Navigation README is registered in the UI inventory as the extension approved on 2026-10-17. The pinned
 sheet copy and generated tokens remain unchanged. Native interaction behavior follows the

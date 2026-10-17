@@ -126,7 +126,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         const error = readErrorParam(query);
         const { session, clearCookie } = await deps.readSession(request, deadline);
         // A signed-in visitor has nothing to sign in to, unless a failed sign-in brought them back to read why.
-        if (session !== null && error === null) return redirect("/me");
+        if (session !== null && error === null) return redirect("/did");
         const body = deps.screens.login({
           handle: (query.get("handle") ?? "").slice(0, MAX_PREFILL),
           next: safeReturnPath(query.get("next")),

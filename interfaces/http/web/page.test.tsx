@@ -68,21 +68,23 @@ test("island_props_too_large_prod_logs_name_only", async () => {
 });
 
 test("shell_navigation_uses_only_the_route_supplied_identity", async () => {
+  const accountPath = `/did:plc:${"a".repeat(24)}`;
   const response = pageResponse(deps("test"), {
     group: "app",
-    request: new Request("https://unset.test/me?active=settings&accountName=Mallory", {
+    request: new Request(`https://unset.test${accountPath}?active=settings&accountName=Mallory&accountPath=/evil`, {
       headers: { cookie: "accountName=Mallory" },
     }),
     title: "Account",
     body: null,
     islands: "off",
-    shell: { navigation: { active: "account", accountName: "Alice" } },
+    shell: { navigation: { active: "account", accountName: "Alice", accountPath } },
   });
   const document = parse(await response.text());
-  const account = elements(elements(document, "nav")[0], "a", { href: "/me", "aria-current": "page" })[0];
+  const account = elements(elements(document, "nav")[0], "a", { href: accountPath, "aria-current": "page" })[0];
   expect(account).toBeDefined();
   const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
   expect(initials).toContain("A");
   expect(textContent(document)).not.toContain("Mallory");
+  expect(elements(document, "a", { href: "/evil" })).toHaveLength(0);
   expect(elements(document, "script")).toHaveLength(0);
 });

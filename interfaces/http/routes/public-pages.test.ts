@@ -68,9 +68,23 @@ function throwingServer(screens: WebRender["screens"] = web.screens) {
 }
 
 describe("public pages", () => {
+  test("explicit routes take precedence over the DID parameter", async () => {
+    const login = await get("/login");
+    expect(login.status).toBe(200);
+    expect(elements(parse(await login.text()), "form", { action: "/login" }).length).toBeGreaterThan(0);
+    const metadata = await get("/oauth-client-metadata.json");
+    expect(metadata.status).toBe(200);
+    expect(await metadata.json()).toMatchObject({ client_id: `${ORIGIN}/oauth-client-metadata.json` });
+    for (const path of ["/did", "/me"]) {
+      const response = await get(path);
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/login?next=%2Fdid");
+    }
+  });
+
   test("home_navigation_stays_anonymous_and_cookie_independent", async () => {
     const plain = await get("/");
-    const supplied = await get("/?active=account&accountName=Mallory", {
+    const supplied = await get("/?active=account&accountName=Mallory&accountPath=/evil", {
       cookie: "__Host-sid=untrusted; __Host-theme=dark; accountName=Mallory",
     });
     const html = await plain.text();
@@ -80,7 +94,9 @@ describe("public pages", () => {
     const document = parse(html);
     const navigation = elements(document, "nav")[0];
     expect(elements(navigation, "a", { href: "/", "aria-current": "page" })).toHaveLength(1);
-    expect(elements(navigation, "a", { href: "/me", "aria-current": "page" })).toHaveLength(0);
+    expect(elements(navigation, "a", { href: "/did" })).toHaveLength(1);
+    expect(elements(navigation, "a", { href: "/did", "aria-current": "page" })).toHaveLength(0);
+    expect(elements(navigation, "a", { href: "/me" })).toHaveLength(0);
     expect(textContent(document)).not.toContain("Mallory");
     expect(elements(document, "script")).toHaveLength(0);
   });

@@ -26,14 +26,16 @@ P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
-login, continue, signed-out, verify-email and `/me` render inside the shell (one `<main id="main">`). `feed`,
+login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). `feed`,
 `PrefsForms` and the favicons are still P1.25j. Text is in `src/shell/messages.ts`.
 
-**Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/me` and `/settings/profile`:
+**Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
 brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
 visually hidden heading. The interface supplies the active destination and a verified account name when available;
 the anonymous public homepage still reads no cookies. Native popovers keep the phone menu usable without JS.
-The account link uses the existing `/me` route until public DID profiles land; the editor remains P2.21.
+The interface supplies `accountPath` from the session DID; the anonymous fallback `/did` resolves the user's own
+destination through existing app gates. `/me` is a compatibility redirect. The current DID page is still owner-only;
+public profile content and the editor remain separate work (P2.21).
 
 **Entry points.**
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build

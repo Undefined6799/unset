@@ -30,13 +30,17 @@ function render(input: Partial<PageInput> = {}): string {
 const head = (html: string) => html.slice(0, html.indexOf("</head>"));
 
 describe("core shell", () => {
-  const core = (active: "home" | "account" | "settings" = "home", accountName?: string) =>
+  const core = (active: "home" | "account" | "settings" = "home", accountName?: string, accountPath?: string) =>
     new DOMParser().parseFromString(
       render({
         shell: {
           error: null,
           noindex: false,
-          navigation: { active, ...(accountName === undefined ? {} : { accountName }) },
+          navigation: {
+            active,
+            ...(accountName === undefined ? {} : { accountName }),
+            ...(accountPath === undefined ? {} : { accountPath }),
+          },
         },
       }),
       "text/html",
@@ -54,7 +58,8 @@ describe("core shell", () => {
 
   test("navigation_uses_real_account_and_protected_settings_routes", () => {
     const document = core();
-    expect(document.querySelector('a[href="/me"]')).not.toBeNull();
+    expect(document.querySelectorAll('a[href="/did"]')).toHaveLength(2);
+    expect(document.querySelector('a[href="/me"]')).toBeNull();
     expect(document.querySelector('a[href="/settings/profile"]')).not.toBeNull();
     expect(document.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("/");
     expect(document.querySelector("script")).toBeNull();
@@ -70,11 +75,20 @@ describe("core shell", () => {
   });
 
   test("signed_in_avatar_uses_only_the_supplied_name", () => {
-    const document = core("account", "member.unset.test");
-    expect(document.querySelector('a[href="/me"]')?.textContent).toContain("M");
-    expect(document.querySelector('[href="/me"][aria-current="page"]')).not.toBeNull();
+    const document = core("account", "member.unset.test", "/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa");
+    const links = document.querySelectorAll('[href="/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"][aria-current="page"]');
+    expect(links).toHaveLength(2);
+    expect(links[0]?.textContent).toContain("M");
+    expect(document.querySelector('a[href="/me"]')).toBeNull();
     expect(document.body.textContent).not.toContain("Demo Member");
   });
+
+  test.each(["https://other.example/profile", "//other.example/profile", "javascript:alert(1)"])(
+    "account_destination_rejects_non_path_%s",
+    (accountPath) => {
+      expect(() => core("account", undefined, accountPath)).toThrow("shell link is not a path");
+    },
+  );
 });
 
 describe("app shell", () => {

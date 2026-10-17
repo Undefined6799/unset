@@ -149,3 +149,10 @@ describe("me screen", () => {
     expect(page).toContain("We could not check your handle just now");
   });
 });
+
+describe("verify email screen", () => {
+  test("confirmed_email_continues_to_the_self_profile_shortcut", () => {
+    const page = html(screens.verifyEmail({ state: "confirmed", pdsHost: "pds.example" }));
+    expect(tags(page, "a").map((a) => a.href)).toEqual(["/did"]);
+  });
+});
