@@ -36,6 +36,8 @@ export type Deps = {
   readText?: (path: string) => string | null;
   /** How an env file Compose reads values from is read; `readEnvOrNull` unless a test passes one. */
   readEnv?: (path: string) => EnvRead | null;
+  /** How C18 reads the dev root and leaf copies (Inputs.readRegular); regular-file.ts unless a test passes one. */
+  readRegular?: Inputs["readRegular"];
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
   realpath?: (path: string) => string | null;
@@ -97,6 +99,12 @@ export class CannotRun extends Error {}
 
 /** An env file's text and the `dev:ino` of the file it came from, which C9 matches against what it judges. */
 export type EnvRead = { text: string; id: string };
+
+/** A file's text, read only as a regular file (P1.35p S2); any error but its absence throws. */
+const readRegularText: Inputs["readRegular"] = (path) => {
+  const read = readRegular(path);
+  return read === null || read === NOT_REGULAR ? read : read.text;
+};
 
 /** An env file, read only as a regular file (P1.34p, Amendment 2); anything else stops the run. */
 function readEnvOrNull(path: string): EnvRead | null {
@@ -338,10 +346,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     networkTablePath: join(deps.root, `deployment/networks.${networkTable(env)}.json`),
     edgeDir: join(deps.root, "deployment/edge"),
     readText,
-    readRegular: (path) => {
-      const read = readRegular(path);
-      return read === null || read === NOT_REGULAR ? read : read.text;
-    },
+    readRegular: deps.readRegular ?? readRegularText,
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
     realpath: deps.realpath ?? realpathOrNull,
