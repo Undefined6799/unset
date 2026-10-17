@@ -8,6 +8,8 @@ export type BuildManifest = Readonly<{
   boot: string;
   /** The CSS the styles entry emitted (every CSS Module, P1.23c), linked by every page in this order. */
   styles: readonly string[];
+  /** The woff2 files those styles' font faces load, which every page preloads (P1.25). */
+  fonts: readonly string[];
   /** Per island name: its chunk and the chunks it imports statically, the chunk first. */
   islands: ReadonlyMap<string, readonly string[]>;
 }>;

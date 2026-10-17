@@ -65,6 +65,16 @@ describe("POST /prefs/theme", () => {
     }
   });
 
+  test("prefs_error_renders_through_kit", async () => {
+    const response = await send({ body: "theme=blue" });
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const html = await response.text();
+    expect(html).toContain('<main id="main">');
+    expect(html).toContain("<h1>That choice is not one of the options.</h1>");
+    expect(html).not.toContain("blue");
+  });
+
   test("prefs_body_too_large_413", async () => {
     const response = await send({ body: `theme=light&pad=${"x".repeat(4096)}` });
     expect(response.status).toBe(413);

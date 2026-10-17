@@ -35,14 +35,19 @@ test("web_build_parsed_once_for_route_and_render", () => {
     ["demo", ["assets/demo.island-T3st0003.js", "assets/runtime-T3st0001.js", "assets/boot-T3st0002.js"]],
   ]);
   expect([...build.files.keys()].sort()).toEqual([
+    "Display-T3st0007.woff2",
+    "Mono-T3st0009.woff2",
     "boot-T3st0002.js",
     "demo.island-T3st0003.js",
+    "logo-T3st0008.svg",
     "notes-T3st0004.txt",
     "runtime-T3st0001.js",
     "styles-T3st0005.js",
     "styles-T3st0006.css",
   ]);
   expect(build.manifest.styles).toEqual(["assets/styles-T3st0006.css"]);
+  // Only the styles entry's woff2 files are fonts to preload; its other assets are served but not preloaded.
+  expect(build.manifest.fonts).toEqual(["assets/Display-T3st0007.woff2", "assets/Mono-T3st0009.woff2"]);
   expect(build.files.get("boot-T3st0002.js")).toBe(join(TESTDATA, "assets/boot-T3st0002.js"));
 });
 

@@ -30,6 +30,7 @@ const ASSETS: Assets = {
   manifest: {
     boot: "assets/boot-1.js",
     styles: ["assets/styles-1.css", "assets/styles-5.css"],
+    fonts: [],
     islands: new Map([
       ["demo", ["assets/demo-2.js", "assets/boot-1.js"]],
       ["echo", ["assets/echo-3.js", "assets/shared-4.js"]],
@@ -44,7 +45,8 @@ function render(body: PageInput["body"], env: PageInput["env"] = "test") {
     env,
     title: "Test",
     body,
-    islands: ISLANDS,
+    islands: "on",
+    registry: ISLANDS,
   });
 }
 const scripts = (html: string) => html.match(/<script[^>]*>/g) ?? [];
@@ -169,7 +171,8 @@ describe("document", () => {
       env: "test",
       title: "A & B",
       body: null,
-      islands: ISLANDS,
+      islands: "on",
+      registry: ISLANDS,
     });
     expect(html.startsWith('<!doctype html><html lang="en" data-theme="dark"><head><meta charSet="utf-8"/>')).toBe(
       true,

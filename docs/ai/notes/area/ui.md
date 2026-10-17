@@ -28,8 +28,8 @@ checked: 2026-10-17
 - `components/<Name>/`: the kit, one folder per sheet component (TSX, `.module.css` in `@layer components`, test).
   They render on the server with no JS; field parts shared by Input, Textarea, Select, Checkbox and RadioGroup are in
   `components/Input/field.tsx`. `css-modules.d.ts` types the class maps. `showcase/` renders every built component
-  for P1.26's axe and target-size checks. `index.ts` exports only the four the first screens use (Button, Callout,
-  Input, Link; P2.05). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
+  for P1.26's axe and target-size checks. `index.ts` exports only what the screens use: Button, Callout, Input, Link (P2.05)
+  and the shell's Footer, Header, SkipLink (P1.25). The boot chunk no longer imports this index: `readProps` comes from [[islands]] (P1.25p),
   after an earlier re-export pulled the kit into boot (P1.25h; architecture record 2026-10-07-p125h-boot-chunk.md).
   Re-measure with `scripts/budgets/island.ts` before exporting more components.
 - `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,

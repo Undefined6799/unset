@@ -12,7 +12,7 @@ const echo = defineIsland(({ text }: { text: string }) => <p>{text}</p>, {
 });
 const deps = (env: PageDeps["env"]): PageDeps => ({
   build: {
-    manifest: { boot: "assets/boot-1.js", styles: [], islands: new Map([["echo", ["assets/echo-2.js"]]]) },
+    manifest: { boot: "assets/boot-1.js", styles: [], fonts: [], islands: new Map([["echo", ["assets/echo-2.js"]]]) },
     files: new Map(),
   },
   render: renderPage,

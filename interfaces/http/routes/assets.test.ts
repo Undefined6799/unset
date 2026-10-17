@@ -72,7 +72,11 @@ describe("GET /assets/<file>", () => {
     ]) {
       const response = await get(path);
       expect([400, 404], path).toContain(response.status);
-      expect(await response.text(), path).not.toContain("assets/");
+      // The error page links the build's stylesheets, so it names assets/ itself; no part of the path comes back.
+      const body = await response.text();
+      for (const echo of [".vite", "manifest", "boot-T3st0002", "passwd", "%2", "%00"]) {
+        expect(body, path).not.toContain(echo);
+      }
     }
   });
 

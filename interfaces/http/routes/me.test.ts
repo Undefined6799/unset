@@ -38,7 +38,7 @@ function setup(world: { session?: Session | null; clearCookie?: boolean; verdict
     page: (page) =>
       pageResponse(
         {
-          build: { manifest: { boot: "assets/boot.js", styles: [], islands: new Map() }, files: new Map() },
+          build: { manifest: { boot: "assets/boot.js", styles: [], fonts: [], islands: new Map() }, files: new Map() },
           render: web.renderPage,
           assetsOrigin: ORIGIN,
           env: "test",

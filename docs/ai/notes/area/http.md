@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-16
+checked: 2026-10-17
 ---
 # http
 
@@ -18,8 +18,12 @@ Two folders share this hub: `interfaces/http`, the web server for unset.sh, and 
 all six servers are built from.
 
 **interfaces/http owns** the public site's routes: `routes/assets.ts` (apps/web's built files, by exact name from
-the manifest), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme cookie, applied on the server) and
-`web/` (reads Vite's manifest once at startup and renders pages through apps/web). `limits.ts` holds its
+the manifest), `routes/home.ts` and `routes/legal.ts` (P1.25: `/`, `/legal/terms`, `/legal/privacy`, group `public`,
+zero JS, the legal two `noindex` with `X-Robots-Tag`), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme
+cookie, applied on the server) and `web/` (reads Vite's manifest once at startup and renders pages through apps/web).
+Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read JSX, so pages come from `screens`.
+`web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
+script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook. `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 
 **The OAuth client (P2.04c).** `compose.ts` builds `web`'s Postgres pool and lock pool, the sealer, net-guard, the
