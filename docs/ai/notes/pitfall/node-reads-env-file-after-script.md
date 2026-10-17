@@ -50,3 +50,5 @@ was added, and the rules above still hold. The four `npm run` scripts call the w
 Re-checked at P1.35p, which moves the env files' `O_NOFOLLOW|O_NONBLOCK` reader from `inputs.ts` to `regular-file.ts`
 unchanged and gives C18 the same reader for the dev root copies; no flag, argv form or child environment changed, and
 the rules above still hold.
+Re-checked at P1.01a, which spells `stack.ts`'s host-pin import as `@unset/shared-host-pin`; no flag, argv form or
+child environment changed, and the rules above still hold.

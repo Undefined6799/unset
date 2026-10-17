@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-15
+checked: 2026-10-17
 ---
 # tests
 
@@ -45,6 +45,7 @@ Unit tests sit beside the file they test, not here.
   `query-budget/fixtures/<interface>.json`, and stays under the statement budget.
 
 **Rules worth knowing.** No module mocks; only unmanaged dependencies get doubles (TE-1). Vitest fails if a
-discovered test did not run.
+discovered test did not run. Re-checked at P1.01a: integration tests import postgres and audit by package name;
+the Docker start path is unchanged.
 
 **Links.** [[postgres]].
