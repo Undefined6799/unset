@@ -72,10 +72,10 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35p, P1.35r, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34v, P1.34y, P1.34z, P1.33b, P1.29s,
+  P1.34d, P1.35p, P1.35r, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
   P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.37, P1.37b, P1.36
-  (pulled forward from slice 2, Alex 23:08Z); then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12,
-  P2.13 and the slice exit P2.13a.
+  (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built). Then
+  phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -291,9 +291,9 @@ flowchart LR
   P1_34t["P1.34t pin the PLC URL per environment"]
   P1_33m["P1.33m local Postgres init owned"]
   P1_34u["P1.34u local PLC role and database"]
-  P1_34v["P1.34v local PLC in the local stack ALEX"]
+  P1_34v["P1.34v local PLC DROPPED ADR 0022"]
   P1_34y["P1.34y inert local PLC policy in net-guard"]
-  P1_34z["P1.34z identity resolves through the local PLC"]
+  P1_34z["P1.34z local PLC identity DROPPED ADR 0022"]
   P1_33i["P1.33i preflight may import shared/host-pin ALEX"]
   P1_33f["P1.33f depcruise exclude anchored"]
   P1_33o["P1.33o host-pin kept a leaf"]
@@ -332,7 +332,7 @@ flowchart LR
   P1_29["P1.29 compose.dev.yaml, no PDS"]
   P1_29a["P1.29a PDS and edge in the dev stack ALEX"]
   P1_29h["P1.29h local email-token reader"]
-  P1_29s["P1.29s dev seed and precheck"]
+  P1_29s["P1.29s local precheck, no per-run accounts"]
   P1_29t["P1.29t running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
   P1_30p["P1.30p compose parser and SecretMap"]
@@ -486,7 +486,6 @@ flowchart LR
   P1_30n --> P1_29
   P1_29 --> P1_29a
   P1_29a --> P1_29h
-  P1_29h --> P1_29s
   P1_29a --> P1_29s
   P1_29a --> P1_29t
   P1_29s --> P1_29t
@@ -575,16 +574,13 @@ flowchart LR
   P1_34d --> P1_34v
   P1_34d --> P1_34u
   P1_34d --> P1_29s
+  P1_34t --> P1_29s
+  P1_34t --> P1_29t
+  P1_33b --> P1_29s
   P1_34t --> P1_34y
   P1_34v --> P1_34z
   P1_34y --> P1_34z
-  P1_34z --> P1_29s
-  P1_29i --> P1_29s
-  P1_33j --> P1_29s
-  P1_33k --> P1_29s
-  P1_33l --> P1_29s
   P1_33j --> P1_33l
-  P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33o
   P1_33h --> P1_33j
@@ -8958,6 +8954,8 @@ removed resource limit that lets one service starve the host (the compose tests 
 local-only service that skips the env drift test picking up a key that changes its trust, such as TLS or app settings.
 
 **What:**
+As changed (ADR 0022/0023, book edit 2026-10-17-p129s-adr0023-rescope): P1.34v is dropped and P1.29s adds no seed
+service, so the plc and seed limits/env rows this step deferred never arrive. The reader's empty pin still holds.
 - I-1, limits by value: each service's `mem_limit`, `cpus` and `pids_limit` are pinned exactly, in both compose
   files, from one table beside `networks.dev.json` (for example `deployment/limits.dev.json`, a service-to-limits
   map). Any value that differs, is missing, or belongs to a service not in the table fails, naming the service and
@@ -9507,6 +9505,8 @@ and check is green.
 
 ### P1.34v — Run a local PLC directory in the local stack
 Tags: [SEC] [ALEX] (card answered 20:43:34Z)            Depends on: P1.34u, P1.34d, P1.35o, P1.35r
+**Dropped (ADR 0022, 2026-10-16; never built).** Do not implement. P1.29s and P1.29t no longer depend on it
+(book edit 2026-10-17-p129s-adr0023-rescope). The historical spec below is kept so the id holds.
 Slice 1, issue #782, product (`deployment/compose.local.yaml`, its network table, the image lock, the local PDS env),
 lane the third thread; book edit 2026-10-13-local-plc-steps, with architecture's Amendment 4 of 2026-10-13-local-plc;
 book edit 2026-10-13-local-plc-a4-steps (which narrows Amendment 2's points 2 and 3 to
@@ -9570,6 +9570,9 @@ added to the public `plc` policy, and `localPlc` reachable from the public `plc`
 
 ### P1.34z — Point identity resolution at the local PLC
 Tags: [SEC]            Depends on: P1.34v, P1.34y
+**Dropped (ADR 0022, 2026-10-16; never built).** Do not implement. P1.29s and P1.29t no longer depend on it
+(book edit 2026-10-17-p129s-adr0023-rescope). Identity resolution uses the shared PLC (ADR 0022). The historical spec
+below is kept so the id holds.
 Slice 1, issue #784, product (`domains/identity/`, `shared/config`, `compose.local.yaml`,
 `infrastructure/pds/identity-network.ts`, `infrastructure/postgres/migrate-cli.ts` and `rewrap-cli.ts`, and the web,
 appview and tap config), lane the third thread, before P1.29s; book edit 2026-10-13-local-plc-steps, step-book note 2 of
@@ -9790,8 +9793,8 @@ As built: #852, merged as df655b0.
 Slice 1, issue #805, product (`tests/support/pds-email-token.ts` and its test), kind/fix, lane the third thread after
 P1.33j (#799), with no dependency on P1.33k; book edit 2026-10-13-local-plc-a3-steps, from architecture's Amendment 3
 of 2026-10-13-local-plc (Codex on #800), and 2026-10-13-local-plc-a4-steps (13:38Z, which retitles it and makes it
-local only). Not paused: P1.29s needs it to run the reader under local. A new step keeps
-P1.33k a preflight change.
+local only). As changed (ADR 0023, book edit 2026-10-17-p129s-adr0023-rescope): P1.29s no longer runs the reader.
+A new step keeps P1.33k a preflight change. The reader's local-only pin still holds for P2.11.
 
 **What** (architecture's Amendment 4 follow-up of 2026-10-13-local-plc, 13:36Z, which supersedes Amendment 3 §1's
 "dev or local"): the reader stops hard-coding `PROJECT = "unset-dev"` (`tests/support/pds-email-token.ts:61` on
@@ -12447,7 +12450,8 @@ P1.29h, P1.29s, P1.29t.
    schema drift, naming the pinned PDS version; and never prints or logs the token. An admin "mark confirmed" step is
    refused as an admin bypass, and real SMTP on developer machines is refused. Tests:
    `email_token_reader_fails_on_unknown_schema`, `local_confirm_uses_real_endpoint`,
-   `email_token_reader_refuses_non_local`, `email_token_reader_read_only`. P1.29s and P2.11 depend on it.
+   `email_token_reader_refuses_non_local`, `email_token_reader_read_only`. P2.11 depends on it. P1.29s no longer does
+   (ADR 0023: the reader keeps refusing every stack; book edit 2026-10-17-p129s-adr0023-rescope).
    The reader service:
    - It runs with `docker compose run --rm`, under a dev-only profile, on our locked node runtime base by digest (not
      the PDS image); it never appears in a non-dev compose file (the existing dev-only test pattern).
@@ -12486,39 +12490,35 @@ P1.29h, P1.29s, P1.29t.
    but without B2' and S2' of architecture's Amendment 3 of 2026-10-13-p129h-local-token-reader. Those are now P1.33j
    (B2', the shared socket pin, after P1.33h) and P1.29i (S2', every outbound key) (book edit 2026-10-13-host-pin-steps,
    Amendments 3 and 4).
-9. **P1.29s "Add the dev seed and precheck scripts"** ([SEC]; depends on P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i,
-   P1.33j, P1.33k, P1.33l and P1.34d, book edits 2026-10-13-local-plc-steps, 2026-10-13-host-pin-steps Amendment 5 and
-   2026-10-13-local-plc-a3-steps, so the seed never runs the token reader before its holes are closed; and P1.33b, which
-   carries Alex's mail-card answer, because local C11 and C19 and the reader's SMTP refusal cannot both hold until then
-   (architecture's Amendment 3 of 2026-10-13-local-plc, point 2; book edit 2026-10-13-p127l-local-gaps, Amendment
-   6)): `scripts/dev-seed.ts` and
-   `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path), the `dev:up` wiring of `dev-precheck`,
-   the seed's `local:up` wiring (P1.34d) and their tests below. It adds the `seed` service to `compose.local.yaml`
-   itself, with the drift allowance P1.34d prepared (book edit 2026-10-13-verify-814-fixes, Amendments 1 and 2).
-   `dev-seed` runs under `local` only and refuses dev and prod (architecture's Amendment 4 of 2026-10-13-local-plc,
-   point 1); it creates accounts through the local PDS and confirms their email through P1.29h's reader and the real
-   `confirmEmail`; `dev-precheck` travels with it. It also adds the compose key allowlist's one `logging` entry: exactly
-   `{driver: "none"}`, on the seed service only (book edit 2026-10-12-p129s-seed-file-location, amendments 2 and 3). It
-   adds seed's row to P1.35r's limits table and seed's exact environment map and `env_file` list to P1.35r's
-   local-only env pins, with red tests APP_HOST on seed, an unlisted `env_file` on seed, and P1.35r's value red tests
-   on seed (Codex on #910); seed's rows meet P1.35r's secret-bearing predicate. It
-   also carries a test that a seed run leaves the secrets folder's listing unchanged (book edit
-   2026-10-12-p134l-secrets-folder-listing, rider), and a test that the token reader passes `hostWalk` to the pin
-   unchanged, so mutant R12 (statfs blind) dies (verify-845-200b534 N3; book edit 2026-10-13-host-pin-steps, "Step-book
-   mapping of verify-845-200b534").
-10. **P1.29t "Test the running dev stack"** ([SEC]; depends on P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v and
-    P1.34z): it runs on the local stack only (`local:up`); no probe runs under dev (architecture's Amendment 4 of
-    2026-10-13-local-plc, point 1, and Amendment 6, S3). Its first assertion, before any browser flow, is a probe from
-    inside the PDS container: an HTTPS GET of web's `client_id`, resolved through the edge's network aliases (Amendment
-    1), succeeds, the chain verifies against the dev root, and the body parses as client metadata. If the PDS's own
-    fetch refuses the app host's private address, the builder stops and sends architecture the exact error and the PDS
+9. **P1.29s "Add the local precheck; create no accounts per run"** ([SEC]; depends on P1.29a, P1.34t, P1.34d, P1.33b;
+   ADRs 0022 and 0023; book edit 2026-10-17-p129s-adr0023-rescope). The local PLC steps P1.34v and P1.34z are dropped
+   (ADR 0022) and are not dependencies. The email-token reader (P1.29h, P1.29i) keeps refusing every stack, so this
+   step does not wait on it and does not call it.
+   `scripts/dev-precheck.ts` (product: the `scripts/` root is not a check path) and the `dev:up` / `local:up` wiring of
+   it. No `scripts/dev-seed.ts`, no compose `seed` service, no `createAccount`, no generated passwords, no
+   `.seeded.json`. A few fixed test accounts are made once by hand, with an invite code and the PDS's own account
+   creation, and reused (ADR 0023). This step does not name their handles, passwords, DIDs or emails. Test handles stay
+   under the local/dev root's constrained names, with no public DNS. `dev-precheck` still refuses when the PDS
+   `describeServer` DID is neither the expected local DID nor absent, when the env names a production host, and when
+   `preflight --env local` fails. `local:up` never creates an account. The P1.35r seed-service limits row, seed env
+   pins, and the compose `logging: {driver: "none"}` allowlist for a seed service are cancelled. Tests, red first:
+   `precheck_refuses_unknown_pds_did`; `precheck_refuses_production_host`; `local_up_creates_no_account`;
+   `no_seed_service_in_compose`; `no_create_account_in_scripts`; `email_token_reader_still_refuses_every_stack`.
+10. **P1.29t "Test the running local stack"** ([SEC]; depends on P1.29a, P1.29s, P1.34d, P1.34k, P1.34t; ADRs 0022 and
+    0023; book edit 2026-10-17-p129s-adr0023-rescope): it runs on the local stack only (`local:up`); no probe runs under
+    dev (architecture's Amendment 4 of 2026-10-13-local-plc, point 1, and Amendment 6, S3). Nothing in this step creates
+    an account or calls the email-token reader. Its first assertion, before any browser flow, is a probe from inside the
+    PDS container: an HTTPS GET of web's `client_id`, resolved through the edge's network aliases (Amendment 1),
+    succeeds, the chain verifies against the dev root, and the body parses as client metadata. If the PDS's own fetch
+    refuses the app host's private address, the builder stops and sends architecture the exact error and the PDS
     version; no workaround (book edit 2026-10-12-p134c-p134d-local-dev-root-ca). Then `pds_device_row_has_no_client_ip`
-    (the edge, the PDS and an OAuth sign-in on a seeded account) and `net_guard_resolve_pin_in_image`. It also asserts
-    P1.29a's PDS user and volume, red first: `id -u` is 1000, the data directory is owned by 1000, and a write succeeds;
-    a root-owned volume fails the test, not the boot silently (book edit 2026-10-13-p129a-build-rulings). From inside
-    the PDS, `APP_HOST` and `PDS_HOST` each resolve to the edge's runtime address and the TLS chain verifies against the
-    dev root (Amendment 1). If the CI job that runs them needs a `.github/` change, that change is its own check part,
-    `P1.29q`, booked when the thread measures it, and it needs Alex's typed line.
+    (the edge, the PDS and an OAuth sign-in on one of the fixed test accounts; this step does not create that account)
+    and `net_guard_resolve_pin_in_image`. It also asserts P1.29a's PDS user and volume, red first: `id -u` is 1000, the
+    data directory is owned by 1000, and a write succeeds; a root-owned volume fails the test, not the boot silently
+    (book edit 2026-10-13-p129a-build-rulings). From inside the PDS, `APP_HOST` and `PDS_HOST` each resolve to the
+    edge's runtime address and the TLS chain verifies against the dev root (Amendment 1). If the CI job that runs them
+    needs a `.github/` change, that change is its own check part, `P1.29q`, booked when the thread measures it, and it
+    needs Alex's typed line.
 11. **P1.29y "Fold the old image jobs into the scan matrix"** ([SEC] [ALEX], check: `.github/workflows/images.yml`,
     `scripts/ci/list-dockerfiles.ts`, `image-workflows.test.ts`, `mirror-scan.test.ts`, kind/build; issue #581; depends
     on P1.29w (merged, #571) and P1.29v (merged, #583), which also edits images.yml; owner Phase 2 or the third lane,
@@ -12653,13 +12653,13 @@ bump. If P1.29t cannot run it, it moves to the preflight.
 
 **Where:** `deployment/images/{migrate,postgres}.Dockerfile` (P1.29k, P1.29d); `deployment/compose.dev.yaml`;
 `deployment/networks.dev.json`; `deployment/env/dev-public.example.env`; `docs/human/runbooks/dev-stack-secrets.md`;
-`scripts/dev-seed.ts`; `scripts/dev-precheck.ts`; tests (each part carries its share, above).
+`scripts/dev-precheck.ts` (P1.29s; no `scripts/dev-seed.ts`, ADR 0023); tests (each part carries its share, above).
 
 **Size:** ~230 lines of YAML, ~220 script lines, ~250 test lines.
 
-**Goal:** One command brings up a hardened development stack — Postgres, migrator, the dev PDS minting
-`.0x40.space` handles, the edge — on networks where only the edge can reach the PDS's HTTP port,
-and seeds test accounts without printing a secret and without ever touching the lexicon authority.
+**Goal:** One command brings up a hardened development stack — Postgres, migrator, the local PDS, the edge — on
+networks where only the edge can reach the PDS's HTTP port. Test accounts are a few fixed ones made once by hand
+(ADR 0023); nothing creates accounts per run.
 
 **Inputs:** P1.11 migrator image and Postgres settings; P1.27 images and lock; P1.28 edge image and config; the dev
 PDS hostname `0x40.space` (plan §5.3 and decision 20); `shared/lexicons/published.lock.json` (P1.31g/P1.35).
@@ -12716,51 +12716,32 @@ Two env files use the same compose file: `dev` (the homelab, Alex-operated from 
   - `tap` (profile `tap`; dynamic mode pointed at the dev PDS; provisional until the P3.01 spike decides).
   - `edge` (P1.28 image; ports 80 and 443 published on the host's tailnet address in pure dev, or on the public
     interface only when P1.34 opens outside access).
-  - `web` (profile `app`, from Phase 2); `seed` (profile `seed`, run on demand; local only: P1.29s adds it to
-    `compose.local.yaml`; P1.34d's drift allowance names it (book edit 2026-10-13-verify-814-fixes, Amendment 1,
-    Codex 3; architecture's Amendment 7 of 2026-10-13-local-plc, Q3)).
-- `dev-precheck` (run by `npm run dev:up` before `docker compose up`): refuses when `0x40.space` answers
-  `describeServer` with a DID that is neither the expected dev PDS DID nor absent (protects against the old
-  prototype PDS), when the env names a production host, and when `preflight --env dev` (P1.30) fails.
-- `dev-seed`: creates test accounts through the local PDS only, never under dev or prod (architecture's Amendment 4 of
-  2026-10-13-local-plc); the authority guard (below) stays as a second check.
+  - `web` (profile `app`, from Phase 2). No `seed` service (ADR 0023; book edit 2026-10-17-p129s-adr0023-rescope):
+    P1.34d's drift allowance that named `seed` is unused. Nothing in compose creates accounts.
+- `dev-precheck` (run by `npm run local:up` / `dev:up` before `docker compose up`): refuses when the PDS answers
+  `describeServer` with a DID that is neither the expected local DID nor absent (protects against the old
+  prototype PDS), when the env names a production host, and when `preflight` for that env (P1.30) fails.
+- Test accounts: a few fixed ones, made once by hand with an invite code and the PDS's own account creation, and
+  reused (ADR 0023). Nothing creates accounts per run. The email-token reader keeps refusing every stack. This spec
+  does not name handles, passwords, DIDs or emails.
 
 **Algorithm:**
 ```text
-dev-seed:
-1. Refuse unless ENV is exactly local AND the PDS hostname ends with .localhost (an agent's throwaway stack,
-   never reachable from outside) AND the compose project name is unset-local → exit 2 "seed.not_local". Dev
-   and prod are refused: seeds run only under local, so test identities never reach the public directory
-   (architecture's Amendment 4 of 2026-10-13-local-plc, point 1).
-2. Authority guard (round 1, F6): read shared/lexicons/published.lock.json. If it names an authority DID,
-   fetch https://plc.directory/<DID> through net-guard (timeout 10 s):
-   - service endpoint is https://0x40.space → exit 2 "seed.authority_hosted" (after P1.35 the dev PDS admin
-     password is authority-critical and only Alex holds it; test accounts come from invites, P2.10);
-   - timeout or error → exit 2 "seed.authority_unknown" (fail closed);
-   - endpoint elsewhere (after P5.02a) → continue.
-   No authority DID in the lock → continue.
-3. Get invite codes through the PDS admin API on the internal address http://pds:3000 (never through the
-   edge, which denies it) using PDS_ADMIN_PASSWORD from the secrets file. Dev-only use of the admin
-   credential, allowed only while step 2 passes.
-   Timeout 10 s → exit 1 "seed.pds_timeout"; non-2xx → exit 1 with the status only.
-   (The seed container joins the edge network for this one call; it is a profile service that exits.)
-4. For each test account (alice, bob, carol under the local PDS's handle domain, a .localhost name local C15
-   accepts): createAccount with a generated password (crypto
-   random, 24 bytes base64url) and the invite code. Handle taken → skip and report "exists".
-5. Print { handle, did, password } as JSON on stdout, which reaches only the host wrapper's pipe: the seed service
-   declares `logging: { driver: "none" }` and runs with `--rm`, so Docker keeps no log of it (the compose key allowlist
-   accepts that `logging` value on the seed service only, added by P1.29s). The wrapper validates the JSON and writes
-   .seeded.json to the sibling unset-dev-env folder (0600, owned by the deploy user; O_EXCL temp file, fsync, rename),
-   never logging it; the container mounts nothing from unset-dev-env. The wrapper prints the created handles to the
-   operator's terminal and writes nothing about the accounts to any log (SE-7). (P1.29s, book edit
-   2026-10-12-p129s-seed-file-location, amendments 1 to 3.)
-6. Re-run → idempotent (existing accounts skipped).
+dev-precheck (P1.29s):
+1. Refuse unless the env is local or dev as the wrapper named, and the PDS hostname matches that env's pin.
+   Production host → exit 2 "precheck.production_host".
+2. describeServer: DID neither the expected DID nor absent → exit 2 "precheck.unknown_pds_did".
+3. preflight for that env fails → exit 2 with the preflight code.
+4. Stop. Do not create an account, do not call the token reader, do not write account files.
+
+There is no dev-seed. The createAccount / invite-code / .seeded.json algorithm that used to sit here is dropped
+(ADR 0023).
 ```
 
 **Edge cases and failures:**
-- Secrets file mode not 0600 → P1.30 C9 refuses; `dev-seed` also refuses.
+- Secrets file mode not 0600 → P1.30 C9 refuses.
 - The old prototype PDS still answering on `0x40.space` → precheck refuses (P1.33a must complete before P1.34).
-- Postgres not healthy within 60 s → `migrate` never starts; compose reports unhealthy; no partial seed.
+- Postgres not healthy within 60 s → `migrate` never starts; compose reports unhealthy.
 - A container added to the `edge` network without a review → `compose_dev_networks_match_table` fails.
 - `tap` profile not enabled → nothing depends on it in Phase 1.
 - Someone runs `docker compose down -v` after P1.35 → the authority's PDS data is gone; recovery is P1.34's
@@ -12778,10 +12759,9 @@ dev-seed:
     (`pds_mail_unset_only_with_logging_off`).
   - E A container escapes or escalates → `cap_drop: ALL`, `no-new-privileges`, non-root (`compose_dev_hardening`).
   - D One container starves the host → memory, CPU and pids limits, heap below the limit (`compose_dev_limits`).
-  - T The seed touches the lexicon authority or a foreign PDS → refused (`seed_refuses_while_authority_hosted`,
-    `precheck_refuses_unknown_pds_did`).
-  - I Seeded passwords logged or world-readable → stdout reaches only the wrapper's pipe, the seed service logs to
-    driver `none`, and the file is mode 0600 (`seed_never_prints_password`, `seed_file_mode_0600`, P1.29s's tests).
+  - T A script or compose service creates a PDS account on a run → absent (`local_up_creates_no_account`,
+    `no_seed_service_in_compose`, `no_create_account_in_scripts`).
+  - I Test-account passwords in the repo or in logs → this step never writes them (`no_seeded_json`, SE-7).
 
 **Done when (tests):**
 - `compose_dev_name_pinned`; `compose_dev_images_by_digest` (every image in the lock, from our registry).
@@ -12796,20 +12776,14 @@ dev-seed:
   `PDS_RATE_LIMIT_BYPASS_IPS` and `PDS_RATE_LIMIT_BYPASS_KEY` are both absent (P1.29a, where the `pds` service first
   exists). P1.30 C7 still checks the deployed env at preflight; nothing deploys before P1.28 and every P1.29 part are
   merged.
-- `pds_device_row_has_no_client_ip` (integration, dev stack; moved from P1.30, book edit 2026-10-07-p130-split): sign in
-  through the edge from a test client, then read the PDS `device` table's `ipAddress` → it equals the edge's address on
-  `edge`, read at run time with `docker inspect`, never the client's. P1.29t (book edit 2026-10-07-p129-split) is the
-  first step that runs the stack with the edge in front of the PDS.
-- `seed_refuses_non_local`: ENV=dev → exit 2; ENV=prod → exit 2; compose project `unset-dev` → exit 2.
-- `seed_refuses_while_authority_hosted`: stub PLC answering `https://0x40.space` → exit 2; stub timing out → exit 2.
-- `seed_never_prints_password`: run against a stub PDS; stderr, the wrapper's output and `docker logs` contain no
-  generated password (stdout carries it only to the wrapper's pipe, step 5).
-- `seed_file_mode_0600`.
-- P1.29s (book edit 2026-10-12-p129s-seed-file-location), red first: the seed service declares no volume from
-  unset-dev-env; malformed stdout writes nothing; an existing temp file makes O_EXCL fail closed; the written file
-  is 0600. Amendment 2, red first: `docker logs <seed>` fails or prints nothing; the service's logging config is
-  exactly `{driver: "none"}`; a Docker-gated run leaves no `*-json.log` for the container; `logging` on any other
-  service, or any other driver, is refused.
+- `pds_device_row_has_no_client_ip` (integration, local stack; moved from P1.30, book edit 2026-10-07-p130-split): sign
+  in through the edge from a test client as one of the fixed test accounts (P1.29t does not create the account), then
+  read the PDS `device` table's `ipAddress` → it equals the edge's address on `edge`, read at run time with
+  `docker inspect`, never the client's. P1.29t (book edit 2026-10-07-p129-split) is the first step that runs the stack
+  with the edge in front of the PDS.
+- P1.29s (book edit 2026-10-17-p129s-adr0023-rescope), red first: `local_up_creates_no_account`;
+  `no_seed_service_in_compose`; `no_create_account_in_scripts`; `email_token_reader_still_refuses_every_stack`;
+  `precheck_refuses_production_host`.
 - `precheck_refuses_unknown_pds_did`: stub `describeServer` answering a foreign DID → refuses.
 - `dev_down_never_removes_volumes`: the npm script contains no `-v`/`--volumes`.
 - C26 passes on the root-context postgres build with every env file outside the checkout (P1.27u amendments 1 and

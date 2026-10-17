@@ -417,9 +417,9 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.34t | Pin the PLC URL per environment | [SEC] | — | `phase-1.md` |
 | P1.33m | Own the local Postgres init in CODEOWNERS (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.34u | Give the local PLC its own role and database (trusted base) | [SEC] | P1.34t, P1.34d, P1.33m | `phase-1.md` |
-| P1.34v | Run a local PLC directory in the local stack | [SEC] [ALEX] (card answered 20:43:34Z) | P1.34u, P1.34d, P1.35o, P1.35r | `phase-1.md` |
+| P1.34v | ~~Run a local PLC directory in the local stack~~ **Retired** (ADR 0022; never built) | [SEC] [ALEX] | P1.34u, P1.34d, P1.35o, P1.35r | `phase-1.md` |
 | P1.34y | Add an inert local PLC policy to net-guard (trusted base) | [SEC] | P1.34t | `phase-1.md` |
-| P1.34z | Point identity resolution at the local PLC | [SEC] | P1.34v, P1.34y | `phase-1.md` |
+| P1.34z | ~~Point identity resolution at the local PLC~~ **Retired** (ADR 0022; never built) | [SEC] | P1.34v, P1.34y | `phase-1.md` |
 | P1.33i | Let the preflight import shared/host-pin (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
 | P1.33h | Move the host pin into shared/host-pin | [SEC] | P1.33i | `phase-1.md` |
 | P1.33f | Anchor the depcruise exclude to our outputs (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -451,10 +451,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29 | Development stack (`compose.dev.yaml`) without the PDS: postgres, migrate, web | [SEC] | P1.29k, P1.29d, P1.29w, P1.11p, P1.30t, P1.30n, P1.29n, P1.29p, P1.29f, P1.29m, P1.30x, P1.30y, P1.30z, P1.30a, P1.30o, P1.27y, P1.27a, P1.27u, P1.27w | `phase-1.md` |
 | P1.27o | Edge /data and /config owned by caddy (trusted base) | [SEC] | P1.34e | `phase-1.md` |
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
-| P1.29h | Local PDS email-token reader for tests and dev-seed (real confirmEmail flow) | [SEC] | P1.29a | `phase-1.md` |
+| P1.29h | Local PDS email-token reader for tests (real confirmEmail flow; refuses every stack, ADR 0023) | [SEC] | P1.29a | `phase-1.md` |
 | P1.33b | Let local stacks run without mail | [SEC] [ALEX] (card answered 20:28:12Z) | P1.27l | `phase-1.md` |
-| P1.29s | Dev seed and precheck scripts | [SEC] | P1.29a, P1.29h, P1.34t, P1.34v, P1.34z, P1.29i, P1.33j, P1.33k, P1.33l, P1.34d, P1.33b | `phase-1.md` |
-| P1.29t | Running dev stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t, P1.34v, P1.34z | `phase-1.md` |
+| P1.29s | Local precheck; no per-run account creation | [SEC] | P1.29a, P1.34t, P1.34d, P1.33b | `phase-1.md` |
+| P1.29t | Running local stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
 | P1.31d | Resolve package exports and lexicon scripts (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -700,9 +700,9 @@ flowchart TD
   P1_34t["P1.34t Pin the PLC URL per environment"]
   P1_33m["P1.33m Local Postgres init owned"]
   P1_34u["P1.34u Local PLC role and database"]
-  P1_34v["P1.34v Local PLC in the local stack"]
+  P1_34v["P1.34v Local PLC DROPPED ADR 0022"]
   P1_34y["P1.34y inert local PLC policy in net-guard"]
-  P1_34z["P1.34z Identity resolves through the local PLC"]
+  P1_34z["P1.34z Local PLC identity DROPPED ADR 0022"]
   P1_33i["P1.33i Preflight may import shared/host-pin"]
   P1_33f["P1.33f Depcruise exclude anchored"]
   P1_33o["P1.33o Host-pin kept a leaf"]
@@ -736,7 +736,7 @@ flowchart TD
   P1_29a["P1.29a PDS and edge in the dev stack"]
   P1_29h["P1.29h Local email-token reader"]
   P1_33b["P1.33b Local stacks without mail"]
-  P1_29s["P1.29s Dev seed and precheck"]
+  P1_29s["P1.29s Local precheck, no per-run accounts"]
   P1_29t["P1.29t Running-stack tests"]
   P1_30q["P1.30q preflight boundary row"]
   P1_30p["P1.30p compose parser and SecretMap"]
@@ -1045,7 +1045,6 @@ flowchart TD
   P1_30n --> P1_29
   P1_29 --> P1_29a
   P1_29a --> P1_29h
-  P1_29h --> P1_29s
   P1_29h --> P2_11
   P1_29a --> P1_29s
   P1_29a --> P1_29t
@@ -1108,19 +1107,15 @@ flowchart TD
   P1_34d --> P1_34v
   P1_34d --> P1_34u
   P1_34d --> P1_29s
+  P1_34t --> P1_29s
+  P1_34t --> P1_29t
   P1_34t --> P1_34y
   P1_34v --> P1_34z
   P1_34y --> P1_34z
-  P1_34z --> P1_29s
-  P1_29i --> P1_29s
-  P1_33j --> P1_29s
-  P1_33k --> P1_29s
-  P1_33l --> P1_29s
   P1_27l --> P1_33b
   P1_33c --> P1_33e
   P1_33b --> P1_29s
   P1_33j --> P1_33l
-  P1_34z --> P1_29t
   P1_33i --> P1_33h
   P1_33h --> P1_33o
   P1_33h --> P1_33j
@@ -1965,6 +1960,8 @@ flowchart LR
 | P1.36a | Not used: the severity step is P0.09b. |
 | P4.07a | Not used: the preserve verbs are **P3.16c**. |
 | P6.18 | Retired: the branded Element Web fallback was dropped (Alex answer 53). |
+| P1.34v | Retired: local PLC in the local stack, dropped by ADR 0022; never built. |
+| P1.34z | Retired: identity resolution through a local PLC, dropped by ADR 0022; never built. |
 | P4.02a | Reserved: a follow-up PR only if a P4.01 answer needs an extra record. |
 
 ## Dependency check (2026-10-04, SE-6 corrections)
@@ -2034,7 +2031,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.34v, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -2173,3 +2170,11 @@ GitHub Pro; the ruleset was applied 2026-10-06, ADR 0017).
 Re-run by script over all 239 rows after adding P0.09d and P2.13b: no duplicate id, every dependency names a step that
 exists and comes earlier in the row order, every id matches P0.09c's id pattern. P0.09d depends on P0.06; P2.13b on
 P2.13a and P0.07.
+
+## Book edit (2026-10-17, ADR 0023 rescope)
+
+P1.29s, P1.29t and P2.13a aligned with ADR 0023 (and ADR 0022's dropped local PLC). P1.34v and P1.34z are
+**Retired** (never built). P1.29s no longer depends on P1.34v, P1.34z, P1.29h, P1.29i, P1.33j, P1.33k or P1.33l;
+P1.29t no longer depends on P1.34v or P1.34z. P2.13a stays [STOP]; its Depends on line is unchanged. Nothing creates
+accounts per run. Ordering check re-run (`heading_matches_row`, `outline_dependency_ids_exist`,
+`outline_graph_acyclic`).
