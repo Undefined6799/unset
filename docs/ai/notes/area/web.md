@@ -18,7 +18,8 @@ checked: 2026-10-17
 the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/ErrorPage.tsx`), the screens under
 `src/screens/` (P1.25: `Home`, `Legal`; P2.15: `src/legal/` parses the build-inlined English markdown once;
 P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink`;
-P2.11: `VerifyEmail`; P2.13: `Me`, including the confirm box for sign-out everywhere), and the islands runtime under
+P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`, `PrivacyNotice`) and a placeholder
+`SettingsProfile`; P2.13: `Me`, including the confirm box for sign-out everywhere and the privacy banner), and the islands runtime under
 `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.
 
 **The shell (P1.25).** `renderPage` takes `islands: "on" | "off"` and an optional `shell`. "off" (the public pages

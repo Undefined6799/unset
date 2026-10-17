@@ -167,6 +167,20 @@
         "rowPrivileges": ["DELETE"]
       }
     },
+    "app.account": {
+      "web": {
+        "columns": {
+          "did": ["SELECT", "INSERT"],
+          "first_seen_at": ["SELECT", "INSERT"],
+          "onboarding": ["SELECT", "INSERT", "UPDATE"],
+          "terms_version": ["SELECT", "INSERT", "UPDATE"],
+          "terms_accepted_at": ["SELECT", "INSERT", "UPDATE"],
+          "privacy_version": ["SELECT", "INSERT", "UPDATE"],
+          "age_confirmed_at": ["SELECT", "INSERT", "UPDATE"],
+          "storage_quota_bytes": ["SELECT"]
+        }
+      }
+    },
     "app.oauth_session": {
       "web": {
         "columns": {

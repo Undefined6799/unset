@@ -24,7 +24,9 @@ network itself.
 - `did-doc.ts`: reads the atproto fields of a DID document; `alsoKnownAs` is passed on raw.
 - `verify-handle.ts`: shows a handle only when it resolves back to the same DID. Trusted base.
 - `contract.ts`: the `IdentityNetwork` port, one GET and one TXT lookup, with three failures.
-- `auth/gates.ts`: whether a confirmed-email cache is still fresh (`emailGate`, P2.11). No network.
+- `auth/gates.ts`: whether a confirmed-email cache is still fresh (`emailGate`, P2.11), and whether onboarding
+  is done with the current terms (`requireOnboarded`, P2.12). A privacy-version difference is a notice, not a redirect.
+- `auth/age.ts`: parses a birth date and counts full years (P2.12). The date is not stored here.
 - `legal/versions.ts`: `TERMS_VERSION` and `PRIVACY_VERSION`, the date strings P2.12 compares (P2.15).
 
 **How data flows.** Interface → identity → `IdentityNetwork` → [[pds]] adapter → [[net-guard]] → network. Every

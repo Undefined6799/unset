@@ -4,6 +4,7 @@
   "include": ["**/*.ts"],
   "exclude": ["dist"],
   "references": [
+    { "path": "../interfaces/http" },
     { "path": "../infrastructure/audit" },
     { "path": "../infrastructure/pds" },
     { "path": "../infrastructure/postgres" },

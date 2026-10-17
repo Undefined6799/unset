@@ -2,6 +2,7 @@
 // back to the DID (P2.02), the DID itself, the PDS account link, a sign-out form and a confirm box that signs out
 // every browser (P2.08a). Both post with no script. The profile, privacy and invite blocks join them in their own steps.
 import { Button, Link, safeHref } from "@unset/shared-ui";
+import { PrivacyNotice } from "./welcome/PrivacyNotice.tsx";
 
 export type MeProps = {
   /** displayHandle's text: the verified handle, or `handle.invalid`. */
@@ -9,13 +10,16 @@ export type MeProps = {
   did: string;
   /** The check could not run (an outage), as opposed to the handle failing it. */
   handleUnavailable: boolean;
+  /** A privacy-version change: one banner, not a new acceptance (P2.12). */
+  privacyNotice?: boolean;
   pdsHost: string;
 };
 
-export function Me({ handle, did, handleUnavailable, pdsHost }: MeProps) {
+export function Me({ handle, did, handleUnavailable, privacyNotice = false, pdsHost }: MeProps) {
   const account = safeHref(`https://${pdsHost}/account`, ["https:"]);
   return (
     <main>
+      {privacyNotice ? <PrivacyNotice /> : null}
       <h1>{handle}</h1>
       <p>
         <code>{did}</code>
