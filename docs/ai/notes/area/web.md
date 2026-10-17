@@ -24,8 +24,8 @@ P2.11: `VerifyEmail`; P2.13: `Me`, including the confirm box for sign-out everyw
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
-(login, continue, signed-out, verify-email, `/me`) still pass no `shell` and render their own `<main>`; moving them
-in, `feed`, `PrefsForms` and the favicons are P1.25j. Text is in `src/shell/messages.ts`.
+login, continue, signed-out, verify-email and `/me` render inside the shell (one `<main id="main">`). `feed`,
+`PrefsForms` and the favicons are still P1.25j. Text is in `src/shell/messages.ts`.
 
 **Entry points.**
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build

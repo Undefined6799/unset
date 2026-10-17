@@ -183,11 +183,11 @@ test("signed_out_everywhere_names_an_unconfirmed_revoke", async () => {
   const html = await response.text();
   expect(html).toContain("every browser");
   expect(html).toContain("could not confirm the sign-in server ended access");
-  // A crafted scope or error is not a sentence.
+  // A scope the page does not know is not a sentence. A known ?error= code is the shell's callout.
   const ignored = await setup({ session: null }).send("/signed-out?scope=all&error=login.failed", { method: "GET" });
   const quiet = await ignored.text();
   expect(quiet).not.toContain("every browser");
-  expect(quiet).not.toContain("Sign-in could not start");
+  expect(quiet.match(/Sign-in could not start/g)).toHaveLength(1);
 });
 
 test("signed_out_sends_a_signed_in_visitor_to_me", async () => {

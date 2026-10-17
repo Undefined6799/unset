@@ -19,7 +19,7 @@ export type LoginProps = {
 export function Login({ handle, next, error, pdsHost, handleDomain }: LoginProps) {
   const message = error === null ? undefined : ERROR_MESSAGES[error as keyof typeof ERROR_MESSAGES];
   return (
-    <main>
+    <>
       <h1>Sign in</h1>
       {message === undefined ? null : <Callout tone="danger">{message}</Callout>}
       <form method="post" action="/login">
@@ -40,6 +40,6 @@ export function Login({ handle, next, error, pdsHost, handleDomain }: LoginProps
           {`Use ${pdsHost} sign-in`}
         </Button>
       </form>
-    </main>
+    </>
   );
 }

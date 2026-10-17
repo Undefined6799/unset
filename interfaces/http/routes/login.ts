@@ -12,17 +12,17 @@ import { parseDid, parseHandle } from "@unset/domains-identity";
 import type { AuthorizeResult } from "@unset/infrastructure-pds";
 import type { SessionRead } from "@unset/infrastructure-session";
 import { type ErrorCode, readErrorParam, withErrorParam } from "@unset/shared-errors";
-import { defineRoute, type Route, type RouteGroup, type SafePath, safeReturnPath } from "@unset/shared-http";
+import { defineRoute, type Route, type SafePath, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 // A whole-statement type import: Node erases it, so the server never loads the kit (its index reaches .tsx files).
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
-import type { ReactNode } from "react";
 import { sessionClearCookie } from "../session-cookie.ts";
+import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
 import { appStateOf, nonceCookie, signedOutFrom, targetCookie, targetFromCookies } from "./sign-in-state.ts";
 
 export type LoginDeps = {
-  page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
+  page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
   /** The kit's link validator, from the render build. */
   safeHref: WebRender["safeHref"];
@@ -130,11 +130,12 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         const body = deps.screens.login({
           handle: (query.get("handle") ?? "").slice(0, MAX_PREFILL),
           next: safeReturnPath(query.get("next")),
-          error,
+          // The shell shows a checked ?error= code. The screen does not repeat it.
+          error: null,
           pdsHost: deps.pdsHost,
           handleDomain: deps.handleDomain,
         });
-        const response = deps.page({ group: "app", request, title: "Sign in", body });
+        const response = deps.page({ group: "app", request, title: "Sign in", body, shell: {} });
         if (clearCookie) response.headers.append("set-cookie", sessionClearCookie());
         return response;
       },
@@ -167,7 +168,7 @@ export function loginRoutes(deps: LoginDeps): Route[] {
         if (target === null) return back("login.expired", null);
         const host = new URL(target).host;
         const body = deps.screens.loginContinue({ target, host, ours: host === deps.pdsHost });
-        return deps.page({ group: "app", request, title: "Continue signing in", body });
+        return deps.page({ group: "app", request, title: "Continue signing in", body, shell: {} });
       },
     }),
   ];

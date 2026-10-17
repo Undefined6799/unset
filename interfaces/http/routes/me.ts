@@ -3,16 +3,16 @@
 // the page. App pages are private, no-store and vary on Cookie (pageResponse, P1.22).
 import { type Did, displayHandle, type HandleVerdict } from "@unset/domains-identity";
 import type { SessionRead } from "@unset/infrastructure-session";
-import { defineRoute, type Route, type RouteGroup } from "@unset/shared-http";
-import type { ReactNode } from "react";
+import { defineRoute, type Route } from "@unset/shared-http";
 import { sessionClearCookie } from "../session-cookie.ts";
+import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
 
 export type MeDeps = {
   /** P2.03's read of the request's session cookie: a live session, and whether a dead cookie should be cleared. */
   readSession: (request: Request, deadline: AbortSignal) => Promise<SessionRead>;
   verifyHandle: (did: Did, signal: AbortSignal) => Promise<HandleVerdict>;
-  page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
+  page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
   pdsHost: string;
 };
@@ -44,7 +44,7 @@ export function meRoutes(deps: MeDeps): Route[] {
           handleUnavailable: verdict.status === "unavailable",
           pdsHost: deps.pdsHost,
         });
-        return deps.page({ group: "app", request, title: displayHandle(verdict), body });
+        return deps.page({ group: "app", request, title: displayHandle(verdict), body, shell: {} });
       },
     }),
   ];

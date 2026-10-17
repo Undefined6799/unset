@@ -14,7 +14,7 @@ export type LoginContinueProps = {
 
 export function LoginContinue({ target, host, ours }: LoginContinueProps) {
   return (
-    <main>
+    <>
       <meta httpEquiv="refresh" content={`0;url=${target}`} />
       <h1>
         You are going to <strong>{host}</strong>
@@ -23,6 +23,6 @@ export function LoginContinue({ target, host, ours }: LoginContinueProps) {
       <Link href={target} variant="standalone">
         {`Continue to ${host}`}
       </Link>
-    </main>
+    </>
   );
 }

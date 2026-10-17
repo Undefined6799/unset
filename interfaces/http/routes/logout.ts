@@ -6,10 +6,10 @@
 import type { Did } from "@unset/domains-identity";
 import type { Session } from "@unset/infrastructure-session";
 import { AppError, readErrorParam, withErrorParam } from "@unset/shared-errors";
-import { defineRoute, type Route, type RouteGroup } from "@unset/shared-http";
+import { defineRoute, type Route } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
-import type { ReactNode } from "react";
 import { sessionClearCookie } from "../session-cookie.ts";
+import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
 import { clearNonceCookie, clearTargetCookie, signedOutCookie } from "./sign-in-state.ts";
 
@@ -27,7 +27,7 @@ export type LogoutDeps = {
   revokeGrant: (did: Did) => Promise<void>;
   /** `oauthSessionStore.del`: used when revoke throws, so no grant remains on our side. */
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
-  page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
+  page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
   pdsHost: string;
   log: Logger;
@@ -168,6 +168,7 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
           group: "app",
           request,
           title: "Signed out",
+          shell: {},
           body: deps.screens.signedOut({
             pdsHost: deps.pdsHost,
             everywhere: query.get("scope") === "everywhere",

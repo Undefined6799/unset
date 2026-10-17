@@ -68,6 +68,9 @@ describe("GET /me", () => {
     const html = await response.text();
     expect(html).toContain("alice.pds.unset.test");
     expect(html).toContain(`<code>${DID}</code>`);
+    expect(html).toContain('<main id="main">');
+    expect(html.match(/<main/g)).toHaveLength(1);
+    expect(html).toContain("Skip to content");
     expect(checked).toEqual([DID]);
   });
 

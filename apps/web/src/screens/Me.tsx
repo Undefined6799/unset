@@ -15,7 +15,7 @@ export type MeProps = {
 export function Me({ handle, did, handleUnavailable, pdsHost }: MeProps) {
   const account = safeHref(`https://${pdsHost}/account`, ["https:"]);
   return (
-    <main>
+    <>
       <h1>{handle}</h1>
       <p>
         <code>{did}</code>
@@ -36,6 +36,6 @@ export function Me({ handle, did, handleUnavailable, pdsHost }: MeProps) {
         </label>
         <Button type="submit">Sign out everywhere</Button>
       </form>
-    </main>
+    </>
   );
 }

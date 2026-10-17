@@ -141,7 +141,11 @@ describe("GET /login", () => {
 
   test("login_get_shows_only_a_catalog_error", async () => {
     const { send } = setup();
-    expect(await (await send("/login?error=login.handle_not_found")).text()).toContain("No account uses that handle.");
+    const html = await (await send("/login?error=login.handle_not_found")).text();
+    expect(html).toContain("No account uses that handle.");
+    expect(html.match(/No account uses that handle\./g)).toHaveLength(1);
+    expect(html).toContain('<main id="main">');
+    expect(html.match(/<main/g)).toHaveLength(1);
     const forged = await (await send("/login?error=%3Cscript%3Ex")).text();
     expect(forged).not.toContain('role="alert"');
     expect(forged).not.toContain("<script>x");
