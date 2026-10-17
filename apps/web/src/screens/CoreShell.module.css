@@ -1,0 +1,16 @@
+/* Core shell geometry from the approved Figma shell; the kit owns the header and navigation. */
+@layer screens {
+  .main {
+    margin-left: calc(var(--space-6) * 3);
+    padding: var(--space-12);
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 767px) {
+    .main {
+      --bottom: calc(60px + max(20px, env(safe-area-inset-bottom)));
+      margin-left: 0;
+      padding: var(--space-4) var(--space-4) calc(var(--space-4) + var(--bottom));
+    }
+  }
+}

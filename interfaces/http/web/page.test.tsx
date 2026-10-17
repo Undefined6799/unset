@@ -2,8 +2,10 @@
 import { Island, renderPage } from "@unset/apps-web";
 import { defineIsland, type IslandDefinition } from "@unset/shared-islands";
 import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { expect, test } from "vitest";
 import { THEME_COOKIE } from "../prefs/theme.ts";
+import { elements, textContent } from "./fixtures/html.ts";
 import { type PageDeps, pageResponse } from "./page.ts";
 
 const lines: Record<string, unknown>[] = [];
@@ -63,4 +65,24 @@ test("island_props_too_large_prod_logs_name_only", async () => {
   expect(logged).toHaveLength(1);
   expect(logged[0]?.island).toBe("echo");
   expect(JSON.stringify(logged)).not.toContain("secret");
+});
+
+test("shell_navigation_uses_only_the_route_supplied_identity", async () => {
+  const response = pageResponse(deps("test"), {
+    group: "app",
+    request: new Request("https://unset.test/me?active=settings&accountName=Mallory", {
+      headers: { cookie: "accountName=Mallory" },
+    }),
+    title: "Account",
+    body: null,
+    islands: "off",
+    shell: { navigation: { active: "account", accountName: "Alice" } },
+  });
+  const document = parse(await response.text());
+  const account = elements(elements(document, "nav")[0], "a", { href: "/me", "aria-current": "page" })[0];
+  expect(account).toBeDefined();
+  const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
+  expect(initials).toContain("A");
+  expect(textContent(document)).not.toContain("Mallory");
+  expect(elements(document, "script")).toHaveLength(0);
 });

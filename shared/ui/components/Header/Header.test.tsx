@@ -16,6 +16,12 @@ import { Header } from "./Header.tsx";
 const href = (raw: string) => safeHref(raw, ["path"]) as SafeHref;
 
 describe("Header", () => {
+  it("brand_only_header_has_no_empty_menu_or_island", () => {
+    const html = renderToStaticMarkup(<Header brandOnly />);
+    expect(html).toContain('href="/"');
+    expect(html).toContain('aria-label="unset.sh home"');
+    expect(html).not.toMatch(/<nav|<details|<button|<script|data-island/);
+  });
   it("header_menu_details_no_js", () => {
     const html = renderToStaticMarkup(
       <Header
@@ -52,6 +58,6 @@ describe("Header", () => {
     expect(css).toMatch(
       /@container \(max-width: 440px\) \{\s+\.wide \{\s+display: none;\s+\}\s+\.menu \{\s+display: block;/,
     );
-    expect(css).not.toContain("@media (max-width");
+    // The separate brand-only header follows the app viewport; generic navigation still folds by container.
   });
 });

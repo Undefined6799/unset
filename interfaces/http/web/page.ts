@@ -3,6 +3,7 @@
 // private and varying on Cookie; public pages neither, so their bytes never depend on a cookie).
 // P1.25: a page may ask for the app shell, which shows a checked `?error=` code; and the kit's error-page hook renders
 // every error page through the same shell, anonymously and with no script.
+import type { ShellOptions } from "@unset/apps-web";
 import { ERROR_MESSAGES, readErrorParam } from "@unset/shared-errors";
 import type { ErrorPage, RouteGroup } from "@unset/shared-http";
 import type { IslandDefinition } from "@unset/shared-islands";
@@ -32,7 +33,7 @@ export type PageSpec = {
   body: ReactNode;
   islands?: "off";
   /** Render inside the app shell; `noindex` also sends `X-Robots-Tag`. */
-  shell?: { noindex?: true };
+  shell?: { noindex?: true; navigation?: ShellOptions["navigation"] };
 };
 
 const ISLAND_ENV = { dev: "development", test: "test", prod: "production" } as const;
@@ -48,7 +49,11 @@ const renderBase = (deps: PageDeps) => ({
 export function pageResponse(deps: PageDeps, page: PageSpec): Response {
   const prefs = documentPrefs(page.group, page.request.headers.get("cookie"));
   const noindex = page.shell?.noindex === true;
-  const shell = page.shell && { error: readErrorParam(new URL(page.request.url).searchParams), noindex };
+  const shell = page.shell && {
+    error: readErrorParam(new URL(page.request.url).searchParams),
+    noindex,
+    ...(page.shell.navigation === undefined ? {} : { navigation: page.shell.navigation }),
+  };
   const { html, tooLarge } = deps.render({
     ...renderBase(deps),
     prefs,

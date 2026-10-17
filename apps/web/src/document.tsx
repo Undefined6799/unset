@@ -20,7 +20,11 @@ export type PagePrefs = Readonly<{
 export type Assets = Readonly<{ origin: string; manifest: BuildManifest }>;
 
 /** A page inside AppShell: the checked `?error=` code, and whether search engines may index it. */
-export type ShellOptions = Readonly<{ error: AppShellProps["error"]; noindex: boolean }>;
+export type ShellOptions = Readonly<{
+  error: AppShellProps["error"];
+  noindex: boolean;
+  navigation?: NonNullable<AppShellProps["navigation"]>;
+}>;
 
 /**
  * The bootstrap and its preloads. It renders after the body, so by then every island on the page has been counted;
@@ -50,7 +54,14 @@ export function Document(props: {
   children: ReactNode;
 }): ReactNode {
   const { prefs, run, shell } = props;
-  const page = shell === undefined ? props.children : <AppShell error={shell.error}>{props.children}</AppShell>;
+  const page =
+    shell === undefined ? (
+      props.children
+    ) : (
+      <AppShell error={shell.error} {...(shell.navigation === undefined ? {} : { navigation: shell.navigation })}>
+        {props.children}
+      </AppShell>
+    );
   return (
     <html {...prefs.htmlAttrs}>
       <Head

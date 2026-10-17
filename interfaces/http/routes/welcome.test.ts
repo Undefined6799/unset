@@ -11,12 +11,14 @@ import { loadConfig } from "@unset/shared-config";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import type { AccountStore } from "../account.ts";
 import { type AppGate, openApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
+import { elements } from "../web/fixtures/html.ts";
 import { pageResponse } from "../web/page.ts";
 import { meRoutes } from "./me.ts";
 import { settingsRoutes } from "./settings.ts";
@@ -413,6 +415,29 @@ describe("the app gate", () => {
       email: { confirmed: null, checkedAt: null },
     });
     expect((await unverified.send("/settings/profile")).headers.get("location")).toBe("/verify-email");
+  });
+
+  test("settings_navigation_renders_only_after_the_existing_gates", async () => {
+    const { send } = setup({
+      row: {
+        onboarding: "done",
+        termsVersion: TERMS_VERSION,
+        privacyVersion: PRIVACY_VERSION,
+        ageConfirmedAt: "confirmed",
+      },
+    });
+    const response = await send("/settings/profile");
+    expect(response.status).toBe(200);
+    const document = parse(await response.text());
+    expect(
+      elements(elements(document, "nav")[0], "a", { href: "/settings/profile", "aria-current": "page" }),
+    ).toHaveLength(1);
+    expect(elements(document, "script")).toHaveLength(0);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("vary")).toBe("Cookie");
+    const refused = await setup({ session: null }).send("/settings/profile");
+    expect(refused.status).toBe(303);
+    expect(refused.headers.get("location")).toBe("/login?next=%2Fsettings%2Fprofile");
   });
 });
 

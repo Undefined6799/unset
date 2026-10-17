@@ -132,6 +132,13 @@
     "variants": ["tone=default", "tone=danger"],
     "status": "built"
   },
+  "Navigation": {
+    "sheet": "components/Navigation/README.md",
+    "sheetSha256": "48bd2e90974787eca83d47eae4c3ebadc86d87d4c7962b895d3bf5c88901ca24",
+    "props": "NavigationProps",
+    "variants": ["desktop rail", "phone bar and popup"],
+    "status": "built"
+  },
   "NewPosts": {
     "sheet": "sheet/components/NewPosts/README.md",
     "sheetSha256": "5495a0162714dd03509584768e5d3329c24ae8c84ee00b68e8f28c3790d5c7c3",

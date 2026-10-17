@@ -23,6 +23,8 @@ and `/legal/domains`, group `public` so the shell's styles load, zero JS, `noind
 `routes/security-txt.ts` (`/.well-known/security.txt`, group `static`), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme
 cookie, applied on the server) and `web/` (reads Vite's manifest once at startup and renders pages through apps/web).
 Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read JSX, so pages come from `screens`.
+The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
+`/me`, the verified handle for an avatar initial. This is display data only; public home remains anonymous.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook. `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.

@@ -2,6 +2,7 @@
 // a disc with a 1px `line` hairline, or the name's first letter in `mono` on `surface-raised` when there is none.
 // Decorative by default (alt=""), because the name beside it says who it is. The picture is a `SafeHref`, which the
 // caller mints from the media proxy's address, never a PDS's.
+import type { ReactNode } from "react";
 import type { SafeHref } from "../../safe-href.ts";
 import { classNames } from "../../src/class-names.ts";
 import styles from "./Avatar.module.css";
@@ -13,6 +14,8 @@ export type AvatarProps = {
   src?: SafeHref | undefined;
   /** The display name or handle; its first letter is the fallback. */
   name: string;
+  /** Anonymous artwork when no name or picture is available. */
+  fallback?: ReactNode;
   /** 24 in lists, 40 in headers and post rows (default), 64 in cards, 128 on the profile page. */
   size?: AvatarSize;
   /** Only when no name is shown beside it. */
@@ -26,7 +29,7 @@ export function avatarLetter(name: string): string {
   return first === undefined ? "?" : first.toUpperCase();
 }
 
-export function Avatar({ src, name, size = 40, alt = "", className }: AvatarProps) {
+export function Avatar({ src, name, fallback, size = 40, alt = "", className }: AvatarProps) {
   const disc = classNames(styles.root, styles[`size${size}`], className);
   if (src !== undefined) {
     return (
@@ -35,16 +38,17 @@ export function Avatar({ src, name, size = 40, alt = "", className }: AvatarProp
       </span>
     );
   }
+  const content = name.trim() === "" ? (fallback ?? avatarLetter(name)) : avatarLetter(name);
   if (alt === "") {
     return (
       <span className={disc} aria-hidden="true">
-        {avatarLetter(name)}
+        {content}
       </span>
     );
   }
   return (
     <span className={disc}>
-      <span aria-hidden="true">{avatarLetter(name)}</span>
+      <span aria-hidden="true">{content}</span>
       <span className="visually-hidden">{alt}</span>
     </span>
   );

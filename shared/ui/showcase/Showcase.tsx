@@ -21,6 +21,7 @@ import { Link } from "../components/Link/Link.tsx";
 import { Mark } from "../components/Mark/Mark.tsx";
 import { MediaFrame } from "../components/MediaFrame/MediaFrame.tsx";
 import { Modal } from "../components/Modal/Modal.tsx";
+import { Navigation } from "../components/Navigation/Navigation.tsx";
 import { NewPosts } from "../components/NewPosts/NewPosts.tsx";
 import { Pagination } from "../components/Pagination/Pagination.tsx";
 import { Progress } from "../components/Progress/Progress.tsx";
@@ -201,6 +202,16 @@ export const SAMPLES: Readonly<Record<string, ReactNode>> = {
         { label: "Explore", href: href("/explore") },
       ]}
       action={{ label: "Sign in", href: href("/signin") }}
+    />
+  ),
+  Navigation: (
+    <Navigation
+      inline
+      account={{ href: href("/me"), label: "Your profile" }}
+      primary={{ href: href("/"), label: "Home", icon: "home" }}
+      items={[{ href: href("/settings/profile"), label: "Settings", icon: "settings", current: true }]}
+      menuLabel="Menu"
+      closeLabel="Close menu"
     />
   ),
   Footer: (

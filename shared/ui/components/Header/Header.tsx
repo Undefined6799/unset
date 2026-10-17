@@ -20,22 +20,28 @@ export type HeaderProps = {
   homeHref?: SafeHref;
   /** The folded menu's toggle word; default "menu". */
   menuLabel?: string;
+  /** Compact brand header when navigation is supplied separately by the app shell. */
+  brandOnly?: boolean;
   className?: string;
 };
 
-export function Header({ nav = [], action, homeHref, menuLabel = "menu", className }: HeaderProps) {
+export function Header({ nav = [], action, homeHref, menuLabel = "menu", brandOnly = false, className }: HeaderProps) {
   // The menu comes before the inline nav so that, folded or not, the shown one ends the bar.
   const menu = { label: menuLabel, nav: [...nav], ...(action === undefined ? {} : { action }) };
   return (
-    <header className={classNames(styles.root, className)}>
+    <header className={classNames(styles.root, brandOnly && styles.brand, className)}>
       <div className={styles.bar}>
         <a className={styles.home} href={homeHref ?? "/"}>
           <Mark width={72} title="unset.sh home" />
         </a>
-        <IslandSlot name="header-menu" island={headerMenu} props={menu} />
-        <div className={styles.wide}>
-          <NavLinks nav={nav} action={action} />
-        </div>
+        {brandOnly ? null : (
+          <>
+            <IslandSlot name="header-menu" island={headerMenu} props={menu} />
+            <div className={styles.wide}>
+              <NavLinks nav={nav} action={action} />
+            </div>
+          </>
+        )}
       </div>
     </header>
   );

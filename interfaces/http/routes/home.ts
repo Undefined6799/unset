@@ -17,6 +17,13 @@ export const homeRoutes = (deps: PublicPageDeps): Route[] => [
     rateLimit: "default",
     session: "none",
     handler: ({ request }) =>
-      deps.page({ group: "public", request, title: "unset.sh", body: deps.screens.home(), islands: "off", shell: {} }),
+      deps.page({
+        group: "public",
+        request,
+        title: "unset.sh",
+        body: deps.screens.home(),
+        islands: "off",
+        shell: { navigation: { active: "home" } },
+      }),
   }),
 ];

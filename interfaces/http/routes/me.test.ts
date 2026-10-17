@@ -9,11 +9,13 @@ import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { sessionClearCookie } from "../session-cookie.ts";
 import { webTestEnv } from "../test-env.ts";
+import { elements, textContent } from "../web/fixtures/html.ts";
 import { pageResponse } from "../web/page.ts";
 import { type MeDeps, meRoutes } from "./me.ts";
 
@@ -74,9 +76,13 @@ describe("GET /me", () => {
     const html = await response.text();
     expect(html).toContain("alice.pds.unset.test");
     expect(html).toContain(`<code>${DID}</code>`);
-    expect(html).toContain('<main id="main">');
-    expect(html.match(/<main/g)).toHaveLength(1);
+    const document = parse(html);
+    expect(elements(document, "main", { id: "main" })).toHaveLength(1);
     expect(html).toContain("Skip to content");
+    const account = elements(elements(document, "nav")[0], "a", { href: "/me", "aria-current": "page" })[0];
+    expect(account).toBeDefined();
+    const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
+    expect(initials).toContain("A");
     expect(checked).toEqual([DID]);
   });
 
@@ -97,6 +103,10 @@ describe("GET /me", () => {
     const html = await (await setup({ verdict: { status: "invalid", checkedAt: 0 } }).get()).text();
     expect(html).toContain("handle.invalid");
     expect(html).not.toContain("could not check");
+    const account = elements(elements(parse(html), "nav")[0], "a", { href: "/me", "aria-current": "page" })[0];
+    expect(account).toBeDefined();
+    const initials = elements(account, "span", { "aria-hidden": "true" }).map(textContent);
+    expect(initials).not.toContain("H");
   });
 
   test("me_clears_a_dead_session_cookie", async () => {

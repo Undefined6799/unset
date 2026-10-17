@@ -38,7 +38,18 @@ export function meRoutes(deps: MeDeps): Route[] {
           privacyNotice: opened.privacyNotice,
           pdsHost: deps.pdsHost,
         });
-        return deps.page({ group: "app", request, title: displayHandle(verdict), body, shell: {} });
+        return deps.page({
+          group: "app",
+          request,
+          title: displayHandle(verdict),
+          body,
+          shell: {
+            navigation: {
+              active: "account",
+              ...(verdict.status === "verified" ? { accountName: verdict.handle } : {}),
+            },
+          },
+        });
       },
     }),
   ];
