@@ -3,7 +3,7 @@
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { sealFields } from "@unset/infrastructure-seal";
-import { defineEntrypointConfig, HOSTNAME, int, netGuardFields, str, url, withRule } from "@unset/shared-config";
+import { defineEntrypointConfig, HOSTNAME, int, netGuardFields, oneOf, str, url, withRule } from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
 import { securityContactAllowed, securityTxtExpiry } from "./security-txt.ts";
 
@@ -53,6 +53,10 @@ export const loginConfig = {
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
   /** How long a confirmed-email cache is trusted before the PDS is asked again (P2.11). */
   EMAIL_RECHECK_S: int({ min: 60, max: 86_400, default: 900 }),
+  /** Full years before an account may continue (P2.12; plan §6). Never below 16. */
+  MIN_AGE: int({ min: 16, max: 120, default: 16 }),
+  /** When on, the terms screen requires the invite-country checkbox (P2.12; plan §6). */
+  INVITE_COUNTRY_RULE: oneOf(["on", "off"], { default: "on" }),
 };
 
 /** Text that can be shown on a page: no C0 controls, no DEL, at most 200 characters. Not an email or a name. */

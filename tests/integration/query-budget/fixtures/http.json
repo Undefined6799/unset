@@ -112,6 +112,51 @@
       "method": "GET",
       "path": "/me",
       "status": 303
+    },
+    {
+      "method": "GET",
+      "path": "/welcome",
+      "status": 303
+    },
+    {
+      "method": "GET",
+      "path": "/welcome/age",
+      "status": 303
+    },
+    {
+      "method": "POST",
+      "path": "/welcome/age",
+      "status": 415
+    },
+    {
+      "method": "GET",
+      "path": "/welcome/terms",
+      "status": 303
+    },
+    {
+      "method": "POST",
+      "path": "/welcome/terms",
+      "status": 415
+    },
+    {
+      "method": "GET",
+      "path": "/welcome/chat",
+      "status": 303
+    },
+    {
+      "method": "POST",
+      "path": "/welcome/chat",
+      "status": 415
+    },
+    {
+      "method": "GET",
+      "path": "/welcome/blocked",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/settings/profile",
+      "status": 303
     }
   ]
 }

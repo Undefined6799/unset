@@ -10,7 +10,14 @@
 // P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
 // error page.
 import { fileURLToPath } from "node:url";
-import { createDidResolver, createHandleVerifier, resolveHandle } from "@unset/domains-identity";
+import {
+  createDidResolver,
+  createHandleVerifier,
+  type EmailCache,
+  PRIVACY_VERSION,
+  resolveHandle,
+  TERMS_VERSION,
+} from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
 import {
   authorize,
@@ -34,10 +41,13 @@ import {
   withTransaction,
 } from "@unset/infrastructure-postgres";
 import { createSealer } from "@unset/infrastructure-seal";
-import { createSessionStore } from "@unset/infrastructure-session";
+import { createSessionStore, type Session } from "@unset/infrastructure-session";
 import type { Config } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger, type Logger } from "@unset/shared-log";
+import { createAccountStore } from "./account.ts";
+import type { AppGate } from "./app-gate.ts";
+import { openApp } from "./app-gate.ts";
 import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
@@ -51,7 +61,9 @@ import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { securityTxtRoutes } from "./routes/security-txt.ts";
+import { settingsRoutes } from "./routes/settings.ts";
 import { verifyEmailRoutes } from "./routes/verify-email.ts";
+import { welcomeRoutes } from "./routes/welcome.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
 import { loadWebBuild } from "./web/build.ts";
 import { errorPageHook, type PageDeps, pageResponse } from "./web/page.ts";
@@ -98,12 +110,13 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     cacheTtlS: cfg.DID_DOC_CACHE_TTL_S,
     cacheMax: cfg.DID_DOC_CACHE_MAX,
   });
+  const sessionStore = createOAuthSessionStore<SavedSession>({ pool, sealer, log });
   const { client } = await createOAuthClient({
     origin: cfg.PUBLIC_ORIGIN,
     keys: cfg.OAUTH_CLIENT_KEYS,
     activeKid: cfg.OAUTH_ACTIVE_KID,
     stateStore: createOAuthStateStore({ pool, sealer, log }),
-    sessionStore: createOAuthSessionStore<SavedSession>({ pool, sealer, log }),
+    sessionStore,
     requestLock: createRequestLock(lockPool),
     fetch: libraryFetch(guard),
     network,
@@ -115,7 +128,15 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
     withClient(pool, null, (db) =>
       checkConnectionBudget(db, [cfg.PG_POOL_MAX, cfg.LOCK_POOL_MAX], cfg.PG_MAX_REPLICAS),
     );
-  return { client, network, resolveDid, pool, boot, onClose: [() => pool.end(), () => lockPool.pool.end()] };
+  return {
+    client,
+    network,
+    resolveDid,
+    pool,
+    sessionStore,
+    boot,
+    onClose: [() => pool.end(), () => lockPool.pool.end()],
+  };
 }
 
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
@@ -204,8 +225,54 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       }),
     log,
   });
+  const accounts = createAccountStore(oauth.pool);
+  const versions = { terms: TERMS_VERSION, privacy: PRIVACY_VERSION };
+  const emailCache = async (session: Session, deadline: AbortSignal): Promise<EmailCache> => {
+    const { rows } = await withClient(oauth.pool, deadline, (db) =>
+      db.query<{ email_confirmed: boolean | null; email_checked_at: Date | null }>(
+        "SELECT email_confirmed, email_checked_at FROM app.session WHERE id_hash = $1 AND did = $2",
+        [session.idHash, session.did],
+      ),
+    );
+    const row = rows[0];
+    return row === undefined
+      ? { confirmed: null, checkedAt: null }
+      : { confirmed: row.email_confirmed, checkedAt: row.email_checked_at };
+  };
+  const refreshEmail: AppGate["refreshEmail"] = async (session, deadline) => {
+    const info = await pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, session.did);
+    switch (info.kind) {
+      case "transient":
+        return "transient";
+      case "ok": {
+        if (info.value.emailConfirmed === undefined) return "unconfirmed";
+        const confirmed = info.value.emailConfirmed;
+        await withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, session.idHash, confirmed));
+        return confirmed ? "confirmed" : "unconfirmed";
+      }
+      case "auth_dead":
+      case "scope_missing":
+      case "rejected":
+        return "unconfirmed";
+      default: {
+        const unexpected: never = info;
+        return unexpected;
+      }
+    }
+  };
+  const gate: AppGate = {
+    readSession,
+    loadAccount: (did, deadline) => accounts.get(did, deadline),
+    versions,
+    emailCache,
+    refreshEmail,
+    now: () => Date.now(),
+    emailRecheckS: cfg.EMAIL_RECHECK_S,
+  };
   const verifyEmail = verifyEmailRoutes({
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,
+    loadAccount: (did, deadline) => accounts.get(did, deadline),
+    versions,
     setEmailConfirmed: (idHash, value, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value)),
     sessionInfo: (did, deadline) =>
@@ -220,8 +287,33 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pdsHost: cfg.PDS_HOSTNAME,
     log,
   });
-  const me = meRoutes({
+  const welcome = welcomeRoutes({
     readSession,
+    accounts,
+    versions,
+    minAge: cfg.MIN_AGE,
+    countryRule: cfg.INVITE_COUNTRY_RULE === "on",
+    supportEmail: cfg.SUPPORT_EMAIL,
+    pdsIssuer: `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`,
+    issuerOf: async (did) => {
+      const saved = await oauth.sessionStore.get(did);
+      const iss = saved?.tokenSet.iss;
+      return typeof iss === "string" ? iss : null;
+    },
+    revoke: (did) => oauth.client.revoke(did),
+    endSessions: (did, deadline) =>
+      withTransaction(oauth.pool, deadline, (tx) => sessions.destroyAllForDid(tx, did, "underage")).then(
+        () => undefined,
+      ),
+    now: () => new Date(),
+    safeHref: render.safeHref,
+    page,
+    screens: render.screens,
+    log,
+  });
+  const settings = settingsRoutes({ gate, page, screens: render.screens });
+  const me = meRoutes({
+    open: (request, deadline) => openApp(gate, request, deadline, "/me"),
     verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
@@ -250,7 +342,9 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...login,
     ...callback,
     ...logout,
+    ...welcome,
     ...verifyEmail,
+    ...settings,
     ...me,
   ];
   return {

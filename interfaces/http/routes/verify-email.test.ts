@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as web from "@unset/apps-web";
-import type { Did } from "@unset/domains-identity";
+import { type Did, type OnboardingAccount, PRIVACY_VERSION, TERMS_VERSION } from "@unset/domains-identity";
 import type { PdsResult, SessionInfo } from "@unset/infrastructure-pds";
 import type { Session } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
@@ -30,7 +30,15 @@ function info(emailConfirmed: boolean | undefined): PdsResult<SessionInfo> {
   return { kind: "ok", value: { ...value, emailConfirmed } };
 }
 
-function setup(world: { session?: Session | null; info?: PdsResult<SessionInfo> } = {}) {
+const DONE: OnboardingAccount = {
+  onboarding: "done",
+  termsVersion: TERMS_VERSION,
+  privacyVersion: PRIVACY_VERSION,
+};
+
+function setup(
+  world: { session?: Session | null; info?: PdsResult<SessionInfo>; account?: OnboardingAccount | null } = {},
+) {
   const saved: boolean[] = [];
   const calls: string[] = [];
   const authorized: { prompt?: string; input: string }[] = [];
@@ -39,6 +47,8 @@ function setup(world: { session?: Session | null; info?: PdsResult<SessionInfo> 
     config: CONFIG,
     routes: verifyEmailRoutes({
       readSession: async () => (world.session === undefined ? SESSION : world.session),
+      loadAccount: async () => (world.account === undefined ? DONE : world.account),
+      versions: { terms: TERMS_VERSION, privacy: PRIVACY_VERSION },
       setEmailConfirmed: async (_id, value) => {
         saved.push(value);
       },
@@ -131,6 +141,14 @@ describe("GET /verify-email", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("is not answering");
     expect(saved).toEqual([]);
+  });
+
+  test("verify.onboarding_required", async () => {
+    const { send, calls } = setup({ account: { onboarding: "age", termsVersion: null, privacyVersion: null } });
+    const response = await send("/verify-email");
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/welcome");
+    expect(calls).toEqual([]);
   });
 
   test("verify_no_session", async () => {

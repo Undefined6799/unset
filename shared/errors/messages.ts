@@ -35,4 +35,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "logout.confirm_required": "Tick the box to sign out of every browser.",
   "logout.revoke_unconfirmed":
     "We could not confirm the sign-in server ended access. On a shared computer, open Connected apps on your account page and disconnect unset.sh.",
+  "welcome.date_invalid": "That date is not a real calendar date.",
+  "welcome.terms_required": "Tick the box to accept the terms and the privacy notice.",
+  "welcome.country_required": "Tick the box about where you live.",
 };
