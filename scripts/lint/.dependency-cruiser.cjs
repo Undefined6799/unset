@@ -30,12 +30,16 @@ const oneOfFiles = (paths) => `${anyOf(paths)}$`;
 const npmPackage = (name) => `^(node_modules/)?${name}(/|$)`;
 
 /**
- * The one unresolvable edge allowed (P1.23w; architecture Amendment 2026-10-06 21:45Z; Alex 21:49Z): the web render
- * loader imports apps/web's server build through the package export `@unset/apps-web/server`. dependency-cruiser does
- * not follow that exports subpath into the excluded dist/, so it reports the edge as unresolved. Only this file, only
- * this exact specifier.
+ * The unresolvable edge allowed (P1.23w; architecture Amendment 2026-10-06 21:45Z; Alex 21:49Z): apps/web's server
+ * build is the package export `@unset/apps-web/server`. dependency-cruiser does not follow that exports subpath into
+ * the excluded dist/, so it reports the edge as unresolved. The render loader is the product importer. P1.26's
+ * harness loads the same build for `Island`, which has to be that module so it shares IslandRunContext with the
+ * production render. Only these files, only this specifier.
  */
-const RENDER_BUILD_IMPORT = { from: "interfaces/http/web/render-entry.ts", module: "@unset/apps-web/server" };
+const RENDER_BUILD_MODULE = "@unset/apps-web/server";
+const RENDER_BUILD_IMPORT = { from: "interfaces/http/web/render-entry.ts", module: RENDER_BUILD_MODULE };
+const E2E_SERVER_BUILD = { from: "tests/e2e/fixtures/servers.ts", module: RENDER_BUILD_MODULE };
+const UNRESOLVED_BUILD_IMPORTERS = [RENDER_BUILD_IMPORT.from, E2E_SERVER_BUILD.from];
 
 const NPM = { dependencyTypes: ["npm", "npm-dev", "npm-optional", "npm-peer", "npm-bundled"] };
 const CORE = { dependencyTypes: ["core"] };
@@ -333,20 +337,21 @@ module.exports = {
       { path: "^deployment/preflight/" },
     ),
     // P1.28k (architecture amendment 8, second note, 2026-10-08 01:10Z): an import nothing here can follow escapes every
-    // path rule above, so our own relative and @unset/* specifiers must resolve. RENDER_BUILD_IMPORT is the one
-    // exception. How a specifier may be spelled (no root-absolute path, URL scheme or undeclared package) is the
-    // raw-specifier allowlist in scripts/lint/specifiers.ts, because these rules see only where it resolved.
+    // path rule above, so our own relative and @unset/* specifiers must resolve. UNRESOLVED_BUILD_IMPORTERS are the
+    // exception, and only for RENDER_BUILD_MODULE. How a specifier may be spelled (no root-absolute path, URL scheme
+    // or undeclared package) is the raw-specifier allowlist in scripts/lint/specifiers.ts, because these rules see
+    // only where it resolved.
     forbidden(
       "specifier-must-resolve",
       "A relative or @unset/* specifier must resolve (P1.28k).",
-      { pathNot: oneOfFiles([RENDER_BUILD_IMPORT.from]) },
+      { pathNot: oneOfFiles(UNRESOLVED_BUILD_IMPORTERS) },
       { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)" },
     ),
     forbidden(
       "specifier-must-resolve",
-      "The render loader's only unresolved import is RENDER_BUILD_IMPORT's specifier (P1.28k, P1.23w).",
-      { path: oneOfFiles([RENDER_BUILD_IMPORT.from]) },
-      { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)", pathNot: oneOfFiles([RENDER_BUILD_IMPORT.module]) },
+      "These files' only unresolved import is the web server build (P1.28k, P1.23w, P1.26).",
+      { path: oneOfFiles(UNRESOLVED_BUILD_IMPORTERS) },
+      { couldNotResolve: true, path: "^(\\.{1,2}(/|$)|@unset/)", pathNot: oneOfFiles([RENDER_BUILD_MODULE]) },
     ),
     forbidden(
       "fake-only-in-composition-root",
@@ -413,6 +418,7 @@ Object.defineProperties(module.exports, {
   ZERO_DEP_ALLOWLIST: { value: ZERO_DEP_ALLOWLIST },
   RENDER_ENTRIES: { value: RENDER_ENTRIES },
   RENDER_BUILD_IMPORT: { value: RENDER_BUILD_IMPORT },
+  E2E_SERVER_BUILD: { value: E2E_SERVER_BUILD },
   SDK_ADAPTERS: { value: SDK_ADAPTERS },
   MATRIX: { value: MATRIX },
   LEXICON_SCRIPT_BUILTINS: { value: LEXICON_SCRIPT_BUILTINS },

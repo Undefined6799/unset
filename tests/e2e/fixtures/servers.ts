@@ -22,7 +22,7 @@ import { loadWebBuild } from "../../../interfaces/http/web/build.ts";
 import { pageResponse } from "../../../interfaces/http/web/page.ts";
 import { loadWebRender, type WebRender } from "../../../interfaces/http/web/render-entry.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
-import { FIXTURES, PROD_ORIGIN, TEST_ORIGIN } from "../pages.ts";
+import { FIXTURES, PROD_ORIGIN, PROD_PUBLIC_ORIGIN, TEST_ORIGIN } from "../pages.ts";
 
 const ROOT = join(import.meta.dirname, "../../..");
 const BUILD = join(ROOT, "apps/web/dist/client");
@@ -38,16 +38,16 @@ function secretsDir(): string {
   return dir;
 }
 
-function harnessEnv(dir: string, origin: string): Record<string, string> {
-  const port = new URL(origin).port;
+function harnessEnv(dir: string, listen: string, extra: Record<string, string> = {}): Record<string, string> {
   return webTestEnv(dir, {
     UNSET_ENV: "dev",
-    LISTEN_PORT: port,
-    PUBLIC_ORIGIN: origin,
-    HTTP_ALLOWED_HOSTS: "127.0.0.1",
+    LISTEN_PORT: new URL(listen).port,
+    PUBLIC_ORIGIN: listen,
+    HTTP_ALLOWED_HOSTS: new URL(listen).hostname,
     MEDIA_ORIGIN: "http://media.test:9",
     TRUSTED_PROXY_MODE: "socket",
     OAUTH_ALLOW_HTTP: "true",
+    ...extra,
   });
 }
 
@@ -76,7 +76,13 @@ async function serveProd(): Promise<void> {
     secrets: { pg_migrator_password: migratorPassword, pg_tap_password: randomPassword() },
   });
   const dir = secretsDir();
-  const env = harnessEnv(dir, PROD_ORIGIN);
+  // Styles and scripts stay on the HTTP listener. ASSETS_BASE may be http in dev
+  // (shared/http/config.ts); an empty value would point them at PROD_PUBLIC_ORIGIN.
+  const env = harnessEnv(dir, PROD_ORIGIN, {
+    PUBLIC_ORIGIN: PROD_PUBLIC_ORIGIN,
+    HTTP_ALLOWED_HOSTS: "unset.test,127.0.0.1",
+    ASSETS_BASE: `${PROD_ORIGIN}/assets/`,
+  });
   env.PG_HOST = "127.0.0.1";
   env.PG_PORT = String(postgres.port);
   const result = await migrate({
