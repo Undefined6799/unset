@@ -29,6 +29,9 @@ const SCREEN_NAMES: Readonly<Record<keyof WebRender["screens"], true>> = {
   signedOut: true,
   me: true,
   verifyEmail: true,
+  home: true,
+  legal: true,
+  errorPage: true,
 };
 
 function hasEveryScreen(screens: unknown): screens is WebRender["screens"] {

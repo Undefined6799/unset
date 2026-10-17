@@ -9,6 +9,33 @@
     "middleware": ["requestId", "methodCheck"]
   },
   {
+    "method": "GET",
+    "path": "/",
+    "group": "public",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
+    "path": "/legal/terms",
+    "group": "public",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
+    "path": "/legal/privacy",
+    "group": "public",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
     "method": "POST",
     "path": "/prefs/theme",
     "group": "app",

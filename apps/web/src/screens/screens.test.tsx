@@ -6,7 +6,7 @@ import { type Assets, renderPage, screens } from "../../render.tsx";
 
 const ASSETS: Assets = {
   origin: "https://unset.test",
-  manifest: { boot: "assets/boot.js", styles: [], islands: new Map() },
+  manifest: { boot: "assets/boot.js", styles: [], fonts: [], islands: new Map() },
 };
 const html = (body: Parameters<typeof renderPage>[0]["body"]) =>
   renderPage({
@@ -15,6 +15,7 @@ const html = (body: Parameters<typeof renderPage>[0]["body"]) =>
     env: "test",
     title: "T",
     body,
+    islands: "on",
   }).html;
 const LOGIN = { handle: "", next: null, error: null, pdsHost: "pds.example", handleDomain: "pds.example" };
 

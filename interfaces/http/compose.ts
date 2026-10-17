@@ -7,7 +7,8 @@
 // connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
 // the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
 // and P2.08a: this browser, the last browser's grant, and sign-out everywhere. P2.13: the signed-in home, with
-// P2.02's handle check on the same DID resolver.
+// P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
+// error page.
 import { fileURLToPath } from "node:url";
 import { createDidResolver, createHandleVerifier, resolveHandle } from "@unset/domains-identity";
 import { createNetGuard, libraryFetch } from "@unset/infrastructure-net-guard";
@@ -41,6 +42,8 @@ import type { config } from "./config.ts";
 import { policies } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
+import { homeRoutes } from "./routes/home.ts";
+import { legalRoutes } from "./routes/legal.ts";
 import { loginRoutes } from "./routes/login.ts";
 import { logoutRoutes } from "./routes/logout.ts";
 import { meRoutes } from "./routes/me.ts";
@@ -50,7 +53,7 @@ import { prefsRoutes } from "./routes/prefs.ts";
 import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
 import { loadWebBuild } from "./web/build.ts";
-import { type PageDeps, pageResponse } from "./web/page.ts";
+import { errorPageHook, type PageDeps, pageResponse } from "./web/page.ts";
 import { loadWebRender, type WebRender } from "./web/render-entry.ts";
 
 type WebConfig = Config<(typeof config)["fields"]>;
@@ -224,6 +227,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     pdsHost: cfg.PDS_HOSTNAME,
   });
   const routes = [
+    ...homeRoutes({ page, screens: render.screens }),
+    ...legalRoutes({ page, screens: render.screens }),
     ...prefsRoutes(),
     ...assetsRoutes(build.files),
     ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
@@ -234,7 +239,14 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...me,
   ];
   return {
-    server: createServer({ config: cfg, routes, policies, log, onClose: oauth.onClose }),
+    server: createServer({
+      config: cfg,
+      routes,
+      policies,
+      log,
+      onClose: oauth.onClose,
+      errorPage: errorPageHook(deps, render.screens),
+    }),
     page,
     oauth: oauth.client,
     boot: oauth.boot,

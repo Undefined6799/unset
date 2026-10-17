@@ -69,7 +69,8 @@ export function parseWebBuild(text: string, dir: string, islandName: IslandNamer
   if (boot?.isEntry !== true) return fail(`${BOOT_SOURCE} is not an entry`);
   const styles = chunks.get(STYLES_SOURCE);
   if (styles?.isEntry !== true) return fail(`${STYLES_SOURCE} is not an entry`);
-  return { manifest: { boot: boot.file, styles: styles.css ?? [], islands }, files };
+  const fonts = (styles.assets ?? []).filter((file) => file.endsWith(".woff2"));
+  return { manifest: { boot: boot.file, styles: styles.css ?? [], fonts, islands }, files };
 }
 
 /** Reads `<dir>/.vite/manifest.json`; throws when it is missing or malformed, so startup fails closed. */
