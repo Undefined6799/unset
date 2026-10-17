@@ -5,6 +5,7 @@ import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructur
 import { sealFields } from "@unset/infrastructure-seal";
 import { defineEntrypointConfig, HOSTNAME, int, netGuardFields, str, url, withRule } from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
+import { securityContactAllowed, securityTxtExpiry } from "./security-txt.ts";
 
 /**
  * The browser session timeouts (P2.03x; plan section 5.3 "Lifecycle": idle 7 days, absolute 30 days), in seconds,
@@ -54,6 +55,34 @@ export const loginConfig = {
   EMAIL_RECHECK_S: int({ min: 60, max: 86_400, default: 900 }),
 };
 
+/** Text that can be shown on a page: no C0 controls, no DEL, at most 200 characters. Not an email or a name. */
+const PUBLIC_TEXT = new RegExp(
+  `[^${String.fromCharCode(0)}-${String.fromCharCode(0x1f)}${String.fromCharCode(0x7f)}]{1,200}`,
+);
+
+/**
+ * The legal pages (P2.15). The three text keys are required and have no default: until Alex sets them they hold the
+ * placeholder tokens in legal-placeholders.ts. security.txt Contact is `privacy-page` (this origin's privacy notice),
+ * a mailto, or an https URI on PUBLIC_ORIGIN with no userinfo (RFC 9116 §2.5.3). Expires must be a future RFC 3339
+ * instant at most 365 days ahead; inside 30 days the process still boots and the renewal test fails.
+ */
+export const legalConfig = {
+  PRIVACY_OFFICER_TITLE: str({ pattern: PUBLIC_TEXT }),
+  PRIVACY_OFFICER_CONTACT: str({ pattern: PUBLIC_TEXT }),
+  SUPPORT_EMAIL: str({ pattern: PUBLIC_TEXT }),
+  SECURITY_CONTACT: withRule(str({ pattern: /(?:privacy-page|mailto:\S+|https:\/\/\S+)/ }), (config) => {
+    const contact = config.SECURITY_CONTACT;
+    const origin = config.PUBLIC_ORIGIN;
+    return typeof contact === "string" && typeof origin === "string" && securityContactAllowed(contact, origin);
+  }),
+  SECURITY_TXT_EXPIRES: withRule(str({ pattern: /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/ }), (config) => {
+    const expires = config.SECURITY_TXT_EXPIRES;
+    if (typeof expires !== "string") return false;
+    const state = securityTxtExpiry(expires, Date.now());
+    return state === "ok" || state === "soon";
+  }),
+};
+
 export const config = defineEntrypointConfig({
   ...httpKitConfig,
   ...sessionConfig,
@@ -65,6 +94,7 @@ export const config = defineEntrypointConfig({
   ...identityConfig,
   ...oauthFields,
   ...loginConfig,
+  ...legalConfig,
   /** apps/web's browser build, the directory holding `.vite/manifest.json` (P1.23). Empty means apps/web/dist/client. */
   WEB_BUILD_DIR: str({ default: "" }),
 });

@@ -71,10 +71,11 @@ afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 /** A fixture's env, with the web server's secret files added (P2.04c); loaded like compose.ts, by path. */
 async function envOf(name: string, fixture: Fixture): Promise<Record<string, string>> {
   if (name !== "http") return fixture.env;
-  const { webSecretEnv } = (await import(join(INTERFACES, "http", "test-env.ts"))) as {
+  const { legalTestEnv, webSecretEnv } = (await import(join(INTERFACES, "http", "test-env.ts"))) as {
+    legalTestEnv: () => Record<string, string>;
     webSecretEnv: (dir: string) => Record<string, string>;
   };
-  return { ...fixture.env, ...webSecretEnv(SECRETS) };
+  return { ...fixture.env, ...legalTestEnv(), ...webSecretEnv(SECRETS) };
 }
 
 describe("query budget", () => {

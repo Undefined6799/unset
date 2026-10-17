@@ -22,6 +22,7 @@ const COLUMNS = [
     links: [
       { label: SHELL.terms, href: path("/legal/terms") },
       { label: SHELL.privacy, href: path("/legal/privacy") },
+      { label: SHELL.domains, href: path("/legal/domains") },
     ],
   },
 ];

@@ -23,7 +23,7 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN, WEB_BUILD_DIR: TESTDATA }));
 const { server } = await compose(CONFIG, web);
-const PUBLIC_PAGES = ["/", "/legal/terms", "/legal/privacy"];
+const PUBLIC_PAGES = ["/", "/legal/terms", "/legal/privacy", "/legal/domains"];
 
 type Server = { request: (request: Request, peer?: string) => Promise<Response> };
 const get = (path: string, init: { method?: string; cookie?: string; on?: Server } = {}) =>
@@ -93,7 +93,7 @@ describe("public pages", () => {
   });
 
   test("legal_placeholders_noindex", async () => {
-    for (const path of ["/legal/terms", "/legal/privacy"]) {
+    for (const path of ["/legal/terms", "/legal/privacy", "/legal/domains"]) {
       const response = await get(path);
       expect(response.headers.get("x-robots-tag"), path).toBe("noindex");
       expect(await response.text(), path).toContain('<meta name="robots" content="noindex"/>');

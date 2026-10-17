@@ -75,7 +75,9 @@ describe("app shell", () => {
 
   test("shell_footer_links", () => {
     const footer = render().split("<footer")[1] ?? "";
-    for (const href of ["/", "/login", "/legal/terms", "/legal/privacy"]) expect(footer).toContain(`href="${href}"`);
+    for (const href of ["/", "/login", "/legal/terms", "/legal/privacy", "/legal/domains"]) {
+      expect(footer).toContain(`href="${href}"`);
+    }
   });
 
   test("error_param_known_code", () => {
@@ -124,12 +126,23 @@ describe("error page", () => {
   });
 });
 
+const LEGAL_VALUES = {
+  privacyOfficerTitle: "Officer",
+  privacyOfficerContact: "contact",
+  supportEmail: "support",
+  pdsHost: "pds.example",
+};
+
 describe("legal placeholders", () => {
-  test("legal_placeholders_say_in_preparation", () => {
-    for (const document of ["terms", "privacy"] as const) {
-      const html = render({ body: screens.legal({ document }) });
-      expect(html).toContain(document === "terms" ? "<h1>Terms of service</h1>" : "<h1>Privacy notice</h1>");
-      expect(html).toContain("This document is in preparation.");
+  test("legal_pages_open_with_the_placeholder_banner", () => {
+    const banner = "This page is a placeholder. It has not been reviewed by a lawyer, and it is not legal advice.";
+    const heading = { terms: "Terms of service", privacy: "Privacy notice", domains: "Our domains" } as const;
+    for (const document of ["terms", "privacy", "domains"] as const) {
+      const html = render({ body: screens.legal({ document, values: LEGAL_VALUES }) });
+      const main = html.slice(html.indexOf("<main"));
+      expect(main.startsWith(`<main id="main"><p>${banner}</p>`)).toBe(true);
+      expect(html).toContain(`<h1>${heading[document]}</h1>`);
+      expect(html).not.toContain("in preparation");
     }
   });
 });

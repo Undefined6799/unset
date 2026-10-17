@@ -199,6 +199,13 @@ services:
       OAUTH_ACTIVE_KID: ${WEB_OAUTH_ACTIVE_KID}
       PDS_HOSTNAME: ${PDS_HOSTNAME}
       HANDLE_SUFFIX: ${PDS_SERVICE_HANDLE_DOMAINS}
+      # Legal placeholders (P2.15). Literals, not ${...}/path: the compose parser refuses a partial interpolation,
+      # and these are not secrets. Alex replaces the three tokens; security.txt points at the privacy page.
+      PRIVACY_OFFICER_TITLE: "[to fill: PRIVACY_OFFICER_TITLE]"
+      PRIVACY_OFFICER_CONTACT: "[to fill: PRIVACY_OFFICER_CONTACT]"
+      SUPPORT_EMAIL: "[to fill: SUPPORT_EMAIL]"
+      SECURITY_CONTACT: privacy-page
+      SECURITY_TXT_EXPIRES: "2027-10-01T00:00:00Z"
       NODE_OPTIONS: --max-old-space-size=384
     # Each file owned by 65532, the uid web and migrate share (docs/human/runbooks/dev-stack-secrets.md).
     secrets: [pg_web_password, web_seal_keyring, web_oauth_client_keys]

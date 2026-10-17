@@ -50,6 +50,7 @@ import { meRoutes } from "./routes/me.ts";
 import { oauthCallbackRoutes } from "./routes/oauth-callback.ts";
 import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
+import { securityTxtRoutes } from "./routes/security-txt.ts";
 import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
 import { loadWebBuild } from "./web/build.ts";
@@ -228,7 +229,21 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   });
   const routes = [
     ...homeRoutes({ page, screens: render.screens }),
-    ...legalRoutes({ page, screens: render.screens }),
+    ...legalRoutes({
+      page,
+      screens: render.screens,
+      values: {
+        privacyOfficerTitle: cfg.PRIVACY_OFFICER_TITLE,
+        privacyOfficerContact: cfg.PRIVACY_OFFICER_CONTACT,
+        supportEmail: cfg.SUPPORT_EMAIL,
+        pdsHost: cfg.PDS_HOSTNAME,
+      },
+    }),
+    ...securityTxtRoutes({
+      origin: cfg.PUBLIC_ORIGIN,
+      contact: cfg.SECURITY_CONTACT,
+      expires: cfg.SECURITY_TXT_EXPIRES,
+    }),
     ...prefsRoutes(),
     ...assetsRoutes(build.files),
     ...oauthMetadataRoutes(cfg.PUBLIC_ORIGIN, cfg.OAUTH_CLIENT_KEYS),
