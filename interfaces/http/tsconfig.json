@@ -14,6 +14,9 @@
       "path": "../../domains/identity"
     },
     {
+      "path": "../../infrastructure/audit"
+    },
+    {
       "path": "../../infrastructure/net-guard"
     },
     {

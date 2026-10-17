@@ -48,7 +48,8 @@ completeAuthorization, then in order the appState shape, the nonce cookie agains
 mismatch keeps the cookie, another tab may own it), the P1.16 consume, the expected DID, `grantCovers` (an
 insufficient grant is revoked), then a P2.03 session in its own transaction, rotating the request's old `__Host-sid`.
 It redirects to the stored `next` or `/me`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
-{code}`), never a DID. Not yet: `app.account` and onboarding, the email read, `invalidateHandle` (later steps).
+{code}`), never a DID. The callback still does not write `app.account`: P2.12 inserts that row on the first
+welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 
 **Signing out (P2.08, remainder P2.08a).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's
 session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
@@ -59,13 +60,19 @@ it is trusted base, so a store method cannot share this PR. GET /signed-out poin
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
-pass/refresh/verify decision for other pages is `emailGate` in the identity domain. Not yet wired onto `/me` or the
-callback: P2.12 owns that guard order.
+pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
+onboarding, on `/me` and `/settings/profile`. `/verify-email` checks onboarding and then is the email page itself.
+
+**Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/me` or `/verify-email`.
+An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
+birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
+`GET /settings/profile` is a placeholder page so the gate has an app route to refuse.
 
 **The signed-in home (P2.13).** `routes/me.ts`: GET /me reads the session (none → `/login?next=/me`), shows the handle
 only when P2.02's `verifyHandle` (wired in compose with HANDLE_* config, sharing the DID resolver's cache) confirms it,
 else `handle.invalid`, plus the DID, the PDS account link and the sign-out form. GET /login sends a signed-in visitor
-to /me. Not yet: the app shell (P1.25), the profile, privacy and invite blocks, onboarding guards.
+to /me. P2.12's `openApp` refuses `/me` and `/settings/profile` until onboarding is done and the email is
+confirmed. Not yet: the app shell around these screens (P1.25j), the profile, privacy and invite blocks.
 
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only

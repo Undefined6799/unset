@@ -33,9 +33,10 @@ COPY --from=deps /app/package.json /app/package.json
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/shared /app/shared
 # The OAuth client the server composes (P2.04c) and what it stands on: the identity domain, the atproto adapter,
-# Postgres, sealing and net-guard, plus the session store sign-in writes to (P2.06).
-# web_image_copies_every_workspace_the_server_reaches (node-app.test.ts) fails when one of them is missing.
+# Postgres, sealing and net-guard, the session store sign-in writes to (P2.06), and the audit writer the age
+# gate calls (P2.12). web_image_copies_every_workspace_the_server_reaches fails when one of them is missing.
 COPY --from=deps /app/domains/identity /app/domains/identity
+COPY --from=deps /app/infrastructure/audit /app/infrastructure/audit
 COPY --from=deps /app/infrastructure/net-guard /app/infrastructure/net-guard
 COPY --from=deps /app/infrastructure/pds /app/infrastructure/pds
 COPY --from=deps /app/infrastructure/postgres /app/infrastructure/postgres

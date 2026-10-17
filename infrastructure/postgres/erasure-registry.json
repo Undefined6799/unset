@@ -11,6 +11,10 @@
     "strategy": "delete_row",
     "reason": "the person's OAuth token set; it has no use once they are erased"
   },
+  "app.account.did": {
+    "strategy": "delete_row",
+    "reason": "the person's app account, including onboarding; the row goes when they are erased"
+  },
   "audit.event_body.subject": {
     "strategy": "audit_redact",
     "class": "mod",

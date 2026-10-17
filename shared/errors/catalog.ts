@@ -40,6 +40,10 @@ export const ERROR_CODES = {
   // P2.08a, signing out everywhere. Shown from a redirect (`error=`), not as the response status.
   "logout.confirm_required": { status: 400, public: true },
   "logout.revoke_unconfirmed": { status: 503, public: true },
+  // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.
+  "welcome.date_invalid": { status: 400, public: true },
+  "welcome.terms_required": { status: 400, public: true },
+  "welcome.country_required": { status: 400, public: true },
   "config.invalid": { status: 500, public: false },
 } as const satisfies Record<string, { status: Status; public: boolean }>;
 
