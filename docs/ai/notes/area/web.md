@@ -53,9 +53,10 @@ failed island stays as its server markup and only logs to the console.
   that no entry reaches through static `imports`. `scripts/budgets/island.ts` refuses otherwise before the size gate,
   so an island inlined into boot can no longer drop out of the count unseen (P1.25l).
 - No inline script or style on any page (CSP).
-- CSS is one bundle: tokens, base and the kit. The unminified cap in `scripts/budgets/budget.css.json` is 52 KiB
-  (53,248 bytes), raised in P1.25 from 40 KiB to cover the measured 50,063 with 3,185 bytes of headroom. Do not
-  trim those shared sheets to fit a tighter cap, and do not duplicate a rule the kit already provides. The gzip
-  cap (12 KiB; the shell uses 6,376) is what bounds the bytes sent.
+- CSS is one bundle: tokens, base and the kit. Do not trim those shared sheets to fit the 40 KiB
+  unminified cap, and do not duplicate a rule the kit already provides. Alex (2026-10-17) set the cap at
+  52 KiB (53,248 bytes) so the measured 50,063 fits with 3,185 bytes of headroom. `scripts/budgets/` is a
+  check path, so that edit is its own pull request (SE-6) and is not in the shell PR. The gzip cap (12 KiB;
+  the shell uses 6,376) is what bounds the bytes sent.
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[http]].

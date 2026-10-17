@@ -48,40 +48,37 @@ function builds(bundles: Record<string, number>): { min: string; raw: string } {
 
 test("budget_css_limits_are_kib", () => {
   expect(BUDGET).toEqual({
-    perBundle: { unminifiedBytes: 52 * KIB, minGzipBytes: 12 * KIB },
-    perPage: { unminifiedBytes: 52 * KIB, minGzipBytes: 12 * KIB },
+    perBundle: { unminifiedBytes: 40 * KIB, minGzipBytes: 12 * KIB },
+    perPage: { unminifiedBytes: 40 * KIB, minGzipBytes: 12 * KIB },
   });
 });
 
 test("css_budget_over", () => {
-  const { min, raw } = builds({ big: 53, small: 2 });
+  const { min, raw } = builds({ big: 41, small: 2 });
   const bundles = measureBundles(min, raw);
   expect(bundles.map((b) => [b.name, b.unminifiedBytes])).toEqual([
-    ["assets/big.css", 53 * KIB],
+    ["assets/big.css", 41 * KIB],
     ["assets/small.css", 2 * KIB],
   ]);
   const report = checkCss(bundles, {}, BUDGET);
   expect(report.over).toEqual([
     expect.stringMatching(
-      /^bundle assets\/big\.css: 54272 unminified bytes \(max 53248\), \d+ min-gzip bytes \(max 12288\)$/,
+      /^bundle assets\/big\.css: 41984 unminified bytes \(max 40960\), \d+ min-gzip bytes \(max 12288\)$/,
     ),
   ]);
   // The numbers are printed for every bundle, over or not.
   expect(report.lines).toEqual([
-    expect.stringMatching(/^bundle assets\/big\.css: 54272 /),
+    expect.stringMatching(/^bundle assets\/big\.css: 41984 /),
     expect.stringMatching(/^bundle assets\/small\.css: 2048 /),
   ]);
 });
 
 test("css_budget_per_page_over", () => {
-  const { min, raw } = builds({ a: 15, b: 15, c: 15, d: 15, e: 1 });
+  const { min, raw } = builds({ a: 15, b: 15, c: 15, d: 1 });
   const bundles = measureBundles(min, raw);
-  const pages = {
-    "/": ["assets/a.css", "assets/b.css", "assets/c.css", "assets/d.css"],
-    "/about": ["assets/a.css", "assets/e.css"],
-  };
+  const pages = { "/": ["assets/a.css", "assets/b.css", "assets/c.css"], "/about": ["assets/a.css", "assets/d.css"] };
   const report = checkCss(bundles, pages, BUDGET);
-  expect(report.over).toEqual([expect.stringMatching(/^page \/: 61440 unminified bytes \(max 53248\), /)]);
+  expect(report.over).toEqual([expect.stringMatching(/^page \/: 46080 unminified bytes \(max 40960\), /)]);
   expect(checkCss(bundles, { "/x": ["assets/nope.css"] }, BUDGET).over).toEqual([
     "page /x links assets/nope.css, which no build produced",
   ]);
@@ -94,7 +91,7 @@ test("css_budget_builds_must_pair", () => {
 });
 
 test("css_budget_cli_exit_codes", () => {
-  const over = builds({ big: 53 });
+  const over = builds({ big: 41 });
   const lines: string[] = [];
   expect(main([over.min, over.raw], ROOT, (l) => lines.push(l))).toBe(1);
   expect(lines.at(-1)).toMatch(/^::error title=css-budget::bundle assets\/big\.css: /);
