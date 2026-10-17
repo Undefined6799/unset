@@ -294,7 +294,9 @@ Outputs:
       `/infrastructure/arachnid/`, `/interfaces/legal-hold-export/` (P4.07's offline export of sealed hold records; the
       legal-hold seal path is `/infrastructure/seal/` plus these); boundary rules `/.dependency-cruiser.cjs`;
       islands and links `/shared/ui/islands/`, `/shared/ui/src/islands/` (props serialiser, P1.10),
-      `/shared/ui/safe-href.ts` (P1.24);
+      `/shared/ui/safe-href.ts` (P1.24); the island runtime, props serialiser included, is now `/shared/islands/`
+      (added by P1.25o, #912; moved by P1.25i, #954, to P1.25e, #959), and P1.25u drops `/shared/ui/src/islands/`
+      while `/shared/ui/islands/` stays for the kit's islands;
       egress `/infrastructure/net-guard/`; database `/infrastructure/postgres/`; entrypoints `/apps/admin/`,
       `/interfaces/admin/`, `/interfaces/pds-admin/`,
       `/interfaces/media/`, `/interfaces/api/`, `/interfaces/review/`, `/interfaces/indexer/` (erasure), `/interfaces/chat-admin/`, `/interfaces/{jobs,audit-verify,chat-auth}/` (`jobs` runs all
@@ -315,7 +317,8 @@ Outputs:
     patterns, one per SE-6 entry: CSRF gate and session `/shared/http/`,
     `/infrastructure/session/` (moved by P2.03q, #403, then P2.03c, #613), `/interfaces/http/session-cookie.ts`;
     `verifyHandle` `/domains/identity/verify-handle.ts`; `net-guard` `/infrastructure/net-guard/`; serialiser
-    `/shared/ui/islands/props.ts`, `/shared/ui/src/islands/readProps.ts`; `safeHref` `/shared/ui/safe-href.ts`; seal
+    `/shared/ui/islands/props.ts`, `/shared/ui/src/islands/readProps.ts`, now `/shared/islands/` (added by P1.25o,
+    #912; the two old lines go in P1.25u); `safeHref` `/shared/ui/safe-href.ts`; seal
     `/infrastructure/seal/`; CSP builder (inside `/shared/http/`); media sandbox headers `/interfaces/media/headers.ts`
     (P3.09 keeps them in that one file); roles and grants on objects that already exist: the role roster
     `/infrastructure/postgres/roles.json` as a whole path, and one comment line `# parsed:

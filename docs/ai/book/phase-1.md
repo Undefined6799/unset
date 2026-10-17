@@ -2317,6 +2317,10 @@ As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:49Z):
     naming the Node and V8 versions it ran on (DO-3), so the refusal can be revisited when it starts failing on a fixed
     engine.
 
+Moved (P1.25i #954, P1.25p #955, P1.25e #959): the Where line above is read with this note. The serialiser and the
+reader are now `shared/islands/props.ts` and `shared/islands/readProps.ts`, exported from `@unset/shared-islands`,
+with their tests beside them; the shared/ui files are deleted.
+
 ---
 
 ### P1.11h — Postgres test helper (prelude to P1.11g, SE-6)
@@ -6218,6 +6222,8 @@ check-to-fixture table.
 
 ### P1.25o — Own the island runtime's new paths
 Tags: check, [ALEX]            Depends on: P1.25h (merged, #464)
+As built: #912 at 1e61c26, merged as 66a75b2, on Alex's typed line "Yes p131d and 125o" (project chat, 2026-10-15
+11:52:12Z), quoted in its PR body.
 Slice 1, check class (`.github/CODEOWNERS`, `scripts/lint/`, `scripts/budgets/`); book edit
 2026-10-07-p125l-islands-lazy-chunks (the split, 14:20Z). Owner: Phase 2. Order: P1.25o, P1.25i, P1.25p, P1.25e, P1.25u,
 then P1.25 and P1.26 (book edit 2026-10-12-p125i-p125p-p125e-island-move-split); P1.25o only adds paths, so no trusted
@@ -6237,12 +6243,13 @@ file is ever unowned.
 
 A loosening (coordinator's ruling, 14:11Z): the new trusted-section directory widens what a trusted PR may carry until
 P1.25u narrows it, and the new edges widen what may import what. Phase 2 opens it only after Alex's typed line (for
-example "yes P1.25o CODEOWNERS"), quoted with its time in the PR body. Line: (pending).
+example "yes P1.25o CODEOWNERS"), quoted with its time in the PR body. Line: received 2026-10-15 11:52:12Z (As built).
 
 ---
 
 ### P1.25i — Move the island runtime to shared/islands
 Tags: trusted            Depends on: P1.25o
+As built: #954 at b1ba1ed, merged as 0e48461.
 Slice 1, trusted; book edits 2026-10-07-p125l-islands-lazy-chunks and 2026-10-12-p125i-p125p-p125e-island-move-split
 (23:00Z, amendments 1 23:10Z and 2), from architecture's 2026-10-12-p125i-islands-move-split (23:05Z, amendment 1),
 which its PR body cites. Owner: Phase 2, moved from the third thread by the refocus (2026-10-12) so the shell stays in
@@ -6265,6 +6272,7 @@ Done when the parity test passes (red on a one-byte change) and `npm run check` 
 
 ### P1.25p — Point island importers at shared/islands
 Tags: —            Depends on: P1.25i
+As built: #955 at 9afb95d, merged as b13a3ce.
 Slice 1, issue #747, product, kind/refactor, lane Phase 2; book edit 2026-10-12-p125i-p125p-p125e-island-move-split.
 It runs back to back with P1.25e: nothing else touches the eight runtime files in between. P1.25 depends on it.
 
@@ -6285,6 +6293,7 @@ one line per island (P1.25l).
 
 ### P1.25e — Delete the old trusted island runtime files
 Tags: trusted            Depends on: P1.25p
+As built: #959 at 304abdf, merged as 96a9550.
 Slice 1, issue #748, trusted, kind/refactor, lane Phase 2, right after P1.25p; book edit
 2026-10-12-p125i-p125p-p125e-island-move-split. P1.25u depends on it.
 
