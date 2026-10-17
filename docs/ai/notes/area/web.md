@@ -56,7 +56,7 @@ failed island stays as its server markup and only logs to the console.
 - CSS is one bundle: tokens, base and the kit. Do not trim those shared sheets to fit the 40 KiB
   unminified cap, and do not duplicate a rule the kit already provides. Alex (2026-10-17) set the cap at
   52 KiB (53,248 bytes) so the measured 50,063 fits with 3,185 bytes of headroom. `scripts/budgets/` is a
-  check path, so that edit is its own pull request (SE-6) and is not in the shell PR. The gzip cap (12 KiB;
+  check path, so that edit is #965 (SE-6) and is not in this pull request. The gzip cap (12 KiB;
   the shell uses 6,376) is what bounds the bytes sent.
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[http]].
