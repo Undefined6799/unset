@@ -48,7 +48,6 @@
 
 # Islands and links
 /shared/ui/islands/ @Undefined6799
-/shared/ui/src/islands/ @Undefined6799
 /shared/islands/ @Undefined6799
 /shared/ui/safe-href.ts @Undefined6799
 
@@ -116,8 +115,6 @@
 # net-guard
 /infrastructure/net-guard/ @Undefined6799
 # Islands props serialiser
-/shared/ui/islands/props.ts @Undefined6799
-/shared/ui/src/islands/readProps.ts @Undefined6799
 /shared/islands/ @Undefined6799
 # safeHref
 /shared/ui/safe-href.ts @Undefined6799
