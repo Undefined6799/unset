@@ -1,5 +1,10 @@
 # Legal status
 
+> **Placeholder: not reviewed by a lawyer.** This table and the runbooks it tracks are working drafts. No lawyer has
+> reviewed them, and they are not legal advice. A Canadian lawyer reviews them before public launch; until then every
+> `[to fill]` placeholder and every L row below stays open (Alex, 2026-10-17, `docs/ai/book/alex-answers.md` row
+> `p137-legal-placeholder`).
+
 Where each piece of legal paperwork stands (P1.37). Alex updates a row whenever its state changes; the doc check
 (`scripts/docs/legal.ts`) fails when a row is malformed, a submitted item has no date, or a `[lawyer to confirm: Ln]`
 marker in this folder has no row here, or an L row has no marker. Dates are ISO (`2026-10-12`); `—` means none yet.
@@ -10,7 +15,7 @@ Status is one of: `to do`, `in progress`, `submitted`, `done`.
 | --- | --- | --- | --- | --- |
 | Fill the runbooks' `[to fill]` placeholders | to do | — | — | Alex fills the role title, addresses and police line |
 | Cybertip.ca service-provider access key | to do | — | — | Alex creates the key at cybertip.ca/en/report/federal |
-| Lawyer hour booked | to do | — | — | Alex books it and sends the L rows below |
+| Lawyer hour booked | to do | — | — | Deferred by Alex on 2026-10-17 until he asks for review; booked before public launch, with the L rows below |
 | Arachnid Shield application (P1.37a) | to do | — | — | P1.37a |
 | L1 no duty or authority to search (Act s. 6) | to do | — | — | Lawyer hour |
 | L2 report addresses to Cybertip.ca, our own service's included (Act s. 2; Regs s. 2, 10) | to do | — | — | Lawyer hour |
