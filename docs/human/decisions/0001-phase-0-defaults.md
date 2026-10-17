@@ -446,3 +446,9 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   app), `staging.unset.ac` (the PDS), `<user>.staging.unset.im` (handles) and `staging.unset.cc` (chat, and that
   homeserver's server name). These are subdomains of the four public domains. The development PDS does not mint
   `.unset.im`. The local throwaway stack stays on `.localhost`.
+- **Local email-gate exception (Alex, 2026-10-17; own record:
+  [0026](0026-local-email-gate-exception.md)):** `requireVerified` treats only `alice.unset.im` and
+  `bob.unset.im` as verified, and only on the local stack (mechanism 2). Production refuses to boot if that
+  handle list is set. Real users still hit P2.11. Password, DID, and email for those two live only on the PDS;
+  the app keeps no parallel store and does not put them in the repository. Agents sign in through the real PDS
+  login. This record does not implement the gate.

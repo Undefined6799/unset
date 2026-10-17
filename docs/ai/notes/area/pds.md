@@ -7,10 +7,10 @@ summary: "Hub for infrastructure/pds: the atproto network adapter: identity's DI
 code: [infrastructure/pds/index.ts]
 sources: []
 importance: normal
-related: ["[[identity]]", "[[net-guard]]"]
+related: ["[[identity]]", "[[net-guard]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, pds]
-checked: 2026-10-16
+checked: 2026-10-17
 ---
 # pds
 
@@ -55,4 +55,4 @@ through an injected `endSessions` (`destroyAllForDid`); this package cannot impo
 handshake, a 429 or an outage does not. `pdsCall.dev_pds_nonce_rotation` needs the local compose stack and is not
 in the unit tests.
 
-**Links.** [[identity]], [[net-guard]].
+**Links.** [[identity]], [[net-guard]], [[alice-bob-pds-password]].
