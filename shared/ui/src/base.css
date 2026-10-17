@@ -22,6 +22,11 @@
     color: var(--color-ink);
   }
 
+  /* The shell's header and footer inset by space-6. A bare main would sit on the viewport edge. */
+  main {
+    padding: var(--space-6);
+  }
+
   h1 {
     margin: 0 0 var(--space-6);
     font-size: var(--type-heading-1-size);

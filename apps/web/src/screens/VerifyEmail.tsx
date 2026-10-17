@@ -17,7 +17,7 @@ export function VerifyEmail({ state, pdsHost, issuer, ours = true }: VerifyEmail
   const again = safeHref("/verify-email", ["path"]);
   const home = safeHref("/me", ["path"]);
   return (
-    <main>
+    <>
       <h1>Confirm your email</h1>
       {state === "confirmed" ? (
         <>
@@ -58,6 +58,6 @@ export function VerifyEmail({ state, pdsHost, issuer, ours = true }: VerifyEmail
           )}
         </>
       ) : null}
-    </main>
+    </>
   );
 }

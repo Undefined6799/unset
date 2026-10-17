@@ -5,11 +5,11 @@ import type { Did } from "@unset/domains-identity";
 import type { AuthorizeResult, PdsResult, SessionInfo } from "@unset/infrastructure-pds";
 import type { Session } from "@unset/infrastructure-session";
 import { withErrorParam } from "@unset/shared-errors";
-import { defineRoute, type Route, type RouteGroup, safeReturnPath } from "@unset/shared-http";
+import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
 import type { Logger } from "@unset/shared-log";
 import type { HrefScheme, SafeHref } from "@unset/shared-ui";
-import type { ReactNode } from "react";
 import { sessionClearCookie } from "../session-cookie.ts";
+import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
 import { appStateOf, nonceCookie, targetCookie } from "./sign-in-state.ts";
 
@@ -25,7 +25,7 @@ export type VerifyEmailDeps = {
   ) => Promise<AuthorizeResult>;
   safeHref: (value: string, schemes: readonly HrefScheme[]) => SafeHref | null;
   allowHttp: boolean;
-  page: (page: { group: RouteGroup; request: Request; title: string; body: ReactNode }) => Response;
+  page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
   pdsHost: string;
   log: Logger;
@@ -62,6 +62,7 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
       request,
       title: "Confirm your email",
       body: deps.screens.verifyEmail({ state, pdsHost: deps.pdsHost }),
+      shell: {},
     });
   }
 

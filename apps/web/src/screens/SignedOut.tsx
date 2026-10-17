@@ -26,7 +26,7 @@ export function SignedOut({
 }: SignedOutProps) {
   const signIn = safeHref("/login", ["path"]);
   return (
-    <main>
+    <>
       <h1>You are signed out</h1>
       {everywhere ? <p>This signed you out of every browser.</p> : null}
       {revokeUnconfirmed ? <p>{ERROR_MESSAGES["logout.revoke_unconfirmed"]}</p> : null}
@@ -36,6 +36,6 @@ export function SignedOut({
           Sign in again
         </Link>
       )}
-    </main>
+    </>
   );
 }
