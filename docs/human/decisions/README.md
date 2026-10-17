@@ -33,3 +33,4 @@ one-paragraph entry; new decisions also get their own file.
 | [0023](0023-local-pds-publishes-to-shared-plc.md) | The local PDS publishes to the shared PLC, with a few fixed test accounts (P1.34t) | Proposed (awaiting Alex) |
 | [0024](0024-atproto-api-agent.md) | @atproto/api Agent as the XRPC client over an OAuth session (P2.07) | Proposed (awaiting Alex) |
 | [0025](0025-public-domains.md) | Public domains: app `unset.sh`, PDS `unset.ac`, handles `unset.im`, chat `unset.cc`; development `staging.unset.*` | Proposed (awaiting Alex) |
+| [0026](0026-local-email-gate-exception.md) | Local-only email-gate exception for `alice.unset.im` and `bob.unset.im` (mechanism 2) | Proposed (awaiting Alex) |
