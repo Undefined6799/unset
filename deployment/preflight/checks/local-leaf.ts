@@ -91,11 +91,21 @@ function readBeside({ root, readRegular }: Inputs, path: string): string | Outco
   return text;
 }
 
-/** APP_HOST is a hostname and exactly the host web's PUBLIC_ORIGIN names (Amendment 3); reasons are fixed words. */
-export function appHostProblem(inputs: Inputs, appHost: string | undefined): Outcome | null {
+/**
+ * APP_HOST is a hostname, a proper name under .localhost (the names the dev root may vouch for), not PDS_HOST, and
+ * exactly the host web's PUBLIC_ORIGIN names (Amendment 3; P1.35p, architecture 04:03Z). Reasons are fixed words.
+ */
+export function appHostProblem(
+  inputs: Inputs,
+  appHost: string | undefined,
+  pdsHost: string | undefined,
+): Outcome | null {
   if (appHost === undefined || appHost === "") return fail("APP_HOST is missing");
   // An all-digit last label is an IPv4 address the hostname pattern also admits (verify-869 S1).
   if (!ENV_NAMES.APP_HOST.test(appHost) || /\.\d+$/.test(appHost)) return fail("APP_HOST is not a hostname");
+  // By whole labels, so app.notlocalhost is not under it (SE-7a); the pattern above already needs a label before it.
+  if (!appHost.endsWith(".localhost")) return fail("APP_HOST is not a name under .localhost");
+  if (appHost === pdsHost) return fail("APP_HOST is PDS_HOST");
   const origin = inputs.serviceEnv.get("web")?.use("PUBLIC_ORIGIN", (value) => value);
   if (origin === undefined || !URL.canParse(origin)) return fail("web's PUBLIC_ORIGIN is not a URL");
   if (new URL(origin).hostname !== appHost) return fail("APP_HOST is not the host of web's PUBLIC_ORIGIN");

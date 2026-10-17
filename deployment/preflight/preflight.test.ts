@@ -3431,6 +3431,23 @@ networks:
       ],
     ];
     for (const [line, edit] of cases) expect(await c18(edit), line).toBe(line);
+    // P1.35p (architecture 04:03Z, "APP_HOST value under local"): APP_HOST is a proper name under .localhost, which the
+    // dev root constrains, never PDS_HOST and never an address. Web's origin moves with it, so only this rule refuses.
+    const both = (value: string) => (text: string) =>
+      text
+        .replace(appHost, `      APP_HOST: "${value}"\n`)
+        .replace(origin, `      PUBLIC_ORIGIN: "https://${value}"\n`);
+    const under = "FAIL C18 APP_HOST is not a name under .localhost";
+    const values: [string, string][] = [
+      [under, "app.example.com"],
+      // ".localhost" is matched by whole labels (SE-7a): app.notlocalhost ends in "localhost", not in ".localhost".
+      [under, "app.notlocalhost"],
+      ["FAIL C18 APP_HOST is not a hostname", "localhost"],
+      ["FAIL C18 APP_HOST is not a hostname", "127.0.0.1"],
+      ["FAIL C18 APP_HOST is not a hostname", "[::1]"],
+      ["FAIL C18 APP_HOST is PDS_HOST", "pds.localhost"],
+    ];
+    for (const [line, value] of values) expect(await c18(both(value)), value).toBe(line);
   });
 
   test("local_c18_pds_host_is_the_pds_hostname", async () => {

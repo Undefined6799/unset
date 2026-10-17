@@ -285,9 +285,9 @@ function localEdgeZones(inputs: Inputs): Outcome {
   const env = inputs.serviceEnv.get("edge");
   if (env === undefined) return missing("the edge service's environment");
   const appHost = env.use("APP_HOST", (value) => value);
-  const host = appHostProblem(inputs, appHost);
-  if (host !== null) return host;
   const pdsHost = env.use("PDS_HOST", (value) => value);
+  const host = appHostProblem(inputs, appHost, pdsHost);
+  if (host !== null) return host;
   const pds = pdsHostProblem(inputs, pdsHost);
   if (pds !== null) return pds;
   const leaf = localLeafProblem(inputs, appHost ?? "", pdsHost ?? "");
