@@ -3,19 +3,26 @@ id: tests
 type: area
 status: current
 areas: ["[[tests]]"]
-summary: "Hub for tests/: integration tests against real Postgres, and the one helper that starts it."
-code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts]
+summary: "Hub for tests/: Postgres integration tests and the browser accessibility harness."
+code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/assert-tests-ran.ts, .github/workflows/e2e.yml]
 sources: []
 importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-15
+checked: 2026-10-17
 ---
 # tests
 
-**What it owns.** Integration tests (`tests/integration/`) and, later, end-to-end tests (`tests/e2e/`, Playwright).
+**What it owns.** Integration tests (`tests/integration/`) and the browser harness (`tests/e2e/`, Playwright).
 Unit tests sit beside the file they test, not here.
+
+**Browser harness (P1.26).** Two processes serve the production web build: the real server, and a fixture
+server whose pages are not in the route manifest. The kit showcase is not in that build (Node cannot load
+its TSX), so the fixture server loads it with Vite's `ssrLoadModule` and the production stylesheet.
+`scripts/assert-tests-ran.ts` reads Playwright's JSON report. pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are
+installed in the `e2e` job only; their trees fail `npm audit --audit-level=high`, so they are not in the
+lockfile. Lighthouse's upload target is `filesystem`.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
