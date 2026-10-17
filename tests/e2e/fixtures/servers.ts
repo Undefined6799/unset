@@ -8,6 +8,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
 import { migrate } from "@unset/infrastructure-postgres";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute, type Route } from "@unset/shared-http";
@@ -27,6 +28,15 @@ import { FIXTURES, PROD_ORIGIN, PROD_PUBLIC_ORIGIN, TEST_ORIGIN } from "../pages
 const ROOT = join(import.meta.dirname, "../../..");
 const BUILD = join(ROOT, "apps/web/dist/client");
 const LOGS = ["e2e-prod.log", "e2e-test.log"] as const;
+
+// The wait process probes both listeners. scripts/guards/egress.ts scans tests/ and refuses a
+// dynamic fetch, so the probe is guardedFetch. An internal policy allows these exact http origins,
+// and a private answer may be loopback (infrastructure/net-guard/src/resolve.ts).
+const health = guardedFetch(
+  createNetGuard({ internalHosts: [], allowLoopback: false, commit: "c".repeat(40) }),
+  internalPolicy("e2e-health", [PROD_ORIGIN, TEST_ORIGIN]),
+  { timeoutMs: 2_000, maxBytes: 4_096 },
+);
 
 type Mode = "prod" | "test" | "wait";
 
@@ -206,7 +216,7 @@ async function serveTest(): Promise<void> {
 async function once(url: string, deadline: number): Promise<boolean> {
   if (Date.now() >= deadline) return false;
   try {
-    const response = await fetch(url);
+    const response = await health(url);
     return response.ok;
   } catch (error) {
     void error;

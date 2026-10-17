@@ -24,8 +24,19 @@ describe("lhci_no_public_upload", () => {
   });
 
   test("pa11y visits the same pages and the job pins the audit-dirty CLIs outside the lockfile", () => {
-    const pa11y = JSON.parse(read(".pa11yci.json")) as { urls: string[] };
+    const pa11y = JSON.parse(read(".pa11yci.json")) as {
+      defaults: { levelCapWhenNeedsReview: string; ignore: string[] };
+      urls: string[];
+    };
     expect(pa11y.urls).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
+    // axe-core 4.13.0 reports the button's ::before fill and a full-bleed h1 as incomplete
+    // ("needs review"), which pa11y 9 promotes to an error. HTML_CodeSniffer does not see the
+    // mark's aria-label or that fill. Real violations stay errors: contrast below 4.5:1, link-name.
+    expect(pa11y.defaults.levelCapWhenNeedsReview).toBe("warning");
+    expect(pa11y.defaults.ignore).toEqual([
+      "WCAG2AA.Principle4.Guideline4_1.4_1_2.H91.A.NoContent",
+      "WCAG2AA.Principle1.Guideline1_4.1_4_3.G18.Fail",
+    ]);
     const workflow = read(".github/workflows/e2e.yml");
     expect(workflow).toContain("pa11y-ci@5.0.0");
     expect(workflow).toContain("@lhci/cli@0.15.1");
