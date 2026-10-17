@@ -1,5 +1,10 @@
 # Incident response: privacy breaches
 
+> **Placeholder: not reviewed by a lawyer.** This is a working draft written from the official texts it cites. No
+> lawyer has reviewed it, and it is not legal advice. A Canadian lawyer reviews it before public launch; until then
+> every `[to fill]` placeholder and every open lawyer row in [`legal-status.md`](legal-status.md) stays open
+> (Alex, 2026-10-17, `docs/ai/book/alex-answers.md` row `p137-legal-placeholder`).
+
 What to do when personal information we hold may have been accessed, used or disclosed without authority, or lost.
 Plan §6 ("Canadian law"). P1.35's `permission-set-changed.md` and `plc-nullification.md` hand over here when an
 integrity incident may have exposed users. Child sexual abuse material follows

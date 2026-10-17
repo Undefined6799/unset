@@ -1,5 +1,10 @@
 # Child sexual abuse material: report and preserve
 
+> **Placeholder: not reviewed by a lawyer.** This is a working draft written from the official texts it cites. No
+> lawyer has reviewed it, and it is not legal advice. A Canadian lawyer reviews it before public launch; until then
+> every `[to fill]` placeholder and every open lawyer row in [`legal-status.md`](legal-status.md) stays open
+> (Alex, 2026-10-17, `docs/ai/book/alex-answers.md` row `p137-legal-placeholder`).
+
 What to do when a fingerprint match, a local check, a reviewer or a user report points at child sexual abuse and
 exploitation material (CSAEM) on our service. Plan §5.8 and §6 (decisions 9, 21 and 30). The law below was read on
 2026-10-12 (the Act's title on 2026-10-13); every citation is marked for the lawyer hour, and each marker has a row in
