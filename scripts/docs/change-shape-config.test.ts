@@ -11,7 +11,7 @@ const read = (file: string): string => readFileSync(join(ROOT, file), "utf8");
 describe("change-shape settings", () => {
   test("required_check_listed", () => {
     const required: string[] = JSON.parse(read(".github/required-checks.json"));
-    expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape"]);
+    expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape", "e2e"]);
   });
 
   test("renovate_titles_pass", () => {

@@ -1,0 +1,16 @@
+{
+  "defaults": {
+    "standard": "WCAG2AA",
+    "timeout": 60000,
+    "wait": 1000,
+    "runners": ["axe", "htmlcs"],
+    "chromeLaunchConfig": { "args": ["--no-sandbox", "--disable-dev-shm-usage"] }
+  },
+  "urls": [
+    "http://127.0.0.1:8080/",
+    "http://127.0.0.1:8080/legal/terms",
+    "http://127.0.0.1:8080/legal/privacy",
+    "http://127.0.0.1:8080/login",
+    "http://127.0.0.1:8080/signed-out"
+  ]
+}
