@@ -18,8 +18,12 @@ checked: 2026-10-17
 Unit tests sit beside the file they test, not here.
 
 **Browser harness (P1.26).** Two processes serve the production web build: the real server, and a fixture
-server whose pages are not in the route manifest. The kit showcase is not in that build (Node cannot load
-its TSX), so the fixture server loads it with Vite's `ssrLoadModule` and the production stylesheet.
+server whose pages are not in the route manifest. The real server's `PUBLIC_ORIGIN` is
+`https://unset.test:8080` because `@atproto/oauth-client` 0.8.9 rejects an `http` or IP client id; browsers
+still open `http://127.0.0.1:8080`, and `ASSETS_BASE` stays on that listener. The kit showcase is not in
+that build (Node cannot load its TSX), so the fixture server loads it with Vite's `ssrLoadModule` and the
+production stylesheet. The toast fixture's `Island` is the production server build, the same module the
+render loader imports, so it shares that build's `IslandRunContext`.
 `scripts/assert-tests-ran.ts` reads Playwright's JSON report. pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are
 installed in the `e2e` job only; their trees fail `npm audit --audit-level=high`, so they are not in the
 lockfile. Lighthouse's upload target is `filesystem`.

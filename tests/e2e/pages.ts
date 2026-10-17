@@ -1,8 +1,17 @@
 // The pages the browser harness visits (P1.26). English only: no `?lang` and no locale cookie.
 // P1.22b adds French. A GET in the web route manifest must be listed here or in NOT_DOCUMENTS.
 
+/** Where Playwright, pa11y and Lighthouse open the production process. */
 export const PROD_ORIGIN = "http://127.0.0.1:8080";
 export const TEST_ORIGIN = "http://127.0.0.1:8081";
+/**
+ * `PUBLIC_ORIGIN` for that process. @atproto/oauth-client 0.8.9
+ * (`dist/types.js`, `oauthClientIdDiscoverableSchema`) rejects a client id that is
+ * `http:` or an IP, and the product id is `${PUBLIC_ORIGIN}/oauth-client-metadata.json`
+ * (`infrastructure/pds/oauth/oauth-client.ts`). The port matches `PROD_ORIGIN` so the host
+ * check strips `:8080` (`shared/http/server.ts` `requestHost`).
+ */
+export const PROD_PUBLIC_ORIGIN = "https://unset.test:8080";
 
 /**
  * Fixture paths on the test server only. The kit's path template rejects a leading underscore
