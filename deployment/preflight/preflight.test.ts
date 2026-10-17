@@ -29,8 +29,9 @@ import { children, der, type Tlv } from "./checks/der.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
 import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
-import { type Deps, preflight, printable, type Run } from "./index.ts";
+import { type Deps, preflight, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
+import { printable } from "./printable.ts";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes: number[]): string {
