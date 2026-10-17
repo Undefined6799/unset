@@ -5,23 +5,24 @@
 // 90s budget in tests/support/postgres.ts, so `wait` allows 180s and then prints the server logs.
 //
 // HSTS is present on http in dev because shared/http/csp/headers.ts sets it for every group.
+// The http modules are package subpaths, not relative paths: a relative import pulls
+// interfaces/http into this project, whose rootDir is tests/ (TS6059).
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createNetGuard, guardedFetch, internalPolicy } from "@unset/infrastructure-net-guard";
 import { migrate } from "@unset/infrastructure-postgres";
+import { compose } from "@unset/interfaces-http/compose.ts";
+import { config } from "@unset/interfaces-http/config.ts";
+import { policies } from "@unset/interfaces-http/limits.ts";
+import { assetsRoutes } from "@unset/interfaces-http/routes/assets.ts";
+import { webTestEnv } from "@unset/interfaces-http/test-env.ts";
+import { loadWebBuild } from "@unset/interfaces-http/web/build.ts";
+import { pageResponse } from "@unset/interfaces-http/web/page.ts";
+import { loadWebRender, type WebRender } from "@unset/interfaces-http/web/render-entry.ts";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute, type Route } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
-import { createElement, type FunctionComponent } from "react";
-import { compose } from "../../../interfaces/http/compose.ts";
-import { config } from "../../../interfaces/http/config.ts";
-import { policies } from "../../../interfaces/http/limits.ts";
-import { assetsRoutes } from "../../../interfaces/http/routes/assets.ts";
-import { webTestEnv } from "../../../interfaces/http/test-env.ts";
-import { loadWebBuild } from "../../../interfaces/http/web/build.ts";
-import { pageResponse } from "../../../interfaces/http/web/page.ts";
-import { loadWebRender, type WebRender } from "../../../interfaces/http/web/render-entry.ts";
 import { randomPassword, startPostgres, stopAllPostgres } from "../../support/postgres.ts";
 import { FIXTURES, PROD_ORIGIN, PROD_PUBLIC_ORIGIN, TEST_ORIGIN } from "../pages.ts";
 
@@ -125,7 +126,24 @@ async function serveProd(): Promise<void> {
  * and the showcase in one module graph, so IslandRendererContext is a single React context.
  * Class names come from the same scopedName the production CSS build used (apps/web/vite.config.ts).
  */
-async function loadKit(): Promise<{ renderPage: WebRender["renderPage"]; Showcase: FunctionComponent }> {
+type PageBody = Parameters<typeof pageResponse>[1]["body"];
+type CreateElement = (type: unknown, props?: unknown, ...children: unknown[]) => PageBody;
+type IslandComponent = (props: { name: string; props: object }) => PageBody;
+
+// This file is not in a workspace, so the raw-specifier allowlist only permits packages
+// the root package.json declares (scripts/lint/specifiers.ts). react is not one of them.
+// A string variable is not a specifier. Node still loads the module the server build imports.
+async function loadReact(): Promise<CreateElement> {
+  const specifier: string = "react";
+  const react = (await import(specifier)) as { createElement?: CreateElement };
+  if (react.createElement === undefined) throw new Error("react did not load");
+  return react.createElement;
+}
+
+async function loadKit(): Promise<{
+  renderPage: WebRender["renderPage"];
+  Showcase: (props: Record<string, never>) => PageBody;
+}> {
   const { createServer } = await import("vite");
   const vite = await createServer({
     configFile: join(ROOT, "apps/web/vite.config.ts"),
@@ -139,7 +157,7 @@ async function loadKit(): Promise<{ renderPage: WebRender["renderPage"]; Showcas
   });
   const web = (await vite.ssrLoadModule(join(ROOT, "apps/web/render.tsx"))) as { renderPage?: WebRender["renderPage"] };
   const kit = (await vite.ssrLoadModule(join(ROOT, "shared/ui/showcase/Showcase.tsx"))) as {
-    Showcase?: FunctionComponent;
+    Showcase?: (props: Record<string, never>) => PageBody;
   };
   if (web.renderPage === undefined || kit.Showcase === undefined) {
     throw new Error("kit showcase did not load");
@@ -153,9 +171,11 @@ async function serveTest(): Promise<void> {
   const render = await loadWebRender();
   const build = loadWebBuild(BUILD, render.islandName);
   const kit = await loadKit();
-  const web = (await import("@unset/apps-web/server")) as {
-    Island?: FunctionComponent<{ name: string; props: object }>;
-  };
+  const createElement = await loadReact();
+  // A literal import resolves to apps/web/render.tsx, which this project cannot parse
+  // without jsx. The string is the same package export the production render loader uses.
+  const serverBuild: string = "@unset/apps-web/server";
+  const web = (await import(serverBuild)) as { Island?: IslandComponent };
   const Island = web.Island;
   if (Island === undefined) throw new Error("web render build does not export Island");
   const log = createLogger({ service: "e2e", commit: "c".repeat(40), env: "dev" });

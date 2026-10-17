@@ -10,7 +10,7 @@ describe("lhci_no_public_upload", () => {
   test("upload target is filesystem and the public bucket is absent", () => {
     const config = JSON.parse(read("lighthouserc.json")) as {
       ci: {
-        collect: { numberOfRuns: number; url: string[] };
+        collect: { numberOfRuns: number; url: string[]; settings: { chromeFlags: string } };
         assert: {
           assertMatrix: {
             matchingUrlPattern: string;
@@ -24,6 +24,9 @@ describe("lhci_no_public_upload", () => {
     expect(read("lighthouserc.json")).not.toContain("temporary-public-storage");
     expect(read(".github/workflows/e2e.yml")).not.toContain("temporary-public-storage");
     expect(config.ci.collect.numberOfRuns).toBe(3);
+    // @lhci/cli 0.15.1 collect.settings.chromeFlags (docs/configuration.md). ubuntu-24.04's
+    // AppArmor blocks Chrome's unprivileged user namespace, so the launcher needs --no-sandbox.
+    expect(config.ci.collect.settings.chromeFlags).toBe("--no-sandbox --disable-dev-shm-usage");
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
     // Public documents stay at 0 scripts. /login and /signed-out load the header island:

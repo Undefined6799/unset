@@ -163,8 +163,10 @@ test("header_folds_by_container", async ({ page }) => {
   const wide = section.locator("header > div > div").last();
   await expect(menu).toBeHidden();
   await expect(wide).toBeVisible();
+  // servers.ts imports the page types, which load @types/react's empty DOM stubs
+  // (this project has no DOM lib), so HTMLElement here has no style.
   await section.evaluate((element) => {
-    element.style.width = "400px";
+    (element as unknown as { style: { width: string } }).style.width = "400px";
   });
   await expect(menu).toBeVisible();
   await expect(wide).toBeHidden();

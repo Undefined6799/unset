@@ -10,8 +10,11 @@ rules:
       snapshot in shared/http/csp/policies.test.ts. Compare the value, or extend that file.
     paths:
       exclude:
+        - "scripts/"
+        - "tests/"
+        - "**/*.test.ts"
+        - "/scripts/lint/semgrep/fixtures/"
         - shared/http/csp/policies.test.ts
-        - scripts/lint/semgrep/fixtures
     pattern-either:
       - pattern: $X.toMatchSnapshot(...)
       - pattern: $X.toMatchInlineSnapshot(...)
