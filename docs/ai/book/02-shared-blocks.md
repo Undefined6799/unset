@@ -76,7 +76,8 @@ How to read an entry:
 
 ## 5. Island props serialiser
 
-- **Owner:** P1.10 (`shared/ui/islands/props.ts`, client `shared/ui/src/islands/readProps.ts`).
+- **Owner:** P1.10 (`shared/islands/props.ts`, client `shared/islands/readProps.ts`, both exported from
+  `@unset/shared-islands`; moved out of shared/ui by P1.25i, #954, P1.25p, #955, and P1.25e, #959).
 - **Signature:** `serializeProps(value: JsonValue, opts?: { maxBytes?: number }): string` (default 15 360 bytes;
   throws `SerializeError { code: "islands.props_invalid" | "islands.props_too_large" }`);
   `renderPropsTag(id, value): { id, json }`; client `readProps(id): JsonValue` (throws `PropsMissing`).

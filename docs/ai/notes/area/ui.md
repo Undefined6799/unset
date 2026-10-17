@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[ui-build]]", "[[islands]]", "[[copied-svg-committed-as-txt]]"]
 replaced_by: null
 tags: [area, ui]
-checked: 2026-10-16
+checked: 2026-10-17
 ---
 # ui
 
@@ -34,7 +34,8 @@ checked: 2026-10-16
   Re-measure with `scripts/budgets/island.ts` before exporting more components.
 - `islands/`: the kit's `*.island.tsx` files. Each island's component sits beside its kit component. define, slot,
   the props serialiser and the browser reader are [[islands]] (`@unset/shared-islands`); this index does not
-  re-export them. P1.25e deleted `islands/props.ts` and `src/islands/readProps.ts`.
+  re-export them. The old copies here are gone: P1.25p deleted `islands/define.ts` and `islands/slot.ts`, and
+  P1.25e `islands/props.ts` and `src/islands/readProps.ts`.
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
