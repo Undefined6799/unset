@@ -31,9 +31,11 @@
     "local:down": "node deployment/preflight/stack.ts -- down --env local --compose deployment/compose.local.yaml --interpolation-env ../unset-dev-env/dev-public.env"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@biomejs/biome": "2.5.15",
     "@capsizecss/metrics": "4.3.0",
     "@capsizecss/unpack": "4.0.1",
+    "@playwright/test": "1.64.0",
     "@swc/core": "1.16.13",
     "@types/node": "26.6.5",
     "dependency-cruiser": "18.5.0",

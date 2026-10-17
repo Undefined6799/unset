@@ -128,8 +128,8 @@ describe("workflows", () => {
 
   test("required_checks_listed", () => {
     const required: string[] = JSON.parse(readFileSync(join(ROOT, ".github", "required-checks.json"), "utf8"));
-    // The P0.07 gate set plus P0.09c's pr-shape; every name is a real job in some workflow.
-    expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape"]);
+    // The P0.07 gate set, P0.09c's pr-shape, and P1.26's e2e job. Alex updates the ruleset to match.
+    expect(required).toEqual(["check", "audit", "secrets", "actionlint", "semgrep", "pr-shape", "e2e"]);
     const ids = workflowFiles.flatMap((f) => [...jobs(code(readFileSync(join(WORKFLOWS, f), "utf8"))).keys()]);
     for (const name of required) expect(ids).toContain(name);
   });
