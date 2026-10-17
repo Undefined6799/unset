@@ -11,6 +11,7 @@ import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, expect, inject, test } from "vitest";
+import { sessionClearCookie } from "../../../interfaces/http/session-cookie.ts";
 
 // Loaded by path, as query-budget does for compose: a static import would pull the server into this project.
 
@@ -129,8 +130,20 @@ beforeAll(async () => {
         log,
       }),
       ...meRoutes({
-        readSession: (request: Request, deadline: AbortSignal) =>
-          store.read({ key: request, cookieValue: cookieOf(request), deadline }),
+        // This file proves logout, not the age gate. compose is what applies that gate; here a live session is enough.
+        open: async (request: Request, deadline: AbortSignal) => {
+          const { session, clearCookie } = await store.read({
+            key: request,
+            cookieValue: cookieOf(request),
+            deadline,
+          });
+          if (session === null) {
+            const headers = new Headers({ location: "/login?next=%2Fme", "cache-control": "no-store" });
+            if (clearCookie) headers.append("set-cookie", sessionClearCookie());
+            return new Response(null, { status: 303, headers });
+          }
+          return { session, privacyNotice: false };
+        },
         verifyHandle: async () => ({ status: "verified", handle: "alice.test", checkedAt: 0 }),
         page,
         screens: web.screens,

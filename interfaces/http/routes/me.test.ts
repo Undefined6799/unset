@@ -12,6 +12,7 @@ import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, test } from "vitest";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
+import { sessionClearCookie } from "../session-cookie.ts";
 import { webTestEnv } from "../test-env.ts";
 import { pageResponse } from "../web/page.ts";
 import { type MeDeps, meRoutes } from "./me.ts";
@@ -27,10 +28,15 @@ function setup(world: { session?: Session | null; clearCookie?: boolean; verdict
   const checked: string[] = [];
   const log = createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined });
   const deps: MeDeps = {
-    readSession: async () => ({
-      session: world.session === undefined ? SESSION : world.session,
-      clearCookie: world.clearCookie ?? false,
-    }),
+    open: async () => {
+      const session = world.session === undefined ? SESSION : world.session;
+      if (session === null) {
+        const headers = new Headers({ location: "/login?next=%2Fme", "cache-control": "no-store" });
+        if (world.clearCookie) headers.append("set-cookie", sessionClearCookie());
+        return new Response(null, { status: 303, headers });
+      }
+      return { session, privacyNotice: false };
+    },
     verifyHandle: async (did) => {
       checked.push(did);
       return world.verdict ?? { status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 };
