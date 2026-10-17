@@ -25,6 +25,7 @@ export const c9: Check = {
     devCaInputProblem(inputs) ??
     mountedProblem(inputs) ??
     bindSourceProblem(inputs) ??
+    devTrustProblem(inputs) ??
     composeReadProblem(inputs) ??
     pass(`${inputs.secretPaths.length} files, ${inputs.mountedSecrets.length} mounted secrets`),
 };
@@ -147,6 +148,49 @@ export function reachesDevCaFolder(path: string, inputs: Inputs): boolean {
 }
 
 export const devCaFolder = ({ root }: Inputs): string => join(dirname(root), "unset-dev-ca");
+
+/** The folder of the dev root pds and web trust under local, beside the checkout (P1.33g; P1.34d binds it). */
+export const devTrustFolder = ({ root }: Inputs): string => join(dirname(root), "unset-dev-trust");
+
+/**
+ * Which envs judge the dev trust folder: a positive, exhaustive list, so a new env is refused until it is named (P1.35p
+ * N9, the P1.34z pattern). Only local trusts the dev root; dev and prod never read the folder.
+ */
+export function devTrustJudged(inputs: Inputs): boolean | Outcome {
+  switch (inputs.env) {
+    case "local":
+      return true;
+    case "dev":
+    case "prod":
+      return false;
+    default: {
+      const unnamed: never = inputs.env;
+      return fail(`the dev trust folder has no rule for the env ${String(unnamed)}`);
+    }
+  }
+}
+
+/**
+ * Under local, the dev trust folder and its root.pem belong to the deploy user or root, the folder writable by no group
+ * or other user, and root.pem exactly 0444 or 0644: pds and web read it, nobody else changes it (P1.35p N4/N5,
+ * verify-896). C26 judges the folder's shape and requires it, so an absent folder or root.pem is C26's to name.
+ */
+function devTrustProblem(inputs: Inputs): Outcome | null {
+  const judged = devTrustJudged(inputs);
+  if (judged !== true) return judged === false ? null : judged;
+  const folder = devTrustFolder(inputs);
+  const owned = (info: Stats) => info.uid === inputs.uid || info.uid === 0;
+  const dir = inputs.lstat(folder);
+  if (dir === null) return null;
+  if (!owned(dir) || (dir.mode & 0o022) !== 0)
+    return fail(`dev trust folder can be changed by another user: ${folder}`);
+  const path = join(folder, "root.pem");
+  const root = inputs.lstat(path);
+  if (root === null) return null;
+  if (!owned(root)) return fail(`dev trust root is not owned by the deploy user or root: ${path}`);
+  const mode = root.mode & 0o7777;
+  return mode === 0o444 || mode === 0o644 ? null : fail(`dev trust root must have mode 0444 or 0644: ${path}`);
+}
 
 /** Whether `path` is or contains a file Compose reads values from (an env file or the `.env`), by the same tests. */
 export function holdsEnvFile(path: string, inputs: Inputs): boolean {

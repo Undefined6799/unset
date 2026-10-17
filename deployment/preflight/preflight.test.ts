@@ -24,8 +24,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { c26 } from "./checks/build.ts";
 import { children, der, type Tlv } from "./checks/der.ts";
 import { pdsNeighbours } from "./checks/networks.ts";
+import { c9 } from "./checks/secrets.ts";
 import { type Check, fail, type Inputs, missing, pass } from "./checks/types.ts";
 import { type Deps, preflight, printable, type Run } from "./index.ts";
 import { loadInputs } from "./inputs.ts";
@@ -2670,6 +2672,7 @@ networks:
       devRoot = DEV_ROOT,
       caRoot = devRoot,
       setUp = () => undefined,
+      owners = () => ({}),
       deps = {},
       ...s
     }: Stack & {
@@ -2679,6 +2682,8 @@ networks:
       devRoot?: string | null;
       caRoot?: string | null;
       setUp?: (root: string) => void;
+      /** Paths that read as owned by another uid (fakeFs), named once the stack's root is known. */
+      owners?: (root: string) => Record<string, number>;
       deps?: Partial<Deps>;
     } = {},
   ) {
@@ -2698,6 +2703,7 @@ networks:
     if (devRoot !== null) {
       mkdirSync(join(dirname(root), "unset-dev-trust"), { recursive: true });
       writeFileSync(join(dirname(root), "unset-dev-trust/root.pem"), devRoot);
+      chmodSync(join(dirname(root), "unset-dev-trust"), 0o755);
       chmodSync(join(dirname(root), "unset-dev-trust/root.pem"), 0o644);
     }
     // Local needs the dev CA (P1.35a): the folder with its key and its root, one link each.
@@ -2710,7 +2716,7 @@ networks:
     const result = await preflight(["--env", "local", "--compose", file], {
       root,
       run: fakeRun().run,
-      ...fakeFs(root),
+      ...fakeFs(root, WEB_UID, owners(root)),
       ...deps,
     });
     return { ...result, root };
@@ -3705,6 +3711,60 @@ networks:
     expect(await c18({ leaf: null, setUp: (root) => fifo(join(envOf(root), "local-leaf.pem")) })).toBe(
       "FAIL C18 unset-dev-env/local-leaf.pem is not a regular file",
     );
+  });
+
+  test("local_c9_dev_trust_folder_owner_and_mode", async () => {
+    // P1.35p N4/N5 (verify-896): the folder pds and web read the dev root from, and its root.pem, belong to the deploy
+    // user or root; no group or other user can write the folder, and root.pem is exactly 0444 or 0644, so the services
+    // can read it and nobody else can change it. C26 keeps judging the folder's shape and C18 what root.pem holds.
+    const trust = (root: string) => join(dirname(root), "unset-dev-trust");
+    const c9Line = async (options: Parameters<typeof local>[1]) =>
+      (await local((text) => text, options)).lines.find((line) => / C9 /.test(line));
+    expect(await c9Line({})).toMatch(/^PASS C9 /);
+    expect(await c9Line({ setUp: (root) => chmodSync(join(trust(root), "root.pem"), 0o444) })).toMatch(/^PASS C9 /);
+    expect(await c9Line({ owners: (root) => ({ [trust(root)]: 0, [join(trust(root), "root.pem")]: 0 }) })).toMatch(
+      /^PASS C9 /,
+    );
+    const folder = /^FAIL C9 dev trust folder can be changed by another user: \/.+\/unset-dev-trust$/;
+    expect(await c9Line({ setUp: (root) => chmodSync(trust(root), 0o777) })).toMatch(folder);
+    expect(await c9Line({ setUp: (root) => chmodSync(trust(root), 0o775) })).toMatch(folder);
+    expect(await c9Line({ owners: (root) => ({ [trust(root)]: 4242 }) })).toMatch(folder);
+    const mode = /^FAIL C9 dev trust root must have mode 0444 or 0644: \/.+\/unset-dev-trust\/root\.pem$/;
+    expect(await c9Line({ setUp: (root) => chmodSync(join(trust(root), "root.pem"), 0o600) })).toMatch(mode);
+    expect(await c9Line({ setUp: (root) => chmodSync(join(trust(root), "root.pem"), 0o664) })).toMatch(mode);
+    expect(await c9Line({ owners: (root) => ({ [join(trust(root), "root.pem")]: 4242 }) })).toMatch(
+      /^FAIL C9 dev trust root is not owned by the deploy user or root: \/.+\/root\.pem$/,
+    );
+  });
+
+  test("dev_trust_folder_rules_name_every_env", async () => {
+    // P1.35p N9 (verify-896; the P1.34z pattern): only local judges the trust folder, dev and prod are named, and any
+    // other env is refused rather than skipped, in C9 and C26 alike.
+    const { root } = await local();
+    const argv = ["--env", "local", "--compose", join(root, "deployment/compose.yaml")];
+    const { inputs } = loadInputs(argv, { root, run: fakeRun().run, ...fakeFs(root) });
+    const staging = { ...inputs, env: "staging" } as unknown as Inputs;
+    const refused = { pass: false, reason: "the dev trust folder has no rule for the env staging" };
+    expect(c9.run(staging, AbortSignal.timeout(1000))).toEqual(refused);
+    expect(c26.run(staging, AbortSignal.timeout(1000))).toEqual(refused);
+  });
+
+  test("local_dev_trust_survivors_on_disk", async () => {
+    // P1.35p N6 (verify-896): what only a file on disk shows. A dot-named file beside root.pem (a listing that skips
+    // dot names would miss it) and a SEC1 key block, which says EC PRIVATE KEY rather than PRIVATE KEY. A CA:TRUE leaf
+    // is already pinned in local_c18_judges_the_leaf_copy.
+    const dot = await local((text) => text, {
+      setUp: (root) => writeFileSync(join(dirname(root), "unset-dev-trust/.hidden"), "x"),
+    });
+    expect(dot.lines.find((line) => / C26 /.test(line))).toMatch(
+      /^FAIL C26 dev trust folder holds something other than root\.pem: \/.+\/unset-dev-trust\/\.hidden$/,
+    );
+    const sec1 = execFileSync("openssl", ["ec", "-in", join(pki, "root.key")], { stdio: ["ignore", "pipe", "pipe"] });
+    expect(sec1.toString()).toMatch(/^-----BEGIN EC PRIVATE KEY-----\n/);
+    for (const devRoot of [`${DEV_ROOT}${sec1}`, `${sec1}${DEV_ROOT}`]) {
+      const { lines } = await local((text) => text, { devRoot });
+      expect(lines.find((line) => / C18 /.test(line))).toBe("FAIL C18 the dev root copy holds a private key");
+    }
   });
 
   test("local_guards_loopback_ports_and_localhost_pds", async () => {

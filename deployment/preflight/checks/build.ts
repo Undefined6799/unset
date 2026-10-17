@@ -6,7 +6,14 @@ import { basename, dirname, join, relative, sep } from "node:path";
 import { resolveChecked, WALK_REASONS } from "../../../shared/host-pin/index.ts";
 import type { Service } from "../compose-parse.ts";
 import { lockOrNone } from "./lock.ts";
-import { devCaFolder, holdsEnvFile, reachesDevCaFolder, reachesSecretsFolder } from "./secrets.ts";
+import {
+  devCaFolder,
+  devTrustFolder,
+  devTrustJudged,
+  holdsEnvFile,
+  reachesDevCaFolder,
+  reachesSecretsFolder,
+} from "./secrets.ts";
 import { type Check, fail, type Inputs, missing, type Outcome, pass, runsImage } from "./types.ts";
 
 /** images.test.ts's discovery rule and list-dockerfiles.ts's name rule, copied: deployment/ imports no script. */
@@ -238,8 +245,9 @@ const fileProblem = (path: string, info: Stats): string | null => {
  * naming the path. C18 judges what root.pem holds.
  */
 function devTrustFolderProblem(inputs: Inputs): Outcome | null {
-  if (inputs.env !== "local") return null;
-  const folder = join(dirname(inputs.root), "unset-dev-trust");
+  const judged = devTrustJudged(inputs);
+  if (judged !== true) return judged === false ? null : judged;
+  const folder = devTrustFolder(inputs);
   const info = inputs.lstat(folder);
   if (info === null) {
     return isAbsent(folder, inputs) ? missing("unset-dev-trust") : fail(`dev trust folder cannot be read: ${folder}`);
