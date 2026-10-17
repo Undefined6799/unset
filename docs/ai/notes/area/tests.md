@@ -29,7 +29,9 @@ covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in 
 only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
 mark link, whose name is an SVG `aria-label`, and contrast on a button whose fill is
-`::before`. Lighthouse's upload target is `filesystem`.
+`::before`. Lighthouse's upload target is `filesystem`. P2.13 put `/login` and
+`/signed-out` in the app shell, so those two load the header island. `/legal/domains` is a
+public document. `/.well-known/security.txt` is text, not a page.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

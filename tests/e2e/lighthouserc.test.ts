@@ -11,7 +11,12 @@ describe("lhci_no_public_upload", () => {
     const config = JSON.parse(read("lighthouserc.json")) as {
       ci: {
         collect: { numberOfRuns: number; url: string[] };
-        assert: { assertions: { "categories:accessibility": [string, { minScore: number }] } };
+        assert: {
+          assertMatrix: {
+            matchingUrlPattern: string;
+            assertions: Record<string, [string, { minScore?: number; maxNumericValue?: number }]>;
+          }[];
+        };
         upload: { target: string };
       };
     };
@@ -19,8 +24,21 @@ describe("lhci_no_public_upload", () => {
     expect(read("lighthouserc.json")).not.toContain("temporary-public-storage");
     expect(read(".github/workflows/e2e.yml")).not.toContain("temporary-public-storage");
     expect(config.ci.collect.numberOfRuns).toBe(3);
-    expect(config.ci.assert.assertions["categories:accessibility"]).toEqual(["error", { minScore: 1 }]);
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
+    // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
+    // Public documents stay at 0 scripts. /login and /signed-out load the header island:
+    // boot plus its graph was 226093 bytes in the current web build, under 256 KiB.
+    const matrix = config.ci.assert.assertMatrix;
+    for (const row of matrix) {
+      expect(row.assertions["categories:accessibility"]).toEqual(["error", { minScore: 1 }]);
+    }
+    for (const page of PAGES) {
+      const url = `${PROD_ORIGIN}${page.path}`;
+      const rows = matrix.filter((row) => new RegExp(row.matchingUrlPattern).test(url));
+      expect(rows, page.path).toHaveLength(1);
+      const script = rows[0]?.assertions["resource-summary:script:size"]?.[1].maxNumericValue;
+      expect(script).toBe(page.expectJs ? 262144 : 0);
+    }
   });
 
   test("pa11y visits the same pages and the job pins the audit-dirty CLIs outside the lockfile", () => {
@@ -44,8 +62,14 @@ describe("lhci_no_public_upload", () => {
     expect(workflow).toContain("npm ci --ignore-scripts");
     // Stylesheets are served uncompressed. The 12KB gzip cap stays in scripts/budgets/css.ts.
     const lighthouse = JSON.parse(read("lighthouserc.json")) as {
-      ci: { assert: { assertions: { "resource-summary:stylesheet:size": [string, { maxNumericValue: number }] } } };
+      ci: {
+        assert: {
+          assertMatrix: { assertions: { "resource-summary:stylesheet:size": [string, { maxNumericValue: number }] } }[];
+        };
+      };
     };
-    expect(lighthouse.ci.assert.assertions["resource-summary:stylesheet:size"][1].maxNumericValue).toBe(53248);
+    for (const row of lighthouse.ci.assert.assertMatrix) {
+      expect(row.assertions["resource-summary:stylesheet:size"][1].maxNumericValue).toBe(53248);
+    }
   });
 });

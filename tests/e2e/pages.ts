@@ -41,8 +41,10 @@ export const PAGES: readonly PageFixture[] = [
   { path: "/", group: "public", zeroJs: true, expectJs: false },
   { path: "/legal/terms", group: "public", zeroJs: true, expectJs: false },
   { path: "/legal/privacy", group: "public", zeroJs: true, expectJs: false },
-  { path: "/login", group: "app", zeroJs: true, expectJs: false },
-  { path: "/signed-out", group: "app", zeroJs: true, expectJs: false },
+  { path: "/legal/domains", group: "public", zeroJs: true, expectJs: false },
+  // P2.13 renders these inside the app shell. The header island is a script; the page still works without it.
+  { path: "/login", group: "app", zeroJs: false, expectJs: true },
+  { path: "/signed-out", group: "app", zeroJs: false, expectJs: true },
 ];
 
 /**
@@ -51,6 +53,7 @@ export const PAGES: readonly PageFixture[] = [
  */
 export const NOT_DOCUMENTS: readonly { readonly path: string; readonly reason: string }[] = [
   { path: "/health", reason: "readiness probe" },
+  { path: "/.well-known/security.txt", reason: "RFC 9116 text, not a document" },
   { path: "/assets/:file", reason: "built file, not a document" },
   { path: "/oauth-client-metadata.json", reason: "OAuth metadata JSON" },
   { path: "/oauth/jwks.json", reason: "OAuth key set JSON" },
