@@ -18,8 +18,9 @@ Two folders share this hub: `interfaces/http`, the web server for unset.sh, and 
 all six servers are built from.
 
 **interfaces/http owns** the public site's routes: `routes/assets.ts` (apps/web's built files, by exact name from
-the manifest), `routes/home.ts` and `routes/legal.ts` (P1.25: `/`, `/legal/terms`, `/legal/privacy`, group `public`,
-zero JS, the legal two `noindex` with `X-Robots-Tag`), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme
+the manifest), `routes/home.ts` and `routes/legal.ts` (P1.25 slots; P2.15 fills `/legal/terms`, `/legal/privacy`
+and `/legal/domains`, group `public` so the shell's styles load, zero JS, `noindex` with `X-Robots-Tag`) and
+`routes/security-txt.ts` (`/.well-known/security.txt`, group `static`), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme
 cookie, applied on the server) and `web/` (reads Vite's manifest once at startup and renders pages through apps/web).
 Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read JSX, so pages come from `screens`.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no

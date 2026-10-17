@@ -5,6 +5,13 @@
 import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  PRIVACY_OFFICER_CONTACT_TOKEN,
+  PRIVACY_OFFICER_TITLE_TOKEN,
+  SECURITY_CONTACT_PAGE,
+  SECURITY_TXT_EXPIRES,
+  SUPPORT_EMAIL_TOKEN,
+} from "./legal-placeholders.ts";
 
 /** One private ES256 client key, as OAUTH_CLIENT_KEYS holds it. */
 export const clientKeyJwk = (kid: string) => ({
@@ -37,6 +44,17 @@ export function webSecretEnv(dir: string): Record<string, string> {
   };
 }
 
+/** The legal placeholders (P2.15). Spread before a caller's `extra`, so a test can replace a token. */
+export function legalTestEnv(): Record<string, string> {
+  return {
+    PRIVACY_OFFICER_TITLE: PRIVACY_OFFICER_TITLE_TOKEN,
+    PRIVACY_OFFICER_CONTACT: PRIVACY_OFFICER_CONTACT_TOKEN,
+    SUPPORT_EMAIL: SUPPORT_EMAIL_TOKEN,
+    SECURITY_CONTACT: SECURITY_CONTACT_PAGE,
+    SECURITY_TXT_EXPIRES,
+  };
+}
+
 /** The whole env a test passes to `loadConfig(config, …)`; `extra` adds or replaces keys (WEB_BUILD_DIR, mostly). */
 export function webTestEnv(dir: string, extra: Record<string, string> = {}): Record<string, string> {
   return {
@@ -50,6 +68,7 @@ export function webTestEnv(dir: string, extra: Record<string, string> = {}): Rec
     TRUSTED_PROXY_MODE: "header",
     TRUSTED_PROXY_HEADER: "x-forwarded-for",
     TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
+    ...legalTestEnv(),
     ...webSecretEnv(dir),
     ...extra,
   };

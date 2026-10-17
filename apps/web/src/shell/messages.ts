@@ -11,6 +11,7 @@ export const SHELL = {
   legalColumn: "Legal",
   terms: "Terms",
   privacy: "Privacy",
+  domains: "Domains",
   note: "© 2026 unset.sh",
 } as const;
 
@@ -20,9 +21,7 @@ export const HOME = {
 } as const;
 
 export const LEGAL = {
-  terms: "Terms of service",
-  privacy: "Privacy notice",
-  preparing: "This document is in preparation. It will be published here before anyone can sign up.",
+  banner: "This page is a placeholder. It has not been reviewed by a lawyer, and it is not legal advice.",
 } as const;
 
 export const ERROR_PAGE = {

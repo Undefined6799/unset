@@ -1,13 +1,19 @@
-// The two legal pages' slots (P1.25): a placeholder at each path until the legal work (P2.15) writes the texts.
+// The legal pages (P2.15): a placeholder banner, then the document parsed at load. Config values are React children.
+import { LEGAL_DOCUMENTS } from "../legal/documents.ts";
+import type { LegalValues } from "../legal/markdown.ts";
+import { renderLegal } from "../legal/render.tsx";
 import { LEGAL } from "../shell/messages.ts";
 
-export type LegalProps = { document: "terms" | "privacy" };
+export type LegalProps = {
+  document: "terms" | "privacy" | "domains";
+  values: LegalValues;
+};
 
-export function Legal({ document }: LegalProps) {
+export function Legal({ document, values }: LegalProps) {
   return (
     <>
-      <h1>{LEGAL[document]}</h1>
-      <p>{LEGAL.preparing}</p>
+      <p>{LEGAL.banner}</p>
+      {renderLegal(LEGAL_DOCUMENTS[document], values)}
     </>
   );
 }

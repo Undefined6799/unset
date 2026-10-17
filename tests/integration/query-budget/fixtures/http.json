@@ -35,6 +35,16 @@
     },
     {
       "method": "GET",
+      "path": "/legal/domains",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/.well-known/security.txt",
+      "status": 200
+    },
+    {
+      "method": "GET",
       "path": "/assets/:file",
       "status": 404
     },

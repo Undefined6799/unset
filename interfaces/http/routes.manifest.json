@@ -36,6 +36,24 @@
     "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
   },
   {
+    "method": "GET",
+    "path": "/legal/domains",
+    "group": "public",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
+    "method": "GET",
+    "path": "/.well-known/security.txt",
+    "group": "static",
+    "accepts": [],
+    "rateLimit": "default",
+    "mutates": false,
+    "middleware": ["requestId", "hostCheck", "trustedProxy", "methodCheck", "rateLimitIp"]
+  },
+  {
     "method": "POST",
     "path": "/prefs/theme",
     "group": "app",
