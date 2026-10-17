@@ -9,9 +9,9 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createPool, migrate, type Pool, withClient } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createPool, migrate, type Pool, withClient } from "../../../infrastructure/postgres/index.ts";
 import {
   type PostgresContainer,
   randomPassword,

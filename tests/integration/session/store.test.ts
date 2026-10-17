@@ -5,18 +5,18 @@
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
-import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
-import { createSessionStore, END_SESSIONS_REASONS, type SessionLimits } from "@unset/infrastructure-session";
-import { AppError } from "@unset/shared-errors";
-import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import {
   createOAuthSessionStore,
   createPool,
   type Pool,
   withClient,
   withTransaction,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import { createSessionStore, END_SESSIONS_REASONS, type SessionLimits } from "@unset/infrastructure-session";
+import { AppError } from "@unset/shared-errors";
+import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
+import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";

@@ -7,9 +7,6 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import { relative } from "node:path";
 import { type Consistency, createDidResolver, type Did, type IdentityNetwork } from "@unset/domains-identity";
 import { createOAuthClient, parseClientKeys, type SavedSession } from "@unset/infrastructure-pds";
-import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
-import type { Logger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 import {
   createLockPool,
   createOAuthSessionStore,
@@ -18,7 +15,10 @@ import {
   createRequestLock,
   type Pool,
   withClient,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import type { Logger } from "@unset/shared-log";
+import { afterAll, beforeAll, describe, expect, inject, test } from "vitest";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";

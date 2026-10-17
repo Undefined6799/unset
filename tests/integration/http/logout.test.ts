@@ -4,18 +4,18 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
+import {
+  createOAuthSessionStore,
+  createPool,
+  withClient,
+  withTransaction,
+} from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
 import { createSessionStore, type SessionLimits } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, expect, inject, test } from "vitest";
-import {
-  createOAuthSessionStore,
-  createPool,
-  withClient,
-  withTransaction,
-} from "../../../infrastructure/postgres/index.ts";
 
 // Loaded by path, as query-budget does for compose: a static import would pull the server into this project.
 

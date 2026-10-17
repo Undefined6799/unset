@@ -2,8 +2,6 @@
 // Postgres, connected as the roles that use it (TE-2): web issues, consumes and claims; retention sweeps.
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
-import { createLogger, type LogEvent, type LogFields, type Logger } from "@unset/shared-log";
-import { afterAll, describe, expect, inject, test } from "vitest";
 import {
   createPool,
   createSingleUseStore,
@@ -12,7 +10,9 @@ import {
   type Pool,
   type Purpose,
   withClient,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createLogger, type LogEvent, type LogFields, type Logger } from "@unset/shared-log";
+import { afterAll, describe, expect, inject, test } from "vitest";
 import type { ProcessRole } from "../setup/pg.setup.ts";
 
 const provided = inject("postgres");

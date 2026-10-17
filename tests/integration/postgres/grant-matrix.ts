@@ -2,7 +2,7 @@
 // same facts, the diff between them, and the rules that hold whatever the matrix says. It reads `pg_catalog`, not
 // `information_schema`, so a privilege a role holds on every column only through a table-level grant stays one
 // table-level fact (column grants are read from `attacl` itself).
-import { type Pool, withClient } from "../../../infrastructure/postgres/index.ts";
+import { type Pool, withClient } from "@unset/infrastructure-postgres";
 
 /** The schemas whose objects the matrix covers; `plugin_<id>` schemas join them (decision 25). */
 export const SCHEMAS = ["app", "idx", "audit", "types", "public"];

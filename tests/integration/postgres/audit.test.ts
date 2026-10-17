@@ -6,9 +6,9 @@
 // the shared cluster does not hand out, and the owner's view of the side tables.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createPool, migrate, type Pool, withClient } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createPool, migrate, type Pool, withClient } from "../../../infrastructure/postgres/index.ts";
 import {
   type PostgresContainer,
   randomPassword,

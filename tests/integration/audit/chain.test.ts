@@ -6,8 +6,6 @@
 // shared cluster does not hand out, and a superuser to tamper with rows behind the triggers.
 import { join } from "node:path";
 import { parseDid } from "@unset/domains-identity";
-import { createLogger } from "@unset/shared-log";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   AUDIT_ACTIONS,
   AUDIT_REASONS,
@@ -15,7 +13,7 @@ import {
   type AuditEvent,
   appendAudit,
   verifyChain,
-} from "../../../infrastructure/audit/index.ts";
+} from "@unset/infrastructure-audit";
 import {
   createPool,
   migrate,
@@ -23,7 +21,9 @@ import {
   type PoolClient,
   withClient,
   withTransaction,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import { createLogger } from "@unset/shared-log";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   type PostgresContainer,
   randomPassword,

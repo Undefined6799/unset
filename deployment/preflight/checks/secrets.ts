@@ -15,7 +15,7 @@ import {
   resolveChecked,
   WALK_REASONS,
   within,
-} from "../../../shared/host-pin/index.ts";
+} from "@unset/shared-host-pin";
 import { type Check, fail, type Inputs, type MountedSecret, missing, type Outcome, pass } from "./types.ts";
 
 export const c9: Check = {

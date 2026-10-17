@@ -3,7 +3,7 @@
 // the postgres image.
 import { readdirSync, realpathSync, type Stats } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
-import { resolveChecked, WALK_REASONS } from "../../../shared/host-pin/index.ts";
+import { resolveChecked, WALK_REASONS } from "@unset/shared-host-pin";
 import type { Service } from "../compose-parse.ts";
 import { lockOrNone } from "./lock.ts";
 import {

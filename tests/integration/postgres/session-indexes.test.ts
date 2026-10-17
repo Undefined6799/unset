@@ -2,8 +2,8 @@
 // cloned from the migrated template, so 0012 applies after P2.03x's 0011. The sweep gets no index (architecture record
 // 2026-10-12-p203i-sweep-index): its OR has an unindexed last_seen_at arm.
 import { relative } from "node:path";
+import { createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, describe, expect, inject, test } from "vitest";
-import { createPool, withClient } from "../../../infrastructure/postgres/index.ts";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";

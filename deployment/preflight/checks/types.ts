@@ -1,7 +1,7 @@
 // What every check sees and answers (P1.30). Inputs are read once by index.ts; a check never prints a value from a
 // SecretMap, only a variable name, a path or an image reference.
 import type { Stats } from "node:fs";
-import type { WalkInputs } from "../../../shared/host-pin/index.ts";
+import type { WalkInputs } from "@unset/shared-host-pin";
 import type { Compose, Service } from "../compose-parse.ts";
 import type { SecretMap } from "../secret-map.ts";
 

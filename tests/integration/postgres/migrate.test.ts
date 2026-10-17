@@ -5,9 +5,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { type MigrateOptions, migrate } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { type MigrateOptions, migrate } from "../../../infrastructure/postgres/index.ts";
 import {
   type PostgresContainer,
   randomPassword,

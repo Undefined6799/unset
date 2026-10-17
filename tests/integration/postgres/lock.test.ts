@@ -1,8 +1,6 @@
 // P1.17 (infrastructure/postgres/lock.ts): the advisory lock against real Postgres, connected as `web`, the role that
 // refreshes OAuth tokens (TE-2). Two lock pools stand in for two `web` replicas.
 import { relative } from "node:path";
-import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
-import { afterAll, describe, expect, inject, test } from "vitest";
 import {
   createLockPool,
   createPool,
@@ -14,7 +12,9 @@ import {
   type Pool,
   withAdvisoryLock,
   withClient,
-} from "../../../infrastructure/postgres/index.ts";
+} from "@unset/infrastructure-postgres";
+import type { LogEvent, LogFields, Logger } from "@unset/shared-log";
+import { afterAll, describe, expect, inject, test } from "vitest";
 
 const provided = inject("postgres");
 const database = provided.databases[relative(`${import.meta.dirname}/../../..`, import.meta.filename)] ?? "";

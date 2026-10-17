@@ -10,11 +10,11 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { createPool, type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, describe, expect, inject, test } from "vitest";
-import { createPool, type Pool, withClient, withTransaction } from "../../infrastructure/postgres/index.ts";
 
 const BUDGET = 5;
 /** The allowed host and a client behind the trusted proxy, for interfaces in header mode; socket-mode ones ignore it. */
