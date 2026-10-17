@@ -453,8 +453,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.29a | PDS image, PDS and edge services in the dev stack | [ALEX] [SEC] | P1.29, P1.28, P1.27o | `phase-1.md` |
 | P1.29h | Local PDS email-token reader for tests (real confirmEmail flow; refuses every stack, ADR 0023) | [SEC] | P1.29a | `phase-1.md` |
 | P1.33b | Let local stacks run without mail | [SEC] [ALEX] (card answered 20:28:12Z) | P1.27l | `phase-1.md` |
-| P1.29s | Local precheck; no per-run account creation | [SEC] | P1.29a, P1.34t, P1.34d, P1.33b | `phase-1.md` |
-| P1.29t | Running local stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t | `phase-1.md` |
+| P1.29s | Local precheck; no per-run account creation (ADR 0026 mechanism 2) | [SEC] | P1.29a, P1.34t, P1.34d, P1.33b | `phase-1.md` |
+| P1.29t | Running local stack tests: client_id probe, no client IP in device rows, resolve-and-pin in the image (ADR 0026 mechanism 2) | [SEC] | P1.29a, P1.29s, P1.34d, P1.34k, P1.34t | `phase-1.md` |
 | P1.32 | Permanent choices (ask Alex) | [STOP] [PERMANENT] | — | `phase-1.md` |
 | P1.32a | Keep ADR 0020 to the answered questions | — | P1.32 | `phase-1.md` |
 | P1.31d | Resolve package exports and lexicon scripts (check, SE-6) | [SEC] [ALEX] (typed line) | — | `phase-1.md` |
@@ -492,11 +492,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
 | P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06, P2.04s | `phase-2.md` |
-| P2.11 | Email-verify gate | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
+| P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34; ADR 0026 mechanism 2) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -2170,6 +2170,13 @@ GitHub Pro; the ruleset was applied 2026-10-06, ADR 0017).
 Re-run by script over all 239 rows after adding P0.09d and P2.13b: no duplicate id, every dependency names a step that
 exists and comes earlier in the row order, every id matches P0.09c's id pattern. P0.09d depends on P0.06; P2.13b on
 P2.13a and P0.07.
+
+## Book edit (2026-10-17, ADR 0026 mechanism 2)
+
+Alex chose mechanism 2 for the local email-gate exception. P1.29s, P1.29t, P2.11 and P2.13a name it: `requireVerified`
+treats only `alice.unset.im` and `bob.unset.im` as verified, and only on the local stack; production refuses to boot if
+that handle list is set. Password, DID, and email for those two live only on the PDS. P2.13a stays `[STOP]`. No
+dependency changed. The product gate is not implemented in the ADR PR.
 
 ## Book edit (2026-10-17, ADR 0023 rescope)
 

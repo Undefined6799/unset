@@ -1751,7 +1751,10 @@ Outputs:
   - `requireSession(ctx) -> Session` (303 `/login?next=<path>` when none; `next` from `safeReturnPath(ctx.path)`).
   - `requireVerified(ctx) -> Session`: session required; then if `email_confirmed` is true and `email_checked_at` is within
     `EMAIL_RECHECK_S` → pass; if true but stale → `pdsSessionInfo` refresh (transient → pass on the cached true; the
-    PDS being down must not lock a verified user out); if false or null → 303 `/verify-email`.
+    PDS being down must not lock a verified user out); if false or null → 303 `/verify-email`. Local stack only
+    (ADR 0026, mechanism 2): treats only `alice.unset.im` and `bob.unset.im` as verified, even when the PDS email is
+    unconfirmed. Production refuses to boot if that handle list is set. This step's algorithm for every other account
+    is unchanged. The product change is not in the ADR PR.
   - `GET /verify-email`: states `confirmed` (link "Continue"), `unconfirmed` (interstitial sentence + button link to
     the PDS account page + "I've confirmed it — check again" link that reloads this page), `needs_consent` (grant
     lacks `account:email` → a form posting to `/verify-email/reconsent`), `unavailable` (PDS not answering; retry link).
@@ -1784,6 +1787,10 @@ Edge cases and failures:
     for a tester.
   - Re-consent loop guard: if the user returns from re-consent and the grant still lacks `account:email`, P2.06 denies with
     `login.scope_insufficient` (no loop).
+  - Local stack only (ADR 0026, mechanism 2): `requireVerified` treats only `alice.unset.im` and `bob.unset.im` as
+    verified. Their PDS emails stay unconfirmed. Password, DID, and email live only on the PDS. Production refuses to
+    boot if that handle list is set. Every other account still follows the algorithm above. This step does not
+    implement that exception.
 
 Threats: the confirmed-email gate.
   - S A crafted `?confirmed=1` passes the gate → ignored; only the PDS answer counts (`verify.query_ignored`).
@@ -1808,7 +1815,8 @@ Reuse (provisional — for reuse review):
     kept as a test; the `confirmedParam` input disappears.
   - `app/src/app/verify-email/page.tsx:50-90` (auto-send on a bare GET) → REJECT: a GET that sends mail is a state change (rule 4).
   - `app/src/lib/session-policy.ts:62-63` (`EMAIL_SCOPE` re-consent path) → LESSON: keep the re-consent escape hatch.
-Not in this step: showing the email publicly (P2.21/P2.23 use the verified email only); onboarding order (P2.12).
+Not in this step: showing the email publicly (P2.21/P2.23 use the verified email only); onboarding order (P2.12);
+  the local exception's product code (ADR 0026; a later PR implements `requireVerified`).
 Diagram: none.
 
 ### P2.15 — Legal paperwork part 2
@@ -2051,13 +2059,16 @@ was learned, and fix problems before any other slice is built (guideline §12).
 Inputs: every slice-1 step merged (`01-outline.md`, "Slice 1"); P1.29's `local` env (`PDS_HOSTNAME=pds.unset.localhost`,
   never reachable from outside) with two fixed test accounts, `alice.unset.im` and `bob.unset.im`, made once by hand
   (ADR 0023; Alex, 2026-10-17, B). This step does not create an account and does not name passwords, DIDs or mailbox
-  addresses. Their emails are not confirmed. Agents must be able to sign in as them. A test-only exception treats these
-  two as verified so the browser scenario can use `/me` without in-browser email confirmation. Real users still hit
-  P2.11: unconfirmed email cannot use `/me`. Email confirmation stays in the product for account recovery and as a
-  second factor; this step does not invent a 2FA design and does not rewrite P2.11 as optional. The exception must not
-  exist in production (fail closed; no admin bypass, no forged membership, no "lock down later" path). This step does
-  not invent the local mechanism (see the book-edit PR). The email-token reader still refuses every stack (ADR 0023);
-  P1.26's Playwright and axe harness; P0.05's dependency-cruiser rules.
+  addresses. Password, DID, and email live only on the PDS, the same place as any other user's. The app does not keep
+  a parallel store for them and does not put them in the repository or a special sibling secrets file. Their emails
+  are not confirmed. Agents sign in through the real PDS login, like a member. Mechanism 2 (ADR 0026):
+  `requireVerified` treats only these two as verified, and only on the local stack, so the browser scenario can use
+  `/me` without in-browser email confirmation. Production refuses to boot if that handle list is set. Real users still
+  hit P2.11: unconfirmed email cannot use `/me`. Email confirmation stays in the product for account recovery and as a
+  second factor; this step does not invent a 2FA design and does not rewrite P2.11 as optional. Fail closed: no admin
+  bypass, no forged membership, no "lock down later" path. This step does not implement `requireVerified`. The
+  email-token reader still refuses every stack (ADR 0023); P1.26's Playwright and axe harness; P0.05's
+  dependency-cruiser rules. Where the operator types the PDS password from is still open.
 Outputs:
   - `tests/e2e/slice-1.spec.ts`: one scenario per theme, in English (slice 1 is English only; the i18n slice adds French).
     This step stays [STOP] and does not write a new browser sign-in spec; the scenario below is the already-booked
@@ -2080,7 +2091,7 @@ Algorithm:
      "Set up your profile" placeholder → Sign out → `/me` redirects to `/login?next=/me`. Skip in-browser email
      confirmation on these two accounts only. Do not call the email-token reader and do not create an account. Their
      emails are not confirmed. P2.11 still gates every other account; this step does not rewrite it as optional and
-     stays [STOP].
+     stays [STOP]. Mechanism 2 (ADR 0026) is the local exception; this step does not implement it.
   3. Assert on the way: every response carries the P1.08 CSP and security headers; session cookies are `__Host-`
      cookies with no `Domain=`; the OAuth state, session and token rows are sealed (`types.sealed`); no IP address or
      user agent is written (P0.06 `ip-columns` and a log scan of the run); the sign-in writes no audit row (only the
@@ -2097,8 +2108,9 @@ Edge cases and failures:
     create an account to unblock it, and never fall back to the homelab dev PDS (its admin password is Alex's alone
     after P1.34).
   - A production env, or any account other than these two, treating unconfirmed email as verified → fail closed; never
-    an admin bypass, forged membership, or "lock down later" path. How the local exception is implemented is not
-    invented here (it must stay off the production path; options on the book-edit PR).
+    an admin bypass, forged membership, or "lock down later" path. Mechanism 2 (ADR 0026): `requireVerified` treats
+    only these two as verified, and only on the local stack; production refuses to boot if that handle list is set.
+    This step does not implement `requireVerified`.
   - The local PDS cannot fetch `web`'s client metadata (the `client_id` URL does not resolve from `pds_egress`, or the
     PDS's OAuth provider refuses the address) → **stop** and report with options (findings F-25; the prototype could
     never verify a signed-in flow locally, vault pitfall `dev-local-verification-limits`). Never make it pass with
