@@ -20,6 +20,21 @@
     },
     {
       "method": "GET",
+      "path": "/",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/legal/terms",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/legal/privacy",
+      "status": 200
+    },
+    {
+      "method": "GET",
       "path": "/assets/:file",
       "status": 404
     },
