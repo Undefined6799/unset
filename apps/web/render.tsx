@@ -48,12 +48,12 @@ export type PageInput = Readonly<{
   title: string;
   body: ReactNode;
   /** The islands to look names up in; tests pass their own. */
-  islands?: ReadonlyMap<string, IslandDefinition>;
+  registry?: ReadonlyMap<string, IslandDefinition>;
 }>;
 
 /** The HTML of one page, and the islands production rendered static because their props were too large. */
 export function renderPage(input: PageInput): { html: string; tooLarge: readonly string[] } {
-  const run = newIslandRun(input.islands ?? ISLANDS, input.env);
+  const run = newIslandRun(input.registry ?? ISLANDS, input.env);
   const body = renderToString(
     <Document prefs={input.prefs} title={input.title} assets={input.assets} run={run}>
       {input.body}

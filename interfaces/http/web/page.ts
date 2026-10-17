@@ -35,7 +35,7 @@ export function pageResponse(
     env: ISLAND_ENV[deps.env],
     title: page.title,
     body: page.body,
-    ...(deps.islands ? { islands: deps.islands } : {}),
+    ...(deps.islands ? { registry: deps.islands } : {}),
   });
   // The name comes from the island registry the render looked it up in, never from the request.
   for (const island of tooLarge) deps.log.warn("island.props_too_large", { island });

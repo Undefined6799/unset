@@ -44,7 +44,7 @@ function render(body: PageInput["body"], env: PageInput["env"] = "test") {
     env,
     title: "Test",
     body,
-    islands: ISLANDS,
+    registry: ISLANDS,
   });
 }
 const scripts = (html: string) => html.match(/<script[^>]*>/g) ?? [];
@@ -169,7 +169,7 @@ describe("document", () => {
       env: "test",
       title: "A & B",
       body: null,
-      islands: ISLANDS,
+      registry: ISLANDS,
     });
     expect(html.startsWith('<!doctype html><html lang="en" data-theme="dark"><head><meta charSet="utf-8"/>')).toBe(
       true,
