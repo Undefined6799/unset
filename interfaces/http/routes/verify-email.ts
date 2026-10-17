@@ -49,7 +49,10 @@ export function verifyEmailRoutes(deps: VerifyEmailDeps): Route[] {
   const schemes: readonly HrefScheme[] = deps.allowHttp ? ["https:", "http:"] : ["https:"];
 
   async function onboarded(session: Session, deadline: AbortSignal): Promise<Response | null> {
-    const away = redirectFor(requireOnboarded(await deps.loadAccount(session.did, deadline), deps.versions));
+    const away = redirectFor(
+      requireOnboarded(await deps.loadAccount(session.did, deadline), deps.versions),
+      "/verify-email",
+    );
     return away === null ? null : redirect(away);
   }
 

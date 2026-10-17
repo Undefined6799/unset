@@ -19,12 +19,15 @@ export type AccountStore = {
   /** Records the accepted versions. From terms the step becomes chat; a finished account stays done. */
   acceptTerms(did: Did, terms: string, privacy: string, deadline: AbortSignal): Promise<"chat" | "done" | null>;
   finishChat(did: Did, deadline: AbortSignal): Promise<boolean>;
-  /** Blocks the account and writes age_gate.blocked. A throw rolls both back. */
+  /**
+   * Blocks the account and writes age_gate.blocked. Null means this call did not change the row
+   * (it was already past the age step), so no second audit row is written. A throw rolls both back.
+   */
   blockUnderage(
     did: Did,
     hosted: boolean,
     deadline: AbortSignal,
-  ): Promise<{ readonly lane: string; readonly seq: number }>;
+  ): Promise<{ readonly lane: string; readonly seq: number } | null>;
 };
 
 const STEPS = ["age", "terms", "chat", "done", "blocked_underage"] as const;
@@ -94,11 +97,17 @@ export function createAccountStore(pool: Pool): AccountStore {
     },
     async blockUnderage(did, hosted, deadline) {
       return write(deadline, async (tx) => {
-        await tx.query(
+        // Only the age step may become blocked. A concurrent adult confirmation or an earlier block
+        // leaves the row alone, and this transaction then writes no audit row.
+        // https://www.postgresql.org/docs/18/sql-insert.html (read 2026-10-17): a row the WHERE
+        // clause does not update is absent from RETURNING.
+        const { rows } = await tx.query(
           "INSERT INTO app.account (did, first_seen_at, onboarding) VALUES ($1, now(), 'blocked_underage') " +
-            "ON CONFLICT (did) DO UPDATE SET onboarding = 'blocked_underage'",
+            "ON CONFLICT (did) DO UPDATE SET onboarding = 'blocked_underage' " +
+            "WHERE app.account.onboarding = 'age' RETURNING onboarding",
           [did],
         );
+        if (rows.length !== 1) return null;
         const appended = await appendAudit(asAuditDb(tx), {
           action: "age_gate.blocked",
           outcome: "succeeded",

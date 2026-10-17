@@ -22,6 +22,7 @@ const did = (text: string): Did => {
 };
 const ADULT = did(`did:plc:${"a".repeat(24)}`);
 const CHILD = did(`did:plc:${"b".repeat(24)}`);
+const MOVED = did(`did:plc:${"c".repeat(24)}`);
 const store = createAccountStore(pool);
 
 const columns = () =>
@@ -50,11 +51,21 @@ test("age.valid_adult", async () => {
 
 test("age.underage_blocks", async () => {
   const appended = await store.blockUnderage(CHILD, true, AbortSignal.timeout(5_000));
+  if (appended === null) throw new Error("block did not commit");
   expect(appended.lane).toBe("sec");
   expect(appended.seq).toBeGreaterThan(0);
+  expect(await store.blockUnderage(CHILD, true, AbortSignal.timeout(5_000))).toBeNull();
+  expect(await store.confirmAdult(MOVED, AbortSignal.timeout(5_000))).toBe(true);
+  expect(await store.blockUnderage(MOVED, false, AbortSignal.timeout(5_000))).toBeNull();
   const rows = await withClient(pool, null, async (db) => {
-    const found = await db.query<{ onboarding: string }>("SELECT onboarding FROM app.account WHERE did = $1", [CHILD]);
+    const found = await db.query<{ did: string; onboarding: string }>(
+      "SELECT did, onboarding FROM app.account WHERE did IN ($1, $2) ORDER BY did",
+      [CHILD, MOVED],
+    );
     return found.rows;
   });
-  expect(rows).toEqual([{ onboarding: "blocked_underage" }]);
+  expect(rows).toEqual([
+    { did: CHILD, onboarding: "blocked_underage" },
+    { did: MOVED, onboarding: "terms" },
+  ]);
 });

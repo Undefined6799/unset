@@ -74,6 +74,7 @@ const EVENTS = [
   // P2.12, the age gate. `kind` is the audit lane or an error class; `count` is the audit sequence. No DID.
   "age_gate.hosted_block",
   "age_gate.block_failed",
+  "age_gate.issuer_unknown",
   "age_gate.sessions_end_failed",
   // P2.13, the handle check: an error it did not expect (the class as kind, never the DID); the verdict is unavailable.
   "handle.verify_failed",

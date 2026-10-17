@@ -66,7 +66,9 @@ export type OnboardingDecision =
 
 /**
  * Whether an app page may render (P2.12). Pass means onboarding is done and the accepted terms are current. A privacy
- * bump sets `privacyNotice` and does not redirect. Anything else is a redirect the caller makes.
+ * bump sets `privacyNotice` and does not redirect. The banner stays until a later terms acceptance records the
+ * current privacy version: writing it when the banner is drawn would store an acceptance that was not made.
+ * Anything else is a redirect the caller makes.
  */
 export function requireOnboarded(account: OnboardingAccount | null, versions: OnboardingVersions): OnboardingDecision {
   const step = onboardingStep(account, versions);

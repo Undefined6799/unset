@@ -12,6 +12,7 @@ import {
   verifiedAfterRefresh,
 } from "@unset/domains-identity";
 import type { Session, SessionRead } from "@unset/infrastructure-session";
+import { safeReturnPath } from "@unset/shared-http";
 import { sessionClearCookie } from "./session-cookie.ts";
 
 export type AppGate = {
@@ -26,15 +27,17 @@ export type AppGate = {
 
 export type OpenedApp = { readonly session: Session; readonly privacyNotice: boolean };
 
-/** Where a decision sends the browser, or null when the page may render. */
-export function redirectFor(decision: OnboardingDecision): "/welcome" | "/welcome/terms" | "/welcome/blocked" | null {
+/** Where a decision sends the browser, or null when the page may render. `next` is the route that was refused. */
+export function redirectFor(decision: OnboardingDecision, next: string): string | null {
   switch (decision.outcome) {
     case "pass":
       return null;
     case "welcome":
       return "/welcome";
-    case "terms":
-      return "/welcome/terms";
+    case "terms": {
+      const back = safeReturnPath(next);
+      return back === null ? "/welcome/terms" : `/welcome/terms?${new URLSearchParams({ next: back })}`;
+    }
     case "blocked":
       return "/welcome/blocked";
     default: {
@@ -63,7 +66,7 @@ export async function openApp(
   if (session === null) return redirect(`/login?${new URLSearchParams({ next })}`, clearCookie);
   const account = await gate.loadAccount(session.did, deadline);
   const decision = requireOnboarded(account, gate.versions);
-  const away = redirectFor(decision);
+  const away = redirectFor(decision, next);
   if (away !== null) return redirect(away, false);
   const cache = await gate.emailCache(session, deadline);
   const email = emailGate(cache, gate.now(), gate.emailRecheckS);

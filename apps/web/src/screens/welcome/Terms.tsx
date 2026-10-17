@@ -7,9 +7,12 @@ export type TermsProps = {
   readonly countryRule: boolean;
   /** A safe return path for a re-acceptance, or null on the first pass. */
   readonly next: string | null;
+  /** The versions this form is showing. The POST accepts only these. */
+  readonly termsVersion: string;
+  readonly privacyVersion: string;
 };
 
-export function Terms({ countryRule, next }: TermsProps) {
+export function Terms({ countryRule, next, termsVersion, privacyVersion }: TermsProps) {
   const terms = safeHref("/legal/terms", ["path"]);
   const privacy = safeHref("/legal/privacy", ["path"]);
   return (
@@ -29,6 +32,8 @@ export function Terms({ countryRule, next }: TermsProps) {
         )}
       </p>
       <form method="post" action="/welcome/terms">
+        <input type="hidden" name="terms_version" value={termsVersion} />
+        <input type="hidden" name="privacy_version" value={privacyVersion} />
         {next === null ? null : <input type="hidden" name="next" value={next} />}
         <Checkbox label={WELCOME.accept} name="accept" value="yes" />
         {countryRule ? <Checkbox label={WELCOME.country} name="country" value="yes" /> : null}

@@ -49,6 +49,11 @@ class RevokeTimeout extends Error {
   }
 }
 
+function termsPath(next: string | null, code?: ErrorCode): string {
+  const path = next === null ? "/welcome/terms" : `/welcome/terms?${new URLSearchParams({ next })}`;
+  return code === undefined ? path : withErrorParam(path, code);
+}
+
 function redirect(location: string, cookies: readonly string[] = []): Response {
   const headers = new Headers({ location, "cache-control": "no-store" });
   for (const cookie of cookies) headers.append("set-cookie", cookie);
@@ -153,24 +158,28 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
     return redirect(destination(found.step, found.session.emailConfirmed));
   }
 
-  /** Block, then revoke, then end sessions. A database error stops before the grant is touched. */
+  /** Block, then revoke, then end sessions. A database error on the block stops before the grant is touched. */
   async function block(session: Session, deadline: AbortSignal): Promise<Response> {
-    let issuer: string | null;
+    let issuer: string | null = null;
     try {
       issuer = await deps.issuerOf(session.did);
     } catch (error) {
-      deps.log.warn("age_gate.block_failed", failure(error));
-      throw new AppError("service.unavailable");
+      // An unreadable grant is not evidence the account is ours. Block anyway, with no hosted alert.
+      deps.log.warn("age_gate.issuer_unknown", failure(error));
     }
     const hosted = hostedOnOurPds(issuer, deps.pdsIssuer);
-    let audit: { lane: string; seq: number };
+    let audit: { lane: string; seq: number } | null;
     try {
       audit = await deps.accounts.blockUnderage(session.did, hosted, deadline);
     } catch (error) {
       deps.log.warn("age_gate.block_failed", failure(error));
       throw new AppError("service.unavailable");
     }
-    if (hosted) deps.log.warn("age_gate.hosted_block", { kind: audit.lane, count: audit.seq });
+    if (audit === null) {
+      const account = await deps.accounts.get(session.did, deadline);
+      const step = onboardingStep(account, deps.versions);
+      if (step !== "blocked") return redirect(destination(step, session.emailConfirmed));
+    } else if (hosted) deps.log.warn("age_gate.hosted_block", { kind: audit.lane, count: audit.seq });
     try {
       await withTimeout(deps.revoke(session.did), deadline);
     } catch (error) {
@@ -245,7 +254,16 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       if (found.kind === "out") return found.response;
       if (found.step !== "terms") return elsewhere(found);
       const next = safeReturnPath(new URL(request.url).searchParams.get("next"));
-      return show(request, "Terms and privacy", deps.screens.welcomeTerms({ countryRule: deps.countryRule, next }));
+      return show(
+        request,
+        "Terms and privacy",
+        deps.screens.welcomeTerms({
+          countryRule: deps.countryRule,
+          next,
+          termsVersion: deps.versions.terms,
+          privacyVersion: deps.versions.privacy,
+        }),
+      );
     },
   });
 
@@ -263,9 +281,15 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
       if (found.kind === "out") return found.response;
       if (found.step !== "terms") return elsewhere(found);
       const form = new URLSearchParams(await request.text());
-      const missing = (code: ErrorCode) => redirect(withErrorParam("/welcome/terms", code));
-      if (single(form, "accept") !== "yes") return missing("welcome.terms_required");
-      if (deps.countryRule && single(form, "country") !== "yes") return missing("welcome.country_required");
+      const next = safeReturnPath(single(form, "next"));
+      const shown =
+        single(form, "terms_version") === deps.versions.terms &&
+        single(form, "privacy_version") === deps.versions.privacy;
+      if (!shown) return redirect(termsPath(next));
+      if (single(form, "accept") !== "yes") return redirect(termsPath(next, "welcome.terms_required"));
+      if (deps.countryRule && single(form, "country") !== "yes") {
+        return redirect(termsPath(next, "welcome.country_required"));
+      }
       const step = await deps.accounts.acceptTerms(
         found.session.did,
         deps.versions.terms,

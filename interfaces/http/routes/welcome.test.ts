@@ -98,6 +98,7 @@ function setup(world: World = {}) {
     },
     blockUnderage: async (_did, hosted) => {
       if (world.blockThrows) throw Object.assign(new Error("db"), { code: "57014" });
+      if (row !== null && row.onboarding !== "age") return null;
       calls.push({ op: "block", hosted });
       order.push("block");
       row = {
@@ -281,6 +282,16 @@ describe("POST /welcome/age", () => {
     expect((await failed.send("/welcome/age", post("day=1&month=1&year=2014"))).status).toBe(503);
     expect(failed.order).toEqual([]);
 
+    const unread = setup({ issuerThrows: true });
+    const stillBlocked = await unread.send("/welcome/age", post("day=1&month=1&year=2014"));
+    expect(stillBlocked.status).toBe(303);
+    expect(stillBlocked.headers.get("location")).toBe("/welcome/blocked");
+    expect(unread.calls).toEqual([{ op: "block", hosted: false }]);
+    expect(unread.order).toEqual(["block", "revoke", "end"]);
+    expect(unread.lines.join("\n")).toContain("age_gate.issuer_unknown");
+    expect(unread.lines.join("\n")).not.toContain("age_gate.hosted_block");
+    expect(unread.lines.join("\n")).not.toContain(DID);
+
     const revoked = setup({ revokeThrows: true, issuer: "https://other.example" });
     const after = await revoked.send("/welcome/age", post("day=1&month=1&year=2014"));
     expect(after.headers.get("location")).toBe("/welcome/blocked");
@@ -305,19 +316,22 @@ describe("POST /welcome/age", () => {
 
 describe("POST /welcome/terms", () => {
   const terms: Row = { onboarding: "terms", termsVersion: null, privacyVersion: null, ageConfirmedAt: "confirmed" };
+  const shown = `terms_version=${TERMS_VERSION}&privacy_version=${PRIVACY_VERSION}`;
 
   test("terms.required_boxes", async () => {
     const missing = setup({ row: { ...terms } });
-    const first = await missing.send("/welcome/terms", post("country=yes"));
-    expect(first.headers.get("location")).toBe("/welcome/terms?error=welcome.terms_required");
+    const first = await missing.send("/welcome/terms", post(`country=yes&${shown}&next=%2Fsettings%2Fprofile`));
+    expect(first.headers.get("location")).toBe(
+      "/welcome/terms?next=%2Fsettings%2Fprofile&error=welcome.terms_required",
+    );
     expect(missing.row()?.onboarding).toBe("terms");
 
     const country = setup({ row: { ...terms } });
-    const second = await country.send("/welcome/terms", post("accept=yes"));
+    const second = await country.send("/welcome/terms", post(`accept=yes&${shown}`));
     expect(second.headers.get("location")).toBe("/welcome/terms?error=welcome.country_required");
 
     const off = setup({ row: { ...terms }, countryRule: false });
-    const third = await off.send("/welcome/terms", post("accept=yes"));
+    const third = await off.send("/welcome/terms", post(`accept=yes&${shown}`));
     expect(third.headers.get("location")).toBe("/welcome/chat");
     expect(off.row()).toMatchObject({
       onboarding: "chat",
@@ -334,17 +348,27 @@ describe("POST /welcome/terms", () => {
       ageConfirmedAt: "confirmed",
     };
     const { send, calls } = setup({ row, email: { confirmed: true, checkedAt: NOW } });
-    for (const path of ["/me", "/settings/profile", "/welcome", "/welcome/age"]) {
+    expect((await send("/me")).headers.get("location")).toBe("/welcome/terms?next=%2Fme");
+    expect((await send("/settings/profile")).headers.get("location")).toBe("/welcome/terms?next=%2Fsettings%2Fprofile");
+    for (const path of ["/welcome", "/welcome/age"]) {
       const response = await send(path);
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/welcome/terms");
     }
     expect(calls).toEqual([]);
-    const accepted = await send("/welcome/terms", post("accept=yes&country=yes&next=%2Fsettings%2Fprofile"));
+    const accepted = await send("/welcome/terms", post(`accept=yes&country=yes&${shown}&next=%2Fsettings%2Fprofile`));
     expect(accepted.headers.get("location")).toBe("/settings/profile");
     const invalid = setup({ row: { ...row } });
-    const back = await invalid.send("/welcome/terms", post("accept=yes&country=yes&next=%2Flogin"));
+    const back = await invalid.send("/welcome/terms", post(`accept=yes&country=yes&${shown}&next=%2Flogin`));
     expect(back.headers.get("location")).toBe("/me");
+    const stale = setup({ row: { ...row } });
+    const old = await stale.send(
+      "/welcome/terms",
+      post("accept=yes&country=yes&terms_version=2020-01-01&privacy_version=2020-01-01&next=%2Fsettings%2Fprofile"),
+    );
+    expect(old.headers.get("location")).toBe("/welcome/terms?next=%2Fsettings%2Fprofile");
+    expect(stale.row()?.termsVersion).toBe("2020-01-01");
+    expect(stale.calls).toEqual([]);
   });
 });
 
