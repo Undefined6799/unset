@@ -7,7 +7,7 @@ summary: "Hub for domains/identity: DID and handle syntax, resolution and the tw
 code: [domains/identity/index.ts]
 sources: []
 importance: normal
-related: ["[[pds]]", "[[net-guard]]", "[[node-dns-lookup-hides-nxdomain]]"]
+related: ["[[pds]]", "[[net-guard]]", "[[node-dns-lookup-hides-nxdomain]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, identity]
 checked: 2026-10-17
