@@ -2041,7 +2041,7 @@ Diagram: none.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
 Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
-Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` dev stack),
+Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation
 
@@ -2049,11 +2049,19 @@ Goal: prove the first slice works end to end, check its architecture against the
 was learned, and fix problems before any other slice is built (guideline §12).
 
 Inputs: every slice-1 step merged (`01-outline.md`, "Slice 1"); P1.29's `local` env (`PDS_HOSTNAME=pds.unset.localhost`,
-  never reachable from outside) with an account seeded by `dev-seed`; P1.29h's token reader for the verification
-  (no Mailpit); P1.26's
-  Playwright and axe harness; P0.05's dependency-cruiser rules.
+  never reachable from outside) with two fixed test accounts, `alice.unset.im` and `bob.unset.im`, made once by hand
+  (ADR 0023; Alex, 2026-10-17, B). This step does not create an account and does not name passwords, DIDs or mailbox
+  addresses. Their emails are not confirmed. Agents must be able to sign in as them. A test-only exception treats these
+  two as verified so the browser scenario can use `/me` without in-browser email confirmation. Real users still hit
+  P2.11: unconfirmed email cannot use `/me`. Email confirmation stays in the product for account recovery and as a
+  second factor; this step does not invent a 2FA design and does not rewrite P2.11 as optional. The exception must not
+  exist in production (fail closed; no admin bypass, no forged membership, no "lock down later" path). This step does
+  not invent the local mechanism (see the book-edit PR). The email-token reader still refuses every stack (ADR 0023);
+  P1.26's Playwright and axe harness; P0.05's dependency-cruiser rules.
 Outputs:
   - `tests/e2e/slice-1.spec.ts`: one scenario per theme, in English (slice 1 is English only; the i18n slice adds French).
+    This step stays [STOP] and does not write a new browser sign-in spec; the scenario below is the already-booked
+    slice-1 path, rescoped onto `alice.unset.im` / `bob.unset.im`, skipping in-browser email confirmation for them only.
   - `docs/human/features/sign-in.md`: what the feature does, its ownership path
     (`apps/web → interfaces/http → domains/identity → infrastructure/pds → PDS`, with `infrastructure/postgres`,
     `infrastructure/seal` and `infrastructure/net-guard` beside it), its routes, tables and roles, the security pieces it
@@ -2064,12 +2072,15 @@ Outputs:
 
 Algorithm:
   1. Bring up the `local` stack (`local:up`, which runs `compose.local.yaml`, profile `app`; architecture's Amendment 5
-     of 2026-10-13-local-plc, point 1); seed one account.
-  2. Run the scenario: `/login` → handle of the seeded account → the local PDS's sign-in page → consent (the fallback
-     scope set is expected until P1.35 publishes the permission set; P2.05 logs `oauth.scope_fallback_used`) →
-     `/oauth/callback` → onboarding (age, terms) → email verification (`requestEmailConfirmation`, P1.29h's
-     reader, the real `confirmEmail`) → `/me` shows the verified handle
-     and the DID in mono and the "Set up your profile" placeholder → Sign out → `/me` redirects to `/login?next=/me`.
+     of 2026-10-13-local-plc, point 1). Do not seed. Use `alice.unset.im` or `bob.unset.im` (ADR 0023; Alex, 2026-10-17,
+     B).
+  2. Run the already-booked scenario on that account: `/login` → handle → the local PDS's sign-in page → consent (the
+     fallback scope set is expected until P1.35 publishes the permission set; P2.05 logs `oauth.scope_fallback_used`) →
+     `/oauth/callback` → onboarding (age, terms) → `/me` shows the verified handle and the DID in mono and the
+     "Set up your profile" placeholder → Sign out → `/me` redirects to `/login?next=/me`. Skip in-browser email
+     confirmation on these two accounts only. Do not call the email-token reader and do not create an account. Their
+     emails are not confirmed. P2.11 still gates every other account; this step does not rewrite it as optional and
+     stays [STOP].
   3. Assert on the way: every response carries the P1.08 CSP and security headers; session cookies are `__Host-`
      cookies with no `Domain=`; the OAuth state, session and token rows are sealed (`types.sealed`); no IP address or
      user agent is written (P0.06 `ip-columns` and a log scan of the run); the sign-in writes no audit row (only the
@@ -2082,8 +2093,12 @@ Algorithm:
   6. **Stop:** Alex reads the review; the next slice starts only after this PR is merged.
 
 Edge cases and failures:
-  - The local PDS cannot be reached or the seed fails → the run fails; never fall back to the homelab dev PDS (its admin
-    password is Alex's alone after P1.34).
+  - The local PDS cannot be reached, or neither `alice.unset.im` nor `bob.unset.im` is available → the run fails; never
+    create an account to unblock it, and never fall back to the homelab dev PDS (its admin password is Alex's alone
+    after P1.34).
+  - A production env, or any account other than these two, treating unconfirmed email as verified → fail closed; never
+    an admin bypass, forged membership, or "lock down later" path. How the local exception is implemented is not
+    invented here (it must stay off the production path; options on the book-edit PR).
   - The local PDS cannot fetch `web`'s client metadata (the `client_id` URL does not resolve from `pds_egress`, or the
     PDS's OAuth provider refuses the address) → **stop** and report with options (findings F-25; the prototype could
     never verify a signed-in flow locally, vault pitfall `dev-local-verification-limits`). Never make it pass with
@@ -2094,14 +2109,16 @@ Edge cases and failures:
     without Alex.
 
 Done when (tests):
-  - `slice1.sign_in_to_me`: the scenario in step 2 passes in both themes, in English.
+  - `slice1.sign_in_to_me`: the scenario in step 2 passes in both themes, in English, on `alice.unset.im` or
+    `bob.unset.im`, skipping in-browser email confirmation.
   - `slice1.headers_and_cookies`: step 3's header and cookie checks hold on every response of the run.
   - `slice1.tokens_sealed`: after the run, `app.oauth_state` and `app.oauth_session` hold only sealed values.
   - `slice1.no_sign_in_records`: the audit chain gained no row from sign-in, callback or sign-out.
   - `slice1.axe`: zero violations on every page visited.
   - `slice1.real_oauth`: the spec registers no `page.route`/`context.route` handler and stubs no OAuth endpoint (static
-    check of the spec file), and after the run the local PDS holds an authorization for the seeded account and
+    check of the spec file), and after the run the local PDS holds an authorization for that fixed test account and
     `web`'s `client_id` (read through the PDS's own database in the throwaway stack).
+  - `slice1.creates_no_account`: the spec and helpers call neither `createAccount` nor the email-token reader.
   - `slice1.docs_present`: `docs/human/features/sign-in.md` names the ownership path; the review file names a date and
     lists its problems with their fix PRs (checked by `scripts/docs/docs.test.ts`).
 
