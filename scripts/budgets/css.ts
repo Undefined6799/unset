@@ -1,7 +1,10 @@
 // CSS size budget (P1.21q; plan §6.1 CSS row and §8 Phase 1 styling paragraph): every bundle and every page stays
 // under budget.css.json, measured two ways. Unminified bytes come from a build with minification off; min-gzip
-// bytes are gzip level 9 of the minified build. Limits are KiB (P1.21: 40 KiB = 40,960 bytes). Unlike the line
-// budgets this is a gate: anything over exits 1, and the numbers are printed every time.
+// bytes are gzip level 9 of the minified build. Limits are KiB. P1.21 started at 40 KiB (40,960 bytes).
+// P1.25 raised the unminified cap to 52 KiB (53,248 bytes): the one shared tokens, base and kit bundle
+// measures 50,063, and Alex chose a higher cap over trimming it (2026-10-17). The gzip cap is unchanged
+// and is what bounds the bytes sent. Unlike the line budgets this is a gate: anything over exits 1, and
+// the numbers are printed every time.
 //
 // The two builds are paired by file name with Vite's content hash removed (`assets/[name]-[hash][extname]`, the
 // default asset name in the Vite build options docs). That naming is unverified until P1.21 wires the real double

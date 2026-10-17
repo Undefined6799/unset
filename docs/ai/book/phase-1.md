@@ -4582,9 +4582,13 @@ CI reject any CSS that bypasses the tokens, the layer order or the size budget.
   reports if one does not exist (never substitutes silently). `useLayeredStyles` is nursery-only in Biome 2.5.15
   (reported by P1.21): Alex chose "Turn on" (2026-10-06 12:38Z), so it is enabled at its nursery id at error level,
   and the `css-layers` guard stays as the backstop. Plus the GritQL plugin `token-only.grit`.
-- `budget.css.json`: `{ "perBundle": { "unminifiedBytes": 40960, "minGzipBytes": 12288 }, "perPage":
-  { "unminifiedBytes": 40960, "minGzipBytes": 12288 } }`. Limits are KiB (40 KiB = 40,960 bytes; 12 KiB =
-  12,288 bytes). Plan §8 Phase 1 speaks of the total shipped CSS, §6.1 of bundles: both are checked.
+- `budget.css.json`: `{ "perBundle": { "unminifiedBytes": 53248, "minGzipBytes": 12288 }, "perPage":
+  { "unminifiedBytes": 53248, "minGzipBytes": 12288 } }`. Limits are KiB (52 KiB = 53,248 bytes; 12 KiB =
+  12,288 bytes). P1.21 shipped 40 KiB (40,960). P1.25 raised the unminified cap: the one shared tokens, base and
+  kit bundle measures 50,063 bytes, and Alex chose a higher cap over trimming it (2026-10-17). 52 KiB is the next
+  multiple of 4 KiB above that measurement (48 KiB is 49,152, short of it) and leaves 3,185 bytes. The gzip cap
+  is unchanged and bounds the bytes sent. Plan §8 Phase 1 speaks of the total shipped CSS, §6.1 of bundles: both
+  are checked.
 - `docs/human/decisions/NNNN-design-source.md` (short): "design source = unset.sh sheet `<version>`; the 0x40 v2e direction
   (amber, serif face, chamfers, `UiIcon`) is superseded; icons are Iconoir 7.12.1 SVGs copied from the sheet's Icon
   list (P1.24, #12b), not the 0x40 `iconoir-react` set-up." P0.09 lists the vault note `v2e-visual-direction-locked`
