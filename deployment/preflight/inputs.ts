@@ -2,11 +2,7 @@
 // service env files, and the readers and runners the checks use. Anything that keeps the preflight from judging the
 // stack throws CannotRun or ParseError; index.ts turns either into exit 2.
 import {
-  closeSync,
-  constants,
-  fstatSync,
   lstatSync,
-  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
@@ -30,6 +26,7 @@ import {
   parseEnvFile,
   type Service,
 } from "./compose-parse.ts";
+import { NOT_REGULAR, readRegular, UnreadableFile } from "./regular-file.ts";
 import { ConfiguredValues, SecretMap } from "./secret-map.ts";
 
 export type Deps = {
@@ -39,6 +36,8 @@ export type Deps = {
   readText?: (path: string) => string | null;
   /** How an env file Compose reads values from is read; `readEnvOrNull` unless a test passes one. */
   readEnv?: (path: string) => EnvRead | null;
+  /** How C18 reads the dev root and leaf copies (Inputs.readRegular); regular-file.ts unless a test passes one. */
+  readRegular?: Inputs["readRegular"];
   stat?: (path: string) => Stats | null;
   lstat?: (path: string) => Stats | null;
   realpath?: (path: string) => string | null;
@@ -101,28 +100,23 @@ export class CannotRun extends Error {}
 /** An env file's text and the `dev:ino` of the file it came from, which C9 matches against what it judges. */
 export type EnvRead = { text: string; id: string };
 
-/**
- * An env file, read only as a regular file (P1.34p, Amendment 2): its real path is opened with O_NOFOLLOW, so a link
- * swapped in after realpath(3) fails, and O_NONBLOCK, so a FIFO opens without a writer instead of blocking ("open the
- * file in nonblocking mode", Node v26.10.0 doc/api/fs.md, File open constants). The descriptor is fstat'ed and read
- * only if it is a regular file (readFileSync takes a descriptor, the same page). Null only when nothing exists.
- */
+/** A file's text, read only as a regular file (P1.35p S2); any error but its absence throws. */
+const readRegularText: Inputs["readRegular"] = (path) => {
+  const read = readRegular(path);
+  return read === null || read === NOT_REGULAR ? read : read.text;
+};
+
+/** An env file, read only as a regular file (P1.34p, Amendment 2); anything else stops the run. */
 function readEnvOrNull(path: string): EnvRead | null {
-  let fd: number;
+  let read: ReturnType<typeof readRegular>;
   try {
-    fd = openSync(realpathSync.native(path), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    read = readRegular(path);
   } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return null;
-    throw new CannotRun(`cannot read ${path}`);
+    if (error instanceof UnreadableFile) throw new CannotRun(error.message);
+    throw error;
   }
-  try {
-    const info = fstatSync(fd);
-    if (!info.isFile()) throw new CannotRun(`${path} is not a regular file`);
-    return { text: readFileSync(fd, "utf8"), id: `${info.dev}:${info.ino}` };
-  } finally {
-    closeSync(fd);
-  }
+  if (read === NOT_REGULAR) throw new CannotRun(`${path} is not a regular file`);
+  return read;
 }
 
 /**
@@ -352,6 +346,7 @@ export function loadInputs(argv: string[], deps: Deps): Loaded {
     networkTablePath: join(deps.root, `deployment/networks.${networkTable(env)}.json`),
     edgeDir: join(deps.root, "deployment/edge"),
     readText,
+    readRegular: deps.readRegular ?? readRegularText,
     stat: deps.stat ?? statOrNull,
     lstat: deps.lstat ?? lstatOrNull,
     realpath: deps.realpath ?? realpathOrNull,

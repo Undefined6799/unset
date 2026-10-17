@@ -846,6 +846,7 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
             }
           : { code: 0, stdout: "", stderr: "" },
     readText: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
+    readRegular: (path) => files.get(path)?.text ?? real(path, () => readFileSync(path, "utf8")),
     readEnv: (path) => {
       const entry = files.get(path);
       return entry?.text === undefined

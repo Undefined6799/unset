@@ -22,6 +22,7 @@ import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { hostWalk, localDockerHost, UsageError, type WalkInputs } from "../../shared/host-pin/index.ts";
+import { printable } from "./printable.ts";
 
 /** The only variables a child sees: where commands are, the home directory, and how the Docker CLI is configured. */
 export const CHILD_ENV_NAMES = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
@@ -238,7 +239,8 @@ export function main(
     return run(plan(argv, from, inputs), runner);
   } catch (error) {
     if (!(error instanceof UsageError || error instanceof StackError)) throw error;
-    write(`stack: ${error.message}\n`);
+    // A message can name COMPOSE_* variables from the caller's environment, so it is printed escaped (S1).
+    write(`stack: ${printable(error.message)}\n`);
     return 2;
   }
 }

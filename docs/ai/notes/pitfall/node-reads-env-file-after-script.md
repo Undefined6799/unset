@@ -4,13 +4,13 @@ type: pitfall
 status: current
 areas: ["[[deployment]]"]
 summary: "Node reads --env-file anywhere before a literal --, even after the script name, and runs the file's NODE_OPTIONS."
-code: [deployment/preflight/inputs.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts, deployment/preflight/served-leaf.ts]
+code: [deployment/preflight/inputs.ts, deployment/preflight/regular-file.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts, deployment/preflight/served-leaf.ts]
 sources: [unset-plan/book-edits/2026-10-12-preflight-compose-inputs.md]
 importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-15
+checked: 2026-10-17
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
@@ -47,3 +47,6 @@ That child gets the same environment, empty `NODE_OPTIONS` included, and is call
 local`, which refuses any other form; `stack.test.ts` pins the argv. No `--env-file*`, `--require` or `--import` flag
 was added, and the rules above still hold. The four `npm run` scripts call the wrapper the same way, as
 `node deployment/preflight/stack.ts -- up …`.
+Re-checked at P1.35p, which moves the env files' `O_NOFOLLOW|O_NONBLOCK` reader from `inputs.ts` to `regular-file.ts`
+unchanged and gives C18 the same reader for the dev root copies; no flag, argv form or child environment changed, and
+the rules above still hold.
