@@ -152,13 +152,16 @@ openssl req -x509 -new -key unset-dev-ca/root.key -sha256 -days 825 -subj "/CN=u
   -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -addext "nameConstraints=critical,permitted;DNS:$APP_HOST,permitted;DNS:$PDS_HOST,excluded;IP:0.0.0.0/0.0.0.0,excluded;IP:::/::" \
   -out unset-dev-ca/root.pem
-mkdir -m 0755 unset-dev-trust
-cp unset-dev-ca/root.pem unset-dev-trust/root.pem
-chmod 0644 unset-dev-trust/root.pem
+install -d -m 0755 unset-dev-trust
+install -m 0644 unset-dev-ca/root.pem unset-dev-trust/root.pem
 ```
 
 `unset-dev-trust/` holds only that copy of the root's public certificate, which P1.34d binds into pds and web; it is
-never the CA folder, the env folder or the secrets folder. Copy it, never link it, and put nothing else there.
+never the CA folder, the env folder or the secrets folder. Copy it, never link it, and put nothing else there. The two
+`install` lines can be run again after you remake the root: `install -d` accepts the folder that is already there, and
+`install` replaces whatever sits at `root.pem`, a link included, instead of writing through it. The preflight refuses
+the folder unless it and `root.pem` are yours (or root's), nobody else can write the folder, and `root.pem` is 0444 or
+0644.
 
 Then make the leaf (397 days), and install it:
 

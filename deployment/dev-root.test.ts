@@ -5,7 +5,7 @@
 // `openssl verify` -help: -CAfile, -untrusted, -verify_hostname).
 import { execFileSync, spawnSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -88,6 +88,23 @@ describe("the runbook's local dev root (P1.33g)", () => {
     expect(readFileSync(join(dir, "unset-dev-trust/root.pem"))).toEqual(readFileSync(ca("root.pem")));
     expect(statSync(join(dir, "unset-dev-trust/root.pem")).mode & 0o777).toBe(0o644);
     expect(statSync(join(dir, "unset-dev-trust")).mode & 0o777).toBe(0o755);
+  });
+
+  test("recipe_trust_copy_reruns_and_replaces_a_link", () => {
+    // P1.35p S3 and N6 (verify-896): the copy lines run again where the folder already exists, and a link left at
+    // unset-dev-trust/root.pem is replaced by the file, never written through. Measured with GNU coreutils 9.4: install
+    // replaces the link and leaves its target alone, cp writes through it, and mkdir -m fails on an existing folder.
+    const lines = (recipe()[0] ?? "").split("\n").filter((line) => line.includes("unset-dev-trust"));
+    const trust = join(dir, "unset-dev-trust");
+    writeFileSync(join(dir, "elsewhere.pem"), "outside\n");
+    rmSync(join(trust, "root.pem"));
+    symlinkSync("../elsewhere.pem", join(trust, "root.pem"));
+    execFileSync("sh", ["-e", "-c", lines.join("\n")], { cwd: dir, stdio: "pipe" });
+    expect(lstatSync(join(trust, "root.pem")).isFile()).toBe(true);
+    expect(readFileSync(join(trust, "root.pem"))).toEqual(readFileSync(ca("root.pem")));
+    expect(statSync(join(trust, "root.pem")).mode & 0o777).toBe(0o644);
+    expect(statSync(trust).mode & 0o777).toBe(0o755);
+    expect(readFileSync(join(dir, "elsewhere.pem"), "utf8")).toBe("outside\n");
   });
 
   test("recipe_leaf_serves_exactly_the_two_hosts_for_397_days", () => {
