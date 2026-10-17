@@ -30,9 +30,12 @@ only; their trees fail `npm audit --audit-level=high`, so they are not in the lo
 caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
 mark link, whose name is an SVG `aria-label`, and contrast on a button whose fill is
 `::before`. Lighthouse's upload target is `filesystem`. P2.13 put `/login` and
-`/signed-out` in the app shell, so those two load the header island. `/legal/domains` is a
-public document. `/.well-known/security.txt` is text, not a page. Lighthouse launches
-Chrome with `--no-sandbox` (`collect.settings.chromeFlags` in `@lhci/cli` 0.15.1):
+`/signed-out` in the app shell, so those two load the header island. `/welcome/blocked`
+renders with no session and no island (P2.12). `/welcome`, `/welcome/age`,
+`/welcome/terms`, `/welcome/chat` and `/settings/profile` redirect to sign-in.
+`/legal/domains` is a public document. `/.well-known/security.txt` is text, not a page.
+Lighthouse launches Chrome with `--no-sandbox` (`collect.settings.chromeFlags` in
+`@lhci/cli` 0.15.1):
 ubuntu-24.04's AppArmor refuses the browser's user namespace.
 
 **Files.**

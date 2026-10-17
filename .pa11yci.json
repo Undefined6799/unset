@@ -17,6 +17,7 @@
     "http://127.0.0.1:8080/legal/privacy",
     "http://127.0.0.1:8080/legal/domains",
     "http://127.0.0.1:8080/login",
-    "http://127.0.0.1:8080/signed-out"
+    "http://127.0.0.1:8080/signed-out",
+    "http://127.0.0.1:8080/welcome/blocked"
   ]
 }

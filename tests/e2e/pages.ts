@@ -45,6 +45,8 @@ export const PAGES: readonly PageFixture[] = [
   // P2.13 renders these inside the app shell. The header island is a script; the page still works without it.
   { path: "/login", group: "app", zeroJs: false, expectJs: true },
   { path: "/signed-out", group: "app", zeroJs: false, expectJs: true },
+  // P2.12 renders this with islands off and no session. The header stays static, so no script is requested.
+  { path: "/welcome/blocked", group: "app", zeroJs: true, expectJs: false },
 ];
 
 /**
@@ -61,6 +63,11 @@ export const NOT_DOCUMENTS: readonly { readonly path: string; readonly reason: s
   { path: "/login/continue", reason: "sign-in handoff, covered by P2.13a, not this harness" },
   { path: "/verify-email", reason: "redirects to sign-in without a session" },
   { path: "/me", reason: "redirects to sign-in without a session" },
+  { path: "/welcome", reason: "always redirects to the current onboarding step" },
+  { path: "/welcome/age", reason: "redirects to sign-in without a session" },
+  { path: "/welcome/terms", reason: "redirects to sign-in without a session" },
+  { path: "/welcome/chat", reason: "redirects to sign-in without a session" },
+  { path: "/settings/profile", reason: "redirects to sign-in without a session" },
 ];
 
 export type ThemeCell =
