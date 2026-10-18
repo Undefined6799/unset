@@ -118,7 +118,7 @@ describe("stack wrapper (P1.27w)", () => {
     expect(plan(UP, caller).env).toEqual(childEnv(caller, SOCKET));
   });
 
-  test("up_runs_the_preflight_then_compose_with_the_same_inputs", () => {
+  test("up_runs_the_precheck_then_compose_with_the_same_inputs", () => {
     const files = ["deployment/compose.dev.yaml", "deployment/other.yaml"].map((f) => resolve(f));
     const envFile = resolve("deployment/env/dev.env");
     const { commands } = plan(
@@ -138,7 +138,7 @@ describe("stack wrapper (P1.27w)", () => {
       "--interpolation-env",
       envFile,
     ]);
-    expect(commands[0]?.args[0]).toMatch(/deployment\/preflight\/index\.ts$/);
+    expect(commands[0]?.args[0]).toMatch(/scripts\/dev-precheck\.ts$/);
     expect(commands[1]?.args).toEqual([
       "compose",
       "-f",
@@ -243,6 +243,18 @@ describe("stack wrapper (P1.27w)", () => {
       "local",
     ]);
     expect(plan(LOCAL_DOWN, {}).commands.map((c) => c.args.at(-1))).toEqual(["down"]);
+  });
+
+  test("local_up_creates_no_account", () => {
+    // P1.29s / ADR 0023: local:up never seeds, never calls createAccount, never writes .seeded.json, never runs the
+    // email-token reader. Accounts are made once by hand.
+    const { commands } = plan(LOCAL_UP, {});
+    const argv = commands.flatMap((c) => [c.file, ...c.args]);
+    expect(argv.some((part) => /dev-seed/.test(part))).toBe(false);
+    expect(argv.some((part) => part.includes("createAccount"))).toBe(false);
+    expect(argv.some((part) => part.includes(".seeded.json"))).toBe(false);
+    expect(argv.some((part) => part.includes("pds-token-reader"))).toBe(false);
+    expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker", "the leaf check"]);
   });
 
   test("a_failing_leaf_check_takes_the_stack_down", () => {
@@ -469,7 +481,7 @@ describe("stack wrapper (P1.27w)", () => {
       spawn: () => ({ status: null, signal: null, error: new Error("ENOENT") }),
     };
     // A reason names the program by a fixed label, never a path (P1.34s, nit 4).
-    expect(() => run(plan(UP, {}), missing)).toThrow(new StackError("the preflight could not be started"));
+    expect(() => run(plan(UP, {}), missing)).toThrow(new StackError("the precheck could not be started"));
     const killed: Runner = { ...runner(() => 0), spawn: () => ({ status: null, signal: "SIGKILL" }) };
     expect(() => run(plan(DOWN, {}), killed)).toThrow(new StackError("docker was stopped by SIGKILL"));
     const noDocker: Runner = {
@@ -638,7 +650,7 @@ describe("stack wrapper (P1.27w)", () => {
     expect(
       main(UP, {}, { ...runner(() => 0), spawn: () => ({ status: null, signal: "SIGTERM" }) }, write, SOCKET),
     ).toBe(2);
-    expect(lines).toEqual(["stack: the action is up or down\n", "stack: the preflight was stopped by SIGTERM\n"]);
+    expect(lines).toEqual(["stack: the action is up or down\n", "stack: the precheck was stopped by SIGTERM\n"]);
     expect(
       main(
         UP,

@@ -3,8 +3,9 @@
 // the preflight agree on it. networks.dev.json gets no local-only rows: a row there would claim the homelab runs it.
 import { TOKEN_READER } from "./compose-parse.ts";
 
-/** Services only the local file has: the token reader now, the seed (P1.29s) and the PLC (P1.34v) when they land. */
-export const LOCAL_ONLY_SERVICES: ReadonlySet<string> = new Set([TOKEN_READER, "seed", "plc"]);
+/** Services only the local file has: the token reader now. `plc` is the retired local-PLC placeholder (ADR 0022).
+ * P1.29s adds no seed service. */
+export const LOCAL_ONLY_SERVICES: ReadonlySet<string> = new Set([TOKEN_READER, "plc"]);
 
 /**
  * Networks only the local file has, each with its exact members. P1.34v adds the PLC's per-consumer networks here

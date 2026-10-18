@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[identity]]"]
 replaced_by: null
 tags: [how-to, pds, identity]
-checked: 2026-10-17
+checked: 2026-10-18
 ---
 # Where the operator types the Alice and Bob PDS password
 

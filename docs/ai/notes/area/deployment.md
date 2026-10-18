@@ -3,14 +3,14 @@ id: deployment
 type: area
 status: current
 areas: ["[[deployment]]"]
-summary: "Hub for deployment/: the Postgres init script and the reserved handle labels; compose and edge come later."
-code: [deployment/postgres/init/00-bootstrap.sh, deployment/reserved-labels.txt]
+summary: "Hub for deployment/: compose, edge, preflight, and the local precheck that never creates accounts."
+code: [deployment/postgres/init/00-bootstrap.sh, deployment/reserved-labels.txt, deployment/preflight/stack.ts, scripts/dev-precheck.ts]
 sources: []
 importance: normal
 related: ["[[postgres]]"]
 replaced_by: null
 tags: [area, deployment]
-checked: 2026-10-12
+checked: 2026-10-18
 ---
 # deployment
 
@@ -25,6 +25,8 @@ checked: 2026-10-12
   changed between those two versions (ddb94f1 "fix: avoid eager default interpolation", aa1ee1a "fix extraction of
   variables"; `git log v2.7.1..v2.13.0 -- template/`), which is the kind of change P1.30l's revisit trigger watches
   for.
+- `scripts/dev-precheck.ts` (P1.29s): `dev:up` / `local:up` run it before compose up. It refuses a production PDS host
+  (`unset.ac`) and a foreign describeServer DID, then the preflight. It creates no account and writes no `.seeded.json`.
 
 Deploy only CI-built images of merged commits. Terraform and Ansible arrive at P5.00, once hosting is chosen.
 
