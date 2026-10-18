@@ -1,5 +1,6 @@
 // P1.29t: running-local-stack judgements with stand-ins. Docker and the PDS are unmanaged; the image tests run the
 // same helpers against real containers. Nothing here creates an account or calls the email-token reader.
+import { clientMetadata, SCOPE_METADATA } from "@unset/infrastructure-pds";
 import { describe, expect, test } from "vitest";
 import {
   argvCreatesAccount,
@@ -58,10 +59,13 @@ describe("running local stack (P1.29t)", () => {
   });
 
   test("client_id_body_parses_as_client_metadata", () => {
-    expect(clientMetadataProblem({ client_id: CLIENT_ID }, CLIENT_ID)).toBeNull();
-    expect(clientMetadataProblem({ client_id: "https://other.example/oauth-client-metadata.json" }, CLIENT_ID)).toBe(
-      "probe.client_id_not_metadata",
-    );
+    const origin = `https://${APP_HOST}`;
+    const body = clientMetadata(origin, SCOPE_METADATA);
+    expect(clientMetadataProblem(body, CLIENT_ID)).toBeNull();
+    expect(clientMetadataProblem({ client_id: CLIENT_ID }, CLIENT_ID)).toBe("probe.client_id_not_metadata");
+    expect(
+      clientMetadataProblem({ ...body, client_id: "https://other.example/oauth-client-metadata.json" }, CLIENT_ID),
+    ).toBe("probe.client_id_not_metadata");
     expect(clientMetadataProblem("not json", CLIENT_ID)).toBe("probe.client_id_not_metadata");
     expect(clientMetadataProblem(null, CLIENT_ID)).toBe("probe.client_id_not_metadata");
   });

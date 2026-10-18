@@ -60,8 +60,9 @@ ubuntu-24.04's AppArmor refuses the browser's user namespace.
   Every test image carries `sh.unset.test-owner=<pid>`, the test containers' label, so a leaked tag can be found with
   a label filter (P1.11i).
 - `support/local-stack.ts` (P1.29t): judgements for the running local stack. Probes run only under local. Device
-  rows must show the edge's inspect address, never the client's. The live client_id GET and OAuth as Alice or Bob
-  are P1.33z.
+  rows must show the edge's inspect address, never the client's. Client metadata is judged with
+  `@atproto/oauth-client` 0.8.9 `clientMetadataSchema` (same import as `tests/e2e/oauth-origin.test.ts`). The live
+  client_id GET and OAuth as Alice or Bob are P1.33z.
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.

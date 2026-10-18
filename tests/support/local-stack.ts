@@ -6,6 +6,10 @@
 // The live GET from inside the PDS container is P1.33z (book edit 2026-10-14-p134d-split, probe-departure): session
 // containers cannot pull the PDS image. This module still refuses every env other than local, so a later live probe
 // cannot run under dev (architecture Amendment 4 of 2026-10-13-local-plc, point 1, and Amendment 6, S3).
+// @atproto/oauth-client 0.8.9 exports only "." (package.json); clientMetadataSchema lives in dist/types.js
+// (tests/e2e/oauth-origin.test.ts).
+import { clientMetadataSchema } from "../../node_modules/@atproto/oauth-client/dist/types.js";
+
 export const PROJECT = "unset-local";
 export const EDGE_NETWORK = "edge";
 export const PDS_UID = 1000;
@@ -78,8 +82,8 @@ export function clientIdProbePlan(input: {
 }
 
 export function clientMetadataProblem(body: unknown, clientId: string): "probe.client_id_not_metadata" | null {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) return "probe.client_id_not_metadata";
-  return (body as { client_id?: unknown }).client_id === clientId ? null : "probe.client_id_not_metadata";
+  const parsed = clientMetadataSchema.safeParse(body);
+  return parsed.success && parsed.data.client_id === clientId ? null : "probe.client_id_not_metadata";
 }
 
 /** APP_HOST and PDS_HOST, looked up from inside the PDS, must be exactly the edge's inspect address. */
@@ -92,8 +96,9 @@ export function hostResolvesToEdge(
 }
 
 /**
- * After a real PDS login as Alice or Bob (this step does not create the account), the device row's ipAddress is the
- * edge's address on `edge`, never the client's (P1b-A1: the edge forwards no client address).
+ * Fail-closed verdict for a PDS device row: local env, Alice or Bob, ipAddress equals the edge inspect address
+ * (P1b-A1). Observing a live row after OAuth needs compose up and a password; the book moved the live client_id
+ * GET to P1.33z for the same stack, and ADR 0026 left the password location open. This step does not invent either.
  */
 export function deviceRowVerdict(input: {
   env: string | undefined;

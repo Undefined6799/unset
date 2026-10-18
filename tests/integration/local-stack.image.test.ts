@@ -12,9 +12,13 @@ const PDS = /^ {4}image: (ghcr\.io\/bluesky-social\/pds:\S+@sha256:[0-9a-f]{64})
   readFileSync(join(import.meta.dirname, "../../deployment/compose.local.yaml"), "utf8"),
 )?.[1];
 
+// docker run may pull the PDS image. Inspect, volume, network and rm are shorter. Each call is killed under its own
+// budget so sequential body+cleanup cannot sit on the 600 s suite kill (P1.27k, P1.29o).
 const TEST_MS = 300_000;
-const CALL_MS = killBefore(TEST_MS);
-const call = { timeoutMs: CALL_MS };
+const RUN_MS = 120_000;
+const SHORT_MS = 20_000;
+const runCall = { timeoutMs: killBefore(RUN_MS) };
+const shortCall = { timeoutMs: killBefore(SHORT_MS) };
 const hex = (): string => randomBytes(6).toString("hex");
 
 const pdsSh = (volume: string, target: string, script: string): string[] => [
@@ -41,7 +45,7 @@ describe("running local stack with Docker (P1.29t)", () => {
     // (nodejs/docker-node 24/alpine3.23/Dockerfile:5-6, cited from compose.dev.yaml).
     const run = docker(
       ["run", "--rm", "--network", "none", "--user", "1000:1000", "--entrypoint", "id", PDS as string, "-u"],
-      call,
+      runCall,
     );
     expect(run.code, run.err.slice(-2000)).toBe(0);
     expect(run.out.trim()).toBe(String(PDS_UID));
@@ -52,17 +56,17 @@ describe("running local stack with Docker (P1.29t)", () => {
     const volume = `unset-test-pdsdata-${hex()}`;
     withCleanup(
       () => {
-        expect(docker(["volume", "create", volume], call).code).toBe(0);
+        expect(docker(["volume", "create", volume], shortCall).code).toBe(0);
         // A fresh named volume at /home/node copies that directory's owner (uid 1000) from the image.
         const script = "id -u; stat -c %u /home/node; touch /home/node/write-ok && echo write-ok";
-        const run = docker(pdsSh(volume, "/home/node", script), call);
+        const run = docker(pdsSh(volume, "/home/node", script), runCall);
         expect(run.code, run.err.slice(-2000)).toBe(0);
         const [uid, owner, write] = run.out.trim().split("\n");
         expect(pdsVolumeVerdict({ uid: Number(uid), ownerUid: Number(owner), writeOk: write === "write-ok" })).toBe(
           "ok",
         );
       },
-      () => void docker(["volume", "rm", volume], call),
+      () => void docker(["volume", "rm", volume], shortCall),
     );
   });
 
@@ -71,16 +75,17 @@ describe("running local stack with Docker (P1.29t)", () => {
     const volume = `unset-test-pdsroot-${hex()}`;
     withCleanup(
       () => {
-        expect(docker(["volume", "create", volume], call).code).toBe(0);
+        expect(docker(["volume", "create", volume], shortCall).code).toBe(0);
         // /pds is not in the image, so a fresh volume there is root-owned (P1.29a: never mount /pds).
         const script = "id -u; stat -c %u /pds; touch /pds/write-ok && echo write-ok";
-        const run = docker(pdsSh(volume, "/pds", script), call);
+        const run = docker(pdsSh(volume, "/pds", script), runCall);
         const lines = run.out.trim().split("\n");
-        const writeOk = lines.includes("write-ok") && run.code === 0;
-        expect(pdsVolumeVerdict({ uid: Number(lines[0]), ownerUid: Number(lines[1]), writeOk })).not.toBe("ok");
-        expect(Number(lines[1]) === 0 || writeOk === false).toBe(true);
+        expect(lines[0], run.err.slice(-2000)).toBe(String(PDS_UID));
+        expect(Number(lines[1])).toBe(0);
+        expect(lines.includes("write-ok")).toBe(false);
+        expect(pdsVolumeVerdict({ uid: PDS_UID, ownerUid: 0, writeOk: false })).toBe("pds.volume_not_owned_by_1000");
       },
-      () => void docker(["volume", "rm", volume], call),
+      () => void docker(["volume", "rm", volume], shortCall),
     );
   });
 
@@ -92,7 +97,7 @@ describe("running local stack with Docker (P1.29t)", () => {
     const pdsHost = "pds.unset.localhost";
     withCleanup(
       () => {
-        expect(docker(["network", "create", network], call).code).toBe(0);
+        expect(docker(["network", "create", network], shortCall).code).toBe(0);
         const started = docker(
           [
             "run",
@@ -110,10 +115,10 @@ describe("running local stack with Docker (P1.29t)", () => {
             PDS as string,
             "120",
           ],
-          call,
+          runCall,
         );
         expect(started.code, started.err.slice(-2000)).toBe(0);
-        const inspected = docker(["inspect", edge], call);
+        const inspected = docker(["inspect", edge], shortCall);
         expect(inspected.code, inspected.err.slice(-2000)).toBe(0);
         const info = JSON.parse(inspected.out) as {
           NetworkSettings: { Networks: Record<string, { IPAddress: string } | undefined> };
@@ -125,7 +130,7 @@ Promise.all(${JSON.stringify([app, pdsHost])}.map((n)=>dns.promises.lookup(n,{al
   .then((a)=>console.log(JSON.stringify(a)));`;
         const fromPds = docker(
           ["run", "--rm", "--network", network, "--entrypoint", "node", PDS as string, "-e", lookup],
-          call,
+          runCall,
         );
         expect(fromPds.code, fromPds.err.slice(-2000)).toBe(0);
         const answers = JSON.parse(fromPds.out) as { address: string }[][];
@@ -137,8 +142,8 @@ Promise.all(${JSON.stringify([app, pdsHost])}.map((n)=>dns.promises.lookup(n,{al
         expect(composeNetworkName(PROJECT, "edge")).toBe("unset-local_edge");
       },
       () => {
-        docker(["rm", "-f", edge], call);
-        docker(["network", "rm", network], call);
+        docker(["rm", "-f", edge], shortCall);
+        docker(["network", "rm", network], shortCall);
       },
     );
   });
