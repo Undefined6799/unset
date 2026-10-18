@@ -4,16 +4,18 @@
 //   node deployment/preflight/stack.ts up|down --env dev|local --compose <file> [--compose <file>...]
 //     --interpolation-env <file>
 //
-// `up` runs the deploy preflight as a child process with exactly these compose files and interpolation env file, all
-// after a `--` so Node reads none of them as its own flags (Node loads an --env-file it finds in argv, Amendment 3),
-// and stops on any non-zero exit. It then runs `docker compose … --env-file <file> up -d --build` with the same files
-// in the same order. `down` stops the stack and never passes -v, so the data volumes survive. A COMPOSE_* variable in
-// the caller's shell is refused outright, and both children get an environment built from an allowlist only, so no
-// interpolated name in the shell can change what the preflight read or what Compose runs. Both children talk to a
-// Docker daemon on this host only: C9, C18 and C26 walk this machine's files, and a remote daemon would bind files of
-// another (architecture record 2026-10-12-workspace-imports-and-remote-daemon (2)). It lives beside the
-// preflight under that folder's import row (P1.27w), and runs the preflight as a process, never by import, so its exit
-// code is the gate.
+// `up` runs the local precheck (P1.29s, scripts/dev-precheck.ts) as a child process with exactly these compose files
+// and interpolation env file, all after a `--` so Node reads none of them as its own flags (Node loads an --env-file
+// it finds in argv, Amendment 3), and stops on any non-zero exit. The precheck refuses a production host and a foreign
+// describeServer DID, then runs the deploy preflight as its own child. It then runs
+// `docker compose … --env-file <file> up -d --build` with the same files in the same order. `down` stops the stack and
+// never passes -v, so the data volumes survive. A COMPOSE_* variable in the caller's shell is refused outright, and
+// both children get an environment built from an allowlist only, so no interpolated name in the shell can change what
+// the precheck read or what Compose runs. Both children talk to a Docker daemon on this host only: C9, C18 and C26
+// walk this machine's files, and a remote daemon would bind files of another (architecture record
+// 2026-10-12-workspace-imports-and-remote-daemon (2)). It lives beside the preflight under that folder's import row
+// (P1.27w), and runs the precheck as a process, never by import, so its exit code is the gate. Nothing in this
+// wrapper creates a PDS account.
 //
 // Under --env local (P1.34d item 15), `up` then runs served-leaf.ts, also as a process, to prove the edge serves the
 // leaf copy the preflight judged; if that check does not pass, the wrapper runs `down` and fails.
@@ -27,7 +29,7 @@ import { printable } from "./printable.ts";
 /** The only variables a child sees: where commands are, the home directory, and how the Docker CLI is configured. */
 export const CHILD_ENV_NAMES = ["PATH", "HOME", "DOCKER_CONFIG", "DOCKER_CERT_PATH"];
 
-const PREFLIGHT = resolve(import.meta.dirname, "index.ts");
+const PRECHECK = resolve(import.meta.dirname, "../../scripts/dev-precheck.ts");
 const SERVED_LEAF = resolve(import.meta.dirname, "served-leaf.ts");
 
 /**
@@ -132,10 +134,10 @@ export function plan(
     action === "up"
       ? [
           {
-            name: "the preflight",
+            name: "the precheck",
             file: process.execPath,
             args: [
-              PREFLIGHT,
+              PRECHECK,
               "--",
               "--env",
               env,
