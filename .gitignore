@@ -13,3 +13,11 @@ graphify-out/cache/
 docs/ai/.obsidian/*
 !docs/ai/.obsidian/graph.json
 jscpd-report/
+# P1.26 browser harness output
+/tests/e2e/report.json
+/test-results/
+/playwright-report/
+/.lighthouseci/
+/pa11y-results.json
+/e2e-prod.log
+/e2e-test.log

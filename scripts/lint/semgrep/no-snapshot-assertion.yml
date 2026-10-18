@@ -1,0 +1,20 @@
+# TE-7, P1.26: a snapshot assertion hides a header or markup change. The CSP policy snapshot
+# (shared/http/csp/policies.test.ts, P1.08) is the one exception. Fixtures:
+# scripts/lint/semgrep/fixtures/no-snapshot-assertion/, checked by scripts/lint/semgrep-fixtures.ts.
+rules:
+  - id: no-snapshot-assertion
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      toMatchSnapshot hides a change. The only snapshot in this repository is the CSP policy
+      snapshot in shared/http/csp/policies.test.ts. Compare the value, or extend that file.
+    paths:
+      exclude:
+        - "scripts/"
+        - "tests/"
+        - "**/*.test.ts"
+        - "/scripts/lint/semgrep/fixtures/"
+        - shared/http/csp/policies.test.ts
+    pattern-either:
+      - pattern: $X.toMatchSnapshot(...)
+      - pattern: $X.toMatchInlineSnapshot(...)
