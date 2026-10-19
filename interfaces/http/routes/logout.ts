@@ -17,6 +17,7 @@ import {
   clearNonceCookie,
   clearTargetCookie,
   issuerCookie,
+  issuerCookieSent,
   issuerFromCookies,
   issuerOrigin,
   signedOutCookie,
@@ -148,14 +149,19 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
         if ((await deps.readSession(request, deadline)) !== null) {
           return new Response(null, { status: 303, headers: { location: "/did", "cache-control": "no-store" } });
         }
-        return deps.page({
+        const cookie = request.headers.get("cookie");
+        const response = deps.page({
           group: "app",
           request,
           title: "Signed out",
           shell: {},
           // The cookie, never the query: only our own POST /logout writes it, and its value is re-checked here.
-          body: signedOutBody(issuerFromCookies(request.headers.get("cookie"))),
+          // "Ours" is string equality with our issuer, never a suffix match (architecture 04:15Z item 4).
+          body: signedOutBody(issuerFromCookies(cookie)),
         });
+        // Single use: a reload links our PDS (item 1).
+        if (issuerCookieSent(cookie)) response.headers.append("set-cookie", clearIssuerCookie());
+        return response;
       },
     }),
   ];

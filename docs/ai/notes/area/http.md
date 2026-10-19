@@ -64,8 +64,10 @@ set, repeating the store's `lookup` conditions, because no sweep runs before the
 keep the grant. `infrastructure/session` stays untouched:
 it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
 sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
-deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query; a missing or
-bad cookie falls back to our PDS. The account page reads the same `issuerOf` directly. A failed delete is the 503
+deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query. Architecture's
+04:15Z ruling: the cookie is single use (the page that reads it clears it), only a bare https origin with no port
+counts, "ours" is string equality with our issuer, and neither the value nor a refusal is logged; anything else falls
+back to our PDS. The account page reads the same `issuerOf` directly. A failed delete is the 503
 `logout.failed`.
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never

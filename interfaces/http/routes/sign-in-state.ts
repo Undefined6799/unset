@@ -80,7 +80,13 @@ export const signedOutFrom = (header: string | null): boolean => cookieValue(hea
 export const issuerCookie = (origin: string): string =>
   `${ISSUER_COOKIE}=${Buffer.from(origin).toString("base64url")}; ${ISSUER_ATTRIBUTES}; Max-Age=${ISSUER_TTL_S}`;
 export const clearIssuerCookie = (): string => `${ISSUER_COOKIE}=; ${ISSUER_ATTRIBUTES}; Max-Age=0`;
-/** The carried issuer origin, or null when the cookie is missing, doubled, not base64url or not a bare https origin. */
+/** True when the request sent the issuer cookie at all, valid or not: the page that reads it clears it (single use). */
+export const issuerCookieSent = (header: string | null): boolean =>
+  (header ?? "").split(";").some((pair) => pair.trim().startsWith(`${ISSUER_COOKIE}=`));
+/**
+ * The carried issuer origin, or null when the cookie is missing, doubled, not base64url or not a bare https origin.
+ * A refusal is not logged: the value names the user's PDS (architecture 2026-10-19 04:15Z item 3, SE-7).
+ */
 export function issuerFromCookies(header: string | null): string | null {
   const encoded = cookieValue(header, ISSUER_COOKIE);
   if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
@@ -90,9 +96,10 @@ export function issuerFromCookies(header: string | null): string | null {
 }
 
 /**
- * The https origin of a recorded issuer, or null for another scheme or one with a user or password. The library
- * already refuses a query, fragment or trailing slash (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js); the
- * account link uses only the origin (book P2.08 `PdsAccountLink`: "<issuer origin>/").
+ * The https origin of a recorded issuer, or null for another scheme, a user or password, or a port other than the
+ * default (architecture 2026-10-19 04:15Z item 2). The library already refuses a query, fragment or trailing slash
+ * (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js); the account link uses only the origin (book P2.08
+ * `PdsAccountLink`: "<issuer origin>/"). WHATWG URL leaves `port` empty for 443 on https.
  */
 export function issuerOrigin(issuer: string): string | null {
   let url: URL;
@@ -101,7 +108,8 @@ export function issuerOrigin(issuer: string): string | null {
   } catch {
     return null;
   }
-  return url.protocol === "https:" && url.username === "" && url.password === "" ? url.origin : null;
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.port !== "") return null;
+  return url.origin;
 }
 
 /** The value of the cookie `name` when exactly one is sent: two mean a confused or planted jar, and neither counts. */
