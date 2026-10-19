@@ -22,8 +22,5 @@ export const isLocalOnlyNetwork = (name: string): boolean => LOCAL_ONLY_NETWORKS
  * switched on by a key, and C29 refuses the key under --env dev and prod. Sites: oauth-client.ts (OAUTH_ALLOW_HTTP),
  * shared/config/netGuard.ts (NETGUARD_ALLOW_LOOPBACK), shared/http/config.ts and csp/headers.ts (DEV_VITE_ORIGIN).
  */
-export const LOCAL_ONLY_KEYS: ReadonlySet<string> = new Set([
-  "OAUTH_ALLOW_HTTP",
-  "NETGUARD_ALLOW_LOOPBACK",
-  "DEV_VITE_ORIGIN",
-]);
+export const LOCAL_ONLY_KEY_NAMES = ["OAUTH_ALLOW_HTTP", "NETGUARD_ALLOW_LOOPBACK", "DEV_VITE_ORIGIN"] as const;
+export const LOCAL_ONLY_KEYS: ReadonlySet<string> = new Set(LOCAL_ONLY_KEY_NAMES);
