@@ -90,7 +90,7 @@ test("shell_navigation_uses_only_the_route_supplied_identity", async () => {
 });
 
 test("default_shell_footer_prefs", async () => {
-  type Spec = { group: "app" | "public"; cookie?: string; navigation?: true; path?: string };
+  type Spec = { group: "app" | "public"; cookie?: string; navigation?: true; feed?: true; path?: string };
   const page = async (spec: Spec) => {
     const response = pageResponse(deps("test"), {
       group: spec.group,
@@ -100,7 +100,7 @@ test("default_shell_footer_prefs", async () => {
       title: "Sign in",
       body: null,
       islands: "off",
-      shell: spec.navigation ? { navigation: { active: "home" } } : {},
+      shell: spec.navigation ? { navigation: { active: "home" } } : spec.feed ? { feed: true } : {},
     });
     const document = parse(await response.text());
     return { document, forms: elements(document, "form", { method: "post", action: "/prefs/theme" }) };
@@ -121,7 +121,23 @@ test("default_shell_footer_prefs", async () => {
   expect(elements(login.forms[0], "input", { type: "hidden", name: "return", value: "/" })).toHaveLength(1);
   const system = await page({ group: "app" });
   expect(elements(system.forms[0], "input", { value: "system", checked: "" })).toHaveLength(1);
+  // A tampered or repeated theme cookie reads as system, and only enum values reach the form.
+  for (const cookie of [
+    `${THEME_COOKIE}=blue`,
+    `${THEME_COOKIE}=%22%3E%3Cb%3E`,
+    `${THEME_COOKIE}=dark; ${THEME_COOKIE}=light`,
+  ]) {
+    const tampered = await page({ group: "app", cookie });
+    expect(elements(tampered.forms[0], "input", { checked: "" }).map((radio) => radio.attrs)).toEqual(
+      elements(system.forms[0], "input", { checked: "" }).map((radio) => radio.attrs),
+    );
+    expect(elements(tampered.document, "b")).toHaveLength(0);
+  }
   // Legal pages are public: the theme follows the system there, so no form (phase-1.md:4886-4889).
   expect((await page({ group: "public", path: "/legal/terms" })).forms).toHaveLength(0);
   expect((await page({ group: "app", navigation: true })).forms).toHaveLength(0);
+  // A feed page reaches feed mode through pageResponse: no footer, so no form.
+  const feed = await page({ group: "app", feed: true });
+  expect(elements(feed.document, "footer")).toHaveLength(0);
+  expect(feed.forms).toHaveLength(0);
 });

@@ -55,7 +55,12 @@ test.describe("javascript disabled", () => {
     await page.goto("/signed-out");
     const form = page.locator('footer form[action="/prefs/theme"]');
     await form.getByLabel("Light").check();
+    // The POST itself is the proof the form submitted, in every browser: its 303 carries the cookie.
+    const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
     await form.getByRole("button", { name: "Save theme" }).click();
+    const response = await posted;
+    expect(response.status()).toBe(303);
+    expect(response.request().postData()).toBe("theme=light&return=%2Fsigned-out");
     await expect(page).toHaveURL(/\/signed-out$/);
     // WebKit will not store a Secure __Host- cookie on http (a11y.spec.ts), so it keeps the system theme.
     const expected = browserName === "webkit" ? null : "light";

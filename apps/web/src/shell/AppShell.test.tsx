@@ -162,6 +162,8 @@ describe("app shell", () => {
     }
     expect(menu).not.toContain(" open");
     expect(render()).toContain("<footer");
+    // A page without the theme form renders no empty slot in the footer.
+    expect(render()).not.toMatch(/class="slot_/);
   });
 
   test("error_param_known_code", () => {

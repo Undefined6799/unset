@@ -3,8 +3,9 @@
 // private and varying on Cookie; public pages neither, so their bytes never depend on a cookie).
 // P1.25: a page may ask for the app shell, which shows a checked `?error=` code; and the kit's error-page hook renders
 // every error page through the same shell, anonymously and with no script.
-// P1.25f: an app page gets the footer's theme form (only the default shell has a footer), preset to the page's theme and returning to
-// the page's path. Only the path goes back, never the query, so no request text is echoed into the form.
+// P1.25f: an app page gets the footer's theme form (only the default shell has a footer), preset to the page's theme
+// and returning to the page's path. Only the path goes back, never the query, so no request text is echoed into it.
+// A feed page asks for `feed`, which drops the footer.
 import type { ShellOptions } from "@unset/apps-web";
 import { ERROR_MESSAGES, readErrorParam } from "@unset/shared-errors";
 import { type ErrorPage, type RouteGroup, safeReturnPath } from "@unset/shared-http";
@@ -35,7 +36,7 @@ export type PageSpec = {
   body: ReactNode;
   islands?: "off";
   /** Render inside the app shell; `noindex` also sends `X-Robots-Tag`. */
-  shell?: { noindex?: true; navigation?: ShellOptions["navigation"] };
+  shell?: { noindex?: true; navigation?: ShellOptions["navigation"]; feed?: true };
 };
 
 const ISLAND_ENV = { dev: "development", test: "test", prod: "production" } as const;
@@ -60,6 +61,7 @@ export function pageResponse(deps: PageDeps, page: PageSpec): Response {
     error: readErrorParam(url.searchParams),
     noindex,
     ...(page.shell.navigation === undefined ? {} : { navigation: page.shell.navigation }),
+    ...(page.shell.feed === undefined ? {} : { feed: page.shell.feed }),
     ...(footerPrefs === undefined ? {} : { prefs: footerPrefs }),
   };
   const { html, tooLarge } = deps.render({
