@@ -172,9 +172,18 @@ describe("loadConfig", () => {
 
   test("unrecognised_env_counts_as_prod_for_secrets", () => {
     const schema = defineConfig({ S: secret({ minBytes: 1 }) });
-    expect(problems(() => loadConfig(schema, { UNSET_ENV: "prod ", S: "x" }, quiet))).toEqual([
-      { key: "S", reason: "forbidden_in_env" },
-    ]);
+    // Only the exact string "test" relaxes: missing, padded, other case or a longer name all count as prod.
+    for (const env of [
+      {},
+      { UNSET_ENV: "prod " },
+      { UNSET_ENV: " test" },
+      { UNSET_ENV: "TEST" },
+      { UNSET_ENV: "testing" },
+    ]) {
+      expect(problems(() => loadConfig(schema, { ...env, S: "x" }, quiet))).toEqual([
+        { key: "S", reason: "forbidden_in_env" },
+      ]);
+    }
   });
 
   test("file_suffix_known_only_for_secret_files", () => {

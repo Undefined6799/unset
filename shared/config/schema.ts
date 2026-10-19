@@ -126,7 +126,7 @@ function secretField(kind: "secret" | "secretFile", options: SecretOptions): Fie
   return { kind, parse };
 }
 
-/** A secret read from the environment variable itself; refused in `prod` (use `secretFile`). No default exists. */
+/** A secret read from the environment variable itself; loads only when `UNSET_ENV` is exactly `test` (else use `secretFile`). No default exists. */
 export const secret = (options: SecretOptions): Field<Secret> => secretField("secret", options);
 
 /** A secret read from the file named by `<KEY>_FILE` (a Compose secret). No default exists. */
