@@ -1825,14 +1825,16 @@ Book edit 2026-10-19-five-step-audit, "verify-1009-4001214 follow-ups" and "veri
    this test or removed.
 8. **verify-1020 N2 to N4.** The Me.tsx:1-3 header drops the confirm box, and logger.ts:70 names both
    `oauth.revoke_failed` sources, including welcome.ts:186.
-9. The ASVS V7.4.1 row (asvs-5-l2.md) also cites this step's new integration tests.
+9. The ASVS V7.4.1 row (asvs-5-l2.md) also cites `logout.remaining_sessions_match_the_store`,
+   `logout.last_browser_revoke_fails` and `logout.last_browser_counts_past_the_touch_interval`.
 Departure (book edit 2026-10-19-five-step-audit, "Departure: P2.08e item 6, red by local mutation"): the lane's
 harness refused the weakening commits of items 6 and 7, so their red is the verifier applying both mutations locally
 (the unfiltered count in logout-sessions.ts, and `deleteTokenSet` removed at logout.ts:77-81) and naming the tests
-that fail under each. The verify report cites it and the PR body points to the report. Where a session can run
-Postgres, the lane applies each mutation locally with no commit and records the red lines in
-`unset-plan/book-edits/2026-10-19-p208e-mutation-reds.md`, which the PR body cites. If none can, evidence by reading
-is accepted for P2.08e only, never as a general rule for SQL controls (architecture's #1056 M2 ruling, 04:09Z).
+that fail under each. The verify report cites it and the PR body points to the report. The reds were shown against
+real Postgres (16.14, with the repo's own bootstrap and migrations) and recorded in
+`unset-plan/book-edits/2026-10-19-p208e-mutation-reds.md`; CI's postgres:18 run on the head covers the version gap.
+The by-reading fallback was not used, and it is never a general rule for SQL controls (architecture's #1056 M2
+ruling, 04:09Z).
 Threats: a live browser losing its grant early, or a grant outliving the last live browser, through drift from the
 store's rule. Answered by the same-instant store pin and the shared limits object.
 Done when the tests pass, the CI red is cited, and check is green.
