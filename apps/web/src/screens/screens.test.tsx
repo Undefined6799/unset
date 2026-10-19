@@ -6,7 +6,13 @@ import { type Assets, renderPage, screens } from "../../render.tsx";
 
 const ASSETS: Assets = {
   origin: "https://unset.test",
-  manifest: { boot: "assets/boot.js", styles: [], fonts: [], islands: new Map() },
+  manifest: {
+    boot: "assets/boot.js",
+    styles: [],
+    fonts: [],
+    icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
+    islands: new Map(),
+  },
 };
 const html = (body: Parameters<typeof renderPage>[0]["body"]) =>
   renderPage({

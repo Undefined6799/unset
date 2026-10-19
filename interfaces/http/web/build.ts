@@ -18,6 +18,9 @@ const STYLES_SOURCE = "src/styles.ts";
 /** A built file name: `assets/` and one segment, so no `..`, no leading `/` and no nested path. */
 const FILE = /^assets\/[A-Za-z0-9._-]+$/;
 const ISLAND = /\.island\.tsx$/;
+/** The styles entry's two icons (apps/web src/styles.ts), by the name Vite keeps before its hash. */
+const FAVICON = /^assets\/unset-favicon-32-[A-Za-z0-9_-]+\.png$/;
+const APPLE_TOUCH = /^assets\/unset-apple-touch-icon-[A-Za-z0-9_-]+\.png$/;
 
 const fail = (why: string): never => {
   throw new Error(`web build manifest: ${why}`);
@@ -70,7 +73,10 @@ export function parseWebBuild(text: string, dir: string, islandName: IslandNamer
   const styles = chunks.get(STYLES_SOURCE);
   if (styles?.isEntry !== true) return fail(`${STYLES_SOURCE} is not an entry`);
   const fonts = (styles.assets ?? []).filter((file) => file.endsWith(".woff2"));
-  return { manifest: { boot: boot.file, styles: styles.css ?? [], fonts, islands }, files };
+  const icon = (shape: RegExp) =>
+    (styles.assets ?? []).find((file) => shape.test(file)) ?? fail(`${STYLES_SOURCE} has no ${shape.source} icon`);
+  const icons = { favicon: icon(FAVICON), appleTouch: icon(APPLE_TOUCH) };
+  return { manifest: { boot: boot.file, styles: styles.css ?? [], fonts, icons, islands }, files };
 }
 
 /** Reads `<dir>/.vite/manifest.json`; throws when it is missing or malformed, so startup fails closed. */

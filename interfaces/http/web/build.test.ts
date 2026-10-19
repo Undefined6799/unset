@@ -44,10 +44,16 @@ test("web_build_parsed_once_for_route_and_render", () => {
     "runtime-T3st0001.js",
     "styles-T3st0005.js",
     "styles-T3st0006.css",
+    "unset-apple-touch-icon-T3st0011.png",
+    "unset-favicon-32-T3st0010.png",
   ]);
   expect(build.manifest.styles).toEqual(["assets/styles-T3st0006.css"]);
   // Only the styles entry's woff2 files are fonts to preload; its other assets are served but not preloaded.
   expect(build.manifest.fonts).toEqual(["assets/Display-T3st0007.woff2", "assets/Mono-T3st0009.woff2"]);
+  expect(build.manifest.icons).toEqual({
+    favicon: "assets/unset-favicon-32-T3st0010.png",
+    appleTouch: "assets/unset-apple-touch-icon-T3st0011.png",
+  });
   expect(build.files.get("boot-T3st0002.js")).toBe(join(TESTDATA, "assets/boot-T3st0002.js"));
 });
 
@@ -66,6 +72,21 @@ test("web_build_refuses_bad_names", () => {
   }
   const dangling = manifestWith({ "src/islands/a.island.tsx": { file: "assets/a.js", imports: ["_gone.js"] } });
   expect(() => parseWebBuild(dangling, "/b", web.islandName)).toThrow(/unknown import/);
+});
+
+test("web_build_requires_both_icons", () => {
+  // Every page's head links both (P1.25a), so a build without either fails startup rather than ship a page without it.
+  const favicon = "assets/unset-favicon-32-1.png";
+  const appleTouch = "assets/unset-apple-touch-icon-1.png";
+  const withAssets = (assets: string[]) =>
+    manifestWith({ [STYLES]: { file: "assets/styles-1.js", isEntry: true, assets } });
+  expect(parseWebBuild(withAssets([favicon, appleTouch]), "/b", web.islandName).manifest.icons).toEqual({
+    favicon,
+    appleTouch,
+  });
+  for (const assets of [[favicon], [appleTouch], [], ["assets/unset-favicon-32.svg", appleTouch]]) {
+    expect(() => parseWebBuild(withAssets(assets), "/b", web.islandName), String(assets)).toThrow(/icon/);
+  }
 });
 
 test("manifest_missing_fails_startup", async () => {

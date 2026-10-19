@@ -27,9 +27,11 @@ P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
-login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). `feed`,
-the footer PrefsForms and the favicons are P1.25f (#963's "P1.25j" was that remainder; the booked
-P1.25j means something else); the Settings "Language and theme" section is P2.13c's. Text is in `src/shell/messages.ts`.
+login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). P1.25a added
+the 32 px favicon and 180 px apple-touch PNGs: the styles entry imports them `?url&no-inline`, so they are manifest
+files of `src/styles.ts`, and build.ts requires both. `feed` and the footer PrefsForms are P1.25f (#963's "P1.25j" was
+that remainder; the booked P1.25j means something else); the Settings "Language and theme" section is P2.13c's. The
+SVG favicon is still to come. Text is in `src/shell/messages.ts`.
 
 **Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
 brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
