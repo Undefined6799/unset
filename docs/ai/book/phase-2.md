@@ -109,7 +109,7 @@ and this table is the only place to change.
 ## Slices (decision 34, editor pass 2026-10-04)
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
-Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08f, P2.11, P2.11a, P2.15,
+Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a, P2.15,
 P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
 merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
@@ -128,7 +128,7 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08f, P2.11, P2.11a, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their user-facing
+(P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their user-facing
 English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
 key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
 English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
@@ -163,6 +163,7 @@ flowchart TD
   P206 --> P208[P2.08 logout]
   P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
   P208c --> P208e[P2.08e count pinned to store]; P208d --> P208e; P208d --> P208f[P2.08f signout_all marked unused]
+  P208e --> P208g[P2.08g revoke failure unit test]; P208b --> P208g
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
@@ -1847,6 +1848,17 @@ Slice 1, trusted base (`infrastructure/session/store.ts` comments at :45-46 and 
   lives only in store.ts and the session area note, and the PR says so.
 - `user_signout_all` and migration 0014 otherwise stay. The next trusted step that already touches the reason list
   retires it.
+
+### P2.08g — Unit-test the last-browser revoke failure
+Tags: [SEC]            Depends on: P2.08e, P2.08b
+Slice 1, issue #1061, product test (`interfaces/http/routes/logout.test.ts`), lane Phase 1. Book edit
+2026-10-19-five-step-audit, last section (architecture's #1056 M3 ruling). It can't ride P2.08f, which is trusted
+base and comment-only, because a test takes the class of its folder (SE-6). It builds after #1054 (P2.08b) merges,
+because #1054 rewrites the same harness.
+**What:** the test adopts the verifier's probe (`unset-plan/verify/verify-1056-7a10fd1-revoke-probe.test.ts.txt`)
+for the revoke-failure branch at routes/logout.ts:77-81: when the revoke fails, the token set is still deleted.
+Red: removing `deleteTokenSet` turns it red as a unit test, with no Docker.
+Done when that red is shown and check is green.
 
 ### P2.11 — Email-verify gate
 Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"

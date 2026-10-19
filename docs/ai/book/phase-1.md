@@ -78,7 +78,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u,
   P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g,
   P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022;
-  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08f, P2.11, P2.11a, P2.15,
+  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08g, P2.11, P2.11a, P2.15,
   P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and
   refocus'): the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34
   hardening steps not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario
@@ -6715,7 +6715,7 @@ check is green.
 Tags: [SEC]            Depends on: P1.25n
 Slice 1, product tests (`me.privacy.test.ts` and the fixture manifest, or `tests/integration` if item 1 needs it),
 lane Phase 2. Tests only, a tightening. Book edit 2026-10-19-verify-1017-scrub-and-gate, "verify-1053-8602684
-follow-up". P1.25n merged as #1053. P1.25t stays its own step, in any order. Issue: the board opens it.
+follow-up". P1.25n merged as #1053. P1.25t stays its own step, in any order. Issue #1060.
 **What:**
 1. **M1.** If compose already has a dependency seam for the account store, the test passes in a fake store with three
    DIDs: our own DID with an account, a foreign DID with an account, and an unknown DID with none. It also uses a
@@ -6727,6 +6727,9 @@ follow-up". P1.25n merged as #1053. P1.25t stays its own step, in any order. Iss
    mixed-case paths.
 3. **N1.** The fixture manifest uses one style, so the referrerpolicy check sees the head's links.
 4. **N2.** The wording at me.privacy.test.ts:173 and :186 is trimmed to what the tests prove.
+Threats: the DID route answering differently, or leaking the DID in logs, depending on whether an account exists (an
+account-existence oracle), unseen because tests ran on a stand-in. Answered by real-store cases with G1 and G1soft
+red, and multi-round decoding of every log line.
 Done when G1 and G1soft are red, each new M2 path is red against a copy that skips decoding, and check is green.
 
 ---
