@@ -36,8 +36,9 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    does not verify the edge in any case (0030).
 2. **Edge without a certificate under dev.** Under dev the edge's two sites listen on plain `http`, bound only to
    the edge's address on the internal `newt_edge` network (0030, Decision 2), with no published port and no `:443`
-   site. Preflight C18 under dev checks exactly that shape and under prod keeps refusing anything but Let's Encrypt;
-   a plain-`http` site under prod is a preflight failure. The app and the PDS never derive their scheme from the
+   site. Preflight C18 under dev will check exactly that shape, a future change to C18 that needs Alex's own typed
+   line, and under prod C18 keeps refusing anything but Let's Encrypt; a plain-`http` site under prod is a preflight
+   failure. The app and the PDS never derive their scheme from the
    request: cookies stay `Secure`, and the OAuth issuer, the client metadata URLs and every public URL stay `https`
    from configuration. Both sites still send the security headers. Reds, each in `deployment/edge` or preflight
    tests: the bind address and the absent port; no `:443` site under dev; prod refuses plain `http`; scheme never
@@ -47,8 +48,9 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    validation-domain ruling of 21:52Z apply to production, where `*.unset.im` still needs DNS-01; that question
    returns before Phase 5. P1.36e, P1.36o and the DNS provider steps move to production. ADR 0029's dev media
    site `staging.unset.site` (0029:117-122, P1.38c) depended on P1.36e's certificate; that site is out of this
-   milestone (Alex, 2026-10-19: pictures and media deferred, and the "Four domains only" decision drops
-   `unset.site`), and 0029 is being rewritten for the four domains. Any dev media site that returns takes this
+   milestone (Alex, 2026-10-19: pictures and media deferred at 21:50Z, and his 21:49Z tap "Four domains only" on
+   the card "Keep unset.site as a fifth domain, only for pictures?" drops `unset.site`), and 0029 is being
+   rewritten for the four domains. Any dev media site that returns takes this
    record's plain-`http` shape behind Pangolin or comes back to architecture for a ruling; no dev certificate work
    is kept for it.
 3. **In-stack hop through Pangolin.** Under dev the compose file drops the PDS-host alias on the edge, symmetrical
@@ -56,8 +58,13 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    Pangolin and reaches the PDS through Pangolin, Newt and the edge. net-guard loses its one internal-host
    exception (`infrastructure/net-guard/src/policies.ts:11`) on staging, a tightening: every host web fetches must
    resolve to public unicast addresses. No `NODE_EXTRA_CA_CERTS` anywhere on staging (a red: no staging service
-   names a dev root). Rate limits: web gets no IP allowlist and no Pangolin bypass; the edge's keys stay on
-   `client_ip` (0025:195-201); the `staging.unset.ac` zones are sized from web's measured peak plus headroom. Alex's
+   names a dev root). Rate limits: web gets no IP allowlist and no Pangolin bypass. Today every edge zone keys on
+   `{remote_host}` (`deployment/edge/snippets/ratelimit.caddy:19-127`) and the Caddyfile names no trusted proxy
+   (`deployment/edge/Caddyfile:36`), so behind Newt every client would share one bucket and one stranger could
+   block every tester's sign-in on the public PDS. Under dev the keys move to `client_ip`, as 0025:195-204 requires,
+   with Newt as the only trusted proxy; P1.37v's scope gains a red that pins the dev zones to the client address
+   and the trusted proxy to exactly Newt. The `staging.unset.ac` zones are sized from web's measured peak plus
+   headroom. Alex's
    own browser shares a bucket with web, since both arrive from his egress address, so a `429` for him is a known
    cost. A CrowdSec or rate-limit allowlist for his egress address would be a loosening that needs his own typed
    line; until then the limits fail closed.
@@ -87,9 +94,9 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    so turning them on would make one bucket that anyone could exhaust. On the public PDS, `createSession`, the
    OAuth sign-in and token endpoints and password reset are limited only by the edge's zones
    (`deployment/edge/snippets/ratelimit.caddy`: `session`, `session_day`, `oauth_signin`, `oauth_token`, `signup`,
-   `reset`, `sync`, and the `global` zone, which has no matcher so every PDS route has a zone, `:9-10`), keyed per
-   client as Decision 3 says; the existing red `edge_ratelimit_matches_limits` keeps the zones equal to
-   `limits.json`. Architecture ruled this at 23:33Z, correcting its 23:22Z "PDS and edge rate limits".
+   `reset`, `sync`, and the `global` zone, which has no matcher so every PDS route has a zone, `:126-131`), keyed
+   per client once Decision 3's key change lands; the existing red `edge_ratelimit_matches_limits` keeps the zones
+   equal to `limits.json`. Architecture ruled this at 23:33Z, correcting its 23:22Z "PDS and edge rate limits".
 5. **Federation and what testers are told.** `PDS_CRAWLERS` stays empty, so the PDS itself requests no crawl, but
    anyone can send `requestCrawl` for `staging.unset.ac` to a public relay, and a relay that finds the PDS may
    subscribe to its firehose; the public `com.atproto.sync.listRepos` lists every tester's DID; a tester's DID,
@@ -113,6 +120,8 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
 ## Consequences
 - The staging milestone needs no Cloudflare token on the host and nothing bought; the DNS provider module and ADR
   0028 are deferred to production.
+- `staging.unset.ac` stays in the staging Pangolin org, so 0030's Decision 4 (request-log retention 0, the five-field
+  access log, log level, failed-attempt logging off) covers its public requests as well.
 - Every app-to-PDS call leaves the host and returns through Pangolin's WireGuard tunnel to Newt; latency and the
   shared rate-limit bucket of Decision 3 are accepted costs.
 - Anyone on the internet can read tester repos, create nothing without an invite, and reach no blob or admin method.
@@ -128,12 +137,12 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
   check confirms, from outside, that `staging.unset.ac` answers `describeServer` without a login, that
   `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic` request get the edge's deny. That the edge
   presents no certificate and has no `:443` listener cannot be seen from outside, where TLS ends at Pangolin, so
-  that assertion runs on the host: preflight C18 under dev reads the edge configuration (Decision 2), and the
-  deploy check connects from the `newt_edge` network and asserts plain `http` on the bound address and a refused
-  `:443`. On the first deploy and after every Pangolin update the same check also
-  reads a real resource-session response from `staging.unset.sh` and asserts that `Set-Cookie` carries `Domain`
-  equal to exactly that host, never `unset.sh`, since 0030 Decision 3 derived the exact-domain guarantee from the
-  1.24.0 source only (Codex on #1127, finding 4319934639).
+  that assertion runs on the host, in two future steps: the C18 change of Decision 2 (its own typed line) reads
+  the edge configuration, and the deploy check that P1.37v brings connects from the `newt_edge` network and
+  asserts plain `http` on the bound address and a refused `:443`. On the first deploy and after every Pangolin
+  update the same check also reads a real resource-session response from `staging.unset.sh` and asserts that
+  `Set-Cookie` carries `Domain` equal to exactly that host, never `unset.sh`, since 0030 Decision 3 derived the
+  exact-domain guarantee from the 1.24.0 source only (Codex on #1127, finding 4319934639).
 - ADR 0025 and ADR 0030 change nothing, not even their status lines; this record departs from two clauses of 0025
   and from 0030's no-bypass sentence, its certificate sentence (0030:78-79) and its rejected plain-HTTP alternative
   (0030:130-132), for dev only. The C18 change needs Alex's own typed line, separate from this record's.
