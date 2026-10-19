@@ -2870,6 +2870,10 @@ Algorithm (full detail: suspension, erasure and session ending):
      `auth_dead_chat_job_survives_chat_down`, `auth_dead_chat_job_idempotent`, `auth_dead_chat_job_rolls_back` (the
      job row is gone when the session transaction rolls back). It uses P2.11a's exhaustive switch: `transient`,
      `scope_missing` and `rejected` never end chat sessions, with one red each.
+     Every link of ours that sends a user to their PDS's connected-apps page (the signed-out page, the account page)
+     carries one line once chat exists: "Revoking ends chat on all your devices. Save your recovery key first." The
+     backup prompt stays as well. We cannot warn on the PDS's own page, and the PR says so (architecture 04:47Z, real
+     UTC; test `revoke-link-warns-chat`).
 Edge cases and failures:
   - Chat stack down during erasure → job waits; the core erasure completes; `eraseDid`'s report lists "chat pending".
   - The MXID localpart stays reserved in MAS after deactivation (no reuse); a new account never gets it.
@@ -2878,7 +2882,10 @@ Edge cases and failures:
     and reports about the member kept under P3.15's retention.
   - A report naming an erased sender arrives later → P6.15 stores the MXID only ("unmapped sender").
   - The member is erased while their evidence is held for a case → P6.14a's rows follow P4.07's legal-hold rule.
-Threats: chat accounts when the atproto account is suspended, taken down or erased.
+Threats: chat accounts when the atproto account is suspended, taken down or erased, or whose grant was revoked at
+the PDS.
+  - E Chat sessions outliving a revoked grant → the auth_dead outbox job ends every session kind
+    (`revoked-grant-ends-chat-sessions`, `auth_dead_chat_job_survives_chat_down`).
   - E Chat sessions outliving a suspension or sign-out → locked and every session kind ended
     (`lock-on-account-inactive-ends-sessions`, `end-sessions-finishes-all-three-kinds`).
   - I Chat data surviving erasure → media, link, chat-auth rows and mapping deleted, mapping last
@@ -2893,6 +2900,9 @@ Done when (tests):
     `job-retries-and-alerts`, `lookup-by-subject-not-localpart`, `mas-path-allowlist-grows-only-by-these`,
     `end-sessions-finishes-all-three-kinds` (fake MAS: a session created during the first round is finished in the
     second), `end-sessions-round-cap-errors`,
+    `revoked-grant-ends-chat-sessions`, `transient-never-ends-chat`, `scope-missing-never-ends-chat`,
+    `rejected-never-ends-chat`, `auth_dead_chat_job_survives_chat_down`, `auth_dead_chat_job_idempotent`,
+    `auth_dead_chat_job_rolls_back`, `revoke-link-warns-chat`,
     `admin-grant-only-delete-media-rows`, `app-sign-out-ends-that-browsers-chat-devices` (answer 52: after B signs
     out of the app in browser 1, the chat device session started in browser 1 is finished in MAS and its access token
     gets 401; B's chat device in browser 2 is untouched unless MAS cannot tell them apart, in which case both end).

@@ -62,9 +62,11 @@ Following Alex's architecture principles 13–15 (progressive refinement; revers
 
 ## Times in book text
 
-Every architecture section label that does not say 'real UTC' is a sequence label, not a clock time, on any date.
-Architecture labels are real UTC only from 2026-10-19 03:50Z on. A book line quoting an older label cites it as
-'architecture's section labelled HH:MMZ', never as the time of a decision. Alex's message times are real.
+Every architecture section label that does not say "real UTC" is a sequence label, not a clock time. That covers
+every date, including the 2026-10-19 labels 02:15Z through 06:25Z. Their order within a record is right, but their
+times may run ahead of the real clock. Architecture labels are real UTC only from 2026-10-19 03:50Z on, and each
+such label says "real UTC". A book line that quotes an older label cites it as "architecture's section labelled
+HH:MMZ", never as the time of a decision. Alex's own message times are real and are not affected.
 
 ## Step ids
 

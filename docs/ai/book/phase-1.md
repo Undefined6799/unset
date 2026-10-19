@@ -75,15 +75,15 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
   P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
   P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
-  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v, P1.33n,
-  P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c,
-  P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are
-  dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h,
-  P2.11, P2.11a, P2.11c–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the slice exit P2.13a. Order from
-  2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit
-  2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and
-  test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are exempt.
-  Built PRs still get verified and may merge, and a lane may finish a fix it already started on an open PR.
+  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v, P1.37k,
+  P1.37l, P1.37m, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
+  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
+  23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and
+  P2.02 merged), P2.08b–P2.08h, P2.11, P2.11a, P2.11c–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the
+  slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus
+  order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused
+  guard and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main
+  are exempt. Built PRs still get verified and may merge, and a lane may finish a fix it already started on an open PR.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -700,6 +700,11 @@ flowchart LR
   P1_35v --> P1_36t
   P1_36u["P1.36u private staging addresses refused"]
   P1_36v["P1.36v own-PDS accounts only"]
+  P1_37k["P1.37k failing key and service named"]
+  P1_37l["P1.37l plain-env secrets refused under dev"]
+  P1_37m["P1.37m C29 tests on every service"]
+  P1_36k --> P1_37k
+  P1_36k --> P1_37m
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -6529,8 +6534,8 @@ under a "Riders from P1.24c" heading):
 - `app/src/app/not-found.tsx`, `app/src/app/error.tsx` → LESSON: copy tone; Next.js mechanisms rejected.
 - Prototype privacy and terms pages → REJECT: written for 0x40 and its PDS; legal texts are rewritten.
 
-**As built** (#963, #965, #975; book edit 2026-10-19-five-step-audit, architecture 02:25Z): part one only. The
-remainder is P1.25c (test routes and the 503), P1.25f (favicons, feed mode, footer prefs, D-2's tests), P1.25g
+**As built** (#963, #965, #975; book edit 2026-10-19-five-step-audit, architecture's section labelled 02:25Z): part one
+only. The remainder is P1.25c (test routes and the 503), P1.25f (favicons, feed mode, footer prefs, D-2's tests), P1.25g
 (riders 1 and 2) and P1.25m (D-5's privacy tests); #963's "P1.25j" is that remainder, not the booked P1.25j. #975's
 departures: D-1 accepted (`GET /` is an empty home with a visually hidden heading; the catalog placeholder is dropped,
 and the first step that gives the home real content owns the visible heading); D-3 accepted (one
@@ -6656,9 +6661,9 @@ Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
    - LanguageLinks stays with P1.22b.
    - Tests: `default_shell_footer_prefs` (the form on an app-group default-shell page, and its absence on a legal
      page), and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c lands first.
-4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
-   Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
-   Each has a test.
+4. D-2's two conditions (architecture's section labelled 02:25Z): with JavaScript disabled, the Navigation popover
+   opens, closes on Escape and returns focus; the default shell keeps its `<details>` menu for pages without the
+   Navigation variant. Each has a test.
 
 Done when the tests pass and check is green.
 
@@ -8653,7 +8658,7 @@ classifications still hold, and check is green.
 Tags: [SEC] check [ALEX] (typed line)            Depends on: P1.34d, P1.36h
 Slice 1, issue #983, check paths (`.github/workflows/`, `scripts/ci/`), SE-6 alone (no product, no trusted base),
 kind/ci, lane the third thread. P1.33z depends on it. Book edit 2026-10-19-p135t-local-stack-ci-job, with
-architecture's 02:15Z ruling on D1-D5 and its 02:45Z ruling on the probe gate, both folded in below. Alex's go is his
+architecture's sections labelled 02:15Z (D1-D5) and 02:45Z (the probe gate), both folded in below. Alex's go is his
 "ok for 1.35t then" (2026-10-19 02:13:45Z; book edit 2026-10-19-p135t-local-stack-ci-job, last section).
 
 Threats (SE-1; the PR expands this to one screen and updates the ASVS 5.0 rows): a CI job that holds generated secrets
@@ -8733,8 +8738,8 @@ As built: #1023 (merged as efb3c53).
 Tags: [SEC]            Depends on: P1.35y
 Slice 1, issue #998, product (`deployment/preflight/`, `scripts/dev-precheck.ts`), lane the third thread; book edit
 2026-10-19-staging-path-steps, "Item 4", and architecture's ruling (c) that staging is the `dev` profile (book edit
-2026-10-19-staging-tailnet-rulings). `scripts/dev-precheck.ts` stays product (architecture 02:45Z), so it may share
-this PR with `deployment/preflight/`.
+2026-10-19-staging-tailnet-rulings). `scripts/dev-precheck.ts` stays product (architecture's section labelled 02:45Z),
+so it may share this PR with `deployment/preflight/`.
 
 **What:** the dev pins change from the `0x40.space` names to ADR 0025's accepted `staging.unset.*` names, with their
 tests: the precheck (`scripts/dev-precheck.ts:15`, `:57`) and C15 (`deployment/preflight/checks/settings.ts:60`). The
@@ -8816,7 +8821,7 @@ edit 2026-10-19-verify-1013-followups, M4).
 ### P1.36b — Serve the app site on the dev edge
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36e, P1.36o, P1.35x, P1.35y
 Slice 1, issue #999, trusted base (`deployment/edge/`), lane the third thread; book edit
-2026-10-19-staging-path-steps, "Item 7" and "P1.36b ruled", from architecture's 02:50Z ruling (book edit
+2026-10-19-staging-path-steps, "Item 7" and "P1.36b ruled", from architecture's section labelled 02:50Z (book edit
 2026-10-19-staging-tailnet-rulings, last section). **A loosening, so it needs Alex's typed line:** "yes P1.36b
 deployment/edge/caddyfile.ts dev app site APP_HOST APP_UPSTREAM", quoted with its time in the PR body. It also waits on
 his acceptance of ADR 0025 (P1.35y), since the exact name comes from it.
@@ -9105,6 +9110,50 @@ Threats: an outside account signing in to a staging or prod app that promises ow
 between issuers at the callback. Answered by exact issuer equality, checked at both ends, failing closed. P1.33p later
 owns any loosening, with Alex's word. Until this lands, P2.11a's 900 s bound does not hold for accounts on other PDSes.
 Done when the reds are shown and check is green.
+
+---
+
+### P1.37k — Name the failing key and service in preflight
+Tags: [SEC]            Depends on: P1.36k
+Slice 1, issue #1089, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker, because
+Alex must be able to see which key failed. Book edit 2026-10-19-staging-tailnet-rulings, "Architecture 07:19Z on
+verify-1071-d014cf9, mapped" (architecture 07:19Z, real UTC, N2). A tightening or neutral; no card or typed line.
+- An Outcome gains an optional `key`, printed beside the verdict. Its type is the closed union of C29's key names, and
+  it is checked at runtime against that list before printing.
+- The service name prints the same way, from the parser's closed set of compose service names, never from free text.
+- The withholding filter (deployment/preflight/index.ts:40-54) stays exactly as built, and the reason text still goes
+  through it.
+- Reds: (1) a failure on web prints its key and service; (2) a `key` not in the list prints nothing; (3) a reason
+  containing a configured value is still withheld whole.
+Threats: a secret value leaking through preflight's output. Only code-constant names from closed lists print, each
+checked before printing.
+Done when the reds are shown and check is green.
+
+---
+
+### P1.37l — Refuse plain-env secrets under dev
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1090, product (`shared/config/`), lane the third thread. Same record (N6). A tightening to do now, and
+dormant: no field uses the type today. It may build before P1.37k.
+- shared/config/load.ts:69-70's relaxed set becomes test only (`=== "test"`). Dev and prod never relax, because
+  staging runs dev and the runtime never relaxes for dev.
+- Red: a `secret`-kind field in plain env under UNSET_ENV=dev fails with `forbidden_in_env`.
+Threats: a secret in plain env on staging. It is refused, as in prod.
+Done when the red is shown and check is green.
+
+---
+
+### P1.37m — Widen the C29 tests to every service and file
+Tags: [SEC]            Depends on: P1.36k
+Slice 1, issue #1091, tests plus one comment fix (`deployment/`), lane the third thread. Same record (M1, N3-N5).
+1. **M1:** plant a C29 key, and an http origin, in each compose service in turn, not only web and pds. Each one is
+   refused.
+2. **N3:** a test under deployment/ runs C29 on the committed compose.dev.yaml. It is not a workflow edit.
+3. **N4:** fix the stale header at deployment/preflight/local-only.ts:1-3.
+4. **N5:** a test refuses C29's keys in any Dockerfile ENV line under deployment/images.
+Threats: a dev-only key slipping into a service or image the tests never planted it in. Answered by a planted case per
+service and per Dockerfile.
+Done when each test is red against a planted case, the header is fixed, and check is green.
 
 ---
 
@@ -9617,7 +9666,7 @@ the folder still reads "dev CA folder cannot be read" (#887's message).
 
 Slice 1, issue #893, product (`deployment/preflight/`), kind/fix, lane the third thread after P1.33g (both edit
 C26 in `checks/build.ts`) and before P1.34d (lane order); book edit 2026-10-15-verify-887-followups, from
-verify-887-a7a20cb on P1.35a (#887) and architecture's 02:08Z ruling (last section of
+verify-887-a7a20cb on P1.35a (#887) and architecture's section labelled 02:08Z (last section of
 2026-10-12-p134c-p134d-local-dev-root-ca). A tightening: nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): a dev CA folder
@@ -9631,10 +9680,10 @@ here; no mountinfo parsing.
   below depth 1; a socket; a device (via injected lstat); a dot-name hard link; an unreadable entry at depth 2; dev with
   a symlinked folder; dev with a link inside; realpath EACCES under dev; realpath EACCES under prod. The builder
   matches each case to its mutant in the report's table.
-- S2 (architecture 02:08Z): the walk reads names with `readdirSync(dir, { encoding: "buffer" })`, judges each entry
-  by its exact bytes and builds child paths from them. A name that is not valid UTF-8 is refused with the fixed message
-  before any lstat; a valid UTF-8 name containing U+FFFD is judged like any other. Red fixtures: a lone 0xff name; 0xff
-  beside a real U+FFFD file holding a hard-linked key; the same pair with an outward symlink.
+- S2 (architecture's section labelled 02:08Z): the walk reads names with `readdirSync(dir, { encoding: "buffer" })`,
+  judges each entry by its exact bytes and builds child paths from them. A name that is not valid UTF-8 is refused with
+  the fixed message before any lstat; a valid UTF-8 name containing U+FFFD is judged like any other. Red fixtures: a
+  lone 0xff name; 0xff beside a real U+FFFD file holding a hard-linked key; the same pair with an outward symlink.
 - Re-lstat: after the walk, re-lstat the folder and fail on any change of dev or ino from the first lstat.
 - N1: ELOOP and any other lstat error on the folder itself map to the fixed "not a real directory: <path>" message, so
   a self-loop symlink no longer shows as a C26 check error.
@@ -9661,9 +9710,9 @@ As built: #895 at ee70994, merged as 2b53bd5.
 Slice 1, issue #894, product (`deployment/` compose files, `deployment/networks.dev.json`, `deployment/preflight/`),
 kind/feature, lane the third thread before P1.34d (its place among P1.33g, P1.35m and the open PRs follows the lane's
 D4 queue); book edit 2026-10-14-p134d-split, "P1.35n: the app network split out ahead of P1.34d", carrying
-architecture's 02:05Z option C ruling ("Step-book mapping of the 02:05Z option C ruling", which replaces the withdrawn
-01:51Z networks.local.json mapping). Split from P1.34d item 7 by size. Not a loosening (no new host, no new service), so
-nothing from Alex.
+architecture's section labelled 02:05Z, option C ("Step-book mapping of the 02:05Z option C ruling", which replaces the
+withdrawn 01:51Z networks.local.json mapping). Split from P1.34d item 7 by size. Not a loosening (no new host, no new
+service), so nothing from Alex.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows): web or another
 service reaching the PDS directly instead of through the edge, and an alias that lets a service answer for the app or

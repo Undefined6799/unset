@@ -1729,7 +1729,7 @@ Diagram: see "State diagram: app session lifecycle".
 ### P2.08b — Sign out with the recorded issuer
 Tags: [SEC]            Depends on: P2.08
 Slice 1, issue #988, product, lane Phase 1 (the P2.08 lane). Book edit 2026-10-19-five-step-audit; item 1 rephrased
-by 2026-10-19-drop-sign-out-everywhere (architecture 03:20Z and 03:27Z).
+by 2026-10-19-drop-sign-out-everywhere (architecture's sections labelled 03:20Z and 03:27Z).
 **What:**
 1. The account link on `/signed-out` and the account page: `logout.ts` reads the issuer that OAuth recorded at
    sign-in and passes it to `/signed-out`. `PdsAccountLink` then links the user's own issuer origin, so a user on
@@ -1741,7 +1741,7 @@ by 2026-10-19-drop-sign-out-everywhere (architecture 03:20Z and 03:27Z).
 3. A failed logout shows "Could not sign you out, try again" on its 503, not the generic text (messages.ts:20).
 
 4. **Carrier (architecture's section labelled 04:15Z).** `__Host-signed_out_issuer` (`Secure`, `HttpOnly`,
-   `SameSite=Strict`, `Path=/`, `Max-Age=600`; the 06:10Z (c) ruling) carries the issuer origin to
+   `SameSite=Strict`, `Path=/`, `Max-Age=600`; architecture's section labelled 06:10Z, (c)) carries the issuer origin to
    `/signed-out`. GET /signed-out clears it in the same response that reads it, so a reload shows our PDS link.
 5. The value must re-parse as exactly an https origin: no path, query, fragment, userinfo or non-default port.
    Anything else falls back to our PDS link. The host shown comes from the parsed origin, through the escaping
@@ -1864,7 +1864,7 @@ Tags: trusted            Depends on: P2.08d
 Slice 1, trusted base (`infrastructure/session/store.ts` comments at :45-46 and :151), lane Phase 1. Book edit
 2026-10-19-five-step-audit, "verify-1020-e6a2222 follow-ups". Comment-only, so no behaviour change and no typed line.
 - The comments say that `user_signout_all` is unused since 2026-10-19 (Alex dropped the feature at 02:34:31Z) and
-  that `destroyAllForDid` stays for auth_dead and the age gate (architecture 03:27Z).
+  that `destroyAllForDid` stays for auth_dead and the age gate (architecture's section labelled 03:27Z).
 - **Migration 0014:4.** An applied migration file is not edited if the migration guard pins its contents. The lane
   checks the guard first; if a 0014 edit would be refused or would change a checksum, it leaves 0014 alone, the note
   lives only in store.ts and the session area note, and the PR says so.
@@ -1898,6 +1898,8 @@ report, and the PR lists the mutant number next to each red.
 8. **M4 (verify-1063):** the ASVS 5.0 V7.4.1 row's evidence names `logout.remaining_sessions_match_the_store` and
    `logout.last_browser_revoke_fails`, citing verify-1056-7a10fd1 N6 (book edit 2026-10-19-codex-1063-batch66).
 Done when all six reds are shown, items 7 and 8 are in, and check is green.
+Threats: a last-browser sign-out whose revoke fails leaves a usable token set behind, unseen because no unit test
+covers the failure branch. Answered by reds that delete `deleteTokenSet` and the count filter.
 
 ### P2.08h — Bound the issuer read and narrow its carrier
 Tags: [SEC]            Depends on: P2.08b
@@ -2010,9 +2012,9 @@ Diagram: none.
 ### P2.11a — End sessions on a revoked grant at recheck
 Tags: [SEC]            Depends on: P2.11
 Slice 1, issue #1010, product (`interfaces/http/`), lane Phase 1 (it holds the sign-out steps P2.08b and P2.08c); book
-edit 2026-10-19-auth-dead-gate (architecture 02:35Z, 03:20Z and 03:27Z). A tightening, so nothing is needed from Alex.
-It carries the letter P2.11a because `refreshEmail` and `openApp` are P2.11's confirmed-email gate. With "sign out
-everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our other browsers.
+edit 2026-10-19-auth-dead-gate (architecture's sections labelled 02:35Z, 03:20Z and 03:27Z). A tightening, so nothing is
+needed from Alex. It carries the letter P2.11a because `refreshEmail` and `openApp` are P2.11's confirmed-email gate.
+With "sign out everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our other browsers.
 
 **What:**
 - `refreshEmail` returns a distinct `"ended"` for `auth_dead`, never "unconfirmed" (today interfaces/http/compose.ts:
@@ -2069,10 +2071,11 @@ until P1.33p". The PR body says no behaviour changes. P1.33p carries the forced-
 config comment use architecture's 04:29Z wording, with the last sentence as amended at 04:31Z (book edit
 2026-10-19-auth-dead-gate).
 Done when check is green.
-As built: #1065 merged at a5d0b94 (04:38:02Z) with the pre-04:29Z wording; P2.11e corrects config.ts and http.md on
-main. The ruled wording (04:29Z) leaves out the step's "token life plus EMAIL_RECHECK_S" formula for other PDSes. That
-window stays unresolved until P1.33p's forced refresh, and P1.36v keeps other PDSes from signing in until then (book
-edit 2026-10-19-auth-dead-gate, verify-1065 N7).
+Threats: a comment that overclaims a security bound leads a later change to rely on it (P2.11e's 04:49Z line).
+As built: merged as 6918dd4 (#1065, head a5d0b94; 04:38:02Z) with the pre-04:29Z wording; P2.11e corrects config.ts and
+http.md on main. The ruled wording (04:29Z) leaves out the step's "token life plus EMAIL_RECHECK_S" formula for other
+PDSes. That window stays unresolved until P1.33p's forced refresh, and P1.36v keeps other PDSes from signing in until
+then (book edit 2026-10-19-auth-dead-gate, verify-1065 N7).
 
 ### P2.11d — Cap a cached recheck during PDS outages
 Tags: [SEC]            Depends on: P2.11a, P2.11c
@@ -2459,7 +2462,7 @@ Done when these tests pass and check is green:
 - `me.guards`: not onboarded goes to `/welcome`, on the DID account page itself;
 - `me.renders_owner_data`, as far as the placeholders go: the links and the state placeholder are present; the HTML
   scan finds no `getBlob` string anywhere, and the PDS host only in the one `PdsAccountLink` href (the recorded
-  issuer's origin) and that element's text node (architecture 02:25Z);
+  issuer's origin) and that element's text node (architecture's section labelled 02:25Z);
 - the account page in the P1.26 axe matrix in both themes. Today `tests/e2e/pages.ts:65-67` lists it as not a
   document. English only until the i18n slice.
 
