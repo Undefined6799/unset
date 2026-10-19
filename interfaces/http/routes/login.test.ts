@@ -126,7 +126,7 @@ describe("GET /login", () => {
     const { send } = setup({ signedIn: true });
     const response = await send("/login");
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/me");
+    expect(response.headers.get("location")).toBe("/did");
     // A sign-in that failed in a still-signed-in browser comes back with its error, and stays to show it.
     expect((await send("/login?error=login.consent_denied")).status).toBe(200);
   });

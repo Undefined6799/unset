@@ -79,7 +79,7 @@ function destination(step: OnboardingStep, emailConfirmed: boolean | null): stri
     case "blocked":
       return "/welcome/blocked";
     case "done":
-      return emailConfirmed === true ? "/me" : "/verify-email";
+      return emailConfirmed === true ? "/did" : "/verify-email";
     default: {
       const unexpected: never = step;
       return unexpected;
@@ -301,7 +301,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
         return again.kind === "out" ? again.response : elsewhere(again);
       }
       if (step === "chat") return redirect("/welcome/chat");
-      return redirect(safeReturnPath(single(form, "next")) ?? "/me");
+      return redirect(safeReturnPath(single(form, "next")) ?? "/did");
     },
   });
 
@@ -337,7 +337,7 @@ export function welcomeRoutes(deps: WelcomeDeps): Route[] {
         const again = await located(request, deadline, "/welcome/chat");
         return again.kind === "out" ? again.response : elsewhere(again);
       }
-      return redirect(found.session.emailConfirmed === true ? "/me" : "/verify-email");
+      return redirect(found.session.emailConfirmed === true ? "/did" : "/verify-email");
     },
   });
 

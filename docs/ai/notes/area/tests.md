@@ -67,7 +67,8 @@ ubuntu-24.04's AppArmor refuses the browser's user namespace.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
 - `integration/query-budget.test.ts`: every route in every `routes.manifest.json` needs a fixture in
-  `query-budget/fixtures/<interface>.json`, and stays under the statement budget.
+  `query-budget/fixtures/<interface>.json`, and stays under the statement budget. Keep `path` equal to the manifest
+  template; set `requestPath` to exercise concrete parameters (for example a valid DID for `/:did`).
 
 **Rules worth knowing.** No module mocks; only unmanaged dependencies get doubles (TE-1). Vitest fails if a
 discovered test did not run. Re-checked at P1.01a: integration tests import postgres and audit by package name;

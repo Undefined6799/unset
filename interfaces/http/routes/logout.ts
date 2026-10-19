@@ -161,7 +161,7 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
       handler: async ({ request, deadline }) => {
         // A browser signed in again (Back after a new sign-in, a typed URL) is not told it is signed out.
         if ((await deps.readSession(request, deadline)) !== null) {
-          return new Response(null, { status: 303, headers: { location: "/me", "cache-control": "no-store" } });
+          return new Response(null, { status: 303, headers: { location: "/did", "cache-control": "no-store" } });
         }
         const query = new URL(request.url).searchParams;
         return deps.page({

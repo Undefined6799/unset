@@ -1,0 +1,91 @@
+@layer components {
+  .rail,
+  .phone {
+    position: fixed;
+    z-index: var(--z-menu);
+    background: var(--color-surface-raised);
+    outline: 1px solid var(--color-line);
+  }
+  .rail {
+    inset: calc(var(--space-8) * 2) auto 0 0;
+    width: 72px;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding-block: var(--space-4);
+  }
+  .inline {
+    position: static;
+  }
+  .items {
+    margin-top: auto;
+  }
+  .control {
+    position: relative;
+    text-decoration: none;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    --base-fill: transparent;
+  }
+  .panel {
+    color: var(--color-ink);
+    background: var(--color-ground);
+    outline: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-xs);
+    box-shadow: var(--shadow-menu);
+    inset: auto var(--space-4) calc(var(--space-12) + var(--space-3) + var(--space-4) + var(--safe));
+    margin: 0;
+    width: auto;
+    border: 0;
+    padding: var(--space-2);
+    max-height: calc(100dvh - 168px);
+    & > div {
+      justify-content: space-between;
+      margin-bottom: var(--space-1);
+      padding-left: var(--space-3);
+    }
+    & button {
+      width: 44px;
+      height: 44px;
+    }
+    & a {
+      gap: var(--space-3);
+      height: 48px;
+      padding-inline: var(--space-3);
+      color: inherit;
+    }
+  }
+  .control:is([aria-current], [data-current])::after,
+  .phone:has(+ .panel:popover-open) button::after {
+    content: "";
+    position: absolute;
+    bottom: var(--space-1);
+    width: 24px;
+    border-bottom: 2px solid;
+  }
+  .phone,
+  .panel {
+    --safe: max(20px, env(safe-area-inset-bottom));
+  }
+  .phone {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .panel {
+      display: none;
+    }
+  }
+  @media (max-width: 767px) {
+    .rail {
+      display: none;
+    }
+    .phone {
+      inset: auto 0 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      justify-items: center;
+      padding: calc(var(--space-3) / 2) 0 calc(var(--space-3) / 2 + var(--safe));
+    }
+  }
+}

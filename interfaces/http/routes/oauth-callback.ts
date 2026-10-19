@@ -83,7 +83,7 @@ export function oauthCallbackRoutes(deps: CallbackDeps): Route[] {
     }
     deps.log.info("auth.login_succeeded");
     const cookies = [...spent, clearSignedOutCookie(), sessionSetCookie(created.cookieValue, deps.sessionMaxAgeS)];
-    return redirect(state.next ?? "/me", cookies);
+    return redirect(state.next ?? "/did", cookies);
   }
 
   return [

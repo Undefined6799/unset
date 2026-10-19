@@ -62,6 +62,8 @@ export const NOT_DOCUMENTS: readonly { readonly path: string; readonly reason: s
   { path: "/oauth/callback", reason: "protocol callback; a browser visit would call the PDS" },
   { path: "/login/continue", reason: "sign-in handoff, covered by P2.13a, not this harness" },
   { path: "/verify-email", reason: "redirects to sign-in without a session" },
+  { path: "/did", reason: "resolves the signed-in account; redirects to sign-in without a session" },
+  { path: "/:did", reason: "owner-only account; a valid DID redirects to sign-in without a session" },
   { path: "/me", reason: "redirects to sign-in without a session" },
   { path: "/welcome", reason: "always redirects to the current onboarding step" },
   { path: "/welcome/age", reason: "redirects to sign-in without a session" },

@@ -39,6 +39,9 @@ checked: 2026-10-17
 - `safe-href.ts`: the one link validator, exported from `index.ts`. Trusted base. Button and Link take only its
   `SafeHref`.
 - `inventory.json`: the registered components. A new component needs Alex's approval on the sheet.
+- `components/Navigation/`: the approved core rail and phone bar, composed from Avatar and Icon with a native
+  popover. Its local README records the Figma extension without changing the imported sheet snapshot. Header's
+  `brandOnly` mode supplies the 64px/56px top logo bar; Avatar accepts anonymous fallback artwork.
 
 **Rules worth knowing.** `shared/ui` imports no Node built-in (dependency-cruiser). Node never loads `index.ts`:
 [[ui-build]] imports it for types only (P1.25h). The 0x40 "v2e" look is superseded; follow only

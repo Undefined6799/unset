@@ -8,12 +8,14 @@ import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { createServer, defineRoute } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { loadWebBuild } from "../web/build.ts";
+import { elements, textContent } from "../web/fixtures/html.ts";
 import { errorPageHook } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
 
@@ -66,6 +68,39 @@ function throwingServer(screens: WebRender["screens"] = web.screens) {
 }
 
 describe("public pages", () => {
+  test("explicit routes take precedence over the DID parameter", async () => {
+    const login = await get("/login");
+    expect(login.status).toBe(200);
+    expect(elements(parse(await login.text()), "form", { action: "/login" }).length).toBeGreaterThan(0);
+    const metadata = await get("/oauth-client-metadata.json");
+    expect(metadata.status).toBe(200);
+    expect(await metadata.json()).toMatchObject({ client_id: `${ORIGIN}/oauth-client-metadata.json` });
+    for (const path of ["/did", "/me"]) {
+      const response = await get(path);
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/login?next=%2Fdid");
+    }
+  });
+
+  test("home_navigation_stays_anonymous_and_cookie_independent", async () => {
+    const plain = await get("/");
+    const supplied = await get("/?active=account&accountName=Mallory&accountPath=/evil", {
+      cookie: "__Host-sid=untrusted; __Host-theme=dark; accountName=Mallory",
+    });
+    const html = await plain.text();
+    expect(await supplied.text()).toBe(html);
+    expect(supplied.headers.get("vary")).toBeNull();
+    expect(supplied.headers.get("set-cookie")).toBeNull();
+    const document = parse(html);
+    const navigation = elements(document, "nav")[0];
+    expect(elements(navigation, "a", { href: "/", "aria-current": "page" })).toHaveLength(1);
+    expect(elements(navigation, "a", { href: "/did" })).toHaveLength(1);
+    expect(elements(navigation, "a", { href: "/did", "aria-current": "page" })).toHaveLength(0);
+    expect(elements(navigation, "a", { href: "/me" })).toHaveLength(0);
+    expect(textContent(document)).not.toContain("Mallory");
+    expect(elements(document, "script")).toHaveLength(0);
+  });
+
   test("public_routes_use_public_group", async () => {
     const table = server.routeTable();
     for (const path of PUBLIC_PAGES) {
@@ -86,7 +121,7 @@ describe("public pages", () => {
     const pages = [...PUBLIC_PAGES.map((path) => get(path)), get("/nowhere"), get("/boom", { on })];
     for (const response of await Promise.all(pages)) {
       const html = await response.text();
-      expect(html).toContain('<main id="main">');
+      expect(elements(parse(html), "main", { id: "main" })).toHaveLength(1);
       expect(html).not.toContain("<script");
       expect(html).not.toContain("modulepreload");
     }

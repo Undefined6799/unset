@@ -102,7 +102,7 @@ describe("GET /verify-email", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("Your email is confirmed");
-    expect(html).toContain('href="/me"');
+    expect(html).toContain('href="/did"');
     expect(saved).toEqual([true]);
   });
 

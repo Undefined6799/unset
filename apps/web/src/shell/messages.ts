@@ -8,6 +8,10 @@ export const SHELL = {
   signIn: "Sign in",
   siteColumn: "unset.sh",
   home: "Home",
+  profile: "Profile",
+  settings: "Settings",
+  coreMenu: "Menu",
+  closeMenu: "Close menu",
   legalColumn: "Legal",
   terms: "Terms",
   privacy: "Privacy",
@@ -16,8 +20,7 @@ export const SHELL = {
 } as const;
 
 export const HOME = {
-  heading: "unset.sh",
-  lead: "An identity and profile app on the AT Protocol. It is not open yet.",
+  heading: "Home",
 } as const;
 
 export const LEGAL = {

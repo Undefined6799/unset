@@ -313,7 +313,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
   });
   const settings = settingsRoutes({ gate, page, screens: render.screens });
   const me = meRoutes({
-    open: (request, deadline) => openApp(gate, request, deadline, "/me"),
+    open: (request, deadline, next) => openApp(gate, request, deadline, next),
     verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
@@ -345,6 +345,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...welcome,
     ...verifyEmail,
     ...settings,
+    // The DID parameter route must follow every explicit app/public route.
     ...me,
   ];
   return {

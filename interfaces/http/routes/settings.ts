@@ -33,7 +33,7 @@ export function settingsRoutes(deps: SettingsDeps): Route[] {
           title: "Profile",
           body,
           islands: "off",
-          shell: { noindex: true },
+          shell: { noindex: true, navigation: { active: "settings", accountPath: `/${opened.session.did}` } },
         });
       },
     }),

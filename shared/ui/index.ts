@@ -10,6 +10,7 @@ export { Footer, type FooterProps } from "./components/Footer/Footer.tsx";
 export { Header, type HeaderProps } from "./components/Header/Header.tsx";
 export { Input, type InputProps } from "./components/Input/Input.tsx";
 export { Link, type LinkProps } from "./components/Link/Link.tsx";
+export { Navigation, type NavigationProps } from "./components/Navigation/Navigation.tsx";
 export { SkipLink, type SkipLinkProps } from "./components/SkipLink/SkipLink.tsx";
 // P1.24h: the one link validator; every component link takes its SafeHref.
 export { type HrefScheme, type SafeHref, safeHref } from "./safe-href.ts";

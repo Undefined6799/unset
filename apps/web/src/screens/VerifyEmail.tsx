@@ -15,7 +15,7 @@ export type VerifyEmailProps = {
 
 export function VerifyEmail({ state, pdsHost, issuer, ours = true }: VerifyEmailProps) {
   const again = safeHref("/verify-email", ["path"]);
-  const home = safeHref("/me", ["path"]);
+  const home = safeHref("/did", ["path"]);
   return (
     <>
       <h1>Confirm your email</h1>

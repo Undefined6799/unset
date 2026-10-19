@@ -11,12 +11,14 @@ import { loadConfig } from "@unset/shared-config";
 import { ERROR_MESSAGES } from "@unset/shared-errors";
 import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import type { AccountStore } from "../account.ts";
 import { type AppGate, openApp } from "../app-gate.ts";
 import { config } from "../config.ts";
 import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
+import { elements } from "../web/fixtures/html.ts";
 import { pageResponse } from "../web/page.ts";
 import { meRoutes } from "./me.ts";
 import { settingsRoutes } from "./settings.ts";
@@ -171,7 +173,7 @@ function setup(world: World = {}) {
       }),
       ...settingsRoutes({ gate, page, screens: web.screens }),
       ...meRoutes({
-        open: (request, deadline) => openApp(gate, request, deadline, "/me"),
+        open: (request, deadline, next) => openApp(gate, request, deadline, next),
         verifyHandle: async () => ({ status: "verified", handle: "alice.pds.unset.test" as never, checkedAt: 0 }),
         page,
         screens: web.screens,
@@ -348,7 +350,7 @@ describe("POST /welcome/terms", () => {
       ageConfirmedAt: "confirmed",
     };
     const { send, calls } = setup({ row, email: { confirmed: true, checkedAt: NOW } });
-    expect((await send("/me")).headers.get("location")).toBe("/welcome/terms?next=%2Fme");
+    expect((await send("/did")).headers.get("location")).toBe("/welcome/terms?next=%2Fdid");
     expect((await send("/settings/profile")).headers.get("location")).toBe("/welcome/terms?next=%2Fsettings%2Fprofile");
     for (const path of ["/welcome", "/welcome/age"]) {
       const response = await send(path);
@@ -360,7 +362,7 @@ describe("POST /welcome/terms", () => {
     expect(accepted.headers.get("location")).toBe("/settings/profile");
     const invalid = setup({ row: { ...row } });
     const back = await invalid.send("/welcome/terms", post(`accept=yes&country=yes&${shown}&next=%2Flogin`));
-    expect(back.headers.get("location")).toBe("/me");
+    expect(back.headers.get("location")).toBe("/did");
     const stale = setup({ row: { ...row } });
     const old = await stale.send(
       "/welcome/terms",
@@ -381,18 +383,18 @@ describe("the app gate", () => {
       ageConfirmedAt: "confirmed",
     };
     const { send } = setup({ row, email: { confirmed: true, checkedAt: NOW } });
-    const first = await send("/me");
+    const first = await send(`/${DID}`);
     expect(first.status).toBe(200);
     const html = await first.text();
     expect(html.match(/The privacy notice has changed\./g)).toHaveLength(1);
     expect(html).toContain('href="/legal/privacy"');
-    expect((await send("/me")).status).toBe(200);
+    expect((await send(`/${DID}`)).status).toBe(200);
   });
 
   test("blocked.signin_again", async () => {
     const row: Row = { onboarding: "blocked_underage", termsVersion: null, privacyVersion: null, ageConfirmedAt: null };
     const { send, order } = setup({ row: { ...row }, email: { confirmed: true, checkedAt: NOW } });
-    for (const path of ["/me", "/settings/profile", "/welcome/age"]) {
+    for (const path of ["/did", "/me", `/${DID}`, "/settings/profile", "/welcome/age"]) {
       const response = await send(path);
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/welcome/blocked");
@@ -414,6 +416,30 @@ describe("the app gate", () => {
     });
     expect((await unverified.send("/settings/profile")).headers.get("location")).toBe("/verify-email");
   });
+
+  test("settings_navigation_renders_only_after_the_existing_gates", async () => {
+    const { send } = setup({
+      row: {
+        onboarding: "done",
+        termsVersion: TERMS_VERSION,
+        privacyVersion: PRIVACY_VERSION,
+        ageConfirmedAt: "confirmed",
+      },
+    });
+    const response = await send("/settings/profile");
+    expect(response.status).toBe(200);
+    const document = parse(await response.text());
+    expect(
+      elements(elements(document, "nav")[0], "a", { href: "/settings/profile", "aria-current": "page" }),
+    ).toHaveLength(1);
+    expect(elements(elements(document, "nav")[0], "a", { href: `/${DID}` })).toHaveLength(1);
+    expect(elements(document, "script")).toHaveLength(0);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("vary")).toBe("Cookie");
+    const refused = await setup({ session: null }).send("/settings/profile");
+    expect(refused.status).toBe(303);
+    expect(refused.headers.get("location")).toBe("/login?next=%2Fsettings%2Fprofile");
+  });
 });
 
 describe("the chat placeholder", () => {
@@ -433,8 +459,25 @@ describe("the chat placeholder", () => {
 
   test("welcome.chat_when_email_confirmed", async () => {
     const { send } = setup({ row: { ...chat }, session: sessionOf(true) });
-    expect((await send("/welcome/chat", post(""))).headers.get("location")).toBe("/me");
+    expect((await send("/welcome/chat", post(""))).headers.get("location")).toBe("/did");
   });
+});
+
+test("completed_onboarding_returns_to_the_profile_resolver", async () => {
+  const { send } = setup({
+    row: {
+      onboarding: "done",
+      termsVersion: TERMS_VERSION,
+      privacyVersion: PRIVACY_VERSION,
+      ageConfirmedAt: "confirmed",
+    },
+    session: sessionOf(true),
+  });
+  for (const path of ["/welcome", "/welcome/age", "/welcome/terms", "/welcome/chat"]) {
+    const response = await send(path);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/did");
+  }
 });
 
 describe("welcome screens", () => {

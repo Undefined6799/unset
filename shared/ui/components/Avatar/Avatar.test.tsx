@@ -30,4 +30,11 @@ describe("Avatar", () => {
     expect(html).toMatch(/<span aria-hidden="true">A<\/span><span class="visually-hidden">Alex<\/span>/);
     expect(html).not.toMatch(/role=/);
   });
+
+  it("avatar_anonymous_artwork_does_not_replace_a_known_name_or_picture", () => {
+    const fallback = <span>Guest artwork</span>;
+    expect(renderToStaticMarkup(<Avatar name="" fallback={fallback} />)).toContain("Guest artwork");
+    expect(renderToStaticMarkup(<Avatar name="Alex" fallback={fallback} />)).not.toContain("Guest artwork");
+    expect(renderToStaticMarkup(<Avatar name="" src={picture} fallback={fallback} />)).not.toContain("Guest artwork");
+  });
 });

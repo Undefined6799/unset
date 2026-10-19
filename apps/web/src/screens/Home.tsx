@@ -1,11 +1,6 @@
-// The landing page's placeholder (P1.25): its real content is not booked yet.
+// The core homepage is deliberately bare. Its heading remains available to assistive technology.
 import { HOME } from "../shell/messages.ts";
 
 export function Home() {
-  return (
-    <>
-      <h1>{HOME.heading}</h1>
-      <p>{HOME.lead}</p>
-    </>
-  );
+  return <h1 className="visually-hidden">{HOME.heading}</h1>;
 }

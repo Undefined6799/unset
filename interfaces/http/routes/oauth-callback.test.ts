@@ -95,7 +95,7 @@ describe("GET /oauth/callback", () => {
     const { send, calls, created, lines } = setup();
     const response = await send(NONCE_COOKIE);
     expect(response.status).toBe(303);
-    expect(location(response)).toBe("/me");
+    expect(location(response)).toBe("/did");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(calls).toEqual(["complete st", `consume ${NONCE}`, "create"]);
     expect(created).toEqual([{ did: DID, replacing: null }]);
@@ -111,8 +111,12 @@ describe("GET /oauth/callback", () => {
   test("callback_follows_a_valid_next", async () => {
     const valid = setup({ completed: { appState: appState({ next: "/settings/profile" }) } });
     expect(location(await valid.send(NONCE_COOKIE))).toBe("/settings/profile");
+    const profile = setup({ completed: { appState: appState({ next: `/${DID}` }) } });
+    expect(location(await profile.send(NONCE_COOKIE))).toBe(`/${DID}`);
+    const legacy = setup({ completed: { appState: appState({ next: "/me" }) } });
+    expect(location(await legacy.send(NONCE_COOKIE))).toBe("/me");
     const offsite = setup({ completed: { appState: appState({ next: "//evil.example" }) } });
-    expect(location(await offsite.send(NONCE_COOKIE))).toBe("/me");
+    expect(location(await offsite.send(NONCE_COOKIE))).toBe("/did");
   });
 
   test("callback_no_cookie_or_cookie_mismatch", async () => {
@@ -176,7 +180,7 @@ describe("GET /oauth/callback", () => {
     expect(calls).toEqual(["complete st", `consume ${NONCE}`]);
     expect(cookies(response)).toEqual([CLEAR_NONCE]);
     const chooser = setup({ completed: { did: OTHER, appState: appState({ expectedDid: null }) } });
-    expect(location(await chooser.send(NONCE_COOKIE))).toBe("/me");
+    expect(location(await chooser.send(NONCE_COOKIE))).toBe("/did");
   });
 
   test("callback_scope_insufficient_revokes", async () => {

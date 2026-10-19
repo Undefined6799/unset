@@ -20,6 +20,22 @@
     color: var(--color-ink);
   }
 
+  .brand {
+    background: var(--color-ground);
+    & .bar {
+      height: 63px;
+      padding-block: 0;
+      @media (max-width: 767px) {
+        height: 55px;
+        padding-inline: var(--space-4);
+      }
+    }
+    & .home {
+      align-items: center;
+      height: 48px;
+    }
+  }
+
   .nav {
     display: flex;
     align-items: center;

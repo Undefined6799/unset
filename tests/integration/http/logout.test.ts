@@ -1,4 +1,4 @@
-// P2.08a: HTTP proof that one of two sessions can sign out, and that /me ends when the grant is gone.
+// P2.08a: HTTP proof that one of two sessions can sign out, and account access ends when the grant is gone.
 // The route tests stub the store. This file uses Postgres as web and the real session store (P2.03, P2.04s).
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -131,14 +131,17 @@ beforeAll(async () => {
       }),
       ...meRoutes({
         // This file proves logout, not the age gate. compose is what applies that gate; here a live session is enough.
-        open: async (request: Request, deadline: AbortSignal) => {
+        open: async (request: Request, deadline: AbortSignal, next: string) => {
           const { session, clearCookie } = await store.read({
             key: request,
             cookieValue: cookieOf(request),
             deadline,
           });
           if (session === null) {
-            const headers = new Headers({ location: "/login?next=%2Fme", "cache-control": "no-store" });
+            const headers = new Headers({
+              location: `/login?${new URLSearchParams({ next })}`,
+              "cache-control": "no-store",
+            });
             if (clearCookie) headers.append("set-cookie", sessionClearCookie());
             return new Response(null, { status: 303, headers });
           }
@@ -180,9 +183,9 @@ function post(path: string, cookie: string, body: string) {
   return ask(new Request(`${ORIGIN}${path}`, { method: "POST", headers, body }));
 }
 
-function getMe(cookie: string) {
+function get(path: string, cookie: string) {
   return ask(
-    new Request(`${ORIGIN}/me`, {
+    new Request(`${ORIGIN}${path}`, {
       headers: { host: "unset.test", "x-forwarded-for": "192.0.2.8", cookie: `__Host-sid=${cookie}` },
     }),
   );
@@ -201,7 +204,8 @@ test("logout.this_browser keeps the other session and the grant", async () => {
   await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
   const first = await open(owner);
   const second = await open(owner);
-  const home = await getMe(second.cookieValue);
+  const accountPath = `/${owner}`;
+  const home = await get(accountPath, second.cookieValue);
   expect(home.status).toBe(200);
   expect(await home.text()).toContain("alice.test");
   const response = await post("/logout", first.cookieValue, "");
@@ -210,14 +214,25 @@ test("logout.this_browser keeps the other session and the grant", async () => {
   expect(revoked).toEqual([]);
   expect(await sessionsOf(owner)).toBe(1);
   expect(await hasToken(owner)).toBe(true);
-  const still = await getMe(second.cookieValue);
+  const still = await get(accountPath, second.cookieValue);
   expect(still.status).toBe(200);
+  expect(await still.text()).toContain("alice.test");
+  for (const shortcut of ["/did", "/me"]) {
+    const resolved = await get(shortcut, second.cookieValue);
+    expect(resolved.status).toBe(303);
+    expect(resolved.headers.get("location")).toBe(accountPath);
+  }
   await tokenSets.del(owner);
-  const gone = await getMe(second.cookieValue);
+  const gone = await get(accountPath, second.cookieValue);
   expect(gone.status).toBe(303);
-  expect(gone.headers.get("location")).toBe("/login?next=%2Fme");
+  expect(gone.headers.get("location")).toBe(`/login?${new URLSearchParams({ next: accountPath })}`);
   expect(gone.headers.get("set-cookie")).toContain("__Host-sid=");
   expect(await sessionsOf(owner)).toBe(0);
+  for (const shortcut of ["/did", "/me"]) {
+    const signedOut = await get(shortcut, second.cookieValue);
+    expect(signedOut.status).toBe(303);
+    expect(signedOut.headers.get("location")).toBe("/login?next=%2Fdid");
+  }
   expect(JSON.stringify(lines)).not.toContain(owner);
 });
 

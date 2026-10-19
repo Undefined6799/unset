@@ -26,8 +26,18 @@ P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`
 and every error page) gives no island run at all: no renderer, so each kit IslandSlot renders its server markup (the
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
-login, continue, signed-out, verify-email and `/me` render inside the shell (one `<main id="main">`). `feed`,
+login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). `feed`,
 `PrefsForms` and the favicons are still P1.25j. Text is in `src/shell/messages.ts`.
+
+**Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
+brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
+visually hidden heading. The interface supplies the active destination and a verified account name when available;
+the anonymous public homepage still reads no cookies. Native popovers keep the phone menu usable without JS.
+On screen, core main is a scroll area bounded by the header and navigation; bottom padding alone left keyboard
+focus hidden behind the phone bar at short viewport heights. Print keeps normal flow.
+The interface supplies `accountPath` from the session DID; the anonymous fallback `/did` resolves the user's own
+destination through existing app gates. `/me` is a compatibility redirect. The current DID page is still owner-only;
+public profile content and the editor remain separate work (P2.21).
 
 **Entry points.**
 - `render.tsx` is the one module `interfaces/http` imports. The interface passes preferences and the parsed build
@@ -58,10 +68,8 @@ failed island stays as its server markup and only logs to the console.
   that no entry reaches through static `imports`. `scripts/budgets/island.ts` refuses otherwise before the size gate,
   so an island inlined into boot can no longer drop out of the count unseen (P1.25l).
 - No inline script or style on any page (CSP).
-- CSS is one bundle: tokens, base and the kit. Do not trim those shared sheets to fit the 40 KiB
-  unminified cap, and do not duplicate a rule the kit already provides. Alex (2026-10-17) set the cap at
-  52 KiB (53,248 bytes) so the measured 50,063 fits with 3,185 bytes of headroom. `scripts/budgets/` is a
-  check path, so that edit is #965 (SE-6) and is not in this pull request. The gzip cap (12 KiB;
-  the shell uses 6,376) is what bounds the bytes sent.
+- CSS combines tokens, base and the kit. Do not trim unrelated shared sheets to fit the budget, or duplicate
+  a rule the kit already provides. The cap is 52 KiB (53,248 bytes) unminified and 12 KiB gzip (#965).
+  Measure both builds with `scripts/budgets/css.ts`; those limits live in a check path (SE-6).
 
 **Links.** ADR 0015 (web framework glue), ADR 0016 (design source), [[ui]], [[islands]], [[http]].

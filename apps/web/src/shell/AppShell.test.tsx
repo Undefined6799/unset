@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 // P1.25 (shell/AppShell.tsx, shell/head.tsx, errors/ErrorPage.tsx): the shell through the render entry, as the web
 // server renders it. A zero-JS page must work as plain HTML, so these read the markup only.
+
 import { describe, expect, test } from "vitest";
 import { type Assets, type PageInput, renderPage, screens } from "../../render.tsx";
 
@@ -27,6 +29,68 @@ function render(input: Partial<PageInput> = {}): string {
 }
 const head = (html: string) => html.slice(0, html.indexOf("</head>"));
 
+describe("core shell", () => {
+  const core = (active: "home" | "account" | "settings" = "home", accountName?: string, accountPath?: string) =>
+    new DOMParser().parseFromString(
+      render({
+        shell: {
+          error: null,
+          noindex: false,
+          navigation: {
+            active,
+            ...(accountName === undefined ? {} : { accountName }),
+            ...(accountPath === undefined ? {} : { accountPath }),
+          },
+        },
+      }),
+      "text/html",
+    );
+
+  test("home_is_bare_with_one_main_and_a_skip_link", () => {
+    const document = core();
+    expect(document.querySelectorAll("main")).toHaveLength(1);
+    expect(document.querySelector("main")?.children).toHaveLength(1);
+    expect(document.querySelector("main > h1.visually-hidden")?.textContent).toBe("Home");
+    expect(document.querySelector("a")?.getAttribute("href")).toBe("#main");
+    expect(document.querySelector("header a")?.getAttribute("href")).toBe("/");
+    expect(document.querySelector("footer")).toBeNull();
+  });
+
+  test("navigation_uses_real_account_and_protected_settings_routes", () => {
+    const document = core();
+    expect(document.querySelectorAll('a[href="/did"]')).toHaveLength(2);
+    expect(document.querySelector('a[href="/me"]')).toBeNull();
+    expect(document.querySelector('a[href="/settings/profile"]')).not.toBeNull();
+    expect(document.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("/");
+    expect(document.querySelector("script")).toBeNull();
+    expect(document.querySelector("[data-island]")).toBeNull();
+  });
+
+  test("phone_menu_has_native_dismiss_and_settings_without_new_scripts", () => {
+    const document = core("settings");
+    const popup = document.querySelector('[popover="auto"]');
+    expect(popup).not.toBeNull();
+    expect(document.querySelector('[popovertargetaction="hide"]')?.getAttribute("popovertarget")).toBe(popup?.id);
+    expect(popup?.querySelector('[href="/settings/profile"][aria-current="page"]')).not.toBeNull();
+  });
+
+  test("signed_in_avatar_uses_only_the_supplied_name", () => {
+    const document = core("account", "member.unset.test", "/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa");
+    const links = document.querySelectorAll('[href="/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"][aria-current="page"]');
+    expect(links).toHaveLength(2);
+    expect(links[0]?.textContent).toContain("M");
+    expect(document.querySelector('a[href="/me"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("Demo Member");
+  });
+
+  test.each(["https://other.example/profile", "//other.example/profile", "javascript:alert(1)"])(
+    "account_destination_rejects_non_path_%s",
+    (accountPath) => {
+      expect(() => core("account", undefined, accountPath)).toThrow("shell link is not a path");
+    },
+  );
+});
+
 describe("app shell", () => {
   test("shell_head_contents", () => {
     const html = head(render({ prefs: { htmlAttrs: { lang: "en" }, colorScheme: "light" } }));
@@ -50,7 +114,14 @@ describe("app shell", () => {
 
   test("shell_landmarks_in_order", () => {
     const html = render();
-    const order = ['href="#main"', "<header", '<main id="main">', "<h1>unset.sh</h1>", "</main>", "<footer"];
+    const order = [
+      'href="#main"',
+      "<header",
+      '<main id="main">',
+      '<h1 class="visually-hidden">Home</h1>',
+      "</main>",
+      "<footer",
+    ];
     const at = order.map((piece) => html.indexOf(piece));
     expect(at.every((index) => index >= 0)).toBe(true);
     expect(at).toEqual([...at].sort((a, b) => a - b));

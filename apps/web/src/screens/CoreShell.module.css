@@ -1,0 +1,18 @@
+/* The content scrolls inside the chrome so keyboard focus cannot pass behind it. */
+@layer screens {
+  @media screen {
+    .main {
+      box-sizing: border-box;
+      height: calc(100dvh - 64px);
+      overflow: auto;
+      margin-left: calc(var(--space-6) * 3);
+      padding: var(--space-12);
+      overflow-wrap: anywhere;
+      @media (max-width: 767px) {
+        height: calc(100dvh - 116px - max(20px, env(safe-area-inset-bottom)));
+        margin-left: 0;
+        padding: var(--space-4);
+      }
+    }
+  }
+}

@@ -190,9 +190,9 @@ test("signed_out_everywhere_names_an_unconfirmed_revoke", async () => {
   expect(quiet.match(/Sign-in could not start/g)).toHaveLength(1);
 });
 
-test("signed_out_sends_a_signed_in_visitor_to_me", async () => {
+test("signed_out_sends_a_signed_in_visitor_to_the_profile_resolver", async () => {
   // A browser that is signed in again (Back after a new sign-in, or a typed URL) is not told it is signed out.
   const response = await setup().send("/signed-out", { method: "GET" });
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/me");
+  expect(response.headers.get("location")).toBe("/did");
 });

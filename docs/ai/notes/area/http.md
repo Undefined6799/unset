@@ -23,6 +23,9 @@ and `/legal/domains`, group `public` so the shell's styles load, zero JS, `noind
 `routes/security-txt.ts` (`/.well-known/security.txt`, group `static`), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme
 cookie, applied on the server) and `web/` (reads Vite's manifest once at startup and renders pages through apps/web).
 Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read JSX, so pages come from `screens`.
+The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
+`/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
+public home remains anonymous and uses the `/did` self-profile shortcut. These are display props only.
 `web/page.ts` also builds the kit's `errorPage` hook (P1.25): apps/web's error page in the shell, public prefs, no
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook. `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.
@@ -47,7 +50,7 @@ there is no table for it: the cookie can only send a browser where its own POST 
 completeAuthorization, then in order the appState shape, the nonce cookie against the appState (constant time; a
 mismatch keeps the cookie, another tab may own it), the P1.16 consume, the expected DID, `grantCovers` (an
 insufficient grant is revoked), then a P2.03 session in its own transaction, rotating the request's old `__Host-sid`.
-It redirects to the stored `next` or `/me`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
+It redirects to the stored `next` or `/did`. Logs carry counts only (`auth.login_succeeded`, `auth.login_denied
 {code}`), never a DID. The callback still does not write `app.account`: P2.12 inserts that row on the first
 welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 
@@ -61,18 +64,25 @@ it is trusted base, so a store method cannot share this PR. GET /signed-out poin
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The
 pass/refresh/verify decision for other pages is `emailGate` in the identity domain. P2.12 wires it, after
-onboarding, on `/me` and `/settings/profile`. `/verify-email` checks onboarding and then is the email page itself.
+onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. `/verify-email` checks onboarding
+and then is the email page itself.
 
-**Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/me` or `/verify-email`.
+**Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
 birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.
 `GET /settings/profile` is a placeholder page so the gate has an app route to refuse.
 
-**The signed-in home (P2.13).** `routes/me.ts`: GET /me reads the session (none → `/login?next=/me`), shows the handle
-only when P2.02's `verifyHandle` (wired in compose with HANDLE_* config, sharing the DID resolver's cache) confirms it,
-else `handle.invalid`, plus the DID, the PDS account link and the sign-out form. GET /login sends a signed-in visitor
-to /me. P2.12's `openApp` refuses `/me` and `/settings/profile` until onboarding is done and the email is
-confirmed. Not yet: the app shell around these screens (P1.25j), the profile, privacy and invite blocks.
+**The signed-in account (P2.13).** `routes/me.ts`: GET `/did` and legacy `/me` open the existing app gate, then 303
+to the session's `/<DID>` (private/no-store, Vary Cookie). GET `/:did` validates with identity's `parseDid`, opens
+the gate with that canonical return path, then compares it with the session DID before resolving or rendering.
+Foreign DIDs return 404. Owner pages show the handle only when P2.02's `verifyHandle` confirms it, else
+`handle.invalid`, plus the DID, PDS account link and sign-out form. They are private/no-store, cookie-varying,
+unindexed and zero JS. GET /login sends a signed-in visitor to `/did`. P2.12's `openApp` still requires onboarding
+and email confirmation. Public profile content, editing and invite blocks remain separate work.
+
+Keep `meRoutes` last in composition so the one-segment DID parameter cannot shadow explicit GET routes. Invalid
+DID segments return 404 before any gate or lookup. The shared router's existing candidate matching means GET
+`/logout` now returns 404 and an unsupported POST to a one-segment path returns 405; trusted routing is unchanged.
 
 **Watch out (P1.23c).** Production renders with apps/web's server build, `apps/web/dist/server/render.js`, loaded
 once from that fixed path by `web/render-entry.ts`; no config key moves it. `compose(cfg, web?)` takes a render only

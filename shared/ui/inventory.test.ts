@@ -2,6 +2,7 @@
 // sheet publishes, at the README bytes recorded from it, and every piece the plan needed that the sheet first lacked
 // is in docs/human/ui/stop-items.md with Alex's dated approval before it is built. scripts/guards/ui-inventory.ts
 // (P1.24q) turns the rest of the book's rules into a CI check.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -50,9 +51,10 @@ test("inventory_covers_sheet", () => {
   };
   const dts = readFileSync(join(UI, "sheet", "components-index.d.ts.txt"), "utf8");
   const sheet = readdirSync(join(UI, "sheet", "components")).sort();
-  expect(Object.keys(inventory).sort()).toEqual(sheet);
+  const imported = Object.entries(inventory).filter(([name]) => name !== "Navigation");
+  expect(imported.map(([name]) => name).sort()).toEqual(sheet);
   expect(sheet).toHaveLength(33);
-  for (const [name, entry] of Object.entries(inventory)) {
+  for (const [name, entry] of imported) {
     expect(entry.sheet).toBe(`sheet/components/${name}/README.md`);
     expect(entry.sheetSha256, name).toBe(source.files.find((f) => f.path === entry.sheet)?.sha256);
     expect(STATUSES, name).toContain(entry.status);
@@ -65,6 +67,24 @@ test("inventory_covers_sheet", () => {
       );
     }
   }
+});
+
+test("inventory_registers_the_approved_navigation_extension", () => {
+  const extensions = Object.entries(inventory).filter(([, entry]) => !entry.sheet.startsWith("sheet/"));
+  expect(extensions.map(([name]) => name)).toEqual(["Navigation"]);
+  const readme = "components/Navigation/README.md";
+  expect(inventory.Navigation).toEqual({
+    sheet: readme,
+    sheetSha256: createHash("sha256")
+      .update(readFileSync(join(UI, readme)))
+      .digest("hex"),
+    props: "NavigationProps",
+    variants: ["desktop rail", "phone bar and popup"],
+    status: "built",
+  });
+  expect(readFileSync(join(UI, "components/Navigation/Navigation.tsx"), "utf8")).toContain(
+    "export type NavigationProps =",
+  );
 });
 
 test("stop_items_doc_exists", () => {
@@ -95,8 +115,8 @@ test("icon_approval_recorded", () => {
 });
 
 test("inventory_all_built", () => {
-  // P1.24f finishes the kit: every sheet piece is built, except a stop item, which stays as it is until Alex rules.
+  // P1.24f finishes the imported kit; the approved core shell adds Navigation without changing that snapshot.
   const statuses = Object.values(inventory).map((entry) => entry.status);
   expect(statuses.filter((status) => status !== "built" && status !== "stop")).toEqual([]);
-  expect(statuses.filter((status) => status === "built")).toHaveLength(33);
+  expect(statuses.filter((status) => status === "built")).toHaveLength(34);
 });
