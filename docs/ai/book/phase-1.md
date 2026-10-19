@@ -75,11 +75,11 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
   P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
   P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
-  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m,
-  P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
-  P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR
-  0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h, P2.11,
-  P2.11a–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the slice exit P2.13a. Order from
+  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v, P1.33n,
+  P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c,
+  P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are
+  dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h,
+  P2.11, P2.11a–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the slice exit P2.13a. Order from
   2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit
   2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and
   test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are exempt.
@@ -698,6 +698,8 @@ flowchart LR
   P1_35v["P1.35v secret key words split"]
   P1_36t["P1.36t secret key split widened to every env"]
   P1_35v --> P1_36t
+  P1_36u["P1.36u private staging addresses refused"]
+  P1_36v["P1.36v own-PDS accounts only"]
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -9051,6 +9053,46 @@ Threats (book edit 2026-10-19-codex-1063-batch66, M5):
 - The check's report leaks the secret. It reports fixed words plus the key name, never the value.
 Done when every new red fails on main's predicate first and passes at the head, the K3 and K5 mutants are killed, and
 check is green.
+
+### P1.36u — Refuse private staging addresses in dev preflight
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1038, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker beside
+P1.36k. A tightening, so it needs no card or typed line. Book edit 2026-10-19-p135t-local-stack-ci-job, "Step-book
+mapping of 05:05Z, the staging resolution check".
+**What:**
+- Under `--env dev` only, a new check resolves `APP_HOST` and `PDS_HOST` through the host resolver.
+- Every A and AAAA address is classified by net-guard's existing classifier, imported, never a new copy.
+- The check fails closed, with fixed words and never an address in the output, on a lookup failure, on no
+  addresses, or on any address that isn't public.
+- It refuses `dns`, `dns_search`, `extra_hosts` and `network_mode` on the pds service in compose.dev.yaml.
+- Reds: 10.0.0.1, ::1, a lookup failure, and a `dns` key on pds. Local and prod are unchanged.
+Threats: the PDS reaching our client metadata over a private path, so the staging sign-in proves nothing, or a
+resolver override redirecting it. Answered by public-only resolution checked before start, and no resolver keys on the
+PDS.
+Done when the reds are shown and check is green.
+
+### P1.36v — Sign in only accounts on our own PDS
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1039, product (`infrastructure/pds/oauth/`, `interfaces/http/` login and callback, `shared/config`,
+and their tests), lane the third thread, beside P1.36i. A staging go-live blocker, and never waived (book edit
+2026-10-19-auth-dead-gate). A tightening, so it needs no card or typed line. Book edit
+2026-10-19-staging-tailnet-rulings, "Step-book mapping of 05:15Z". If the step touches
+`domains/identity/verify-handle.ts` (trusted base), the lane stops and splits it.
+**What:**
+1. **Before authorize:** resolve the handle or DID to its PDS, with the bidirectional check. The PDS's
+   authorization-server issuer must exactly equal the configured own issuer. Otherwise refuse with
+   `login.account_elsewhere`, without sending any request to the outside server. A resolution failure also refuses.
+2. **At the callback:** the token response's `iss`, and its `sub`'s PDS, must still match exactly. Otherwise refuse
+   and store no session.
+3. **Config:** the own issuer is required config, derived from `PDS_HOST`. A test PDS configures it under test. It
+   applies in every env, and there is no switch to turn it off.
+4. **What stays:** the scope fallback (sign-in.ts:70-77). It is unrelated.
+Reds: a handle whose PDS is another host; an issuer that differs only by a trailing slash, or by case in the host; a
+callback whose `iss` differs from the one at authorize time; and a resolution failure. Green: an account on our PDS.
+Threats: an outside account signing in to a staging or prod app that promises own-PDS accounts only, or a mix-up
+between issuers at the callback. Answered by exact issuer equality, checked at both ends, failing closed. P1.33p later
+owns any loosening, with Alex's word. Until this lands, P2.11a's 900 s bound does not hold for accounts on other PDSes.
+Done when the reds are shown and check is green.
 
 ---
 
