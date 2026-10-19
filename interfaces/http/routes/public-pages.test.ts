@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
-import { createServer, defineRoute } from "@unset/shared-http";
+import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
@@ -16,8 +16,9 @@ import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { loadWebBuild } from "../web/build.ts";
 import { elements, textContent } from "../web/fixtures/html.ts";
-import { errorPageHook } from "../web/page.ts";
+import { errorPageHook, type PageSpec, pageResponse } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
+import { TEST_PATHS, testRoutes } from "./test-routes.ts";
 
 const ORIGIN = "https://unset.test";
 const TESTDATA = fileURLToPath(new URL("../web/testdata/", import.meta.url));
@@ -37,7 +38,7 @@ const get = (path: string, init: { method?: string; cookie?: string; on?: Server
     "10.0.0.1",
   );
 
-/** A server with one route that throws, the composed server's error page and a log the test reads. */
+/** A server with the test-only routes (P1.25c), the composed server's error page and a log the test reads. */
 function throwingServer(screens: WebRender["screens"] = web.screens) {
   const lines: Record<string, unknown>[] = [];
   const log = createLogger({
@@ -53,17 +54,15 @@ function throwingServer(screens: WebRender["screens"] = web.screens) {
     env: "test",
     log,
   } as const;
-  const route = defineRoute({
-    method: "GET",
-    path: "/boom",
-    group: "app",
-    rateLimit: "default",
-    session: "none",
-    handler: () => {
-      throw new Error("stack text that must not reach the page");
-    },
+  const errorPage = errorPageHook(deps, screens);
+  const page = (spec: PageSpec) => pageResponse(deps, spec);
+  const on = createServer({
+    config: CONFIG,
+    routes: testRoutes({ page, screens, errorPage }),
+    policies,
+    log,
+    errorPage,
   });
-  const on = createServer({ config: CONFIG, routes: [route], policies, log, errorPage: errorPageHook(deps, screens) });
   return { on, lines };
 }
 
@@ -118,7 +117,7 @@ describe("public pages", () => {
 
   test("shell_zero_js", async () => {
     const { on } = throwingServer();
-    const pages = [...PUBLIC_PAGES.map((path) => get(path)), get("/nowhere"), get("/boom", { on })];
+    const pages = [...PUBLIC_PAGES.map((path) => get(path)), get("/nowhere"), get(TEST_PATHS.throw, { on })];
     for (const response of await Promise.all(pages)) {
       const html = await response.text();
       expect(elements(parse(html), "main", { id: "main" })).toHaveLength(1);
@@ -175,7 +174,7 @@ describe("error pages", () => {
 
   test("server_error_request_id", async () => {
     const { on, lines } = throwingServer();
-    const response = await get("/boom", { on });
+    const response = await get(TEST_PATHS.throw, { on });
     expect(response.status).toBe(500);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const html = await response.text();
@@ -183,7 +182,7 @@ describe("error pages", () => {
     expect(shown).toBeDefined();
     expect(lines.find((line) => line.event === "http.request")?.reqId).toBe(shown);
     expect(html).toContain('<main id="main">');
-    expect(html).not.toContain("stack text");
+    expect(html).not.toContain("test route throw");
     expect(html).not.toMatch(/at \S+ \(/);
   });
 
@@ -195,7 +194,7 @@ describe("error pages", () => {
       },
     };
     const { on } = throwingServer(broken);
-    const response = await get("/boom", { on });
+    const response = await get(TEST_PATHS.throw, { on });
     expect(response.status).toBe(500);
     const html = await response.text();
     expect(html).toContain("<title>Error</title>");

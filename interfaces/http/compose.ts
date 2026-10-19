@@ -8,7 +8,7 @@
 // the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
 // and P2.08a: this browser, the last browser's grant, and sign-out everywhere. P2.13: the signed-in home, with
 // P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
-// error page.
+// error page. P1.25c: the test-only pages, only when TEST_ROUTES is on.
 import { fileURLToPath } from "node:url";
 import {
   createDidResolver,
@@ -62,6 +62,7 @@ import { oauthMetadataRoutes } from "./routes/oauth-metadata.ts";
 import { prefsRoutes } from "./routes/prefs.ts";
 import { securityTxtRoutes } from "./routes/security-txt.ts";
 import { settingsRoutes } from "./routes/settings.ts";
+import { testRoutes } from "./routes/test-routes.ts";
 import { verifyEmailRoutes } from "./routes/verify-email.ts";
 import { welcomeRoutes } from "./routes/welcome.ts";
 import { sessionCookieValue } from "./session-cookie.ts";
@@ -319,6 +320,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     screens: render.screens,
     pdsHost: cfg.PDS_HOSTNAME,
   });
+  const errorPage = errorPageHook(deps, render.screens);
   const routes = [
     ...homeRoutes({ page, screens: render.screens }),
     ...legalRoutes({
@@ -345,6 +347,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...welcome,
     ...verifyEmail,
     ...settings,
+    ...(cfg.TEST_ROUTES ? testRoutes({ page, screens: render.screens, errorPage }) : []),
     // The DID parameter route must follow every explicit app/public route.
     ...me,
   ];
@@ -355,7 +358,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       policies,
       log,
       onClose: oauth.onClose,
-      errorPage: errorPageHook(deps, render.screens),
+      errorPage,
     }),
     page,
     oauth: oauth.client,
