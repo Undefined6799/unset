@@ -26,7 +26,7 @@ const FIXTURES = join(import.meta.dirname, "query-budget", "fixtures");
 type Route = { readonly method: string; readonly path: string };
 type Fixture = {
   readonly env: Record<string, string>;
-  readonly requests: readonly (Route & { readonly status: number })[];
+  readonly requests: readonly (Route & { readonly requestPath?: string; readonly status: number })[];
 };
 type Server = { request(request: Request, peer?: string): Promise<Response> };
 
@@ -101,7 +101,8 @@ describe("query budget", () => {
       const { server } = await compose(loadConfig(config, await envOf(name, fixture)), ...wiring);
       for (const request of fixture.requests) {
         const route = `${name} ${request.method} ${request.path}`;
-        const result = await measure(server, request);
+        // Keep the manifest's route template for coverage, but send concrete parameters when the handler needs them.
+        const result = await measure(server, { ...request, path: request.requestPath ?? request.path });
         expect(result.status, route).toBe(request.status);
         expect(result.statements, route).toBeLessThanOrEqual(BUDGET);
       }

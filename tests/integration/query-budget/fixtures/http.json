@@ -110,6 +110,17 @@
     },
     {
       "method": "GET",
+      "path": "/did",
+      "status": 303
+    },
+    {
+      "method": "GET",
+      "path": "/:did",
+      "requestPath": "/did:plc:aaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": 303
+    },
+    {
+      "method": "GET",
       "path": "/me",
       "status": 303
     },
