@@ -175,7 +175,7 @@ describe("scan-export gates the secret scan", () => {
     expect(runs).not.toMatch(/\|\|\s*true/);
     expect(runs).toContain("rootfs --scanners secret --exit-code 1 --ignorefile /dev/null");
     const scan = wf.jobs.scan;
-    expect(scan?.needs).toEqual(["discover", "scan-image", "scan-export"]);
+    expect(scan?.needs).toEqual(["discover", "scan-image", "scan-export", "pds-ui"]);
     expect(runsOf(scan).includes(GH_OPEN)).toBe(false);
     const images = readFileSync(join(ROOT, ".github", "workflows", "images.yml"), "utf8");
     expect(images).not.toContain("v0.74.0");
@@ -247,13 +247,14 @@ describe("scan-export gates the secret scan", () => {
   test("scan_fails_when_scan_export_is_skipped_or_cancelled", () => {
     const step = wf.jobs.scan?.steps?.[0];
     if (step?.run === undefined) throw new Error("no scan gate");
-    const gate = (exportResult: string) =>
+    const gate = (exportResult: string, pdsResult = "success") =>
       spawnSync("bash", ["-e", "-c", step.run ?? ""], {
         env: {
           PATH: process.env.PATH,
           DISCOVER: "success",
           SCAN_RESULT: "success",
           EXPORT_RESULT: exportResult,
+          PDS_RESULT: pdsResult,
         },
         encoding: "utf8",
       });
@@ -261,6 +262,8 @@ describe("scan-export gates the secret scan", () => {
     for (const result of ["failure", "cancelled", "skipped"]) {
       const ran = gate(result);
       expect(ran.status, ran.stdout + ran.stderr).not.toBe(0);
+      const pds = gate("success", result);
+      expect(pds.status, pds.stdout + pds.stderr).not.toBe(0);
     }
   });
 });

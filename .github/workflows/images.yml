@@ -404,13 +404,30 @@ jobs:
             exit 1
           fi
 
+  # The paired PDS is admitted only as a derived build, never as a vendor/Compose exception.
+  pds-ui:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm ci
+      - run: node scripts/ci/pds-ui/build-check.ts
+
   # The one stable name (P1.27r requires `scan`, not the per-image names). always() runs this job when
   # discover, scan-image or scan-export failed, was skipped or was cancelled (workflow-syntax,
   # jobs.<job_id>.needs; expressions, always()). needs.<job_id>.result is success, failure, cancelled or
   # skipped (contexts reference). Anything but success is red, so a skipped export cannot read as green
   # (P1.33u). Drafts stay skipped, same as the other jobs. Making `scan` a required check stays P1.27r.
   scan:
-    needs: [discover, scan-image, scan-export]
+    needs: [discover, scan-image, scan-export, pds-ui]
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -422,9 +439,10 @@ jobs:
           DISCOVER: ${{ needs.discover.result }}
           SCAN_RESULT: ${{ needs.scan-image.result }}
           EXPORT_RESULT: ${{ needs.scan-export.result }}
+          PDS_RESULT: ${{ needs.pds-ui.result }}
         run: |
-          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ] || [ "$EXPORT_RESULT" != success ]; then
-            echo "discover=$DISCOVER scan-image=$SCAN_RESULT scan-export=$EXPORT_RESULT"
+          if [ "$DISCOVER" != success ] || [ "$SCAN_RESULT" != success ] || [ "$EXPORT_RESULT" != success ] || [ "$PDS_RESULT" != success ]; then
+            echo "discover=$DISCOVER scan-image=$SCAN_RESULT scan-export=$EXPORT_RESULT pds-ui=$PDS_RESULT"
             exit 1
           fi
 
