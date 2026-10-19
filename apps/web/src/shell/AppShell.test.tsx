@@ -2,10 +2,8 @@
 // P1.25 (shell/AppShell.tsx, shell/head.tsx, errors/ErrorPage.tsx): the shell through the render entry, as the web
 // server renders it. A zero-JS page must work as plain HTML, so these read the markup only.
 
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { type Assets, type PageInput, renderPage, screens } from "../../render.tsx";
-import { AppShell } from "./AppShell.tsx";
 
 const ASSETS: Assets = {
   origin: "https://assets.unset.test",
@@ -155,18 +153,15 @@ describe("app shell", () => {
 
   test("shell_feed_no_footer", () => {
     // A feed scrolls without end, so its footer links move into the header menu, which opens with no JS (P1.25f).
-    const html = renderToStaticMarkup(
-      <AppShell error={null} feed>
-        <p>feed</p>
-      </AppShell>,
-    );
+    // Through the render entry, as a route reaches it (ShellOptions.feed).
+    const html = render({ shell: { error: null, noindex: false, feed: true } });
     expect(html).not.toContain("<footer");
     const menu = /<details[^>]*><summary[^>]*>menu.*?<\/details>/.exec(html)?.[0] ?? "";
     for (const href of ["/login", "/legal/terms", "/legal/privacy", "/legal/domains"]) {
       expect(menu, href).toContain(`href="${href}"`);
     }
     expect(menu).not.toContain(" open");
-    expect(renderToStaticMarkup(<AppShell error={null}>{null}</AppShell>)).toContain("<footer");
+    expect(render()).toContain("<footer");
   });
 
   test("error_param_known_code", () => {

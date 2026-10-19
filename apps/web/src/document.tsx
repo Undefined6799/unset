@@ -24,6 +24,8 @@ export type ShellOptions = Readonly<{
   error: AppShellProps["error"];
   noindex: boolean;
   navigation?: NonNullable<AppShellProps["navigation"]>;
+  /** A feed page: no footer (AppShellProps["feed"]). */
+  feed?: true;
   /** The footer's theme form, on app pages only. */
   prefs?: NonNullable<AppShellProps["prefs"]>;
 }>;
@@ -63,6 +65,7 @@ export function Document(props: {
       <AppShell
         error={shell.error}
         {...(shell.navigation === undefined ? {} : { navigation: shell.navigation })}
+        {...(shell.feed === undefined ? {} : { feed: shell.feed })}
         {...(shell.prefs === undefined ? {} : { prefs: shell.prefs })}
       >
         {props.children}
