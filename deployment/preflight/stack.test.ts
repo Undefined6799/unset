@@ -139,18 +139,7 @@ describe("stack wrapper (P1.27w)", () => {
       envFile,
     ]);
     expect(commands[0]?.args[0]).toMatch(/scripts\/dev-precheck\.ts$/);
-    expect(commands[1]?.args).toEqual([
-      "compose",
-      "-f",
-      files[0],
-      "-f",
-      files[1],
-      "--env-file",
-      envFile,
-      "up",
-      "-d",
-      "--build",
-    ]);
+    expect(commands[1]?.args).toEqual(["compose", "-f", files[0], "-f", files[1], "--env-file", envFile, "up", "-d"]);
   });
 
   test("compose_paths_reach_both_children_absolute_and_normalized", () => {

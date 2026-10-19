@@ -146,7 +146,8 @@ export function plan(
               envFile,
             ],
           },
-          { name: "docker", file: "docker", args: [...compose, "up", "-d", "--build"] },
+          // Only a local stack builds from the checkout; dev runs the registry images C2 pinned (P1.37n).
+          { name: "docker", file: "docker", args: [...compose, "up", "-d", ...(env === "local" ? ["--build"] : [])] },
           ...(env === "local" ? [leafCheck] : []),
         ]
       : [down];
