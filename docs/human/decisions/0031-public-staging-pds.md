@@ -24,9 +24,11 @@ edge's certificate, so under dev the edge needs none. Architecture ruled this sh
 (`unset-plan/book-edits/2026-10-19-staging-tailnet-rulings.md`).
 
 ## Decision
-This record departs from ADR 0025 at the two clauses above and from ADR 0030's "no bypass" sentence, for the dev
-profile only. Neither record is edited; both keep their status. Production is unchanged: `unset.ac` stays behind
-whatever ADR 0028 and the Phase 5 records decide, with Let's Encrypt at the edge.
+This record departs from ADR 0025 at the two clauses above, and from ADR 0030 at three points, for the dev profile
+only: 0030's "`staging.unset.ac` has no bypass" (Decision 1), 0030:78-79 ("The edge keeps its own Let's
+Encrypt DNS-01 certificate for the staging names"), and the alternative 0030:130-132 rejected, plain HTTP from
+the edge to Newt, which this record adopts. Neither record is edited; both keep their status. Production is
+unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records decide, with Let's Encrypt at the edge.
 
 1. **Pangolin.** `staging.unset.ac` is a public resource at Pangolin: no login, no rules. `staging.unset.sh` keeps
    the tester login and exactly the two ACCEPT rules of 0030. Never an ACCEPT-by-IP rule on `staging.unset.sh`:
@@ -50,29 +52,44 @@ whatever ADR 0028 and the Phase 5 records decide, with Let's Encrypt at the edge
    exception (`infrastructure/net-guard/src/policies.ts:11`) on staging, a tightening: every host web fetches must
    resolve to public unicast addresses. No `NODE_EXTRA_CA_CERTS` anywhere on staging (a red: no staging service
    names a dev root). Rate limits: web gets no IP allowlist and no Pangolin bypass; the edge's keys stay on
-   `client_ip` (0025:186-194); the `staging.unset.ac` zones are sized from web's measured peak plus headroom. Alex's
+   `client_ip` (0025:195-201); the `staging.unset.ac` zones are sized from web's measured peak plus headroom. Alex's
    own browser shares a bucket with web, since both arrive from his egress address, so a `429` for him is a known
    cost. A CrowdSec or rate-limit allowlist for his egress address would be a loosening that needs his own typed
    line; until then the limits fail closed.
-4. **What `staging.unset.ac` exposes, and what the edge denies.** Public: every XRPC method the PDS serves
-   (`com.atproto.server.*`, `repo.*`, `sync.*` including `subscribeRepos` and `getRepo`, `identity.*`), the OAuth
-   endpoints (`/oauth/authorize`, PAR, token, `/.well-known/oauth-authorization-server`,
-   `/.well-known/oauth-protected-resource`) and the PDS account pages. Under dev the edge denies on
-   `staging.unset.ac`: (i) any request carrying `Authorization: Basic`, because admin authentication is Basic and
-   some admin-authenticated methods sit outside `com.atproto.admin` (`com.atproto.server.createInviteCode`,
-   `createInviteCodes`); `/xrpc/com.atproto.admin.*` and `/xrpc/com.atproto.temp.*` are denied as well; the runbook
-   runs admin calls from the staging host against the PDS container, never the public name; (ii) until P5.07b's
+4. **What `staging.unset.ac` exposes, and what the edge denies.** The policy is a denylist, not an allowlist:
+   everything the PDS serves is public except the denies below. That means every XRPC method of the pinned PDS
+   image (for example `com.atproto.server.*`, `repo.*`, `sync.*` including `subscribeRepos`, `listRepos` and
+   `getRepo`, `identity.*`), the OAuth endpoints (`/oauth/authorize`, PAR, token,
+   `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`) and the PDS account pages;
+   the build step lists the routes from the PDS source at the pinned version, not from memory. The edge denies
+   on `staging.unset.ac`: (i) the admin surface, already in `deployment/edge/snippets/xrpc-guard.caddy:8-25` and
+   kept on the public name: `404` for `/xrpc/com.atproto.admin.*`, `com.atproto.temp.*`, `tools.ozone.*`,
+   `com.atproto.server.createInviteCode` and `createInviteCodes` in any letter case; `401` for any XRPC request
+   carrying `Authorization: Basic`, since admin authentication is Basic and some admin-authenticated methods sit
+   outside `com.atproto.admin`; `400` for a malformed XRPC path (encoded characters, extra segments, trailing
+   slash, case games with `xrpc`), matched on the raw request target; the runbook runs admin calls from the
+   staging host against the PDS container, never the public name; (ii) until P5.07b's
    real scan exists, `com.atproto.repo.uploadBlob`, `com.atproto.sync.getBlob` and `com.atproto.repo.importRepo`,
    because a public `getBlob` would make an unscanned public image host, which the 20:58Z ruling, our zero tolerance
    for CSAM and the vault note `research/atproto-blob-serving-security` forbid. No media is in this milestone, so
    nothing breaks; a blob path that opens later carries the sandbox CSP and `nosniff`. Each deny gets a property-test
    red (TE-6) covering case, percent-encoding, trailing-slash and doubled-slash variants, in the shape of 0030's
    probe groups. Still holding: `PDS_INVITE_REQUIRED` (open sign-up waits on P5.02a), the admin password usable
-   only from the host, the PDS's own rate limits and the edge's, the app behind the Pangolin login, own-PDS-only
-   sign-in (P1.36v, never waived), and no media in the milestone.
-5. **Federation.** `PDS_CRAWLERS` stays empty, so the PDS requests no crawl; relays that find tester repos through
-   `plc.directory` may still subscribe, and tester repos are public atproto data (ADR 0004). No mitigation. The
-   runbook says how tester accounts are deactivated when staging ends.
+   only from the host, the edge's rate-limit zones, the app behind the Pangolin login, own-PDS-only sign-in
+   (P1.36v, never waived), and no media in the milestone. The PDS's own rate limits are not a layer: they stay off
+   (`PDS_RATE_LIMITS_ENABLED=false`, `deployment/compose.dev.yaml:114`, required exactly so by preflight C7) because
+   the edge strips the forwarded-address headers on the PDS route and the PDS would see one address for everyone,
+   so turning them on would make one bucket that anyone could exhaust. On the public PDS, `createSession`, the
+   OAuth sign-in and token endpoints and password reset are limited only by the edge's zones
+   (`deployment/edge/snippets/ratelimit.caddy`: `session`, `session_day`, `oauth_signin`, `oauth_token`, `signup`,
+   `reset`, `sync`), keyed per client as Decision 3 says.
+5. **Federation and what testers are told.** `PDS_CRAWLERS` stays empty, so the PDS itself requests no crawl, but
+   anyone can send `requestCrawl` for `staging.unset.ac` to a public relay, and a relay that finds the PDS may
+   subscribe to its firehose; the public `com.atproto.sync.listRepos` lists every tester's DID; a tester's DID,
+   handle history and PDS endpoint stay in `plc.directory`'s log for good, and neither deactivation nor deletion
+   removes them or copies third parties already hold. Tester repos are public atproto data (ADR 0004). No
+   mitigation; the tester notice says all of this before an invite is used. The runbook says how tester accounts
+   are deactivated when staging ends.
 6. **Handles.** Unchanged from 0025:89-94: `<handle>.staging.unset.im` stays internal, verified over public DNS TXT.
 
 ## Alternatives
@@ -103,6 +120,7 @@ whatever ADR 0028 and the Phase 5 records decide, with Let's Encrypt at the edge
   answers `describeServer` without a login, that `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic`
   request get the edge's deny, and that the edge presents no certificate of its own.
 - ADR 0025 and ADR 0030 change nothing, not even their status lines; this record departs from two clauses of 0025
-  and one sentence of 0030 for dev only. The C18 change needs Alex's own typed line, separate from this record's.
+  and from 0030's no-bypass sentence, its certificate sentence (0030:78-79) and its rejected plain-HTTP alternative
+  (0030:130-132), for dev only. The C18 change needs Alex's own typed line, separate from this record's.
 - Acceptance line: "yes accept ADR 0031 staging PDS public through Pangolin no certificate at our edge
   docs/human/decisions/0031-public-staging-pds.md".
