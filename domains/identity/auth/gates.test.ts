@@ -17,6 +17,13 @@ describe("email gate", () => {
     expect(verifiedAfterRefresh("transient")).toBe("pass");
   });
 
+  test("gate.requireVerified_ended_grant", () => {
+    // P2.11a: a revoked grant is a sign-out, never a request to confirm the email again.
+    expect(verifiedAfterRefresh("ended")).toBe("ended");
+    expect(verifiedAfterRefresh("unconfirmed")).toBe("verify");
+    expect(verifiedAfterRefresh("confirmed")).toBe("pass");
+  });
+
   test("gate.requireVerified_false", () => {
     expect(emailGate({ confirmed: false, checkedAt: new Date(NOW) }, NOW, RECHECK_S)).toBe("verify");
     expect(emailGate({ confirmed: null, checkedAt: null }, NOW, RECHECK_S)).toBe("verify");

@@ -74,6 +74,16 @@ pass/refresh/verify decision for other pages is `emailGate` in the identity doma
 onboarding, on `/<DID>`, its `/did` and `/me` shortcuts, and `/settings/profile`. `/verify-email` checks onboarding
 and then is the email page itself.
 
+**A grant revoked at the PDS (P2.11a, security note).** The stale-cache refresh (`email-refresh.ts`) goes through
+`pdsSessionInfo`; on `auth_dead`, pdsCall's `authDead` has already ended every session of the DID and its token set,
+so `refreshEmail` answers `ended` and `openApp` sends 303 to `/login?error=login.session_ended` with the cookie
+cleared. `scope_missing` and `rejected` still go to `/verify-email`; a transient answer passes on the cached `true`
+and ends nothing. **The bound:** another browser keeps rendering from its session row until the next PDS call for
+that DID or its own email recheck, whichever comes first. `EMAIL_RECHECK_S` defaults to 900 and its config maximum
+is 900, so the window is at most 15 minutes. A shorter window would need a PDS call per request. Pinned by
+`tests/integration/http/email-recheck.test.ts` and `config.test.ts#email_recheck_capped_at_900`. There is no audit
+row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
+
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
 birth date is not stored or logged. `/legal/*`, `/logout*`, `/welcome*` and `/signed-out` skip `requireOnboarded`.

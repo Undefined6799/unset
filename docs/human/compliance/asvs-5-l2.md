@@ -184,7 +184,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 |---|---|---|---|---|
 | V7.1.1 | The user's session inactivity timeout and absolute maximum session lifetime are … | open |  | — |
 | V7.1.2 | The documentation defines how many concurrent (parallel) sessions are allowed for one … | open |  | — |
-| V7.1.3 | All systems that create and manage user sessions as part of a federated identity … | partial | `test:tests/integration/session/store.test.ts#session.no_token_set_ends` | — |
+| V7.1.3 | All systems that create and manage user sessions as part of a federated identity … | partial | `test:tests/integration/session/store.test.ts#session.no_token_set_ends`, `test:tests/integration/http/email-recheck.test.ts#email_recheck.bound_is_the_recheck` | — |
 | V7.2.1 | The application performs all session token verification using a trusted, backend service | open |  | — |
 | V7.2.2 | The application uses either self-contained or reference tokens that are dynamically … | open |  | — |
 | V7.2.3 | If reference tokens are used to represent user sessions, they are unique and generated … | covered | `test:tests/integration/session/store.test.ts#session.create_stores_hash_only`, `test:tests/integration/session/store.test.ts#session.rotation` | P2.03 |
@@ -198,7 +198,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V7.4.5 | Application administrators are able to terminate active sessions for an individual user … | open |  | — |
 | V7.5.1 | The application requires full re-authentication before allowing modifications to … | open |  | — |
 | V7.5.2 | Users are able to view and (having authenticated again with at least one factor) … | open | `step:P2.08` | P2.08 |
-| V7.6.1 | Session lifetime and termination between Relying Parties (RPs) and Identity Providers … | open |  | — |
+| V7.6.1 | Session lifetime and termination between Relying Parties (RPs) and Identity Providers … | partial | `test:tests/integration/http/email-recheck.test.ts#email_recheck.revoked_grant_signs_out_every_browser`, `test:tests/integration/http/email-recheck.test.ts#email_recheck.bound_is_the_recheck`, `step:P2.11a` | P2.11a |
 | V7.6.2 | Creation of a session requires either the user's consent or an explicit action … | open | `step:P2.05` | P2.05 |
 
 ## V8 Authorization
