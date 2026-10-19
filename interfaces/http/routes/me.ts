@@ -4,9 +4,11 @@
 import { type Did, displayHandle, type HandleVerdict, parseDid } from "@unset/domains-identity";
 import { AppError } from "@unset/shared-errors";
 import { defineRoute, type Route } from "@unset/shared-http";
+import type { Logger } from "@unset/shared-log";
 import type { OpenedApp } from "../app-gate.ts";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";
+import { issuerOrigin } from "./sign-in-state.ts";
 
 export type MeDeps = {
   /** Session, then onboarding, then a confirmed email (P2.12). A Response is the redirect. */
@@ -14,10 +16,24 @@ export type MeDeps = {
   verifyHandle: (did: Did, signal: AbortSignal) => Promise<HandleVerdict>;
   page: (page: PageSpec) => Response;
   screens: WebRender["screens"];
-  pdsHost: string;
+  /** The issuer OAuth recorded at sign-in (the stored token set's `iss`), or null. Never a DID-document field. */
+  issuerOf: (did: Did) => Promise<string | null>;
+  /** Our PDS's issuer origin, to tell our sign-in server from another. */
+  pdsIssuer: string;
+  log: Logger;
 };
 
 export function meRoutes(deps: MeDeps): Route[] {
+  /** P2.08b: the account link follows the recorded issuer. An unreadable record drops the link, never the page. */
+  const recordedIssuer = (did: Did): Promise<string | null> =>
+    deps.issuerOf(did).then(
+      (issuer) => (issuer === null ? null : issuerOrigin(issuer)),
+      (cause: unknown) => {
+        deps.log.warn("auth.account_issuer_unknown", { kind: cause instanceof Error ? cause.name : "Error" });
+        return null;
+      },
+    );
+
   return [
     ...["/did", "/me"].map((path) =>
       defineRoute({
@@ -51,13 +67,14 @@ export function meRoutes(deps: MeDeps): Route[] {
         const opened = await deps.open(request, deadline, accountPath);
         if (opened instanceof Response) return opened;
         if (did !== opened.session.did) throw new AppError("http.not_found");
-        const verdict = await deps.verifyHandle(did, deadline);
+        const [verdict, issuer] = await Promise.all([deps.verifyHandle(did, deadline), recordedIssuer(did)]);
         const body = deps.screens.me({
           handle: displayHandle(verdict),
           did,
           handleUnavailable: verdict.status === "unavailable",
           privacyNotice: opened.privacyNotice,
-          pdsHost: deps.pdsHost,
+          issuer,
+          ours: issuer === deps.pdsIssuer,
         });
         return deps.page({
           group: "app",

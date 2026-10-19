@@ -32,6 +32,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "login.scope_insufficient": "The account's server did not grant what unset.sh needs. Try again and allow access.",
   "login.account_mismatch": "You signed in as a different account than the one you typed. Try again.",
   "login.session_ended": "That sign-in ended. Sign in again.",
+  "logout.failed": "Could not sign you out, try again.",
   "welcome.date_invalid": "That date is not a real calendar date.",
   "welcome.terms_required": "Tick the box to accept the terms and the privacy notice.",
   "welcome.country_required": "Tick the box about where you live.",

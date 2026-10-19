@@ -18,6 +18,7 @@ import { policies } from "../limits.ts";
 import { webTestEnv } from "../test-env.ts";
 import { pageResponse } from "../web/page.ts";
 import { type LoginDeps, loginRoutes } from "./login.ts";
+import { logoutRoutes } from "./logout.ts";
 
 const ORIGIN = "https://unset.test";
 const PDS = "pds-test.dev";
@@ -85,7 +86,19 @@ function setup(world: World = {}) {
     allowHttp: world.allowHttp ?? false,
     log,
   };
-  const server = createServer({ config: CONFIG, routes: loginRoutes(deps), policies, log });
+  // The real sign-out route beside sign-in, so a test can carry what logout sets into the next POST /login.
+  const logout = logoutRoutes({
+    readSession: async () => (world.signedIn ? ({ did: DID, idHash: Buffer.alloc(32, 7) } as Session) : null),
+    destroySession: async () => 1,
+    issuerOf: async () => `https://${PDS}`,
+    revokeGrant: async () => undefined,
+    deleteTokenSet: async () => undefined,
+    page: deps.page,
+    screens: web.screens,
+    pdsIssuer: `https://${PDS}`,
+    log,
+  });
+  const server = createServer({ config: CONFIG, routes: [...loginRoutes(deps), ...logout], policies, log });
   const send = (path: string, init: { form?: string; cookie?: string; site?: "same-origin" | "cross-site" } = {}) => {
     const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1" });
     if (init.cookie) headers.set("cookie", init.cookie);
@@ -243,10 +256,18 @@ describe("POST /login", () => {
     expect(location(await local.send("/login", { form: "handle=alice" }))).toBe("/login/continue");
   });
 
-  test("login_prompt_login_after_signout", async () => {
-    // After a sign-out, the server asks for the password again rather than reusing its own session (P2.08).
+  test("logout.next_login_prompt", async () => {
+    // After a sign-out, the server asks for the password again rather than reusing its own session (P2.08). The
+    // cookie is the one a real POST /logout sets, carried back as a browser would (P2.08b), not one written here.
+    const signOut = await setup({ signedIn: true }).send("/logout", { form: "", cookie: "__Host-sid=x" });
+    expect(location(signOut)).toBe("/signed-out");
+    const jar = cookies(signOut)
+      .map((line) => line.split(";")[0] ?? "")
+      .filter((pair) => !pair.endsWith("="))
+      .join("; ");
+    expect(jar).toContain("__Host-signed_out=");
     const { send, authorized } = setup();
-    await send("/login", { form: "handle=alice", cookie: "__Host-signed_out=1" });
+    await send("/login", { form: "handle=alice", cookie: jar });
     await send("/login", { form: "handle=alice" });
     expect(authorized.map((a) => a.prompt)).toEqual(["login", undefined]);
   });

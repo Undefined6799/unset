@@ -69,6 +69,8 @@ const EVENTS = [
   "auth.logout_this_browser",
   // P2.08a, a revocation that failed on the last browser's sign-out. No DID.
   "oauth.revoke_failed",
+  // P2.08b, the issuer recorded at sign-in could not be read at sign-out; `kind` is the class name. No DID.
+  "auth.logout_issuer_unknown",
   // P2.12, the age gate. `kind` is the audit lane or an error class; `count` is the audit sequence. No DID.
   "age_gate.hosted_block",
   "age_gate.block_failed",
@@ -76,6 +78,8 @@ const EVENTS = [
   "age_gate.sessions_end_failed",
   // P2.13, the handle check: an error it did not expect (the class as kind, never the DID); the verdict is unavailable.
   "handle.verify_failed",
+  // P2.08b, the account page could not read the issuer recorded at sign-in, so it shows no account link. No DID.
+  "auth.account_issuer_unknown",
 ] as const;
 export type LogEvent = (typeof EVENTS)[number];
 

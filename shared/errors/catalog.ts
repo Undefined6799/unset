@@ -37,6 +37,8 @@ export const ERROR_CODES = {
   "login.account_mismatch": { status: 403, public: true },
   // P2.07: the PDS wrapper ended the session because the grant is dead.
   "login.session_ended": { status: 401, public: true },
+  // P2.08b: the sign-out's own delete failed; the cookie stays, so trying again finds the session.
+  "logout.failed": { status: 503, public: true },
   // P2.12, onboarding. Shown from a redirect (`error=`). None of them names the age threshold.
   "welcome.date_invalid": { status: 400, public: true },
   "welcome.terms_required": { status: 400, public: true },

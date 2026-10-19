@@ -203,6 +203,14 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     sessionMaxAgeS: cfg.SESSION_ABSOLUTE_S,
     log,
   });
+  // Our PDS's issuer origin, and the issuer the OAuth library recorded for a DID at sign-in (its stored token set,
+  // read without a refresh). Never a DID-document field (book P2.08 `PdsAccountLink`).
+  const pdsIssuer = `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`;
+  const issuerOf = async (did: Did): Promise<string | null> => {
+    const saved = await oauth.sessionStore.get(did);
+    const iss = saved?.tokenSet.iss;
+    return typeof iss === "string" ? iss : null;
+  };
   const logout = logoutRoutes({
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,
     ...browserLogout({
@@ -212,9 +220,10 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
       revoke: (did) => oauth.client.revoke(did),
     }),
+    issuerOf,
     page,
     screens: render.screens,
-    pdsHost: cfg.PDS_HOSTNAME,
+    pdsIssuer,
     log,
   });
   const pds = createPdsCall({
@@ -279,12 +288,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     minAge: cfg.MIN_AGE,
     countryRule: cfg.INVITE_COUNTRY_RULE === "on",
     supportEmail: cfg.SUPPORT_EMAIL,
-    pdsIssuer: `${cfg.OAUTH_ALLOW_HTTP ? "http" : "https"}://${cfg.PDS_HOSTNAME}`,
-    issuerOf: async (did) => {
-      const saved = await oauth.sessionStore.get(did);
-      const iss = saved?.tokenSet.iss;
-      return typeof iss === "string" ? iss : null;
-    },
+    pdsIssuer,
+    issuerOf,
     revoke: (did) => oauth.client.revoke(did),
     endSessions: (did, deadline) =>
       withTransaction(oauth.pool, deadline, (tx) => sessions.destroyAllForDid(tx, did, "underage")).then(
@@ -302,7 +307,9 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
-    pdsHost: cfg.PDS_HOSTNAME,
+    issuerOf,
+    pdsIssuer,
+    log,
   });
   const errorPage = errorPageHook(deps, render.screens);
   const testPages = cfg.TEST_ROUTES

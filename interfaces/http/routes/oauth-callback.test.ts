@@ -102,6 +102,8 @@ describe("GET /oauth/callback", () => {
     expect(cookies(response)).toEqual([
       CLEAR_NONCE,
       "__Host-signed_out=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
+      // A new sign-in ends the signed-out state, so the previous account's carried issuer goes too (Codex, #1054).
+      "__Host-signed_out_issuer=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0",
       `__Host-sid=${SID}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000`,
     ]);
     expect(events(lines).map((line) => line.event)).toEqual(["auth.login_succeeded"]);
