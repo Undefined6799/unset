@@ -40,9 +40,6 @@ function setup(world: { session?: Session | null; destroyFails?: boolean; remain
       // Another browser still holds a session, so this path must not revoke the shared grant.
       return world.remaining ?? 1;
     },
-    destroyAllSessions: async () => {
-      throw new Error("everywhere is not this test");
-    },
     revokeGrant: async () => {
       throw new Error("revoke is not this test");
     },

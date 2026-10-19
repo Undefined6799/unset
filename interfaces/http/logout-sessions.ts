@@ -1,5 +1,5 @@
-// The session work behind signing out (P2.08a; book phase-2.md "POST /logout" step 4 and "POST /logout/everywhere"
-// steps 3–4; plan §5.3 "Logout"). The count is the book's SELECT, run in the same transaction as the delete so a
+// The session work behind signing out (P2.08a; book phase-2.md "POST /logout" step 4; plan §5.3 "Logout"). P2.08d
+// removed "sign out everywhere" and its destroy-all here. The count is the book's SELECT, run in the same transaction as the delete so a
 // failed count rolls the delete back. It lives here, not on infrastructure/session: that folder is trusted base
 // (SE-6, CODEOWNERS) and cannot share a pull request with these routes.
 import type { Did } from "@unset/domains-identity";
@@ -21,7 +21,6 @@ export function browserLogout(options: {
   readonly revoke: (did: Did) => Promise<void>;
 }): {
   destroySession: (session: Session, deadline: AbortSignal) => Promise<number>;
-  destroyAllSessions: (session: Session, deadline: AbortSignal) => Promise<number>;
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
 } {
@@ -32,8 +31,6 @@ export function browserLogout(options: {
         await sessions.destroy(tx, session.idHash);
         return remainingSessions(tx, session.did);
       }),
-    destroyAllSessions: (session, deadline) =>
-      withTransaction(pool, deadline, (tx) => sessions.destroyAllForDid(tx, session.did, "user_signout_all")),
     revokeGrant: (did) => revoke(did),
     deleteTokenSet: (did, deadline) =>
       withClient(pool, deadline, (db) => db.query("DELETE FROM app.oauth_session WHERE did = $1", [did])).then(

@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-17
+checked: 2026-10-19
 ---
 # http
 
@@ -57,7 +57,8 @@ welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 **Signing out (P2.08, remainder P2.08a).** `routes/logout.ts`: POST /logout (CSRF gate) destroys this browser's
 session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
 that was the last session, it revokes the grant (`OAuthClient.revoke`, 10s) and deletes the stored set if revoke
-throws. POST /logout/everywhere requires `confirm=yes`, revokes first, then `destroyAllForDid`. The count is
+throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19), so POST /logout/everywhere is an unknown route;
+`destroyAllForDid` stays for the age gate and auth_dead. The count is
 `logout-sessions.ts` (the book's SELECT, same transaction as the delete). `infrastructure/session` stays untouched:
 it is trusted base, so a store method cannot share this PR. GET /signed-out points at the PDS account page.
 

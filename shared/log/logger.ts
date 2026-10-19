@@ -67,9 +67,7 @@ const EVENTS = [
   "pds.unexpected",
   // P2.08, signing out of this browser: a count with no DID.
   "auth.logout_this_browser",
-  // P2.08a, signing out of every browser, and a revocation the authorization server did not confirm. No DID.
-  "auth.logout_everywhere",
-  "auth.revoke_unconfirmed",
+  // P2.08a, a revocation that failed on the last browser's sign-out. No DID.
   "oauth.revoke_failed",
   // P2.12, the age gate. `kind` is the audit lane or an error class; `count` is the audit sequence. No DID.
   "age_gate.hosted_block",

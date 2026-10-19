@@ -6,7 +6,7 @@
 // P2.04c: the one OAuth client, on `web`'s pools, the seal keyring, net-guard and the identity domain. Building opens no
 // connection; `boot` checks the connection budget before the server listens. P2.05: the sign-in routes on that client,
 // the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
-// and P2.08a: this browser, the last browser's grant, and sign-out everywhere. P2.13: the signed-in home, with
+// and P2.08a: this browser and the last browser's grant (P2.08d removed sign-out everywhere). P2.13: the signed-in home, with
 // P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
 // error page.
 import { fileURLToPath } from "node:url";
