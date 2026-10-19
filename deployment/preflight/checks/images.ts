@@ -24,9 +24,9 @@ const INDEX_TYPES = [
 /**
  * C2: no service has a build, and every service image is ours by digest and the lock lists that digest. A locked digest
  * beside a build doesn't hold, since Compose builds the bytes from the checkout (P1.37n; architecture 07:24Z on
- * verify-1079). Under dev that includes migrate, which changes the schema with migration privileges: it gets no
- * exception for a build from the checkout, and it is signed and digest-pinned like every other image (P1.36r;
- * architecture 2026-10-19 04:20Z). Only --env local builds.
+ * verify-1079). Under dev that includes migrate, which changes the schema with migration privileges: it is
+ * digest-pinned like every other image, and C3 verifies its signature (P1.36r; architecture's section labelled
+ * 04:20Z). Only --env local builds.
  */
 export const c2: Check = {
   id: "C2",

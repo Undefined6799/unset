@@ -349,9 +349,9 @@ describe("preflight", () => {
   });
 
   test("c2_dev_migrate_built_from_checkout_fails", async () => {
-    // P1.36r (architecture 2026-10-19 04:20Z): migrate runs schema changes with migration privileges, so under dev it
-    // is signed and digest-pinned like every other image. A build from the checkout, as compose.dev.yaml has until
-    // P1.27s, fails C2 under dev and prod alike; only --env local takes the unsigned path.
+    // P1.36r (architecture's section labelled 04:20Z): migrate runs schema changes with migration privileges, so under
+    // dev it is digest-pinned like every other image, and C3 verifies its signature. A build from the checkout, as
+    // compose.dev.yaml has until P2.26b, fails C2 under dev and prod alike; only --env local takes the unsigned path.
     const migrate = [
       "  migrate:",
       "    build:",
