@@ -63,7 +63,11 @@ Alex's word.
 - The edge's own certificates for the `staging.unset.*` names are Let's Encrypt with the DNS-01
   challenge, validated through a delegated zone: `_acme-challenge.staging.unset.*` is a CNAME into a
   dedicated validation zone, and the edge's DNS token can write only that zone, never the product
-  zones. The public certificates that Pangolin presents for `staging.unset.sh` and `staging.unset.ac`
+  zones. The CNAME tells the CA where to read; the edge must be told where to write, because the
+  DNS-01 solver does not follow a CNAME. So the edge's TLS configuration names the delegated target
+  as the challenge's override domain for each name (Caddy's `dns_challenge_override_domain`), which
+  P1.36e carries; without it the edge would try to write the product zone and the scoped token would
+  refuse. The public certificates that Pangolin presents for `staging.unset.sh` and `staging.unset.ac`
   are its own, issued by HTTP-01 (below). The local development root is not used for these names.
 - `staging.unset.sh` is published through Pangolin behind its login. Exactly two paths bypass the
   login, for GET and HEAD, by exact match and never by wildcard: `/oauth-client-metadata.json` and the
@@ -95,16 +99,18 @@ Alex's word.
   TXT records. For `staging.unset.cc` it holds the `_acme-challenge` CNAME and its CAA records.
 - CAA lookup climbs to the closest parent record (RFC 8659), and `unset.ac` stays parked at
   `CAA 0 issue ";"` until P5.02a, so every staging name carries its own CAA. `staging.unset.sh` and
-  `staging.unset.ac` each carry exactly three records:
+  `staging.unset.ac` each carry exactly four records:
   `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` for the edge's certificate,
-  `CAA 0 issue "letsencrypt.org; validationmethods=http-01"` for Pangolin's certificate and
-  `CAA 0 issuewild ";"`. `staging.unset.im` carries
+  `CAA 0 issue "letsencrypt.org; validationmethods=http-01"` for Pangolin's certificate,
+  `CAA 0 issuewild ";"` and `CAA 0 iodef "mailto:security@unset.sh"`. `staging.unset.im` carries
   `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` plus
   `CAA 0 issuewild "letsencrypt.org; validationmethods=dns-01"` for `*.staging.unset.im`, the only staging
-  wildcard. `staging.unset.cc` carries `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` and
-  `CAA 0 issuewild ";"`, and gains Pangolin's issuer if chat is later routed through Pangolin. Each
-  `letsencrypt.org` record gains `accounturi=` once its ACME account exists (RFC 8657). The parked apex
-  records are unchanged.
+  wildcard, and the same `iodef`. `staging.unset.cc` carries
+  `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"`, `CAA 0 issuewild ";"` and the same `iodef`,
+  and gains Pangolin's issuer if chat is later routed through Pangolin. Because the lookup stops at the
+  first name that has any CAA record, a child set does not inherit the apex's `iodef`, so every serving
+  set carries it, as the Phase 0 record set requires. Each `letsencrypt.org` record gains `accounturi=`
+  once its ACME account exists (RFC 8657). The parked apex records are unchanged.
 
 The Matrix `server_name` is `unset.cc`. An MXID reads `@localpart:unset.cc`. Chat is served at
 `unset.cc`. There is no delegation from `unset.sh` and no `chat.unset.sh` host.
@@ -184,6 +190,16 @@ unchanged. This record supersedes ADR 0020.
   Newt's fixed address, short retention and a RoPA line for its access logs, and testers told it is a
   test system. Our own gates stay: invites, the email and onboarding gates, our OAuth session, the CSRF
   and Origin gates, owner-only `/<DID>`, no published PDS port.
+- Amends ADR 0018's rate-limit key (0018:71) under the dev profile only. Behind Pangolin every
+  connection reaches the edge from Newt's fixed address, so a socket-address key would give all testers
+  one shared quota in every zone, and one tester could throttle staging. Under dev the edge trusts
+  exactly Newt's address as its proxy, strictly, keys its rate-limit zones by the client address taken
+  from that forwarded header, and falls back to Newt's address when no header arrives, which fails
+  closed to the shared quota. The edge still removes `X-Forwarded-For` and `Forwarded` before the PDS
+  and web see the request, and web's own trust settings are unchanged. Production and local keep the
+  socket-address key, since nothing sits in front of their edge. The code is P1.36j, on Alex's typed
+  line; its reds are separate quotas for two clients behind Newt, a spoofed header from any other
+  address ignored, and no forwarded header at web.
 - Let's Encrypt stays the only issuer of our own certificates. C18 accepts DNS-01 for the dev profile
   first (P1.36e, a trusted-base step); production's handle wildcard `*.unset.im` and its internal
   admin host (PLAN.md:440) use the same delegated-zone pattern when Phase 5 builds them, each with
