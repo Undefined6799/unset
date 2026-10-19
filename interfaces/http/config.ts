@@ -3,7 +3,17 @@
 import { oauthFields } from "@unset/infrastructure-pds";
 import { lockPoolFields, poolFields, postgresFields } from "@unset/infrastructure-postgres";
 import { sealFields } from "@unset/infrastructure-seal";
-import { defineEntrypointConfig, HOSTNAME, int, netGuardFields, oneOf, str, url, withRule } from "@unset/shared-config";
+import {
+  bool,
+  defineEntrypointConfig,
+  HOSTNAME,
+  int,
+  netGuardFields,
+  oneOf,
+  str,
+  url,
+  withRule,
+} from "@unset/shared-config";
 import { httpKitConfig } from "@unset/shared-http";
 import { securityContactAllowed, securityTxtExpiry } from "./security-txt.ts";
 
@@ -87,6 +97,19 @@ export const legalConfig = {
   }),
 };
 
+/**
+ * The test-only pages (P1.25c, routes/test-routes.ts). Off by default, and a positive allowlist: only `test` may turn
+ * them on. Every other profile, dev (staging, ADR 0025) and prod included, refuses the key at start (`config.invalid`
+ * with key TEST_ROUTES, exit 78), so no deployed routing holds them. UNSET_ENV has no `local` value; the local stack
+ * runs as dev, so it refuses too.
+ */
+export const testRoutesConfig = {
+  TEST_ROUTES: withRule(
+    bool({ default: false }),
+    (config) => config.TEST_ROUTES !== true || config.UNSET_ENV === "test",
+  ),
+};
+
 export const config = defineEntrypointConfig({
   ...httpKitConfig,
   ...sessionConfig,
@@ -99,6 +122,7 @@ export const config = defineEntrypointConfig({
   ...oauthFields,
   ...loginConfig,
   ...legalConfig,
+  ...testRoutesConfig,
   /** apps/web's browser build, the directory holding `.vite/manifest.json` (P1.23). Empty means apps/web/dist/client. */
   WEB_BUILD_DIR: str({ default: "" }),
 });

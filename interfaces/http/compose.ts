@@ -8,7 +8,7 @@
 // the identity network and P1.16's nonces. P2.06: the callback, which creates P2.03 sessions on the same pool. P2.08
 // and P2.08a: this browser and the last browser's grant (P2.08d removed sign-out everywhere). P2.13: the signed-in home, with
 // P2.02's handle check on the same DID resolver. P1.25: the public pages, and the kit's error-page hook on apps/web's
-// error page.
+// error page. P1.25c: the test-only pages, imported only when TEST_ROUTES is on, so no deployed process loads them.
 import { fileURLToPath } from "node:url";
 import {
   createDidResolver,
@@ -320,6 +320,10 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     screens: render.screens,
     pdsHost: cfg.PDS_HOSTNAME,
   });
+  const errorPage = errorPageHook(deps, render.screens);
+  const testPages = cfg.TEST_ROUTES
+    ? (await import("./routes/test-routes.ts")).testRoutes({ page, screens: render.screens, errorPage })
+    : [];
   const routes = [
     ...homeRoutes({ page, screens: render.screens }),
     ...legalRoutes({
@@ -346,6 +350,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...welcome,
     ...verifyEmail,
     ...settings,
+    ...testPages,
     // The DID parameter route must follow every explicit app/public route.
     ...me,
   ];
@@ -356,7 +361,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       policies,
       log,
       onClose: oauth.onClose,
-      errorPage: errorPageHook(deps, render.screens),
+      errorPage,
     }),
     page,
     oauth: oauth.client,
