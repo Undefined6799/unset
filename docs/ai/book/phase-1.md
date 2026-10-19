@@ -61,8 +61,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
   2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
-  P1.20–P1.25, P1.25c, P1.25a, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.26, P1.27, P1.27d, P1.28q, P1.28d,
-  P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+  P1.20–P1.25, P1.25c, P1.25a, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.37f, P1.26, P1.27, P1.27d, P1.28q,
+  P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r,
+  P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g,
   P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f,
   P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g,
@@ -436,6 +437,8 @@ flowchart LR
   P1_25y["P1.25y disabled Select styled, tests tightened"]
   P1_25g --> P1_25y
   P1_25t["P1.25t encoded DIDs redacted in log scrub"]
+  P1_37f["P1.37f DID route privacy, real accounts"]
+  P1_25n --> P1_37f
   P1_04 --> P1_27
   P0_07 --> P1_27
   P1_27 --> P1_27d
@@ -6585,14 +6588,18 @@ Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
      `settings_prefs_section` and its design-sheet entry are P2.13c's (issue #992, booked in the next batch), because
      P2.13c builds the SettingsShell after this step (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes
      from Codex on #1037").
-   - The footer form stays on default-shell pages (sign-in, verify-email, legal), where signed-out visitors need it.
+   - The footer form stays on app-group pages without the side navigation, such as sign-in and verify-email, where
+     signed-out visitors need it. It never goes on the public legal pages (/legal/terms, /legal/privacy,
+     /legal/domains): P1.22 gives public pages no theme control and `LanguageLinks()` instead (book edit
+     2026-10-19-alex-cards-and-edge-dev-mode, "Correction: no theme form on public legal pages", a correction, not a
+     departure).
    - Nothing goes in the Navigation panel.
    - Both are zero-JS form POSTs that set the prefs cookie, same-origin, behind the CSRF and Origin gates, and they
      work in both shells.
    - The PR body quotes his 02:59:37Z tap.
    - LanguageLinks stays with P1.22b.
-   - Tests: `default_shell_footer_prefs`, and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c
-     lands first.
+   - Tests: `default_shell_footer_prefs` (the form on an app-group default-shell page, and its absence on a legal
+     page), and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c lands first.
 4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
    Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
    Each has a test.
@@ -6701,6 +6708,26 @@ Threats: an encoded DID slipping past the last log layer (SE-7). Answered by mat
 case-insensitively.
 Done when the reds fail on main first, the mutants that drop each separator form or the case flag are killed, and
 check is green.
+
+---
+
+### P1.37f — Test DID route privacy against real accounts
+Tags: [SEC]            Depends on: P1.25n
+Slice 1, product tests (`me.privacy.test.ts` and the fixture manifest, or `tests/integration` if item 1 needs it),
+lane Phase 2. Tests only, a tightening. Book edit 2026-10-19-verify-1017-scrub-and-gate, "verify-1053-8602684
+follow-up". P1.25n merged as #1053. P1.25t stays its own step, in any order. Issue: the board opens it.
+**What:**
+1. **M1.** If compose already has a dependency seam for the account store, the test passes in a fake store with three
+   DIDs: our own DID with an account, a foreign DID with an account, and an unknown DID with none. It also uses a
+   well-formed `__Host-sid` that names no live session. The verifier's plants G1 and G1soft both go red. If there is
+   no seam, none is added only for the test; the same cases run as a Postgres case in the existing CI integration
+   project.
+2. **M2.** The log check decodes each line repeatedly, up to 3 rounds. A malformed escape counts as a match, and
+   `did:` matches case-insensitively on both the raw and the decoded line. Add the fully encoded, `%253A` and
+   mixed-case paths.
+3. **N1.** The fixture manifest uses one style, so the referrerpolicy check sees the head's links.
+4. **N2.** The wording at me.privacy.test.ts:173 and :186 is trimmed to what the tests prove.
+Done when G1 and G1soft are red, each new M2 path is red against a copy that skips decoding, and check is green.
 
 ---
 

@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 354 steps: 320 from `phase-1.md`, 34 from `phase-2.md` (including the
+Depth: **build-ready**. 355 steps: 321 from `phase-1.md`, 34 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -297,6 +297,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25m | Pin the DID account route's privacy | [SEC] | P1.25 | `phase-1.md` |
 | P1.25n | Harden the DID route privacy tests | [SEC] | P1.25m | `phase-1.md` |
 | P1.25t | Redact percent-encoded DIDs in the log scrub | [SEC] | — | `phase-1.md` |
+| P1.37f | Test DID route privacy against real accounts | [SEC] | P1.25n | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P2.26b (P2.26c for the edge), interim departure, Alex 2026-10-07 00:17Z; P2.26b, then P2.26c, flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -972,6 +973,8 @@ flowchart TD
   P1_25y["P1.25y Disabled Select styled, tests tightened"]
   P1_25g --> P1_25y
   P1_25t["P1.25t Encoded DIDs redacted in log scrub"]
+  P1_37f["P1.37f DID route privacy, real accounts"]
+  P1_25n --> P1_37f
   P1_04 --> P1_27
   P1_27 --> P1_27d
   P1_27 --> P1_28q
