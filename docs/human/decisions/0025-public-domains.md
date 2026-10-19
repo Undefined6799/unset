@@ -1,6 +1,7 @@
 # 0025 — Public domains
 
-Status: Proposed (awaiting Alex)
+Status: Accepted by Alex, 2026-10-19 04:17:55Z ("yes accept ADR 0025 public domains with staging TLS and Pangolin
+docs/human/decisions/0025-public-domains.md").
 
 PERMANENT — changing any value breaks existing users.
 
