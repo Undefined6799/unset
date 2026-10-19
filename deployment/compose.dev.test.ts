@@ -511,6 +511,7 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_PORT: "3000",
       PDS_DATA_DIRECTORY: "/home/node",
       PDS_BLOBSTORE_DISK_LOCATION: "/home/node/blocks",
+      PDS_BLOB_UPLOAD_LIMIT: "5242880",
       PDS_DID_PLC_URL: "https://plc.directory",
       PDS_INVITE_REQUIRED: "true",
       PDS_CRAWLERS: "",
