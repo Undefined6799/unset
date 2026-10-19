@@ -110,11 +110,11 @@ and this table is the only place to change.
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
 Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08g, P2.11,
-P2.11a–P2.11c, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
-merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
-file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
-i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
-four (book edit 2026-10-14-verify-834-fixes, S5).
+P2.11a–P2.11c, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once
+their own dependencies merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice
+1"). The rest of this file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built
+after slice 2 and the i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build
+order, except those four (book edit 2026-10-14-verify-834-fixes, S5).
 Pulled forward after P2.13a and before P1.34 (Alex, "Set up now", 2026-10-14T20:45:26Z; book edit
 2026-10-13-verify-819-fixes, Q3 and the keyless mapping): P1.27s, then P2.26e, P2.26b, P2.26c and P2.26d, so the
 home-server stack runs only signed, mirrored images.
@@ -129,14 +129,14 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
 (P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
-user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
-key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
-English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
-(P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts
-every module first and adds French to these tests; no French page ships before it. The Phase 2 exit (P2.26) still checks
-both languages, since it comes after it. Every step after P2.13a uses the catalogs and `t()` directly. Dependency
-changes: P2.04 takes P1.31 instead of P1.35; P2.12 lists P1.15 (its age-gate block writes one audit row); P2.15 lists
-P1.37 (its incident-response page); P2.26 lists P2.13a and P1.38.
+user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they
+say "catalog key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and
+Playwright tests run English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in
+the i18n slice (P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`,
+"Slices") converts every module first and adds French to these tests; no French page ships before it. The Phase 2 exit
+(P2.26) still checks both languages, since it comes after it. Every step after P2.13a uses the catalogs and `t()`
+directly. Dependency changes: P2.04 takes P1.31 instead of P1.35; P2.12 lists P1.15 (its age-gate block writes one audit
+row); P2.15 lists P1.37 (its incident-response page); P2.26 lists P2.13a and P1.38.
 
 ## Step dependency diagram
 
