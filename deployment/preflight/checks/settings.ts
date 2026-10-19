@@ -3,7 +3,7 @@
 // packages/common/src/env.ts: envStr treats an empty value as unset, envList splits on commas, envInt parses an
 // integer. A reason names the variable, never its value.
 import type { SecretMap } from "../secret-map.ts";
-import { localMail, smtpProblem, withPds } from "./pds.ts";
+import { fromAddressProblem, localMail, smtpProblem, withPds } from "./pds.ts";
 import { type Check, fail, type Inputs, pass, serviceNamed } from "./types.ts";
 
 const present = (env: SecretMap, name: string): boolean => env.has(name);
@@ -95,9 +95,8 @@ export const c19: Check = {
       smtpProblem(v, stage, "PDS_MODERATION_EMAIL_SMTP_URL"),
     );
     if (problem !== null) return fail(problem);
-    return (value(env, "PDS_MODERATION_EMAIL_ADDRESS") ?? "") === ""
-      ? fail("PDS_MODERATION_EMAIL_ADDRESS missing")
-      : pass();
+    const from = env.use("PDS_MODERATION_EMAIL_ADDRESS", (v) => fromAddressProblem(v, "PDS_MODERATION_EMAIL_ADDRESS"));
+    return from === null ? pass() : fail(from);
   }),
 };
 

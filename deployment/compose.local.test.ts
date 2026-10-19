@@ -53,6 +53,8 @@ const ENV_ALLOWED: Record<string, Record<string, EnvValue>> = {
   web: { NODE_EXTRA_CA_CERTS: { literal: "/etc/unset-dev-trust/root.pem" } },
 };
 const UNSET_ENV_LOCAL: EnvValue = { literal: "local" };
+/** The dev keys the local file must leave out, by service: the from addresses, since local sends no mail (P1.36g). */
+const DEV_ONLY: Record<string, string[]> = { pds: ["PDS_EMAIL_FROM_ADDRESS", "PDS_MODERATION_EMAIL_ADDRESS"] };
 /**
  * Item 12's app site on the local edge, and the two keys its app.caddy reads with no default. They come together: with
  * the mount the edge needs both keys exactly, without it neither, and no other service or file may set them (step book
@@ -97,6 +99,10 @@ function environmentDrift(dev: Service, local: Service): string[] {
     if (devEnv.has(key) && APP_SITE_KEYS.has(key)) problems.push(`${dev.name}: environment ${key} is in the dev file`);
     if (dev.name === "edge" && APP_SITE_KEYS.has(key)) continue;
     const value = localEnv.get(key);
+    if (DEV_ONLY[dev.name]?.includes(key)) {
+      if (localEnv.has(key)) problems.push(`${dev.name}: environment ${key} is set in the local file`);
+      continue;
+    }
     const permitted =
       same(devEnv.get(key), value) ||
       (allowed[key] !== undefined && same(allowed[key], value)) ||
@@ -805,9 +811,11 @@ describe("compose.local.yaml under the whole preflight (P1.34d item 12)", () => 
       ].join("\n"),
     );
     // The template with its two checked placeholders filled: a recovery did:key built here (as preflight.test.ts does,
-    // so no key-shaped string sits in the file) and an admin password of 32 characters.
+    // so no key-shaped string sits in the file) and an admin password of 32 characters. Local leaves out the two
+    // SMTP lines, as the template says.
     const recovery = `did:key:z${base58([0xe7, 0x01, 0x02, ...Array.from({ length: 32 }, (_, i) => i + 1)])}`;
     const pdsEnv = readFileSync(join(DEPLOYMENT, "env/pds.example.env"), "utf8")
+      .replace(/^PDS_(MODERATION_)?EMAIL_SMTP_URL=.*\n/gm, "")
       .replace("PDS_RECOVERY_DID_KEY=replace-me", `PDS_RECOVERY_DID_KEY=${recovery}`)
       .replace("PDS_ADMIN_PASSWORD=replace-me", `PDS_ADMIN_PASSWORD=${"x".repeat(32)}`);
     file("unset-dev-env/pds.env", 0o600, pdsEnv);

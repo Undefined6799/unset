@@ -31,6 +31,8 @@ export type Inputs = WalkInputs & {
   compose: Compose;
   /** Each service's environment as the container gets it: its env files, then its `environment` entries. */
   serviceEnv: ReadonlyMap<string, SecretMap>;
+  /** Each service's env-file names only, in file order with any repeat kept; never a value (C30). */
+  envFileNames: ReadonlyMap<string, readonly string[]>;
   /** Absolute paths of every file Compose itself reads for values: env files and the project's `.env`. */
   secretPaths: string[];
   /** Every top-level file secret, by absolute path, with the services that mount it (P1.30o). */

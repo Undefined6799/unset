@@ -51,6 +51,8 @@ const EDGE_DIR = join(import.meta.dirname, "..", "edge");
 const REPO = join(import.meta.dirname, "..", "..");
 
 const PDS_ENV: Record<string, string> = {
+  PDS_JWT_SECRET: `${CANARY}-jwt`,
+  PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX: `${CANARY}-plc`,
   PDS_RECOVERY_DID_KEY: RECOVERY_KEY,
   PDS_DID_PLC_URL: "https://plc.directory",
   PDS_INVITE_REQUIRED: "true",
@@ -63,6 +65,7 @@ const PDS_ENV: Record<string, string> = {
   PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
   PDS_MODERATION_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
   PDS_MODERATION_EMAIL_ADDRESS: "moderation@example.test",
+  PDS_EMAIL_FROM_ADDRESS: "noreply@example.test",
   PDS_BLOB_UPLOAD_LIMIT: "5242880",
 };
 const COMPOSE = `name: unset-prod
@@ -123,11 +126,14 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C27",
   "C28",
   "C29",
+  "C30",
 ]);
 
 type Stack = {
   compose?: string;
   pdsEnv?: Record<string, string | null>;
+  /** Raw lines appended to pds.env, after the ones pdsEnv writes there (C30). */
+  pdsEnvFile?: string;
   lock?: object | null;
   dotEnv?: string;
   /** The retirement report's text; `undefined` writes none, even under --env dev (see `check`). */
@@ -159,10 +165,21 @@ const envOf = (root: string) => join(dirname(root), "unset-dev-env");
 /** The dev root CA's key folder: `unset-dev-ca` beside the checkout (P1.33w). */
 const devCaOf = (root: string) => join(dirname(root), "unset-dev-ca");
 
+/** The names the fixture keeps in pds.env, as C30 wants them under dev and prod. */
+const PDS_ENV_FILE_NAMES = new Set([
+  "PDS_JWT_SECRET",
+  "PDS_ADMIN_PASSWORD",
+  "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
+  "PDS_RECOVERY_DID_KEY",
+  "PDS_EMAIL_SMTP_URL",
+  "PDS_MODERATION_EMAIL_SMTP_URL",
+]);
+
 /** Writes a stack (the all-good one unless overridden) and returns its root and compose path. */
 function stack({
   compose = COMPOSE,
   pdsEnv = {},
+  pdsEnvFile = "",
   lock = LOCK,
   dotEnv,
   report,
@@ -183,9 +200,24 @@ function stack({
     writeFileSync(join(root, path), text);
     chmodSync(join(root, path), 0o600);
   };
-  const env = Object.entries({ ...PDS_ENV, ...pdsEnv }).flatMap(([k, v]) => (v === null ? [] : [`${k}=${v}\n`]));
+  // As in the real stack (C30, P1.36q): pds.env holds the PDS's secrets and mail URLs, and every other setting is a
+  // literal at the top of the pds service's environment. A compose whose pds has no environment keeps them in pds.env.
+  const entries = Object.entries({ ...PDS_ENV, ...pdsEnv }).filter((e): e is [string, string] => e[1] !== null);
+  const pdsBlock = /\n {2}pds:\n(?: {4}.*\n)*? {4}environment:\n/.exec(compose);
+  // A setting the test already wrote into pds's environment stays as written there.
+  const pdsText = pdsBlock === null ? "" : (compose.slice(pdsBlock.index + 1).split(/\n {2}\S/)[0] ?? "");
+  const written = (k: string) => pdsText.includes(`\n      ${k}:`);
+  const literal = (k: string) => !PDS_ENV_FILE_NAMES.has(k) && pdsBlock !== null;
+  const env = entries.filter(([k]) => !literal(k)).map(([k, v]) => `${k}=${v}\n`);
+  const settings = entries
+    .filter(([k]) => literal(k) && !written(k))
+    .map(([k, v]) => `      ${k}: ${JSON.stringify(v)}\n`);
+  if (pdsBlock !== null) {
+    const at = pdsBlock.index + pdsBlock[0].length;
+    compose = compose.slice(0, at) + settings.join("") + compose.slice(at);
+  }
   // The env files Compose reads (P1.27u): beside the checkout too, in their own 0700 folder, never in a build context.
-  writeFileSync(join(envOf(root), "pds.env"), env.join(""));
+  writeFileSync(join(envOf(root), "pds.env"), env.join("") + pdsEnvFile);
   chmodSync(join(envOf(root), "pds.env"), 0o600);
   // A mounted secret (P1.30o): mode 0400 in the deploy user's 0700 directory; fakeFs reads it as owned by web's uid.
   writeFileSync(join(secretsOf(root), "db_password"), `${CANARY}\n`);
@@ -322,6 +354,13 @@ async function expectOnlyBesideBuild(id: string, s: Stack, env = "prod", deps: P
   return result.lines.find((l) => l.startsWith(`FAIL ${id}`));
 }
 
+/** As expectOnly, for a name pds.env must hold (P1.36q): leaving it out fails its own check and C30's exact set. */
+async function expectWithC30(id: string, s: Stack, env = "prod") {
+  const result = await check(s, env);
+  expect(failed(result.lines)).toEqual([id, "C30"]);
+  return result.lines.find((l) => l.startsWith(`FAIL ${id}`));
+}
+
 describe("preflight", () => {
   test("preflight_all_good_passes", async () => {
     const result = await check();
@@ -431,7 +470,7 @@ describe("preflight", () => {
   });
 
   test("c6_recovery_key_fails", async () => {
-    expect(await expectOnly("C6", { pdsEnv: { PDS_RECOVERY_DID_KEY: null } })).toContain("cannot be added");
+    expect(await expectWithC30("C6", { pdsEnv: { PDS_RECOVERY_DID_KEY: null } })).toContain("cannot be added");
     // An Ed25519 did:key (multicodec 0xed): a valid did:key, but not a type the PDS accepts for rotation.
     const ed25519 = `did:key:z${base58([0xed, 0x01, ...Array.from({ length: 32 }, (_, i) => i + 1)])}`;
     await expectOnly("C6", { pdsEnv: { PDS_RECOVERY_DID_KEY: ed25519 } });
@@ -546,7 +585,10 @@ describe("preflight", () => {
     const { root, file } = stack();
     writeFileSync(join(envOf(root), "dev.env"), readFileSync(join(envOf(root), "pds.env")));
     chmodSync(join(envOf(root), "dev.env"), 0o600);
-    writeFileSync(file, COMPOSE.replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"));
+    writeFileSync(
+      file,
+      readFileSync(file, "utf8").replace("../../unset-dev-env/pds.env", "../../unset-dev-env/dev.env"),
+    );
     const beside = await preflight(["--env", "prod", "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
     expect(failed(beside.lines)).toEqual([]);
   });
@@ -1206,19 +1248,76 @@ describe("preflight", () => {
   });
 
   test("c11_smtp_fails", async () => {
-    await expectOnly("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: null } });
+    await expectWithC30("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: null } });
     await expectOnly("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: "smtp://mail.example.test:587" } });
     await expectOnly("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: "smtp://mailpit:1025" } });
+    await expectOnly("C11", { pdsEnv: { PDS_EMAIL_FROM_ADDRESS: null } });
     await expectOnly("C11", {
       pdsEnv: { PDS_EMAIL_SMTP_URL: "smtps://mail.example.test?tls.rejectUnauthorized=false" },
     });
     const tls = await check({ pdsEnv: { PDS_EMAIL_SMTP_URL: "smtp://mail.example.test:587?requireTLS=true" } });
     expect(failed(tls.lines)).toEqual([]);
+    // P1.36g: no dev service runs Mailpit, so dev refuses it too; a local stack sends no mail at all.
     const mailpit = await check(
       { compose: DEV, pdsEnv: { ...DEV_ENV, PDS_EMAIL_SMTP_URL: "smtp://mailpit:1025" } },
       "dev",
     );
-    expect(failed(mailpit.lines)).toEqual([]);
+    expect(mailpit.lines).toContain("FAIL C11 PDS_EMAIL_SMTP_URL is Mailpit");
+    expect(failed(mailpit.lines)).toEqual(["C11"]);
+  });
+
+  test("c30_pds_env_holds_exactly_its_set", async () => {
+    // P1.36q reds 1, 2, 4, 6 and 7 (dev and prod hold six names); reds 3 and 5 are under --env local below.
+    const set = (name: string, env = "prod") =>
+      `FAIL C30 ${name} is in the pds env file, which under ${env} holds only its set`;
+    expect(await expectOnly("C30", { pdsEnvFile: "PDS_CRAWLERS=\n" })).toBe(set("PDS_CRAWLERS"));
+    expect(await expectOnly("C30", { pdsEnvFile: "PDS_EMAIL_FROM_ADDRESS=noreply@example.test\n" })).toBe(
+      set("PDS_EMAIL_FROM_ADDRESS"),
+    );
+    // A key that is not one of ours might be a pasted value, so it is not printed.
+    expect(await expectOnly("C30", { pdsEnvFile: `${CANARY.replaceAll("-", "_")}=x\n` })).toBe(set("a name"));
+    expect(await expectOnly("C30", { pdsEnvFile: "PDS_JWT_SECRET=again\n" })).toBe(
+      "FAIL C30 PDS_JWT_SECRET is repeated in the pds env file",
+    );
+    const dev = (unset: Record<string, null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...unset } });
+    expect(await expectWithC30("C11", dev({ PDS_EMAIL_SMTP_URL: null }), "dev")).toBe(
+      "FAIL C11 PDS_EMAIL_SMTP_URL missing",
+    );
+    const four = await check(dev({ PDS_EMAIL_SMTP_URL: null, PDS_MODERATION_EMAIL_SMTP_URL: null }), "dev");
+    expect(failed(four.lines)).toEqual(["C11", "C19", "C30"]);
+    expect(four.lines).toContain("FAIL C30 PDS_EMAIL_SMTP_URL is missing from the pds env file");
+    expect(failed((await check(dev({ PDS_MODERATION_EMAIL_SMTP_URL: null }), "dev")).lines)).toEqual(["C19", "C30"]);
+  });
+
+  test("c11_c19_from_address_is_an_addr_spec", async () => {
+    // P1.36g (architecture 20:01Z): each SMTP URL needs its from address, an RFC 5322 dot-atom addr-spec.
+    for (const [id, key] of [
+      ["C11", "PDS_EMAIL_FROM_ADDRESS"],
+      ["C19", "PDS_MODERATION_EMAIL_ADDRESS"],
+    ] as const) {
+      expect(await expectOnly(id, { pdsEnv: { [key]: null } }), key).toBe(`FAIL ${id} ${key} missing`);
+      for (const bad of [
+        "",
+        "noreply",
+        "@example.test",
+        "a@",
+        "a b@example.test",
+        "a@example",
+        "a@@example.test",
+        "Name <a@example.test>",
+        "a@example.test,b@example.test",
+        "a@-example.test",
+        "a..b@example.test",
+        ".a@example.test",
+      ]) {
+        expect(await expectOnly(id, { pdsEnv: { [key]: bad } }), `${key}=${bad}`).toBe(
+          bad === "" ? `FAIL ${id} ${key} missing` : `FAIL ${id} ${key} is not an email address`,
+        );
+      }
+      for (const good of ["noreply@staging.unset.sh", "a.b+c@mail.example.test"]) {
+        expect(failed((await check({ pdsEnv: { [key]: good } })).lines), good).toEqual([]);
+      }
+    }
   });
 
   test("c12_log_enabled_fails", async () => {
@@ -1485,7 +1584,7 @@ describe("preflight", () => {
     });
     expect(result.code).toBe(2);
     expect(result.lines[0]).toMatch(/^ERROR cannot read .*absent\.env$/);
-    const loose = await check({ pdsEnv: { PDS_HOSTNAME: '"quoted"' } });
+    const loose = await check({ pdsEnv: { PDS_JWT_SECRET: '"quoted"' } });
     expect(loose.code).toBe(2);
   });
 
@@ -1619,11 +1718,11 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   });
 
   test("c19_moderation_mail_missing_fails", async () => {
-    await expectOnly("C19", { pdsEnv: { PDS_MODERATION_EMAIL_SMTP_URL: null } });
+    await expectWithC30("C19", { pdsEnv: { PDS_MODERATION_EMAIL_SMTP_URL: null } });
     await expectOnly("C19", { pdsEnv: { PDS_MODERATION_EMAIL_ADDRESS: null } });
     await expectOnly("C19", { pdsEnv: { PDS_MODERATION_EMAIL_SMTP_URL: "smtp://mailpit:1025" } });
     const dev = { ...DEV_ENV, PDS_MODERATION_EMAIL_SMTP_URL: "smtp://mailpit:1025" };
-    expect(failed((await check({ compose: DEV, pdsEnv: dev }, "dev")).lines)).toEqual([]);
+    expect(failed((await check({ compose: DEV, pdsEnv: dev }, "dev")).lines)).toEqual(["C19"]);
   });
 
   test("c20_mod_service_set_fails", async () => {
@@ -1706,13 +1805,16 @@ describe("preflight C13 to C24 (P1.30s)", () => {
 
   for (const env of ["dev", "prod"] as const) {
     test(`c11_required_${env}`, async () => {
-      expect(await expectOnly("C11", offLocal(env, { PDS_EMAIL_SMTP_URL: null }), env)).toBe(
+      expect(await expectWithC30("C11", offLocal(env, { PDS_EMAIL_SMTP_URL: null }), env)).toBe(
         "FAIL C11 PDS_EMAIL_SMTP_URL missing",
+      );
+      expect(await expectOnly("C11", offLocal(env, { PDS_EMAIL_FROM_ADDRESS: null }), env)).toBe(
+        "FAIL C11 PDS_EMAIL_FROM_ADDRESS missing",
       );
     });
 
     test(`c19_required_${env}`, async () => {
-      expect(await expectOnly("C19", offLocal(env, { PDS_MODERATION_EMAIL_SMTP_URL: null }), env)).toBe(
+      expect(await expectWithC30("C19", offLocal(env, { PDS_MODERATION_EMAIL_SMTP_URL: null }), env)).toBe(
         "FAIL C19 PDS_MODERATION_EMAIL_SMTP_URL missing",
       );
       expect(await expectOnly("C19", offLocal(env, { PDS_MODERATION_EMAIL_ADDRESS: null }), env)).toBe(
@@ -2847,6 +2949,7 @@ networks:
     PDS_EMAIL_SMTP_URL: null,
     PDS_MODERATION_EMAIL_SMTP_URL: null,
     PDS_MODERATION_EMAIL_ADDRESS: null,
+    PDS_EMAIL_FROM_ADDRESS: null,
   };
   const LOCAL_FILES = {
     ...NODE_APP,
@@ -4126,17 +4229,31 @@ networks:
     expect(code).toBe(0);
   });
 
+  test("local_c30_four_names", async () => {
+    // P1.36q red 5: one env per host, so a six-name pds.env under --env local fails, beside C11's and C19's refusals.
+    const mail = {
+      PDS_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
+      PDS_MODERATION_EMAIL_SMTP_URL: "smtps://m.test",
+    };
+    const { lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, ...mail } });
+    expect(failed(lines)).toEqual(["C11", "C19", "C30"]);
+    expect(lines).toContain("FAIL C30 PDS_EMAIL_SMTP_URL is in the pds env file, which under local holds only its set");
+  });
+
   test("local_any_smtp_key_refused", async () => {
     // So local cannot half-configure mail: any mail key, even a valid or empty value, fails its check.
     const keys = [
       ["C11", "PDS_EMAIL_SMTP_URL"],
       ["C19", "PDS_MODERATION_EMAIL_SMTP_URL"],
       ["C19", "PDS_MODERATION_EMAIL_ADDRESS"],
+      ["C11", "PDS_EMAIL_FROM_ADDRESS"],
     ] as const;
     for (const [id, name] of keys) {
       for (const value of ["smtps://mail.example.test:465", "smtp://mailpit:1025", "moderation@example.test", ""]) {
         const { lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, [name]: value } });
-        expect(failed(lines), `${name}=${value}`).toEqual([id]);
+        // The URLs are pds.env names, which local's exact set (C30) refuses too; the addresses are compose literals.
+        const viaFile = name.endsWith("_SMTP_URL") ? ["C30"] : [];
+        expect(failed(lines), `${name}=${value}`).toEqual([id, ...viaFile]);
         expect(lines).toContain(`FAIL ${id} ${name} is set; local runs without email`);
       }
     }

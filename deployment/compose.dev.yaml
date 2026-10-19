@@ -83,11 +83,12 @@ services:
   # base's node user (uid 1000, nodejs/docker-node 24/alpine3.23/Dockerfile:5-6), with its data in a named volume at
   # that user's home: a fresh volume takes the owner of the directory it mounts over, and /home/node is node's, where a
   # new path would be root's. The PDS reads its settings from its environment only (dist/config/env.js); the pinned
-  # ones are literals here, which Compose prefers over env_file, and pds.env holds only its secrets and recovery key
-  # (deployment/env/pds.example.env). Not set, on purpose: PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25) or any
-  # other PDS DISABLE switch but C16's (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any
-  # PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, the AppView and report service (optional, dist/config/config.js:162-189),
-  # and the mail URLs (no mail is sent; pds_mail_unset_only_with_logging_off).
+  # ones are literals here, which Compose prefers over env_file, and pds.env holds only its secrets, its recovery key
+  # and the two SMTP URLs, which carry the mail key (deployment/env/pds.example.env; P1.36g, P1.36q). The from
+  # addresses are literals (P1.36g); preflight C11 and C19 refuse a missing URL or address. Not set, on purpose:
+  # PDS_DEV_MODE, PDS_DISABLE_SSRF_PROTECTION (F-25) or any other PDS DISABLE switch but C16's
+  # (no_pds_disable_or_dev_mode_variable), PDS_LEXICON_AUTHORITY_DID, any PDS_RATE_LIMIT_BYPASS_ name, LOG_LEVEL, and
+  # the AppView and report service (optional, dist/config/config.js:162-189).
   pds:
     image: ghcr.io/bluesky-social/pds:0.4.5037@sha256:3a8feb3415e319dbcc13372293b7ef1fb05a318a6ff1d55968cf99ba6633c5d4
     user: "1000:1000"
@@ -113,6 +114,8 @@ services:
       PDS_CRAWLERS: ""
       PDS_RATE_LIMITS_ENABLED: "false"
       PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true"
+      PDS_EMAIL_FROM_ADDRESS: noreply@staging.unset.sh
+      PDS_MODERATION_EMAIL_ADDRESS: moderation@staging.unset.sh
       LOG_ENABLED: "false"
       NODE_OPTIONS: --max-old-space-size=768
     networks: [edge, pds_egress]

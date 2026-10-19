@@ -108,10 +108,11 @@ export const c8: Check = {
   },
 };
 
-/** C11: mail leaves over TLS, never through Mailpit in prod. Nodemailer reads the URL's query as transport options
+/** C11: mail leaves over TLS, never through Mailpit. Nodemailer reads the URL's query as transport options
  * (nodemailer 10.0.15 shared/index.js parseConnectionUrl), so `requireTLS=true` makes STARTTLS mandatory. */
-// Mailpit stays dev's alone. A local stack sends no mail at all (Alex's "Local only" card, 2026-10-14T20:28:12Z;
-// record 2026-10-13-p127l-local-gaps, Amendment 6), so localMail below refuses any SMTP key there instead.
+// No dev service runs Mailpit, so dev refuses it too (P1.36g). A local stack sends no mail at all (Alex's "Local only"
+// card, 2026-10-14T20:28:12Z; record 2026-10-13-p127l-local-gaps, Amendment 6), so localMail below refuses any SMTP
+// key there instead.
 export function smtpProblem(raw: string | undefined, stage: Env, name: string): string | null {
   if (raw === undefined) return `${name} missing`;
   let url: URL;
@@ -120,7 +121,7 @@ export function smtpProblem(raw: string | undefined, stage: Env, name: string): 
   } catch {
     return `${name} is not a URL`;
   }
-  if (url.hostname === "mailpit") return stage === "dev" ? null : `${name} is Mailpit in prod`;
+  if (url.hostname === "mailpit") return `${name} is Mailpit`;
   if (url.searchParams.has("ignoreTLS") || url.searchParams.has("tls.rejectUnauthorized")) {
     return `${name} weakens TLS`;
   }
@@ -138,11 +139,27 @@ export function localMail(env: SecretMap, ...names: string[]): Outcome {
     : fail(`${name} is set; local runs without email`);
 }
 
+/**
+ * An RFC 5322 addr-spec in dot-atom form only (section 3.4.1, atext from 3.2.3), with a dotted domain of LDH labels: no
+ * display name, quoted local part, domain literal or list. Stricter than the RFC, which a from address needs no more of.
+ */
+const ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
+const LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?";
+const ADDR_SPEC = new RegExp(`^${ATOM}(?:\\.${ATOM})*@${LABEL}(?:\\.${LABEL})+$`);
+
+/** Why a from address is not usable, naming the key only, or null. */
+export function fromAddressProblem(raw: string | undefined, name: string): string | null {
+  if (raw === undefined || raw === "") return `${name} missing`;
+  return ADDR_SPEC.test(raw) ? null : `${name} is not an email address`;
+}
+
 export const c11: Check = {
   id: "C11",
   run: withPds((env, { env: stage }) => {
-    if (stage === "local") return localMail(env, "PDS_EMAIL_SMTP_URL");
-    const problem = env.use("PDS_EMAIL_SMTP_URL", (v) => smtpProblem(v, stage, "PDS_EMAIL_SMTP_URL"));
+    if (stage === "local") return localMail(env, "PDS_EMAIL_SMTP_URL", "PDS_EMAIL_FROM_ADDRESS");
+    const problem =
+      env.use("PDS_EMAIL_SMTP_URL", (v) => smtpProblem(v, stage, "PDS_EMAIL_SMTP_URL")) ??
+      env.use("PDS_EMAIL_FROM_ADDRESS", (v) => fromAddressProblem(v, "PDS_EMAIL_FROM_ADDRESS"));
     return problem === null ? pass() : fail(problem);
   }),
 };
@@ -163,4 +180,37 @@ export const c12: Check = {
     }
     return pass();
   }),
+};
+
+/** What pds.env holds (P1.36q): the PDS's secrets, plus both mail URLs where mail is sent (dev and prod). */
+const PDS_ENV_SECRETS = [
+  "PDS_JWT_SECRET",
+  "PDS_ADMIN_PASSWORD",
+  "PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX",
+  "PDS_RECOVERY_DID_KEY",
+];
+const PDS_ENV_MAIL = ["PDS_EMAIL_SMTP_URL", "PDS_MODERATION_EMAIL_SMTP_URL"];
+/** A name C30 may print: one of ours. Anything else in a key slot might be a pasted value, so it is not named. */
+const PRINTABLE = /^PDS_[A-Z0-9_]+$/;
+
+/**
+ * C30: the PDS's env file holds exactly its set of names (P1.36q), so no unreviewed setting or stray secret rides in
+ * beside the secrets; every other setting is a compose literal. One env per host: four names under local, which sends
+ * no mail, and six under dev and prod. Names only; a value is never read.
+ */
+export const c30: Check = {
+  id: "C30",
+  run: ({ env: stage, envFileNames }) => {
+    const names = envFileNames.get("pds");
+    if (names === undefined) return fail("no pds service");
+    const expected = stage === "local" ? PDS_ENV_SECRETS : [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL];
+    const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");
+    const repeated = names.find((name, i) => names.indexOf(name) !== i);
+    if (repeated !== undefined) return fail(`${label(repeated)} is repeated in the pds env file`);
+    const extra = names.find((name) => !expected.includes(name));
+    if (extra !== undefined)
+      return fail(`${label(extra)} is in the pds env file, which under ${stage} holds only its set`);
+    const missing = expected.find((name) => !names.includes(name));
+    return missing === undefined ? pass() : fail(`${missing} is missing from the pds env file`);
+  },
 };
