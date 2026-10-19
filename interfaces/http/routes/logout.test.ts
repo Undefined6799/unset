@@ -139,10 +139,11 @@ describe("POST /logout", () => {
 
 describe("POST /logout/everywhere", () => {
   test("logout_everywhere_requires_confirm", async () => {
+    // Back to the account page that holds the confirm box, which shows the code (no /settings page exists yet).
     const { send, destroyed } = setup();
     const response = await send("/logout/everywhere");
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/settings?error=logout.confirm_required");
+    expect(response.headers.get("location")).toBe(`/${DID}?error=logout.confirm_required`);
     expect(response.headers.getSetCookie()).toEqual([]);
     expect(destroyed).toEqual([]);
   });

@@ -129,12 +129,13 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
         const session = await deps.readSession(request, deadline);
         if (session === null) return finish("/signed-out");
         const form = new URLSearchParams(await request.text());
-        // Plan §2 rule 15: the catalog code rides on `error=`, which is what withErrorParam writes.
+        // Plan §2 rule 15: the catalog code rides on `error=`, which is what withErrorParam writes. It goes back to
+        // the account page, which holds the confirm box (Me.tsx); /did would drop the query on its redirect.
         if (single(form, "confirm") !== "yes") {
           return new Response(null, {
             status: 303,
             headers: {
-              location: withErrorParam("/settings", "logout.confirm_required"),
+              location: withErrorParam(`/${session.did}`, "logout.confirm_required"),
               "cache-control": "no-store",
             },
           });

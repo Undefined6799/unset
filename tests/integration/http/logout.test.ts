@@ -288,7 +288,7 @@ test("logout.everywhere_requires_confirm leaves every session", async () => {
   const cookies = [await open(owner), await open(owner)];
   const response = await post("/logout/everywhere", firstCookie(cookies), "");
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/settings?error=logout.confirm_required");
+  expect(response.headers.get("location")).toBe(`/${owner}?error=logout.confirm_required`);
   expect(revoked).toEqual([]);
   expect(await sessionsOf(owner)).toBe(2);
   expect(await hasToken(owner)).toBe(true);
