@@ -65,8 +65,8 @@ function readRaw(key: string, kind: Kind, env: Env): Read {
     const read = readSecretFile(path);
     return "problem" in read ? read : { raw: read.text };
   }
-  // Fail closed: only an exact dev or test environment may carry a `secret` in plain env.
-  const relaxed = ["dev", "test"].includes(lookup(env, "UNSET_ENV") ?? "");
+  // Fail closed: only an exact test environment may carry a `secret` in plain env. Never dev, because staging runs dev.
+  const relaxed = lookup(env, "UNSET_ENV") === "test";
   if (kind === "secret" && !relaxed && lookup(env, key) !== undefined) return { problem: "forbidden_in_env" };
   return { raw: lookup(env, key) };
 }
