@@ -1750,6 +1750,7 @@ Done when, red first: with one live session and one idle-expired session for the
 one revokes the grant. The same holds for an absolute-expired row. A row one second inside either limit still counts.
 Check is green. Sweeps of the session, oauth_state and single_use tables stay with the jobs process; they are not
 part of this step.
+As built: #1009 (merged as 54046ca).
 
 ### P2.08d — Remove sign out everywhere
 Tags: [SEC]            Depends on: P2.08

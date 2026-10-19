@@ -6603,6 +6603,7 @@ Slice 1, issue #1004, product (`interfaces/http/`, tests), lane Phase 2. Book ed
 
 Condition 4 needs no code. `/<DID>` serves only its owner, and showing it to anyone else needs a new ruling and
 Alex's word.
+As built: #1017 (merged as e284029); its two Codex hardenings are P1.25n.
 
 ---
 
@@ -8770,7 +8771,7 @@ green job failed for these two product reasons (run 39190048082).
 
 Done when P1.35t's green job, rerun on this fix through a main merge into #1005, gets past both points, each with its
 red first, and check is green.
-As built: #1015 (merged).
+As built: #1015 (merged as 22b4ef6).
 
 ---
 
@@ -8806,6 +8807,7 @@ with a literal value: `Db.apiToken`, `db-password`, `dbPassword`. A green: a key
 stays accepted with a literal.
 
 Done when, red first, the three reds fail on main's predicate and pass after, and check is green.
+As built: #1016 (merged as 90ecfe6).
 
 ---
 
