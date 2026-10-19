@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 347 steps: 316 from `phase-1.md`, 31 from `phase-2.md` (including the
+Depth: **build-ready**. 340 steps: 316 from `phase-1.md`, 24 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -521,18 +521,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
-| P2.08 | Logout ("sign out everywhere" dropped 2026-10-19) | [SEC] | P2.06, P2.04s | `phase-2.md` |
-| P2.08b | Sign out with the recorded issuer | [SEC] | P2.08 | `phase-2.md` |
-| P2.08c | Count only live sessions at sign-out | [SEC] | P2.08 | `phase-2.md` |
-| P2.08d | Remove sign out everywhere | [SEC] | P2.08 | `phase-2.md` |
+| P2.08 | Logout and "sign out everywhere" | [SEC] | P2.06, P2.04s | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
-| P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
-| P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
-| P2.12b | Show the privacy notice once | [SEC] | P2.12 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
-| P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34; ADR 0026 mechanism 2) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
 
 ```mermaid
@@ -829,18 +822,11 @@ flowchart TD
   P2_05["P2.05 Login"]
   P2_06["P2.06 Callback"]
   P2_07["P2.07 Resilience"]
-  P2_08["P2.08 Logout"]
-  P2_08b["P2.08b Sign out with the recorded issuer"]
-  P2_08c["P2.08c Live sessions at sign-out"]
-  P2_08d["P2.08d Remove sign out everywhere"]
+  P2_08["P2.08 Logout and sign out everywhere"]
   P2_11["P2.11 Email-verify gate"]
-  P2_11a["P2.11a Revoked grant ends sessions"]
   P2_15["P2.15 Legal paperwork part 2"]
   P2_12["P2.12 Onboarding"]
   P2_13["P2.13 /me and the settings shell"]
-  P2_12a["P2.12a Welcome screens axe"]
-  P2_12b["P2.12b Privacy notice dismissed once"]
-  P2_13c["P2.13c Settings shell and account links"]
   P2_13a["P2.13a Slice 1 exit"]
   P1_01 --> P1_02
   P1_02 --> P1_03
@@ -1033,7 +1019,6 @@ flowchart TD
   P2_06 --> P2_08
   P2_06 --> P2_11
   P2_07 --> P2_11
-  P2_11 --> P2_11a
   P1_25 --> P2_15
   P1_37 --> P2_15
   P1_37 --> P1_37b
@@ -1047,13 +1032,6 @@ flowchart TD
   P1_25 --> P2_13
   P2_13 --> P2_13a
   P2_08 --> P2_13a
-  P2_08 --> P2_08b
-  P2_08 --> P2_08c
-  P2_08 --> P2_08d
-  P2_12 --> P2_12a
-  P2_12 --> P2_12b
-  P2_13 --> P2_13c
-  P2_08b --> P2_13c
   P2_12 --> P2_13a
   P1_26 --> P2_13a
   P1_29k --> P1_29
@@ -1935,7 +1913,7 @@ Depth: **detail by risk; P6.00 refines** (contract parts in full, algorithms a r
 | P6.15g | `admin` read grant on the chat mapping (SE-6) | [SEC] [CHAT] | P6.00, P2.14 | `phase-6.md` |
 | P6.15 | `admin` polls Synapse event and user reports into its queue | [SEC] [MOD] [CHAT] [ALEX] | P6.15g, P6.14a, P6.02a, P3.20, P3.19 | `phase-6.md` |
 | P6.16 | Full logout, revoke, and back-channel logout from the app | [SEC] [CHAT] | P6.07, P6.03, P6.05, P2.08 | `phase-6.md` |
-| P6.04a | Chat accounts on suspension, takedown and erasure | [SEC] [CHAT] | P6.04, P6.05, P6.16, P6.15, P3.06, P3.07 | `phase-6.md` |
+| P6.04a | Chat accounts on suspension, takedown, erasure and "sign out everywhere" | [SEC] [CHAT] | P6.04, P6.05, P6.16, P6.15, P3.06, P3.07, P2.08 | `phase-6.md` |
 | P6.17 | Onboarding chat step wired into signup | [CHAT] | P6.08, P6.05, P2.12, P6.07 | `phase-6.md` |
 | P6.19 | Restore drill re-run with Matrix databases, media and signing keys | [SEC] | P6.17, P5.05, P5.04, P5.06 | `phase-6.md` |
 | P6.20 | Phase 6 exit | [CHAT] | P6.13, P6.14a, P6.15, P6.16, P6.17, P6.09a, P6.19, P6.04a | `phase-6.md` |
@@ -2198,8 +2176,9 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
   and reviewer). Signing is keyless (the keyless signing ADR, written by P1.27s, numbered when it opens and accepted
   when Alex merges it; Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or
   with a key you keep?"), so there is no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping
-after architecture's answers"). - **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml
-  .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci".
+  after architecture's answers").
+- **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
+  .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
 - **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
   allow rules".

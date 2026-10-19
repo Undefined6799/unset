@@ -77,12 +77,11 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
   P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
   P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
-  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b, P2.08c, P2.08d, P2.11, P2.11a, P2.15, P2.12, P2.12a,
-  P2.12b, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the
-  sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps
-  not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario passes locally.
-  Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may finish a fix it
-  already started on an open PR.
+  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
+  edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
+  and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
+  exempt. Built PRs still get verified and may merge, and a lane may finish a fix it already started on an open PR.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -6610,7 +6609,7 @@ As built: #1017 (merged as e284029); its two Codex hardenings are P1.25n.
 ### P1.25n — Harden the DID route privacy tests
 Tags: [SEC]            Depends on: P1.25m
 Slice 1, product tests only, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode. P1.25m merged in #1017
-(3271762) without Phase 2's two Codex hardenings (local commit 6261eb4, tests only). Issue: the board opens it.
+(3271762) without Phase 2's two Codex hardenings (local commit 6261eb4, tests only). Issue #1026.
 
 **What:**
 1. The log-privacy test also feeds percent-encoded DIDs and asserts that no decoded or encoded form reaches the log.
@@ -8814,7 +8813,7 @@ As built: #1016 (merged as 90ecfe6).
 ### P1.36m — Draft ADR 0028 for the edge DNS module
 Tags: [SEC]            Depends on: —
 Slice 1, docs only (`docs/human/decisions/0028-edge-dns-01-provider-module.md`, Status: Proposed), lane the plan
-thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1 (architecture 04:10Z). Issue: the board opens it.
+thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1 (architecture 04:10Z). Issue #1027.
 
 **What:** exactly architecture's five points: the module pinned by pseudo-version and checksum; dev only until
 Phase 5; the token as a C9 file secret; the failure mode; and `edge_image_plugins_exact` becoming exactly two modules.
@@ -8826,7 +8825,7 @@ free when the PR opens (book edit 2026-10-19-adr-number-labels); if 0028 is take
 ### P1.36n — Accept ADR 0028
 Tags: [ALEX]            Depends on: P1.36m
 Slice 1, docs only (the Status line), lane the plan thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1.
-Issue: the board opens it. It opens only on Alex's typed yes: "yes accept ADR 0028 edge DNS-01 provider module
+Issue #1028. Its PR opens only on Alex's typed yes: "yes accept ADR 0028 edge DNS-01 provider module
 docs/human/decisions/0028", quoted with its time.
 
 ---
@@ -8835,7 +8834,7 @@ docs/human/decisions/0028", quoted with its time.
 Tags: [SEC]            Depends on: P1.36e
 Slice 1, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread, right after P1.36e
 with nothing that touches the edge or C18 between them (architecture 04:35Z); book edit
-2026-10-19-alex-cards-and-edge-dev-mode, M2. Issue: the board opens it. Tightenings only, so no typed line.
+2026-10-19-alex-cards-and-edge-dev-mode, M2. Issue #1029. Tightenings only, so no typed line.
 
 **What:**
 - C18 (preflight/checks/edge.ts:228) maps local to `local/tls.caddy`, dev to `dev/tls.caddy` and prod to
@@ -8855,7 +8854,7 @@ snippet reaching prod or local. Answered by the per-profile snippet map and the 
 Tags: [SEC]            Depends on: P1.36h
 Slice 1, product (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`, `deployment/preflight/`), lane the
 third thread, a staging go-live blocker; book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2a)
-and 04:35Z. Issue: the board opens it.
+and 04:35Z. Issue #1030.
 
 **What:**
 - The PDS's temp blobs at `/tmp/pds/blobs` get a tmpfs of their own: `size=20m,mode=0700`, owned by the PDS user
@@ -8877,7 +8876,7 @@ preflight.
 ### P1.36q — Require exactly four names in pds.env
 Tags: [SEC]            Depends on: —
 Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
-2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2b). Issue: the board opens it.
+2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2b). Issue #1031.
 
 **What:**
 - Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
@@ -8896,7 +8895,7 @@ secret, slipped into the PDS env. Answered by an exact key set.
 ### P1.36r — Refuse a checkout-built migrate under dev
 Tags: [SEC]            Depends on: —
 Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
-2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N5). Issue: the board opens it.
+2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N5). Issue #1032.
 
 **What:** main already refuses this: under dev, C2 fails any service with no digest image (images.ts:24-37), and
 compose.dev.yaml's migrate is a `build:` (:50-53), so dev preflight refuses the whole stack until P1.27s publishes
@@ -10714,7 +10713,8 @@ signature from our exact workflow is refused):
     read-only GitHub API GET.
   - The keyless signing ADR (written by P1.27s; numbered when it opens) records the answer with its question, option and
     time, and the attestation-availability finding for public repositories, and says that moving back to a key needs a
-  new ADR. - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
+  new ADR.
+  - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
   - One digest: publish scans, signs and attests the one digest it pushes (book edit
     2026-10-15-verify-863-866-followups, "N7 ruled"; P1.35e does the same for the PR check).
   - The trusted-root fetch: `sigstore-root.yml` has `permissions: contents: read`, no secrets and no environment. It
