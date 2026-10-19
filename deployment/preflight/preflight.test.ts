@@ -2416,6 +2416,11 @@ describe("preflight C22 pinned upload bounds (P1.36p)", () => {
         "FAIL C22 the PDS's /tmp tmpfs is not capped as pinned",
       );
     }
+    // The one capped tmpfs at the parser's other target leaves /tmp on the read-only root (C27 also refuses it).
+    const elsewhere = devWith({}, '    tmpfs: ["/var/run/postgresql:uid=1000,gid=1000,mode=1777,size=20m"]\n');
+    expect((await check(elsewhere, "dev")).lines.find((l) => / C22 /.test(l))).toBe(
+      "FAIL C22 the PDS's /tmp tmpfs is not capped as pinned",
+    );
   });
 
   test("c22_pinned_bounds_pass_and_prod_is_unchanged", async () => {

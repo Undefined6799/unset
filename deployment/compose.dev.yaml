@@ -94,7 +94,8 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    # /tmp is capped (P1.36p). Temporary blobs stay on the volume, in /home/node/blocks/tempt (C22).
+    # /tmp is capped (P1.36p). C22 checks only that PDS_BLOBSTORE_DISK_TMP_LOCATION stays unset, so temporary
+    # blobs follow PDS_BLOBSTORE_DISK_LOCATION into its tempt folder; that location is not pinned yet (P1.37t).
     tmpfs:
       - /tmp:uid=1000,gid=1000,mode=1777,size=20m
     volumes:
