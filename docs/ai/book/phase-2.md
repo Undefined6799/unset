@@ -1756,6 +1756,11 @@ Done when these tests pass, red first for item 1, and check is green:
   assertion from `logout.everywhere`, which P2.08d removes; whichever of the two PRs lands second carries it;
 - `logout.next_login_prompt`, which runs a real logout before `POST /login`, instead of faking the cookie;
 - a foreign-issuer fixture (a reserved name, SE-7a) whose account link points at that issuer's origin.
+Threats (book edit 2026-10-19-codex-1063-batch66, M5):
+- A foreign or tampered issuer becomes a link on /signed-out or the account page (phishing, open redirect). Only an
+  exact match with our own issuer shows a link, and anything else falls back (P2.08h narrows the carrier).
+- The issuer cookie is read cross-site or outlives sign-out. It is `__Host-`, `Path=/`, `Secure`, `HttpOnly`,
+  `SameSite=Strict` and `Max-Age=600` (the 06:10Z (c) section label, written before 03:50Z UTC).
 As built: #1054 (merged as c8937e5). Its verify follow-ups are P2.08g items 2 to 6 and P2.08h.
 
 ### P2.08c — Count only live sessions at sign-out
@@ -1799,6 +1804,11 @@ message quoted in P2.08; the PR body quotes it with its time. It loosens no chec
 next trusted step that already touches the reason list retires it, and no migration is made only for that. This
 browser's sign-out, including the last-browser revoke (P2.08a, and P2.08c's live-session count), is unchanged.
 
+Threats (book edit 2026-10-19-codex-1063-batch66, M5):
+- Removing the button leaves a compromised account's other sessions alive. The user revokes us at the PDS, and
+  P2.11a ends every app session within 15 minutes while the PDS is reachable (V7.4.3 Partial).
+- A removed route lingers and still acts. Both forms answer as unknown routes (Done when).
+
 Done when:
 - `POST /logout/everywhere`, and `POST /logout` with `scope=everywhere`, both answer as unknown routes;
 - no code or catalog reference to the removed names remains, checked by grep in the PR;
@@ -1832,9 +1842,7 @@ Book edit 2026-10-19-five-step-audit, "verify-1009-4001214 follow-ups" and "veri
    this test or removed.
 8. **verify-1020 N2 to N4.** The Me.tsx:1-3 header drops the confirm box, and logger.ts:70 names both
    `oauth.revoke_failed` sources, including welcome.ts:186.
-9. The ASVS V7.4.1 row (asvs-5-l2.md) also cites `logout.remaining_sessions_match_the_store`,
-   `logout.last_browser_revoke_fails` and `logout.last_browser_counts_past_the_touch_interval` (verify-1056-7a10fd1
-   N6; the step book pinned all three at 04:14Z).
+Item 9 (the ASVS V7.4.1 evidence) moved to P2.08g item 8 (book edit 2026-10-19-codex-1063-batch66, M4).
 Departure (book edit 2026-10-19-five-step-audit, "Departure: P2.08e item 6, red by local mutation"): the lane's
 harness refused the weakening commits of items 6 and 7, so their red is the verifier applying both mutations locally
 (the unfiltered count in logout-sessions.ts, and `deleteTokenSet` removed at logout.ts:77-81) and naming the tests
@@ -1881,7 +1889,11 @@ report, and the PR lists the mutant number next to each red.
 5. **N2, mutant 16:** the origin normalisation at routes/logout.ts:105-110 covers case, the default port, a trailing
    slash and a path. Writing the raw issuer turns it red.
 6. **M4:** `logout.no_sign_in_records` also counts `audit.chain`, per P2.08's test list.
-Done when all six reds are shown and check is green.
+7. **N8 (verify-1062):** the stale comment at apps/web/src/screens/Me.tsx:2-3, about the removed confirm box, goes
+   (book edit 2026-10-19-drop-sign-out-everywhere).
+8. **M4 (verify-1063):** the ASVS 5.0 V7.4.1 row's evidence names `logout.remaining_sessions_match_the_store` and
+   `logout.last_browser_revoke_fails`, citing verify-1056-7a10fd1 N6 (book edit 2026-10-19-codex-1063-batch66).
+Done when all six reds are shown, items 7 and 8 are in, and check is green.
 
 ### P2.08h — Bound the issuer read and narrow its carrier
 Tags: [SEC]            Depends on: P2.08b
@@ -2014,6 +2026,12 @@ everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our 
   P2.11b's counter, with no identity data.
 - Phase 6 adds the chat call here (P6.04a): after `destroyAllForDid` commits, `chat.endSessions(did, { kind:
   "everywhere" })`, for `auth_dead` only (book edit 2026-10-19-codex-1063-batch66, Codex 3).
+
+Threats (book edit 2026-10-19-codex-1063-batch66, M5):
+- A grant revoked at the PDS keeps app sessions alive. On `auth_dead` the recheck ends every session of the DID
+  within EMAIL_RECHECK_S (at most 900 s) on our own PDS.
+- A PDS outage signs everyone out. Only `auth_dead` ends sessions, and `transient`, `scope_missing` and `rejected`
+  never do (P2.11d caps the cached result).
 
 Done when these pass, each red first, and check is green:
 1. a revoked grant at the recheck gives a 303 to `/login` with the cookie cleared, no session row left for the DID,

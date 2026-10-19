@@ -8982,6 +8982,11 @@ Reds, each with a literal value: `db2Password`, `apiKey2`, `token1`, `PASSWORD2`
 `PLC_DB_PASSWORD` on postgres, in each compose file. Greens: every existing green, plus `S3_BUCKET`.
 The PR body re-measures that no env key in either compose file changes status, at its own head. Preflight's C9 is
 unchanged.
+Threats (book edit 2026-10-19-codex-1063-batch66, M5):
+- A secret-bearing compose env key escapes the split (a case, digit or acronym boundary, or a value) and ships as a
+  plain, reviewable literal. The split runs on every boundary, over every key and value of every service in both
+  compose files.
+- The check's report leaks the secret. It reports fixed words plus the key name, never the value.
 Done when every new red fails on main's predicate first and passes at the head, the K3 and K5 mutants are killed, and
 check is green.
 
