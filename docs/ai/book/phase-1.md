@@ -73,9 +73,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
   P1.34d, P1.35p, P1.35r, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
-  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.37, P1.37b, P1.36
-  (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built). Then
-  phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
+  P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
+  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -311,6 +311,7 @@ flowchart LR
   P1_35i["P1.35i test handles on reserved domains"]
   P1_35j["P1.35j trusted test handles on reserved domains"]
   P1_35k["P1.35k net-guard test hosts on reserved names"]
+  P1_35s["P1.35s net-guard carried IPv4 fixtures swapped"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -8225,6 +8226,33 @@ hosts are A1's, and the public IPs are SE-7a's closed list, embedded forms inclu
 
 Done when no net-guard test file holds a registrable host other than an A2 service host or an A1 own host, the same
 refusals still fire, and check is green.
+
+---
+
+### P1.35s — Swap net-guard's carried IPv4 fixtures
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
+
+Slice 1, issue #914, trusted base (`infrastructure/net-guard/` tests only), kind/fix, lane Phase 1 (owner of P1.35k),
+after P1.31g; book edit 2026-10-15-verify-886-fixture-scope, "Architecture on verify-910-aa6a3e8 S1: carried IPv4
+addresses" (13:02Z) and its step-book mapping (13:00Z). It is the "next trusted net-guard step" that record has named
+since 03:35Z. Like any trusted-base PR it touches nothing outside trusted base, so SE-6 keeps it alone. It needs
+Alex's typed line: "yes P1.35s infrastructure/net-guard carried IPv4 fixtures".
+
+**What:**
+1. SE-7a's two known exceptions, swapped so that each IPv4 address a Teredo literal carries is allowed in its file,
+   preferring the RFC 5737 documentation ranges, while each test keeps testing what it tested:
+   `ranges.test.ts:33` (the Teredo server, 65.54.227.120, is public and unlisted) keeps the Teredo shape;
+   `prototype.test.ts:74` (the client, 7f00:1 XOR ffff:ffff, is 128.255.255.254, public and unlisted) may take a
+   special-use client such as 127.0.0.1 XOR'd, if a loopback-like client is its point. Then the PR drops both lines
+   from SE-7a's Known exceptions (a docs line may ride along).
+2. Near-edge comments: each near-edge value in net-guard's tests gets a comment naming the range it sits next to
+   (architecture's 03:35Z S1 ruling; SE-7a's "where such a comment is missing today").
+
+Test-only lines do not count toward size.
+
+Done when no net-guard test literal carries an IPv4 address that SE-7a does not allow in that file (SIIT, local-use
+NAT64 at each RFC 6052 position, and Teredo's server and client), every near-edge value names its range, the same
+classifications still hold, and check is green.
 
 ---
 
