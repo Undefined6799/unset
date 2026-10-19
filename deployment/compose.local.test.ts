@@ -207,9 +207,12 @@ const LOCAL_ONLY_PINS: ReadonlyMap<string, { environment: Record<string, string>
 const asWritten = (value: EnvValue): string =>
   "ref" in value ? `\${${value.ref}}` : value.literal.replaceAll("$", () => "$$");
 
-/** Each local-only service whose environment or env_file is not exactly its pin, or carries a secret as refused. */
-function localOnlyDrift(local: Compose): string[] {
-  const services = local.services.filter((s) => LOCAL_ONLY_SERVICES.has(s.name));
+/**
+ * Each local-only service whose environment or env_file is not exactly its pin, or carries a secret as refused. `listed`
+ * is the real local-only list by default; one test passes a longer one to reach a listed service with no pin (P1.37e).
+ */
+function localOnlyDrift(local: Compose, listed: ReadonlySet<string> = LOCAL_ONLY_SERVICES): string[] {
+  const services = local.services.filter((s) => listed.has(s.name));
   const problems = [...LOCAL_ONLY_PINS.keys()]
     .filter((name) => !services.some((s) => s.name === name))
     .map((name) => `${name} is pinned but not in the local file`);
@@ -637,6 +640,15 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
     },
   ])("a_local_only_service_off_its_pin_is_named: $name", ({ local: changed, problem }) => {
     expect(drift(dev, changed)).toContain(problem);
+  });
+
+  test("a_listed_local_only_service_with_no_pin_is_named", () => {
+    // P1.37e (verify-1050-e602039 M2): every listed service has a pin today, so the no-pin branch is reached through a
+    // list that names one more service than LOCAL_ONLY_PINS does.
+    const extra = { ...local, services: [...local.services, { ...readerService, name: "extra" }] };
+    expect(localOnlyDrift(extra, new Set([TOKEN_READER, "extra"]))).toEqual([
+      "extra has no environment and env_file pin",
+    ]);
   });
 
   test("a_secret_in_the_pin_is_refused", () => {

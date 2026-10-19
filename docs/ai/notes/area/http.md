@@ -84,14 +84,16 @@ and then is the email page itself.
 `pdsSessionInfo`; on `auth_dead`, pdsCall's `authDead` has already ended every session of the DID and its token set,
 so `refreshEmail` answers `ended` and `openApp` sends 303 to `/login?error=login.session_ended` with the cookie
 cleared. `scope_missing` and `rejected` still go to `/verify-email`; a transient answer passes on the cached `true`
-and ends nothing. **The bound:** another browser keeps rendering from its session row until the next PDS call for
-that DID or its own email recheck, whichever comes first. On our own PDS the window is at most `EMAIL_RECHECK_S`
-(default 900, config maximum 900, so at most 15 minutes); the step book's P2.11c record states this. On any other
-PDS an access token may keep working until it expires, so the window is that token's remaining life plus
-`EMAIL_RECHECK_S`. That is unresolved until P1.33p, which must make the recheck force a token refresh before it
-opens sign-in to other PDSes. A shorter window would need a PDS call per request. Pinned by
-`tests/integration/http/email-recheck.test.ts` and `config.test.ts#email_recheck_capped_at_900`. There is no audit
-row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
+and ends nothing. **The bound:** on our own PDS, a revoked grant ends every session of the account at the next
+successful email recheck (`EMAIL_RECHECK_S`, at most 900 s) or at the next PDS call, whichever comes first. While
+the PDS can't be reached, the cached result is kept, and the bound extends until a recheck succeeds. Once P1.36v
+lands, accounts on other PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each
+recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
+a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
+client, so no real PDS revokes anything), and `config.test.ts#email_recheck_capped_at_900` pins the cap. Nothing in the
+repository pins the PDS side; it rests on @atproto/pds 0.5.37 (dist/context.js:276, stateful access tokens) and
+@atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row:
+`end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The

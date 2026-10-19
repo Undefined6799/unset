@@ -48,7 +48,7 @@ export function Footer({ columns, note, meta, children, className }: FooterProps
           ))}
         </div>
       </div>
-      {children === undefined ? null : <div className={styles.slot}>{children}</div>}
+      {children === undefined || children === null ? null : <div className={styles.slot}>{children}</div>}
       <div className={styles.bottom}>
         <span>{note}</span>
         {meta === undefined ? null : <span>{meta}</span>}

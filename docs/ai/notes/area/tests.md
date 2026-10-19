@@ -26,7 +26,9 @@ production stylesheet. The toast fixture's `Island` is the production server bui
 render loader imports, so it shares that build's `IslandRunContext`.
 The welcome screens that need a session at their real paths (age, terms, chat) are fixture pages too,
 `/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
-in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). A local run needs Playwright pointed at
+in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). `nojs.spec.ts` also drives both menus at a
+375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/login`) and the footer
+theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
 `/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
 covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
@@ -68,7 +70,10 @@ ubuntu-24.04's AppArmor refuses the browser's user namespace.
   `@atproto/oauth-client` 0.8.9 `clientMetadataSchema` (same import as `tests/e2e/oauth-origin.test.ts`). The live
   client_id GET and OAuth as Alice or Bob are P1.33z.
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
-  Tests connect as the real process roles, never as migrator or the superuser (TE-2).
+  Tests connect as the real process roles, never as migrator or the superuser (TE-2). One opt-in exception
+  (architecture 2026-10-19 04:51Z): `asAuditor()` from `setup/pg.setup.ts` logs in as the real auditor role,
+  provided under its own key `postgresAuditor`, so a test can count `audit.chain`; it is never handed to a server
+  under test.
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
 - `integration/query-budget.test.ts`: every route in every `routes.manifest.json` needs a fixture in
   `query-budget/fixtures/<interface>.json`, and stays under the statement budget. Keep `path` equal to the manifest

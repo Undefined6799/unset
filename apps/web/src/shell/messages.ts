@@ -19,6 +19,14 @@ export const SHELL = {
   note: "© 2026 unset.sh",
 } as const;
 
+export const PREFS = {
+  theme: "Theme",
+  dark: "Dark",
+  light: "Light",
+  system: "System",
+  save: "Save theme",
+} as const;
+
 export const HOME = {
   heading: "Home",
 } as const;

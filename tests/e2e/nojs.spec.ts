@@ -16,6 +16,57 @@ test.describe("javascript disabled", () => {
       await expect(page.locator("main")).toBeVisible();
     });
   }
+
+  // P1.25f: both menus work with no script. The Navigation panel and the folded Header menu show only on a phone.
+  test.describe("phone", () => {
+    test.use({ viewport: { width: 375, height: 800 } });
+
+    // The native popover closes on Escape and gives focus back to the button that opened it (HTML "hide popover
+    // algorithm", focusPreviousElement for a close request).
+    test("navigation_popover_without_js", async ({ page }) => {
+      await page.goto("/");
+      const toggle = page.locator('button[popovertargetaction="toggle"]');
+      const panel = page.locator("[popover]");
+      await expect(panel).toBeHidden();
+      await toggle.press("Enter");
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole("link", { name: "Settings" })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+      await expect(toggle).toBeFocused();
+    });
+
+    test("default_shell_details_menu_without_js", async ({ page }) => {
+      await page.goto("/login");
+      const menu = page.locator("header details");
+      const summary = menu.locator("summary");
+      await expect(summary).toBeVisible();
+      await expect(menu.getByRole("link", { name: "Sign in" })).toBeHidden();
+      await summary.press("Enter");
+      await expect(menu).toHaveAttribute("open", "");
+      await expect(menu.getByRole("link", { name: "Sign in" })).toBeVisible();
+      await summary.press("Enter");
+      await expect(menu).not.toHaveAttribute("open");
+    });
+  });
+
+  // P1.22's test, its theme half (the French half is P1.22b's): the footer form on an app page sets the theme.
+  test("prefs_forms_work_without_js", async ({ page, browserName }) => {
+    await page.goto("/signed-out");
+    const form = page.locator('footer form[action="/prefs/theme"]');
+    await form.getByLabel("Light").check();
+    // The POST itself is the proof the form submitted, in every browser: its 303 carries the cookie.
+    const posted = page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith("/prefs/theme"));
+    await form.getByRole("button", { name: "Save theme" }).click();
+    const response = await posted;
+    expect(response.status()).toBe(303);
+    expect(response.request().postData()).toBe("theme=light&return=%2Fsigned-out");
+    await expect(page).toHaveURL(/\/signed-out$/);
+    // WebKit will not store a Secure __Host- cookie on http (a11y.spec.ts), so it keeps the system theme.
+    const expected = browserName === "webkit" ? null : "light";
+    expect(await page.locator("html").getAttribute("data-theme")).toBe(expected);
+    await expect(form.getByLabel(browserName === "webkit" ? "System" : "Light")).toBeChecked();
+  });
 });
 
 // axe-core's injection uses page.evaluate, which does not finish when JavaScript is disabled.

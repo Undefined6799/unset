@@ -156,6 +156,21 @@ describe("app shell", () => {
     }
   });
 
+  test("shell_feed_no_footer", () => {
+    // A feed scrolls without end, so its footer links move into the header menu, which opens with no JS (P1.25f).
+    // Through the render entry, as a route reaches it (ShellOptions.feed).
+    const html = render({ shell: { error: null, noindex: false, feed: true } });
+    expect(html).not.toContain("<footer");
+    const menu = /<details[^>]*><summary[^>]*>menu.*?<\/details>/.exec(html)?.[0] ?? "";
+    for (const href of ["/login", "/legal/terms", "/legal/privacy", "/legal/domains"]) {
+      expect(menu, href).toContain(`href="${href}"`);
+    }
+    expect(menu).not.toContain(" open");
+    expect(render()).toContain("<footer");
+    // A page without the theme form renders no empty slot in the footer.
+    expect(render()).not.toMatch(/class="slot_/);
+  });
+
   test("error_param_known_code", () => {
     const html = render({ shell: { error: "csrf.denied", noindex: false } });
     expect(html).toMatch(/role="alert"/);

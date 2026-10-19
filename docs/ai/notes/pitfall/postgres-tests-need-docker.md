@@ -41,3 +41,6 @@ Re-checked at P1.01a: `pg.setup.ts` imports `@unset/infrastructure-postgres` by 
 path, fail-not-skip rule, and cleanup helpers are unchanged.
 
 **Repair.** Nothing to repair; it is a property of the environment.
+
+Re-checked at P2.08g: the opt-in auditor login (`asAuditor`) adds a role password in the same setup, not a second
+start path.
