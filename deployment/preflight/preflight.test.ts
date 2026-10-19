@@ -2759,103 +2759,34 @@ networks:
     }
   });
 
-  test("local_c17_plc_beside_the_pds_only_as_ruled", () => {
-    // Architecture 2026-10-15 03:05Z, F1: the PDS publishes to http://plc:2582, so under --env local the PLC may share
-    // `plc_pds` with it, and only there, only the two of them, and only running the base lock's localOnly plc entry.
-    // pdsNeighbours is called directly: until P1.34v lists plc_pds as local-only, C17 refuses the network itself.
+  test("local_c17_plc_beside_the_pds_fails", () => {
+    // P1.35w (architecture 2026-10-19 02:18Z, verify-903-6cc8ab0 F-3): ADR 0022 retired the local PLC, so the plc_pds
+    // exemption is gone. A service named plc on plc_pds, running a well-formed localOnly plc entry of the base lock, is
+    // a PDS neighbour like any other, under every env. pdsNeighbours is called directly, as C17 refuses plc_pds itself.
     const PLC = { ref: "docker.io/example/plc", tag: "0.0.1", digest: digest("e") };
-    const PLC_IMAGE = `${PLC.ref}:${PLC.tag}@${PLC.digest}`;
-    const withPlc = (plc: unknown) => JSON.stringify({ ...JSON.parse(BASES), plc });
-    const bases = (localOnly: unknown) =>
-      withPlc({ ...PLC, source: "upstream", stage: "runtime", buildStage: false, localOnly });
-    const shape = ({ name = "plc", image = PLC_IMAGE, network = "plc_pds", plcAlso = "", webAlso = "" } = {}) =>
-      LOCAL.replace(
-        "    env_file: ../../unset-dev-env/pds.env\n",
-        `    env_file: ../../unset-dev-env/pds.env\n    networks: [default, ${network}]\n`,
+    const bases = JSON.stringify({
+      ...JSON.parse(BASES),
+      plc: { ...PLC, source: "upstream", stage: "runtime", buildStage: false, localOnly: true },
+    });
+    const compose = LOCAL.replace(
+      "    env_file: ../../unset-dev-env/pds.env\n",
+      "    env_file: ../../unset-dev-env/pds.env\n    networks: [default, plc_pds]\n",
+    )
+      .replace(
+        "\nsecrets:\n  db_password:",
+        `\n  plc:\n    image: ${PLC.ref}:${PLC.tag}@${PLC.digest}\n    networks: [plc_pds]\nsecrets:\n  db_password:`,
       )
-        .replace("    networks: [back]\n", `    networks: [back${webAlso}]\n`)
-        .replace(
-          "\nsecrets:\n  db_password:",
-          `\n  ${name}:\n    image: ${image}\n    networks: [${network}${plcAlso}]\nsecrets:\n  db_password:`,
-        )
-        .replace("\nnetworks:\n  back: {}\n", `\nnetworks:\n  back: {}\n  ${network}:\n    internal: true\n`);
-    const neighbours = (compose: string, basesText = bases(true), env = "local") => {
+      .replace("\nnetworks:\n  back: {}\n", "\nnetworks:\n  back: {}\n  plc_pds:\n    internal: true\n");
+    for (const env of ["local", "dev", "prod"]) {
       const { root, file } = stack({
         compose,
         pdsEnv: LOCAL_ENV,
         lock: env === "local" ? null : LOCK,
-        files: { ...LOCAL_FILES, "deployment/images/bases.lock.json": basesText },
+        files: { ...LOCAL_FILES, "deployment/images/bases.lock.json": bases },
       });
-      return pdsNeighbours(
-        loadInputs(["--env", env, "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) }).inputs,
-      );
-    };
-    const plcNeighbour = ["plc shares a network with the pds"];
-    expect(neighbours(shape())).toEqual([]);
-    // The same compose under dev and under prod.
-    expect(neighbours(shape(), bases(true), "dev")).toEqual(plcNeighbour);
-    expect(neighbours(shape(), bases(true), "prod")).toEqual(plcNeighbour);
-    // No plc entry, or a malformed one, is no exemption (architecture 03:05Z addendum).
-    expect(neighbours(shape(), BASES)).toEqual(plcNeighbour);
-    for (const plc of ["x", null, [], { ...PLC, localOnly: true, digest: undefined }]) {
-      expect(neighbours(shape(), withPlc(plc)), JSON.stringify(plc)).toEqual(plcNeighbour);
+      const { inputs } = loadInputs(["--env", env, "--compose", file], { root, run: fakeRun().run, ...fakeFs(root) });
+      expect(pdsNeighbours(inputs), env).toEqual(["plc shares a network with the pds"]);
     }
-    // A malformed entry exempts nothing, even for a service that spells out the same broken string (verify-906 S2,
-    // and verify-906-3e62ab9 N-a for the last five rows).
-    const broken: [object, string][] = [
-      [{ ref: PLC.ref, tag: PLC.tag }, `${PLC.ref}:${PLC.tag}@undefined`],
-      [{ ...PLC, digest: "" }, `${PLC.ref}:${PLC.tag}@`],
-      [{ ref: PLC.ref, digest: PLC.digest }, `${PLC.ref}:undefined@${PLC.digest}`],
-      [{ ...PLC, digest: 1 }, `${PLC.ref}:${PLC.tag}@1`],
-      [{ ...PLC, ref: "" }, `:${PLC.tag}@${PLC.digest}`],
-      [{ ...PLC, tag: "" }, `${PLC.ref}:@${PLC.digest}`],
-      // A digest that is not a string but reads as the right one, and a short one.
-      [{ ...PLC, digest: [PLC.digest] }, PLC_IMAGE],
-      [{ ...PLC, digest: `sha256:${"e".repeat(63)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}`],
-      [{ ...PLC, digest: `sha256:${"E".repeat(64)}` }, `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`],
-      [{ tag: PLC.tag, digest: PLC.digest }, `undefined:${PLC.tag}@${PLC.digest}`],
-      [{ ...PLC, ref: [PLC.ref] }, PLC_IMAGE],
-      [{ ...PLC, digest: `${PLC.digest}0` }, `${PLC_IMAGE}0`],
-      [{ ...PLC, digest: `x${PLC.digest}` }, `${PLC.ref}:${PLC.tag}@x${PLC.digest}`],
-      [{ ...PLC, digest: `sha384:${"e".repeat(64)}` }, `${PLC.ref}:${PLC.tag}@sha384:${"e".repeat(64)}`],
-    ];
-    for (const [entry, image] of broken) {
-      const plc = { ...entry, source: "upstream", stage: "runtime", buildStage: false, localOnly: true };
-      expect(neighbours(shape({ image: JSON.stringify(image) }), withPlc(plc)), image).toEqual(plcNeighbour);
-    }
-    // Exactly the entry's image: one digest character, no digest, no tag, another tag, or the digest's case.
-    for (const image of [
-      `${PLC.ref}:${PLC.tag}@sha256:${"e".repeat(63)}f`,
-      `${PLC.ref}:${PLC.tag}`,
-      `${PLC.ref}@${PLC.digest}`,
-      `${PLC.ref}:0.0.2@${PLC.digest}`,
-      `${PLC.ref}:${PLC.tag}@sha256:${"E".repeat(64)}`,
-    ]) {
-      expect(neighbours(shape({ image })), image).toEqual(plcNeighbour);
-    }
-    // The localOnly entry under another key is no plc entry.
-    const otherKey = JSON.stringify({ ...JSON.parse(BASES), directory: { ...PLC, localOnly: true } });
-    expect(neighbours(shape(), otherKey)).toEqual(plcNeighbour);
-    // The entry is not marked localOnly.
-    expect(neighbours(shape(), withPlc({ ...PLC, source: "upstream", stage: "runtime", buildStage: false }))).toEqual(
-      plcNeighbour,
-    );
-    for (const localOnly of [false, null, "true", 1]) {
-      expect(neighbours(shape(), bases(localOnly)), String(localOnly)).toEqual(plcNeighbour);
-    }
-    // plc on another network it shares with the PDS.
-    expect(neighbours(shape({ plcAlso: ", default" }))).toEqual(plcNeighbour);
-    // A third member on plc_pds.
-    expect(neighbours(shape({ webAlso: ", plc_pds" }))).toEqual([
-      "web shares a network with the pds",
-      "plc shares a network with the pds",
-    ]);
-    // A service named plc that runs another image.
-    expect(neighbours(shape({ image: `docker.io/example/other:0.0.1@${digest("f")}` }))).toEqual(plcNeighbour);
-    // The PLC's image under another name, on another network with the PDS.
-    expect(neighbours(shape({ name: "directory", network: "plc_web" }))).toEqual([
-      "directory shares a network with the pds",
-    ]);
   });
 
   test("local_unsigned_never_hides_a_failure", async () => {
@@ -3231,8 +3162,8 @@ networks:
   });
 
   test("local_c17_runs_the_pds_neighbour_rule", async () => {
-    // C17 judges the PDS's neighbours under local too (#742 item 11), even where the table admits one. The PLC cases
-    // call pdsNeighbours directly until P1.34v, so this is the case that reaches it through C17 (verify-903-2f7413d).
+    // C17 judges the PDS's neighbours under local too (#742 item 11), even where the table admits one. The retired PLC
+    // case calls pdsNeighbours directly (ADR 0022), so this is the case that reaches it through C17 (verify-903-2f7413d).
     const admitted = { ...TABLE, default: { internal: false, members: ["edge", "pds", "web"] } };
     const { lines } = await local((text) => text.replace("    networks: [back]", "    networks: [back, default]"), {
       networks: admitted,

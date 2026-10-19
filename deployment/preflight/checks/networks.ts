@@ -5,7 +5,7 @@
 import { type Compose, networksOf, ParseError, parseStrictData, type Service, TOKEN_READER } from "../compose-parse.ts";
 import { isLocalOnlyNetwork, LOCAL_ONLY_NETWORKS } from "../local-only.ts";
 import { runsBuilt } from "./build.ts";
-import { type BaseEntry, exactImage, readBases, readLock } from "./lock.ts";
+import { readBases, readLock } from "./lock.ts";
 import { type Check, type Env, fail, type Inputs, missing, pass } from "./types.ts";
 
 export type NetworkTable = ReadonlyMap<string, { internal: boolean; members: readonly string[] }>;
@@ -73,7 +73,7 @@ export function networkTableProblems(compose: Pick<Compose, "services" | "networ
  * Services are known by the image they run, never by name alone (architecture 2026-10-15 03:05Z, F3, last section of
  * book edit 2026-10-13-local-plc-a4-steps): a PDS is any service named pds or running the locked PDS image, from any
  * tag or digest, and more than one fails; the edge is the service running the edge image as C25 knows it (runsBuilt).
- * The one other neighbour allowed is the local PLC on `plc_pds` (F1), on the conditions in plcBesidePds.
+ * The edge is the only neighbour allowed: ADR 0022 retired the local PLC and its plc_pds exemption (P1.35w).
  */
 export function pdsNeighbours(inputs: Inputs): string[] {
   const { services } = inputs.compose;
@@ -85,8 +85,7 @@ export function pdsNeighbours(inputs: Inputs): string[] {
   const [pds] = pdses;
   if (pds === undefined) return [];
   const isEdge = (s: Service) => runsBuilt(s, inputs, lock.edge?.ref, EDGE_DOCKERFILE) === "yes";
-  const allowed = (s: Service, network: string) =>
-    !pds.networks.includes(network) || isEdge(s) || plcBesidePds(inputs, bases.plc, pds, s, network);
+  const allowed = (s: Service, network: string) => !pds.networks.includes(network) || isEdge(s);
   return services
     .filter((s) => s !== pds && !s.networks.every((network) => allowed(s, network)))
     .map((s) => `${s.name} shares a network with the pds`);
@@ -100,7 +99,7 @@ const EDGE_DOCKERFILE = "deployment/edge/Dockerfile";
  * registry and `library/` namespace written out, as the Docker CLI resolves a short name (distribution/reference
  * github.com/distribution/reference v0.6.0 normalize.go:126-165, splitDockerDomain: a first part with no `.` or `:`
  * and other than `localhost` is a Docker Hub path). Lower-casing all of it can only make more spellings match, so a PDS
- * is never missed; the edge and PLC exemptions never use this, only exact identity.
+ * is never missed; the edge exemption never uses this, only exact identity.
  */
 export const repository = (image: string): string => {
   const name = image
@@ -114,35 +113,6 @@ export const repository = (image: string): string => {
   if (!hub) return `${registry}/${path.join("/")}`;
   return `docker.io/${path.length === 1 ? "library/" : ""}${path.join("/")}`;
 };
-
-/**
- * The local PLC's one exemption (architecture 2026-10-15 03:05Z, F1): the PDS publishes to http://plc:2582, so under
- * --env local it shares `plc_pds` with the PLC, and nothing else. All four must hold: the env is local; the network is
- * exactly `plc_pds`; the network's only members are the PDS and this service; and this service runs the base lock's
- * `plc` entry, marked localOnly, by exact ref:tag@digest. The entry must be well formed first, so a broken one that a
- * service spells out the same way exempts nothing (verify-906-57737f2 S2).
- */
-function plcBesidePds(
-  inputs: Inputs,
-  plc: (BaseEntry & { localOnly?: unknown }) | undefined,
-  pds: Service,
-  service: Service,
-  network: string,
-): boolean {
-  if (inputs.env !== "local" || network !== "plc_pds") return false;
-  const members = inputs.compose.services.filter((s) => s.networks.includes(network));
-  if (members.length !== 2 || !members.includes(pds) || !members.includes(service)) return false;
-  return plc?.localOnly === true && wellFormed(plc) && service.image === exactImage(plc);
-}
-
-/** A base lock entry with a non-empty ref and tag and a sha256 digest of 64 lower-case hex characters. */
-const wellFormed = (entry: BaseEntry): boolean =>
-  typeof entry.ref === "string" &&
-  entry.ref !== "" &&
-  typeof entry.tag === "string" &&
-  entry.tag !== "" &&
-  typeof entry.digest === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(entry.digest);
 
 /**
  * C17: no `network_mode` (host, service: or container: would bypass the table), and the networks match the table. The
