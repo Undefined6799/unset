@@ -16,6 +16,7 @@
 import { appendFileSync, existsSync, readdirSync, realpathSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { recipeContract } from "./pds-ui/contract.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 /** Same filter as deployment/images/images.test.ts. A copy, so the test can tell them apart. */
@@ -80,6 +81,7 @@ export function entryProblems(root: string, dockerfile: string): string[] {
  * deployment/, or two Dockerfiles that would share a matrix name.
  */
 export function listDockerfiles(root: string): ListedImage[] {
+  recipeContract(root);
   const paths = discoverDockerfiles(root);
   if (paths.length === 0) throw new Error("no Dockerfiles under deployment/");
   const problems: string[] = [];

@@ -3990,7 +3990,7 @@ Done when: Existing doc/index/immutability/outline checks pass; the exact allowl
 
 ### P2.24b — Add frontend build and integrity checks
 Tags: [SEC]            Depends on: P2.24a            Plan: §5.3; §9; ADR 0027
-Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs)
+Where: `scripts/ and .github/ check paths; root development dependency manifest/lock` (one ownership path, its tests/docs)
 Goal: Task 2 check part: source/image classification, source-input policy, exact UI-directory and runtime-config equality, manifest requirements and CI publishing contract. Keep deployment/product changes for P2.24c.
 Done when: Known-bad provider contents, permissions and symlink targets fail; missing entries/assets, version/hash drift and changed runtime config fail. Checks must exercise nonzero inputs. Notes updated or none needed.
 
