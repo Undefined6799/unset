@@ -173,6 +173,8 @@ export type OAuthClientOptions = {
   readonly network: IdentityNetwork;
   readonly resolveDid: (did: Did, consistency: Consistency) => Promise<ResolvedDid>;
   readonly allowHttp: boolean;
+  /** Our PDS's issuer, exactly (P1.36v): only its accounts sign in. */
+  readonly ownIssuer: string;
   readonly log: Logger;
 };
 
@@ -196,7 +198,7 @@ export async function createOAuthClient(options: OAuthClientOptions) {
     requestLock: options.requestLock,
     fetch: options.fetch,
     handleResolver: handleResolverForOAuth(options.network),
-    didResolver: didResolverForOAuth(options.resolveDid),
+    didResolver: didResolverForOAuth(options.resolveDid, options.ownIssuer),
     allowHttp: options.allowHttp,
     onSessionDeleted,
   });

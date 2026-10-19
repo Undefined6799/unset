@@ -62,6 +62,8 @@ type World = {
   token?: () => Response;
   /** Other accounts the PLC stand-in publishes, each hosted at its own PDS. */
   others?: readonly { did: string; pds: string }[];
+  /** Our PDS's issuer as configured; PDS unless a test says otherwise. */
+  ownIssuer?: string;
 };
 
 const TOKENS = { access_token: "at", refresh_token: "rt", token_type: "DPoP", sub: DID, expires_in: 3600 };
@@ -126,6 +128,8 @@ async function setup(world: World = {}) {
   const box: StandIn = { pars, posts, tokenBodies, par, ...(world.token ? { token: world.token } : {}) };
   const server = (url: URL, request: Request): Promise<Response> =>
     world.server ? Promise.resolve(world.server(url)) : standIn(url, request, box);
+  /** Every host the client sent a request to, so a refusal can show it asked no outside server. */
+  const hosts: string[] = [];
   const states = new Map<string, SavedState>();
   const sessions = new Map<string, SavedSession>();
   const logged: { event: LogEvent; fields: LogFields }[] = [];
@@ -149,22 +153,31 @@ async function setup(world: World = {}) {
     requestLock: async (_name, fn) => fn(),
     fetch: async (input, init) => {
       const request = new Request(input, init);
+      hosts.push(new URL(request.url).host);
       return server(new URL(request.url), request);
     },
     network,
     resolveDid: createDidResolver({ network, plcUrl: new URL("https://plc.directory"), cacheTtlS: 60, cacheMax: 10 }),
     allowHttp: false,
+    ownIssuer: world.ownIssuer ?? PDS,
     log,
   });
   const run = (input: string, prompt?: "login") =>
-    authorize(client, input, { appState: APP_STATE, ...(prompt ? { prompt } : {}), deadline: null, log });
+    authorize(client, input, {
+      appState: APP_STATE,
+      ...(prompt ? { prompt } : {}),
+      deadline: null,
+      ownIssuer: world.ownIssuer ?? PDS,
+      log,
+    });
   /** Starts a flow at the issuer and returns the query the server would send the browser back with. */
   const started = async (extra: Record<string, string> = { code: "code-1", iss: PDS }) => {
     await run(PDS);
     return new URLSearchParams({ state: pars.at(-1)?.get("state") ?? "", ...extra });
   };
-  const complete = (query: URLSearchParams) => completeAuthorization(client, query, log);
-  return { run, started, complete, pars, posts, tokenBodies, states, sessions, logged };
+  const complete = (query: URLSearchParams, ownIssuer = world.ownIssuer ?? PDS) =>
+    completeAuthorization(client, query, log, ownIssuer);
+  return { run, started, complete, pars, posts, tokenBodies, states, sessions, logged, hosts };
 }
 
 describe("authorize", () => {
@@ -201,6 +214,30 @@ describe("authorize", () => {
     const { run, pars } = await setup({ par: [() => json({ error: "invalid_scope" }, 400)] });
     expect(await run(PDS)).toEqual({ ok: false, reason: "failed" });
     expect(pars).toHaveLength(2);
+  });
+
+  test("authorize_account_on_another_pds_is_refused_before_any_request", async () => {
+    // P1.36v red: a DID (or the handle that names it) whose PDS is another host. Nothing is sent to that host.
+    const other = `did:plc:${"b".repeat(24)}`;
+    const { run, pars, hosts } = await setup({ others: [{ did: other, pds: "https://evil.example" }] });
+    // A handle reaches the same resolver once it names this DID; the claimed-handle path is identity-resolvers.test.ts's.
+    expect(await run(other)).toEqual({ ok: false, reason: "account_elsewhere" });
+    expect(pars).toHaveLength(0);
+    expect(hosts).toEqual([]);
+  });
+
+  test("authorize_issuer_is_ours_exactly", async () => {
+    // P1.36v red: a server URL a trailing slash, a letter's case or a scheme away from ours is another issuer.
+    const { run, pars, hosts } = await setup();
+    for (const input of [`${PDS}/`, PDS.toUpperCase(), "https://PDS-test.dev", PDS.replace("https:", "http:")]) {
+      expect(await run(input), input).toEqual({ ok: false, reason: "account_elsewhere" });
+    }
+    expect(await run("https://evil.example")).toEqual({ ok: false, reason: "account_elsewhere" });
+    expect(pars).toHaveLength(0);
+    expect(hosts).toEqual([]);
+    // Green: our own issuer, and an account on our PDS.
+    expect((await run(PDS)).ok).toBe(true);
+    expect((await run(DID)).ok).toBe(true);
   });
 
   test("authorize_handle_not_claimed_is_unverified", async () => {
@@ -301,6 +338,21 @@ describe("completeAuthorization", () => {
     expect(logged).toEqual([{ event: "oauth.callback_failed", fields: { kind: "OAuthCallbackError" } }]);
   });
 
+  test("callback_issuer_not_ours_is_revoked_and_refused", async () => {
+    // P1.36v red: the issuer the grant came from must still be ours exactly at the callback; a trailing slash or a
+    // letter's case is another issuer. The grant is revoked and its token set dropped, so no session can be made.
+    for (const configured of [`${PDS}/`, "https://PDS-test.dev"]) {
+      const { started, complete, sessions, posts, logged } = await setup();
+      expect(await complete(await started(), configured), configured).toEqual({
+        ok: false,
+        reason: "account_elsewhere",
+      });
+      expect(sessions.size).toBe(0);
+      expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
+      expect(logged).toContainEqual({ event: "oauth.callback_failed", fields: { kind: "issuer_elsewhere" } });
+    }
+  });
+
   test("callback_token_endpoint_down_is_unreachable", async () => {
     const { started, complete } = await setup({ token: () => json({ error: "server_error" }, 503) });
     expect(await complete(await started())).toEqual({ ok: false, reason: "pds_unreachable" });
@@ -316,16 +368,16 @@ describe("completeAuthorization", () => {
   });
 
   test("callback_rejects_subject_of_another_issuer", async () => {
-    // verifyIssuer (oauth-server-agent.js, 0.8.9) refuses a sub whose issuer is not the token server.
+    // verifyIssuer (oauth-server-agent.js, 0.8.9) resolves the sub's DID document through our resolver, which refuses
+    // an account on another PDS (P1.36v: the sub's PDS must still be ours), so the library revokes the grant.
     const other = `did:plc:${"b".repeat(24)}`;
-    const { started, complete, sessions, posts, logged } = await setup({
+    const { started, complete, sessions, posts } = await setup({
       others: [{ did: other, pds: "https://evil.example" }],
       token: () => json({ ...TOKENS, sub: other, scope: scopeString() }),
     });
-    expect(await complete(await started())).toEqual({ ok: false, reason: "failed" });
+    expect(await complete(await started())).toEqual({ ok: false, reason: "account_elsewhere" });
     expect(sessions.size).toBe(0);
     expect(posts).toEqual(["/oauth/token", "/oauth/revoke"]);
-    expect(logged).toEqual([{ event: "oauth.callback_failed", fields: { kind: "OAuthCallbackError" } }]);
   });
 
   test("callback_second_login_replaces_the_set", async () => {

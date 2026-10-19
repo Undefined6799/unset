@@ -24,6 +24,8 @@ export const ERROR_CODES = {
   "prefs.invalid": { status: 400, public: true },
   // P2.05, signing in: each is shown on the sign-in form (`/login?error=`), never with the handle that caused it.
   "login.handle_invalid": { status: 400, public: true },
+  // P1.36v: only accounts on our own PDS sign in.
+  "login.account_elsewhere": { status: 403, public: true },
   "login.handle_not_found": { status: 404, public: true },
   "login.handle_unverified": { status: 400, public: true },
   "login.identity_unavailable": { status: 503, public: true },

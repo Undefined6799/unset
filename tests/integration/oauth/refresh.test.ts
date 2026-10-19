@@ -166,6 +166,7 @@ async function replica(lock: "advisory" | "none", { keys, activeKid } = onlyA) {
     network,
     resolveDid,
     allowHttp: true,
+    ownIssuer: as.origin,
     log: silent,
   });
   return { client, sessions: createOAuthSessionStore<SavedSession>({ pool, sealer, log: silent }) };

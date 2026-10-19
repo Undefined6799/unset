@@ -12,11 +12,13 @@ import { type Did, IdentityError, parseDid } from "@unset/domains-identity";
 import { NetGuardError } from "@unset/infrastructure-net-guard";
 import { scopeString, scopeStringFallback } from "@unset/shared-lexicons";
 import type { Logger } from "@unset/shared-log";
+import { AccountElsewhereError } from "./identity-resolvers.ts";
 import type { createOAuthClient } from "./oauth-client.ts";
 
 type Client = Awaited<ReturnType<typeof createOAuthClient>>["client"];
 
 export type AuthorizeFailure =
+  | "account_elsewhere"
   | "handle_unverified"
   | "handle_not_found"
   | "identity_unavailable"
@@ -31,6 +33,8 @@ export type AuthorizeOptions = {
   readonly prompt?: "login" | "create" | "consent";
   /** The request's deadline; the 10 s limit nests inside it (RE-1). */
   readonly deadline: AbortSignal | null;
+  /** Our PDS's issuer (P1.36v): the chooser's input must be exactly it; a handle or DID must resolve to it. */
+  readonly ownIssuer: string;
   readonly log: Logger;
 };
 
@@ -58,6 +62,9 @@ export async function authorize(
   input: string,
   options: AuthorizeOptions,
 ): Promise<AuthorizeResult> {
+  // P1.36v: a server's URL is ours exactly, never a trailing slash or a case away, or nothing is sent anywhere. A
+  // handle or DID is refused inside the library's identity step (didResolverForOAuth), before its PDS is asked.
+  if (/^https?:\/\//i.test(input) && input !== options.ownIssuer) return { ok: false, reason: "account_elsewhere" };
   const timeout = AbortSignal.timeout(AUTHORIZE_TIMEOUT_MS);
   const signal = options.deadline ? AbortSignal.any([options.deadline, timeout]) : timeout;
   const request = (scope: string) =>
@@ -88,6 +95,7 @@ function failure(error: unknown, log: Logger): AuthorizeResult {
 
 function reasonOf(error: unknown): AuthorizeFailure {
   const chain = causes(error);
+  if (chain.some((cause) => cause instanceof AccountElsewhereError)) return "account_elsewhere";
   if (chain.some((cause) => cause instanceof IdentityError && cause.kind === "unavailable")) {
     return "identity_unavailable";
   }
@@ -108,7 +116,7 @@ const unreachable = (chain: readonly unknown[]): boolean =>
       (cause instanceof OAuthResponseError && cause.status >= 500),
   );
 
-export type CallbackFailure = "consent_denied" | "expired" | "pds_unreachable" | "failed";
+export type CallbackFailure = "account_elsewhere" | "consent_denied" | "expired" | "pds_unreachable" | "failed";
 export type CompletedSignIn = {
   readonly ok: true;
   /** The account the server vouched for: the token's `sub`, checked by the library against its DID document. */
@@ -123,11 +131,15 @@ export type CompletedSignIn = {
 };
 export type CallbackResult = CompletedSignIn | { readonly ok: false; readonly reason: CallbackFailure };
 
-/** `query` is the callback URL's whole query, passed to the library as it came. */
+/**
+ * `query` is the callback URL's whole query, passed to the library as it came. `ownIssuer` is our PDS's issuer
+ * (P1.36v): a grant from any other issuer is revoked and refused, so no session is made from it.
+ */
 export async function completeAuthorization(
   client: Pick<Client, "callback">,
   query: URLSearchParams,
   log: Logger,
+  ownIssuer: string,
 ): Promise<CallbackResult> {
   let completed: Awaited<ReturnType<Client["callback"]>>;
   try {
@@ -138,6 +150,13 @@ export async function completeAuthorization(
     return { ok: false, reason };
   }
   const { session, state } = completed;
+  const revoke = () =>
+    session.signOut().catch((error: unknown) => log.warn("oauth.callback_failed", { kind: kindOf(error) }));
+  if (session.serverMetadata.issuer !== ownIssuer) {
+    log.warn("oauth.callback_failed", { kind: "issuer_elsewhere" });
+    await revoke();
+    return { ok: false, reason: "account_elsewhere" };
+  }
   const did = parseDid(session.did);
   let scope: string;
   try {
@@ -151,8 +170,6 @@ export async function completeAuthorization(
     log.warn("oauth.callback_failed", { kind: state === null ? "no_app_state" : "bad_sub" });
     return { ok: false, reason: "failed" };
   }
-  const revoke = () =>
-    session.signOut().catch((error: unknown) => log.warn("oauth.callback_failed", { kind: kindOf(error) }));
   return { ok: true, did, issuer: session.serverMetadata.issuer, appState: state, scope, revoke };
 }
 
@@ -163,7 +180,9 @@ function callbackReason(error: unknown): CallbackFailure {
     if (error.state === undefined) return "expired";
     if (error.params.get("error") === "access_denied") return "consent_denied";
   }
-  return unreachable(causes(error)) ? "pds_unreachable" : "failed";
+  const chain = causes(error);
+  if (chain.some((cause) => cause instanceof AccountElsewhereError)) return "account_elsewhere";
+  return unreachable(chain) ? "pds_unreachable" : "failed";
 }
 
 /** The error and its causes, outermost first; a short bounded walk, since a cause chain is the library's to build. */

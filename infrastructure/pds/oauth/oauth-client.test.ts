@@ -158,6 +158,7 @@ describe("client", () => {
       network,
       resolveDid: createDidResolver({ network, plcUrl: new URL("https://plc.directory"), cacheTtlS: 60, cacheMax: 10 }),
       allowHttp: false,
+      ownIssuer: "https://pds.example",
       log,
     });
     expect(client.clientMetadata.client_id).toBe(`${ORIGIN}/oauth-client-metadata.json`);

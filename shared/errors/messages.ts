@@ -22,6 +22,7 @@ export const ERROR_MESSAGES: Record<PublicCode, string> = {
   "prefs.invalid": "That choice is not one of the options.",
   "login.handle_invalid": "That is not a handle. A handle looks like a domain name.",
   "login.handle_not_found": "No account uses that handle.",
+  "login.account_elsewhere": "Only accounts on this site's own server can sign in here.",
   "login.handle_unverified": "That handle is not confirmed by its account.",
   "login.identity_unavailable": "That handle could not be looked up right now. Try again soon.",
   "login.pds_unreachable": "The account's sign-in server could not be reached. Try again soon.",
