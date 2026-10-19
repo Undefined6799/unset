@@ -42,29 +42,63 @@ of one public domain, not a fifth registration. Alex named it on 2026-10-16 22:5
 The development PDS mints `<user>.staging.unset.im` and does not mint `.unset.im`. The local
 throwaway stack stays on `.localhost`. It is not this system.
 
-The development system runs on Alex's homelab and is reachable on the tailnet only, with invites still
-required. Alex chose "Tailnet only" on 2026-10-19 at 02:05:05Z on the card "Choose who can reach
-staging on your homelab during live tests". Architecture ruled on its names and certificates on
-2026-10-19 at 02:35Z, and on 2026-10-19 at 03:24Z added that staging tests only accounts on its own PDS.
-Sign-in by an account hosted on another PDS is out of scope on tailnet staging until P1.33p opens it, because
-the lexicon authority's record is read from this PDS and no public read path to it exists; opening one is its
-own step, with its own ruling and Alex's word, since it changes "tailnet only".
+The development system runs on Alex's homelab, with invites still required. Alex chose "Tailnet only" on
+2026-10-19 at 02:05:05Z on the card "Choose who can reach staging on your homelab during live tests". His
+words of 2026-10-19 at 02:39:57Z and 02:50:36Z replace that tap for the app and the PDS: `staging.unset.sh`
+and `staging.unset.ac` are published through his Pangolin instance behind its user login, one SSO login per
+tester rather than a shared password, and the handle hosts `*.staging.unset.im` stay internal. He kept the
+login on 2026-10-19 at 02:56:58Z ("Keep password" on the card "Keep the Pangolin password on staging, or open
+it with invites only?"); opening staging without it would be P1.33p's public opening, pulled forward.
+Architecture ruled on names and certificates on 2026-10-19 at 02:35Z, on 2026-10-19 at 03:24Z added that
+staging tests only accounts on its own PDS, and on 2026-10-19 at 03:35Z, 03:40Z, 04:00Z and 04:05Z ruled on
+Pangolin, the tester handles and the remaining CAA records.
+Sign-in by an account hosted on another PDS is out of scope on staging until P1.33p opens a read path,
+because the lexicon authority's record is read from this PDS, which sits behind the Pangolin login with no
+bypass; opening that path is its own step, with its own ruling and Alex's word.
 
 - TLS for the `staging.unset.*` names is Let's Encrypt with the DNS-01 challenge, validated through a
   delegated zone: `_acme-challenge.staging.unset.*` is a CNAME into a dedicated validation zone, and the
   edge's DNS token can write only that zone, never the product zones. The local development root is not
   used for these names.
-- The tailnet's split DNS serves the staging names, answering with the homelab's tailnet addresses.
-- Public DNS holds, for these names, only the `_acme-challenge` CNAMEs and the CAA records below, plus
-  the record of the client-metadata host if Alex agrees to the split-horizon arrangement for the PDS's
-  metadata fetch. That is a separate card, after P1.33z's probe, and is not decided by this record.
+- `staging.unset.sh` is published through Pangolin behind its login. Exactly two paths bypass the
+  login, for GET and HEAD, by exact match and never by wildcard: `/oauth-client-metadata.json` and the
+  client's `jwks_uri` path. They are the same two public documents every atproto client publishes, and a
+  test pins that the app serves them and that nothing else under them is public. `/oauth/callback` does
+  not bypass. Pangolin terminates public TLS with its own Let's Encrypt certificate for this one host,
+  issued by HTTP-01, and connects upstream over HTTPS through Newt to the edge's existing loopback bind,
+  with certificate verification on and SNI `staging.unset.sh`; no new port is published. The edge keeps
+  its own DNS-01 certificate for the name. Under dev the edge drops the app-host alias, so the PDS resolves
+  `staging.unset.sh` through public DNS to Pangolin's public address and its metadata fetch passes the
+  unicast check; no split-horizon static host is needed for this name. The PDS-host alias stays.
+- `staging.unset.ac` is published through the same Pangolin behind the same login, with no bypass at
+  all: a tester's browser reaches the PDS's authorize and account pages with the Pangolin cookie, and the
+  app reaches the PDS internally through the edge's PDS alias, the one exact host net-guard allows.
+  Staging is own-PDS-only, so no outside server needs the PDS. Its TLS is the same two hops as the app
+  name's. No PDS port is published.
+- A tester's handle `<handle>.staging.unset.im` resolves through a public DNS TXT record
+  `_atproto.<handle>.staging.unset.im`, one per tester, which Alex adds through the runbook. Handle
+  verification in the app runs over public DNS through net-guard, which keeps refusing private and
+  CGNAT addresses, so the handle hosts themselves stay internal with no wildcard certificate at Pangolin
+  and no new bypass. The alternative, `*.staging.unset.im` through Pangolin with one
+  `/.well-known/atproto-did` bypass, is not taken.
+- The tailnet's split DNS serves only `staging.unset.im` and its handle hosts, answering with the
+  homelab's tailnet addresses.
+- Public DNS holds, for `staging.unset.sh` and `staging.unset.ac`: an A/AAAA record pointing at the
+  Pangolin host, the `_acme-challenge` CNAME into the validation zone, and the CAA records below. For
+  `staging.unset.im` it holds the `_acme-challenge` CNAME, its CAA records and the testers' `_atproto`
+  TXT records. For `staging.unset.cc` it holds the `_acme-challenge` CNAME and its CAA records.
 - CAA lookup climbs to the closest parent record (RFC 8659), and `unset.ac` stays parked at
-  `CAA 0 issue ";"` until P5.02a, so each staging name carries its own CAA: `staging.unset.sh` and
-  `staging.unset.ac` carry `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` and
-  `CAA 0 issuewild ";"`; `staging.unset.im` carries the same `issue` record plus
+  `CAA 0 issue ";"` until P5.02a, so every staging name carries its own CAA. `staging.unset.sh` and
+  `staging.unset.ac` each carry exactly three records:
+  `CAA 0 issue "letsencrypt.org; validationmethods=dns-01; accounturi=<our account>"`,
+  `CAA 0 issue "letsencrypt.org; validationmethods=http-01; accounturi=<Pangolin's account>"` and
+  `CAA 0 issuewild ";"`. `staging.unset.im` carries
+  `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` plus
   `CAA 0 issuewild "letsencrypt.org; validationmethods=dns-01"` for `*.staging.unset.im`, the only staging
-  wildcard. Each record gains `accounturi=` once Alex has created the ACME account (RFC 8657). The parked
-  apex records are unchanged.
+  wildcard. `staging.unset.cc` carries `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` and
+  `CAA 0 issuewild ";"`, and gains Pangolin's issuer if chat is later routed through Pangolin. Each
+  `letsencrypt.org` record gains `accounturi=` once its ACME account exists (RFC 8657). The parked apex
+  records are unchanged.
 
 The Matrix `server_name` is `unset.cc`. An MXID reads `@localpart:unset.cc`. Chat is served at
 `unset.cc`. There is no delegation from `unset.sh` and no `chat.unset.sh` host.
@@ -95,8 +129,13 @@ unchanged. This record supersedes ADR 0020.
 - Issue the staging certificates from the local development root. Rejected: that root is
   name-constrained to `.localhost` (P1.35p), so it cannot issue for `staging.unset.*`, and a second
   root installed on testers' devices is a far larger trust grant than a public certificate.
-- Resolve the staging names in public DNS to the homelab. Rejected: the system is tailnet only, so
-  public DNS carries only what certificate validation needs.
+- Resolve the staging names in public DNS to the homelab. Rejected: the app and PDS names point at
+  Pangolin, not the homelab, and the handle names are tailnet only, so public DNS carries only the
+  records the Decision lists for these names.
+- Keep the PDS tailnet-only and have testers join the tailnet. Rejected by Alex on 2026-10-19 at
+  02:50:36Z: a browser has to reach the PDS's authorize page, and Pangolin already fronts the app.
+- Serve the client metadata and public keys from a separate split-horizon static host. Retired for the
+  app name: Pangolin's two bypass paths serve the same two documents from the app's own origin.
 
 ## Consequences
 - Phase 6 reads `MATRIX_SERVER_NAME` for every production MXID. A later change, after an account
@@ -129,10 +168,23 @@ unchanged. This record supersedes ADR 0020.
   host and the development hosts until that book is revised.
 - The staging names appear in Certificate Transparency logs. They are already public in this
   record, so the logs reveal nothing new.
-- Let's Encrypt stays the only issuer. C18 accepts DNS-01 for the dev profile first (P1.36e);
-  production's handle wildcard `*.unset.im` uses the same delegated-zone pattern when Phase 5 builds it,
-  each with its own typed line. The edge gains exactly one DNS provider module, built and pinned like
-  the other images, and the zone-scoped DNS token is a file secret mounted only into the edge (P1.36c).
+- The Pangolin host is inside the staging trust boundary: it sees decrypted session cookies and OAuth
+  codes, so no production data or production account ever touches staging. Its conditions are Alex's,
+  on the runbook: a patched Pangolin at 1.22.0 or later with share links off, MFA on its admin login, one
+  Pangolin login per tester rather than a shared password, host-only cookies on the resource name (never
+  `Domain=unset.sh`),
+  forwarded headers set by Pangolin alone and trusted by the edge only from Newt's fixed address, short
+  retention and a RoPA line for its access logs, and testers told it is a test system. Our own gates
+  stay: invites, our OAuth session, the CSRF and Origin gates, owner-only `/<DID>`, no published PDS port.
+- Let's Encrypt stays the only issuer of our own certificates. C18 accepts DNS-01 for the dev profile
+  first (P1.36e, a trusted-base step); production's handle wildcard `*.unset.im` and its internal admin
+  host `admin.int.unset.sh` use the same delegated-zone pattern when Phase 5 builds them, each with its
+  own typed line. P1.36e leaves the local
+  stack and production's current challenges as they are. Here the dev profile is the development
+  system (the preflight's `--env dev`), not the local stack, which also sets `UNSET_ENV=dev`.
+- The edge image gains exactly one DNS provider module, built from a pinned source in our image
+  pipeline and signed and digest-pinned like the other images (P1.36d, trusted base). The zone-scoped
+  DNS token is Alex's to create; it is a C9 file secret mounted only into the edge (P1.36c).
 
 ## Compliance
 `shared/config/permanent.test.ts` pins `MATRIX_SERVER_NAME` and `PERMISSION_SET_NSID` to the rows
