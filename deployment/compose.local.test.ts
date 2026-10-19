@@ -385,6 +385,8 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
         "edge: secrets differs",
       ],
       [dev, editService(local, TOKEN_READER, (s) => ({ ...s, name: "reader2" })), "reader2 is only in the local file"],
+      // P1.36w: ADR 0022 retired the local PLC, so a plc service is no longer local-only.
+      [dev, editService(local, TOKEN_READER, (s) => ({ ...s, name: "plc" })), "plc is only in the local file"],
       [
         { ...dev, services: [...dev.services, ...local.services.filter((s) => s.name === TOKEN_READER)] },
         local,
@@ -627,11 +629,6 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
       name: "a literal under a listed word on the reader",
       local: reader((s) => ({ ...s, environment: [["PLC_DB_PASSWORD", { literal: "literal" }]] })),
       problem: `${TOKEN_READER}: environment PLC_DB_PASSWORD ${SECRET}`,
-    },
-    {
-      name: "a local-only service with no pin",
-      local: { ...local, services: [...local.services, { ...readerService, name: "plc" }] },
-      problem: "plc has no environment and env_file pin",
     },
     {
       name: "a pin whose service is gone",
