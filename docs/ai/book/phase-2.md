@@ -170,7 +170,7 @@ flowchart TD
   P206 --> P213[P2.13 /me shell]; P125 --> P213
   P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]; P212a --> P212c[P2.12c welcome axe gaps]
   P213 --> P213c[P2.13c settings shell, links]; P208b --> P213c
-  P213 --> P213a[P2.13a slice 1 exit]; P208 --> P213a; P212 --> P213a
+  P213 --> P213a[P2.13a slice 1 exit]; P213c --> P213a; P208 --> P213a; P212 --> P213a
   P115 --> P212; P137 --> P215; P213a --> P226; P138[P1.38 Phase 1 exit] --> P226
   P116 --> P214[P2.14 identity seam]; P203 --> P214
   P125 --> P215[P2.15 legal 2]
@@ -1941,13 +1941,15 @@ everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our 
 - No per-request PDS call. The bound (`EMAIL_RECHECK_S` or the next PDS call, whichever is first) goes into the
   security notes, pinned by a test. `EMAIL_RECHECK_S`'s config maximum drops from 86,400 to 900
   (interfaces/http/config.ts:55), which caps the window at 15 minutes.
-- An audit event (DID and IP only) is added only if `destroyAllForDid` with "auth_dead" writes none today.
+- No audit row: session ends are never audited (P1.15; book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order
+  fixes from Codex on #1037"). Whether a separate audit step follows waits on architecture.
 
 Done when these pass, each red first, and check is green:
 1. a revoked grant at the recheck gives a 303 to `/login` with the cookie cleared, no session row left for the DID,
    and the token set gone;
 2. a second browser's next request goes to `/login`;
-3. `transient` changes no session and shows the PDS-unavailable page;
+3. `transient` changes no session row, passes on the cached confirmed email, and gives the same response as main for
+   that case, pinned (book edit 2026-10-19-auth-dead-gate, "Step-book mapping of 06:10Z");
 4. `scope_missing` still goes to `/verify-email`;
 5. the bound test pins 900, and a config red shows 901 is refused.
 
@@ -2136,9 +2138,10 @@ Not in this step: the real chat step (P6.17); COPPA "credible under-13 report de
   P3.20 runbook); age assurance for Australia (not built; the invite-country rule covers it).
 As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The real axe run is P2.12a.
   The banner shows until it is dismissed or until the next terms acceptance (P2.12b, Alex's "Dismiss button",
-  02:58:35Z). Until P3.16d raises `alert.notify` for a hosted block,
-  the interim signal is the warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The
-  account page moved from `/me` to `/<DID>` (D-5, #975); `/me` and `/did` answer 303 to it.
+  02:58:35Z). A hosted block writes `age_gate.blocked` with reason `age_gate_hosted`. No `alert.notify` class covers it
+  yet (its contract waits on architecture), so the interim signal is the warning log line `age_gate.hosted_block`
+  (interfaces/http/routes/welcome.ts:182). The account page moved from `/me` to `/<DID>` (D-5, #975); `/me` and `/did`
+  answer 303 to it.
 Diagram: none.
 
 ### P2.12a — Run axe on the welcome screens
@@ -2264,7 +2267,10 @@ Slice 1, issue #992, product, lane Phase 2. **It comes first for staging.** Book
 the drop of the confirmation test (2026-10-19-drop-sign-out-everywhere, "Knock-on effects").
 **What:**
 1. Add `SettingsShell({active, children})` with Profile, Privacy, Invites, Account (`PdsAccountLink`) and Language
-   and theme.
+   and theme. The "Language and theme" section is P1.25f's PrefsForms moved here (Alex's "Settings + footer",
+   02:59:37Z): a zero-JS form POST that sets the prefs cookie behind the CSRF and Origin gates, with its design-sheet
+   entry approved by Alex first. P1.25f keeps the footer form (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
+   "Order fixes from Codex on #1037").
 2. `/settings` answers with a 303 to `/settings/profile`, and the query string is kept.
 3. The account page gains:
    - the Edit profile, Privacy and Invites links;
@@ -2278,6 +2284,7 @@ the drop of the confirmation test (2026-10-19-drop-sign-out-everywhere, "Knock-o
 
 Done when these tests pass and check is green:
 - `settings.redirect`;
+- `settings_prefs_section`, and `prefs_post_csrf_origin` if P1.25f has not landed it;
 - `me.guards`: not onboarded goes to `/welcome`, on the DID account page itself;
 - `me.renders_owner_data`, as far as the placeholders go: the links and the state placeholder are present; the HTML
   scan finds no `getBlob` string anywhere, and the PDS host only in the one `PdsAccountLink` href (the recorded
@@ -2286,7 +2293,7 @@ Done when these tests pass and check is green:
   document. English only until the i18n slice.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
-Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
+Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.13c, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
 Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation

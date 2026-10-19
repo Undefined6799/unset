@@ -539,7 +539,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.12c | Close the welcome axe gaps | — | P2.12a | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
-| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34; ADR 0026 mechanism 2) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
+| P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34; ADR 0026 mechanism 2) | [STOP] (next slice after Alex reads the review) | P2.13, P2.13c, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
 
 ```mermaid
 flowchart TD
@@ -1058,6 +1058,7 @@ flowchart TD
   P2_06 --> P2_13
   P1_25 --> P2_13
   P2_13 --> P2_13a
+  P2_13c --> P2_13a
   P2_08 --> P2_13a
   P2_08 --> P2_08b
   P2_08 --> P2_08c
