@@ -62,10 +62,12 @@ export const loginConfig = {
   PDS_HOSTNAME: str({ pattern: HOSTNAME }),
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
   /**
-   * How long a confirmed-email cache is trusted before the PDS is asked again (P2.11), so 900 (15 minutes) is the
-   * maximum. On our own PDS it also bounds how long another browser keeps rendering after the grant is revoked there
-   * (P2.11a). On any other PDS the bound is the access token's remaining life plus this, unresolved until P1.33p
-   * (P2.11c).
+   * How long a confirmed-email cache is trusted before the PDS is asked again (P2.11); 900 (15 minutes) is the
+   * maximum. On our own PDS, a revoked grant ends every session of the account at the next successful email recheck
+   * (EMAIL_RECHECK_S, at most 900 s) or at the next PDS call, whichever comes first. While the PDS can't be reached,
+   * the cached result is kept, and the bound extends until a recheck succeeds. Once P1.36v lands, accounts on other
+   * PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each recheck; before P1.36v
+   * they can sign in, and this bound does not hold for them (P2.11c).
    */
   EMAIL_RECHECK_S: int({ min: 60, max: 900, default: 900 }),
   /** Full years before an account may continue (P2.12; plan §6). Never below 16. */
