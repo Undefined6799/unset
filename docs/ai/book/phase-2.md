@@ -109,9 +109,9 @@ and this table is the only place to change.
 ## Slices (decision 34, editor pass 2026-10-04)
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
-Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b, P2.08c, P2.08d, P2.11, P2.15,
-P2.12, P2.12a, P2.12b, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies merge,
-ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
+Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b, P2.08c, P2.08d, P2.11, P2.11a,
+P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
+merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
 i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
 four (book edit 2026-10-14-verify-834-fixes, S5).
@@ -128,9 +128,9 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08d, P2.11, P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c, P2.13a) keep their user-facing English
-text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog key",
-"catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
+(P2.01–P2.08, P2.08b–P2.08d, P2.11, P2.11a, P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c, P2.13a) keep their user-facing
+English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
+key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
 English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
 (P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts
 every module first and adds French to these tests; no French page ships before it. The Phase 2 exit (P2.26) still checks
@@ -164,7 +164,7 @@ flowchart TD
   P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
-  P206 --> P211[P2.11 email gate]
+  P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
   P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]
@@ -1858,6 +1858,34 @@ Not in this step: showing the email publicly (P2.21/P2.23 use the verified email
   the local exception's product code (ADR 0026; a later PR implements `requireVerified`).
 Diagram: none.
 
+### P2.11a — End sessions on a revoked grant at recheck
+Tags: [SEC]            Depends on: P2.11
+Slice 1, issue #1010, product (`interfaces/http/`), lane Phase 1 (it holds the sign-out steps P2.08b and P2.08c); book
+edit 2026-10-19-auth-dead-gate (architecture 02:35Z, 03:20Z and 03:27Z). A tightening, so nothing is needed from Alex.
+It carries the letter P2.11a because `refreshEmail` and `openApp` are P2.11's confirmed-email gate. With "sign out
+everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our other browsers.
+
+**What:**
+- `refreshEmail` returns a distinct `"ended"` for `auth_dead`, never "unconfirmed" (today interfaces/http/compose.ts:
+  253-256). `openApp` answers 303 to `/login?error=login.session_ended` with the clear-cookie header, the target
+  `respondToPdsFailure` already uses for `auth_dead` (pds-call.ts:232-234). The switch stays exhaustive.
+- Every session of the DID ends, as today (pds-call.ts:104-110, compose.ts:218-220): one OAuth token set per DID, so a
+  dead grant is dead for every browser.
+- `scope_missing` keeps `/verify-email` with `login.scope_insufficient`; `rejected` stays "unconfirmed" (fails
+  closed); `transient` never ends a session.
+- No per-request PDS call. The bound (`EMAIL_RECHECK_S` or the next PDS call, whichever is first) goes into the
+  security notes, pinned by a test. `EMAIL_RECHECK_S`'s config maximum drops from 86,400 to 900
+  (interfaces/http/config.ts:55), which caps the window at 15 minutes.
+- An audit event (DID and IP only) is added only if `destroyAllForDid` with "auth_dead" writes none today.
+
+Done when these pass, each red first, and check is green:
+1. a revoked grant at the recheck gives a 303 to `/login` with the cookie cleared, no session row left for the DID,
+   and the token set gone;
+2. a second browser's next request goes to `/login`;
+3. `transient` changes no session and shows the PDS-unavailable page;
+4. `scope_missing` still goes to `/verify-email`;
+5. the bound test pins 900, and a config red shows 901 is refused.
+
 ### P2.15 — Legal paperwork part 2
 Tags: (none; content needs Alex's approval through the PR and two inputs, see checklist)            Depends on: P1.25, P1.37            Plan: §6 "Legal paperwork", "Privacy notice", "Invite-country rule", "Canadian law"; §5.3 interstitial; §5.8 fingerprints
 Where: `apps/web/legal/{terms.en.md, terms.fr.md, privacy.en.md, privacy.fr.md, domains.en.md, domains.fr.md}` rendered by
@@ -2041,8 +2069,9 @@ Reuse (provisional — for reuse review):
     legal gates; nothing to salvage for age or terms.
 Not in this step: the real chat step (P6.17); COPPA "credible under-13 report deletes the account" (moderator action,
   P3.20 runbook); age assurance for Australia (not built; the invite-country rule covers it).
-As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The real axe run is P2.12a;
-  the one-time privacy notice is P2.12b, held for Alex's card. Until P3.16d raises `alert.notify` for a hosted block,
+As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The real axe run is P2.12a.
+  The banner shows until it is dismissed or until the next terms acceptance (P2.12b, Alex's "Dismiss button",
+  02:58:35Z). Until P3.16d raises `alert.notify` for a hosted block,
   the interim signal is the warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The
   account page moved from `/me` to `/<DID>` (D-5, #975); `/me` and `/did` answer 303 to it.
 Diagram: none.
@@ -2057,21 +2086,39 @@ Slice 1, issue #993, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
 Done when the tests pass and check is green.
 
 ### P2.12b — Show the privacy notice once
-Tags: (none)            Depends on: P2.12
-Slice 1, issue to be opened by the board, product, lane Phase 2. **Held for Alex's card**; it opens only after his
-answer. Book edit 2026-10-19-five-step-audit, architecture 03:55Z and the step-book mapping at 03:56Z.
-**What** (architecture's limits): writing `privacy_version` on render stays refused (gates.ts:66-70), because a GET
-must not record an acceptance nobody made. The options on the card:
-- (A) A dismiss button, recommended: a POST behind the session, CSRF and Origin gates records a separate
-  `privacy_notice_seen_version` integer on the account, never `privacy_version`. The banner shows until dismissed or
-  until the next terms acceptance. The new field needs a purpose (accountability that the changed notice was shown), a
-  lawful basis (legal obligation or legitimate interest), erasure with the account, export, a RoPA line and a
-  migration. No GET writes anything.
-- (B) Keep the banner until the next terms acceptance. Then this step records that in P2.12's As built line, amends
-  `terms.privacy_bump_notice_only`, and adds only the test that the second request still shows the banner.
+Tags: [SEC]            Depends on: P2.12
+Slice 1, product, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode (architecture 03:55Z and 04:35Z).
+Issue: the board opens it. Alex tapped "Dismiss button" at 02:58:35Z on "Let people dismiss the privacy-update banner,
+saving that they saw it?" (option A); the PR body quotes the question, the option and the time.
 
-Done when, for (A), `terms.privacy_bump_notice_only` passes red first (no banner after the dismiss POST) and check is
-green.
+**What:**
+1. **Dismiss.** The banner gets a dismiss button, a plain form POST (zero JS), behind the session, CSRF and Origin
+   gates.
+2. **The record.** The POST records the shown privacy version in a new column,
+   `app.account.privacy_notice_seen_version`: a seen-record, never an acceptance, and never `privacy_version`. Its type
+   matches `privacy_version`, which is `text` (0015_app_account.sql:13; architecture 04:35Z).
+3. **When the banner shows.** While the current privacy version is newer than both `privacy_version` and
+   `privacy_notice_seen_version`, so it disappears on dismiss or at the next terms acceptance, whichever comes first.
+   Re-acceptance stays not forced.
+4. **No GET writes.** Writing `privacy_version` on render stays refused (gates.ts:66-70).
+5. **The migration.** A new numbered migration adds the column, with a column-level `GRANT UPDATE` to the app role
+   only (as 0015:24 does), and the grant-matrix entry. Both are parsed paths and ride with product as #972 did; if a
+   parsed check refuses, the lane stops and tells the step book.
+6. **Data duties:** purpose, accountability that the changed notice was shown; lawful basis, legal obligation or
+   legitimate interest; erasure rides the `app.account` row (erasure-registry.json, "app.account.did"), with a test
+   that the column is gone and a registry reason naming it; export rides P4.26's row list; one RoPA line through the
+   step book (if main has no RoPA file yet, the PR says so and the line is booked for P2.15's records).
+
+Tests, red first: `terms.privacy_notice_dismiss` (after a POST, the next GET has no banner, and `privacy_version` is
+unchanged); a dismiss without CSRF or with a foreign Origin is refused and writes nothing;
+`terms.privacy_bump_notice_until_dismissed` (the banner shows on repeat GETs until dismissed); a GET never writes the
+column; erasure removes it.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a privacy acknowledgement
+recorded without a person's action, or forged across sites. Answered by POST only behind the CSRF and Origin gates,
+and no GET writes.
+
+Done when the tests pass and check is green.
 
 ### P2.13 — `/me` and the settings shell
 Tags: (none)            Depends on: P2.06, P1.25            Plan: §5.4 (owner sees drafts); §2 rules 9, 12; §4 "Shell + UI kit"

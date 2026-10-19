@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 336 steps: 306 from `phase-1.md`, 30 from `phase-2.md` (including the
+Depth: **build-ready**. 347 steps: 316 from `phase-1.md`, 31 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -293,6 +293,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25f | Add favicons, feed mode and footer prefs | — | P1.25 | `phase-1.md` |
 | P1.25g | Fix disabled select focus and add two kit tests | — | P1.25 | `phase-1.md` |
 | P1.25m | Pin the DID account route's privacy | [SEC] | P1.25 | `phase-1.md` |
+| P1.25n | Harden the DID route privacy tests | [SEC] | P1.25m | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P2.26b (P2.26c for the edge), interim departure, Alex 2026-10-07 00:17Z; P2.26b, then P2.26c, flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -447,21 +448,30 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.35r | Pin compose limits and local-only env | [SEC] | P1.34d | `phase-1.md` |
 | P1.35l | Check the PDS host in every env | [SEC] | P1.35g | `phase-1.md` |
 | P1.33z | Run the local stack in CI (split from P1.34d) | [SEC] | P1.34d, P1.35t | `phase-1.md` |
-| P1.35t | Run the local stack in a CI job (check, before P1.33z) | [SEC] check [ALEX] (typed line) | P1.34d | `phase-1.md` |
+| P1.35t | Run the local stack in a CI job (check, before P1.33z) | [SEC] check [ALEX] (typed line) | P1.34d, P1.36h | `phase-1.md` |
 | P1.35w | Retire the plc_pds exemption | [SEC] | — | `phase-1.md` |
 | P1.36f | Add staging TLS and DNS to ADR 0025 | — | — | `phase-1.md` |
 | P1.35y | Accept ADR 0025, the public domains | [ALEX] | P1.36f | `phase-1.md` |
 | P1.35z | Accept ADR 0026, the local email-gate exception | [ALEX] | — | `phase-1.md` |
 | P1.35x | Pin the dev hosts to the staging names | [SEC] | P1.35y | `phase-1.md` |
-| P1.36d | Build the edge image with one DNS module (trusted) | [SEC] trusted | — | `phase-1.md` |
-| P1.36e | Allow DNS-01 for dev in C18 (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36d | `phase-1.md` |
-| P1.36b | Serve the app site on the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36e, P1.35x, P1.35y | `phase-1.md` |
+| P1.36d | Build the edge image with one DNS module (trusted) | [SEC] trusted | P1.36n | `phase-1.md` |
+| P1.36e | Add the edge dev mode with one DNS-01 issuer (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36d | `phase-1.md` |
+| P1.36b | Serve the app site on the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36e, P1.36o, P1.35x, P1.35y | `phase-1.md` |
 | P1.36c | Wire the dev edge's DNS token and app site | [SEC] | P1.36b | `phase-1.md` |
 | P1.36g | Fix dev mail and the first-invite runbook | [SEC] | — | `phase-1.md` |
 | P1.36i | Pin the dev edge aliases and public paths | [SEC] | P1.36b | `phase-1.md` |
 | P1.36j | Trust only Newt's address at the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
 | P1.36k | Refuse dev-only runtime keys outside local | [SEC] | — | `phase-1.md` |
 | P1.36l | Refuse the zero commit under dev | [SEC] | P1.27s | `phase-1.md` |
+| P1.36h | Fix migrate index lint and PDS data dir locally | [SEC] | — | `phase-1.md` |
+| P1.35u | Narrow and pin the islands owner lines | [SEC] check [ALEX] (typed line) | — | `phase-1.md` |
+| P1.35v | Split secret key words on every boundary | [SEC] | — | `phase-1.md` |
+| P1.36m | Draft ADR 0028 for the edge DNS module | [SEC] | — | `phase-1.md` |
+| P1.36n | Accept ADR 0028 | [ALEX] | P1.36m | `phase-1.md` |
+| P1.36o | Mount the edge dev snippet and map it in C18 | [SEC] | P1.36e | `phase-1.md` |
+| P1.36p | Cap the PDS temp blob tmpfs | [SEC] | P1.36h | `phase-1.md` |
+| P1.36q | Require exactly four names in pds.env | [SEC] | — | `phase-1.md` |
+| P1.36r | Refuse a checkout-built migrate under dev | [SEC] | — | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.33y, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
@@ -516,10 +526,11 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08c | Count only live sessions at sign-out | [SEC] | P2.08 | `phase-2.md` |
 | P2.08d | Remove sign out everywhere | [SEC] | P2.08 | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
+| P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
-| P2.12b | Show the privacy notice once (held for Alex's card) | — | P2.12 | `phase-2.md` |
+| P2.12b | Show the privacy notice once | [SEC] | P2.12 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34; ADR 0026 mechanism 2) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
@@ -823,11 +834,12 @@ flowchart TD
   P2_08c["P2.08c Live sessions at sign-out"]
   P2_08d["P2.08d Remove sign out everywhere"]
   P2_11["P2.11 Email-verify gate"]
+  P2_11a["P2.11a Revoked grant ends sessions"]
   P2_15["P2.15 Legal paperwork part 2"]
   P2_12["P2.12 Onboarding"]
   P2_13["P2.13 /me and the settings shell"]
   P2_12a["P2.12a Welcome screens axe"]
-  P2_12b["P2.12b Privacy notice once"]
+  P2_12b["P2.12b Privacy notice dismissed once"]
   P2_13c["P2.13c Settings shell and account links"]
   P2_13a["P2.13a Slice 1 exit"]
   P1_01 --> P1_02
@@ -943,6 +955,8 @@ flowchart TD
   P1_25 --> P1_25g
   P1_25m["P1.25m DID account route privacy"]
   P1_25 --> P1_25m
+  P1_25n["P1.25n DID route privacy tests hardened"]
+  P1_25m --> P1_25n
   P1_04 --> P1_27
   P1_27 --> P1_27d
   P1_27 --> P1_28q
@@ -1019,6 +1033,7 @@ flowchart TD
   P2_06 --> P2_08
   P2_06 --> P2_11
   P2_07 --> P2_11
+  P2_11 --> P2_11a
   P1_25 --> P2_15
   P1_37 --> P2_15
   P1_37 --> P1_37b
@@ -1141,6 +1156,8 @@ flowchart TD
   P1_34d --> P1_33z
   P1_35t["P1.35t Local stack CI job"]
   P1_34d --> P1_35t
+  P1_36h["P1.36h Migrate lint mode and PDS data dir"]
+  P1_36h --> P1_35t
   P1_35t --> P1_33z
   P1_35w["P1.35w plc_pds exemption retired"]
   P1_36f["P1.36f ADR 0025 staging TLS and DNS"]
@@ -1149,11 +1166,18 @@ flowchart TD
   P1_35z["P1.35z ADR 0026 accepted"]
   P1_35x["P1.35x Dev hosts pinned to staging names"]
   P1_35y --> P1_35x
+  P1_36m["P1.36m ADR 0028 edge DNS module drafted"]
+  P1_36n["P1.36n ADR 0028 accepted"]
+  P1_36m --> P1_36n
   P1_36d["P1.36d Edge image with one DNS module"]
-  P1_36e["P1.36e DNS-01 for dev in C18"]
+  P1_36n --> P1_36d
+  P1_36e["P1.36e Edge dev mode with one DNS-01 issuer"]
   P1_36d --> P1_36e
+  P1_36o["P1.36o Edge dev snippet mounted, C18 mapped"]
+  P1_36e --> P1_36o
   P1_36b["P1.36b App site on the dev edge"]
   P1_36e --> P1_36b
+  P1_36o --> P1_36b
   P1_35x --> P1_36b
   P1_35y --> P1_36b
   P1_36c["P1.36c Dev edge DNS token and app site wired"]
@@ -1166,6 +1190,12 @@ flowchart TD
   P1_36k["P1.36k Dev-only runtime keys refused outside local"]
   P1_36l["P1.36l Zero commit refused under dev"]
   P1_27s --> P1_36l
+  P1_36p["P1.36p PDS temp blob tmpfs capped"]
+  P1_36h --> P1_36p
+  P1_36q["P1.36q Exactly four names in pds.env"]
+  P1_36r["P1.36r Checkout-built migrate refused under dev"]
+  P1_35u["P1.35u Islands owner lines narrowed"]
+  P1_35v["P1.35v Secret key words split"]
   P1_34a --> P1_34o
   P1_34o --> P1_34q
   P1_34q --> P1_34d
@@ -2125,7 +2155,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.36b, P1.36e, P1.36j, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -2148,8 +2178,10 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.35k (#891):** a typed line, "yes P1.35k infrastructure/net-guard test hosts reserved names".
 - **P1.35s (#914):** a typed line, "yes P1.35s infrastructure/net-guard carried IPv4 fixtures".
 - **P1.35t (#983):** Alex's go, "ok for 1.35t then" (2026-10-19 02:13:45Z).
-- **P1.36e (#1002):** a typed line, "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/snippets/tls.caddy C18
-  DNS-01 dev only".
+- **P1.36e (#1002):** a typed line, "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/dev/tls.caddy edge dev
+  mode DNS-01 dev only" (it replaces the earlier line, which named snippets/tls.caddy).
+- **P1.36n:** a typed line, "yes accept ADR 0028 edge DNS-01 provider module docs/human/decisions/0028".
+- **P1.35u (#985):** a typed line, "yes P1.35u .github/CODEOWNERS scripts/workspace".
 - **P1.36b (#999):** a typed line, "yes P1.36b deployment/edge/caddyfile.ts dev app site APP_HOST APP_UPSTREAM".
 - **P1.36j (#1019):** a typed line, "yes P1.36j deployment/edge/Caddyfile dev trusted proxy Newt only".
 - **P1.35y (#996) and P1.35z (#997):** Alex's yes to accept ADR 0025 and ADR 0026, quoted with its time.

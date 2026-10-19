@@ -3743,9 +3743,10 @@ Outputs:
   tip off", C-16); `video_upload` → include, except that a row in `matched_hold` shows its state as `unavailable`
   (the same generic copy the member sees, so the export does not tip off); `review_decision` and `appeal` → include
   (moderation history, plan §6) with `decided_by` redacted when a person decided; `bsky_post_draft`, `pending_comment`
-  → include; audit lanes → include rows naming the DID minus other DIDs. Draft images (P2.18 `draft_media`) → included
-  through `draftMedia.listForExport(did) → {key, mime, bytes}[]` (P2 note E25; whether the bytes travel inline or as
-  short-lived signed links is settled in P4.00).
+  → include; audit lanes → include rows naming the DID minus other DIDs. `app.account` includes
+  `privacy_notice_seen_version` once P2.12b merges (book edit 2026-10-19-alex-cards-and-edge-dev-mode). Draft images
+  (P2.18 `draft_media`) → included through `draftMedia.listForExport(did) → {key, mime, bytes}[]` (P2 note E25; whether
+  the bytes travel inline or as short-lived signed links is settled in P4.00).
 - Export hooks (decision 25, the export twin of P3.07's `eraseHooks`): data held outside the app database joins through
   a fixed list `exportHooks: {name, export(did) → AsyncIterable<JsonChunk>}[]` passed by `web`'s composition root (no
   registry); `draftMedia.listForExport` is its first entry, and each later data owner (chat in Phase 6, any future
