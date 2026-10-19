@@ -36,7 +36,7 @@ describe("logger", () => {
 
   test("logger_drops_unlisted", () => {
     const { log, records } = capture();
-    log.warn("config.unknown_keys", { ip: "1.2.3.4", ua: "Mozilla/5.0", path: "/@alice" } as unknown as LogFields);
+    log.warn("config.unknown_keys", { ip: "192.0.2.1", ua: "Mozilla/5.0", path: "/@alice" } as unknown as LogFields);
     const [record] = records();
     expect(record).not.toHaveProperty("ip");
     expect(record).not.toHaveProperty("ua");
@@ -46,7 +46,7 @@ describe("logger", () => {
 
   test("logger_drops_non_primitive_values", () => {
     const { log, records } = capture();
-    log.info("config.unknown_keys", { reason: { nested: "1.2.3.4" } } as unknown as LogFields);
+    log.info("config.unknown_keys", { reason: { nested: "192.0.2.1" } } as unknown as LogFields);
     expect(records()[0]).toMatchObject({ dropped: 1 });
     expect(records()[0]).not.toHaveProperty("reason");
   });
