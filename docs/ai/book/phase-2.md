@@ -327,7 +327,7 @@ stateDiagram-v2
   Active --> NoSession: token set gone (has_token_set false on read) → row deleted
   Active --> Active: transient PDS error, or a 401 while the token set is still stored (kept, never dropped)
   Active --> Active: another browser logs in for the same DID (library replaces the set, no logout)
-  Active --> NoSession: auth_dead from pdsCall or P2.11a recheck (PDS revoke, within 15 min) → destroyAllForDid
+  Active --> NoSession: auth_dead from pdsCall or P2.11a recheck (PDS revoke, ≤15 min on our own PDS, at a recheck that reaches it) → destroyAllForDid
 ```
 
 ---
@@ -1761,7 +1761,8 @@ Threats (book edit 2026-10-19-codex-1063-batch66, M5):
 - A foreign or tampered issuer becomes a link on /signed-out or the account page (phishing, open redirect). A recorded
   issuer that passes the carrier's rule (an https DNS-name origin, P2.08h) is linked to its own origin. Exact equality
   with our own issuer decides only whether the page calls it ours. An issuer the carrier refuses falls back to the
-  link-less page. Until P1.33p, P1.36v means no such account exists (Codex item 2 on #1081, architecture 07:07Z).
+  link-less page. Until P1.33p, P1.36v means no such account exists (Codex item 2 on #1081, step book 07:07Z;
+  architecture 07:08Z and 07:10Z).
 - The issuer cookie is read cross-site or outlives sign-out. It is `__Host-`, `Path=/`, `Secure`, `HttpOnly`,
   `SameSite=Strict` and `Max-Age=600` (the 06:10Z (c) section label, written before 03:50Z UTC).
 As built: #1054 (merged as c8937e5). Its verify follow-ups are P2.08g items 2 to 6 and P2.08h.
@@ -1809,7 +1810,8 @@ browser's sign-out, including the last-browser revoke (P2.08a, and P2.08c's live
 
 Threats (book edit 2026-10-19-codex-1063-batch66, M5):
 - Removing the button leaves a compromised account's other sessions alive. The user revokes us at the PDS, and
-  P2.11a ends every app session within 15 minutes while the PDS is reachable (V7.4.3 Partial).
+  P2.11a ends every app session within 15 minutes on our own PDS, at the next recheck that reaches the PDS, never
+  immediately (V7.4.3 Partial).
 - A removed route lingers and still acts. Both forms answer as unknown routes (Done when).
 
 Done when:
@@ -1918,7 +1920,7 @@ out. It may build beside P2.08g, but whichever lands second merges main first.
    - Anything refused is dropped, and the page falls back. A recorded issuer that passes the carrier's rule (an https
      DNS-name origin, P2.08h) is linked to its own origin. Exact equality with our own issuer decides only whether the
      page calls it ours. An issuer the carrier refuses falls back to the link-less page. Until P1.33p, P1.36v means no
-     such account exists (Codex item 2 on #1081, architecture 07:07Z).
+     such account exists (Codex item 2 on #1081, step book 07:07Z; architecture 07:08Z and 07:10Z).
    - **Reds:** one per refused form.
 Threats: a slow or hung store holds sign-out open (M5); a hostile or odd issuer string reaches a page link (N1). Both
 fail closed, to sign-out without a link.
@@ -2310,10 +2312,9 @@ As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built a
   button", 02:58:35Z). A hosted block writes `age_gate.blocked` with reason `age_gate_hosted`. Its alert is P3.16d's
   class `age_gate_hosted_block` (architecture's section labelled 06:15Z; book edit 2026-10-19-five-step-audit,
   "Hosted-block alert contract"): payload the audit row id only, one alert at the block, `open_hosted_blocks` as a
-  count in the daily digest, and "handled" derived from the block's resolution row in our own audit table, written by
-  the admin action through the app (architecture 20:09Z), so the count stays open until P3.16. Until P3.16d, the interim
-  signal is the warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The account page moved
-  from `/me` to `/<DID>` (D-5,
+  count in the daily digest, and "handled" derived from pds-admin's log of a succeeded deactivate or takedown on the
+  same target, so the count stays open until P3.16. Until P3.16d, the interim signal is the warning log line
+  `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The account page moved from `/me` to `/<DID>` (D-5,
   #975); `/me` and `/did` answer 303 to it.
 Diagram: none.
 
@@ -4593,8 +4594,8 @@ Algorithm (the exit spec, in order; each numbered block is one Playwright test w
      notice and the session survives; after the PDS returns, the page works without signing in again.
   7. `exit.logout`: two browser contexts signed in → "Sign out" in one → the other stays signed in; signing out the
      other too revokes the grant, and the next login sends `prompt=login` ("sign out everywhere" dropped, P2.08). A
-     grant revoked at the PDS signs the other browser out within 15 minutes (P2.11a's 900 s recheck cap) while the PDS
-     is reachable; P2.11a's own test 2 covers it, so the exit adds no test for it.
+     grant revoked at the PDS signs the other browser out within 15 minutes on our own PDS, at the next recheck that
+     reaches the PDS, never immediately; P2.11a's own test 2 covers it, so the exit adds no test for it.
   8. `exit.fingerprint_fail_closed`: an avatar whose hash is in the fake's `unavailable` list is refused with
      `image.check_unavailable` and nothing is stored; one whose hash is in its `match` list is refused with
      `image.cannot_use`, the account's uploads are frozen, and nothing is stored; a production-config boot with the

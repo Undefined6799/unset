@@ -218,10 +218,9 @@ Algorithm (full detail: it gates the whole phase):
   1. For each row of "Interfaces this phase assumes", find the real symbol in the merged code. Same semantics, other
      name → note the rename. Different semantics → a contract change.
   2. Check specifically, because round 1 found drift here: P2.14's `claims` extension and `MODULES` entries for
-     `chat-auth` and `chat-admin`; P2.08's sign-out path (where P6.16 calls `chat.enqueueEndSessions`); P2.16's
-     fingerprint-check names and whether the real Arachnid client is live (P5.07b); P4.07/P5.07b's image legal-hold
-     entry point; P3.07's erasure-report shape; P3.15's `app.report` columns and categories; P4.18's follow reader;
-     P5.02's network names; P5.10's edge limiter; P1.13's registry API.
+     `chat-auth` and `chat-admin`; P2.08's sign-out path (where P6.16 calls `chat.enqueueEndSessions`); P2.16's fingerprint-check
+     names and whether the real Arachnid client is live (P5.07b); P4.07/P5.07b's image legal-hold entry point; P3.07's erasure-report shape; P3.15's `app.report`
+     columns and categories; P4.18's follow reader; P5.02's network names; P5.10's edge limiter; P1.13's registry API.
   3. For each step whose Algorithm is marked "reviewed hypothesis", compare it with the code it will sit beside and
      rewrite it where the surrounding code makes another shape simpler (principles 9, 12, 18). Record each rewrite.
   4. Read the answers to P6-A1–P6-A8. An answer that differs from the default taken in this file → the affected steps are
@@ -1173,9 +1172,10 @@ Algorithm (full detail: an authenticated cross-origin read surface):
   3. Responses carry `Access-Control-Allow-Origin: https://chat.unset.sh`, `Access-Control-Allow-Credentials: true`,
      `Vary: Origin`, `Cache-Control: private, no-store`, `Content-Type: application/json`.
   4. `session = getSession(req)`; none → 401 `{ error: "signed_out" }`. `/api/chat/me` passes the P2.11a recheck: it
-     goes through the same openApp gate as any page, and the chat client's 5-minute poll sits inside the 15-minute
-     bound. On `ended` it answers 401 with the cookie cleared, and the chat client wipes its stores, as for a sign-out
-     (architecture 05:01Z, M2; book edit 2026-10-19-drop-sign-out-everywhere).
+     goes through the same openApp gate as any page. It is a liveness path that keeps the cached recheck, not what
+     carries the 15-minute bound; P2.11f's sweep carries it (architecture 20:09Z). On `ended` it answers 401 with the
+     cookie cleared, and the chat client wipes its stores, as for a sign-out (architecture 05:01Z, M2; book edit
+     2026-10-19-drop-sign-out-everywhere).
   5. Any exception → 503 (and the chat client treats 503 as "not followed", "handle unknown"; fail closed).
   `me`: 6. `mxid = byDid('chat', did)`; `chat_state = chat.accountStatus(did)`; `handle` from `verifyHandle(did)`
      (unverified → the DID is shown instead).
@@ -2745,10 +2745,10 @@ Edge cases and failures:
   - The member signed in to chat through a third-party client → the same back-channel path applies (the MAS session
     came through chat-auth too).
   - No `login_session` row for that app session (chat never opened in that browser) → `ended: 0`; nothing to do.
-  - A freeze, takedown, erasure or a grant revoked at the PDS (within 15 minutes, P2.11a's 900 s recheck cap, while
-    the PDS is reachable) ends chat devices too → P6.04a, through `chat-admin` `end_sessions`: MAS's
-    back-channel action is fixed per provider (`backchannel_logout.rs:247`), so this provider stays
-    `logout_browser_only` and no logout token can end devices.
+  - A freeze, takedown, erasure or a grant revoked at the PDS (within 15 minutes on our own PDS, at the next recheck
+    that reaches the PDS, never immediately; P2.11a, P2.11f) ends chat devices too → P6.04a, through `chat-admin`
+    `end_sessions`: MAS's back-channel action is fixed per provider (`backchannel_logout.rs:247`), so this provider
+    stays `logout_browser_only` and no logout token can end devices.
   - MAS logs `sub` (the DID) and `sid` at info for every back-channel logout (`backchannel_logout.rs:245`) → P6.02's
     `RUST_LOG` lowers that target to `warn`; `mas-backchannel-log-has-no-did` checks it.
 Threats: ending chat sessions on one device or from the app.
@@ -2864,11 +2864,10 @@ Algorithm (full detail: suspension, erasure and session ending):
      Any step failing 24 times → alert and a held case in `admin`; the core erasure has already completed.
   4. No app action ends every chat session except a freeze, takedown, erasure or a revoked grant (auth_dead, P2.11a;
      architecture 05:01Z, book edit 2026-10-19-drop-sign-out-everywhere). A grant revoked at the PDS: `auth_dead` only
-     (P2.11a), within 15 minutes on our own PDS at the next recheck that reaches it, never immediately. P2.11f carries
-     the bound: its sweep rechecks every DID with a live chat seed against our own PDS at most 5 minutes apart,
+     (P2.11a), within 15 minutes on our own PDS, at the next recheck that reaches the PDS, never immediately. P2.11f
+     carries the bound: its sweep rechecks every DID with a live chat seed against our own PDS at most 5 minutes apart,
      bypassing the email-recheck cache, and the outbox is worked within 2 minutes, so about 7 minutes at worst
-     (architecture 20:09Z). `/api/chat/me` keeps the cached recheck; it is a liveness path, not the bound. It
-     ends every chat session of the DID, chat devices included, through `enqueueEndSessions { kind: "everywhere" }` and
+     (architecture 20:09Z). It ends every chat session of the DID, chat devices included, through `enqueueEndSessions { kind: "everywhere" }` and
      `chat-admin` `end_sessions`. It goes through the DA-2 outbox, never a call after commit: the same transaction that
      runs `destroyAllForDid(tx, did, "auth_dead")` inserts one job row to end every chat session of the DID.
      `chat-admin` works it idempotently with backoff; a dead letter raises `dead_letters`. `/api/chat/me`'s 401 at the

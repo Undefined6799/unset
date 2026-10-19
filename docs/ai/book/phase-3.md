@@ -2081,8 +2081,8 @@ Outputs (contract):
     carries no DID, handle, text or hash (only the hold reference).
   - `digest.send` args (fixed schema): `{heads: [{lane, seq, row_hash}], roster_serial, roster_sha256, counts:
     {accounts_new, reports_opened, actions, open_hosted_blocks}, suppressed_alerts, canary_code}`; `pds-admin` adds
-    its own log head. `open_hosted_blocks` is derived, never set by hand (P3.20c; Codex item 5 on #1081, architecture
-    07:08Z).
+    its own log head. `open_hosted_blocks` is derived, never set by hand (P3.20c; Codex item 5 on #1081, architecture's
+    section labelled 06:15Z, mapped by the step book at 07:07Z).
   - The `age_gate_hosted_block` alert payload is the audit row id only, under the normal caps (test
     `alert_hosted_block_payload_is_row_id`).
   - **Mail preflight (F3, plan issue PI-6):** the deploy preflight (P1.30, production P5.02a) fails unless
@@ -2799,9 +2799,9 @@ Outputs (contract):
     transaction that enqueues the end (architecture 20:09Z). Counts only, with no DID, IP or label value; no audit row
     (P1.15); a transient failure raises nothing.
   - `open_hosted_blocks` for the digest: the count of `age_gate.blocked` audit rows with reason `age_gate_hosted`
-    that have no resolution row in our own audit table, written by the admin action through the app. "Handled" is
-    derived, never set by hand, and never read from `pds-admin`'s log (architecture 20:09Z); until P3.16 lands, every
-    such row stays open (Codex item 5 on #1081, architecture 07:08Z).
+    that have no matching succeeded `deactivate` or `takedown` outcome in `pds-admin`'s log. "Handled" is derived,
+    never set by hand; until P3.16 lands, every such row stays open (Codex item 5 on #1081, architecture's section
+    labelled 06:15Z, step book 07:07Z).
   - `adm.canary(id, code_sha256, sent_at, confirmed_at NULL)`: the mail canary (F3).
   - **Alert outbox, `alert.send(class)`** (editor pass, phase-5 note 10): a process with no mail path (`indexer`,
     `auditor`, and later `retention` and `backup`) never sends an alert itself. `alert.send(class)` calls the
@@ -2839,8 +2839,8 @@ Done when (tests):
   - `ops-report-name-ownership`; `ops-numeric-only`; `ops_auth_dead_counters` (one revoked DID with 3 sessions
     moves `auth_dead_dids_ended` by 1 and `auth_dead_sessions_ended` by 3, and writes no audit row; a transient
     failure raises nothing); `ops_auth_dead_counters_concurrent` (two concurrent ends add up exactly);
-    `digest_counts_open_hosted_blocks`; `digest_clears_handled_block`; `digest_ignores_non_matching_outcome` (a
-    resolution row for another block leaves the count unchanged); `alert-outbox-class-ownership`;
+    `digest_counts_open_hosted_blocks`; `digest_clears_handled_block`; `digest_ignores_non_matching_outcome` (an
+    outcome for another target leaves the count unchanged); `alert-outbox-class-ownership`;
     `alert-outbox-delivered-once`.
   - `monitor-alerts-each-threshold` (fake clock, one per class); `monitor-csam-report-alert`.
   - `csam-emergency-delivered-same-cycle`: a `csam_emergency` outbox row is delivered in the monitor cycle that sees

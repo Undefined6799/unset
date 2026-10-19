@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 372 steps: 332 from `phase-1.md`, 40 from `phase-2.md` (including the
+Depth: **build-ready**. 370 steps: 329 from `phase-1.md`, 41 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -475,11 +475,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.35u | Narrow and pin the islands owner lines | [SEC] check [ALEX] (typed line) | — | `phase-1.md` |
 | P1.35v | Split secret key words on every boundary | [SEC] | — | `phase-1.md` |
 | P1.36t | Widen the secret key split to every compose env | [SEC] | P1.35v | `phase-1.md` |
-| P1.36u | Refuse private staging addresses in dev preflight | [SEC] | — | `phase-1.md` |
+| P1.36u | Refuse private staging addresses in dev preflight | [ALEX] [SEC] | — | `phase-1.md` |
 | P1.36v | Sign in only accounts on our own PDS | [SEC] | — | `phase-1.md` |
-| P1.37k | Name the failing key and service in preflight | [SEC] | P1.36k | `phase-1.md` |
-| P1.37l | Refuse plain-env secrets under dev | [SEC] | — | `phase-1.md` |
-| P1.37m | Widen the C29 tests to every service and file | [SEC] | P1.36k | `phase-1.md` |
 | P1.37n | Refuse build keys under dev and prod | [SEC] | P1.36r | `phase-1.md` |
 | P1.36m | Draft ADR 0028 for the edge DNS module | [SEC] | — | `phase-1.md` |
 | P1.36n | Accept ADR 0028 | [ALEX] | P1.36m | `phase-1.md` |
@@ -1267,13 +1264,8 @@ flowchart TD
   P1_35v --> P1_36t
   P1_36u["P1.36u Private staging addresses refused"]
   P1_36v["P1.36v Own-PDS accounts only"]
-  P1_37k["P1.37k Failing key and service named"]
-  P1_37l["P1.37l Plain-env secrets refused under dev"]
-  P1_37m["P1.37m C29 tests on every service"]
   P1_37n["P1.37n Build keys refused under dev and prod"]
   P1_36r --> P1_37n
-  P1_36k --> P1_37k
-  P1_36k --> P1_37m
   P1_34a --> P1_34o
   P1_34o --> P1_34q
   P1_34q --> P1_34d
@@ -2176,6 +2168,7 @@ flowchart LR
 | P6.18 | Retired: the branded Element Web fallback was dropped (Alex answer 53). |
 | P1.34v | Retired: local PLC in the local stack, dropped by ADR 0022; never built. |
 | P1.34z | Retired: identity resolution through a local PLC, dropped by ADR 0022; never built. |
+| P2.11b | Retired 2026-10-19: its counters moved to **P3.20c** (architecture 07:08Z); the heading stays, and #1052 stays open. |
 | P4.02a | Reserved: a follow-up PR only if a P4.01 answer needs an extra record. |
 
 ## Dependency check (2026-10-04, SE-6 corrections)

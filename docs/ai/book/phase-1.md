@@ -75,8 +75,8 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
   P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
   P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
-  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v, P1.37k,
-  P1.37l, P1.37m, P1.37n, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
+  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v,
+  P1.37n, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
   P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
   23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and
   P2.02 merged), P2.08b–P2.08h, P2.11, P2.11a, P2.11c–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the
@@ -700,13 +700,8 @@ flowchart LR
   P1_35v --> P1_36t
   P1_36u["P1.36u private staging addresses refused"]
   P1_36v["P1.36v own-PDS accounts only"]
-  P1_37k["P1.37k failing key and service named"]
-  P1_37l["P1.37l plain-env secrets refused under dev"]
-  P1_37m["P1.37m C29 tests on every service"]
   P1_37n["P1.37n build keys refused under dev and prod"]
   P1_36r --> P1_37n
-  P1_36k --> P1_37k
-  P1_36k --> P1_37m
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -6626,7 +6621,7 @@ path only". Staging's ASSETS_BASE is empty (shared/http/config.ts:81), so the ic
 not a staging go-live blocker. It is a Phase 5 launch prerequisite; if a change sets ASSETS_BASE under dev first, this
 step joins the go-live blockers before that change merges.
 - The app and admin img-src gain exactly the public group's source (`{ originPath: assets, path: "/assets/" }`,
-  policies.ts:43), and nothing more.
+  policies.ts:40, its img-src at :46), and nothing more.
 - The layers that still hold: the source is path-scoped to /assets/ on the configured origin; the origin comes only
   from config, in sources.ts shapes; script-src and style-src already trust that path; the path serves only our
   immutable build output; default-src stays 'none'.
@@ -9074,10 +9069,12 @@ Done when every new red fails on main's predicate first and passes at the head, 
 check is green.
 
 ### P1.36u — Refuse private staging addresses in dev preflight
-Tags: [SEC]            Depends on: —
+Tags: [ALEX] [SEC]            Depends on: —
 Slice 1, issue #1038, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker beside
-P1.36k. A tightening, so it needs no card or typed line. Book edit 2026-10-19-p135t-local-stack-ci-job, "Step-book
-mapping of 05:05Z, the staging resolution check".
+P1.36k. Book edit 2026-10-19-p135t-local-stack-ci-job, "Step-book mapping of 05:05Z, the staging resolution check".
+**[ALEX]:** the net-guard import widens a check path (architecture 04:48Z), so it lands first in its own
+dependency-cruiser PR, with a 1.1.1.1 green fixture, on Alex's typed line "yes P1.36u scripts/lint dependency-cruiser
+deployment-preflight imports net-guard classify.ts and ranges.ts only".
 **What:**
 - Under `--env dev` only, a new check resolves `APP_HOST` and `PDS_HOST` through the host resolver.
 - Every A and AAAA address is classified by net-guard's existing classifier, imported, never a new copy.
@@ -9115,50 +9112,6 @@ Threats: an outside account signing in to a staging or prod app that promises ow
 between issuers at the callback. Answered by exact issuer equality, checked at both ends, failing closed. P1.33p later
 owns any loosening, with Alex's word. Until this lands, P2.11a's 900 s bound does not hold for accounts on other PDSes.
 Done when the reds are shown and check is green.
-
----
-
-### P1.37k — Name the failing key and service in preflight
-Tags: [SEC]            Depends on: P1.36k
-Slice 1, issue #1089, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker, because
-Alex must be able to see which key failed. Book edit 2026-10-19-staging-tailnet-rulings, "Architecture 07:19Z on
-verify-1071-d014cf9, mapped" (architecture 07:19Z, real UTC, N2). A tightening or neutral; no card or typed line.
-- An Outcome gains an optional `key`, printed beside the verdict. Its type is the closed union of C29's key names, and
-  it is checked at runtime against that list before printing.
-- The service name prints the same way, from the parser's closed set of compose service names, never from free text.
-- The withholding filter (deployment/preflight/index.ts:40-54) stays exactly as built, and the reason text still goes
-  through it.
-- Reds: (1) a failure on web prints its key and service; (2) a `key` not in the list prints nothing; (3) a reason
-  containing a configured value is still withheld whole.
-Threats: a secret value leaking through preflight's output. Only code-constant names from closed lists print, each
-checked before printing.
-Done when the reds are shown and check is green.
-
----
-
-### P1.37l — Refuse plain-env secrets under dev
-Tags: [SEC]            Depends on: —
-Slice 1, issue #1090, product (`shared/config/`), lane the third thread. Same record (N6). A tightening to do now, and
-dormant: no field uses the type today. It may build before P1.37k.
-- shared/config/load.ts:69-70's relaxed set becomes test only (`=== "test"`). Dev and prod never relax, because
-  staging runs dev and the runtime never relaxes for dev.
-- Red: a `secret`-kind field in plain env under UNSET_ENV=dev fails with `forbidden_in_env`.
-Threats: a secret in plain env on staging. It is refused, as in prod.
-Done when the red is shown and check is green.
-
----
-
-### P1.37m — Widen the C29 tests to every service and file
-Tags: [SEC]            Depends on: P1.36k
-Slice 1, issue #1091, tests plus one comment fix (`deployment/`), lane the third thread. Same record (M1, N3-N5).
-1. **M1:** plant a C29 key, and an http origin, in each compose service in turn, not only web and pds. Each one is
-   refused.
-2. **N3:** a test under deployment/ runs C29 on the committed compose.dev.yaml. It is not a workflow edit.
-3. **N4:** fix the stale header at deployment/preflight/local-only.ts:1-3.
-4. **N5:** a test refuses C29's keys in any Dockerfile ENV line under deployment/images.
-Threats: a dev-only key slipping into a service or image the tests never planted it in. Answered by a planted case per
-service and per Dockerfile.
-Done when each test is red against a planted case, the header is fixed, and check is green.
 
 ---
 
@@ -15144,7 +15097,8 @@ Split again (book edit 2026-10-12-p133p-public-opening, from architecture's 2026
 this step is the tailnet core that gates P1.34: the drill, the Tailscale policy and Tailnet Lock, sshd, nftables
 and the Docker daemon, CoreDNS and `allowed_signers`, and router hygiene with **no forwards at all**. Its outside
 probe runs expecting no open ports. The 80/443 forwards and accept rule, ip-echo and the echo assertion, V5, and
-the CGNAT and DDNS branches move to **P1.33p** (#757); where the text below names them, they are P1.33p's.
+the CGNAT and DDNS branches moved to **P5.02b** (#1087; architecture 07:10Z); where the text below names them,
+they are P5.02b's, and staging uses none of them (P1.33p).
 
 **Tags:** [ALEX] [SEC] · **Depends on:** P1.33q, P1.32 (Q2) (P1.28 only because step 11's probe runs through the edge) · **Plan:** §5.7 (host, Tailscale, admin access), §6 (access); review 04-infra; decision 20
 
@@ -15283,7 +15237,7 @@ proved he can recover it from the console.
 
 Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-public-opening, from architecture's
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
-It gates the first 80/443 forward.
+It gates the first public exposure of staging, through Pangolin only.
 
 **Staging names (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's 0x40.space ruling at 03:55Z):**
 after P1.35x every `0x40.space` dev value fails, so this step's configuration and probe use ADR 0025's
@@ -15317,9 +15271,10 @@ Alex's steps (P1.34's former steps 5, 6 and 9):
 
 ```text
  5. Confirm registrar lock and DNSSEC on unset.sh and unset.ac (enable them if off).
- 6. CAA on staging.unset.sh and staging.unset.ac: 0 issue "letsencrypt.org" (optionally with
-    accounturi=<Caddy's ACME account URI>, RFC 8657, once Caddy has registered). The edge is pinned to Let's
-    Encrypt (P1.28).
+ 6. CAA on staging.unset.sh and staging.unset.ac, exactly ADR 0025's four records each:
+    0 issue "letsencrypt.org; validationmethods=dns-01" (the edge), 0 issue "letsencrypt.org;
+    validationmethods=http-01" (Pangolin), 0 issuewild ";" and 0 iodef "mailto:security@unset.sh". Each
+    letsencrypt.org record gains accounturi= once its ACME account exists (RFC 8657).
  9. Public DNS: A/AAAA records for staging.unset.sh and staging.unset.ac to Pangolin's public address (the
     staging opening above). _lexicon.unset.sh and _atproto.lexicon.unset.sh stay Alex's to edit.
 ```
@@ -15327,7 +15282,8 @@ Alex's steps (P1.34's former steps 5, 6 and 9):
 Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
 - V2: P1.34's V1 DNSSEC check on `unset.sh` and `unset.ac`, plus the CAA record; registrar lock confirmed by Alex.
 - V3: from outside, every path on staging.unset.sh and staging.unset.ac answers with Pangolin's login, except GET and
-  HEAD on /oauth-client-metadata.json and /oauth/jwks.json, which answer 200. A POST to either of those two gets the
+  HEAD on staging.unset.sh's /oauth-client-metadata.json and /oauth/jwks.json, which answer 200. staging.unset.ac
+  has no bypass (ADR 0025). A POST to either of those two gets the
   login, which proves Pangolin 1.24.0's method scope.
 - V4: from the homelab host, behind Pangolin, as a runbook command: `describeServer` on staging.unset.ac → 200 with
   `inviteCodeRequired: true`, `_health` → 200, and the admin probes → 404/401 (the P1.28 tests, now against the live
@@ -15340,8 +15296,8 @@ is the private names and dev-root certificates, the read-only dev-stack check (d
 every public gate and its evidence lives here.
 - The edge obtains its Let's Encrypt certificate by DNS-01 (P1.36d, ADR 0028).
 - `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no
-  bypass key or IPs), public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit);
-  the provider is set up before P1.34 — Notes, SMTP provider.
+  bypass key or IPs), no public edge ports (Pangolin through Newt only). Mail: real SMTP from the start (no Mailpit,
+  book edit 2026-10-07-no-mailpit); the provider is set up before P1.34 — Notes, SMTP provider.
 - **Probe (P1b-A2 default, provisional):** a separate **public** repo `unset-probe` containing only a scheduled
   workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
   are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
@@ -15349,7 +15305,8 @@ every public gate and its evidence lives here.
   behind it):
   1. every probed path on both hosts answers with Pangolin's login; any other answer fails the run with "login
      bypassed";
-  2. GET and HEAD on /oauth-client-metadata.json and /oauth/jwks.json → 200, and a POST to either → the login;
+  2. on staging.unset.sh only, GET and HEAD on /oauth-client-metadata.json and /oauth/jwks.json → 200, and a POST to
+     either → the login;
   3. TLS certificate valid for more than 14 days.
   The PDS checks run from the homelab host as a runbook command, never from outside: `_health` → 200;
   `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200 and a
@@ -15655,7 +15612,7 @@ D. Dev PDS fit for the authority
  8. Generate the dev PDS recovery key on the offline machine with the P0.12 runbook (a key separate from the
     authority's own offline keys; recorded as its own P0.12 inventory row); put only its did:key in PDS_RECOVERY_DID_KEY, BEFORE any account that matters
     is created (it is stamped into DID docs at creation and cannot be retrofitted).
- 9. (Moved to P1.33p: the public A record or DDNS updater; G-1.)
+ 9. (Moved: the public A/AAAA record to P1.33p, the DDNS updater to P5.02b; G-1.)
 10. (Merged into step 11; book edit 2026-10-12-p130a-p130l-compose-inputs-booked.)
 11. Run P1.27w's wrapper with `compose.dev.yaml` and
     `--interpolation-env <absolute path of unset-dev-env/dev-public.env>` (the tailnet dev stack's env; Amendment 2,
