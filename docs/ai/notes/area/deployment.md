@@ -10,7 +10,7 @@ importance: normal
 related: ["[[postgres]]"]
 replaced_by: null
 tags: [area, deployment]
-checked: 2026-10-18
+checked: 2026-10-19
 ---
 # deployment
 

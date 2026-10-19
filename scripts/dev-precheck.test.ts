@@ -58,6 +58,12 @@ describe("dev-precheck (P1.29s)", () => {
     }
     expect(hostnamePin("local", PRODUCTION_HOST)).toBe(PRODUCTION_HOST_CODE);
     expect(hostnamePin("dev", DEV_HOST)).toBe("ok");
+    // P1.35x: dev is staging, pinned to ADR 0025's exact PDS name; the retired dev host and look-alikes are refused.
+    expect(hostnamePin("dev", "staging.unset.ac")).toBe("ok");
+    expect(hostnamePin("dev", "Staging.Unset.AC.")).toBe("ok");
+    for (const name of ["0x40.space", "pds.staging.unset.ac", "staging.unset.sh", "xstaging.unset.ac"]) {
+      expect(hostnamePin("dev", name), name).toBe(PRODUCTION_HOST_CODE);
+    }
     expect(hostnamePin("local", LOCAL)).toBe("ok");
   });
 

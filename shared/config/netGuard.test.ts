@@ -34,7 +34,7 @@ describe("netGuardFields", () => {
   });
 
   test("hosts_are_exact_lowercase_names", () => {
-    for (const value of ["Unset.ac", "unset.ac.", "*.0x40.me", "https://unset.ac", "unset.ac:443"]) {
+    for (const value of ["Unset.ac", "unset.ac.", "*.unset.im", "https://unset.ac", "unset.ac:443"]) {
       expect(problems({ UNSET_ENV: "dev", NETGUARD_INTERNAL_HOSTS: value }), value).toEqual([
         { key: "NETGUARD_INTERNAL_HOSTS", reason: "invalid" },
       ]);

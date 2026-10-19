@@ -103,8 +103,8 @@ const LOCK = {
   web: { ref: WEB, origin: "first-party", verify: "cosign-key" },
 };
 const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
-// The dev PDS's own handle domain (0x40.space): the dev-environment checks are about that suffix.
-const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".0x40.space" };
+// The dev (staging) PDS's own handle domain, ADR 0025: the dev-environment checks are about that suffix.
+const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.im" };
 const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"].concat([
   "C13",
   "C14",
@@ -1566,6 +1566,20 @@ describe("preflight C13 to C24 (P1.30s)", () => {
     expect(failed((await check({ compose: DEV, pdsEnv: DEV_ENV }, "dev")).lines)).toEqual([]);
   });
 
+  test("c15_dev_handle_domain_is_the_staging_one", async () => {
+    // P1.35x (ADR 0025): the dev PDS mints only <user>.staging.unset.im, one exact entry, never .unset.im.
+    const dev = async (domains: string) =>
+      (await check({ compose: DEV, pdsEnv: { ...DEV_ENV, PDS_SERVICE_HANDLE_DOMAINS: domains } }, "dev")).lines.find(
+        (l) => / C15 /.test(l),
+      );
+    expect(await dev(".staging.unset.im")).toBe("PASS C15 ok");
+    for (const domains of [".0x40.space", ".unset.im", ".x.staging.unset.im", ".staging.unset.im,.unset.im"]) {
+      expect(await dev(domains), domains).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
+    }
+    // Prod's rule is unchanged: the dev domain is not judged there.
+    expect(failed((await check({ pdsEnv: { PDS_SERVICE_HANDLE_DOMAINS: ".0x40.space" } })).lines)).toEqual([]);
+  });
+
   test("c16_confirmation_link_required", async () => {
     await expectOnly("C16", { pdsEnv: { PDS_EMAIL_DISABLE_CONFIRMATION_LINK: null } });
     // A wrong value is also a safety-off key, so C14 fails with C16 (P1.34k). Absence is C16 alone.
@@ -1627,7 +1641,7 @@ describe("preflight C13 to C24 (P1.30s)", () => {
   });
 
   test("c28_dev_and_prod_use_exactly_the_public_plc", async () => {
-    // Decision 20 and local-plc Amendment 4: the dev (0x40.space) and prod PDS publish to plc.directory and nowhere else.
+    // Decision 20 and local-plc Amendment 4: the dev (staging) and prod PDS publish to plc.directory and nowhere else.
     // The PDS reads an unset or empty value as https://plc.directory (@atproto/pds 0.5.37 dist/config/config.js:99,
     // env.js:57), so the value is required spelled out.
     for (const env of ["prod", "dev"]) {
@@ -4271,7 +4285,7 @@ networks:
     // S5 (the #789 verify): a look-alike that ends in the host's text but not at a label boundary.
     for (const domains of [
       ".example.test",
-      ".0x40.space",
+      ".staging.unset.im",
       ".other.localhost",
       ".pds.localhost,.example.test",
       ".evil-pds.localhost",
