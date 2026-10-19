@@ -682,7 +682,7 @@ flowchart LR
   P1_27s --> P1_36l
   P1_36p["P1.36p PDS temp blob tmpfs capped"]
   P1_36h --> P1_36p
-  P1_36q["P1.36q exact key set in pds.env"]
+  P1_36q["P1.36q exact secret set in pds.env"]
   P1_36g --> P1_36q
   P1_36r["P1.36r checkout-built migrate refused under dev"]
   P1_35u["P1.35u islands owner lines narrowed CHECK"]
@@ -8787,9 +8787,10 @@ so nothing is needed from Alex for the step itself.
    (smtps or requireTLS). The SMTP password follows the 12:40Z predicate: exactly one `${NAME:?message}`, or the whole
    URL comes from a `/run/secrets/` file. If nothing uses Mailpit under dev, C11's Mailpit acceptance narrows to local
    only. ADR 0026's exception stays local-only.
-2. **The pds.env template and runbook** list the SMTP URL key, the recovery key and its did:key, and the first
-   account, with no values and nothing that looks like a real key. pds.env holds only secret-bearing keys; non-secret
-   SMTP settings, such as the from address, go in compose.dev.yaml's environment (architecture 06:15Z).
+2. **The pds.env template and runbook** list both SMTP URL keys (PDS_EMAIL_SMTP_URL and
+   PDS_MODERATION_EMAIL_SMTP_URL, which C19 requires), the recovery key and its did:key, and the first account, with
+   no values and nothing that looks like a real key. pds.env holds only secret-bearing keys; non-secret SMTP settings,
+   the two from addresses, go in compose.dev.yaml's environment (architecture 06:15Z and 04:32Z; P1.36q has the set).
 3. **The first invite** is a runbook one-off that Alex runs and Claude never does, under the ruling's four conditions:
    it runs with `docker compose exec` inside the PDS container, against its own loopback port, with no port published
    and the edge still answering 404 for createInviteCode; the password is read from the file inside the container,
@@ -9036,21 +9037,30 @@ preflight.
 
 ---
 
-### P1.36q — Require the exact key set in pds.env
+### P1.36q — Require the exact secret set in pds.env
 Tags: [SEC]            Depends on: P1.36g
 Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
-2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2b). Issue #1031.
+2026-10-19-alex-cards-and-edge-dev-mode, "P1.36q (#1031) restated after architecture 04:32Z" (it replaces the
+five-name text; C19 requires PDS_MODERATION_EMAIL_SMTP_URL, deployment/preflight/checks/settings.ts:92-94). Issue
+#1031.
 
 **What:**
-- Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
-  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX, PDS_RECOVERY_DID_KEY) plus
-  the SMTP URL key that P1.36g adds: five names, all secret-bearing, with the same exact-map pattern as P1.35r's env
-  table. Delivery follows the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z
-  sections).
-- Preflight reads names only, and never prints a value.
-- Reds: a sixth key (for example a non-secret SMTP setting); a missing key; a duplicate key.
-- It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
-  architecture 06:15Z).
+- Preflight reads the key set of `pds.env` and requires an exact, env-aware set of secret-bearing names, with the same
+  exact-map pattern as P1.35r's env table:
+  - under dev and prod, six: PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX,
+    PDS_RECOVERY_DID_KEY, PDS_EMAIL_SMTP_URL and PDS_MODERATION_EMAIL_SMTP_URL;
+  - under local, the first four only, because C19's localMail needs both mail keys absent.
+- PDS_EMAIL_FROM_ADDRESS and PDS_MODERATION_EMAIL_ADDRESS stay compose literals that review can see.
+- `deployment/env/pds.example.env` lists all six, with the two SMTP lines marked "dev and prod only".
+- A separate SMTP credential for moderation is recommended, and the same value is accepted. The runbook records which
+  Alex used. Preflight never compares the two.
+- Delivery follows the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z
+  sections). Preflight reads names only, and never prints a value.
+- Reds: (1) a seventh key; (2) either SMTP URL missing under dev; (3) either SMTP URL present under local; (4) a from
+  address placed in pds.env.
+- It builds after P1.36g, so the set is known when it lands.
+
+Done when the four reds are shown and check is green.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an unreviewed setting, or a
 secret, slipped into the PDS env. Answered by an exact key set.

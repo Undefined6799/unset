@@ -475,7 +475,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.36n | Accept ADR 0028 | [ALEX] | P1.36m | `phase-1.md` |
 | P1.36o | Mount the edge dev snippet and map it in C18 | [SEC] | P1.36e | `phase-1.md` |
 | P1.36p | Cap the PDS temp blob tmpfs | [SEC] | P1.36h | `phase-1.md` |
-| P1.36q | Require the exact key set in pds.env | [SEC] | P1.36g | `phase-1.md` |
+| P1.36q | Require the exact secret set in pds.env | [SEC] | P1.36g | `phase-1.md` |
 | P1.36r | Refuse a checkout-built migrate under dev | [SEC] | — | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.33y, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
@@ -1228,7 +1228,7 @@ flowchart TD
   P1_27s --> P1_36l
   P1_36p["P1.36p PDS temp blob tmpfs capped"]
   P1_36h --> P1_36p
-  P1_36q["P1.36q Exact key set in pds.env"]
+  P1_36q["P1.36q Exact secret set in pds.env"]
   P1_36g --> P1_36q
   P1_36r["P1.36r Checkout-built migrate refused under dev"]
   P1_35u["P1.35u Islands owner lines narrowed"]
