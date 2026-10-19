@@ -8,14 +8,14 @@
 // reaches stderr, a log or a file (SE-7). tests/support/pds-email-token.ts pipes the output into confirmEmail.
 //
 // The schema is @atproto/pds 0.5.37's (dist/account-manager/db/migrations/001-init.js:85-95); the database is
-// `account.sqlite` under PDS_DATA_DIRECTORY (dist/config/config.js:37), here /data/pds. The PDS keeps it in WAL mode
+// `account.sqlite` under PDS_DATA_DIRECTORY (dist/config/config.js:37), here /data. The PDS keeps it in WAL mode
 // (dist/db/db.js:32-33, ensureWal), and a read-only connection over a read-only mount opens only while the PDS
 // holds it open: a stopped PDS leaves no -shm file, and SQLite then answers SQLITE_CANTOPEN (14), measured on the node
 // lock base. Never `immutable=1`, which could read stale pages while the PDS writes (the record, point 2).
 import { DatabaseSync } from "node:sqlite";
 
 const PINNED = "@atproto/pds 0.5.37";
-const ACCOUNT_DB = "/data/pds/account.sqlite";
+const ACCOUNT_DB = "/data/account.sqlite";
 const COLUMNS = ["purpose", "did", "token", "requestedAt"];
 // DID syntax, at most 2 KiB (atproto.com/specs/did, "DID Syntax"); the value is still bound as a parameter.
 const DID = /^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$/;

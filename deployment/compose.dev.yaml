@@ -103,8 +103,8 @@ services:
       PDS_HOSTNAME: ${PDS_HOSTNAME}
       PDS_SERVICE_HANDLE_DOMAINS: ${PDS_SERVICE_HANDLE_DOMAINS}
       PDS_PORT: "3000"
-      PDS_DATA_DIRECTORY: /home/node/pds
-      PDS_BLOBSTORE_DISK_LOCATION: /home/node/pds/blocks
+      PDS_DATA_DIRECTORY: /home/node
+      PDS_BLOBSTORE_DISK_LOCATION: /home/node/blocks
       PDS_DID_PLC_URL: https://plc.directory
       PDS_INVITE_REQUIRED: "true"
       PDS_CRAWLERS: ""
