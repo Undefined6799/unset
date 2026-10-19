@@ -544,7 +544,15 @@ describe("welcome screens", () => {
       }).send("/welcome/blocked")
     ).text();
     expect(blocked).toMatch(/mailto:help@unset\.test\?subject=Appeal(?:%20|\+)[0-9a-f-]{36}/);
-    expect(blocked).not.toContain("<form");
+    // The screen offers nothing to submit; the one form is the footer's theme form (P1.25f).
+    const blockedDoc = parse(blocked);
+    expect(elements(elements(blockedDoc, "main")[0], "form")).toHaveLength(0);
+    expect(elements(blockedDoc, "form").map((form) => form.attrs)).toEqual([
+      [
+        { name: "action", value: "/prefs/theme" },
+        { name: "method", value: "post" },
+      ],
+    ]);
     expect(blocked).not.toContain(DID);
     const unpublished = await (
       await setup({

@@ -88,3 +88,40 @@ test("shell_navigation_uses_only_the_route_supplied_identity", async () => {
   expect(elements(document, "a", { href: "/evil" })).toHaveLength(0);
   expect(elements(document, "script")).toHaveLength(0);
 });
+
+test("default_shell_footer_prefs", async () => {
+  type Spec = { group: "app" | "public"; cookie?: string; navigation?: true; path?: string };
+  const page = async (spec: Spec) => {
+    const response = pageResponse(deps("test"), {
+      group: spec.group,
+      request: new Request(`https://unset.test${spec.path ?? "/signed-out"}?return=%2Fevil&theme=light`, {
+        headers: spec.cookie === undefined ? {} : { cookie: spec.cookie },
+      }),
+      title: "Sign in",
+      body: null,
+      islands: "off",
+      shell: spec.navigation ? { navigation: { active: "home" } } : {},
+    });
+    const document = parse(await response.text());
+    return { document, forms: elements(document, "form", { method: "post", action: "/prefs/theme" }) };
+  };
+  const themed = await page({ group: "app", cookie: `${THEME_COOKIE}=dark` });
+  expect(themed.forms).toHaveLength(1);
+  const form = themed.forms[0];
+  expect(elements(elements(themed.document, "footer")[0], "form")).toEqual(themed.forms);
+  expect(elements(form, "input", { type: "radio", name: "theme" })).toHaveLength(3);
+  expect(elements(form, "input", { type: "radio", value: "dark", checked: "" })).toHaveLength(1);
+  expect(elements(form, "input", { checked: "" })).toHaveLength(1);
+  // Only the page's path goes back: the query's `return` and `theme` are never echoed.
+  expect(elements(form, "input", { type: "hidden", name: "return", value: "/signed-out" })).toHaveLength(1);
+  expect(elements(form, "input", { type: "hidden" })).toHaveLength(1);
+  expect(elements(form, "button", { type: "submit" })).toHaveLength(1);
+  // The kit refuses /login as a return target (shared/http/returnPath.ts DENIED_TARGETS), so the form goes home.
+  const login = await page({ group: "app", path: "/login" });
+  expect(elements(login.forms[0], "input", { type: "hidden", name: "return", value: "/" })).toHaveLength(1);
+  const system = await page({ group: "app" });
+  expect(elements(system.forms[0], "input", { value: "system", checked: "" })).toHaveLength(1);
+  // Legal pages are public: the theme follows the system there, so no form (phase-1.md:4886-4889).
+  expect((await page({ group: "public", path: "/legal/terms" })).forms).toHaveLength(0);
+  expect((await page({ group: "app", navigation: true })).forms).toHaveLength(0);
+});

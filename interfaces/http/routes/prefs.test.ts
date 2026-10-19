@@ -101,6 +101,29 @@ describe("POST /prefs/theme", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
+  // The footer form (P1.25f) posts here from a page. A browser that sends no Sec-Fetch-Site is decided by its Origin.
+  test("prefs_post_csrf_origin", async () => {
+    const { server } = await compose(loadConfig(config, ENV), web);
+    const post = (origin: string) =>
+      server.request(
+        new Request(`${ORIGIN}/prefs/theme`, {
+          method: "POST",
+          headers: { host: "unset.test", "x-forwarded-for": "192.0.2.1", "content-type": FORM, origin },
+          body: "theme=light&return=%2Fsigned-out",
+        }),
+        "10.0.0.1",
+      );
+    for (const origin of ["https://evil.example", "null", "http://unset.test", "https://unset.test.evil.example"]) {
+      const denied = await post(origin);
+      expect(denied.status).toBe(403);
+      expect(denied.headers.get("set-cookie")).toBeNull();
+    }
+    const allowed = await post(ORIGIN);
+    expect(allowed.status).toBe(303);
+    expect(allowed.headers.get("location")).toBe("/signed-out");
+    expect(allowed.headers.get("set-cookie")).toBe(`${THEME_COOKIE}=light; ${YEAR}`);
+  });
+
   test("prefs_get_405", async () => {
     const response = await send({ method: "GET" });
     expect(response.status).toBe(405);
