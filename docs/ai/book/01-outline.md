@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 364 steps: 323 from `phase-1.md`, 41 from `phase-2.md` (including the
+Depth: **build-ready**. 367 steps: 326 from `phase-1.md`, 41 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -292,13 +292,16 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25c | Add test routes, prod refusal and the 503 page | [SEC] | P1.25 | `phase-1.md` |
 | P1.25z | Pin the test-routes gate when the key is off | [SEC] | P1.25c | `phase-1.md` |
 | P1.25a | Ship the PNG favicons | [ALEX] (his favicon files) | P1.25 | `phase-1.md` |
+| P1.37i | Allow /assets/ images on app and admin pages | [SEC] [ALEX] (CSP loosening, trusted base; typed line) | P1.25a | `phase-1.md` |
 | P1.25f | Add feed mode and footer prefs | — | P1.25 | `phase-1.md` |
 | P1.25g | Fix disabled select focus and add two kit tests | — | P1.25 | `phase-1.md` |
 | P1.25y | Style disabled Select and tighten its tests | — | P1.25g | `phase-1.md` |
 | P1.25m | Pin the DID account route's privacy | [SEC] | P1.25 | `phase-1.md` |
 | P1.25n | Harden the DID route privacy tests | [SEC] | P1.25m | `phase-1.md` |
 | P1.25t | Redact percent-encoded DIDs in the log scrub | [SEC] | — | `phase-1.md` |
+| P1.37h | Scrub DIDs whose method has digits | [SEC] | P1.25t | `phase-1.md` |
 | P1.37f | Test DID route privacy against real accounts | [SEC] | P1.25n | `phase-1.md` |
+| P1.37j | Find why Lighthouse fails with NO_NAVSTART | (none; root cause, then Alex's typed line for the fix) | — | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P2.26b (P2.26c for the edge), interim departure, Alex 2026-10-07 00:17Z; P2.26b, then P2.26c, flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -980,6 +983,8 @@ flowchart TD
   P1_25c --> P1_25z
   P1_25a["P1.25a PNG favicons"]
   P1_25 --> P1_25a
+  P1_37i["P1.37i Assets images on app and admin"]
+  P1_25a --> P1_37i
   P1_25f["P1.25f Feed mode, footer prefs"]
   P1_25 --> P1_25f
   P1_25g["P1.25g Disabled select focus, kit tests"]
@@ -993,6 +998,9 @@ flowchart TD
   P1_25t["P1.25t Encoded DIDs redacted in log scrub"]
   P1_37f["P1.37f DID route privacy, real accounts"]
   P1_25n --> P1_37f
+  P1_37h["P1.37h DID methods with digits scrubbed"]
+  P1_25t --> P1_37h
+  P1_37j["P1.37j Lighthouse NO_NAVSTART cause"]
   P1_04 --> P1_27
   P1_27 --> P1_27d
   P1_27 --> P1_28q
@@ -2215,7 +2223,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25a, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25a, P1.37i, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 

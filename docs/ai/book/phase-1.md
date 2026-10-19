@@ -61,9 +61,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
   2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
-  P1.20–P1.25, P1.25c, P1.25z, P1.25a, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.37f, P1.26, P1.27, P1.27d,
-  P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j,
-  P1.28r, P1.28n,
+  P1.20–P1.25, P1.25c, P1.25z, P1.25a, P1.37i, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.37h, P1.37f, P1.37j,
+  P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h,
+  P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
   P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g,
   P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f,
   P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g,
@@ -428,6 +428,8 @@ flowchart LR
   P1_25c --> P1_25z
   P1_25a["P1.25a PNG favicons ALEX"]
   P1_25 --> P1_25a
+  P1_37i["P1.37i assets images on app and admin ALEX"]
+  P1_25a --> P1_37i
   P1_25f["P1.25f feed mode, footer prefs"]
   P1_25 --> P1_25f
   P1_25g["P1.25g disabled select focus, kit tests"]
@@ -441,6 +443,9 @@ flowchart LR
   P1_25t["P1.25t encoded DIDs redacted in log scrub"]
   P1_37f["P1.37f DID route privacy, real accounts"]
   P1_25n --> P1_37f
+  P1_37h["P1.37h DID methods with digits scrubbed"]
+  P1_25t --> P1_37h
+  P1_37j["P1.37j Lighthouse NO_NAVSTART cause"]
   P1_04 --> P1_27
   P0_07 --> P1_27
   P1_27 --> P1_27d
@@ -6598,6 +6603,25 @@ asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, a
 
 Done when the test passes and check is green.
 
+### P1.37i — Allow /assets/ images on app and admin pages
+Tags: [SEC] [ALEX] (CSP loosening, trusted base; typed line)            Depends on: P1.25a
+Slice 1, issue #1084, trusted base only (`shared/http/csp/policies.ts` and its test), lane Phase 2, in its own SE-6
+PR. Book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Architecture 05:00Z on #1072, mapped". It needs Alex's typed
+line before it is built: "yes P1.37i shared/http/csp/policies.ts app and admin img-src add the assets origin /assets/
+path only". Staging's ASSETS_BASE is empty (shared/http/config.ts:81), so the icons load as 'self' there and this is
+not a staging go-live blocker. It is a Phase 5 launch prerequisite; if a change sets ASSETS_BASE under dev first, this
+step joins the go-live blockers before that change merges.
+- The app and admin img-src gain exactly the public group's source (`{ originPath: assets, path: "/assets/" }`,
+  policies.ts:43), and nothing more.
+- The layers that still hold: the source is path-scoped to /assets/ on the configured origin; the origin comes only
+  from config, in sources.ts shapes; script-src and style-src already trust that path; the path serves only our
+  immutable build output; default-src stays 'none'.
+- Reds: (1) an image from the assets origin outside /assets/ is blocked; (2) an image from any other origin is
+  blocked; (3) admin still allows no media origin.
+Threats: image-based exfiltration or tracking through a widened img-src. The source is limited to one path on our own
+configured origin, with no new party.
+Done when the reds are shown and check is green.
+
 ---
 
 ### P1.25f — Add feed mode and footer prefs
@@ -6734,6 +6758,22 @@ Threats: an encoded DID slipping past the last log layer (SE-7). Answered by mat
 case-insensitively.
 Done when the reds fail on main first, the mutants that drop each separator form or the case flag are killed, and
 check is green.
+As built: #1070 (merged as c5d979a).
+
+### P1.37h — Scrub DIDs whose method has digits
+Tags: [SEC]            Depends on: P1.25t
+Slice 1, issue #1083, product (`shared/log/`), lane Phase 2. Book edit 2026-10-19-verify-1017-scrub-and-gate, last
+section, from Codex P2 on #1070. shared/log is not in CODEOWNERS' trusted section; if the lane finds otherwise, it
+splits that part out. A tightening, so it needs no card or typed line. W3C did-core gives `method-name =
+1*method-char` with `method-char = %x61-7A / DIGIT` (https://www.w3.org/TR/did-core/#did-syntax), but
+shared/log/scrub.ts:16 matches the method as `[a-z]+`, so `did:v1:alice` passes the last log layer.
+- shared/log/scrub.ts:16: the method part becomes `[a-z0-9]+`. The rest of the pattern is unchanged.
+- Red: `logger_scrubs_encoded_dids` gains numeric-method cases, plain and encoded once and twice (`did:v1:alice`,
+  `did%3Av1%3Aalice`, `did%253Av1%253Aalice`). A mutant that drops `0-9` turns them red.
+Threats: a DID with a digit in its method reaches the logs unscrubbed (SE-7). The scrub covers the full did-core method
+grammar.
+ASVS 5.0: V16.2.5.
+Done when the red and the mutant are shown and check is green.
 
 ---
 
@@ -6757,6 +6797,23 @@ Threats: the DID route answering differently, or leaking the DID in logs, depend
 account-existence oracle), unseen because tests ran on a stand-in. Answered by real-store cases with G1 and G1soft
 red, and multi-round decoding of every log line.
 Done when G1 and G1soft are red, each new M2 path is red against a copy that skips decoding, and check is green.
+
+### P1.37j — Find why Lighthouse fails with NO_NAVSTART
+Tags: (none; root cause, then Alex's typed line for the fix)            Depends on: —
+Slice 1, issue #1085, lane Phase 2. Book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Architecture 05:00Z on #1072,
+mapped". Research first; the fix comes only on Alex's typed line. It failed the same way on #1072 at ec43af5 and on
+#1056's branch at 7607ecb, both with HeadlessChrome 156 (chromium-1248) and Lighthouse 12.6.1. Version skew is the
+inferred cause, not yet shown.
+1. Reproduce it locally with the preinstalled Chromium and the pinned Lighthouse on /legal/privacy.
+2. Prove the cause with a supported pair: a Lighthouse release that supports Chrome 156, or a Chromium that Lighthouse
+   12.6.1 supports.
+3. Propose the exact diff to .github/workflows/e2e.yml or lighthouserc.json, then ask for Alex's line naming the file
+   and the change, for example "yes P1.37j .github/workflows/e2e.yml pin Lighthouse to <version> for Chrome 156". No
+   line is pre-approved.
+- Never: retries, a skip, a timeout bump, or dropping /legal/privacy from the run.
+- Meanwhile #1072 and #1056 each get one PR comment (the failing check, why it isn't that PR's, and P1.37j), and
+  neither pushes for e2e.
+Done when the cause is shown and the fix PR, on Alex's line, makes e2e green.
 
 ---
 
@@ -9081,6 +9138,11 @@ after architecture 04:53Z".
 Threats: uncommitted temporary blobs filling the pdsdata volume. Answered for now by the `disk` alert; the note says
 whether the PDS bounds them itself.
 Done when the note cites the pinned source, and, if there is no sweep, architecture has the design question.
+As built: answered (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "P1.37g (#1080) answered"). @atproto/pds
+0.5.37 has no age-based cleanup of uncommitted blobs in `tempt`; the note is
+unset-plan/staging/2026-10-19-p137g-pds-temp-blob-sweep.md (architecture 05:03Z), and the image entrypoint stays
+unverified until Alex's runbook check. Staging and invite-only use are accepted. Each PDS pin bump re-checks the dist
+for a sweep, citing the note. Open sign-up waits on P5.02a's prerequisites list.
 
 ---
 
@@ -15131,8 +15193,13 @@ Alex's steps (P1.34's former steps 5, 6 and 9):
 
 Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
 - V2: P1.34's V1 DNSSEC check on `unset.sh` and `unset.ac`, plus the CAA record; registrar lock confirmed by Alex.
-- V3: from outside, `describeServer` on `staging.unset.ac` → 200 with `inviteCodeRequired: true`.
-- V4: outside admin probes → 404/401 (the P1.28 tests, now against the live host).
+- V3: from outside, every path on staging.unset.sh and staging.unset.ac answers with Pangolin's login, except GET and
+  HEAD on /oauth-client-metadata.json and /oauth/jwks.json, which answer 200. A POST to either of those two gets the
+  login, which proves Pangolin 1.24.0's method scope.
+- V4: from the homelab host, behind Pangolin, as a runbook command: `describeServer` on staging.unset.ac → 200 with
+  `inviteCodeRequired: true`, `_health` → 200, and the admin probes → 404/401 (the P1.28 tests, now against the live
+  host). There is no tailnet path for the PDS (Alex, 02:50:36Z). No Pangolin credential is ever stored in the repo or
+  in CI, and the PDS never gets a Pangolin exemption (architecture 04:33Z; book edit 2026-10-19-codex-1063-batch66).
 - V7: probe green for 24 h before P1.35 starts; the hairpin check passed (P1.29a's edge aliases).
 
 Edge case (moved from P1.34): Address changes while DDNS lags → the probe fails; the authorization servers' cached
@@ -15148,22 +15215,27 @@ every public gate and its evidence lives here.
 - **Probe (P1b-A2 default, provisional):** a separate **public** repo `unset-probe` containing only a scheduled
   workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
   are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
-  timeout 10 s per request:
-  1. `GET https://staging.unset.ac/xrpc/_health` → 200;
-  2. `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200
-     and a CAR whose commit proof verifies against the DID document's signing key (the same check resolvers do,
-     `lex-resolver.ts:495-520`), and whose record CID equals the expected CID committed in the probe repo;
-  3. admin probes: `com.atproto.admin.getAccountInfos`, `com.atproto.server.createInviteCode` (POST, no auth) and a
-     Basic-auth request → 404/401; any 2xx → the run fails with "admin surface exposed";
-  4. TLS certificate valid for more than 14 days.
+  timeout 10 s per request (architecture 04:33Z: the outside probe proves the login holds, and the PDS checks run
+  behind it):
+  1. every probed path on both hosts answers with Pangolin's login; any other answer fails the run with "login
+     bypassed";
+  2. GET and HEAD on /oauth-client-metadata.json and /oauth/jwks.json → 200, and a POST to either → the login;
+  3. TLS certificate valid for more than 14 days.
+  The PDS checks run from the homelab host as a runbook command, never from outside: `_health` → 200;
+  `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200 and a
+  CAR whose commit proof verifies against the DID document's signing key (the same check resolvers do,
+  `lex-resolver.ts:495-520`), with the record CID equal to the expected one; and the admin probes
+  (`com.atproto.admin.getAccountInfos`, `com.atproto.server.createInviteCode` as an unauthenticated POST, and a
+  Basic-auth request) → 404/401, where any 2xx fails with "admin surface exposed".
   Alerting: a failed run notifies Alex by GitHub's workflow-failure e-mail; two consecutive failures are an
   outage. Runs that did not execute (GitHub schedule delays) are counted separately as "probe gap", never as up or
   down: each run writes its timestamp to a workflow artefact, and a weekly job reports gaps over 45 minutes and the
   measured availability. Nothing about outages is written to public issues.
-- Threats: E the PDS admin API or a debug setting exposed → P1.30's checks with `dev-public.env`, and the outside
-  probe tries admin (`dev_public_env_matches_policy`, `probe_checks_present`); S a substituted repository served under
-  our name → the probe verifies `sync.getRecord` proofs (`probe_proof_verification_fails_on_wrong_key`); D probe gaps
-  never counted as up (`probe_gap_not_counted_as_up`).
+- Threats: E the PDS admin API or a debug setting exposed → P1.30's checks with `dev-public.env`, and the homelab
+  command tries admin (`dev_public_env_matches_policy`, `probe_checks_present`); E the Pangolin login bypassed or an
+  exemption added → the outside probe expects the login everywhere but the two GET/HEAD paths; S a substituted
+  repository served under our name → the probe verifies `sync.getRecord` proofs
+  (`probe_proof_verification_fails_on_wrong_key`); D probe gaps never counted as up (`probe_gap_not_counted_as_up`).
 - P1.29h's reader (book edit 2026-10-13-p129h-book-lines, Amendment 1): a check refuses the `tools` profile and the
   `pds-token-reader` service on any stack whose `PDS_HOST` is public, with red fixtures.
 - The PLC (architecture's Amendment 4 of 2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps): this step has
@@ -15179,8 +15251,9 @@ every public gate and its evidence lives here.
   - ISP blocks inbound 443 → as CGNAT. Blocks only 80 → fine (TLS-ALPN-01).
   - Probe repo's schedule stops (GitHub disables schedules in repos without activity for 60 days) → the weekly gap
     report notices; the runbook says to re-enable it.
-- Done when (tests): `dev_public_env_matches_policy` (reuses P1.30's checks); `probe_checks_present` (health,
-  sync.getRecord with proof, admin, TLS); `probe_proof_verification_fails_on_wrong_key` (fixture CAR signed by another
+- Done when (tests): `dev_public_env_matches_policy` (reuses P1.30's checks); `probe_checks_present` (outside: the
+  login on every path, the two metadata paths on GET and HEAD, the POST refusal, TLS; homelab command: health,
+  sync.getRecord with proof, admin); `probe_proof_verification_fails_on_wrong_key` (fixture CAR signed by another
   key); `probe_gap_not_counted_as_up`; the outside probe green.
 
 **Not in this step:** P1.33a's prototype retirement, which gates the dev PDS taking `0x40.space`. This step runs after

@@ -1170,7 +1170,10 @@ Algorithm (full detail: an authenticated cross-origin read surface):
      `https://chat.unset.sh`; else 403 with no CORS headers. A top-level navigation (`navigate`) → 403.
   3. Responses carry `Access-Control-Allow-Origin: https://chat.unset.sh`, `Access-Control-Allow-Credentials: true`,
      `Vary: Origin`, `Cache-Control: private, no-store`, `Content-Type: application/json`.
-  4. `session = getSession(req)`; none → 401 `{ error: "signed_out" }`.
+  4. `session = getSession(req)`; none → 401 `{ error: "signed_out" }`. `/api/chat/me` passes the P2.11a recheck: it
+     goes through the same openApp gate as any page, and the chat client's 5-minute poll sits inside the 15-minute
+     bound. On `ended` it answers 401 with the cookie cleared, and the chat client wipes its stores, as for a sign-out
+     (architecture 05:01Z, M2; book edit 2026-10-19-drop-sign-out-everywhere).
   5. Any exception → 503 (and the chat client treats 503 as "not followed", "handle unknown"; fail closed).
   `me`: 6. `mxid = byDid('chat', did)`; `chat_state = chat.accountStatus(did)`; `handle` from `verifyHandle(did)`
      (unverified → the DID is shown instead).
@@ -1210,6 +1213,8 @@ Done when (tests):
   - `cors-exact-origin-only` (app origin, `https://evil.example`, `null`, missing Origin → 403, no ACAO header).
   - `navigate-mode-denied`; `non-get-405`.
   - `me-signed-out-401`; `me-returns-mapping`; `me-unseeded-pending`.
+  - `revoked-grant-via-chat-me-ends-chat-sessions`: a revoked grant seen through `/api/chat/me` ends every chat session
+    of the DID, and the answer is 401 with the cookie cleared.
   - `resolve-bidirectional-only` (handle whose DID document does not claim it → 404); `resolve-not-member-404`;
     `resolve-returns-only-did-and-mxid` (public-profile fixture); `resolve-rate-limited`.
   - `resolve-private-equals-missing` (decision 36, R3-01): an unknown handle (does not resolve), plus three fixtures with
@@ -2854,10 +2859,12 @@ Algorithm (full detail: suspension, erasure and session ending):
      f. `delete_mapping` → delete `module_account` (`chat`) and `app.chat_seed` for the DID, then the erasure row
         itself, then `core.erase_hook_mark(did, 'chat', 'done')` (P3.07 `hooks.chat`); `eraseDid`'s report changes "chat pending" to "chat erased".
      Any step failing 24 times → alert and a held case in `admin`; the core erasure has already completed.
-  4. A grant revoked at the PDS: `auth_dead` only (P2.11a), within 15 minutes (P2.11a's 900 s recheck cap) while the PDS
-     is reachable, ends every chat session of the DID, chat devices included, through
-     `endSessions { kind: "everywhere" }` and `chat-admin` `end_sessions`. It uses P2.11a's exhaustive switch:
-     `transient`, `scope_missing` and `rejected` never end chat sessions, with one red each.
+  4. No app action ends every chat session except a freeze, takedown, erasure or a revoked grant (auth_dead, P2.11a;
+     architecture 05:01Z, book edit 2026-10-19-drop-sign-out-everywhere). A grant revoked at the PDS: `auth_dead` only
+     (P2.11a), within 15 minutes on our own PDS, at the next recheck, never immediately (P2.11a's 900 s recheck cap),
+     ends every chat session of the DID, chat devices included, through `endSessions { kind: "everywhere" }` and
+     `chat-admin` `end_sessions`. It uses P2.11a's exhaustive switch: `transient`, `scope_missing` and `rejected` never
+     end chat sessions, with one red each.
 Edge cases and failures:
   - Chat stack down during erasure → job waits; the core erasure completes; `eraseDid`'s report lists "chat pending".
   - The MXID localpart stays reserved in MAS after deactivation (no reuse); a new account never gets it.

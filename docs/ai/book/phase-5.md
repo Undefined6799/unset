@@ -1662,6 +1662,14 @@ Outputs:
 - **The production PDS settings:**
   - `PDS_HOSTNAME=unset.ac`, `PDS_SERVICE_HANDLE_DOMAINS=.0x40.me`, `PDS_RECOVERY_DID_KEY` set;
   - `PDS_INVITE_REQUIRED=true`;
+    **Before PDS_INVITE_REQUIRED goes false (open sign-up)**, each of these holds, and Alex flips it (book edit
+    2026-10-19-alex-cards-and-edge-dev-mode, "P1.37g (#1080) answered"; architecture 05:03Z):
+    1. **The temporary-blob sweep:** either upstream ships a sweep we have verified in the pinned dist, or a reviewed
+       [SEC] step builds an age-based job outside the PDS. That job never runs in the PDS process, deletes only
+       `tempt` entries older than a fixed age well above any upload's lifetime, and has its own reds and an
+       audit-free ops counter. No step is lettered until then.
+    2. **Per-account write limits keyed by DID,** the gap recorded in P1.28 ("revisit before open sign-up").
+    The list is closed. New items join it only through a record.
   - **`PDS_RATE_LIMITS_ENABLED=false`, set explicitly** (global resolution 1; provisional while Alex's edge-IP card is
     queued). Every request reaches the PDS from the edge's address, so per-IP limits would put every user in one
     bucket. Per-client limiting happens at the edge, in memory (`caddy-ratelimit`, P1.28). Setting it explicitly means a
