@@ -82,6 +82,27 @@ test("toast_close_leaves_focus_held_elsewhere", async () => {
   expect(main.hasAttribute("tabindex")).toBe(false);
 });
 
+test("toast_close_without_main_leaves_focus", async () => {
+  // A page with no <main id="main"> has nowhere to send focus (ToastClose.tsx:43): the toast still hides in place,
+  // nothing throws, and focus is not moved anywhere by the island; where it lands is the browser's focus fixup.
+  const other = document.createElement("button");
+  document.body.append(other);
+  const { box, link } = await mount();
+  const errors: unknown[] = [];
+  const onError = (event: ErrorEvent) => {
+    errors.push(event.error);
+    event.preventDefault();
+  };
+  window.addEventListener("error", onError);
+  link.focus();
+  expect(await click(link)).toBe(false);
+  window.removeEventListener("error", onError);
+  expect(errors).toEqual([]);
+  expect(box.hidden).toBe(true);
+  expect(document.getElementById("main")).toBeNull();
+  expect([link, document.body]).toContain(document.activeElement);
+});
+
 test("toast_island_without_toast_follows_link", async () => {
   const { box, link } = await mount();
   box.removeAttribute("id");

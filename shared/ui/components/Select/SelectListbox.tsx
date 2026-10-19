@@ -53,10 +53,12 @@ export function SelectListbox({ select }: SelectListboxProps) {
     setNative({ element, options });
     setChosen(options.indexOf(element.options[element.selectedIndex] as HTMLOptionElement));
     element.hidden = true;
-    // A click on the visible label would focus the hidden native control; it focuses the combobox instead.
+    // A click on the visible label would focus the hidden native control; it focuses the combobox instead. A disabled
+    // control takes no focus from its label, as a native one could not: an actually disabled element is no focusable
+    // area (https://html.spec.whatwg.org/multipage/interaction.html#data-model, 6.6.2, read 2026-10-19).
     const focusBox = (event: Event) => {
       event.preventDefault();
-      box.current?.focus();
+      if (!element.disabled) box.current?.focus();
     };
     const labels = [...(element.labels ?? [])];
     for (const label of labels) label.addEventListener("click", focusBox);
