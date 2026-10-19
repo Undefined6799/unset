@@ -51,6 +51,7 @@ async function migrateService(): Promise<MigrateServiceResult> {
     connection: connection("migrator", migratorPassword),
     dir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
     root: REPOSITORY,
+    checkQueryFiles: true,
     log: createLogger({
       service: "migrate",
       commit: "0".repeat(40),
@@ -100,6 +101,7 @@ describe("role passwords on postgres", () => {
       connection: connection("migrator", migratorPassword),
       dir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
       root: REPOSITORY,
+      checkQueryFiles: true,
       log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
       retryDelaysMs: [],
     });

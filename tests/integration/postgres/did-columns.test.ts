@@ -68,6 +68,7 @@ async function migrateInto(database: string): Promise<void> {
     },
     dir: join(POSTGRES, "migrations"),
     root: REPOSITORY,
+    checkQueryFiles: true,
     log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
     retryDelaysMs: [],
   });

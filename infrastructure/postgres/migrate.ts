@@ -9,7 +9,7 @@ import type { Logger } from "@unset/shared-log";
 import pg from "pg";
 import type { Connection } from "./config.ts";
 import { type PasswordSyncResult, syncRolePasswords } from "./roles.ts";
-import { type LintProblem, lintMigration, type Phase } from "./sqlLint.ts";
+import { type LintProblem, lintMigration, type Phase, type QueryFiles } from "./sqlLint.ts";
 import { inTransaction } from "./tx.ts";
 
 /** The advisory lock key every runner takes: "unse" in ASCII. */
@@ -21,6 +21,8 @@ export type MigrateOptions = {
   readonly dir: string;
   /** The repository root, against which an index's `-- query:` file is checked. */
   readonly root: string;
+  /** False only in the migrate image, which holds no `-- query:` file (sqlLint's QueryFiles). */
+  readonly checkQueryFiles: boolean;
   readonly log: Logger;
   /** How long to wait for another runner's lock. Default 60 s. */
   readonly lockWaitMs?: number;
@@ -66,7 +68,7 @@ const failure = (exit: 1 | 2 | 3, reason: string, extra: Partial<MigrateFailure>
 });
 
 /** Reads, orders, checks and lints the files. Nothing here touches the database. */
-export function readMigrations(dir: string, root: string): Migration[] | MigrateFailure {
+export function readMigrations(dir: string, queryFiles: QueryFiles): Migration[] | MigrateFailure {
   const files = readdirSync(dir)
     .filter((file) => file.endsWith(".sql"))
     .sort();
@@ -78,19 +80,24 @@ export function readMigrations(dir: string, root: string): Migration[] | Migrate
 
   const migrations: Migration[] = [];
   for (const [i, file] of files.entries()) {
-    const read = readMigration(join(dir, file), versions[i] as number, file, root);
+    const read = readMigration(join(dir, file), versions[i] as number, file, queryFiles);
     if ("ok" in read) return read;
     migrations.push(read);
   }
   return migrations;
 }
 
-function readMigration(path: string, version: number, file: string, root: string): Migration | MigrateFailure {
+function readMigration(
+  path: string,
+  version: number,
+  file: string,
+  queryFiles: QueryFiles,
+): Migration | MigrateFailure {
   const sql = readFileSync(path, "utf8");
   const [first = "", second = ""] = sql.split("\n");
   const phase = PHASE_LINE.exec(first)?.[1] as Phase | undefined;
   if (phase === undefined) return failure(1, "no_phase_header", { version, file, line: 1 });
-  const problem: LintProblem | undefined = lintMigration(sql, phase, root)[0];
+  const problem: LintProblem | undefined = lintMigration(sql, phase, queryFiles)[0];
   if (problem !== undefined) return failure(1, `lint_${problem.rule}`, { version, file, line: problem.line });
   const checksum = createHash("sha256").update(sql).digest("hex");
   return { version, file, sql, checksum, phase, noTx: NO_TX_LINE.test(second) };
@@ -98,7 +105,7 @@ function readMigration(path: string, version: number, file: string, root: string
 
 /** Applies every pending migration, or explains why not. It logs the outcome; it never throws for an expected one. */
 export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
-  const migrations = readMigrations(options.dir, options.root);
+  const migrations = readMigrations(options.dir, options);
   if (!Array.isArray(migrations)) return report(options.log, migrations);
   const client = await connect(options.connection, options.retryDelaysMs ?? [1000, 2000, 4000, 8000, 16000]);
   if (client === null) return report(options.log, failure(1, "connect_failed"));

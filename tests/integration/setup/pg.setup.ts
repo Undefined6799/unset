@@ -58,6 +58,7 @@ export async function startTestDatabase(options: TestDatabaseOptions): Promise<P
       connection: { ...connection, database: "unset", ssl: false },
       dir: options.migrationsDir,
       root: REPOSITORY,
+      checkQueryFiles: true,
       log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
       retryDelaysMs: [],
     });
