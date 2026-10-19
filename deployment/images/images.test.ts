@@ -4,6 +4,7 @@
 // allowlist: Docker's official library images, each named (interim, until P1.27s mirrors them and flips the host; book edit
 // 2026-10-07-p128-edge-bases-and-ratelimit-adr widened it from Node alone for the edge's Caddy bases) and our GHCR
 // namespace. The build itself (hadolint, Trivy, non-root, no dev dependencies, healthy) runs in the images workflow.
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
@@ -966,8 +967,22 @@ function strippedProblems(files: Record<string, string>, lock: Lock): string[] {
 }
 
 /** Every Dockerfile under deployment/ (the web image's and, from P1.28, the edge's), so a new image is covered too. */
+// ADR 0027: only this validated pair uses the dedicated frontend assembly checks.
+// A missing/malformed member throws; every other path retains all general rules.
+const pairedPds = JSON.parse(
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      'const {recipeContract}=await import("./scripts/ci/pds-ui/contract.ts"); console.log(JSON.stringify(recipeContract(process.cwd())));',
+    ],
+    { cwd: join(DEPLOYMENT, ".."), encoding: "utf8" },
+  ),
+);
 const dockerfiles = (readdirSync(DEPLOYMENT, { recursive: true }) as string[])
   .filter((file) => /(^|\/)([\w.-]+\.)?Dockerfile$/.test(file) && !file.includes("node_modules"))
+  .filter((file) => file !== "pds/Dockerfile" || pairedPds === null)
   .sort();
 
 const dockerfile = read(DOCKERFILE);
