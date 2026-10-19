@@ -147,10 +147,16 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
       session: "none",
       handler: async ({ request, deadline }) => {
         // A browser signed in again (Back after a new sign-in, a typed URL) is not told it is signed out.
-        if ((await deps.readSession(request, deadline)) !== null) {
-          return new Response(null, { status: 303, headers: { location: "/did", "cache-control": "no-store" } });
-        }
         const cookie = request.headers.get("cookie");
+        if ((await deps.readSession(request, deadline)) !== null) {
+          const signedIn = new Response(null, {
+            status: 303,
+            headers: { location: "/did", "cache-control": "no-store" },
+          });
+          // Another tab signed in first: the previous account's issuer must not outlive this redirect.
+          if (issuerCookieSent(cookie)) signedIn.headers.append("set-cookie", clearIssuerCookie());
+          return signedIn;
+        }
         const response = deps.page({
           group: "app",
           request,
