@@ -56,15 +56,7 @@ async function main(): Promise<void> {
     requireThat(/^sha256:[0-9a-f]{64}$/.test(iid), "invalid candidate content id");
     run("docker", ["image", "save", "--output", join(scratch, "candidate.tar"), iid]);
     run("docker", ["pull", "--platform", lock.base.platform, lock.base.ref]);
-    run("docker", [
-      "image",
-      "save",
-      "--platform",
-      lock.base.platform,
-      "--output",
-      join(scratch, "base.tar"),
-      lock.base.ref,
-    ]);
+    run("docker", ["image", "save", "--output", join(scratch, "base.tar"), lock.base.ref]);
     const candidate = readBounded(join(scratch, "candidate.tar"));
     const saved = await archive(candidate);
     const index = JSON.parse(saved.get("index.json")?.data.toString() ?? "");

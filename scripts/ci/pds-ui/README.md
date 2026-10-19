@@ -80,7 +80,10 @@ only the frontend/supporting libraries. This is a reviewed build recipe; static 
 arbitrary Dockerfile programs honest. Full artifact/layer verification remains mandatory.
 
 The CI driver builds the artifact target and final candidate, saves actual immutable images, checks the separately
-downloaded immutable source, and runs the same verifier. The Linux runner must match the declared native platform;
+downloaded immutable source, and runs the same verifier. Pull and builds target the locked platform. Base-image save
+intentionally omits `--platform`: Docker 29.5.2's filtered export drops the authentic locked upstream index. Ordinary
+save preserves that index; the strict verifier authenticates it and selects the locked platform from its descriptors.
+Missing/mismatching indices or platform descriptors remain failures. The Linux runner must match the declared native platform;
 it does not silently emulate arm64 on amd64. Current local evidence is linux/arm64; amd64 is a P2.24c CI gate.
 Build-only product scripts require no deployment import exception: this interface is Dockerfile-only.
 
