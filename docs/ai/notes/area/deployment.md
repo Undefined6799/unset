@@ -27,6 +27,7 @@ checked: 2026-10-18
   for.
 - `scripts/dev-precheck.ts` (P1.29s): `dev:up` / `local:up` run it before compose up. It refuses a production PDS host
   (`unset.ac`) and a foreign describeServer DID, then the preflight. It creates no account and writes no `.seeded.json`.
+  P1.29t's stack tests refuse to probe under `dev`; `dev:up` still has no client_id probe child.
 
 Deploy only CI-built images of merged commits. Terraform and Ansible arrive at P5.00, once hosting is chosen.
 

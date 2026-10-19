@@ -257,6 +257,14 @@ describe("stack wrapper (P1.27w)", () => {
     expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker", "the leaf check"]);
   });
 
+  test("probe_runs_under_local_only", () => {
+    // P1.29t: no client_id probe, sign-in, or token reader under dev (Amendment 4 of 2026-10-13-local-plc, point 1).
+    const { commands } = plan(UP, {});
+    expect(commands.map((c) => c.name)).toEqual(["the precheck", "docker"]);
+    const argv = commands.flatMap((c) => [c.file, ...c.args]).join(" ");
+    expect(argv).not.toMatch(/oauth-client-metadata|createAccount|pds-token-reader|dev-seed/);
+  });
+
   test("a_failing_leaf_check_takes_the_stack_down", () => {
     // P1.34d item 15, red test: a served leaf that differs from the copy brings the stack down, and the run fails.
     const leafCheck = (exit: Exit) => {

@@ -4,13 +4,13 @@ type: area
 status: current
 areas: ["[[tests]]"]
 summary: "Hub for tests/: Postgres integration tests and the browser accessibility harness."
-code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/test/assert-tests-ran.ts, .github/workflows/e2e.yml]
+code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/support/local-stack.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/test/assert-tests-ran.ts, .github/workflows/e2e.yml]
 sources: []
 importance: normal
-related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
+related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, tests]
-checked: 2026-10-17
+checked: 2026-10-18
 ---
 # tests
 
@@ -59,6 +59,10 @@ ubuntu-24.04's AppArmor refuses the browser's user namespace.
   test. A failed build's message keeps BuildKit's summary of the failing step (plain progress, not `-q`).
   Every test image carries `sh.unset.test-owner=<pid>`, the test containers' label, so a leaked tag can be found with
   a label filter (P1.11i).
+- `support/local-stack.ts` (P1.29t): judgements for the running local stack. Probes run only under local. Device
+  rows must show the edge's inspect address, never the client's. Client metadata is judged with
+  `@atproto/oauth-client` 0.8.9 `clientMetadataSchema` (same import as `tests/e2e/oauth-origin.test.ts`). The live
+  client_id GET and OAuth as Alice or Bob are P1.33z.
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
   Tests connect as the real process roles, never as migrator or the superuser (TE-2).
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
