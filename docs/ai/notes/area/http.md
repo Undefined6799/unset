@@ -10,7 +10,7 @@ importance: normal
 related: ["[[web]]", "[[config]]", "[[errors]]", "[[case-insensitive-path-collision]]"]
 replaced_by: null
 tags: [area, http]
-checked: 2026-10-17
+checked: 2026-10-19
 ---
 # http
 
@@ -58,7 +58,9 @@ welcome step. Not yet: the email read, `invalidateHandle` (later steps).
 session, clears `__Host-sid` and sets `__Host-signed_out`, which makes the next POST /login send `prompt=login`. When
 that was the last session, it revokes the grant (`OAuthClient.revoke`, 10s) and deletes the stored set if revoke
 throws. POST /logout/everywhere requires `confirm=yes`, revokes first, then `destroyAllForDid`. The count is
-`logout-sessions.ts` (the book's SELECT, same transaction as the delete). `infrastructure/session` stays untouched:
+`logout-sessions.ts` (same transaction as the delete). It counts only live rows (P2.08c): not past the absolute or
+idle limit, and only while the DID has a token set, repeating the store's `lookup` conditions, because no sweep runs
+before the jobs process and a stale row would keep the grant. `infrastructure/session` stays untouched:
 it is trusted base, so a store method cannot share this PR. GET /signed-out points at the PDS account page.
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
