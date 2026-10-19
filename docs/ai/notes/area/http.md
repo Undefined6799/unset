@@ -83,8 +83,9 @@ successful email recheck (`EMAIL_RECHECK_S`, at most 900 s) or at the next PDS c
 the PDS can't be reached, the cached result is kept, and the bound extends until a recheck succeeds. Once P1.36v
 lands, accounts on other PDSes are refused at sign-in until P1.33p, which must first force a token refresh at each
 recheck; before P1.36v they can sign in, and this bound does not hold for them (P2.11c). A shorter window would need
-a PDS call per request. Pinned by `tests/integration/http/email-recheck.test.ts` and `config.test.ts#email_recheck_capped_at_900`. There is no audit
-row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
+a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
+client, so no real PDS revokes anything), and `config.test.ts#email_recheck_capped_at_900` pins the cap. There is no
+audit row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
