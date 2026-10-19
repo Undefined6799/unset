@@ -137,35 +137,14 @@ describe("POST /logout", () => {
   });
 });
 
-describe("POST /logout/everywhere", () => {
-  test("logout_everywhere_requires_confirm", async () => {
-    const { send, destroyed } = setup();
-    const response = await send("/logout/everywhere");
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/settings?error=logout.confirm_required");
-    expect(response.headers.getSetCookie()).toEqual([]);
-    expect(destroyed).toEqual([]);
-  });
-
-  test("logout_everywhere_get_405", async () => {
-    const { send, destroyed } = setup();
-    expect((await send("/logout/everywhere", { method: "GET" })).status).toBe(405);
-    expect(destroyed).toEqual([]);
-  });
-
-  test("logout_everywhere_csrf", async () => {
-    const { send, destroyed } = setup();
-    expect((await send("/logout/everywhere", { site: "cross-site", body: "confirm=yes" })).status).toBe(403);
-    expect(destroyed).toEqual([]);
-  });
-
-  test("logout_everywhere_no_session_idempotent", async () => {
-    const { send, destroyed } = setup({ session: null });
-    const response = await send("/logout/everywhere");
-    expect(response.headers.get("location")).toBe("/signed-out");
-    expect(response.headers.getSetCookie()).toEqual(SIGNED_OUT);
-    expect(destroyed).toEqual([]);
-  });
+// P2.08d: "Sign out everywhere" is removed (Alex, 2026-10-19 02:34:31Z). Its path is an unknown route, and nothing
+// is signed out by it.
+test("logout_everywhere_is_gone", async () => {
+  const { send, destroyed } = setup();
+  const response = await send("/logout/everywhere", { body: "confirm=yes" });
+  expect(response.status).toBe(404);
+  expect(response.headers.getSetCookie()).toEqual([]);
+  expect(destroyed).toEqual([]);
 });
 
 test("signed_out_page", async () => {
@@ -177,17 +156,16 @@ test("signed_out_page", async () => {
   expect(html).toContain('href="https://pds.unset.test/account"');
 });
 
-test("signed_out_everywhere_names_an_unconfirmed_revoke", async () => {
+test("signed_out_ignores_scope_everywhere", async () => {
   const { send } = setup({ session: null });
   const response = await send("/signed-out?scope=everywhere&error=logout.revoke_unconfirmed", { method: "GET" });
   const html = await response.text();
-  expect(html).toContain("every browser");
-  expect(html).toContain("could not confirm the sign-in server ended access");
-  // A scope the page does not know is not a sentence. A known ?error= code is the shell's callout.
-  const ignored = await setup({ session: null }).send("/signed-out?scope=all&error=login.failed", { method: "GET" });
-  const quiet = await ignored.text();
-  expect(quiet).not.toContain("every browser");
-  expect(quiet.match(/Sign-in could not start/g)).toHaveLength(1);
+  expect(html).toContain("You are signed out");
+  expect(html).not.toContain("every browser");
+  expect(html).not.toContain("could not confirm the sign-in server ended access");
+  // A known ?error= code is still the shell's callout.
+  const shown = await setup({ session: null }).send("/signed-out?scope=all&error=login.failed", { method: "GET" });
+  expect((await shown.text()).match(/Sign-in could not start/g)).toHaveLength(1);
 });
 
 test("signed_out_sends_a_signed_in_visitor_to_the_profile_resolver", async () => {
