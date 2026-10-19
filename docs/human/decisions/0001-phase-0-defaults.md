@@ -465,3 +465,12 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   staging behind his Pangolin with one login per tester, the edge's certificates by DNS-01 through a delegated
   validation zone, own-PDS sign-in enforced in the app until P1.33p, and the dev-only refinement of ADR 0018's
   rate-limit key. From here the record changes only to be marked superseded.
+- **ADR 0025 erratum on architecture's times (plan thread, 2026-10-19 04:48Z UTC):** the times of architecture's
+  rulings quoted at 0025:53-56 (02:35Z, 03:24Z, 03:35Z, 03:40Z, 04:00Z, 04:05Z, 04:10Z and 05:15Z on 2026-10-19)
+  are architecture's section labels, not clock times and not the times of decisions. Each was written before
+  03:50Z UTC that day, so the "05:15Z" own-PDS ruling predates Alex's 04:17:55Z acceptance; see architecture's
+  restated erratum ("Clock erratum restated", 2026-10-19 04:37Z real UTC, in the staging rulings record). The
+  accepted text is not edited. Two clarifications of the entry above: "staging behind his Pangolin" means only
+  `staging.unset.sh` and `staging.unset.ac` (0025:48-50, :74, :84); the handle hosts `*.staging.unset.im` stay internal
+  (0025:89-94). The second bypass path, "the client's `jwks_uri` path", is `/oauth/jwks.json` today
+  (`infrastructure/pds/oauth/oauth-client.ts:148`, `interfaces/http/routes/oauth-metadata.ts:26`).
