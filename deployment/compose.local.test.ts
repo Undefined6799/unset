@@ -654,6 +654,9 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
       ["PDS_DID_PLC_URL", "http://plc:2582"],
       ["KEYBOARD_LAYOUT", "literal"],
       ["PASSAGE", "literal"],
+      // P1.35v: words split on `_`, `-`, `.` and each lower-to-upper boundary; none of these is a listed word.
+      ["keyboardLayout", "literal"],
+      ["app.passage-count", "literal"],
     ];
     for (const [key, value] of accepted) expect(secretRefusal(key, value), `${key}=${value}`).toBeNull();
   });
@@ -698,6 +701,10 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
     { name: "a /run/secrets path on a key not *_FILE", key: "PLC_DB_PASSWORD", value: "/run/secrets/plc_db_password" },
     // A listed word in any case is still the word.
     { name: "a literal under a lower-case word", key: "plc_db_password", value: "literal" },
+    // P1.35v: a listed word after a `.`, a `-` or a lower-to-upper boundary is still the word.
+    { name: "a literal under a dotted mixed-case word", key: "Db.apiToken", value: "literal" },
+    { name: "a literal under a hyphenated word", key: "db-password", value: "literal" },
+    { name: "a literal under a camel-case word", key: "dbPassword", value: "literal" },
     // What the URL reading must not miss: a reference elsewhere, a question mark in a message, a URL in a message.
     {
       name: "a userinfo URL with an unbraced reference",
