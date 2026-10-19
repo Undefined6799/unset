@@ -1,6 +1,7 @@
 # 0030 — Staging behind Pangolin: the method and TLS checks move to our edge
 
-Status: Proposed (awaiting Alex)
+Status: Accepted by Alex, 2026-10-19 23:17:16Z ("i accept adr 30", in the project chat, answering the
+request for his acceptance line). From here the record changes only to be marked superseded.
 
 ## Context
 Accepted ADR 0025 (2026-10-19 04:17:55Z) puts `staging.unset.sh` and `staging.unset.ac` behind Alex's
@@ -53,8 +54,9 @@ its status does not change.
    code we own and test; Pangolin keeps the path check. The deploy check against the live resource, run on the
    first deploy, after every rule or policy change and after every Pangolin update, in two groups. Without a
    login, because Pangolin's matcher folds them onto the two files: the two exact paths, the trailing-slash
-   forms `/oauth/jwks.json/` and `/oauth-client-metadata.json/`, the encoded forms `/oauth%2Fjwks.json`,
-   `/oauth/jwks%2Ejson` and `/%6Fauth-client-metadata.json`, and the dot-segment form `/x/../oauth/jwks.json`.
+   forms `/oauth/jwks.json/` and `/oauth-client-metadata.json/`, the doubled-slash forms `/oauth//jwks.json`
+   and `//oauth-client-metadata.json`, the encoded forms `/oauth%2Fjwks.json`, `/oauth/jwks%2Ejson` and
+   `/%6Fauth-client-metadata.json`, and the dot-segment form `/x/../oauth/jwks.json`.
    A `GET` of either exact path returns exactly that file's bytes, with status `200`, since a `404` there would
    leave staging green while no client could sign in; a `GET` of every other spelling returns exactly that
    file's bytes or a `4xx`,
@@ -177,5 +179,6 @@ its status does not change.
   are recorded in the staging runbook.
 - ADR 0025 changes nothing, not even its status line, since this record amends four clauses and supersedes
   none of its decisions.
-- Acceptance line: "yes accept ADR 0030 staging Pangolin checks move to our edge
-  docs/human/decisions/0030-pangolin-checks-at-our-edge.md".
+- Accepted by Alex on 2026-10-19 at 23:17:16Z with "i accept adr 30", written in the project chat in answer to
+  the request for his acceptance line; the fuller line proposed in the plan thread at 22:50Z was not typed.
+  P1.37v (#1115) is unblocked from this time.

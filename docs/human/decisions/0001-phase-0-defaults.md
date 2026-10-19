@@ -474,3 +474,10 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   `staging.unset.sh` and `staging.unset.ac` (0025:48-50, :74, :84); the handle hosts `*.staging.unset.im` stay internal
   (0025:89-94). The second bypass path, "the client's `jwks_uri` path", is `/oauth/jwks.json` today
   (`infrastructure/pds/oauth/oauth-client.ts:148`, `interfaces/http/routes/oauth-metadata.ts:26`).
+- **ADR 0030 accepted (Alex, 2026-10-19 23:17:16Z; own record:
+  [0030](0030-pangolin-checks-at-our-edge.md)):** "i accept adr 30", in the project chat, accepts the record
+  amending four clauses of 0025 for staging behind Pangolin 1.24.0: the method check on the two public sign-in
+  files moves to our edge (`405` with `Allow: GET, HEAD`; Pangolin keeps the path check with ACCEPT rules); the
+  last hop is host-local with Newt inside the stack under three host conditions; the login cookie is a Domain
+  cookie on the resource name, a stated loosening of 0025:190; and four org-wide or global Pangolin logging
+  settings replace the per-resource ones 0025 assumed. 0025 is not edited. P1.37v (#1115) unblocks.
