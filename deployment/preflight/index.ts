@@ -94,8 +94,9 @@ const SERVICE_NAME = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * The key and service an outcome names, printed beside the verdict (P1.37k). Each prints only when it is on its closed
- * list: the key on C29's names (NAMED_KEYS), the service among this stack's parsed service names. Neither is a configured value, so
- * neither goes through the withholding filter, and a withheld reason no longer hides which key failed.
+ * list: the key on C29's names (NAMED_KEYS), the service among this stack's parsed service names. The closed lists are
+ * what make them safe to print, not the withholding filter: a service name may equal a configured value (PG_USER: web),
+ * and it still prints, so a withheld reason no longer hides which key or service failed.
  */
 function named(outcome: Outcome, services: ReadonlySet<string>): string {
   const { key, service } = outcome;

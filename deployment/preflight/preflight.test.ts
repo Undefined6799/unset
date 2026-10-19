@@ -2360,8 +2360,10 @@ describe("preflight C29 (P1.36k)", () => {
         ["PUBLIC_ORIGIN", '""'],
         ["MEDIA_ORIGIN", "HTTP://media.example.net"],
       ]) {
-        expect(await expectOnly("C29", withWeb(env, `      ${key}: ${value}`), env), `${env} ${key} ${value}`).toBe(
-          `FAIL C29 key=${key} service=web the origin is not https`,
+        // The real dev stack sets UNSET_SERVICE: http, so the reason must not hold "http" or it is withheld.
+        const lines = `      UNSET_SERVICE: http\n      ${key}: ${value}`;
+        expect(await expectOnly("C29", withWeb(env, lines), env), `${env} ${key} ${value}`).toBe(
+          `FAIL C29 key=${key} service=web the origin lacks TLS`,
         );
       }
     }
@@ -2460,7 +2462,9 @@ describe("preflight named key and service (P1.37k)", () => {
   });
 
   test("a_failure_on_web_prints_its_key_and_service", async () => {
-    const compose = DEV.replace("      FINGERPRINT_CHECK: arachnid", '$&\n      OAUTH_ALLOW_HTTP: "true"');
+    // The real dev stack sets PG_USER: web, so the service name is also a configured value and must still print.
+    const lines = '$&\n      OAUTH_ALLOW_HTTP: "true"\n      PG_USER: web';
+    const compose = DEV.replace("      FINGERPRINT_CHECK: arachnid", lines);
     expect(await expectOnly("C29", { compose, pdsEnv: DEV_ENV }, "dev")).toBe(
       "FAIL C29 key=OAUTH_ALLOW_HTTP service=web it is for a local stack only",
     );

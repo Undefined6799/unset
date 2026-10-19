@@ -25,7 +25,7 @@ export const c29: Check = {
       const key = env.names().find(isLocalOnly);
       if (key !== undefined) return { ...fail("it is for a local stack only"), key, service };
       const origin = plainOrigin(env);
-      if (origin !== undefined) return { ...fail("the origin is not https"), key: origin, service };
+      if (origin !== undefined) return { ...fail("the origin lacks TLS"), key: origin, service };
     }
     return pass();
   },

@@ -69,9 +69,9 @@ export const NAMED_KEYS = [...LOCAL_ONLY_KEY_NAMES, ...ORIGIN_KEYS] as const;
 export type NamedKey = (typeof NAMED_KEYS)[number];
 
 /**
- * `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED. `key` and
- * `service` name what failed; the runner prints each beside the verdict only after checking it against its closed list
- * (P1.37k), so they survive a withheld reason.
+ * `unsigned` marks C3 to C5 on a local stack, which has no signed images to verify (P1.27l): printed UNSIGNED.
+ * `key` and `service` name what failed; the runner prints each beside the verdict only after checking it against its
+ * closed list (P1.37k), so they survive a withheld reason.
  */
 export type Outcome = { pass: boolean; reason: string; unsigned?: true; key?: NamedKey; service?: string };
 export type Check = {
