@@ -8,11 +8,15 @@ import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
 import { safeReturnPath } from "@unset/shared-http";
+import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
 import { THEME_COOKIE } from "../prefs/theme.ts";
 import { webTestEnv } from "../test-env.ts";
+import { elements } from "../web/fixtures/html.ts";
+import { pageResponse } from "../web/page.ts";
 
 const ORIGIN = "https://unset.test";
 const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
@@ -156,6 +160,59 @@ describe("POST /prefs/theme", () => {
     ]) {
       expect(await returnTo(target), target).toBe("/");
     }
+  });
+
+  // P2.13d's round trip (architecture 20:36Z, Codex item 5): the footer form a sign-in page renders, posted back as a
+  // browser would, lands on that page with its checked next and handle; the server re-checks whatever it is sent.
+  test("prefs_sign_in_round_trip_keeps_next_and_handle", async () => {
+    const rendered = async (path: string): Promise<string | undefined> => {
+      const response = pageResponse(
+        {
+          build: {
+            manifest: {
+              boot: "assets/boot.js",
+              styles: [],
+              fonts: [],
+              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
+              islands: new Map(),
+            },
+            files: new Map(),
+          },
+          render: web.renderPage,
+          assetsOrigin: ORIGIN,
+          env: "test",
+          log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
+        },
+        {
+          group: "app",
+          request: new Request(`${ORIGIN}${path}`),
+          title: "Sign in",
+          body: null,
+          islands: "off",
+          shell: {},
+        },
+      );
+      const forms = elements(parse(await response.text()), "form", { method: "post", action: "/prefs/theme" });
+      const input = elements(forms[0], "input", { type: "hidden", name: "return" })[0];
+      return input?.attrs?.find((attribute) => attribute.name === "value")?.value;
+    };
+    const submit = async (path: string) => {
+      const value = await rendered(path);
+      const response = await send({ body: new URLSearchParams({ theme: "light", return: value ?? "" }).toString() });
+      return { value, location: response.headers.get("location") };
+    };
+    expect(await submit("/login?next=/me&handle=alice.unset.im&x=1")).toEqual({
+      value: "/login?next=%2Fme&handle=alice.unset.im",
+      location: "/login?next=%2Fme&handle=alice.unset.im",
+    });
+    // An invalid next is dropped when the page renders and again when a forged return reaches the server.
+    expect(await submit("/login/continue?next=https://evil.example&handle=alice.unset.im")).toEqual({
+      value: "/login/continue?handle=alice.unset.im",
+      location: "/login/continue?handle=alice.unset.im",
+    });
+    expect(await returnTo("/login?next=https%3A%2F%2Fevil.example&handle=alice.unset.im")).toBe(
+      "/login?handle=alice.unset.im",
+    );
   });
 
   // The exception is the prefs route's own: every other target still goes through the kit's returnPath unchanged.
