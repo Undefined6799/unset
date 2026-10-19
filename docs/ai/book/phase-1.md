@@ -77,8 +77,8 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
   P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
   P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
-  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b, P2.08c, P2.08d, P2.11, P2.11a, P2.15, P2.12, P2.12a,
-  P2.12b, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the
+  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08f, P2.11, P2.11a, P2.15, P2.12, P2.12a–P2.12c,
+  P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the
   sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps
   not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario passes locally.
   Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may finish a fix it

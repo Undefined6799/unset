@@ -109,8 +109,8 @@ and this table is the only place to change.
 ## Slices (decision 34, editor pass 2026-10-04)
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
-Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b, P2.08c, P2.08d, P2.11, P2.11a,
-P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
+Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08f, P2.11, P2.11a, P2.15,
+P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
 merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
 i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
@@ -128,7 +128,7 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08d, P2.11, P2.11a, P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c, P2.13a) keep their user-facing
+(P2.01–P2.08, P2.08b–P2.08f, P2.11, P2.11a, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their user-facing
 English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
 key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
 English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
@@ -162,12 +162,13 @@ flowchart TD
   P204s --> P206; P204s --> P207; P204s --> P208; P204s --> P212
   P206 --> P208[P2.08 logout]
   P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
+  P208c --> P208e[P2.08e count pinned to store]; P208d --> P208e; P208d --> P208f[P2.08f signout_all marked unused]
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
-  P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]
+  P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]; P212a --> P212c[P2.12c welcome axe gaps]
   P213 --> P213c[P2.13c settings shell, links]; P208b --> P213c
   P213 --> P213a[P2.13a slice 1 exit]; P208 --> P213a; P212 --> P213a
   P115 --> P212; P137 --> P215; P213a --> P226; P138[P1.38 Phase 1 exit] --> P226
@@ -1668,7 +1669,8 @@ Algorithm (`POST /logout`):
   2. If `s` is null → clear cookie, set `__Host-signed_out=1` (Max-Age 30 d), 303 `/signed-out` (idempotent).
   3. In a tx: `sessions.destroy(tx, s.idHash)`. DB error → 503 page "Could not sign you out, try again"; cookie not
      cleared (so the retry finds it). After commit, count `auth.logout_this_browser`.
-  4. `remaining = SELECT count(*) FROM app.session WHERE did = s.did`. If `remaining == 0` (this was the last browser) →
+  4. `remaining` = the DID's session rows the store still accepts: within the idle and absolute limits, with a stored
+     token set (P2.08c), never the unfiltered `SELECT count(*)`. If `remaining == 0` (this was the last browser) →
      `client.revoke(s.did)` with a 10 s timeout; on any error log `oauth.revoke_failed` and delete the stored set directly
      (`oauthSessionStore.del(s.did)`), but
      no `revoke_unconfirmed` notice: a long-lived DPoP-bound refresh credential with no user behind it is not kept
@@ -1714,7 +1716,8 @@ As built: #939 used the id P2.08 for this-browser logout only. The remainder is 
   The session count is the SELECT in `interfaces/http/logout-sessions.ts`, not a new store method, because
   `infrastructure/session` is trusted base (SE-6) and cannot share a PR with the routes. The catalog key is `error=`
   (plan §2 rule 15, `withErrorParam`), where this step wrote `e=`. P2.08a also built the "sign out everywhere" half;
-  P2.08d removes it (book edit 2026-10-19-drop-sign-out-everywhere).
+  P2.08d removes it (book edit 2026-10-19-drop-sign-out-everywhere). P2.08c filters the count to live sessions, and
+  P2.08e pins that filter to the store (book edit 2026-10-19-five-step-audit, verify-1009 N6).
 Diagram: see "State diagram: app session lifecycle".
 
 ### P2.08b — Sign out with the recorded issuer
@@ -1731,8 +1734,20 @@ by 2026-10-19-drop-sign-out-everywhere (architecture 03:20Z and 03:27Z).
    (PdsAccountLink.tsx:27).
 3. A failed logout shows "Could not sign you out, try again" on its 503, not the generic text (messages.ts:20).
 
+4. **Carrier (architecture 04:15Z).** `__Host-signed_out_issuer` (HttpOnly) carries the issuer origin to
+   `/signed-out`. GET /signed-out clears it in the same response that reads it, so a reload shows our PDS link.
+5. The value must re-parse as exactly an https origin: no path, query, fragment, userinfo or non-default port.
+   Anything else falls back to our PDS link. The host shown comes from the parsed origin, through the escaping
+   renderer. The link has `rel="noopener noreferrer"`, and the interstitial "You are going to {pdsHost}" stays.
+6. Neither the value nor the parse-failure detail is logged (SE-7). A fallback logs only a fixed event name.
+7. "Ours" means exact string equality with our PDS issuer's origin, never a suffix match.
+8. The account page reads `issuerOf(session.did)`. A DID document or the query string is never a source.
+
 Done when these tests pass, red first for item 1, and check is green:
-- `logout.no_sign_in_records`, which also asserts that no audit row is written;
+- `signed_out.cookie_single_use`, `signed_out.cookie_rejects_non_origin` (path, query, userinfo, port, http),
+  `signed_out.ours_exact_match` (a suffix lookalike is not ours) and `signed_out.cookie_never_logged`;
+- `logout.no_sign_in_records`, which also asserts that no audit row is written. It takes over the "no audit row"
+  assertion from `logout.everywhere`, which P2.08d removes; whichever of the two PRs lands second carries it;
 - `logout.next_login_prompt`, which runs a real logout before `POST /login`, instead of faking the cookie;
 - a foreign-issuer fixture (a reserved name, SE-7a) whose account link points at that issuer's origin.
 
@@ -1750,7 +1765,13 @@ Done when, red first: with one live session and one idle-expired session for the
 one revokes the grant. The same holds for an absolute-expired row. A row one second inside either limit still counts.
 Check is green. Sweeps of the session, oauth_state and single_use tables stay with the jobs process; they are not
 part of this step.
-As built: #1009 (merged as 54046ca).
+Threats:
+- E: a grant outlives the last live browser. Answered by counting only rows the store accepts
+  (`logout.last_browser_ignores_idle_expired`, `..._absolute_expired`).
+- D: a live browser loses its grant early. Answered by the same predicate pinned to the store
+  (`logout.remaining_sessions_match_the_store`, P2.08e).
+As built: #1009 (merged as 54046ca). The red was behavioural (`logout.test.ts:295`, `:298` and `:305` fail on main),
+not a typecheck failure, and only a scratch query showed it; P2.08e shows it in CI (verify-1009-4001214, M1).
 
 ### P2.08d — Remove sign out everywhere
 Tags: [SEC]            Depends on: P2.08
@@ -1775,6 +1796,49 @@ Done when:
 - no code or catalog reference to the removed names remains, checked by grep in the PR;
 - this-browser logout tests stay green;
 - check is green.
+As built: #1020 (merged as be58616).
+
+### P2.08e — Pin the session count to the store
+Tags: [SEC]            Depends on: P2.08c, P2.08d
+Slice 1, issue #1034, product (`interfaces/http/` and tests, about 15 source lines, no trusted base), lane Phase 1.
+Book edit 2026-10-19-five-step-audit, "verify-1009-4001214 follow-ups" and "verify-1020-e6a2222 follow-ups". Build on
+`verify-1009-4001214-store-pin-after-1020.patch` (beside the report).
+**What:**
+1. **M2.** Add `logout.remaining_sessions_match_the_store`. In one transaction, insert rows exactly at each limit,
+   1 s past each limit, and one row created long ago but seen recently. Assert that `remainingSessions(tx, ...)`
+   equals what `store.read` accepts, through a store whose `withDb` runs on the same `tx`.
+2. **M3.** One `sessionLimits` object in `interfaces/http/compose.ts`, read by both `createSessionStore` and
+   `browserLogout` (today :160 and :209), so the idle limit cannot diverge. A test kills the
+   `SESSION_TOUCH_INTERVAL_S` and `SESSION_ABSOLUTE_S` mutants at :209. If the change has to touch
+   `infrastructure/session/` (trusted base), the lane stops and splits that part out.
+3. **M4.** The same-instant test covers 1 s inside, exactly at, and 1 s outside each limit, and kills the five SQL
+   mutants in the report, including idle measured from `created_at`.
+4. **M5.** An explicit neighbour DID with a live session and a token set, so DID scoping no longer depends on test
+   order.
+5. **N1.** `logout-sessions.ts:2` describes the store predicate, not "the book's SELECT", and wraps at the lint
+   width; so does compose.ts:9.
+6. **Red first in CI (TE-5).** A commit restores the unfiltered `SELECT count(*) ... WHERE did = $1`, check fails on
+   the new tests, and the next commit restores the filter. The PR cites that run.
+7. **verify-1020 M1.** `logout.last_browser_revoke_fails`: deleting the `deleteTokenSet` call (routes/logout.ts:77-81)
+   turns it red, and the item 6 run shows that too. The unused `mode: "keep"` (logout.test.ts:62, :123) is used by
+   this test or removed.
+8. **verify-1020 N2 to N4.** The Me.tsx:1-3 header drops the confirm box, and logger.ts:70 names both
+   `oauth.revoke_failed` sources, including welcome.ts:186.
+Threats: a live browser losing its grant early, or a grant outliving the last live browser, through drift from the
+store's rule. Answered by the same-instant store pin and the shared limits object.
+Done when the tests pass, the CI red is cited, and check is green.
+
+### P2.08f — Mark sign out everywhere unused in session
+Tags: trusted            Depends on: P2.08d
+Slice 1, trusted base (`infrastructure/session/store.ts` comments at :45-46 and :151), lane Phase 1. Book edit
+2026-10-19-five-step-audit, "verify-1020-e6a2222 follow-ups". Comment-only, so no behaviour change and no typed line.
+- The comments say that `user_signout_all` is unused since 2026-10-19 (Alex dropped the feature at 02:34:31Z) and
+  that `destroyAllForDid` stays for auth_dead and the age gate (architecture 03:27Z).
+- **Migration 0014:4.** An applied migration file is not edited if the migration guard pins its contents. The lane
+  checks the guard first; if a 0014 edit would be refused or would change a checksum, it leaves 0014 alone, the note
+  lives only in store.ts and the session area note, and the PR says so.
+- `user_signout_all` and migration 0014 otherwise stay. The next trusted step that already touches the reason list
+  retires it.
 
 ### P2.11 — Email-verify gate
 Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"
@@ -2063,7 +2127,7 @@ Done when (tests):
   - `terms.required_boxes`: missing terms box / missing country box (rule on) → codes; rule off → one box suffices.
   - `terms.version_bump`: accepted v1, current v2 → only `/welcome/terms` is required.
   - `onboarded.guard_order`: a non-onboarded user on `/settings/profile` → `/welcome`; onboarded but unverified → `/verify-email`.
-  - `welcome.axe`: every screen passes axe in both themes and languages; the age screen has no text mentioning 16 (catalog scan).
+  - `welcome.axe`: every screen passes axe in both themes, English only until the i18n slice (P2.12a); the age screen has no text mentioning 16 (catalog scan).
 
 Reuse (provisional — for reuse review):
   - `app/src/components/{app-home,setup-progress}.tsx` (onboarding steps) → LESSON only: they guided profile set-up, not
@@ -2085,6 +2149,25 @@ Slice 1, issue #993, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
 (today it checks structure only, welcome.test.ts:484-560). English only until the i18n slice.
 
 Done when the tests pass and check is green.
+As built: #1033 (merged as 380d8ee).
+
+### P2.12c — Close the welcome axe gaps
+Tags: (none)            Depends on: P2.12a
+Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit
+2026-10-19-five-step-audit, "verify-1033-5293c78 follow-ups". Issue: the board opens it.
+**What:**
+1. **M2.** The welcome cases (a11y.spec.ts:76-91) run the matrix's console and CSP checks (:57, :61-63) and its four
+   once-per-page checks. Red: an inline-style CSP violation on a welcome fixture.
+2. **N1.** The error banners (welcome.ts:235, :289-291) get axe cases in both themes.
+3. **N3.** tests.md:29-30 names the repo path, not a path that exists only in the agent container.
+4. **M1, held for architecture.** axe's "needs review" (`incomplete`) results are checked neither here (:83-84) nor
+   in the P1.26 matrix (:59-60), so three cases stay green: duplicated ids on the age screen's labelled fields, a
+   plain duplicated id (that rule is outside the tag set), and Continue text in its fill's colour
+   (Button.module.css:7). Architecture rules whether `incomplete` fails (all, or a listed set) and whether the
+   duplicate-id rule joins the tag set. The ruling applies to the matrix and the welcome cases together; a product
+   fix it needs (the Button colour or the ids) joins this step.
+Done when items 1 to 3 pass with their reds, and check is green. Item 4 lands with the ruling, or becomes its own step
+if the ruling widens it.
 
 ### P2.12b — Show the privacy notice once
 Tags: [SEC]            Depends on: P2.12
