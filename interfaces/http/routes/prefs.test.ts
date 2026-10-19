@@ -101,6 +101,43 @@ describe("POST /prefs/theme", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
+  // The footer form (P1.25f) posts here from a page. A browser that sends no Sec-Fetch-Site is decided by its Origin.
+  test("prefs_post_csrf_origin", async () => {
+    const { server } = await compose(loadConfig(config, ENV), web);
+    const post = (signals: Record<string, string>) =>
+      server.request(
+        new Request(`${ORIGIN}/prefs/theme`, {
+          method: "POST",
+          headers: { host: "unset.test", "x-forwarded-for": "192.0.2.1", "content-type": FORM, ...signals },
+          body: "theme=light&return=%2Fsigned-out",
+        }),
+        "10.0.0.1",
+      );
+    const denied = [
+      ...["https://evil.example", "null", "http://unset.test", "https://unset.test.evil.example"].map((origin) => ({
+        origin,
+      })),
+      // No Origin, no Referer: no signal at all.
+      {},
+      // A Referer alone is decided by its origin, exactly.
+      { referer: "https://evil.example/login" },
+      { referer: "https://unset.test.evil.example/" },
+      // Same-site is never trusted (chat and admin hosts share the site).
+      { "sec-fetch-site": "same-site", origin: ORIGIN },
+    ];
+    for (const signals of denied) {
+      const response = await post(signals);
+      expect(response.status, JSON.stringify(signals)).toBe(403);
+      expect(response.headers.get("set-cookie")).toBeNull();
+    }
+    for (const signals of [{ origin: ORIGIN }, { referer: `${ORIGIN}/signed-out` }]) {
+      const allowed = await post(signals);
+      expect(allowed.status, JSON.stringify(signals)).toBe(303);
+      expect(allowed.headers.get("location")).toBe("/signed-out");
+      expect(allowed.headers.get("set-cookie")).toBe(`${THEME_COOKIE}=light; ${YEAR}`);
+    }
+  });
+
   test("prefs_get_405", async () => {
     const response = await send({ method: "GET" });
     expect(response.status).toBe(405);

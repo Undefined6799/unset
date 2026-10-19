@@ -26,7 +26,9 @@ production stylesheet. The toast fixture's `Island` is the production server bui
 render loader imports, so it shares that build's `IslandRunContext`.
 The welcome screens that need a session at their real paths (age, terms, chat) are fixture pages too,
 `/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
-in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). A local run needs Playwright pointed at
+in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). `nojs.spec.ts` also drives both menus at a
+375 px viewport with script off (the Navigation popover on `/`, the Header `<details>` on `/login`) and the footer
+theme form on `/signed-out`; WebKit keeps no `__Host-` cookie on http, so it expects the system theme (P1.25f). A local run needs Playwright pointed at
 `/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
 covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
