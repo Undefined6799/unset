@@ -140,7 +140,7 @@ beforeAll(async () => {
         ...browserLogout({
           pool: webPool,
           sessions: store,
-          idleS: LIMITS.idleS,
+          limits: LIMITS,
           revoke: async (owner: Did) => {
             revoked.push({ did: owner, hadToken: await hasToken(owner) });
             if (mode === "keep") throw new Error("RevokeDown");
