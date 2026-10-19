@@ -79,8 +79,11 @@ and then is the email page itself.
 so `refreshEmail` answers `ended` and `openApp` sends 303 to `/login?error=login.session_ended` with the cookie
 cleared. `scope_missing` and `rejected` still go to `/verify-email`; a transient answer passes on the cached `true`
 and ends nothing. **The bound:** another browser keeps rendering from its session row until the next PDS call for
-that DID or its own email recheck, whichever comes first. `EMAIL_RECHECK_S` defaults to 900 and its config maximum
-is 900, so the window is at most 15 minutes. A shorter window would need a PDS call per request. Pinned by
+that DID or its own email recheck, whichever comes first. On our own PDS the window is at most `EMAIL_RECHECK_S`
+(default 900, config maximum 900, so at most 15 minutes); the step book's P2.11c record states this. On any other
+PDS an access token may keep working until it expires, so the window is that token's remaining life plus
+`EMAIL_RECHECK_S`. That is unresolved until P1.33p, which must make the recheck force a token refresh before it
+opens sign-in to other PDSes. A shorter window would need a PDS call per request. Pinned by
 `tests/integration/http/email-recheck.test.ts` and `config.test.ts#email_recheck_capped_at_900`. There is no audit
 row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
