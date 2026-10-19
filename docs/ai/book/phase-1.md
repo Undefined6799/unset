@@ -1091,7 +1091,7 @@ Algorithm (`loadConfig`):
   1. `problems = []`. For each key in the schema (sorted):
      a. If kind is `secret`: read `env[KEY]`. If kind is `secretFile`: read `env[KEY + "_FILE"]` as a path. If a
         `secretFile` key is also present as plain `env[KEY]` → problem `forbidden_in_env` (secrets come from files in
-        `prod`; plain env is allowed only for `secret` kind and only when `UNSET_ENV != prod`).
+        `prod`; plain env is allowed only for `secret` kind and only when `UNSET_ENV` is exactly `test`; P1.37l).
      b. Missing (undefined or empty after trim) → if the field has a default and is not a secret → use the default;
         else → problem `missing`.
      c. For `secretFile`: read the file (`readFileSync`, max 64 KiB). Error (ENOENT, EACCES, too large) → problem
@@ -1152,6 +1152,7 @@ Diagram: none.
 As built (Phase 1 building-blocks thread, relayed 2026-10-04 23:23Z; all fail closed, each listed in the PR):
   - (a) A `secretFile` key given as plain env → `forbidden_in_env` in every environment, not only prod.
   - (b) A missing or unrecognised `UNSET_ENV` counts as prod for plain-env secrets; only exactly `dev` or `test` allows them.
+    Superseded by P1.37l (#1090): only exactly `test` allows them, because staging runs `dev`.
   - (c) `Secret` holds a string, so secret files must be UTF-8 text; invalid bytes → `invalid`.
   - (d) `list` has no separator option: comma only; empty or padded items → invalid.
   - (e) `bootOrExit` writes its `config.invalid` lines to stderr as JSON itself, because the logger (P1.03) depends on
