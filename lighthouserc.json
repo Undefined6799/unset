@@ -20,7 +20,7 @@
           "deviceScaleFactor": 1.75,
           "disabled": false
         },
-        "chromeFlags": "--no-sandbox --disable-dev-shm-usage"
+        "chromeFlags": "--no-sandbox --disable-dev-shm-usage --disable-features=Translate,OptimizationHints,MediaRouter,DialMediaRouteProvider,CalculateNativeWinOcclusion,InterestFeedContentSuggestions,CertificateTransparencyComponentUpdater,AutofillServerCommunication,PrivacySandboxSettings4,RenderDocument,SpareRendererForSitePerProcess"
       }
     },
     "assert": {
