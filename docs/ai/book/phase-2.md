@@ -3895,12 +3895,12 @@ Not in this step: the public page (P3.12); indexing (P3.05); posts and follows p
 Diagram: see "Sequence: publish and unpublish".
 
 ### P2.24 — §5.3 go/no-go spike
-Tags: [SPIKE] [ALEX]            Depends on: P1.34, P1.33p            Plan: §5.3 "Phase 2 go/no-go"; §3 PDS account UI and branding; §4 dropped `account-manager`/`pds-gatekeeper`
+Tags: [SPIKE] [ALEX]            Depends on: P1.34, P1.33p, P2.24r            Plan: §5.3 "Phase 2 go/no-go"; §3 PDS account UI and branding; §4 dropped `account-manager`/`pds-gatekeeper`
 Where: `docs/human/decisions/00xx-pds-account-surface.md`, `docs/human/decisions/assets/pds-branding/*.png`, `docs/human/runbooks/pds-branding.md`,
   `deployment/` env for the dev PDS (and the production PDS by Alex)
 Size: ~0 source lines; ~60 lines of runbook and ADR; one Playwright script (~120 lines) for screenshots and probes
 
-Goal: Decide with evidence that the unpatched, branded PDS `/account` and sign-in pages can be the only account surface,
+Goal: Decide with evidence that the branded native PDS `/account` and sign-in pages, with only ADR 0027’s frontend replacement, can be the only account surface,
 so `account-manager` and `pds-gatekeeper` stay dropped.
 
 Inputs: the dev PDS (P1.29a, made fit for authority by P1.34/P1.35) at the pinned image digest — there is no production
@@ -3930,8 +3930,9 @@ Algorithm (experiment protocol; each item: steps → pass → fail and what chan
      `PDS_BACKGROUND_LIGHT_URL`/`DARK`, `PDS_HOME_URL`, `PDS_TERMS_OF_SERVICE_URL`, `PDS_PRIVACY_POLICY_URL`,
      `PDS_SUPPORT_URL` (values in the runbook); the Playwright script captures sign-in, sign-up (`prompt=create`), consent,
      each `/account` page, and the confirm-email, reset and 2FA mails, in light and dark. Pass: Alex accepts in writing (a
-     PR comment). Fail → **stop**; the plan's fallback is thin app pages for what OAuth allows (handle change, deactivate,
-     verify prompt) — new steps are added to the book before continuing; never a PDS patch.
+     PR comment). Review the complete candidate from P2.24r against the approved PDS design, including native errors
+     and warnings; emails retain upstream rendering. Fail → **stop** for a decision before continuing; no backend patch,
+     app-side account screen or broader OAuth scope is authorized. Font feasibility is P2.24d/e, not provider source work.
   6. Confirmation link. Steps: with `PDS_EMAIL_DISABLE_CONFIRMATION_LINK=true`, trigger a confirm-email mail. Pass: the
      mail shows a code and no `bsky.app` link (string check on the captured mail). Also confirm P1.30's preflight refuses a
      PDS env without the flag. Fail → fix env/preflight and re-run.
@@ -3962,14 +3963,141 @@ Done when (tests):
   - `spike.preflight_flag`: P1.30's preflight test with the flag missing fails (re-run here as evidence).
   - Alex's acceptance comment is linked from the ADR (manual check in the PR).
 Reuse (provisional — for reuse review):
-  - `deploy/pds/patch-*.mjs` in the prototype → REJECT (plan §9: no patched upstreams); LESSON: the list of what the theme
-    patch did (invite and handle autofill) is the list of known losses.
+  - `deploy/pds/patch-*.mjs` in the prototype → REJECT (compiled substitution/postinstall/runtime rewrites remain banned).
+    ADR 0027 permits input-hash-checked frontend source presentation patches only; invite/handle autofill is not added.
   - vault `pitfalls/email-2fa-not-enforced-by-oauth-provider`, `pitfalls/email-change-pds-account-manager` → read first.
-Not in this step: any app-side account screen (only if item 5 fails, in new steps); Ozone; production launch settings.
+Not in this step: any app-side account screen; backend/provider changes; Ozone; production launch settings.
 Diagram: none.
 
+#### Approved frontend replacement sequence (2026-10-18)
+
+Alex required the backend remain the same and approved the design/plan with “sweet let's do it”. ADR 0027 and
+`docs/ai/plans/2026-10-18-pds-ui{,-design}.md` define the accepted contract. The steps below are planned, not built.
+All inherit the original P1.34/P1.33p prerequisites through P2.24a. P2.24 itself remains the separate hand-run dev
+SMTP/go-no-go gate; P5.12 still repeats items 1–6 on production. Automated fixtures never replace these gates.
+
+One step means one ownership path/PR, with relevant tests/docs and the existing source-line budget. The check
+steps are allocated first and contain no product changes; edge trusted-base work stays separate. If a slice needs
+further size/ownership splits, allocate them in the book/outline before code rather than mixing paths or granting
+an exemption. Folders appear only with their first implementation. Every done-check includes notes updated or
+none needed. ADR 0019 governs merges, including Alex's new-ADR, loosening, [ALEX]/[STOP] and production gates.
+
+### P2.24a — Record the frontend-only contract
+Tags: [ALEX]            Depends on: P1.34, P1.33p            Plan: §5.3; §9; ADR 0027
+Where: `docs/` (one ownership path, its tests/docs)
+Goal: Task 1; ADR 0027, log, PLAN, architecture, accepted design/plan and this allocation. No code/check changes.
+Done when: Existing doc/index/immutability/outline checks pass; the exact allowlist, no-backend rule, fixtures and font gate agree. Notes updated or none needed.
+
+### P2.24b — Add frontend build and integrity checks
+Tags: [SEC]            Depends on: P2.24a            Plan: §5.3; §9; ADR 0027
+Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs)
+Goal: Task 2 check part: source/image classification, source-input policy, exact UI-directory and runtime-config equality, manifest requirements and CI publishing contract. Keep deployment/product changes for P2.24c.
+Done when: Known-bad provider contents, permissions and symlink targets fail; missing entries/assets, version/hash drift and changed runtime config fail. Checks must exercise nonzero inputs. Notes updated or none needed.
+
+### P2.24c — Build the paired unstyled frontend
+Tags: [SEC]            Depends on: P2.24b            Plan: §5.3; §9; ADR 0027
+Where: `deployment/pds/ and image assembly` (one ownership path, its tests/docs)
+Goal: Task 2 build part: resolve the installed dist path and immutable upstream source from the pinned image; lock dependency/source/base/Unset inputs and build unmodified UI first. Copy dist/manifest atomically, with no runtime reinstall.
+Done when: Backend tree/config equality and all four real provider entries/assets pass. No Compose/image admission change yet; record source/version evidence. Notes updated or none needed.
+
+### P2.24d — Prove fonts through the existing edge
+Tags: [SPIKE] [SEC]            Depends on: P2.24c            Plan: §5.3; §9; ADR 0027
+Where: `spike branch; docs evidence` (one ownership path, its tests/docs)
+Goal: Task 2 font proof: pinned Caddy 2.11.7, isolated test-only PDS/PLC/mail with external egress blocked, and existing licensed fonts at one fixed same-origin path. Test only the corresponding HTML font-src adjustment, preserving dynamic policy values and unrelated responses. Spike code never merges.
+Done when: Browser requests/effective font and negative CSP cases pass, or stop and return the exact limitation for a decision before styled work; no backend patch or silent fallback. Notes updated or none needed.
+
+### P2.24e — Deliver the proved edge font policy
+Tags: [SEC] [ALEX]            Depends on: P2.24d            Plan: §5.3; §9; ADR 0027
+Where: `deployment/edge/ trusted base` (one ownership path, its tests/docs)
+Goal: Implement only the font delivery/policy demonstrated by P2.24d, with focused edge tests and security review. No product UI or repository-check changes ride.
+Done when: Exact origin/path and HTML-only policy change; hashes/nonces, other directives/headers/redirects/non-HTML unchanged; remote/wildcard/unsafe-inline/body rewriting and provider bypass rejected. Alex reviews the concrete loosening. Notes updated or none needed.
+
+### P2.24f — Extend generic shared UI for the PDS
+Tags: —            Depends on: P2.24e            Plan: §5.3; §9; ADR 0027
+Where: `shared/ui/` (one ownership path, its tests/docs)
+Goal: Task 3: design-sheet registration/approval for generic extensions and pinned Iconoir 7.12.1 devices/apps icons, minimal native props/slots, localized brand label and reusable keyboard/menu behavior.
+Done when: Existing app/core-shell, CSS/token freshness and bundle-budget checks pass; focus/escape/dismissal/route close work. No PDS/router/auth types or duplicate React/island runtime. Notes updated or none needed.
+
+### P2.24g — Register build-only presentation boundaries
+Tags: [SEC]            Depends on: P2.24f            Plan: §5.3; §9; ADR 0027
+Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs)
+Goal: Task 4 check part: dependency allowlist, workspace/budget/inventory and isolated fixture discovery checks before apps/pds or test harness code. No product path rides.
+Done when: Known-bad imports/server entry/data/auth ownership fail; shared-only generic dependencies and declared UI runtime remain the sole app imports. Planned folders are not created here. Notes updated or none needed.
+
+### P2.24h — Add isolated native PDS test fixtures
+Tags: —            Depends on: P2.24g, P2.24c            Plan: §5.3; §9; ADR 0027
+Where: `tests/integration/pds-ui/ and tests/e2e/pds/` (one ownership path, its tests/docs)
+Goal: Task 4/6 harness: pinned upstream TestPlc/TestNetworkNoAppView/mail patterns, real PDS and ephemeral state, blocked external egress, no public PLC or real mail. Exercise actual image entrypoint.
+Done when: Native signup/sign-in/recovery/2FA smoke flows pass; fixtures cannot reach public PLC/mail or operated local/dev accounts. No operated topology/config changes. Notes updated or none needed.
+
+### P2.24i — Build the account shell and Devices presentation
+Tags: —            Depends on: P2.24h            Plan: §5.3; §9; ADR 0027
+Where: `apps/pds/` (one ownership path, its tests/docs)
+Goal: Task 4 presentation: build-only package using shared tokens/components; translated labels, resolved links/current state, avatar data, children and upstream-owned action slots.
+Done when: Presentation/keyboard/theme/viewport checks pass with no fetch/auth logic; keep native upstream context/hooks and current-device protections available to the integration. Notes updated or none needed.
+
+### P2.24j — Integrate the native Devices pilot
+Tags: [SEC]            Depends on: P2.24i            Plan: §5.3; §9; ADR 0027
+Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
+Goal: Task 4 integration: small presentation-only patches to upstream account shell/session list. Keep upstream routes, providers, device ordering/filtering and revoke mutation.
+Done when: Real two-session revocation, current device, account switch, avatar/home, settings, direct reload/back/forward pass; both themes match Figma 49:1912/49:1978 at desktop/phone/320px/short viewports. No partial rollout. Notes updated or none needed.
+
+### P2.24k — Build native account-page presentation
+Tags: —            Depends on: P2.24j            Plan: §5.3; §9; ADR 0027
+Where: `apps/pds/` (one ownership path, its tests/docs)
+Goal: Task 5 presentation: home, settings, connected apps and about, with real translated display props and loading/empty/pending/error states. Public profile editing stays in the app.
+Done when: Generic props do not add mockup-only capabilities; visual/keyboard/long-identifier checks pass. Split further before code if the source budget requires it. Notes updated or none needed.
+
+### P2.24l — Integrate native account pages
+Tags: [SEC]            Depends on: P2.24k            Plan: §5.3; §9; ADR 0027
+Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
+Goal: Task 5 integration: presentation-only home/manage/apps/about patches; retain real grant details and native revoke actions.
+Done when: Two-account scoping, switch, rejected/pending revoke, native permission display, locale/sign-out reachability and existing browser navigation pass. Notes updated or none needed.
+
+### P2.24m — Build account-dialog presentation
+Tags: —            Depends on: P2.24l            Plan: §5.3; §9; ADR 0027
+Where: `apps/pds/` (one ownership path, its tests/docs)
+Goal: Task 5 dialogs: verification, email/handle/password changes, email 2FA, deactivate/reactivate/delete. Keep native dialogs/forms unless equivalent focus/validation/pending/error behavior is demonstrated.
+Done when: Every required field/warning/final confirmation remains renderable; keyboard/focus/theme/long-translation checks pass. No native safeguard or credential flow is removed. Notes updated or none needed.
+
+### P2.24n — Integrate native account dialogs
+Tags: [SEC]            Depends on: P2.24m            Plan: §5.3; §9; ADR 0027
+Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
+Goal: Task 5 integration: preserve native validation, credential/code handling, action handlers and actual backend outcomes for all account dialogs.
+Done when: Real changes/revocation/deactivate/reactivate/final delete pass with selected-account isolation; wrong/expired codes, expired session and rejected mutation retain native errors. No optimistic false success. Notes updated or none needed.
+
+### P2.24o — Build authentication presentation
+Tags: —            Depends on: P2.24n            Plan: §5.3; §9; ADR 0027
+Where: `apps/pds/` (one ownership path, its tests/docs)
+Goal: Task 6 presentation: signup, chooser, login, reauth, recovery/reset, email 2FA, consent and authorization/cookie errors; preserve form semantics/autocomplete and required security copy.
+Done when: Both themes, responsive layouts, translated/long data, keyboard and focus checks pass; consent accepts actual request props, never sample permissions. Notes updated or none needed.
+
+### P2.24p — Integrate native authentication and app return
+Tags: [SEC]            Depends on: P2.24o            Plan: §5.3; §9; ADR 0027
+Where: `deployment/pds/patches/ui/` (one ownership path, its tests/docs)
+Goal: Task 6 integration: native auth-shell/forms and all four entries, keeping conditional invite/captcha policy and upstream hooks/actions/locale. Existing app handoff is regression coverage only.
+Done when: Isolated real signup/login/reauth/recovery, correct/wrong/expired 2FA, accept/deny consent, cookie/errors and app return pass. No auth/session/route/scope changes. Notes updated or none needed.
+
+### P2.24q — Add complete candidate release checks
+Tags: [SEC]            Depends on: P2.24p            Plan: §5.3; §9; ADR 0027
+Where: `scripts/ and .github/ check paths` (one ownership path, its tests/docs)
+Goal: Task 7 check part: final integrity/manifest/asset/CSP/browser matrix, source mismatch refusal, provenance/SBOM/scanning/signing/publishing checks. No image admission/product change rides.
+Done when: Version drift/tamper negatives pass; whole screen/state matrix runs and no test is silently omitted. Existing admission stays until separate P2.24r. Notes updated or none needed.
+
+### P2.24r — Admit the fully verified UI image
+Tags: [SEC]            Depends on: P2.24q            Plan: §5.3; §9; ADR 0027
+Where: `deployment/ image admission/Compose/preflight` (one ownership path, its tests/docs)
+Goal: Task 7 deployment part: only the complete verified candidate enters the existing signed/mirrored digest pipeline. Preserve operated topology and official-image fallback; no edge or UI work rides.
+Done when: Artifact/entrypoint/native flow evidence passes; image and matching edge/font digests retained; same-backend official-UI rollback and urgent security upgrade fallback rehearsed. Production deployment still requires its existing gates. Notes updated or none needed.
+
+### P2.24s — Record release and operational acceptance
+Tags: [ALEX]            Depends on: P2.24, P2.24r            Plan: §5.3; §9; ADR 0027
+Where: `docs/human/ runbook/features/evidence` (one ownership path, its tests/docs)
+Goal: Task 7 operations: pds-ui runbook, source/version update procedure, complete Figma/flow/accessibility evidence, accepted variances and P2.24 manual SMTP/screens acceptance. Preserve P5.12 production recheck.
+Done when: Typecheck/lint/guards and relevant full browser/integration checks green; no unresolved backend/font/native-flow gate; Alex acceptance linked. UI rollback restores official UI for the same backend, never downgrades account data. Notes updated or none needed.
+
 ### P2.26 — Phase 2 exit
-Tags: (none)            Depends on: P2.23, P2.24, P2.13a, P1.38, P1.29h            Plan: §8 Phase 2 "Exit"; §6.1 gates; §7 "dependency counts recorded at each phase exit"
+Tags: (none)            Depends on: P2.23, P2.24, P2.24s, P2.13a, P1.38, P1.29h            Plan: §8 Phase 2 "Exit"; §6.1 gates; §7 "dependency counts recorded at each phase exit"
 Where: `tests/e2e/phase-2.exit.spec.ts` (Playwright on a production build against `compose.dev`),
   `tests/integration/authz/web-matrix.test.ts` (findings F-27), `docs/human/phase-exits/phase-2.md`
 Size: ~0 source lines, ~260 test lines, one report

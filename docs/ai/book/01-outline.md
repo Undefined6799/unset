@@ -1326,7 +1326,7 @@ flowchart TD
 
 ## Phase 2 — Identity, auth, profile writing (after slice 1 and slice 2)
 
-Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
+Depth: **build-ready**. 39 steps here (including the 19 P2.24 frontend slices approved 2026-10-18); P2.01–P2.08, P2.11–P2.13, P2.15 and P2.13a are in slice 1 above, and P2.26b–P2.26e in slice 2 (pulled forward before P1.34, Alex 2026-10-14T20:45:26Z).
 
 | Id | Step | Tags | Deps | Owner file |
 |---|---|---|---|---|
@@ -1345,8 +1345,27 @@ Depth: **build-ready**. 20 steps here; P2.01–P2.08, P2.11–P2.13, P2.15 and P
 | P2.21 | Profile editor | — | P2.16, P2.18, P2.19, P2.20, P1.23, P1.31 | `phase-2.md` |
 | P2.22 | Privacy switches as a state machine | [SEC] (Q-A, Q-D provisional; Q-B, Q-C, Q-E answered) | P2.21, P2.07 | `phase-2.md` |
 | P2.23 | Publish and unpublish | [SEC] | P2.21, P2.22, P1.31, P2.07 | `phase-2.md` |
-| P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p | `phase-2.md` |
-| P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.13a, P1.38, P1.29h | `phase-2.md` |
+| P2.24 | §5.3 go/no-go spike | [SPIKE] [ALEX] | P1.34, P1.33p, P2.24r | `phase-2.md` |
+| P2.24a | Record the frontend-only contract | [ALEX] | P1.34, P1.33p | `phase-2.md` |
+| P2.24b | Add frontend build and integrity checks | [SEC] | P2.24a | `phase-2.md` |
+| P2.24c | Build the paired unstyled frontend | [SEC] | P2.24b | `phase-2.md` |
+| P2.24d | Prove fonts through the existing edge | [SPIKE] [SEC] | P2.24c | `phase-2.md` |
+| P2.24e | Deliver the proved edge font policy | [SEC] [ALEX] | P2.24d | `phase-2.md` |
+| P2.24f | Extend generic shared UI for the PDS | — | P2.24e | `phase-2.md` |
+| P2.24g | Register build-only presentation boundaries | [SEC] | P2.24f | `phase-2.md` |
+| P2.24h | Add isolated native PDS test fixtures | — | P2.24g, P2.24c | `phase-2.md` |
+| P2.24i | Build the account shell and Devices presentation | — | P2.24h | `phase-2.md` |
+| P2.24j | Integrate the native Devices pilot | [SEC] | P2.24i | `phase-2.md` |
+| P2.24k | Build native account-page presentation | — | P2.24j | `phase-2.md` |
+| P2.24l | Integrate native account pages | [SEC] | P2.24k | `phase-2.md` |
+| P2.24m | Build account-dialog presentation | — | P2.24l | `phase-2.md` |
+| P2.24n | Integrate native account dialogs | [SEC] | P2.24m | `phase-2.md` |
+| P2.24o | Build authentication presentation | — | P2.24n | `phase-2.md` |
+| P2.24p | Integrate native authentication and app return | [SEC] | P2.24o | `phase-2.md` |
+| P2.24q | Add complete candidate release checks | [SEC] | P2.24p | `phase-2.md` |
+| P2.24r | Admit the fully verified UI image | [SEC] | P2.24q | `phase-2.md` |
+| P2.24s | Record release and operational acceptance | [ALEX] | P2.24, P2.24r | `phase-2.md` |
+| P2.26 | Phase 2 exit | — | P2.23, P2.24, P2.24s, P2.13a, P1.38, P1.29h | `phase-2.md` |
 | P2.26f | Postmortem template and its docs check (check part of P2.26a; SE-6 `q`) | — | P2.26 | `phase-2.md` |
 | P2.26a | Minimal deploy by verified digest for the test host (added, decision 35 D5) | [SEC] | P2.26f, P2.26, P1.27, P1.27s, P2.26d, P1.30, P1.30s, P1.30t, P1.30u, P1.11p, P1.33 | `phase-2.md` |
 | P2.25 | Closed test track | [ALEX] | P2.26, P2.26a, P2.10, P2.15, P2.16 | `phase-2.md` |

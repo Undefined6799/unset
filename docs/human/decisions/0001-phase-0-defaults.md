@@ -452,3 +452,11 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   handle list is set. Real users still hit P2.11. Password, DID, and email for those two live only on the PDS;
   the app keeps no parallel store and does not put them in the repository. Agents sign in through the real PDS
   login. This record does not implement the gate.
+- **PDS frontend distribution (Alex, 2026-10-18; own record:
+  [0027](0027-pds-frontend-distribution.md)):** after requiring the backend remain the same, Alex approved the PDS UI
+  design/plan with “sweet let's do it”. Only the rebuilt `@atproto/oauth-provider-ui/dist`, manifest included, may
+  differ from the pinned official image; backend tree and runtime configuration stay equal. Build-only `apps/pds`
+  reuses shared UI; native auth/account behavior and app scopes stay unchanged. Isolated test-only PDS/PLC/mail
+  fixtures are permitted without changing operated topology or replacing manual dev SMTP/production gates. Fonts
+  need a separately proved, narrowly scoped edge solution; provider asset/CSP source changes are excluded. SE-6,
+  design-sheet registration, ADR 0019 and production gates stand; no admission check is changed in this record.
