@@ -224,6 +224,27 @@ async function serveTest(): Promise<void> {
           { group: "app", request, title: "Kit", body: createElement(kit.Showcase) },
         ),
     }),
+    // P2.12a: the welcome screens as interfaces/http/routes/welcome.ts shows them, without the session they need there.
+    ...[
+      { path: FIXTURES.welcomeAge, title: "When were you born?", body: () => render.screens.welcomeAge() },
+      {
+        path: FIXTURES.welcomeTerms,
+        title: "Terms and privacy",
+        body: () =>
+          render.screens.welcomeTerms({ countryRule: true, next: null, termsVersion: "1", privacyVersion: "1" }),
+      },
+      { path: FIXTURES.welcomeChat, title: "Chat comes later", body: () => render.screens.welcomeChat() },
+    ].map(({ path, title, body }) =>
+      defineRoute({
+        method: "GET",
+        path,
+        group: "app",
+        rateLimit: "default",
+        session: "none",
+        handler: ({ request }) =>
+          pageResponse(deps, { group: "app", request, title, body: body(), islands: "off", shell: { noindex: true } }),
+      }),
+    ),
     htmlRoute(FIXTURES.unlabeled, "public", `<input name="name">`),
     htmlRoute(FIXTURES.inline, "public", `<script>globalThis.__inline = 1</script>`),
     htmlRoute(FIXTURES.script, "app", `<script type="module" src="/${boot}"></script>`),
