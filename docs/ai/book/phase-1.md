@@ -78,8 +78,8 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u,
   P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g,
   P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022;
-  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08g, P2.11, P2.11a, P2.15,
-  P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and
+  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08g, P2.11,
+  P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and
   refocus'): the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34
   hardening steps not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario
   passes locally. Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may
@@ -15037,6 +15037,15 @@ Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-publ
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
 It gates the first 80/443 forward.
 
+**Staging names (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's 0x40.space ruling at 03:55Z):**
+after P1.35x every `0x40.space` dev value fails, so this step's configuration and probe use ADR 0025's
+`staging.unset.sh` (app) and `staging.unset.ac` (PDS), and keep its existing gate. Book text only; no new step.
+
+**Prerequisite before other PDSes sign in (book edit 2026-10-19-auth-dead-gate, P2.11c's book lines):** before any
+PDS other than ours can sign in, the email recheck forces a token refresh, so a revoked grant fails at the refresh
+(`invalid_grant` leads to `authDead`). The test runs against a provider with stateless tokens. Without it, this step
+doesn't open. No forced refresh is needed today: on our own PDS it adds a call and closes nothing.
+
 **What (moved out of P1.33):** the 80/443 forwards and the accept rule; ip-echo and the echo assertion; V5; the
 CGNAT and DDNS branches. Alex's router and DNS actions are as P1.33 lists them.
 
@@ -15047,19 +15056,21 @@ for the book: any step that first makes something reachable from the internet de
 Alex's steps (P1.34's former steps 5, 6 and 9):
 
 ```text
- 5. Confirm registrar lock and DNSSEC on 0x40.space (enable them if off).
- 6. CAA on 0x40.space: 0 issue "letsencrypt.org" (optionally with accounturi=<Caddy's ACME account URI>, RFC
-    8657, once Caddy has registered). The edge is pinned to Let's Encrypt (P1.28).
- 9. Public address: if the ISP address is static → A record for 0x40.space. If dynamic → the DDNS updater
-    (deployment/ddns) with an API token scoped to that single record only; if the DNS provider cannot scope a token
-    to one record → STOP and choose with the agent (another provider for 0x40.space, or a static address).
+ 5. Confirm registrar lock and DNSSEC on unset.sh and unset.ac (enable them if off).
+ 6. CAA on staging.unset.sh and staging.unset.ac: 0 issue "letsencrypt.org" (optionally with
+    accounturi=<Caddy's ACME account URI>, RFC 8657, once Caddy has registered). The edge is pinned to Let's
+    Encrypt (P1.28).
+ 9. Public address: if the ISP address is static → A records for staging.unset.sh and staging.unset.ac. If
+    dynamic → the DDNS updater (deployment/ddns) with an API token scoped to those two records only; if the DNS
+    provider cannot scope a token to them → STOP and choose with the agent (another provider for those records,
+    or a static address).
     _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
     No AAAA record unless IPv6 was probed in P1.33.
 ```
 
 Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
-- V2: P1.34's V1 DNSSEC check on `0x40.space`, plus the CAA record; registrar lock confirmed by Alex.
-- V3: from outside, `describeServer` on `0x40.space` → 200 with `inviteCodeRequired: true`.
+- V2: P1.34's V1 DNSSEC check on `unset.sh` and `unset.ac`, plus the CAA record; registrar lock confirmed by Alex.
+- V3: from outside, `describeServer` on `staging.unset.ac` → 200 with `inviteCodeRequired: true`.
 - V4: outside admin probes → 404/401 (the P1.28 tests, now against the live host).
 - V7: probe green for 24 h before P1.35 starts; the hairpin check passed (P1.29a's edge aliases).
 
@@ -15077,7 +15088,7 @@ every public gate and its evidence lives here.
   workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
   are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
   timeout 10 s per request:
-  1. `GET https://0x40.space/xrpc/_health` → 200;
+  1. `GET https://staging.unset.ac/xrpc/_health` → 200;
   2. `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200
      and a CAR whose commit proof verifies against the DID document's signing key (the same check resolvers do,
      `lex-resolver.ts:495-520`), and whose record CID equals the expected CID committed in the probe repo;

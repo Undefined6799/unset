@@ -109,8 +109,8 @@ and this table is the only place to change.
 ## Slices (decision 34, editor pass 2026-10-04)
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
-Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a, P2.15,
-P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
+Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08g, P2.11,
+P2.11a–P2.11c, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
 merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
 i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
@@ -128,8 +128,8 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their user-facing
-English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
+(P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
+user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
 key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
 English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
 (P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts
@@ -167,6 +167,7 @@ flowchart TD
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
+  P211a --> P211b[P2.11b auth_dead counter]; P211a --> P211c[P2.11c auth_dead bound reworded]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
   P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]; P212a --> P212c[P2.12c welcome axe gaps]
@@ -1962,9 +1963,12 @@ everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our 
   closed); `transient` never ends a session.
 - No per-request PDS call. The bound (`EMAIL_RECHECK_S` or the next PDS call, whichever is first) goes into the
   security notes, pinned by a test. `EMAIL_RECHECK_S`'s config maximum drops from 86,400 to 900
-  (interfaces/http/config.ts:55), which caps the window at 15 minutes.
+  (interfaces/http/config.ts:55). On our own PDS, the only kind signed in until P1.33p (P1.36v), that bounds the
+  window at `EMAIL_RECHECK_S` (at most 900 s), because our pinned PDS checks access tokens statefully. For any other
+  PDS the bound is token life plus `EMAIL_RECHECK_S`, unresolved until P1.33p (architecture's #1051 M1 ruling,
+  03:51Z; P2.11c carries the wording).
 - No audit row: session ends are never audited (P1.15; book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order
-  fixes from Codex on #1037"). Whether a separate audit step follows waits on architecture.
+  fixes from Codex on #1037"). The operational trace is P2.11b's counter, with no identity data.
 
 Done when these pass, each red first, and check is green:
 1. a revoked grant at the recheck gives a 303 to `/login` with the cookie cleared, no session row left for the DID,
@@ -1974,6 +1978,35 @@ Done when these pass, each red first, and check is green:
    that case, pinned (book edit 2026-10-19-auth-dead-gate, "Step-book mapping of 06:10Z");
 4. `scope_missing` still goes to `/verify-email`;
 5. the bound test pins 900, and a config red shows 901 is refused.
+
+As built: #1051, merged as a839ce6.
+
+### P2.11b — Count sessions ended on a revoked grant
+Tags: [SEC]            Depends on: P2.11a
+Slice 1, issue #1052, product (the auth_dead recheck path and the `ops.report()` signal list), lane Phase 1. A
+tightening in its own PR. Book edit 2026-10-19-auth-dead-gate, "Step-book mapping of 06:15Z" (an architecture
+section label written before 03:50Z UTC). If it touches the trusted base (`infrastructure/audit`, or the
+`end_sessions_for_did` function), the lane stops.
+**What:**
+- An `ops.report()` counter, `sessions_ended_auth_dead`, counts the DIDs whose sessions were ended and the sessions
+  ended.
+- It carries no identity data: no DID, no IP and no handle (RE-4, decision 35 D9).
+- It writes no audit row (P1a-A1; P1.15).
+- Red: one revoke raises the counter once and writes no audit row. A transient failure raises nothing.
+- Its retention follows the operational signal entry in the retention table and the RoPA. If no such entry exists,
+  the PR says so, and the step book books the line.
+Threats: sessions ended with no operational trace. Answered by a no-identity counter; nothing new identifies a person.
+Done when the red is shown first and check is green.
+
+### P2.11c — Reword the auth_dead sign-out bound
+Tags: [SEC]            Depends on: P2.11a
+Slice 1, issue #1057, product comment plus a docs rider (`interfaces/http/compose.ts:245-246`,
+`docs/ai/notes/area/http.md:77-79`), lane Phase 1. Book edit 2026-10-19-auth-dead-gate, "Step-book mapping of
+architecture's #1051 M1 ruling".
+**What:** wording only, with no behaviour change. "Signed out within 15 minutes" becomes "on our own PDS, within
+`EMAIL_RECHECK_S` (at most 900 s)". For any other PDS, the bound is "token life plus `EMAIL_RECHECK_S`, unresolved
+until P1.33p". The PR body says no behaviour changes. P1.33p carries the forced-refresh prerequisite.
+Done when check is green.
 
 ### P2.15 — Legal paperwork part 2
 Tags: (none; content needs Alex's approval through the PR and two inputs, see checklist)            Depends on: P1.25, P1.37            Plan: §6 "Legal paperwork", "Privacy notice", "Invite-country rule", "Canadian law"; §5.3 interstitial; §5.8 fingerprints

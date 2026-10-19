@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 356 steps: 321 from `phase-1.md`, 35 from `phase-2.md` (including the
+Depth: **build-ready**. 358 steps: 321 from `phase-1.md`, 37 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -535,6 +535,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08g | Unit-test the last-browser revoke failure | [SEC] | P2.08e, P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
+| P2.11b | Count sessions ended on a revoked grant | [SEC] | P2.11a | `phase-2.md` |
+| P2.11c | Reword the auth_dead sign-out bound | [SEC] | P2.11a | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
@@ -847,6 +849,8 @@ flowchart TD
   P2_08g["P2.08g Revoke failure unit test"]
   P2_11["P2.11 Email-verify gate"]
   P2_11a["P2.11a Revoked grant ends sessions"]
+  P2_11b["P2.11b auth_dead counter"]
+  P2_11c["P2.11c auth_dead bound reworded"]
   P2_15["P2.15 Legal paperwork part 2"]
   P2_12["P2.12 Onboarding"]
   P2_13["P2.13 /me and the settings shell"]
@@ -1054,6 +1058,8 @@ flowchart TD
   P2_06 --> P2_11
   P2_07 --> P2_11
   P2_11 --> P2_11a
+  P2_11a --> P2_11b
+  P2_11a --> P2_11c
   P1_25 --> P2_15
   P1_37 --> P2_15
   P1_37 --> P1_37b
