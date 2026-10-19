@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import {
   createDidResolver,
   createHandleVerifier,
+  type Did,
   type EmailCache,
   PRIVACY_VERSION,
   resolveHandle,
@@ -49,6 +50,7 @@ import { createAccountStore } from "./account.ts";
 import type { AppGate } from "./app-gate.ts";
 import { openApp } from "./app-gate.ts";
 import type { config } from "./config.ts";
+import { emailRefresh } from "./email-refresh.ts";
 import { policies } from "./limits.ts";
 import { browserLogout } from "./logout-sessions.ts";
 import { assetsRoutes } from "./routes/assets.ts";
@@ -240,27 +242,11 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       ? { confirmed: null, checkedAt: null }
       : { confirmed: row.email_confirmed, checkedAt: row.email_checked_at };
   };
-  const refreshEmail: AppGate["refreshEmail"] = async (session, deadline) => {
-    const info = await pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, session.did);
-    switch (info.kind) {
-      case "transient":
-        return "transient";
-      case "ok": {
-        if (info.value.emailConfirmed === undefined) return "unconfirmed";
-        const confirmed = info.value.emailConfirmed;
-        await withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, session.idHash, confirmed));
-        return confirmed ? "confirmed" : "unconfirmed";
-      }
-      case "auth_dead":
-      case "scope_missing":
-      case "rejected":
-        return "unconfirmed";
-      default: {
-        const unexpected: never = info;
-        return unexpected;
-      }
-    }
-  };
+  const sessionInfo = (did: Did, deadline: AbortSignal) =>
+    pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did);
+  const setEmailConfirmed = (idHash: Buffer, value: boolean, deadline: AbortSignal) =>
+    withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value));
+  const refreshEmail = emailRefresh({ sessionInfo, setEmailConfirmed });
   const gate: AppGate = {
     readSession,
     loadAccount: (did, deadline) => accounts.get(did, deadline),
@@ -274,10 +260,8 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     readSession: async (request, deadline) => (await readSession(request, deadline)).session,
     loadAccount: (did, deadline) => accounts.get(did, deadline),
     versions,
-    setEmailConfirmed: (idHash, value, deadline) =>
-      withTransaction(oauth.pool, deadline, (tx) => sessions.setEmailConfirmed(tx, idHash, value)),
-    sessionInfo: (did, deadline) =>
-      pds.pdsSessionInfo({ memo: new Map(), deadline, deadlineAt: Date.now() + 10_000 }, did),
+    setEmailConfirmed,
+    sessionInfo,
     issueNonce: (deadline) =>
       withClient(oauth.pool, deadline, (db) => nonces.issue(db, "login.nonce", { ttlS: PURPOSES["login.nonce"] })),
     authorize: (input, options) => authorize(oauth.client, input, { ...options, log }),
