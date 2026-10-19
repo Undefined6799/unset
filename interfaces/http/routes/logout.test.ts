@@ -237,13 +237,18 @@ test("signed_out_never_takes_the_issuer_from_the_query", async () => {
   expect(html).toContain('href="https://pds.unset.test/account"');
 });
 
-test("signed_out_refuses_a_bad_issuer_cookie", async () => {
-  // Anything but one https origin falls back to our PDS: a path, another scheme, garbage, or two cookies.
+test("signed_out.cookie_rejects_non_origin", async () => {
+  // Architecture 04:15Z item 2: anything but exactly one https origin falls back to our PDS: a path, a query, a
+  // fragment, a user part, a port, another scheme, garbage, or two cookies.
   const bad = [
     issuerCookie("https://pds.example/account"),
+    issuerCookie("https://pds.example/"),
+    issuerCookie("https://pds.example?next=1"),
+    issuerCookie("https://pds.example#top"),
+    issuerCookie("https://user@pds.example"),
+    issuerCookie("https://pds.example:8443"),
     issuerCookie("http://pds.example"),
     issuerCookie("javascript:alert(1)"),
-    issuerCookie("https://user@pds.example"),
     "__Host-signed_out_issuer=%%%",
     `${issuerCookie(FOREIGN_ISSUER)}; ${issuerCookie("https://other.example")}`,
   ];
@@ -253,6 +258,49 @@ test("signed_out_refuses_a_bad_issuer_cookie", async () => {
     expect(html).not.toContain("pds.example");
     expect(html).not.toContain("javascript:");
   }
+});
+
+test("signed_out.cookie_single_use", async () => {
+  // Item 1: the response that reads the carried issuer clears it, so a reload links our PDS.
+  const response = await setup({ session: null }).send("/signed-out", {
+    method: "GET",
+    cookie: issuerCookie(FOREIGN_ISSUER),
+  });
+  expect(await response.text()).toContain('href="https://pds.example/"');
+  expect(response.headers.getSetCookie()).toEqual([CLEAR_ISSUER]);
+  const rejected = await setup({ session: null }).send("/signed-out", {
+    method: "GET",
+    cookie: issuerCookie("https://pds.example:8443"),
+  });
+  expect(rejected.headers.getSetCookie()).toEqual([CLEAR_ISSUER]);
+  const none = await setup({ session: null }).send("/signed-out", { method: "GET" });
+  expect(none.headers.getSetCookie()).toEqual([]);
+});
+
+test("signed_out.ours_exact_match", async () => {
+  // Item 4: ours only when equal, as a string, to our PDS issuer. A lookalike that ends or starts with our host is
+  // foreign: it gets the plain foreign link and never the "our sign-in server" sentence.
+  for (const lookalike of ["https://evilpds.unset.test", "https://pds.unset.test.example"]) {
+    const html = await (
+      await setup({ session: null }).send("/signed-out", { method: "GET", cookie: issuerCookie(lookalike) })
+    ).text();
+    expect(html, lookalike).not.toContain("You are going to");
+    expect(html, lookalike).not.toContain(`href="${lookalike}/account"`);
+    expect(html, lookalike).toContain(`href="${lookalike}/"`);
+  }
+});
+
+test("signed_out.cookie_never_logged", async () => {
+  // Item 3 (SE-7): a user's PDS origin can identify them, so neither it nor a parse failure reaches a log line.
+  for (const cookie of [issuerCookie(FOREIGN_ISSUER), issuerCookie("https://pds.example:8443/x")]) {
+    const { send, lines } = setup({ session: null });
+    await send("/signed-out", { method: "GET", cookie });
+    expect(JSON.stringify(lines)).not.toContain("pds.example");
+    expect(JSON.stringify(lines)).not.toContain(cookie.split("=")[1]);
+  }
+  const { send, lines } = setup({ issuer: FOREIGN_ISSUER });
+  await send("/logout");
+  expect(JSON.stringify(lines)).not.toContain("pds.example");
 });
 
 test("signed_out_ignores_scope_everywhere", async () => {
