@@ -89,11 +89,6 @@
       "status": 415
     },
     {
-      "method": "POST",
-      "path": "/logout/everywhere",
-      "status": 415
-    },
-    {
       "method": "GET",
       "path": "/signed-out",
       "status": 200

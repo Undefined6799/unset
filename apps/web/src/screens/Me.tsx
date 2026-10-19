@@ -33,13 +33,6 @@ export function Me({ handle, did, handleUnavailable, privacyNotice = false, pdsH
       <form method="post" action="/logout">
         <Button type="submit">Sign out</Button>
       </form>
-      <form method="post" action="/logout/everywhere">
-        <label>
-          <input type="checkbox" name="confirm" value="yes" />
-          Sign out of every browser
-        </label>
-        <Button type="submit">Sign out everywhere</Button>
-      </form>
     </>
   );
 }

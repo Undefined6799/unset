@@ -195,12 +195,6 @@ function get(path: string, cookie: string) {
   );
 }
 
-function firstCookie(opened: readonly { cookieValue: string }[]): string {
-  const cookie = opened[0]?.cookieValue;
-  if (cookie === undefined) throw new Error("no session");
-  return cookie;
-}
-
 test("logout.this_browser keeps the other session and the grant", async () => {
   mode = "drop";
   revoked = [];
@@ -309,48 +303,4 @@ test("logout.remaining_sessions_need_a_token_set", async () => {
   expect(await withTransaction(webPool, null, count)).toBe(0);
   await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
   expect(await withTransaction(webPool, null, count)).toBe(1);
-});
-
-test("logout.everywhere revokes before the token set is deleted", async () => {
-  mode = "drop";
-  revoked = [];
-  lines.length = 0;
-  const owner = newDid();
-  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
-  const cookies = [await open(owner), await open(owner), await open(owner)];
-  const response = await post("/logout/everywhere", firstCookie(cookies), "confirm=yes");
-  expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/signed-out?scope=everywhere");
-  expect(revoked).toEqual([{ did: owner, hadToken: true }]);
-  expect(await sessionsOf(owner)).toBe(0);
-  expect(await hasToken(owner)).toBe(false);
-  expect(lines.filter((line) => line.event === "auth.logout_everywhere")).toHaveLength(1);
-  expect(JSON.stringify(lines)).not.toContain(owner);
-});
-
-test("logout.everywhere_revoke_fails still drops the grant", async () => {
-  mode = "keep";
-  revoked = [];
-  const owner = newDid();
-  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
-  const cookies = [await open(owner), await open(owner)];
-  const response = await post("/logout/everywhere", firstCookie(cookies), "confirm=yes");
-  expect(response.headers.get("location")).toBe("/signed-out?scope=everywhere&error=logout.revoke_unconfirmed");
-  expect(revoked).toEqual([{ did: owner, hadToken: true }]);
-  expect(await hasToken(owner)).toBe(false);
-  expect(await sessionsOf(owner)).toBe(0);
-});
-
-test("logout.everywhere_requires_confirm leaves every session", async () => {
-  mode = "drop";
-  revoked = [];
-  const owner = newDid();
-  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
-  const cookies = [await open(owner), await open(owner)];
-  const response = await post("/logout/everywhere", firstCookie(cookies), "");
-  expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("/settings?error=logout.confirm_required");
-  expect(revoked).toEqual([]);
-  expect(await sessionsOf(owner)).toBe(2);
-  expect(await hasToken(owner)).toBe(true);
 });

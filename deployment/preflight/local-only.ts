@@ -8,8 +8,8 @@ import { TOKEN_READER } from "./compose-parse.ts";
 export const LOCAL_ONLY_SERVICES: ReadonlySet<string> = new Set([TOKEN_READER, "plc"]);
 
 /**
- * Networks only the local file has, each with its exact members. P1.34v adds the PLC's per-consumer networks here
- * (plc_pds, plc_web, plc_appview), each holding the PLC and that one consumer (architecture 02:26Z).
+ * Networks only the local file has, each with its exact members. None today: ADR 0022 retired P1.34v's per-consumer PLC
+ * networks, and `plc_*` stays refused outside the local file by isLocalOnlyNetwork (P1.35w).
  */
 export const LOCAL_ONLY_NETWORKS: ReadonlyMap<string, { internal: boolean; members: readonly string[] }> = new Map();
 

@@ -23,6 +23,9 @@ export const FIXTURES = {
   unlabeled: "/fixture/unlabeled",
   inline: "/fixture/inline",
   script: "/fixture/script",
+  welcomeAge: "/fixture/welcome-age",
+  welcomeTerms: "/fixture/welcome-terms",
+  welcomeChat: "/fixture/welcome-chat",
 } as const;
 
 export type PageGroup = "app" | "public";
@@ -47,6 +50,16 @@ export const PAGES: readonly PageFixture[] = [
   { path: "/signed-out", group: "app", zeroJs: false, expectJs: true },
   // P2.12 renders this with islands off and no session. The header stays static, so no script is requested.
   { path: "/welcome/blocked", group: "app", zeroJs: true, expectJs: false },
+];
+
+/**
+ * The welcome screens that need a signed-in account at their real paths (P2.12a), rendered on the test server as the
+ * routes render them: islands off, the app shell, noindex. `/welcome/blocked` needs no session and is in PAGES.
+ */
+export const WELCOME_FIXTURES: readonly PageFixture[] = [
+  { path: FIXTURES.welcomeAge, group: "app", zeroJs: true, expectJs: false },
+  { path: FIXTURES.welcomeTerms, group: "app", zeroJs: true, expectJs: false },
+  { path: FIXTURES.welcomeChat, group: "app", zeroJs: true, expectJs: false },
 ];
 
 /**

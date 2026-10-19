@@ -12,6 +12,7 @@ import {
   TEST_ORIGIN,
   type ThemeCell,
   themeCells,
+  WELCOME_FIXTURES,
 } from "./pages.ts";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -62,6 +63,27 @@ for (const fixture of PAGES) {
         expect(noise.csp).toEqual([]);
         expect(watched.pageErrors).toEqual([]);
         if (!fixture.expectJs) expect(watched.scripts).toEqual([]);
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+}
+
+// P2.12a: the welcome screens that need a session at their real paths, in both themes. English only until P1.22b.
+for (const fixture of WELCOME_FIXTURES) {
+  for (const cell of themeCells(fixture)) {
+    test(`welcome.axe ${fixture.path} ${cellName(cell)}`, async ({ browser, browserName }) => {
+      const page = await openCell(browser, cell);
+      const watched = watch(page);
+      try {
+        const response = await page.goto(`${TEST_ORIGIN}${fixture.path}`);
+        expect(response?.status()).toBe(200);
+        await expectTheme(page, fixture, cell, browserName);
+        const results = await new AxeBuilder({ page }).withTags([...AXE_TAGS]).analyze();
+        expect(unallowedViolations(results.violations, AXE_ALLOWANCE, today)).toEqual([]);
+        expect(watched.pageErrors).toEqual([]);
+        expect(watched.scripts).toEqual([]);
       } finally {
         await page.context().close();
       }
