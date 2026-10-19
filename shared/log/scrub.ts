@@ -11,7 +11,9 @@ const SENSITIVE: readonly RegExp[] = [
   /eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*/g, // JWT
   /\b(?:Bearer|Basic)\s+\S+/gi, // HTTP credentials
   /[^\s@]+@[^\s@]+\.[^\s@]+/g, // email address
-  /\bdid:[a-z]+:[A-Za-z0-9._:%-]+/g, // any DID (before IPv6, whose pattern would eat its colons)
+  // Any DID (before IPv6, whose pattern would eat its colons). Each separator may come as `:`, or percent-encoded once
+  // or twice in either hex case (`%3A`, `%253a`; RFC 3986 2.1), as a client may send it in a path.
+  /\bdid(?::|%3a|%253a)[a-z]+(?::|%3a|%253a)[a-z0-9._:%-]+/gi,
   /z[1-9A-HJ-NP-Za-km-z]{40,}/g, // multibase key
   /(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?!\d)/g, // IPv4, also next to letters (`client_10.0.0.1`)
   // IPv6: eight full groups, or a `::` compression; a zone may follow. Times (`12:30:45`) are neither.

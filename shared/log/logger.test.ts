@@ -69,6 +69,28 @@ describe("logger", () => {
     expect(out).not.toContain(secretPart);
   });
 
+  // A DID's identifier, kept out of the table so the table holds no parenthesis (compliance.ts finds .each by it).
+  const ID = "a".repeat(24);
+  test.each([
+    ["percent-encoded", `did%3Aplc%3A${ID}`, "[redacted]"],
+    ["lower-case hex", `did%3aplc%3a${ID}`, "[redacted]"],
+    ["upper-case letters", "DID:PLC:AAAAAAAAAAAAAAAAAAAAAAAA", "[redacted]"],
+    ["double-encoded", `did%253Aplc%253A${ID}`, "[redacted]"],
+    ["inside a path", `/did%3Aplc%3A${ID}/x`, "/[redacted]/x"],
+  ])("logger_scrubs_encoded_dids %s", (_kind, value, scrubbed) => {
+    // A client may send a DID's colons percent-encoded, in either hex case (RFC 3986 2.1), or encoded twice.
+    expect(scrub(value)).toBe(scrubbed);
+  });
+
+  test.each([
+    ["a word", "didn't"],
+    ["no method", "did: then"],
+    ["an empty method", "did:%3Aplc"],
+  ])("logger_keeps_did_lookalikes %s", (_kind, value) => {
+    // The pattern still needs a method and an identifier after the separators.
+    expect(scrub(value)).toBe(value);
+  });
+
   test("logger_truncates_and_strips_control_characters", () => {
     const reason = scrub(`a\nb\u0000c\u0085d${"x ".repeat(200)}`);
     expect(reason.startsWith("a?b?c?d")).toBe(true);
