@@ -44,10 +44,11 @@ export const c14: Check = {
 };
 
 /**
- * C15: handle domains set explicitly, `.0x40.space` in dev, and never the retired `.0x40.me`. Under --env local every
- * domain sits under the PDS's own `.localhost` host, the one name the dev root permits a suffix of (record
- * 2026-10-13-p127l-local-gaps, Amendment 2, point 1; 2026-10-12-p134c-p134d-local-dev-root-ca, the nameConstraints
- * line), so no handle on a local stack names a real domain.
+ * C15: handle domains set explicitly, exactly `.staging.unset.im` in dev (ADR 0025, P1.35x), and never the retired
+ * `.0x40.me`. Under --env local every domain sits under the PDS's own `.localhost` host, the one name the dev root
+ * permits a suffix of (record 2026-10-13-p127l-local-gaps, Amendment 2, point 1;
+ * 2026-10-12-p134c-p134d-local-dev-root-ca, the nameConstraints line), so no handle on a local stack names a real
+ * domain.
  */
 export const c15: Check = {
   id: "C15",
@@ -57,7 +58,7 @@ export const c15: Check = {
     if (domains.some((d) => d === ".0x40.me" || d.endsWith(".0x40.me"))) {
       return fail("PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
     }
-    if (stage === "dev" && !(domains.length === 1 && domains[0] === ".0x40.space")) {
+    if (stage === "dev" && !(domains.length === 1 && domains[0] === ".staging.unset.im")) {
       return fail("PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
     if (stage === "local" && !domains.every((domain) => underLocalHost(env, domain))) {

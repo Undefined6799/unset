@@ -12,7 +12,8 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 export const PRODUCTION_HOST = "unset.ac";
-export const DEV_HOST = "0x40.space";
+/** The staging PDS (ADR 0025): dev is the staging profile (architecture ruling 3(c), P1.35x). */
+export const DEV_HOST = "staging.unset.ac";
 /** L2's `.localhost` pin (RFC 6761): a throwaway PDS, never a production name. */
 export const LOCAL_HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.localhost$/;
 
