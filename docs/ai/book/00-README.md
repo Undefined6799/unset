@@ -60,6 +60,12 @@ Following Alex's architecture principles 13–15 (progressive refinement; revers
 - When building shows a boundary is wrong, the agent follows principle 16: fix locally, refactor on repetition,
   and stop for human review before changing a core boundary, public contract or data model.
 
+## Times in book text
+
+Every architecture section label that does not say 'real UTC' is a sequence label, not a clock time, on any date.
+Architecture labels are real UTC only from 2026-10-19 03:50Z on. A book line quoting an older label cites it as
+'architecture's section labelled HH:MMZ', never as the time of a decision. Alex's message times are real.
+
 ## Step ids
 
 `P<phase>.<nn>`, for example `P1.07`. Ids are fixed once `01-outline.md` is reviewed; a step added later

@@ -25,7 +25,7 @@ one-paragraph entry; new decisions also get their own file.
 | [0015](0015-web-framework-glue.md) | Web framework glue: Hono with server-rendered React and islands (P1.20 spike) | Accepted (pending merge) |
 | [0016](0016-design-source.md) | The unset.sh design sheet is the design source (P1.21) | Proposed |
 | [0017](0017-main-ruleset-applied.md) | Main ruleset applied; supersedes 0009 | Accepted 2026-10-06; merge sentence superseded by 0019 |
-| [0018](0018-edge-rate-limit-plugin.md) | Edge rate limiting with caddy-ratelimit, in memory only (P1.28) | Proposed (awaiting Alex) |
+| [0018](0018-edge-rate-limit-plugin.md) | Edge rate limiting with caddy-ratelimit, in memory only (P1.28) | Accepted 2026-10-07 (P1.28, #409) |
 | [0019](0019-verified-agent-merges.md) | Verified agent merges: a verifier session merges checked agent PRs (P0.15) | Accepted on merge (2026-10-12) |
 | [0020](0020-permanent-choices.md) | Permanent choices: Matrix server name, Tailnet Lock custody, permission set NSID (P1.32) | Superseded by 0025 |
 | [0021](0021-atproto-oauth-client.md) | @atproto/oauth-client-node as the OAuth client (P2.04) | Proposed (awaiting Alex) |

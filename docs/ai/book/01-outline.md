@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 353 steps: 319 from `phase-1.md`, 34 from `phase-2.md` (including the
+Depth: **build-ready**. 361 steps: 322 from `phase-1.md`, 39 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -290,12 +290,15 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25u | CODEOWNERS drops the island runtime's old paths | check | P1.25e | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25p | `phase-1.md` |
 | P1.25c | Add test routes, prod refusal and the 503 page | [SEC] | P1.25 | `phase-1.md` |
-| P1.25f | Add favicons, feed mode and footer prefs | — | P1.25 | `phase-1.md` |
+| P1.25z | Pin the test-routes gate when the key is off | [SEC] | P1.25c | `phase-1.md` |
+| P1.25a | Ship the PNG favicons | [ALEX] (his favicon files) | P1.25 | `phase-1.md` |
+| P1.25f | Add feed mode and footer prefs | — | P1.25 | `phase-1.md` |
 | P1.25g | Fix disabled select focus and add two kit tests | — | P1.25 | `phase-1.md` |
 | P1.25y | Style disabled Select and tighten its tests | — | P1.25g | `phase-1.md` |
 | P1.25m | Pin the DID account route's privacy | [SEC] | P1.25 | `phase-1.md` |
 | P1.25n | Harden the DID route privacy tests | [SEC] | P1.25m | `phase-1.md` |
 | P1.25t | Redact percent-encoded DIDs in the log scrub | [SEC] | — | `phase-1.md` |
+| P1.37f | Test DID route privacy against real accounts | [SEC] | P1.25n | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
 | P1.27q | Image and mirror workflows, required checks (check part of P1.27; SE-6 `q`) | [SEC] | P1.04, P0.07 | `phase-1.md` |
 | P1.27 | Container images, mirrored upstreams, SBOM, provenance and signatures (base pulled from upstream `node:26-alpine` by digest until P2.26b (P2.26c for the edge), interim departure, Alex 2026-10-07 00:17Z; P2.26b, then P2.26c, flip to the mirror after P1.27s, book edit 2026-10-13-p127s-split) | [SEC] | P1.27q, P1.04, P0.07 | `phase-1.md` |
@@ -473,7 +476,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.36n | Accept ADR 0028 | [ALEX] | P1.36m | `phase-1.md` |
 | P1.36o | Mount the edge dev snippet and map it in C18 | [SEC] | P1.36e | `phase-1.md` |
 | P1.36p | Cap the PDS temp blob tmpfs | [SEC] | P1.36h | `phase-1.md` |
-| P1.36q | Require the exact key set in pds.env | [SEC] | P1.36g | `phase-1.md` |
+| P1.36q | Require the exact secret set in pds.env | [SEC] | P1.36g | `phase-1.md` |
 | P1.36r | Refuse a checkout-built migrate under dev | [SEC] | — | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.33y, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
@@ -524,14 +527,19 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
-| P2.08 | Logout ("sign out everywhere" dropped 2026-10-19) | [SEC] | P2.06, P2.04s | `phase-2.md` |
+| P2.08 | Logout | [SEC] | P2.06, P2.04s | `phase-2.md` |
 | P2.08b | Sign out with the recorded issuer | [SEC] | P2.08 | `phase-2.md` |
 | P2.08c | Count only live sessions at sign-out | [SEC] | P2.08 | `phase-2.md` |
 | P2.08d | Remove sign out everywhere | [SEC] | P2.08 | `phase-2.md` |
 | P2.08e | Pin the session count to the store | [SEC] | P2.08c, P2.08d | `phase-2.md` |
 | P2.08f | Mark sign out everywhere unused in session | trusted | P2.08d | `phase-2.md` |
+| P2.08g | Unit-test the last-browser revoke failure | [SEC] | P2.08e, P2.08b | `phase-2.md` |
+| P2.08h | Bound the issuer read and narrow its carrier | [SEC] | P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
+| P2.11b | Count sessions ended on a revoked grant | [SEC] | P2.11a | `phase-2.md` |
+| P2.11c | Reword the auth_dead sign-out bound | [SEC] | P2.11a | `phase-2.md` |
+| P2.11d | Cap a cached recheck during PDS outages | [SEC] | P2.11a, P2.11c | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
 | P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
@@ -841,8 +849,13 @@ flowchart TD
   P2_08d["P2.08d Remove sign out everywhere"]
   P2_08e["P2.08e Session count pinned to the store"]
   P2_08f["P2.08f user_signout_all marked unused"]
+  P2_08g["P2.08g Revoke failure unit test"]
+  P2_08h["P2.08h Issuer read bounded, carrier narrowed"]
   P2_11["P2.11 Email-verify gate"]
   P2_11a["P2.11a Revoked grant ends sessions"]
+  P2_11b["P2.11b auth_dead counter"]
+  P2_11c["P2.11c auth_dead bound reworded"]
+  P2_11d["P2.11d Cached recheck capped"]
   P2_15["P2.15 Legal paperwork part 2"]
   P2_12["P2.12 Onboarding"]
   P2_13["P2.13 /me and the settings shell"]
@@ -958,7 +971,11 @@ flowchart TD
   P1_25 --> P1_26
   P1_25c["P1.25c Test routes, prod refusal, 503"]
   P1_25 --> P1_25c
-  P1_25f["P1.25f Favicons, feed mode, footer prefs"]
+  P1_25z["P1.25z Test-routes gate pinned, key off"]
+  P1_25c --> P1_25z
+  P1_25a["P1.25a PNG favicons"]
+  P1_25 --> P1_25a
+  P1_25f["P1.25f Feed mode, footer prefs"]
   P1_25 --> P1_25f
   P1_25g["P1.25g Disabled select focus, kit tests"]
   P1_25 --> P1_25g
@@ -969,6 +986,8 @@ flowchart TD
   P1_25y["P1.25y Disabled Select styled, tests tightened"]
   P1_25g --> P1_25y
   P1_25t["P1.25t Encoded DIDs redacted in log scrub"]
+  P1_37f["P1.37f DID route privacy, real accounts"]
+  P1_25n --> P1_37f
   P1_04 --> P1_27
   P1_27 --> P1_27d
   P1_27 --> P1_28q
@@ -1046,6 +1065,10 @@ flowchart TD
   P2_06 --> P2_11
   P2_07 --> P2_11
   P2_11 --> P2_11a
+  P2_11a --> P2_11b
+  P2_11a --> P2_11c
+  P2_11a --> P2_11d
+  P2_11c --> P2_11d
   P1_25 --> P2_15
   P1_37 --> P2_15
   P1_37 --> P1_37b
@@ -1066,6 +1089,9 @@ flowchart TD
   P2_08c --> P2_08e
   P2_08d --> P2_08e
   P2_08d --> P2_08f
+  P2_08e --> P2_08g
+  P2_08b --> P2_08g
+  P2_08b --> P2_08h
   P2_12 --> P2_12a
   P2_12 --> P2_12b
   P2_12a --> P2_12c
@@ -1209,7 +1235,7 @@ flowchart TD
   P1_27s --> P1_36l
   P1_36p["P1.36p PDS temp blob tmpfs capped"]
   P1_36h --> P1_36p
-  P1_36q["P1.36q Exact key set in pds.env"]
+  P1_36q["P1.36q Exact secret set in pds.env"]
   P1_36g --> P1_36q
   P1_36r["P1.36r Checkout-built migrate refused under dev"]
   P1_35u["P1.35u Islands owner lines narrowed"]
@@ -1400,7 +1426,7 @@ Arachnid application, and the Phase 1 exit.
 | P2.26c | Pull the edge bases from the mirror (trusted base; pulled forward, Q3 B) | [SEC] trusted | P2.26b | `phase-2.md` |
 | P2.26d | Drop the edge dual spelling from the lock test (pulled forward, Q3 B) | [SEC] | P2.26c | `phase-2.md` |
 | P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
-| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
+| P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
 | P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.31g, P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
@@ -1430,6 +1456,10 @@ flowchart TD
   P1_38["P1.38 Phase 1 exit"]
   P1_33 --> P1_33a
   P1_33 --> P1_34
+  P1_36b --> P1_34
+  P1_36c --> P1_34
+  P1_36i --> P1_34
+  P1_36j --> P1_34
   P1_33a --> P1_34
   P1_33d --> P1_34
   P1_27s --> P2_26e
@@ -1955,7 +1985,7 @@ Depth: **detail by risk; P6.00 refines** (contract parts in full, algorithms a r
 | P6.15g | `admin` read grant on the chat mapping (SE-6) | [SEC] [CHAT] | P6.00, P2.14 | `phase-6.md` |
 | P6.15 | `admin` polls Synapse event and user reports into its queue | [SEC] [MOD] [CHAT] [ALEX] | P6.15g, P6.14a, P6.02a, P3.20, P3.19 | `phase-6.md` |
 | P6.16 | Full logout, revoke, and back-channel logout from the app | [SEC] [CHAT] | P6.07, P6.03, P6.05, P2.08 | `phase-6.md` |
-| P6.04a | Chat accounts on suspension, takedown and erasure | [SEC] [CHAT] | P6.04, P6.05, P6.16, P6.15, P3.06, P3.07 | `phase-6.md` |
+| P6.04a | Chat accounts on suspension, takedown, erasure and revoked grants | [SEC] [CHAT] | P6.04, P6.05, P6.16, P6.15, P3.06, P3.07, P2.11a | `phase-6.md` |
 | P6.17 | Onboarding chat step wired into signup | [CHAT] | P6.08, P6.05, P2.12, P6.07 | `phase-6.md` |
 | P6.19 | Restore drill re-run with Matrix databases, media and signing keys | [SEC] | P6.17, P5.05, P5.04, P5.06 | `phase-6.md` |
 | P6.20 | Phase 6 exit | [CHAT] | P6.13, P6.14a, P6.15, P6.16, P6.17, P6.09a, P6.19, P6.04a | `phase-6.md` |
@@ -2018,6 +2048,7 @@ flowchart TD
   P6_07 --> P6_16
   P6_15 --> P6_04a
   P6_16 --> P6_04a
+  P2_11a --> P6_04a
   P6_08 --> P6_17
   P6_17 --> P6_19
   P6_09a --> P6_20
@@ -2175,7 +2206,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25a, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 

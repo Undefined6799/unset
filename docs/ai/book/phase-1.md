@@ -61,28 +61,29 @@ later slices (guideline §12). This file is in build order; step ids did not cha
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
   2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
-  P1.20–P1.25, P1.25c, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v,
-  P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q,
-  P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r,
-  P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g,
-  P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w,
-  P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z,
-  P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i,
-  P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v, P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p,
-  P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a,
-  P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f,
-  P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y,
-  P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t, P1.33z,
-  P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g, P1.36i,
-  P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y,
-  P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s,
-  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids,
-  never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08f, P2.11, P2.11a, P2.15, P2.12,
-  P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'):
-  the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening
-  steps not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario passes
-  locally. Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may finish
-  a fix it already started on an open PR.
+  P1.20–P1.25, P1.25c, P1.25z, P1.25a, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.37f, P1.26, P1.27, P1.27d,
+  P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j,
+  P1.28r, P1.28n,
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g,
+  P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f,
+  P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g,
+  P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x,
+  P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f,
+  P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v, P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f,
+  P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c,
+  P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h,
+  P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
+  P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
+  P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
+  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u,
+  P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g,
+  P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022;
+  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h, P2.11,
+  P2.11a–P2.11d, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z
+  (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus).
+  P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and test-helper follow-ups, start only
+  after P2.13a's scenario passes locally. Fixes for holes already on main are exempt. Built PRs still get verified and
+  may merge, and a lane may finish a fix it already started on an open PR.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -423,7 +424,11 @@ flowchart LR
   P1_25 --> P1_26
   P1_25c["P1.25c test routes, prod refusal, 503"]
   P1_25 --> P1_25c
-  P1_25f["P1.25f favicons, feed mode, footer prefs"]
+  P1_25z["P1.25z test-routes gate pinned, key off"]
+  P1_25c --> P1_25z
+  P1_25a["P1.25a PNG favicons ALEX"]
+  P1_25 --> P1_25a
+  P1_25f["P1.25f feed mode, footer prefs"]
   P1_25 --> P1_25f
   P1_25g["P1.25g disabled select focus, kit tests"]
   P1_25 --> P1_25g
@@ -434,6 +439,8 @@ flowchart LR
   P1_25y["P1.25y disabled Select styled, tests tightened"]
   P1_25g --> P1_25y
   P1_25t["P1.25t encoded DIDs redacted in log scrub"]
+  P1_37f["P1.37f DID route privacy, real accounts"]
+  P1_25n --> P1_37f
   P1_04 --> P1_27
   P0_07 --> P1_27
   P1_27 --> P1_27d
@@ -674,9 +681,10 @@ flowchart LR
   P1_36b --> P1_36j
   P1_36k["P1.36k dev-only runtime keys refused outside local"]
   P1_36l["P1.36l zero commit refused under dev"]
+  P1_27s --> P1_36l
   P1_36p["P1.36p PDS temp blob tmpfs capped"]
   P1_36h --> P1_36p
-  P1_36q["P1.36q exact key set in pds.env"]
+  P1_36q["P1.36q exact secret set in pds.env"]
   P1_36g --> P1_36q
   P1_36r["P1.36r checkout-built migrate refused under dev"]
   P1_35u["P1.35u islands owner lines narrowed CHECK"]
@@ -726,6 +734,10 @@ flowchart LR
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33a --> P1_34
+  P1_36b --> P1_34
+  P1_36c --> P1_34
+  P1_36i --> P1_34
+  P1_36j --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
   P1_34 --> P1_33p
@@ -6530,8 +6542,9 @@ in prod. Book edit 2026-10-19-five-step-audit.
 Done when these tests pass, red first, and check is green: `test_routes_refused_in_prod`, `unavailable_retry_after`,
 and `server_error_request_id` and `server_error_fallback_static` on `/__test/throw`.
 
-As built (as ruled; lands in #1011, open at 51f4656; the merge SHA is added once it merges; book edit
-2026-10-19-p125c-as-built, architecture 03:00Z, 03:45Z and 05:10Z): four departures, accepted.
+As built: merged as 29ef862 (#1011, head 51f4656), with `UNSET_ENV === "test"` only, a dynamic import inside the
+gate, and the never-loaded red under prod and dev with `TEST_ROUTES` set; the key-off case is P1.25z (book edit
+2026-10-19-p125c-as-built, architecture's sections labelled 03:00Z, 03:45Z and 05:10Z). Four departures, accepted.
   1. The paths are `/test-routes/{throw,unavailable,app}`: the kit's trusted `SEGMENT` template refuses a leading
      underscore (shared/http/routes.ts:65-66), and widening it would loosen a check. The `/test-routes/` prefix is
      reserved: no product route may use it, and with `TEST_ROUTES` off each path answers byte for byte like an unknown
@@ -6554,28 +6567,61 @@ As built (as ruled; lands in #1011, open at 51f4656; the merge SHA is added once
 
 ---
 
-### P1.25f — Add favicons, feed mode and footer prefs
-Tags: (none)            Depends on: P1.25
-Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit.
+### P1.25z — Pin the test-routes gate when the key is off
+Tags: [SEC]            Depends on: P1.25c
+Slice 1, issue #1055, product (`interfaces/http/compose.ts`, `main.test.ts`; about +15/-6), lane Phase 2. A
+tightening. Build on `unset-plan/verify/verify-1011-51f4656.patch`. Book edit 2026-10-19-p125c-as-built,
+"verify-1011-51f4656 follow-up".
 **What:**
-1. Ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
-   asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
+1. Under prod and under dev with `TEST_ROUTES` unset, config passes and the test-routes module is never loaded. Pin
+   it with the same throwing module mock. This makes #1011's Threats bullet 2 true.
+2. The gated import moves to the top of `compose()`, so the startup control no longer depends on `apps/web/dist`
+   existing. In CI, npm test runs before the web build.
+Threats: test-only routes loaded outside test when the key is off. Answered by the never-loaded pin.
+Done when item 1 is red against a copy that loads the module unconditionally, item 2 passes in a tree with no
+`apps/web/dist`, and check is green.
+
+---
+
+### P1.25a — Ship the PNG favicons
+Tags: [ALEX] (his favicon files)            Depends on: P1.25
+Slice 1, issue #1058, product, lane Phase 2. Split out of P1.25f because it needs Alex's files (book edit
+2026-10-19-alex-cards-and-edge-dev-mode, last two sections). The wait is met: files from the design artifact (Alex,
+2026-10-19 03:00:41Z), `unset-favicon-32.png` and `unset-apple-touch-icon.png`. The PR body quotes his message with
+its time, and his merge confirms the files. Nothing is drawn by hand (head.tsx:4); if the PR's files differ from the
+design artifact's, the lane stops.
+**What:** ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
+asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
+
+Done when the test passes and check is green.
+
+---
+
+### P1.25f — Add feed mode and footer prefs
+Tags: (none)            Depends on: P1.25
+Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit. The favicons are P1.25a.
+**What:**
+1. (moved to P1.25a)
 2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
 3. **PrefsForms** (Alex tapped "Settings + footer" at 2026-10-19 02:59:37Z on "Where should the theme and language
-   settings live in the app?"; architecture 03:55Z; book edit 2026-10-19-alex-cards-and-edge-dev-mode):
+   settings live in the app?"; architecture's section labelled 03:55Z; book edit
+   2026-10-19-alex-cards-and-edge-dev-mode):
    - The canonical place is a "Language and theme" section in Settings. That section, its test
      `settings_prefs_section` and its design-sheet entry are P2.13c's (issue #992, booked in the next batch), because
      P2.13c builds the SettingsShell after this step (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes
      from Codex on #1037").
-   - The footer form stays on default-shell pages (sign-in, verify-email, legal), where signed-out visitors need it.
+   - The footer form stays on app-group pages without the side navigation, such as sign-in and verify-email, where
+     signed-out visitors need it. It never goes on the public legal pages (/legal/terms, /legal/privacy,
+     /legal/domains): P1.22 gives public pages no theme control and `LanguageLinks()` instead (book edit
+     2026-10-19-alex-cards-and-edge-dev-mode, "Correction: no theme form on public legal pages", a correction, not a
+     departure).
    - Nothing goes in the Navigation panel.
    - Both are zero-JS form POSTs that set the prefs cookie, same-origin, behind the CSRF and Origin gates, and they
      work in both shells.
    - The PR body quotes his 02:59:37Z tap.
    - LanguageLinks stays with P1.22b.
-   - Tests: `default_shell_footer_prefs`, and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c
-     lands first.
-   Item 1 still waits for Alex's favicon files; nothing is drawn by hand.
+   - Tests: `default_shell_footer_prefs` (the form on an app-group default-shell page, and its absence on a legal
+     page), and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c lands first.
 4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
    Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
    Each has a test.
@@ -6661,8 +6707,9 @@ Slice 1, product tests only, lane Phase 2; book edit 2026-10-19-alex-cards-and-e
    status, every header name and value, and the body (this folds into item 2). Two DID paths redirect to different
    `next` values, so `Location` is compared after normalizing the requested path, and each path's own redirect is
    asserted separately (Codex on #1037).
-If 6261eb4 applies cleanly to main, the lane cherry-picks it onto a new branch from main. If item 1 needs the scrub to
-pass, P1.25t merges first. The step never merges red, and never skips or weakens the assertion.
+If 6261eb4 applies cleanly to main, the lane cherry-picks it onto a new branch from main. P1.25t is its own step, in
+any order (architecture withdrew "P1.25t first"; verify-1017-scrub-and-gate, 04:04Z). The step never merges red, and
+never skips or weakens the assertion. As built: #1053 (merged as bf79b64); its follow-ups are P1.37f.
 
 Done when the tests are red against a deliberately broken copy (shown in the PR) and green on main, and check is
 green.
@@ -6672,7 +6719,7 @@ green.
 ### P1.25t — Redact percent-encoded DIDs in the log scrub
 Tags: [SEC]            Depends on: —
 Slice 1, product (`shared/log/` and its tests, about 30 lines), lane Phase 2, a PR separate from P1.25n. Book edit
-2026-10-19-verify-1017-scrub-and-gate (M2). A tightening, so no card or typed line. Issue: the board opens it.
+2026-10-19-verify-1017-scrub-and-gate (M2). A tightening, so no card or typed line. Issue #1044.
 **What:** shared/log/scrub.ts:14 matches only a literal `did:<method>:`, so `did%3Aplc%3A…` passes.
 - The DID pattern accepts, as each of its two separators, `:`, `%3A` or `%253A` (double-encoded), and matches
   case-insensitively throughout (`DID`, `%3a`). It keeps its place before IPv6.
@@ -6684,6 +6731,29 @@ Threats: an encoded DID slipping past the last log layer (SE-7). Answered by mat
 case-insensitively.
 Done when the reds fail on main first, the mutants that drop each separator form or the case flag are killed, and
 check is green.
+
+---
+
+### P1.37f — Test DID route privacy against real accounts
+Tags: [SEC]            Depends on: P1.25n
+Slice 1, product tests (`me.privacy.test.ts` and the fixture manifest, or `tests/integration` if item 1 needs it),
+lane Phase 2. Tests only, a tightening. Book edit 2026-10-19-verify-1017-scrub-and-gate, "verify-1053-8602684
+follow-up". P1.25n merged as #1053. P1.25t stays its own step, in any order. Issue #1060.
+**What:**
+1. **M1.** If compose already has a dependency seam for the account store, the test passes in a fake store with three
+   DIDs: our own DID with an account, a foreign DID with an account, and an unknown DID with none. It also uses a
+   well-formed `__Host-sid` that names no live session. The verifier's plants G1 and G1soft both go red. If there is
+   no seam, none is added only for the test; the same cases run as a Postgres case in the existing CI integration
+   project.
+2. **M2.** The log check decodes each line repeatedly, up to 3 rounds. A malformed escape counts as a match, and
+   `did:` matches case-insensitively on both the raw and the decoded line. Add the fully encoded, `%253A` and
+   mixed-case paths.
+3. **N1.** The fixture manifest uses one style, so the referrerpolicy check sees the head's links.
+4. **N2.** The wording at me.privacy.test.ts:173 and :186 is trimmed to what the tests prove.
+Threats: the DID route answering differently, or leaking the DID in logs, depending on whether an account exists (an
+account-existence oracle), unseen because tests ran on a stand-in. Answered by real-store cases with G1 and G1soft
+red, and multi-round decoding of every log line.
+Done when G1 and G1soft are red, each new M2 path is red against a copy that skips decoding, and check is green.
 
 ---
 
@@ -8643,17 +8713,18 @@ TLS edge. Answered by one pinned source, a signed digest, and an image test that
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36d
 Slice 1, issue #1002, trusted base (`deployment/edge/caddyfile.ts`, `deployment/edge/dev/tls.caddy`, their tests),
 lane the third thread; book edit 2026-10-19-staging-path-steps, "Item 7", restated by book edit
-2026-10-19-alex-cards-and-edge-dev-mode, M2 (architecture 04:10Z and 04:35Z). The edge reader's grammar is trusted
-base and C18 imports it (deployment/preflight/checks/edge.ts:1-4), so the widening is a trusted step. **A widening, so
-it needs Alex's typed line:** "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/dev/tls.caddy edge dev mode
-DNS-01 dev only" (it replaces the earlier line, which named snippets/tls.caddy).
+2026-10-19-alex-cards-and-edge-dev-mode, M2 (architecture's section labelled 04:10Z and 04:35Z). The edge reader's
+grammar is trusted base and C18 imports it (deployment/preflight/checks/edge.ts:1-4), so the widening is a trusted step.
+**A widening, so it needs Alex's typed line:** "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/dev/tls.caddy
+edge dev mode DNS-01 dev only" (it replaces the earlier line, which named snippets/tls.caddy).
 
 **What:**
 - The reader (caddyfile.ts:429, :466) gains a third `EdgeMode`, `dev`, beside `shipped` and `local`. It reads
   `edgeDir/dev/` under the same containment as `local/`.
 - New file `deployment/edge/dev/tls.caddy` holds the one DNS-01 issuer: Let's Encrypt only, its token from a file. It
   carries Caddy's DNS-challenge override option, which points each `_acme-challenge` CNAME into the validation zone;
-  the lane confirms the exact directive against the pinned Caddy (ADR 0028; architecture 04:50Z and 06:00Z (b)).
+  the lane confirms the exact directive against the pinned Caddy (ADR 0028; architecture's section labelled 04:50Z and
+  06:00Z (b)).
 - `snippets/tls.caddy` (prod) is not changed, so prod refuses DNS-01 in this step's scope (dev first; a prod wildcard
   is a later ruling, each with its own typed line). The grammar refuses a `dns` issuer in any file outside `dev/`.
 - Local is unchanged. C18's mapping and the dev mount are P1.36o, right after this step.
@@ -8738,9 +8809,11 @@ so nothing is needed from Alex for the step itself.
    (smtps or requireTLS). The SMTP password follows the 12:40Z predicate: exactly one `${NAME:?message}`, or the whole
    URL comes from a `/run/secrets/` file. If nothing uses Mailpit under dev, C11's Mailpit acceptance narrows to local
    only. ADR 0026's exception stays local-only.
-2. **The pds.env template and runbook** list the SMTP URL key, the recovery key and its did:key, and the first
-   account, with no values and nothing that looks like a real key. pds.env holds only secret-bearing keys; non-secret
-   SMTP settings, such as the from address, go in compose.dev.yaml's environment (architecture 06:15Z).
+2. **The pds.env template and runbook** list both SMTP URL keys (PDS_EMAIL_SMTP_URL and
+   PDS_MODERATION_EMAIL_SMTP_URL, which C19 requires), the recovery key and its did:key, and the first account, with
+   no values and nothing that looks like a real key. pds.env holds only secret-bearing keys; non-secret SMTP settings,
+   the two from addresses, go in compose.dev.yaml's environment (architecture's section labelled 06:15Z, and
+   architecture 04:32Z real UTC; P1.36q has the set).
 3. **The first invite** is a runbook one-off that Alex runs and Claude never does, under the ruling's four conditions:
    it runs with `docker compose exec` inside the PDS container, against its own loopback port, with no port published
    and the edge still answering 404 for createInviteCode; the password is read from the file inside the container,
@@ -8813,7 +8886,8 @@ third thread; book edit 2026-10-19-p125c-as-built, "Step-book mapping of archite
 - Sites today: oauth-client.ts:128; netGuard.ts:18; shared/http/config.ts:27; config.ts:90; csp/headers.ts:25.
 
 - `PDS_DISABLE_SSRF_PROTECTION` is never a local-only map entry: set under any env, local included, it fails
-  (architecture 04:40Z; book edit 2026-10-19-p135t-local-stack-ci-job, "Step-book mapping of 04:40Z").
+  (architecture's section labelled 04:40Z; book edit 2026-10-19-p135t-local-stack-ci-job, "Step-book mapping of
+  04:40Z").
 
 Done when one red per key under dev and under prod passes, an http origin under dev fails,
 `PDS_DISABLE_SSRF_PROTECTION` fails under each env, local is otherwise unchanged, and check is green.
@@ -8908,6 +8982,11 @@ Reds, each with a literal value: `db2Password`, `apiKey2`, `token1`, `PASSWORD2`
 `PLC_DB_PASSWORD` on postgres, in each compose file. Greens: every existing green, plus `S3_BUCKET`.
 The PR body re-measures that no env key in either compose file changes status, at its own head. Preflight's C9 is
 unchanged.
+Threats (book edit 2026-10-19-codex-1063-batch66, M5):
+- A secret-bearing compose env key escapes the split (a case, digit or acronym boundary, or a value) and ships as a
+  plain, reviewable literal. The split runs on every boundary, over every key and value of every service in both
+  compose files.
+- The check's report leaks the secret. It reports fixed words plus the key name, never the value.
 Done when every new red fails on main's predicate first and passes at the head, the K3 and K5 mutants are killed, and
 check is green.
 
@@ -8916,19 +8995,20 @@ check is green.
 ### P1.36m — Draft ADR 0028 for the edge DNS module
 Tags: [SEC]            Depends on: —
 Slice 1, docs only (`docs/human/decisions/0028-edge-dns-01-provider-module.md`, Status: Proposed), lane the plan
-thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1 (architecture 04:10Z). Issue #1027.
+thread; book edit 2026-10-19-alex-cards-and-edge-dev-mode, M1 (architecture's section labelled 04:10Z). Issue #1027.
 
 **What:** exactly architecture's five points: the module pinned by pseudo-version and checksum; dev only until
 Phase 5; the token as a C9 file secret; the failure mode; and `edge_image_plugins_exact` becoming exactly two modules.
-It also gives the reason the module is needed even with Pangolin. It does not edit ADR 0018. From architecture 04:50Z
-(book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z"), it also records:
+It also gives the reason the module is needed even with Pangolin. It does not edit ADR 0018. From architecture's section
+labelled 04:50Z (book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of 04:50Z"), it also records:
 - the validation zone as a subdomain delegated by NS from Namecheap (for example `acme.unset.sh`);
 - each `_acme-challenge` record as a CNAME into it;
 - Caddy's DNS-challenge override option in `dev/tls.caddy`, its exact name confirmed against the pinned Caddy;
 - Namecheap's API ruled out as the token host, because its tokens are account-wide.
 The provider it names is the one Alex picks on his card, deSEC (recommended) or Cloudflare. The draft waits for his
 answer, or carries both with the choice left open, at the plan thread's choice. The number is confirmed
-free when the PR opens (book edit 2026-10-19-adr-number-labels); if 0028 is taken, it is the next free number.
+free when the PR opens (book edit 2026-10-19-adr-number-labels); if 0028 is taken, it is the next free number, and
+P1.36n's title and typed line, P1.36d and the outline follow that number.
 
 ---
 
@@ -8943,7 +9023,7 @@ docs/human/decisions/0028", quoted with its time.
 ### P1.36o — Mount the edge dev snippet and map it in C18
 Tags: [SEC]            Depends on: P1.36e
 Slice 1, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread, right after P1.36e
-with nothing that touches the edge or C18 between them (architecture 04:35Z); book edit
+with nothing that touches the edge or C18 between them (architecture's section labelled 04:35Z); book edit
 2026-10-19-alex-cards-and-edge-dev-mode, M2. Issue #1029. Tightenings only, so no typed line.
 
 **What:**
@@ -8963,8 +9043,8 @@ snippet reaching prod or local. Answered by the per-profile snippet map and the 
 ### P1.36p — Cap the PDS temp blob tmpfs
 Tags: [SEC]            Depends on: P1.36h
 Slice 1, product (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`, `deployment/preflight/`), lane the
-third thread, a staging go-live blocker; book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2a)
-and 04:35Z. Issue #1030.
+third thread, a staging go-live blocker; book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's section
+labelled 04:20Z (N2a) and 04:35Z. Issue #1030.
 
 **What:**
 - The PDS's temp blobs at `/tmp/pds/blobs` get a tmpfs of their own: `size=20m,mode=0700`, owned by the PDS user
@@ -8973,7 +9053,9 @@ and 04:35Z. Issue #1030.
   `/tmp` tmpfs the PDS keeps is capped too (today one uncapped `/tmp` at mode 1777, compose.dev.yaml:97-98, and the same
   in compose.local).
 - `PDS_BLOB_UPLOAD_LIMIT` becomes one exact value in the env map, 5242880 (5 MiB). The floor check that it is at least
-  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays.
+  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays. Phase 4's 60 MB video master is above this pin, so the Phase 4
+  step that sets `VIDEO_MASTER_MAX_BYTES` moves the limit, the tmpfs size and their tie test together (P4.02; book edit
+  2026-10-19-alex-cards-and-edge-dev-mode, 04:35Z).
 - Preflight checks both under local and dev.
 - Reds: the blobs tmpfs without `size=`; a `size=` above the cap; a mode other than 0700; a missing or different
   upload limit.
@@ -8984,20 +9066,30 @@ preflight.
 
 ---
 
-### P1.36q — Require the exact key set in pds.env
+### P1.36q — Require the exact secret set in pds.env
 Tags: [SEC]            Depends on: P1.36g
 Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
-2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2b). Issue #1031.
+2026-10-19-alex-cards-and-edge-dev-mode, "P1.36q (#1031) restated after architecture 04:32Z" (it replaces the
+five-name text; C19 requires PDS_MODERATION_EMAIL_SMTP_URL, deployment/preflight/checks/settings.ts:92-94). Issue
+#1031.
 
 **What:**
-- Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
-  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY) plus the SMTP URL key that
-  P1.36g adds: five names, all secret-bearing, with the same exact-map pattern as P1.35r's env table. Delivery follows
-  the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z sections).
-- Preflight reads names only, and never prints a value.
-- Reds: a sixth key (for example a non-secret SMTP setting); a missing key; a duplicate key.
-- It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
-  architecture 06:15Z).
+- Preflight reads the key set of `pds.env` and requires an exact, env-aware set of secret-bearing names, with the same
+  exact-map pattern as P1.35r's env table:
+  - under dev and prod, six: PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX,
+    PDS_RECOVERY_DID_KEY, PDS_EMAIL_SMTP_URL and PDS_MODERATION_EMAIL_SMTP_URL;
+  - under local, the first four only, because C19's localMail needs both mail keys absent.
+- PDS_EMAIL_FROM_ADDRESS and PDS_MODERATION_EMAIL_ADDRESS stay compose literals that review can see.
+- `deployment/env/pds.example.env` lists all six, with the two SMTP lines marked "dev and prod only".
+- A separate SMTP credential for moderation is recommended, and the same value is accepted. The runbook records which
+  Alex used. Preflight never compares the two.
+- Delivery follows the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z
+  sections). Preflight reads names only, and never prints a value.
+- Reds: (1) a seventh key; (2) either SMTP URL missing under dev; (3) either SMTP URL present under local; (4) a from
+  address placed in pds.env.
+- It builds after P1.36g, so the set is known when it lands.
+
+Done when the four reds are shown and check is green.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an unreviewed setting, or a
 secret, slipped into the PDS env. Answered by an exact key set.
@@ -9007,13 +9099,13 @@ secret, slipped into the PDS env. Answered by an exact key set.
 ### P1.36r — Refuse a checkout-built migrate under dev
 Tags: [SEC]            Depends on: —
 Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
-2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N5). Issue #1032.
+2026-10-19-alex-cards-and-edge-dev-mode, architecture's section labelled 04:20Z (N5). Issue #1032.
 
 **What:** main already refuses this: under dev, C2 fails any service with no digest image (images.ts:24-37), and
 compose.dev.yaml's migrate is a `build:` (:50-53), so dev preflight refuses the whole stack until P1.27s publishes
 signed images (compose.dev.yaml:4-6). This step pins that with a named red, `c2_dev_migrate_built_from_checkout_fails`,
 and a comment in C2 saying migrate gets no dev exception. Local's unsigned path for migrate stays unchanged. When
-P1.27s switches compose.dev.yaml's migrate to its digest, this red stays.
+P2.26b switches compose.dev.yaml's migrate to its digest (after P1.27s publishes the images), this red stays.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): schema changes with migration
 privileges run from an unsigned operator build. Answered by signed digests only under dev.
@@ -14984,6 +15076,19 @@ Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-publ
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
 It gates the first 80/443 forward.
 
+**Staging names (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's 0x40.space ruling at 03:55Z):**
+after P1.35x every `0x40.space` dev value fails, so this step's configuration and probe use ADR 0025's
+`staging.unset.sh` (app) and `staging.unset.ac` (PDS), and keep its existing gate. Book text only; no new step.
+
+**Prerequisites before other PDSes sign in (book edit 2026-10-19-auth-dead-gate, architecture 03:51Z, wording
+confirmed at 04:29Z):** "Before any non-own PDS can sign in, the email recheck forces a token refresh, so a revoked
+grant fails at the refresh (invalid_grant leads to authDead). The test runs against a stateless-token provider.
+Otherwise, P1.33p doesn't open." No forced refresh is needed today: on our own PDS it adds a call and closes nothing.
+This step also revisits ASVS V7.4.3 for other PDSes (asvs-5-l2.md). The verify-email
+link also uses the user's recorded issuer, as P2.08b does (verify-email.ts:76 and VerifyEmail.tsx:34 link our PDS
+for every user, which is correct while P1.36v limits sign-in to our own PDS; book edit 2026-10-19-five-step-audit,
+architecture 04:23Z).
+
 **What (moved out of P1.33):** the 80/443 forwards and the accept rule; ip-echo and the echo assertion; V5; the
 CGNAT and DDNS branches. Alex's router and DNS actions are as P1.33 lists them.
 
@@ -14994,19 +15099,21 @@ for the book: any step that first makes something reachable from the internet de
 Alex's steps (P1.34's former steps 5, 6 and 9):
 
 ```text
- 5. Confirm registrar lock and DNSSEC on 0x40.space (enable them if off).
- 6. CAA on 0x40.space: 0 issue "letsencrypt.org" (optionally with accounturi=<Caddy's ACME account URI>, RFC
-    8657, once Caddy has registered). The edge is pinned to Let's Encrypt (P1.28).
- 9. Public address: if the ISP address is static → A record for 0x40.space. If dynamic → the DDNS updater
-    (deployment/ddns) with an API token scoped to that single record only; if the DNS provider cannot scope a token
-    to one record → STOP and choose with the agent (another provider for 0x40.space, or a static address).
+ 5. Confirm registrar lock and DNSSEC on unset.sh and unset.ac (enable them if off).
+ 6. CAA on staging.unset.sh and staging.unset.ac: 0 issue "letsencrypt.org" (optionally with
+    accounturi=<Caddy's ACME account URI>, RFC 8657, once Caddy has registered). The edge is pinned to Let's
+    Encrypt (P1.28).
+ 9. Public address: if the ISP address is static → A records for staging.unset.sh and staging.unset.ac. If
+    dynamic → the DDNS updater (deployment/ddns) with an API token scoped to those two records only; if the DNS
+    provider cannot scope a token to them → STOP and choose with the agent (another provider for those records,
+    or a static address).
     _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
     No AAAA record unless IPv6 was probed in P1.33.
 ```
 
 Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
-- V2: P1.34's V1 DNSSEC check on `0x40.space`, plus the CAA record; registrar lock confirmed by Alex.
-- V3: from outside, `describeServer` on `0x40.space` → 200 with `inviteCodeRequired: true`.
+- V2: P1.34's V1 DNSSEC check on `unset.sh` and `unset.ac`, plus the CAA record; registrar lock confirmed by Alex.
+- V3: from outside, `describeServer` on `staging.unset.ac` → 200 with `inviteCodeRequired: true`.
 - V4: outside admin probes → 404/401 (the P1.28 tests, now against the live host).
 - V7: probe green for 24 h before P1.35 starts; the hairpin check passed (P1.29a's edge aliases).
 
@@ -15024,7 +15131,7 @@ every public gate and its evidence lives here.
   workflow (every 15 min) and no secrets — public repos do not consume private minutes, and the probed hostnames
   are public anyway. Alternative if Alex prefers: an uptime checker on a small VPS outside the homelab. Each run,
   timeout 10 s per request:
-  1. `GET https://0x40.space/xrpc/_health` → 200;
+  1. `GET https://staging.unset.ac/xrpc/_health` → 200;
   2. `com.atproto.sync.getRecord` for the authority's `sh.unset.authApp` record (once P1.35 has published) → 200
      and a CAR whose commit proof verifies against the DID document's signing key (the same check resolvers do,
      `lex-resolver.ts:495-520`), and whose record CID equals the expected CID committed in the probe repo;
@@ -15225,7 +15332,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
@@ -15256,7 +15363,8 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   password" tap at 02:56:58Z on "Keep the Pangolin password on staging, or open it with invites only?"; architecture
   03:35Z, 04:00Z and 05:15Z). Only the two `.sh` sign-in files skip the login, GET and HEAD only; nothing on `.ac` does.
   Public DNS points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
-  through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture 04:05Z, S4).
+  through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture's section
+  labelled 04:05Z, S4).
 - P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
   (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
   the public opening (P1.33p).
