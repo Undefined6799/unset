@@ -46,6 +46,10 @@ describe("lhci_no_public_upload", () => {
     expect(config.ci.collect.settings.chromeFlags).toBe(
       `--no-sandbox --disable-dev-shm-usage --disable-features=${features}`,
     );
+    // lhci 0.15.1 passes settings to the Lighthouse CLI as its flags file (src/collect/node-runner.js:45-69), and
+    // Lighthouse 12.6.1 maps chromeIgnoreDefaultFlags to the launcher's ignoreDefaultFlags (cli/run.js:87), which
+    // would drop the defaults this list repeats.
+    expect(config.ci.collect.settings).not.toHaveProperty("chromeIgnoreDefaultFlags");
     expect(config.ci.collect.url).toEqual(PAGES.map((page) => `${PROD_ORIGIN}${page.path}`));
     // @lhci/cli 0.15.1 refuses assertMatrix together with assertions (utils/src/assertions.js).
     // expectJs false stays at 0 scripts, including /welcome/blocked (islands off).

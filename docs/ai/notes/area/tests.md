@@ -43,9 +43,10 @@ renders with no session and no island (P2.12). `/welcome`, `/welcome/age`,
 Lighthouse launches Chrome with `--no-sandbox` (`collect.settings.chromeFlags` in
 `@lhci/cli` 0.15.1):
 ubuntu-24.04's AppArmor refuses the browser's user namespace. P1.37j also turns off `SpareRendererForSitePerProcess`:
-our COOP header moves the page into a spare renderer made before tracing began, and Lighthouse then stops with
-NO_NAVSTART. Chrome keeps only the last `--disable-features`, so the flag repeats chrome-launcher 1.2.2's default list;
-`lighthouserc.test.ts` pins it.
+with it on, Lighthouse stopped with NO_NAVSTART in 16 of 277 local runs; with it off, 0 of 182. Why a spare renderer
+loses the trace's `navigationStart` is inferred, not proven. Chrome keeps only the last `--disable-features`, so the
+flag repeats chrome-launcher 1.2.2's default list; `lighthouserc.test.ts` pins it, and fails if
+`chromeIgnoreDefaultFlags` is set.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
