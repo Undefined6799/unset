@@ -672,7 +672,8 @@ flowchart LR
   P1_36l["P1.36l zero commit refused under dev"]
   P1_36p["P1.36p PDS temp blob tmpfs capped"]
   P1_36h --> P1_36p
-  P1_36q["P1.36q exactly four names in pds.env"]
+  P1_36q["P1.36q exact key set in pds.env"]
+  P1_36g --> P1_36q
   P1_36r["P1.36r checkout-built migrate refused under dev"]
   P1_35u["P1.35u islands owner lines narrowed CHECK"]
   P1_35v["P1.35v secret key words split"]
@@ -6552,16 +6553,17 @@ Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
 2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
 3. **PrefsForms** (Alex tapped "Settings + footer" at 02:59:37Z on "Where should the theme and language settings live
    in the app?"; architecture 03:55Z; book edit 2026-10-19-alex-cards-and-edge-dev-mode):
-   - The canonical place is a "Language and theme" section in Settings. P2.13c's SettingsShell already lists it; if
-     P2.13c hasn't merged, this item waits for it, or the lane adds the section in P2.13c's own PR.
+   - The canonical place is a "Language and theme" section in Settings. That section, its test
+     `settings_prefs_section` and its design-sheet entry are P2.13c's, because P2.13c builds the SettingsShell after
+     this step (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes from Codex on #1037").
    - The footer form stays on default-shell pages (sign-in, verify-email, legal), where signed-out visitors need it.
    - Nothing goes in the Navigation panel.
    - Both are zero-JS form POSTs that set the prefs cookie, same-origin, behind the CSRF and Origin gates, and they
      work in both shells.
-   - The design sheet gets the Settings section's entry first (v2e direction), approved by Alex like each stop item
-     (phase-1.md's design-sheet rule). The PR body quotes his 02:59:37Z tap.
+   - The PR body quotes his 02:59:37Z tap.
    - LanguageLinks stays with P1.22b.
-   - Tests: `settings_prefs_section`, `default_shell_footer_prefs` and `prefs_post_csrf_origin`.
+   - Tests: `default_shell_footer_prefs`, and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c
+     lands first.
    Item 1 still waits for Alex's favicon files; nothing is drawn by hand.
 4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
    Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
@@ -8729,8 +8731,9 @@ third thread; book edit 2026-10-19-p125c-as-built, "Step-book mapping of archite
 (SE-7b).
 
 **What:**
-- `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` join P1.35r's local-only map, so preflight
-  refuses each one under `--env dev` and `--env prod`.
+- Preflight gains a local-only key list (none exists today: P1.35r's pins are compose tests, and
+  `deployment/preflight/local-only.ts` lists services and networks only). `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK`
+  and `DEV_VITE_ORIGIN` are its first entries, so preflight refuses each one under `--env dev` and `--env prod`.
 - Under dev and prod, every origin-valued key must be `https`.
 - Sites today: oauth-client.ts:128; netGuard.ts:18; shared/http/config.ts:27; config.ts:90; csp/headers.ts:25.
 
@@ -8873,19 +8876,21 @@ preflight.
 
 ---
 
-### P1.36q — Require exactly four names in pds.env
-Tags: [SEC]            Depends on: —
+### P1.36q — Require the exact key set in pds.env
+Tags: [SEC]            Depends on: P1.36g
 Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-live blocker; book edit
 2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:20Z (N2b). Issue #1031.
 
 **What:**
 - Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
-  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY), with the same exact-map
+  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY) plus the SMTP key names
+  P1.36g adds to that template, with the same exact-map
   pattern as P1.35r's env table. Delivery follows the secret-bearing predicate (book edit
   2026-10-15-verify-903-info-items, 12:40Z and 13:05Z sections).
 - Preflight reads names only, and never prints a value.
 - Reds: a fifth key; a missing key; a duplicate key.
-- If P1.36g's SMTP keys move into pds.env, P1.36g amends the exact set in its own PR, with a red, and says so.
+- It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order
+  fixes from Codex on #1037"). If architecture moves the SMTP values out of pds.env, the set is the four names again.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an unreviewed setting, or a
 secret, slipped into the PDS env. Answered by an exact key set.
@@ -10671,9 +10676,10 @@ Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the
   the red cases below), and `/deployment/sigstore/` joining CODEOWNERS' last section (trusted base: the trusted root
   decides which signatures count). Also `.github/workflows/sigstore-root.yml`, a manual-only (`workflow_dispatch`)
   workflow, with its workflow tests (architecture on verify-842-e4f6e94 S5, mapped in the last section of book edit
-  2026-10-13-verify-819-fixes). The ADR `docs/human/decisions/0023-image-signing-keyless.md` rides as docs (0021 is
-  reserved, 0022 is guarded schemas), with the ADR 0001 log entry decision 35 D8 requires (verify-842-e4f6e94 S3).
-  No product file rides with it.
+  2026-10-13-verify-819-fixes). The keyless signing ADR, `docs/human/decisions/<next free
+  number>-image-signing-keyless.md` (numbered when it opens; 0021 to 0026 are taken, and the guarded-schemas ADR takes
+  its own number), rides as docs, with the ADR 0001 log entry decision 35 D8 requires (verify-842-e4f6e94 S3). No
+  product file rides with it.
 PLAN.md gate (verify-842-e4f6e94 S4): the plan thread's PLAN.md edit (:528, :626, text in book edit
   2026-10-13-verify-819-fixes, "Architecture on Alex's keyless answer") is a docs PR. Until it merges, PLAN.md and the
   book disagree, and the plan wins: P1.27s is not built before it merges.
@@ -11635,9 +11641,9 @@ would leak data or cannot be fixed later, and refuses to proceed on any failure.
 
 **Inputs:** compose files; `images.lock.json`, `cosign.pub` and `verify-images` (P1.27); secrets directory; env
 files; the network table (P1.29).
-- `images.lock.json` and the trusted root arrive with P2.26b and P2.26e. Signing is keyless (ADR 0023; book edits
-  2026-10-13-p127s-split and 2026-10-13-verify-819-fixes): no `cosign.pub` exists, and P2.26b's lock carries the
-  keyless identity (`cosign.pub` above is superseded). The network table
+- `images.lock.json` and the trusted root arrive with P2.26b and P2.26e. Signing is keyless (the keyless signing ADR,
+  numbered when it opens; book edits 2026-10-13-p127s-split and 2026-10-13-verify-819-fixes): no `cosign.pub` exists,
+  and P2.26b's lock carries the keyless identity (`cosign.pub` above is superseded). The network table
   with P1.29 and the retirement report with P1.33a. Until then the checks that read them FAIL (below); the tests use
   fixtures for every input, so both parts are green on main without those steps.
 - C3 and C4 take an injected verifier, with fakes in the tests. Production wiring runs
@@ -11724,8 +11730,8 @@ fails while it is on, so a debugging session cannot be forgotten across a deploy
 
 **Edge cases and failures:**
 - No network for signature verification → C3/C4 FAIL (never pass on unknown).
-- An input a later step brings (lock, trusted root, network table, retirement report; `cosign.pub` superseded by ADR
-  0023, keyless) is missing → that check FAILs,
+- An input a later step brings (lock, trusted root, network table, retirement report; `cosign.pub` superseded by the
+  keyless signing ADR) is missing → that check FAILs,
   `input missing: <path>`, exit 1. Exit 2 stays reserved for what the algorithm names (bad arguments, unreadable env
   or secret files, a compose parse error). The only skips are C21 on other hostnames, C22 before Phase 4 and C23
   outside prod (as built by P1.30j) and C24 on `.localhost` (as built by P1.30d), each a PASS with a fixed reason

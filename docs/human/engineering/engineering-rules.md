@@ -276,9 +276,9 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 
 **SE-7b. Runtime code never treats `dev` as local. Local and staging both run `UNSET_ENV=dev`, so a runtime behaviour that must be local only is switched on by a local-only key: preflight refuses that key under `--env dev` and `--env prod`, only compose.local.yaml sets it, and the runtime reads the key, never infers "local" from `dev`.**
 - Every "local" ruling lives in the deploy layer, keyed on preflight's own profile (`--env local|dev|prod`, deployment/preflight/checks/types.ts `Env`). No `UNSET_ENV=local` value is added: it would touch every allowlist and duplicate what preflight already enforces.
-- Enforced by: preflight's local-only env map (P1.35r), which refuses the local-only keys under dev and prod; P1.36k (#1021) adds `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` to it. Verifier review for runtime `UNSET_ENV === "dev"` checks.
+- Enforced by: a local-only key list in preflight, which refuses those keys under dev and prod. P1.36k (#1021) creates it, with `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` as its first entries; until it merges, nothing enforces the rule. Verifier review for runtime `UNSET_ENV === "dev"` checks.
 - Source: architecture ruling 2026-10-19 03:45Z (book edit 2026-10-19-p125c-as-built, last section).
-- Status: NEW — a tightening; today no runtime check reads `dev` as local (TEST_ROUTES boots under `test` only).
+- Status: NEW — a tightening, not yet enforced. Today several runtime gates still accept a local-only behaviour whenever `UNSET_ENV === "dev"` (the sites P1.36k lists, among them shared/http/config.ts:25-27 for plain-http origins); P1.36k is what makes `dev` mean staging there. TEST_ROUTES already boots under `test` only.
 - Priority: P1
 
 ## 7. Testing
