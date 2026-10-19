@@ -674,6 +674,7 @@ flowchart LR
   P1_36b --> P1_36j
   P1_36k["P1.36k dev-only runtime keys refused outside local"]
   P1_36l["P1.36l zero commit refused under dev"]
+  P1_27s --> P1_36l
   P1_36p["P1.36p PDS temp blob tmpfs capped"]
   P1_36h --> P1_36p
   P1_36q["P1.36q exact key set in pds.env"]
@@ -8928,7 +8929,8 @@ It also gives the reason the module is needed even with Pangolin. It does not ed
 - Namecheap's API ruled out as the token host, because its tokens are account-wide.
 The provider it names is the one Alex picks on his card, deSEC (recommended) or Cloudflare. The draft waits for his
 answer, or carries both with the choice left open, at the plan thread's choice. The number is confirmed
-free when the PR opens (book edit 2026-10-19-adr-number-labels); if 0028 is taken, it is the next free number.
+free when the PR opens (book edit 2026-10-19-adr-number-labels); if 0028 is taken, it is the next free number, and
+P1.36n's title and typed line, P1.36d and the outline follow that number.
 
 ---
 
@@ -8973,7 +8975,9 @@ and 04:35Z. Issue #1030.
   `/tmp` tmpfs the PDS keeps is capped too (today one uncapped `/tmp` at mode 1777, compose.dev.yaml:97-98, and the same
   in compose.local).
 - `PDS_BLOB_UPLOAD_LIMIT` becomes one exact value in the env map, 5242880 (5 MiB). The floor check that it is at least
-  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays.
+  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays. Phase 4's 60 MB video master is above this pin, so the Phase 4
+  step that sets `VIDEO_MASTER_MAX_BYTES` moves the limit, the tmpfs size and their tie test together (P4.02; book edit
+  2026-10-19-alex-cards-and-edge-dev-mode, 04:35Z).
 - Preflight checks both under local and dev.
 - Reds: the blobs tmpfs without `size=`; a `size=` above the cap; a mode other than 0700; a missing or different
   upload limit.
@@ -8991,9 +8995,10 @@ Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-
 
 **What:**
 - Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
-  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY) plus the SMTP URL key that
-  P1.36g adds: five names, all secret-bearing, with the same exact-map pattern as P1.35r's env table. Delivery follows
-  the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z sections).
+  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K256_PRIVATE_KEY_HEX, PDS_RECOVERY_DID_KEY) plus
+  the SMTP URL key that P1.36g adds: five names, all secret-bearing, with the same exact-map pattern as P1.35r's env
+  table. Delivery follows the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z
+  sections).
 - Preflight reads names only, and never prints a value.
 - Reds: a sixth key (for example a non-secret SMTP setting); a missing key; a duplicate key.
 - It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
@@ -9013,7 +9018,7 @@ Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-
 compose.dev.yaml's migrate is a `build:` (:50-53), so dev preflight refuses the whole stack until P1.27s publishes
 signed images (compose.dev.yaml:4-6). This step pins that with a named red, `c2_dev_migrate_built_from_checkout_fails`,
 and a comment in C2 saying migrate gets no dev exception. Local's unsigned path for migrate stays unchanged. When
-P1.27s switches compose.dev.yaml's migrate to its digest, this red stays.
+P2.26b switches compose.dev.yaml's migrate to its digest (after P1.27s publishes the images), this red stays.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): schema changes with migration
 privileges run from an unsigned operator build. Answered by signed digests only under dev.
