@@ -72,8 +72,9 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
   P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
   P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35p, P1.35r, P1.35l, P1.33z, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
-  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
+  P1.34d, P1.35p, P1.35r, P1.35l, P1.35t, P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36d, P1.36e, P1.36b,
+  P1.36c, P1.36g, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
+  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
   P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
   Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
@@ -311,7 +312,7 @@ flowchart LR
   P1_35i["P1.35i test handles on reserved domains"]
   P1_35j["P1.35j trusted test handles on reserved domains"]
   P1_35k["P1.35k net-guard test hosts on reserved names"]
-  P1_35s["P1.35s net-guard carried IPv4 fixtures swapped"]
+  P1_35s["P1.35s net-guard carried IPv4 and range notes"]
   P1_33w["P1.33w binds to the dev CA folder refused"]
   P1_33x["P1.33x local leaf names and expiry"]
   P1_33y["P1.33y per-file site mounts on local"]
@@ -623,6 +624,26 @@ flowchart LR
   P1_35g["P1.35g IP refused as local PDS host"]
   P1_35l["P1.35l PDS host checked in every env"]
   P1_35g --> P1_35l
+  P1_35t["P1.35t local stack CI job"]
+  P1_34d --> P1_35t
+  P1_35t --> P1_33z
+  P1_35w["P1.35w plc_pds exemption retired"]
+  P1_36f["P1.36f ADR 0025 staging TLS and DNS"]
+  P1_35y["P1.35y ADR 0025 accepted"]
+  P1_36f --> P1_35y
+  P1_35z["P1.35z ADR 0026 accepted"]
+  P1_35x["P1.35x dev hosts pinned to staging names"]
+  P1_35y --> P1_35x
+  P1_36d["P1.36d edge image with one DNS module"]
+  P1_36e["P1.36e DNS-01 for dev in C18"]
+  P1_36d --> P1_36e
+  P1_36b["P1.36b app site on the dev edge"]
+  P1_36e --> P1_36b
+  P1_35x --> P1_36b
+  P1_35y --> P1_36b
+  P1_36c["P1.36c dev edge DNS token and app site wired"]
+  P1_36b --> P1_36c
+  P1_36g["P1.36g dev mail and first-invite runbook"]
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -8229,7 +8250,7 @@ refusals still fire, and check is green.
 
 ---
 
-### P1.35s — Swap net-guard's carried IPv4 fixtures
+### P1.35s — Net-guard carried IPv4 and range notes
 Tags: [SEC] trusted [ALEX] (typed line)            Depends on: —
 
 Slice 1, issue #914, trusted base (`infrastructure/net-guard/` tests only), kind/fix, lane Phase 1 (owner of P1.35k),
@@ -8239,12 +8260,11 @@ since 03:35Z. Like any trusted-base PR it touches nothing outside trusted base, 
 Alex's typed line: "yes P1.35s infrastructure/net-guard carried IPv4 fixtures".
 
 **What:**
-1. SE-7a's two known exceptions, swapped so that each IPv4 address a Teredo literal carries is allowed in its file,
-   preferring the RFC 5737 documentation ranges, while each test keeps testing what it tested:
-   `ranges.test.ts:33` (the Teredo server, 65.54.227.120, is public and unlisted) keeps the Teredo shape;
-   `prototype.test.ts:74` (the client, 7f00:1 XOR ffff:ffff, is 128.255.255.254, public and unlisted) may take a
-   special-use client such as 127.0.0.1 XOR'd, if a loopback-like client is its point. Then the PR drops both lines
-   from SE-7a's Known exceptions (a docs line may ride along).
+1. SE-7a's two known exceptions, swapped to documentation addresses (RFC 5737), while each test keeps testing what it
+   tested: `ranges.test.ts:33` (the Teredo server, 65.54.227.120, is public and unlisted) keeps the Teredo shape;
+   `prototype.test.ts:74` (the client, 7f00:1 XOR ffff:ffff, is 128.255.255.254, public and unlisted) carries a
+   documentation client after the XOR (verify-984-1ada01f S1). Then the PR drops both lines from SE-7a's Known
+   exceptions (a docs line may ride along).
 2. Near-edge comments: each near-edge value in net-guard's tests gets a comment naming the range it sits next to
    (architecture's 03:35Z S1 ruling; SE-7a's "where such a comment is missing today").
 
@@ -8253,6 +8273,207 @@ Test-only lines do not count toward size.
 Done when no net-guard test literal carries an IPv4 address that SE-7a does not allow in that file (SIIT, local-use
 NAT64 at each RFC 6052 position, and Teredo's server and client), every near-edge value names its range, the same
 classifications still hold, and check is green.
+
+---
+
+### P1.35t — Run the local stack in a CI job
+Tags: [SEC] check [ALEX] (typed line)            Depends on: P1.34d
+Slice 1, issue #983, check paths (`.github/workflows/`, `scripts/ci/`), SE-6 alone (no product, no trusted base),
+kind/ci, lane the third thread. P1.33z depends on it. Book edit 2026-10-19-p135t-local-stack-ci-job, with
+architecture's 02:15Z ruling on D1-D5 and its 02:45Z ruling on the probe gate, both folded in below. Needs Alex's typed
+line: "yes P1.35t .github/workflows/local-stack.yml scripts/ci".
+
+Threats (SE-1; the PR expands this to one screen and updates the ASVS 5.0 rows): a CI job that holds generated secrets
+and runs containers on pull-request code. Answered by: no repository secret, read-only token, generated values never
+logged or uploaded, and the job never runs with a privileged trigger.
+
+**What:**
+1. A new workflow `.github/workflows/local-stack.yml`, on `pull_request` only (never `pull_request_target` or
+   `workflow_run`), `permissions: contents: read` at the top and nothing more, no `environment`, no `secrets.*` or
+   `vars.*` reference, every action pinned by full commit SHA as the other workflows are, a `timeout-minutes` covering
+   the whole job, and `concurrency` cancelling superseded runs. Checkout uses `persist-credentials: false`; the runner
+   label is the same pinned one ci.yml uses; no step saves a Docker layer or image cache. A later `push` trigger is its
+   own check step with its own typed line.
+2. A script under `scripts/ci/` creates the two sibling folders (`../unset-dev-env`, `../unset-dev-secrets`) with
+   values from `node:crypto` `randomBytes`, in the shapes and file modes `docs/human/runbooks/dev-stack-secrets.md`
+   gives. Each value is masked (`::add-mask::`, raw, base64 and URL-encoded forms) before it is written anywhere; the
+   folders are never uploaded as an artifact and are deleted in an `always()` step. No value is written into the
+   workspace. The job never runs `docker compose config`, `docker inspect`, `env` or `printenv`; on failure it shows
+   only `docker compose ps` and `docker compose logs --no-color --tail=200` per service.
+3. The client_id probe, a `scripts/ci/` check script with no product imports: it fetches
+   `https://<APP_HOST>/oauth-client-metadata.json` from inside the PDS container (`docker compose exec`) with the dev
+   root as the only extra trust anchor, verifies the chain, and checks only that `client_id` equals the fetched URL and
+   that `redirect_uris` and `jwks_uri` sit on the same origin. It reads APP_HOST from the generated env and hard-codes
+   nothing product-specific beyond the path. If it needs product code, the lane stops and brings it back to
+   architecture.
+4. Green job: `npm ci`, `npm run local:up`, then the probe and the edge leaf check, then `npm run local:down` in an
+   `always()` step.
+5. Red job, in the same workflow on every run: the same, but the script builds the stack without P1.34d's leaf and
+   mounts. It first asserts every container is healthy, then passes only when the probe fails with the named TLS or
+   client_id fetch error, a fixed string constant matched exactly; a pull failure, a timeout, an unhealthy container or
+   any other error fails the job ("not a red"). Both jobs use the same image digests, read from the same lock.
+6. Every step runs unconditionally apart from the `always()` cleanup: no `hashFiles` gate, no `continue-on-error`.
+7. Images come only from their pinned references; no other registry, mirror or vendored image.
+8. The job is not made a required check here. Adding it to the ruleset is a setting and Alex's call; until then
+   P1.33z cites the green run id itself.
+
+Stop rule (P1.34d item 13): if a file mount on the read-only root fails, stop and report; never add a writable layer or
+a placeholder. If the runner's Docker cannot do what the stack needs (a missing network driver, a cgroup limit), stop
+and report; never `--privileged` or added capabilities.
+
+Done when actionlint, semgrep and check are green, and on this PR's own CI both jobs end as intended (green job green,
+red job green on the named error), with no retry or re-run loop apart from one bounded health wait whose limit is a
+named constant. If the green job fails for a product reason, stop and report to the step book: that fix is the next
+local-chain step and lands before this PR. If the probe's first run is refused, that is the answer to staging ruling (a)
+(book edit 2026-10-19-staging-tailnet-rulings): it blocks this PR and goes to architecture, never into the red job's
+expected error. This PR never merges with either job red.
+
+---
+
+### P1.35w — Retire the plc_pds exemption
+Tags: [SEC]            Depends on: —
+Slice 1, issue #995, product (`deployment/preflight/` only; no check or trusted-base path), lane the third thread,
+after P1.33z (book edit 2026-10-19-staging-path-steps, "Order"). Book edit 2026-10-13-local-plc-a4-steps,
+architecture's 02:18Z retirement ruling and its step-book mapping, from the post-merge verify of #903 (F-3). A
+tightening: nothing from Alex.
+
+**What:** items 1-5 of the ruling, exactly. Remove `plcBesidePds` and the exemption (networks.ts:125-136) and its test
+block (preflight.test.ts:2762). Keep or add the red: a service named plc on a network named plc_pds, with a bases.lock
+"plc" entry present, fails the edge-only PDS check. The four stale comments (local-only.ts:11-12, networks.ts:76,
+preflight.test.ts:2765 and :3235) cite ADR 0022. Drop the plc localOnly reading if nothing else uses it. If a local PLC
+ever returns, the exemption comes back only under a fresh architecture ruling.
+
+Done when the red passes on the new code (and would have passed the old exemption, shown in the PR), and check is green.
+
+---
+
+### P1.35x — Pin the dev hosts to the staging names
+Tags: [SEC]            Depends on: P1.35y
+Slice 1, issue #998, product (`deployment/preflight/`, `scripts/dev-precheck.ts`), lane the third thread; book edit
+2026-10-19-staging-path-steps, "Item 4", and architecture's ruling (c) that staging is the `dev` profile (book edit
+2026-10-19-staging-tailnet-rulings). `scripts/dev-precheck.ts` stays product (architecture 02:45Z), so it may share
+this PR with `deployment/preflight/`.
+
+**What:** the dev pins change from the `0x40.space` names to ADR 0025's accepted `staging.unset.*` names, with their
+tests: the precheck (`scripts/dev-precheck.ts:15`, `:57`) and C15 (`deployment/preflight/checks/settings.ts:60`). The
+prod pins don't change. Each name stays one exact value, never a suffix or a pattern. If ADR 0025 is amended, the names
+follow the amendment.
+
+Done when, red first, the old `0x40.space` names fail under dev, the new names pass, prod is unchanged, and check is
+green.
+
+---
+
+### P1.35y — Accept ADR 0025, the public domains
+Tags: [ALEX]            Depends on: P1.36f; Alex's yes
+Slice 1, issue #996, docs only (`docs/human/decisions/0025-public-domains.md`, the Status line), lane the plan thread;
+book edit 2026-10-19-staging-path-steps. It opens only after Alex says yes, and the PR body quotes his answer and its
+time. It changes nothing but the Status line and its date. If he amends the ADR, the plan thread drafts the amendment,
+and this step waits for it.
+
+---
+
+### P1.35z — Accept ADR 0026, the local email-gate exception
+Tags: [ALEX]            Depends on: Alex's yes
+Slice 1, issue #997, docs only (`docs/human/decisions/0026-local-email-gate-exception.md`, the Status line), lane the
+plan thread; book edit 2026-10-19-staging-path-steps. It follows the same rule as P1.35y.
+
+---
+
+### P1.36d — Build the edge image with one DNS module
+Tags: [SEC] trusted            Depends on: —
+Slice 1, issue #1001, trusted base (`deployment/edge/Dockerfile` and its image tests), lane the third thread; book
+edit 2026-10-19-staging-path-steps, "Item 7", from architecture's ruling (b): staging TLS is Let's Encrypt DNS-01
+through a delegated validation zone, never the dev root (book edit 2026-10-19-staging-tailnet-rulings).
+
+**What:** the edge image gains exactly one DNS provider module, built from a pinned source by commit or digest in our
+image pipeline, and signed and digest-pinned like the other images (the P1.27s chain). There is no second module and no
+plugin loaded at run time. The image tests list the modules and fail on any extra one.
+
+---
+
+### P1.36e — Allow DNS-01 for dev in C18
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36d
+Slice 1, issue #1002, trusted base (`deployment/edge/caddyfile.ts`, `deployment/edge/snippets/tls.caddy`, their
+tests), lane the third thread; book edit 2026-10-19-staging-path-steps, "Item 7". The edge reader's grammar is trusted
+base and C18 imports it (deployment/preflight/checks/edge.ts:1-4), so the widening is a trusted step. **A widening, so
+it needs Alex's typed line:** "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/snippets/tls.caddy C18 DNS-01
+dev only".
+
+**What:** Let's Encrypt stays the only issuer. Under dev, the reader accepts exactly one `dns <module>` challenge, whose
+token comes from a file secret. Under prod, it refuses DNS-01, so the current challenges stay. Local is unchanged.
+Reds: DNS-01 under prod; a second issuer; another CA directory; a token given as a literal or an env value instead of
+the file.
+
+---
+
+### P1.36b — Serve the app site on the dev edge
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36e, P1.35x, P1.35y
+Slice 1, issue #999, trusted base (`deployment/edge/`), lane the third thread; book edit
+2026-10-19-staging-path-steps, "Item 7" and "P1.36b ruled", from architecture's 02:50Z ruling (book edit
+2026-10-19-staging-tailnet-rulings, last section). **A loosening, so it needs Alex's typed line:** "yes P1.36b
+deployment/edge/caddyfile.ts dev app site APP_HOST APP_UPSTREAM", quoted with its time in the PR body. It also waits on
+his acceptance of ADR 0025 (P1.35y), since the exact name comes from it.
+
+**What:** today `APP_HOST` and `APP_UPSTREAM` are accepted only from `local/` (P1.34a). Under dev, the edge reader
+accepts `APP_HOST` only as ADR 0025's accepted app name, one exact string (not a suffix or a pattern), and
+`APP_UPSTREAM` only as the internal web address that local already pins. Both join the dev positive allowlist
+(P1.34z's); if that allowlist lives in `deployment/preflight/`, P1.36c adds the two entries there. Prod stays refused
+until a ruling of its own. Local is unchanged. The PDS-site rules apply to the app site, its TLS is P1.36e's, and the
+edge-only PDS neighbour rule (P1.34d option C) applies under dev unchanged. Reds: any other host under dev, any other
+upstream under dev, and either one under prod.
+
+---
+
+### P1.36c — Wire the dev edge's DNS token and app site
+Tags: [SEC]            Depends on: P1.36b
+Slice 1, issue #1000, product (`deployment/compose.dev.yaml`, `deployment/preflight/`), lane the third thread; book
+edit 2026-10-19-staging-path-steps, "Item 7".
+
+**What:** the DNS token is a C9 file secret, mounted only into the edge, under the C9 owner and mode rules; a test
+asserts that no other service mounts it. The compose wiring adds the app site's mounts as P1.36b reads them, and the two
+dev allowlist entries if that allowlist lives in `deployment/preflight/`. Prod is unchanged. Alex's tasks (runbook):
+create the validation zone, the `_acme-challenge` CNAMEs and the zone-scoped token.
+
+---
+
+### P1.36f — Add staging TLS and DNS to ADR 0025
+Tags: —            Depends on: —
+Slice 1, issue #1003, docs only (`docs/human/decisions/0025-public-domains.md`, still Proposed, so it can change), lane
+the plan thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping". It comes before P1.35y.
+
+**What:** the ADR gains three lines from ruling (b): staging TLS is Let's Encrypt DNS-01 through a delegated validation
+zone; the tailnet's split DNS serves the staging names; public DNS holds only the challenge CNAMEs, plus the metadata
+host's record if Alex agrees to ruling (a). Alex reads the amended ADR when he gives his yes for P1.35y. No typed line
+is needed: the ADR is unaccepted, and his acceptance is the approval.
+
+---
+
+### P1.36g — Fix dev mail and the first-invite runbook
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1007, product (`deployment/compose.dev.yaml`, `deployment/compose.dev.test.ts`, `deployment/preflight/`
+C11, the pds.env template under `deployment/env/` if that is where main keeps it), with docs riding along
+(`docs/human/runbooks/dev-stack-secrets.md`), lane the third thread; book edit 2026-10-19-staging-path-steps, "Item 8",
+from the "Follow-ups from the staging thread (02:40Z)" section of 2026-10-19-staging-tailnet-rulings. All tightenings,
+so nothing is needed from Alex for the step itself.
+
+**What:**
+1. **Mail.** Under dev, a mail URL is required, as C11 says. The compose.dev.yaml comment and the test
+   `pds_mail_unset_only_with_logging_off` change to match it: dev with no mail URL fails. C11's TLS rule stands
+   (smtps or requireTLS). The SMTP password follows the 12:40Z predicate: exactly one `${NAME:?message}`, or the whole
+   URL comes from a `/run/secrets/` file. If nothing uses Mailpit under dev, C11's Mailpit acceptance narrows to local
+   only. ADR 0026's exception stays local-only.
+2. **The pds.env template and runbook** list the SMTP keys, the recovery key and its did:key, and the first account,
+   with no values and nothing that looks like a real key.
+3. **The first invite** is a runbook one-off that Alex runs and Claude never does, under the ruling's four conditions:
+   it runs with `docker compose exec` inside the PDS container, against its own loopback port, with no port published
+   and the edge still answering 404 for createInviteCode; the password is read from the file inside the container,
+   never typed on a command line and never printed; each code has `useCount` 1 and goes to one tester; the log line
+   records the date and the number of codes, never a code. The runbook says this one-off is retired once
+   `interfaces/pds-admin` (P2.09) exists, and drops its "P0.12 runbook" citation.
+
+Done when, red first: dev with no mail URL fails, a literal SMTP password fails, and (if narrowed) Mailpit under dev
+fails. Check is green.
 
 ---
 
@@ -9060,7 +9281,7 @@ Done when every test above passes, each red fixture fails on main for its own re
 ---
 
 ### P1.33z — Run the local stack in CI
-Tags: [SEC]            Depends on: P1.34d
+Tags: [SEC]            Depends on: P1.34d, P1.35t
 Slice 1, issue #856, product, kind/feature, lane the third thread; book edit 2026-10-14-p134d-split, a split of P1.34d
 (#742) by size: no item's content changes, and the record 2026-10-12-p134c-p134d-local-dev-root-ca and its amendments
 still govern the text. Not paused. Nothing from Alex.
@@ -9069,9 +9290,9 @@ Threats (SE-1; the builder's PR expands this to one screen and updates the match
 trust (the leaf, the per-file mounts, the read-only root) untested end to end, answered by the run below.
 
 **What** (P1.34d item 13): a CI integration run: the local stack starts and the edge serves both names with the leaf.
-If a file mount on the read-only root fails, stop and report; never add a writable layer or a placeholder. If the run
-needs a `.github/` change, that change is its own check step before this one (id from the step book on request), and
-it needs Alex's typed line.
+If a file mount on the read-only root fails, stop and report; never add a writable layer or a placeholder. The CI job
+and its client_id probe are P1.35t (#983), the check step before this one; this step no longer adds
+`deployment/local-stack-probe.ts` (book edit 2026-10-19-p135t-local-stack-ci-job, last section).
 
 README, as docs riding this product step (SE-6; book edit 2026-10-14-outside-review-lows, item 3): a "Run it locally"
 section, written here because this step's run proves `compose.local.yaml` starts. It covers installing Node 26 (nvm
@@ -9080,12 +9301,10 @@ are never committed, pointing to `docs/human/runbooks/dev-stack-secrets.md` to c
 and the local origin to open. No secret values and no example values that look like real keys. The wipe line waits for
 P2.25's local arm: until then the section says the wipe is not built yet and documents no command that fails.
 
-Done when the run is green in CI on this step's PR, the README section is in, and check is green. In this PR's CI, the
-client_id probe passes against the started local stack (green), and fails with a named TLS or client_id fetch error when
-the stack runs without P1.34d's leaf and mounts (red); a pull failure, a timeout or an unhealthy container is not a red.
-Both halves are cited by run id. If the green half fails, its fix is the next local-chain step. No other registry,
-mirror or vendored image; any `.github/` change is its own check step with Alex's typed line (book edit
-2026-10-14-p134d-split, "Step-book mapping of the probe-departure ruling").
+Done when P1.35t's green and red jobs are both cited by run id (its run meets the "client_id probe passes" condition),
+the README section and the product fixes the run shows are in, and check is green. If the green half fails, its fix is
+the next local-chain step. No other registry, mirror or vendored image (book edit 2026-10-14-p134d-split, "Step-book
+mapping of the probe-departure ruling").
 
 Rule for every thread: nobody says local sign-in works until this step's run is green, or Alex reports `npm run
 local:up` and the probe passing on his machine.
@@ -14473,6 +14692,9 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   or probe runs on it (the first check above is a read-only call; architecture's Amendment 6 of 2026-10-13-local-plc,
   S3); test identities stay on the local stack's PLC (architecture's Amendment 4 of
   2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps).
+  For staging this is replaced by architecture's 2026-10-19 ruling (b) (book edit 2026-10-19-staging-tailnet-rulings):
+  the names are ADR 0025's `staging.unset.*`, with Let's Encrypt DNS-01 through a delegated validation zone (P1.36d,
+  P1.36e, P1.36b, P1.36c), never `int.unset.sh` or the dev root.
 - P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
   (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
   the public opening (P1.33p).
