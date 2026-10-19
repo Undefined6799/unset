@@ -2091,6 +2091,8 @@ Edge cases and failures:
   - A compromised `admin` floods alerts → `pds-admin`'s caps hold.
 
 Done when (tests):
+  - The `age_gate.hosted_block` audit row (P2.12) raises `alert.notify` and repeats in the daily digest until it is
+    marked handled. Until then P2.12's warning log line is the interim signal (book edit 2026-10-19-five-step-audit).
   - `takedown-happy-path` (PDS stub receives `$type` repoRef, `ref:"unset:<jti>"`; log intent + outcome; receipts queued).
   - `reinstate-checks-pds-ref`; `reinstate-refused-while-hold-open`.
   - `takedown-outcome-readable-after-lost-reply` (R2-05, P3.16): the reply to `account.takedown` is dropped; resending

@@ -61,22 +61,23 @@ later slices (guideline §12). This file is in build order; step ids did not cha
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
   2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
-  P1.20–P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b,
-  P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g,
-  P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r,
-  P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z,
-  P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a,
-  P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a,
-  P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v,
-  P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p,
-  P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o,
-  P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c,
-  P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o,
-  P1.34d, P1.35p, P1.35r, P1.35l, P1.35t, P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36d, P1.36e, P1.36b,
-  P1.36c, P1.36g, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
-  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
+  P1.20–P1.25, P1.25c, P1.25f, P1.25g, P1.25m, P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v, P1.28w, P1.28u, P1.28c,
+  P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q, P1.30p, P1.30, P1.30s,
+  P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r, P1.30e, P1.30f,
+  P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g, P1.29p, P1.29j,
+  P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w, P1.30k, P1.30m,
+  P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z, P1.01g, P1.30x,
+  P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i, P1.11r, P1.11s,
+  P1.11n, P1.11k, P1.33s, P1.33u, P1.33v, P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p, P1.34w, P1.34s,
+  P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a, P1.34b, P1.27l,
+  P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j,
+  P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f,
+  P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.35t, P1.33z, P1.35w, P1.36f, P1.35y,
+  P1.35z, P1.35x, P1.36d, P1.36e, P1.36b, P1.36c, P1.36g, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
+  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
   P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
-  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.11, P2.15, P2.12, P2.13 and the slice exit P2.13a.
+  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b, P2.08c, P2.08d, P2.11, P2.15, P2.12, P2.12a, P2.13,
+  P2.13c and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -419,6 +420,14 @@ flowchart LR
   P1_25e --> P1_25u
   P1_25p --> P1_25
   P1_25 --> P1_26
+  P1_25c["P1.25c test routes, prod refusal, 503"]
+  P1_25 --> P1_25c
+  P1_25f["P1.25f favicons, feed mode, footer prefs"]
+  P1_25 --> P1_25f
+  P1_25g["P1.25g disabled select focus, kit tests"]
+  P1_25 --> P1_25g
+  P1_25m["P1.25m DID account route privacy"]
+  P1_25 --> P1_25m
   P1_04 --> P1_27
   P0_07 --> P1_27
   P1_27 --> P1_27d
@@ -4315,6 +4324,8 @@ LESSON: review 02 MINOR-3's codemod idea does not apply, since screens are rewri
 `/home/claude/0x40/app/src/lib/request-locale.ts:7-9` (cookie only) → LESSON. An i18n library (i18next, FormatJS) →
 REJECT for now (`Intl.PluralRules` and a 100-line runtime cover two languages; reviewer may overturn). Provisional — for
 reuse review.
+Legal texts: this step's PR adds `apps/web/legal/{terms,privacy,domains}.fr.md` beside P2.15's `.en.md` files,
+approved by Alex like all legal text (book edit 2026-10-19-five-step-audit).
 Not in this step: the locale cookie, its POST switch and language negotiation on pages (P1.22b); the React `msg()` helper and `<html lang>` in the shell
 (P1.24/P1.25); email templates (PDS-owned).
 Diagram: none.
@@ -6460,7 +6471,101 @@ under a "Riders from P1.24c" heading):
 - `app/src/app/not-found.tsx`, `app/src/app/error.tsx` → LESSON: copy tone; Next.js mechanisms rejected.
 - Prototype privacy and terms pages → REJECT: written for 0x40 and its PDS; legal texts are rewritten.
 
+**As built** (#963, #965, #975; book edit 2026-10-19-five-step-audit, architecture 02:25Z): part one only. The
+remainder is P1.25c (test routes and the 503), P1.25f (favicons, feed mode, footer prefs, D-2's tests), P1.25g
+(riders 1 and 2) and P1.25m (D-5's privacy tests); #963's "P1.25j" is that remainder, not the booked P1.25j. #975's
+departures: D-1 accepted (`GET /` is an empty home with a visually hidden heading; the catalog placeholder is dropped,
+and the first step that gives the home real content owns the visible heading); D-3 accepted (one
+`apps/web/src/errors/ErrorPage.tsx` with variants replaces NotFound, ServerError and Unavailable; each status keeps its
+own code and test, and no variant renders exception detail); D-4 accepted (`/legal/{terms,privacy,domains}`, as
+phase-2.md:57). D-2 (the Navigation popover on `/`) is accepted with two tested conditions, carried by P1.25f; whether
+Alex approved the core-shell design itself is still to be cited. D-5 (the account page at `/<DID>`) is P2.13's.
+
 **Not in this step:** landing page content; legal texts; sign-in (Phase 2).
+
+---
+
+### P1.25c — Add test routes, prod refusal and the 503 page
+Tags: [SEC]            Depends on: P1.25
+Slice 1, issue #989, product, lane Phase 2. **It comes first for staging**, because nothing yet refuses test routes
+in prod. Book edit 2026-10-19-five-step-audit.
+**What:**
+1. Add `TEST_ROUTES` and `interfaces/http/routes/test-routes.ts`, with `/__test/throw`, `/__test/showcase`,
+   `/__test/unavailable` and `/__test/app`.
+2. A prod config with test routes turned on exits at start (`config.test_routes_in_prod`).
+3. Add `Unavailable.tsx`, a 503 page with `Retry-After: 30`.
+4. The 500-page tests use `/__test/throw` instead of their in-test `/boom` route.
+
+Done when these tests pass, red first, and check is green: `test_routes_refused_in_prod`, `unavailable_retry_after`,
+and `server_error_request_id` and `server_error_fallback_static` on `/__test/throw`.
+
+As built (#1011; book edit 2026-10-19-p125c-as-built, architecture 03:00Z and 03:45Z): four departures, accepted.
+  1. The paths are `/test-routes/{throw,unavailable,app}`: the kit's trusted `SEGMENT` template refuses a leading
+     underscore (shared/http/routes.ts:65-66), and widening it would loosen a check. The `/test-routes/` prefix is
+     reserved: no product route may use it, and with `TEST_ROUTES` off each path answers byte for byte like an unknown
+     path (`test_routes_absent_by_default`).
+  2. The refusal is the config rule, not a second exit: `config.invalid`, key `TEST_ROUTES`, exit 78, like every other
+     refused key (shared/config/load.ts:153-173). The book's `NODE_ENV=production` reads `UNSET_ENV`.
+  3. No showcase route: test-only code stays out of the production server bundle; `/fixture/showcase` keeps P1.26
+     covered.
+  4. No `Unavailable.tsx`: the 503 is the one `ErrorPage`'s `service.unavailable` variant (D-3), and the route sets
+     `Retry-After: 30` and `Cache-Control: no-store` itself.
+  `TEST_ROUTES` is a positive allowlist: it boots only when `UNSET_ENV` is `test`. Dev (staging) and prod refuse it.
+  Runtime `UNSET_ENV` has no `local` value (shared/config/schema.ts:170) and compose.local.yaml runs `dev`, so the
+  ruled "local and test" reduces to `test` alone, which is stricter and accepted. Runtime code never treats `dev` as
+  local; a local-only runtime behaviour needs a local-only key that preflight refuses under `--env dev` and `prod`.
+  Open note for the server kit's next step: the kit's `AppError` path sends no `Retry-After`, so every 503 it renders
+  gains `Retry-After` and `no-store` there.
+
+---
+
+### P1.25f — Add favicons, feed mode and footer prefs
+Tags: (none)            Depends on: P1.25
+Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit.
+**What:**
+1. Ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
+   asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
+2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
+3. The app-page footer slot holds `PrefsForms`. LanguageLinks stays with P1.22b.
+4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
+   Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
+   Each has a test.
+
+Done when the tests pass and check is green.
+
+---
+
+### P1.25g — Fix disabled select focus and add two kit tests
+Tags: (none)            Depends on: P1.25
+Slice 1, issue #991, product (`shared/ui/`), lane Phase 2. These are riders 1 and 2 of P1.25's text. Book edit
+2026-10-19-five-step-audit.
+**What:**
+1. When the native control is disabled, a click on the label must not focus the combobox (SelectListbox.tsx:57-60).
+   The test is `select_label_click_disabled_no_focus`.
+2. Add `toast_close_without_main_leaves_focus` and `font_metrics_check_fails_when_stale`.
+
+Done when the tests pass, red first for item 1, and check is green.
+
+---
+
+### P1.25m — Pin the DID account route's privacy
+Tags: [SEC]            Depends on: P1.25
+Slice 1, issue #1004, product (`interfaces/http/`, tests), lane Phase 2. Book edit 2026-10-19-five-step-audit, D-5.
+
+**What:** these are D-5's conditions 1 to 3, each a test, red first where main fails:
+1. A request to `/<DID>`, and the redirects from `/me` and `/did`, write no DID to any app log line. The edge's access
+   log already never carries the path (deployment/edge/snippets/log.caddy:4). This step only asserts that with an
+   existing edge test, if one exists. If the edge needs a change, the step stops and reports, because that would be a
+   trusted step.
+2. The account page sends the same-origin referrer policy (shared/http/csp/headers.ts:37), and a test pins it.
+3. The one-segment DID route is registered after every explicit route:
+   - a test lists the explicit one-segment routes and proves each still wins;
+   - DID validation stays strict, as in the me.test.ts:137-149 cases (no double percent-decoding, and a did:web with
+     a path is refused);
+   - a foreign DID and a signed-out request can't tell "exists" apart from "doesn't".
+
+Condition 4 needs no code. `/<DID>` serves only its owner, and showing it to anyone else needs a new ruling and
+Alex's word.
 
 ---
 
