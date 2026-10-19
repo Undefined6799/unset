@@ -53,12 +53,14 @@ export const c14: Check = {
 export const c15: Check = {
   id: "C15",
   run: withPds((env, { env: stage }) => {
-    const domains = (value(env, "PDS_SERVICE_HANDLE_DOMAINS") ?? "").split(",").filter((d) => d !== "");
+    const raw = value(env, "PDS_SERVICE_HANDLE_DOMAINS") ?? "";
+    const domains = raw.split(",").filter((d) => d !== "");
     if (domains.length === 0) return fail("PDS_SERVICE_HANDLE_DOMAINS is not set");
     if (domains.some((d) => d === ".0x40.me" || d.endsWith(".0x40.me"))) {
       return fail("PDS_SERVICE_HANDLE_DOMAINS includes the profile domain");
     }
-    if (stage === "dev" && !(domains.length === 1 && domains[0] === ".staging.unset.im")) {
+    // The raw value, not the split list: a stray comma is not the one exact entry.
+    if (stage === "dev" && raw !== ".staging.unset.im") {
       return fail("PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
     if (stage === "local" && !domains.every((domain) => underLocalHost(env, domain))) {

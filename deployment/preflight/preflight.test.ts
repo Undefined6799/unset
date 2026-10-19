@@ -108,6 +108,9 @@ const LOCK = {
 const DEV = COMPOSE.replace("name: unset-prod", "name: unset-dev");
 // The dev (staging) PDS's own handle domain, ADR 0025: the dev-environment checks are about that suffix.
 const DEV_ENV = { PDS_SERVICE_HANDLE_DOMAINS: ".staging.unset.im" };
+/** A from address of 254 or 255 characters, every part within its own cap, so only the length decides. */
+const addressOfLength = (length: 254 | 255) =>
+  `${"a".repeat(64)}@${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(length - 193)}`;
 const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12"].concat([
   "C13",
   "C14",
@@ -1264,6 +1267,12 @@ describe("preflight", () => {
     );
     expect(mailpit.lines).toContain("FAIL C11 PDS_EMAIL_SMTP_URL is Mailpit");
     expect(failed(mailpit.lines)).toEqual(["C11"]);
+    // An smtp: URL keeps its host's case, and a trailing dot names the same host.
+    for (const url of ["smtps://MAILPIT:465", "smtps://mailpit.:465", "smtps://MailPit.:465"]) {
+      expect(await expectOnly("C11", { pdsEnv: { PDS_EMAIL_SMTP_URL: url } }), url).toBe(
+        "FAIL C11 PDS_EMAIL_SMTP_URL is Mailpit",
+      );
+    }
   });
 
   test("c30_pds_env_holds_exactly_its_set", async () => {
@@ -1276,6 +1285,9 @@ describe("preflight", () => {
     );
     // A key that is not one of ours might be a pasted value, so it is not printed.
     expect(await expectOnly("C30", { pdsEnvFile: `${CANARY.replaceAll("-", "_")}=x\n` })).toBe(set("a name"));
+    for (const key of ["pds_x", "PDS_Xab"]) {
+      expect(await expectOnly("C30", { pdsEnvFile: `${key}=\n` }), key).toBe(set("a name"));
+    }
     expect(await expectOnly("C30", { pdsEnvFile: "PDS_JWT_SECRET=again\n" })).toBe(
       "FAIL C30 PDS_JWT_SECRET is repeated in the pds env file",
     );
@@ -1317,12 +1329,25 @@ describe("preflight", () => {
         "a@-example.test",
         "a..b@example.test",
         ".a@example.test",
+        "a@example.test\r\nBcc: x@example.test",
+        "<a@example.test>",
+        "a,b@example.test",
+        "a@example-.test",
+        "a@b_c.test",
+        `${"a".repeat(65)}@example.test`,
+        addressOfLength(255),
       ]) {
         expect(await expectOnly(id, { pdsEnv: { [key]: bad } }), `${key}=${bad}`).toBe(
           bad === "" ? `FAIL ${id} ${key} missing` : `FAIL ${id} ${key} is not an email address`,
         );
       }
-      for (const good of ["noreply@staging.unset.sh", "a.b+c@mail.example.test", `a@${"b".repeat(63)}.test`]) {
+      for (const good of [
+        "noreply@staging.unset.sh",
+        "a.b+c@mail.example.test",
+        `a@${"b".repeat(63)}.test`,
+        `${"a".repeat(64)}@example.test`,
+        addressOfLength(254),
+      ]) {
         expect(failed((await check({ pdsEnv: { [key]: good } })).lines), good).toEqual([]);
       }
     }
@@ -1711,7 +1736,14 @@ describe("preflight C13 to C24 (P1.30s)", () => {
         (l) => / C15 /.test(l),
       );
     expect(await dev(".staging.unset.im")).toBe("PASS C15 ok");
-    for (const domains of [".0x40.space", ".unset.im", ".x.staging.unset.im", ".staging.unset.im,.unset.im"]) {
+    for (const domains of [
+      ".0x40.space",
+      ".unset.im",
+      ".x.staging.unset.im",
+      ".staging.unset.im.evil",
+      ".staging.unset.im,.unset.im",
+      ".staging.unset.im,",
+    ]) {
       expect(await dev(domains), domains).toBe("FAIL C15 PDS_SERVICE_HANDLE_DOMAINS is not the dev handle domain");
     }
     // Prod's rule is unchanged: the dev domain is not judged there.

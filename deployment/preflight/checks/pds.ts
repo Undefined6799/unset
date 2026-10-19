@@ -121,7 +121,8 @@ export function smtpProblem(raw: string | undefined, stage: Env, name: string): 
   } catch {
     return `${name} is not a URL`;
   }
-  if (url.hostname === "mailpit") return `${name} is Mailpit`;
+  // An smtp: URL's host is not lowercased by the URL parser (not a special scheme), and a trailing dot names the same host.
+  if (url.hostname.toLowerCase().replace(/\.$/, "") === "mailpit") return `${name} is Mailpit`;
   if (url.searchParams.has("ignoreTLS") || url.searchParams.has("tls.rejectUnauthorized")) {
     return `${name} weakens TLS`;
   }
@@ -148,7 +149,9 @@ const ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
 const LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
 /** RFC 5321 section 4.5.3.1.3: a path holds at most 256 octets, so an address at most 254. */
 const MAX_ADDRESS = 254;
-const ADDR_SPEC = new RegExp(`^${ATOM}(?:\\.${ATOM})*@${LABEL}(?:\\.${LABEL})+$`);
+/** RFC 5321 section 4.5.3.1.1: a local part holds at most 64 octets. */
+const MAX_LOCAL = 64;
+const ADDR_SPEC = new RegExp(`^(?=.{1,${MAX_LOCAL}}@)${ATOM}(?:\\.${ATOM})*@${LABEL}(?:\\.${LABEL})+$`);
 
 /** Why a from address is not usable, naming the key only, or null. */
 export function fromAddressProblem(raw: string | undefined, name: string): string | null {
