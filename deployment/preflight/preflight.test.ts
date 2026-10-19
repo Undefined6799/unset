@@ -120,6 +120,7 @@ const IDS = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
   "C26",
   "C27",
   "C28",
+  "C29",
 ]);
 
 type Stack = {
@@ -2274,6 +2275,76 @@ describe("preflight C26 and C27 (P1.30y)", () => {
   });
 });
 
+// P1.36k (architecture 2026-10-19 03:45Z and 03:50Z): a container cannot tell a local stack from staging, since both
+// run UNSET_ENV=dev, so the runtime allowances meant for local alone are refused by key and by origin scheme here.
+describe("preflight C29 (P1.36k)", () => {
+  /** The all-good stack under `env` with `lines` added to web's environment. */
+  const withWeb = (env: "dev" | "prod", lines: string): Stack => ({
+    compose: (env === "dev" ? DEV : COMPOSE).replace("      FINGERPRINT_CHECK: arachnid", `$&\n${lines}`),
+    ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
+  });
+
+  test("c29_local_only_key_fails_under_dev_and_prod", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      for (const [key, value] of [
+        ["OAUTH_ALLOW_HTTP", '"true"'],
+        ["OAUTH_ALLOW_HTTP", '"false"'],
+        ["NETGUARD_ALLOW_LOOPBACK", '"true"'],
+        ["DEV_VITE_ORIGIN", "http://localhost:5173"],
+        ["DEV_VITE_ORIGIN", '""'],
+      ]) {
+        expect(await expectOnly("C29", withWeb(env, `      ${key}: ${value}`), env), `${env} ${key}`).toBe(
+          `FAIL C29 ${key} is set in web; it is for a local stack only`,
+        );
+      }
+      // From an env file too, and in any service.
+      const fromFile = env === "dev" ? { compose: DEV, pdsEnv: { ...DEV_ENV, OAUTH_ALLOW_HTTP: "true" } } : {};
+      const prodFile = { pdsEnv: { OAUTH_ALLOW_HTTP: "true" } };
+      expect(await expectOnly("C29", env === "dev" ? fromFile : prodFile, env)).toBe(
+        "FAIL C29 OAUTH_ALLOW_HTTP is set in pds; it is for a local stack only",
+      );
+    }
+  });
+
+  test("c29_origin_not_https_fails_under_dev_and_prod", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      for (const [key, value] of [
+        ["PUBLIC_ORIGIN", "http://app.example.test"],
+        ["MEDIA_ORIGIN", "http://media.example.net"],
+        ["ASSETS_BASE", "http://assets.example.test/assets/"],
+        ["PUBLIC_ORIGIN", "app.example.test"],
+        ["PUBLIC_ORIGIN", '""'],
+        ["MEDIA_ORIGIN", "HTTP://media.example.net"],
+      ]) {
+        expect(await expectOnly("C29", withWeb(env, `      ${key}: ${value}`), env), `${env} ${key} ${value}`).toBe(
+          `FAIL C29 ${key} in web is not https`,
+        );
+      }
+    }
+  });
+
+  test("c29_https_origins_pass", async () => {
+    for (const env of ["dev", "prod"] as const) {
+      const origins = [
+        "      PUBLIC_ORIGIN: https://app.example.test",
+        "      MEDIA_ORIGIN: https://media.example.net",
+        "      ASSETS_BASE: https://app.example.test/assets/",
+      ].join("\n");
+      const result = await check(withWeb(env, origins), env);
+      expect(
+        result.lines.find((l) => / C29 /.test(l)),
+        env,
+      ).toBe("PASS C29 ok");
+      // An empty ASSETS_BASE is the runtime's own default: the public origin's /assets/.
+      const empty = await check(withWeb(env, '      ASSETS_BASE: ""'), env);
+      expect(
+        empty.lines.find((l) => / C29 /.test(l)),
+        env,
+      ).toBe("PASS C29 ok");
+    }
+  });
+});
+
 // P1.30a (architecture ruling 2026-10-12-preflight-compose-inputs, F3.2 and F3.4): the preflight judges the stack against
 // the interpolation inputs Compose would use, and refuses to run when the environment could change them.
 describe("compose inputs (P1.30a)", () => {
@@ -2757,6 +2828,14 @@ networks:
     ]) {
       expect(await c28(value), value).toBe("FAIL C28 PDS_DID_PLC_URL is not the public PLC");
     }
+  });
+
+  test("local_c29_keeps_local_only_keys", async () => {
+    // P1.36k: the local-only keys and plain-http origins stay a local stack's to use, so C29 skips --env local.
+    const keys = { OAUTH_ALLOW_HTTP: "true", NETGUARD_ALLOW_LOOPBACK: "true", PUBLIC_ORIGIN: "http://app.localhost" };
+    const { code, lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, ...keys } });
+    expect(lines.find((line) => / C29 /.test(line))).toBe("PASS C29 skipped: local stack");
+    expect(code).toBe(0);
   });
 
   test("local_c17_plc_beside_the_pds_fails", () => {
