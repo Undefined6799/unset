@@ -69,7 +69,7 @@ function startWithTestRoutes(unsetEnv: string, extra: Record<string, string> = {
   const env = webTestEnv(SECRETS, {
     PUBLIC_ORIGIN: "https://unset.test",
     WEB_BUILD_DIR: join(REPOSITORY, "interfaces/http/web/testdata/"),
-    // Nothing listens here, so a start that gets past compose stops at the database at once.
+    // Nothing listens here, so a start that gets through compose stops at the database at once (db.busy).
     PG_HOST: "127.0.0.1",
     PG_PORT: "1",
     ...(unsetEnv === "prod" ? { NETGUARD_INTERNAL_HOSTS: "postgres" } : {}),
@@ -88,10 +88,15 @@ test("startup_outside_test_never_loads_test_routes", () => {
     expect(stderr, unsetEnv).toContain('{"event":"config.invalid","key":"TEST_ROUTES","reason":"invalid"}');
     expect(stderr, unsetEnv).not.toContain("test-routes loaded");
     expect(status, unsetEnv).toBe(78);
-    // With the key off the start gets past the config, and so past compose's import point, still without the module.
+    // With the key off the start gets past the config and past compose's gated import (its first line), still
+    // without the module, and exits 1 at one of two known places. Where depends on whether apps/web's server build
+    // exists: without it (CI's state when npm test starts) the start stops at loadWebRender, so a load placed later
+    // in compose is caught only when another test has written the build first; with it, at the database.
     const off = startWithTestRoutes(unsetEnv, {});
     expect(off.stderr, unsetEnv).not.toContain("config.invalid");
     expect(off.stderr, unsetEnv).not.toContain("test-routes loaded");
+    expect(off.stderr, unsetEnv).toMatch(/AppError: db\.busy|@unset\/apps-web\/server did not load/);
+    expect(off.status, unsetEnv).toBe(1);
   }
   const control = startWithTestRoutes("test");
   expect(control.stderr).toContain("test-routes loaded");
