@@ -4,7 +4,7 @@
 // integer. A reason names the variable, never its value.
 import type { SecretMap } from "../secret-map.ts";
 import { localMail, smtpProblem, withPds } from "./pds.ts";
-import { type Check, fail, type Inputs, pass } from "./types.ts";
+import { type Check, fail, type Inputs, pass, serviceNamed } from "./types.ts";
 
 const present = (env: SecretMap, name: string): boolean => env.has(name);
 const value = (env: SecretMap, name: string): string | undefined => env.use(name, (v) => v);
@@ -121,10 +121,39 @@ function videoMasterMax({ serviceEnv }: Inputs): bigint | null | "invalid" {
   return max;
 }
 
-/** C22: from Phase 4, the PDS accepts a blob as large as the largest video master (its default is 5 MB). */
+/**
+ * The PDS's upload bounds under local and dev (P1.36p; architecture 2026-10-19 04:53Z). @atproto/pds 0.5.37 writes a
+ * temporary blob under PDS_BLOBSTORE_DISK_LOCATION's `tempt`, on the data volume, unless PDS_BLOBSTORE_DISK_TMP_LOCATION
+ * moves it (dist/disk-blobstore.js:15-16, dist/config/config.js:71-76), so that key stays absent. The upload limit is
+ * exact, and the PDS's only tmpfs is /tmp at exactly one size. A reason names keys only, never a value.
+ */
+const PINNED_UPLOAD_LIMIT = "5242880";
+const PINNED_TMP_SIZE = "size=20m";
+
+function uploadBoundsProblem(env: SecretMap, inputs: Inputs): string | null {
+  if (present(env, "PDS_BLOBSTORE_DISK_TMP_LOCATION")) return "PDS_BLOBSTORE_DISK_TMP_LOCATION is set";
+  if (value(env, "PDS_BLOB_UPLOAD_LIMIT") !== PINNED_UPLOAD_LIMIT)
+    return "PDS_BLOB_UPLOAD_LIMIT is not the pinned limit";
+  const pds = serviceNamed(inputs, "pds");
+  const tmpfs = pds?.tmpfs ?? [];
+  const sizes = (tmpfs[0]?.options ?? "").split(",").filter((option) => option.startsWith("size="));
+  const capped =
+    tmpfs.length === 1 && tmpfs[0]?.target === "/tmp" && sizes.length === 1 && sizes[0] === PINNED_TMP_SIZE;
+  if (!capped || pds?.mounts.some((mount) => mount.type === "tmpfs")) {
+    return "the PDS's /tmp tmpfs is not capped as pinned";
+  }
+  return null;
+}
+
+/**
+ * C22: under local and dev, the upload bounds above; from Phase 4, the PDS accepts a blob as large as the largest video
+ * master (its default is 5 MB).
+ */
 export const c22: Check = {
   id: "C22",
   run: withPds((env, inputs) => {
+    const bounds = inputs.env === "prod" ? null : uploadBoundsProblem(env, inputs);
+    if (bounds !== null) return fail(bounds);
     const master = videoMasterMax(inputs);
     if (master === null) return pass("skipped: VIDEO_MASTER_MAX_BYTES is unset");
     if (master === "invalid") return fail("VIDEO_MASTER_MAX_BYTES is not an integer");

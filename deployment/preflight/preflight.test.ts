@@ -63,6 +63,7 @@ const PDS_ENV: Record<string, string> = {
   PDS_EMAIL_DISABLE_CONFIRMATION_LINK: "true",
   PDS_MODERATION_EMAIL_SMTP_URL: "smtps://mail.example.test:465",
   PDS_MODERATION_EMAIL_ADDRESS: "moderation@example.test",
+  PDS_BLOB_UPLOAD_LIMIT: "5242880",
 };
 const COMPOSE = `name: unset-prod
 services:
@@ -79,6 +80,7 @@ services:
       ACME_EMAIL: edge@example.test
   pds:
     image: ${PDS}
+    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777,size=20m"]
     env_file: ../../unset-dev-env/pds.env
     environment:
       PDS_HOSTNAME: pds.example.test
@@ -2373,6 +2375,62 @@ describe("preflight C29 (P1.36k)", () => {
   });
 });
 
+// P1.36p (architecture 2026-10-19 04:53Z): under local and dev the PDS's upload bounds are exact. Its temporary blobs
+// stay on the data volume, its upload limit is pinned, and its /tmp tmpfs is capped.
+describe("preflight C22 pinned upload bounds (P1.36p)", () => {
+  const PINNED_TMP = '"/tmp:uid=1000,gid=1000,mode=1777,size=20m"';
+  const devWith = (pdsEnv: Record<string, string | null>, tmpfs = `    tmpfs: [${PINNED_TMP}]\n`): Stack => ({
+    compose: DEV.replace(`    tmpfs: [${PINNED_TMP}]\n`, tmpfs),
+    pdsEnv: { ...DEV_ENV, ...pdsEnv },
+  });
+
+  test("c22_temp_blob_location_set_fails", async () => {
+    for (const location of ["/tmp/pds/blobs", "/home/node/tempt", ""]) {
+      expect(await expectOnly("C22", devWith({ PDS_BLOBSTORE_DISK_TMP_LOCATION: location }), "dev"), location).toBe(
+        "FAIL C22 PDS_BLOBSTORE_DISK_TMP_LOCATION is set",
+      );
+    }
+  });
+
+  test("c22_blob_upload_limit_not_pinned_fails", async () => {
+    for (const limit of [null, "", "5242881", "5242879", "05242880", "5242880.0", "52428800"]) {
+      expect(await expectOnly("C22", devWith({ PDS_BLOB_UPLOAD_LIMIT: limit }), "dev"), String(limit)).toBe(
+        "FAIL C22 PDS_BLOB_UPLOAD_LIMIT is not the pinned limit",
+      );
+    }
+  });
+
+  test("c22_pds_tmp_not_capped_fails", async () => {
+    for (const tmpfs of [
+      "",
+      '    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777"]\n',
+      '    tmpfs: ["/tmp"]\n',
+      '    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777,size=21m"]\n',
+      '    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777,size=20480k"]\n',
+      '    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777,size=20m,size=1g"]\n',
+      `    tmpfs: [${PINNED_TMP}, "/tmp:uid=1000,gid=1000,mode=1777"]\n`,
+      // A second, uncapped /tmp in the long form beside the pinned one.
+      `    tmpfs: [${PINNED_TMP}]\n    volumes: [{type: tmpfs, target: /tmp}]\n`,
+    ]) {
+      expect(await expectOnly("C22", devWith({}, tmpfs), "dev"), tmpfs).toBe(
+        "FAIL C22 the PDS's /tmp tmpfs is not capped as pinned",
+      );
+    }
+  });
+
+  test("c22_pinned_bounds_pass_and_prod_is_unchanged", async () => {
+    expect((await check(devWith({}), "dev")).lines.find((l) => / C22 /.test(l))).toBe(
+      "PASS C22 skipped: VIDEO_MASTER_MAX_BYTES is unset",
+    );
+    // Prod's bounds are set when it is planned (Phase 5): none of the three is judged there yet.
+    const prod = await check({
+      compose: COMPOSE.replace(`    tmpfs: [${PINNED_TMP}]\n`, ""),
+      pdsEnv: { PDS_BLOB_UPLOAD_LIMIT: null },
+    });
+    expect(prod.lines.find((l) => / C22 /.test(l))).toBe("PASS C22 skipped: VIDEO_MASTER_MAX_BYTES is unset");
+  });
+});
+
 // P1.30a (architecture ruling 2026-10-12-preflight-compose-inputs, F3.2 and F3.4): the preflight judges the stack against
 // the interpolation inputs Compose would use, and refuses to run when the environment could change them.
 describe("compose inputs (P1.30a)", () => {
@@ -2643,6 +2701,7 @@ services:
       ACME_EMAIL: edge@example.test
   pds:
     image: ${LOCKED_PDS}
+    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777,size=20m"]
     env_file: ../../unset-dev-env/pds.env
     environment:
       PDS_HOSTNAME: pds.localhost
@@ -2864,6 +2923,23 @@ networks:
     const { code, lines } = await local((text) => text, { pdsEnv: { ...LOCAL_ENV, ...keys } });
     expect(lines.find((line) => / C29 /.test(line))).toBe("PASS C29 skipped: local stack");
     expect(code).toBe(0);
+  });
+
+  test("local_c22_pins_the_upload_bounds", async () => {
+    // P1.36p: local judges the same three bounds as dev.
+    const c22 = async (edit: (text: string) => string, env: Record<string, string | null> = {}) =>
+      (await local(edit, { pdsEnv: { ...LOCAL_ENV, ...env } })).lines.find((line) => / C22 /.test(line));
+    const same = (text: string) => text;
+    expect(await c22(same)).toBe("PASS C22 skipped: VIDEO_MASTER_MAX_BYTES is unset");
+    expect(await c22(same, { PDS_BLOBSTORE_DISK_TMP_LOCATION: "/tmp/pds/blobs" })).toBe(
+      "FAIL C22 PDS_BLOBSTORE_DISK_TMP_LOCATION is set",
+    );
+    expect(await c22(same, { PDS_BLOB_UPLOAD_LIMIT: "10485760" })).toBe(
+      "FAIL C22 PDS_BLOB_UPLOAD_LIMIT is not the pinned limit",
+    );
+    expect(await c22((text) => text.replace(",size=20m", ""))).toBe(
+      "FAIL C22 the PDS's /tmp tmpfs is not capped as pinned",
+    );
   });
 
   test("local_c17_plc_beside_the_pds_fails", () => {

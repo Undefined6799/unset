@@ -94,8 +94,9 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    # /tmp is capped (P1.36p). Temporary blobs stay on the volume, in /home/node/blocks/tempt (C22).
     tmpfs:
-      - /tmp:uid=1000,gid=1000,mode=1777
+      - /tmp:uid=1000,gid=1000,mode=1777,size=20m
     volumes:
       - pdsdata:/home/node
     env_file: ../../unset-dev-env/pds.env
@@ -105,6 +106,7 @@ services:
       PDS_PORT: "3000"
       PDS_DATA_DIRECTORY: /home/node
       PDS_BLOBSTORE_DISK_LOCATION: /home/node/blocks
+      PDS_BLOB_UPLOAD_LIMIT: "5242880"
       PDS_DID_PLC_URL: https://plc.directory
       PDS_INVITE_REQUIRED: "true"
       PDS_CRAWLERS: ""
