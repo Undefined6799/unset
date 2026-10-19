@@ -320,4 +320,12 @@ test("signed_out_sends_a_signed_in_visitor_to_the_profile_resolver", async () =>
   const response = await setup().send("/signed-out", { method: "GET" });
   expect(response.status).toBe(303);
   expect(response.headers.get("location")).toBe("/did");
+  expect(response.headers.getSetCookie()).toEqual([]);
+});
+
+test("signed_out.signed_in_redirect_clears_the_carried_issuer", async () => {
+  // Another tab signed in before this redirect arrived: the previous account's issuer must not outlive it.
+  const response = await setup().send("/signed-out", { method: "GET", cookie: issuerCookie(FOREIGN_ISSUER) });
+  expect(response.status).toBe(303);
+  expect(response.headers.getSetCookie()).toEqual([CLEAR_ISSUER]);
 });
