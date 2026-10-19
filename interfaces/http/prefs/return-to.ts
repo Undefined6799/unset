@@ -37,11 +37,14 @@ function signInReturn(target: string): string {
   return rebuilt.size === 0 ? path : `${path}?${rebuilt}`;
 }
 
-/** The theme form's return target: a sign-in page as above, otherwise safeReturnPath's answer or home. */
+/** The theme form's return target: a sign-in page as above, otherwise safeReturnPath's answer, or home when that is
+ * missing or /login-prefixed. */
 export function themeReturnTo(target: string | null): string {
   if (target === null) return HOME;
   if (target.toLowerCase().startsWith("/login")) return signInReturn(target);
-  return safeReturnPath(target) ?? HOME;
+  // safeReturnPath resolves dot segments, so /./loginx comes back as /loginx: check its answer too.
+  const safe = safeReturnPath(target);
+  return safe === null || safe.toLowerCase().startsWith("/login") ? HOME : safe;
 }
 
 /** The page's own return target for the footer form: the query only on a sign-in page, where it is rebuilt. */

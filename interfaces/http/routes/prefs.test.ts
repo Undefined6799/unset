@@ -140,6 +140,8 @@ describe("POST /prefs/theme", () => {
     for (const target of [
       "/login/other",
       "/loginx",
+      "/./loginx",
+      "/a/../loginx",
       "/LOGIN",
       "/%6cogin",
       "/login/",
