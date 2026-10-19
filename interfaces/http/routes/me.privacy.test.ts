@@ -1,6 +1,8 @@
 // P1.25m (routes/me.ts; architecture's #975 ruling, D-5 conditions 1 to 3): the DID-addressed account keeps its DID
 // out of the logs, sends the same-origin referrer policy, is matched only after every explicit route, and answers a
 // foreign DID exactly as it answers a path that is no account. Condition 4 (owner only) is me.test.ts's.
+// P1.25n: the signed-out and log cases also run on the composed server, so the real app gate answers them; signed in
+// needs a stored session, so those cases keep the gate double.
 // The edge's side of condition 1 is edge.image.test.ts's edge_all_logs_have_no_ip_path_or_query: its access log keeps
 // a route class, never the path, and that test sends a path holding a DID.
 import { mkdtempSync, rmSync } from "node:fs";
@@ -34,7 +36,6 @@ const INVALID = [
   "/nowhere",
   "/DID:plc:aaaaaaaaaaaaaaaaaaaaaaaa",
   "/did:plc:short",
-  "/did:web:example.com%2Fevil",
   "/did%253Aplc%253Aaaaaaaaaaaaaaaaaaaaaaaaa",
 ];
 
@@ -78,28 +79,79 @@ function accountServer(signedOut = false) {
   return { server: createServer({ config: CONFIG, routes, policies, log }), lines, resolved };
 }
 
+/**
+ * The composed server (the real app gate), with every line its logger writes to stdout captured. The logger takes no
+ * writer through compose, so stdout, an unmanaged dependency, is the seam; it is restored after each request.
+ */
+async function composedServer() {
+  const lines: string[] = [];
+  const { server } = await compose(CONFIG, web);
+  const request = async (request: Request, peer?: string) => {
+    const write = process.stdout.write;
+    process.stdout.write = ((line: string) => lines.push(line) > 0) as typeof process.stdout.write;
+    try {
+      return await server.request(request, peer);
+    } finally {
+      process.stdout.write = write;
+    }
+  };
+  return { server: { request }, lines };
+}
+
+/** A response's whole shape but its date, which moves with the clock. */
+const shape = async (response: Response) => ({
+  status: response.status,
+  headers: [...response.headers].filter(([name]) => name !== "date"),
+  body: await response.text(),
+});
+
 describe("DID account privacy", () => {
   test("did_route_logs_no_did", async () => {
     const signedIn = accountServer();
     const signedOut = accountServer(true);
-    const paths = [`/${OWNER}`, `/${FOREIGN}`, "/me", "/did", "/did:web:example.com", `/${OWNER}?x=${OWNER}`];
+    const composed = await composedServer();
+    // Percent-escapes are case-insensitive (RFC 3986 2.1), so a client may send the DID's colons in either case.
+    const encoded = (did: string, hex: string) => did.replaceAll(":", hex);
+    const paths = [
+      `/${OWNER}`,
+      `/${FOREIGN}`,
+      "/me",
+      "/did",
+      "/did:web:example.com",
+      `/${OWNER}?x=${OWNER}`,
+      `/${encoded(OWNER, "%3a")}`,
+      `/${encoded(OWNER, "%3A")}`,
+      `/did%3aplc:${"a".repeat(24)}`,
+      `/${encoded(FOREIGN, "%3a")}`,
+    ];
     for (const path of paths) {
       await get(signedIn.server, path, "__Host-sid=x");
       await get(signedOut.server, path);
+      await get(composed.server, path);
+      await get(composed.server, path, "__Host-sid=x");
     }
-    const lines = [...signedIn.lines, ...signedOut.lines];
-    expect(lines.some((line) => line.includes('"event":"http.request"'))).toBe(true);
+    const lines = [...signedIn.lines, ...signedOut.lines, ...composed.lines];
+    expect(composed.lines.some((line) => line.includes('"event":"http.request"'))).toBe(true);
+    expect(signedIn.lines.some((line) => line.includes('"event":"http.request"'))).toBe(true);
     for (const line of lines) {
-      expect(line).not.toContain("did:plc:");
-      expect(line).not.toContain("did:web:");
-      expect(line).not.toContain("did%3A");
+      expect(line).not.toMatch(/did(?::|%3a)(?:plc|web)/i);
+      // SE-7: the handle the page resolved and the client and peer addresses stay out too.
+      expect(line).not.toContain("alice.pds.unset.test");
+      expect(line).not.toContain("192.0.2.1");
+      expect(line).not.toContain("10.0.0.1");
     }
   });
 
   test("did_route_referrer_same_origin", async () => {
     const { server } = accountServer();
     for (const path of [`/${OWNER}`, `/${FOREIGN}`, "/me", "/did"]) {
-      expect((await get(server, path, "__Host-sid=x")).headers.get("referrer-policy"), path).toBe("same-origin");
+      const response = await get(server, path, "__Host-sid=x");
+      expect(response.headers.get("referrer-policy"), path).toBe("same-origin");
+      // A <meta name="referrer"> sets the policy from markup, and the latest source wins (W3C Referrer Policy, 4.2 and
+      // 11.1), so a page-level policy could replace the header's: the page carries none.
+      const html = await response.text();
+      expect(html, path).not.toMatch(/<meta[^>]*name="?referrer/i);
+      expect(html, path).not.toMatch(/referrerpolicy/i);
     }
   });
 
@@ -107,30 +159,33 @@ describe("DID account privacy", () => {
     const { server, resolved } = accountServer();
     const foreign = await get(server, `/${FOREIGN}`, "__Host-sid=x");
     const missing = await get(server, `/did:plc:${"c".repeat(24)}`, "__Host-sid=x");
-    const shape = async (response: Response) => ({
-      status: response.status,
-      headers: [...response.headers].filter(([name]) => name !== "date"),
-      body: await response.text(),
-    });
     const a = await shape(foreign);
     expect(a.status).toBe(404);
     expect(await shape(missing)).toEqual(a);
-    // The strict cases of me.test.ts read the same: no second percent-decoding, no did:web path, no other casing.
+    // The strict cases of me.test.ts read the same: no second percent-decoding, no other casing. A did:web with a path
+    // cannot fail here (the session is did:plc, so it reads as foreign either way); me.test.ts pins it.
     for (const path of INVALID) expect(await shape(await get(server, path, "__Host-sid=x")), path).toEqual(a);
     // Nothing about another DID is looked up, so the answer cannot depend on whether it exists.
     expect(resolved).toEqual([]);
   });
 
   test("signed_out_did_answers_alike", async () => {
-    const { server, resolved } = accountServer(true);
-    const own = await get(server, `/${OWNER}`);
-    const other = await get(server, `/${FOREIGN}`);
+    // The real app gate: whether a DID has an account here must not change a signed-out answer in any way.
+    const { server } = await composedServer();
+    const answer = async (did: Did, cookie?: string) => {
+      const response = await get(server, `/${did}`, cookie);
+      // Only the return path names the DID; the rest must match byte for byte.
+      expect(response.headers.get("location"), did).toBe(`/login?${new URLSearchParams({ next: `/${did}` })}`);
+      const { headers, ...rest } = await shape(response);
+      return { ...rest, headers: headers.filter(([name]) => name !== "location") };
+    };
+    const own = await answer(OWNER);
     expect(own.status).toBe(303);
-    expect(other.status).toBe(303);
-    const names = (response: Response) => [...response.headers.keys()].sort();
-    expect(names(other)).toEqual(names(own));
-    expect(other.headers.get("location")).toBe(`/login?${new URLSearchParams({ next: `/${FOREIGN}` })}`);
-    expect(resolved).toEqual([]);
+    expect(await answer(FOREIGN)).toEqual(own);
+    expect(await answer(`did:plc:${"c".repeat(24)}` as Did)).toEqual(own);
+    // A cookie that names no session is signed out too, and answers alike for any DID.
+    const dead = await answer(OWNER, "__Host-sid=x");
+    expect(await answer(FOREIGN, "__Host-sid=x")).toEqual(dead);
   });
 
   test("did_route_registered_after_every_explicit_route", async () => {
