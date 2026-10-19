@@ -23,8 +23,17 @@ const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 const CONFIG = loadConfig(config, webTestEnv(SECRETS, { PUBLIC_ORIGIN: ORIGIN }));
 
-function setup(world: { session?: Session | null; destroyFails?: boolean; remaining?: number } = {}) {
+type World = {
+  session?: Session | null;
+  destroyFails?: boolean;
+  remaining?: number;
+  /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
+  issuer?: string | null | Error;
+};
+
+function setup(world: World = {}) {
   const destroyed: Session[] = [];
+  const calls: string[] = [];
   const lines: Record<string, unknown>[] = [];
   const log = createLogger({
     service: "http",
@@ -40,8 +49,15 @@ function setup(world: { session?: Session | null; destroyFails?: boolean; remain
       // Another browser still holds a session, so this path must not revoke the shared grant.
       return world.remaining ?? 1;
     },
+    issuerOf: async () => {
+      calls.push("issuerOf");
+      const issuer = world.issuer === undefined ? OUR_ISSUER : world.issuer;
+      if (issuer instanceof Error) throw issuer;
+      return issuer;
+    },
     revokeGrant: async () => {
-      throw new Error("revoke is not this test");
+      calls.push("revoke");
+      if (world.remaining !== 0) throw new Error("revoke is not this test");
     },
     deleteTokenSet: async () => {
       throw new Error("token delete is not this test");
@@ -58,13 +74,17 @@ function setup(world: { session?: Session | null; destroyFails?: boolean; remain
         page,
       ),
     screens: web.screens,
-    pdsHost: "pds.unset.test",
+    pdsIssuer: OUR_ISSUER,
     log,
   };
   const server = createServer({ config: CONFIG, routes: logoutRoutes(deps), policies, log });
-  const send = (path: string, init: { method?: string; site?: "same-origin" | "cross-site"; body?: string } = {}) => {
+  const send = (
+    path: string,
+    init: { method?: string; site?: "same-origin" | "cross-site"; body?: string; cookie?: string } = {},
+  ) => {
     const method = init.method ?? "POST";
-    const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1", cookie: "__Host-sid=x" });
+    const cookie = ["__Host-sid=x", ...(init.cookie === undefined ? [] : [init.cookie])].join("; ");
+    const headers = new Headers({ host: "unset.test", "x-forwarded-for": "192.0.2.1", cookie });
     if (method === "GET") return server.request(new Request(`${ORIGIN}${path}`, { headers }), "10.0.0.1");
     const site = init.site ?? "same-origin";
     headers.set("content-type", "application/x-www-form-urlencoded");
@@ -72,15 +92,22 @@ function setup(world: { session?: Session | null; destroyFails?: boolean; remain
     headers.set("origin", site === "same-origin" ? ORIGIN : "https://evil.example");
     return server.request(new Request(`${ORIGIN}${path}`, { method, headers, body: init.body ?? "" }), "10.0.0.1");
   };
-  return { send, destroyed, lines };
+  return { send, destroyed, lines, calls };
 }
 
+const OUR_ISSUER = "https://pds.unset.test";
+const FOREIGN_ISSUER = "https://pds.example";
+const ISSUER_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
+const issuerCookie = (origin: string) => `__Host-signed_out_issuer=${Buffer.from(origin).toString("base64url")}`;
+const CLEAR_ISSUER = `__Host-signed_out_issuer=; ${ISSUER_ATTRIBUTES}; Max-Age=0`;
 const SIGNED_OUT = [
   "__Host-sid=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
   "__Host-oauth_nonce=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0",
   "__Host-login_target=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0",
   "__Host-signed_out=1; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000",
 ];
+/** P2.08b: what the signed-out page reads to link the issuer recorded at sign-in. */
+const carries = (origin: string) => [...SIGNED_OUT, `${issuerCookie(origin)}; ${ISSUER_ATTRIBUTES}; Max-Age=600`];
 
 describe("POST /logout", () => {
   test("logout_this_browser", async () => {
@@ -89,7 +116,7 @@ describe("POST /logout", () => {
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/signed-out");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.getSetCookie()).toEqual(SIGNED_OUT);
+    expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
     expect(destroyed).toEqual([SESSION]);
     expect(lines.filter((line) => line.event === "auth.logout_this_browser")).toHaveLength(1);
     expect(JSON.stringify(lines)).not.toContain(DID);
@@ -99,7 +126,8 @@ describe("POST /logout", () => {
     const { send, destroyed } = setup({ session: null });
     const response = await send("/logout");
     expect(response.headers.get("location")).toBe("/signed-out");
-    expect(response.headers.getSetCookie()).toEqual(SIGNED_OUT);
+    // Nobody's issuer is known, so a stale one from an earlier sign-out is cleared.
+    expect(response.headers.getSetCookie()).toEqual([...SIGNED_OUT, CLEAR_ISSUER]);
     expect(destroyed).toEqual([]);
   });
 
@@ -121,6 +149,28 @@ describe("POST /logout", () => {
     const response = await send("/logout");
     expect(response.status).toBe(503);
     expect(response.headers.getSetCookie()).toEqual([]);
+    // P2.08b: the book's own words for this failure, not the generic 503 text.
+    expect(await response.text()).toContain("Could not sign you out, try again.");
+  });
+
+  test("logout_reads_the_issuer_before_revoking", async () => {
+    // The last browser's revoke deletes the token set, which is where the issuer is recorded.
+    const { send, calls } = setup({ remaining: 0 });
+    const response = await send("/logout");
+    expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
+    expect(calls).toEqual(["issuerOf", "revoke"]);
+  });
+
+  test("logout_with_an_unreadable_issuer_still_signs_out", async () => {
+    const { send, destroyed, lines } = setup({ issuer: new Error("unseal failed") });
+    const response = await send("/logout");
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(response.headers.getSetCookie()).toEqual([...SIGNED_OUT, CLEAR_ISSUER]);
+    expect(destroyed).toEqual([SESSION]);
+    expect(lines.filter((line) => line.event === "auth.logout_issuer_unknown")).toEqual([
+      expect.objectContaining({ kind: "Error" }),
+    ]);
+    expect(JSON.stringify(lines)).not.toContain(DID);
   });
 
   test("logout_drops_a_pending_sign_in", async () => {
@@ -151,6 +201,58 @@ test("signed_out_page", async () => {
   const html = await response.text();
   expect(html).toContain("You are signed out");
   expect(html).toContain('href="https://pds.unset.test/account"');
+});
+
+test("signed_out_links_the_foreign_issuer_recorded_at_sign_in", async () => {
+  // P2.08b, the book's edge case: a user whose PDS is not ours is sent to their own issuer, never our /account.
+  const signOut = await setup({ issuer: FOREIGN_ISSUER }).send("/logout");
+  expect(signOut.headers.getSetCookie()).toEqual(carries(FOREIGN_ISSUER));
+  const response = await setup({ session: null }).send("/signed-out", {
+    method: "GET",
+    cookie: issuerCookie(FOREIGN_ISSUER),
+  });
+  const html = await response.text();
+  expect(html).toContain('href="https://pds.example/"');
+  expect(html).toContain("your sign-in server (pds.example)");
+  expect(html).not.toContain("pds.unset.test");
+  expect(html).not.toContain("only place you type your password");
+});
+
+test("signed_out_links_our_issuer_from_the_cookie", async () => {
+  const response = await setup({ session: null }).send("/signed-out", {
+    method: "GET",
+    cookie: issuerCookie(OUR_ISSUER),
+  });
+  const html = await response.text();
+  expect(html).toContain('href="https://pds.unset.test/account"');
+  expect(html).toContain("You are going to pds.unset.test, our sign-in server");
+});
+
+test("signed_out_never_takes_the_issuer_from_the_query", async () => {
+  const response = await setup({ session: null }).send("/signed-out?issuer=https%3A%2F%2Fevil.example", {
+    method: "GET",
+  });
+  const html = await response.text();
+  expect(html).not.toContain("evil.example");
+  expect(html).toContain('href="https://pds.unset.test/account"');
+});
+
+test("signed_out_refuses_a_bad_issuer_cookie", async () => {
+  // Anything but one https origin falls back to our PDS: a path, another scheme, garbage, or two cookies.
+  const bad = [
+    issuerCookie("https://pds.example/account"),
+    issuerCookie("http://pds.example"),
+    issuerCookie("javascript:alert(1)"),
+    issuerCookie("https://user@pds.example"),
+    "__Host-signed_out_issuer=%%%",
+    `${issuerCookie(FOREIGN_ISSUER)}; ${issuerCookie("https://other.example")}`,
+  ];
+  for (const cookie of bad) {
+    const html = await (await setup({ session: null }).send("/signed-out", { method: "GET", cookie })).text();
+    expect(html).toContain('href="https://pds.unset.test/account"');
+    expect(html).not.toContain("pds.example");
+    expect(html).not.toContain("javascript:");
+  }
 });
 
 test("signed_out_ignores_scope_everywhere", async () => {

@@ -7,6 +7,7 @@ import { join, relative } from "node:path";
 import { type Did, parseDid } from "@unset/domains-identity";
 import { createOAuthSessionStore, createPool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import { createSealer, parseKeyring } from "@unset/infrastructure-seal";
+import { AUDIT_ACTIONS } from "@unset/infrastructure-audit";
 import { createSessionStore, type SessionDb, type SessionLimits } from "@unset/infrastructure-session";
 import { loadConfig } from "@unset/shared-config";
 import { createServer } from "@unset/shared-http";
@@ -128,9 +129,11 @@ beforeAll(async () => {
             await tokenSets.del(owner);
           },
         }),
+        // P2.08b: these sets carry no recorded issuer; the route tests cover a foreign one.
+        issuerOf: async () => null,
         page,
         screens: web.screens,
-        pdsHost: "pds.unset.test",
+        pdsIssuer: "https://pds.unset.test",
         log,
       }),
       ...meRoutes({
@@ -154,7 +157,9 @@ beforeAll(async () => {
         verifyHandle: async () => ({ status: "verified", handle: "alice.test", checkedAt: 0 }),
         page,
         screens: web.screens,
-        pdsHost: "pds.unset.test",
+        issuerOf: async () => "https://pds.unset.test",
+        pdsIssuer: "https://pds.unset.test",
+        log,
       }),
     ],
     policies,
@@ -231,6 +236,26 @@ test("logout.this_browser keeps the other session and the grant", async () => {
     expect(signedOut.status).toBe(303);
     expect(signedOut.headers.get("location")).toBe("/login?next=%2Fdid");
   }
+  expect(JSON.stringify(lines)).not.toContain(owner);
+});
+
+test("logout.no_sign_in_records", async () => {
+  // Plan §6 "no user sign-in records": a sign-out is a service-wide count, never an identity record. No audit
+  // action names a sign-in, sign-out or session (the closed list mirrors migration 0009's seed), so audit.append has
+  // nothing to record one under, and the only lines a real sign-out writes are counters without the DID.
+  expect(Object.keys(AUDIT_ACTIONS).filter((action) => /^(auth|login|logout|session|oauth)\./.test(action))).toEqual(
+    [],
+  );
+  mode = "drop";
+  revoked = [];
+  lines.length = 0;
+  const owner = newDid();
+  await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
+  const only = await open(owner);
+  expect((await post("/logout", only.cookieValue, "")).headers.get("location")).toBe("/signed-out");
+  // The repeat finds no session, the idempotent path, which writes nothing at all.
+  expect((await post("/logout", only.cookieValue, "")).headers.get("location")).toBe("/signed-out");
+  expect(lines.map((line) => line.event)).toEqual(["auth.logout_this_browser"]);
   expect(JSON.stringify(lines)).not.toContain(owner);
 });
 
