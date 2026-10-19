@@ -98,9 +98,10 @@ export const legalConfig = {
 };
 
 /**
- * The test-only pages (P1.25c, routes/test-routes.ts). Off by default and allowed only where UNSET_ENV is test: dev
- * (which staging runs as) and prod refuse it, so the process exits at start (`config.invalid` with key TEST_ROUTES,
- * exit 78) and no deployed routing holds them.
+ * The test-only pages (P1.25c, routes/test-routes.ts). Off by default, and a positive allowlist: only `test` may turn
+ * them on. Every other profile, dev (staging, ADR 0025) and prod included, refuses the key at start (`config.invalid`
+ * with key TEST_ROUTES, exit 78), so no deployed routing holds them. UNSET_ENV has no `local` value; the local stack
+ * runs as dev, so it refuses too.
  */
 export const testRoutesConfig = {
   TEST_ROUTES: withRule(

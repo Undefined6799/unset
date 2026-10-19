@@ -1,5 +1,6 @@
-// P1.25c (routes/test-routes.ts): the test-only pages exist only when TEST_ROUTES is on, and production refuses to
-// start with it on. The routes run through the composed server, so the kit's error-page hook and headers are real.
+// P1.25c (routes/test-routes.ts): the test-only pages exist only when TEST_ROUTES is on, and every profile but test
+// (dev, which is staging, and prod) refuses to start with it on. The routes run through the composed server, so the
+// kit's error-page hook and headers are real.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,7 +41,7 @@ const UUID = /<code>([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 describe("test routes", () => {
   test("test_routes_refused_in_prod", () => {
-    // Production names other keys it lacks here (net-guard hosts, a real commit); only TEST_ROUTES is this rule's.
+    // Production also names NETGUARD_INTERNAL_HOSTS, which this env leaves empty; only TEST_ROUTES is this rule's.
     const refused = (extra: Record<string, string>) => problems(extra).some((p) => p.key === "TEST_ROUTES");
     // Allowed only in test: dev, which staging runs as, refuses it like prod.
     for (const unsetEnv of ["prod", "dev"]) {
@@ -51,7 +52,7 @@ describe("test routes", () => {
       expect(refused({ UNSET_ENV: unsetEnv }), unsetEnv).toBe(false);
       expect(refused({ UNSET_ENV: unsetEnv, TEST_ROUTES: "false" }), unsetEnv).toBe(false);
     }
-    expect(refused({ UNSET_ENV: "test", TEST_ROUTES: "true" })).toBe(false);
+    expect(problems({ UNSET_ENV: "test", TEST_ROUTES: "true" })).toEqual([]);
   });
 
   test("test_routes_absent_by_default", async () => {
