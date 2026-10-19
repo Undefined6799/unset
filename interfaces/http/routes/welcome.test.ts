@@ -481,7 +481,7 @@ test("completed_onboarding_returns_to_the_profile_resolver", async () => {
 });
 
 describe("welcome screens", () => {
-  test("welcome.axe", async () => {
+  test("welcome_screens_structure", async () => {
     const catalog = readFileSync(join(REPO, "apps/web/src/screens/welcome/messages.ts"), "utf8");
     expect(catalog).not.toMatch(/\b16\b/);
     for (const code of ["welcome.date_invalid", "welcome.terms_required", "welcome.country_required"] as const) {

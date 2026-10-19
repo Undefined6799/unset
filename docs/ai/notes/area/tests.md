@@ -24,6 +24,10 @@ still open `http://127.0.0.1:8080`, and `ASSETS_BASE` stays on that listener. Th
 that build (Node cannot load its TSX), so the fixture server loads it with Vite's `ssrLoadModule` and the
 production stylesheet. The toast fixture's `Island` is the production server build, the same module the
 render loader imports, so it shares that build's `IslandRunContext`.
+The welcome screens that need a session at their real paths (age, terms, chat) are fixture pages too,
+`/fixture/welcome-*`, rendered from the server build's `screens` as the welcome routes render them; `welcome.axe`
+in `a11y.spec.ts` runs axe on them in the four theme cells (P2.12a). A local run needs Playwright pointed at
+`/opt/pw-browsers/chromium` (`launchOptions.executablePath`), since the pinned 1.64.0 wants a newer headless shell.
 `scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
 covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
 only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
