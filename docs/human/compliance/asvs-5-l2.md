@@ -76,7 +76,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V2.1.1 | The application's documentation defines input validation rules for how to check the … | open |  | — |
 | V2.1.2 | The application's documentation defines how to validate the logical and contextual … | open |  | — |
 | V2.1.3 | Expectations for business logic limits and validations are documented, including both … | open |  | — |
-| V2.2.1 | Input is validated to enforce business or functional expectations for that input | partial | `test:shared/lexicons/src/limits.test.ts#limits_enforced`, `test:shared/lexicons/src/validate.test.ts#invalid_values_fail_with_paths`, `step:P2.23` | P2.23 |
+| V2.2.1 | Input is validated to enforce business or functional expectations for that input | partial | `test:shared/lexicons/src/limits.test.ts#limits_enforced`, `test:shared/lexicons/src/validate.test.ts#invalid_values_fail_with_paths`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_sign_in_drops_bad_handle`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_sign_in_drops_other_params`, `step:P2.23` | P2.23 |
 | V2.2.2 | The application is designed to enforce input validation at a trusted service layer | partial | `test:shared/config/schema.test.ts#kinds_parse_strictly`, `test:domains/identity/syntax.test.ts#normalises_and_rejects`, `test:shared/lexicons/src/validate.test.ts#type_mismatch_fails` | — |
 | V2.2.3 | The application ensures that combinations of related data items are reasonable according … | open |  | — |
 | V2.3.1 | The application will only process business logic flows for the same user in the expected … | open |  | — |
@@ -107,7 +107,7 @@ and V10.7). Those rows stay `open` with no step until the PDS deployment steps d
 | V3.5.4 | Separate applications are hosted on different hostnames to leverage the restrictions … | covered | `test:shared/http/config.test.ts#media_same_site_refused`, `test:shared/http/csp/policies.test.ts#media_group` | — |
 | V3.5.5 | Messages received by the postMessage interface are discarded if the origin of the message … | n/a | n/a: no postMessage listener; islands talk to the server over HTTP only (guideline §1) | — |
 | V3.7.1 | The application only uses client-side technologies which are still supported and … | open |  | — |
-| V3.7.2 | The application will only automatically redirect the user to a different hostname or … | covered | `test:shared/http/returnPath.fuzz.test.ts#fuzz_same_origin`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_path_rejects_offsite`, `test:interfaces/http/routes/login.test.ts#login_post_never_leaves_origin`, `test:interfaces/http/routes/login.test.ts#continue_target_not_from_query` | — |
+| V3.7.2 | The application will only automatically redirect the user to a different hostname or … | covered | `test:shared/http/returnPath.fuzz.test.ts#fuzz_same_origin`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_path_rejects_offsite`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_sign_in_drops_offsite_next`, `test:interfaces/http/routes/prefs.test.ts#prefs_return_other_login_paths_fall_back`, `test:interfaces/http/routes/login.test.ts#login_post_never_leaves_origin`, `test:interfaces/http/routes/login.test.ts#continue_target_not_from_query` | — |
 
 ## V4 API and Web Service
 
