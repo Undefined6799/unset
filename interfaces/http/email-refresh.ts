@@ -24,6 +24,9 @@ export function emailRefresh(deps: EmailRefreshDeps): AppGate["refreshEmail"] {
         return confirmed ? "confirmed" : "unconfirmed";
       }
       case "auth_dead":
+        // The sessions are already gone (pds-call.ts `authDead`); "unconfirmed" would send this browser to
+        // /verify-email with a cookie that no longer names a session (P2.11a).
+        return "ended";
       case "scope_missing":
       case "rejected":
         return "unconfirmed";

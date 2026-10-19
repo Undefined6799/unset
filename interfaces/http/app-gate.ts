@@ -4,6 +4,7 @@
 import type { Did } from "@unset/domains-identity";
 import {
   type EmailCache,
+  type EmailRefresh,
   emailGate,
   type OnboardingAccount,
   type OnboardingDecision,
@@ -12,6 +13,7 @@ import {
   verifiedAfterRefresh,
 } from "@unset/domains-identity";
 import type { Session, SessionRead } from "@unset/infrastructure-session";
+import { withErrorParam } from "@unset/shared-errors";
 import { safeReturnPath } from "@unset/shared-http";
 import { sessionClearCookie } from "./session-cookie.ts";
 
@@ -20,7 +22,7 @@ export type AppGate = {
   loadAccount: (did: Did, deadline: AbortSignal) => Promise<OnboardingAccount | null>;
   versions: OnboardingVersions;
   emailCache: (session: Session, deadline: AbortSignal) => Promise<EmailCache>;
-  refreshEmail: (session: Session, deadline: AbortSignal) => Promise<"transient" | "confirmed" | "unconfirmed">;
+  refreshEmail: (session: Session, deadline: AbortSignal) => Promise<EmailRefresh>;
   now: () => number;
   emailRecheckS: number;
 };
@@ -74,6 +76,9 @@ export async function openApp(
   if (email === "refresh") {
     const answer = verifiedAfterRefresh(await gate.refreshEmail(session, deadline));
     if (answer === "verify") return redirect("/verify-email", false);
+    // P2.11a: the grant was revoked at the PDS, and pdsCall has already ended every session of the DID. This browser
+    // signs in again on the page respondToPdsFailure uses for auth_dead (pds-call.ts:232-234).
+    if (answer === "ended") return redirect(withErrorParam("/login", "login.session_ended"), true);
   }
   return { session, privacyNotice: decision.outcome === "pass" && decision.privacyNotice };
 }

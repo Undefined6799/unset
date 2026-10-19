@@ -51,8 +51,11 @@ export const identityConfig = {
 export const loginConfig = {
   PDS_HOSTNAME: str({ pattern: HOSTNAME }),
   HANDLE_SUFFIX: str({ pattern: new RegExp(`\\.(?:${HOSTNAME.source})`) }),
-  /** How long a confirmed-email cache is trusted before the PDS is asked again (P2.11). */
-  EMAIL_RECHECK_S: int({ min: 60, max: 86_400, default: 900 }),
+  /**
+   * How long a confirmed-email cache is trusted before the PDS is asked again (P2.11). It is also how long another
+   * browser keeps rendering after the grant is revoked at the PDS, so 900 (15 minutes) is the maximum (P2.11a).
+   */
+  EMAIL_RECHECK_S: int({ min: 60, max: 900, default: 900 }),
   /** Full years before an account may continue (P2.12; plan §6). Never below 16. */
   MIN_AGE: int({ min: 16, max: 120, default: 16 }),
   /** When on, the terms screen requires the invite-country checkbox (P2.12; plan §6). */

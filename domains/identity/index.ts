@@ -5,6 +5,7 @@ export { ageInYears, type BirthDate, parseBirthDate } from "./auth/age.ts";
 export {
   type EmailCache,
   type EmailGate,
+  type EmailRefresh,
   emailGate,
   type Onboarding,
   type OnboardingAccount,

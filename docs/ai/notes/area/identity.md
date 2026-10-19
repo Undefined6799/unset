@@ -10,7 +10,7 @@ importance: normal
 related: ["[[pds]]", "[[net-guard]]", "[[node-dns-lookup-hides-nxdomain]]", "[[alice-bob-pds-password]]"]
 replaced_by: null
 tags: [area, identity]
-checked: 2026-10-17
+checked: 2026-10-19
 ---
 # identity
 
@@ -26,6 +26,8 @@ network itself.
 - `contract.ts`: the `IdentityNetwork` port, one GET and one TXT lookup, with three failures.
 - `auth/gates.ts`: whether a confirmed-email cache is still fresh (`emailGate`, P2.11), and whether onboarding
   is done with the current terms (`requireOnboarded`, P2.12). A privacy-version difference is a notice, not a redirect.
+  After a stale cache, `verifiedAfterRefresh` turns the PDS's answer (`EmailRefresh`) into pass, verify or `ended`,
+  the last for a revoked grant (P2.11a).
 - `auth/age.ts`: parses a birth date and counts full years (P2.12). The date is not stored here.
 - `legal/versions.ts`: `TERMS_VERSION` and `PRIVACY_VERSION`, the date strings P2.12 compares (P2.15).
 
