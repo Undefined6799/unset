@@ -128,6 +128,25 @@ describe("GET /:did", () => {
     expect(html).not.toContain('href="https://pds.unset.test');
   });
 
+  test("me_hides_a_non_default_port_issuer", async () => {
+    // Only a bare https origin counts (architecture 04:15Z item 2): a port drops the link (P2.08g, verify-1054
+    // mutant 13).
+    const html = await (await setup({ issuer: "https://pds.example:8443" }).get()).text();
+    expect(html).not.toContain("pds.example");
+    expect(html).not.toContain('href="https://pds.unset.test');
+  });
+
+  test("me_lookalike_issuer_is_not_ours", async () => {
+    // "Ours" is string equality with our issuer (architecture 04:15Z item 4). A lookalike gets the plain foreign
+    // link, never the sentence that says it is where the password is typed (P2.08g, verify-1054 mutant 11).
+    for (const lookalike of ["https://evilpds.unset.test", "https://pds.unset.test.example"]) {
+      const html = await (await setup({ issuer: lookalike }).get()).text();
+      expect(html, lookalike).not.toContain("You are going to");
+      expect(html, lookalike).not.toContain(`href="${lookalike}/account"`);
+      expect(html, lookalike).toContain(`href="${lookalike}/"`);
+    }
+  });
+
   test("me_with_an_unreadable_issuer_still_renders", async () => {
     const response = await setup({ issuer: new Error("unseal failed") }).get();
     expect(response.status).toBe(200);

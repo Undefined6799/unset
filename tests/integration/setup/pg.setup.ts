@@ -7,7 +7,7 @@
 import { randomBytes } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { createPool, migrate, type PoolClient, withClient } from "@unset/infrastructure-postgres";
+import { createPool, migrate, type Pool, type PoolClient, withClient } from "@unset/infrastructure-postgres";
 import { createLogger } from "@unset/shared-log";
 import type { TestProject } from "vitest/node";
 import { failAfterCleanup } from "../../support/docker.ts";
@@ -30,10 +30,39 @@ export type ProvidedPostgres = {
   readonly databases: Readonly<Record<string, string>>;
 };
 
+/**
+ * The real auditor role's login, kept out of ProvidedPostgres: a test file reaches it only by importing asAuditor
+ * (architecture 2026-10-19 04:51Z, amending 2026-10-06 03:15Z). Migration 0009 grants it SELECT on audit.chain only.
+ */
+export type ProvidedAuditor = {
+  readonly host: string;
+  readonly port: number;
+  readonly user: "auditor";
+  readonly password: string;
+};
+
 declare module "vitest" {
   interface ProvidedContext {
     postgres: ProvidedPostgres;
+    postgresAuditor: ProvidedAuditor;
   }
+}
+
+/** A one-connection pool logged in as auditor, to count audit.chain. Never hand it to a server under test. */
+export function asAuditor(auditor: ProvidedAuditor, database: string): Pool {
+  return createPool({
+    connection: {
+      host: auditor.host,
+      port: auditor.port,
+      user: auditor.user,
+      password: auditor.password,
+      database,
+      ssl: false,
+    },
+    service: "test-auditor",
+    max: 1,
+    connectTimeoutMs: 5000,
+  });
 }
 
 export type TestDatabaseOptions = {
@@ -45,7 +74,9 @@ export type TestDatabaseOptions = {
 };
 
 /** Starts Postgres, migrates the template and clones it per file. Any failure removes the container before throwing. */
-export async function startTestDatabase(options: TestDatabaseOptions): Promise<ProvidedPostgres> {
+export async function startTestDatabase(
+  options: TestDatabaseOptions,
+): Promise<ProvidedPostgres & { readonly auditor: ProvidedAuditor }> {
   const migratorPassword = randomPassword();
   try {
     // Inside the try: a failed globalSetup gets no teardown, so a start that fails is cleaned up here (F1, P1.11f).
@@ -69,8 +100,16 @@ export async function startTestDatabase(options: TestDatabaseOptions): Promise<P
       postgres.sql("postgres", `CREATE DATABASE ${database} TEMPLATE unset OWNER migrator`);
       databases[file] = database;
     }
-    const roles = await asMigrator(connection, (client) => prepareRoles(client, Object.values(databases)));
-    return { host: connection.host, port: connection.port, roles, databases };
+    const { roles, auditorPassword } = await asMigrator(connection, (client) =>
+      prepareRoles(client, Object.values(databases)),
+    );
+    const auditor = {
+      host: connection.host,
+      port: connection.port,
+      user: "auditor",
+      password: auditorPassword,
+    } as const;
+    return { host: connection.host, port: connection.port, roles, databases, auditor };
   } catch (error) {
     // A killed removal is reported with the setup error, never in its place (P1.11c).
     failAfterCleanup(error, options.stop ?? stopAllPostgres);
@@ -98,7 +137,10 @@ async function asMigrator<T>(connection: MigratorConnection, fn: (client: PoolCl
  * the same from secret files). A clone starts with the default database ACL, so each gets `unset`'s: PUBLIC revoked,
  * CONNECT for the roles migration 0003 granted it.
  */
-async function prepareRoles(client: PoolClient, clones: readonly string[]): Promise<ProvidedPostgres["roles"]> {
+async function prepareRoles(
+  client: PoolClient,
+  clones: readonly string[],
+): Promise<{ roles: ProvidedPostgres["roles"]; auditorPassword: string }> {
   const { rows } = await client.query<{ role: string }>(
     "SELECT a.grantee::regrole::text AS role FROM pg_catalog.pg_database d, pg_catalog.aclexplode(d.datacl) a " +
       "WHERE d.datname = 'unset' AND a.privilege_type = 'CONNECT' AND a.grantee <> d.datdba",
@@ -113,7 +155,9 @@ async function prepareRoles(client: PoolClient, clones: readonly string[]): Prom
     await client.query(`ALTER ROLE ${user} PASSWORD '${password}'`);
     entries.push([user, { user, password }] as const);
   }
-  return Object.fromEntries(entries) as ProvidedPostgres["roles"];
+  const auditorPassword = randomBytes(24).toString("hex");
+  await client.query(`ALTER ROLE auditor PASSWORD '${auditorPassword}'`);
+  return { roles: Object.fromEntries(entries) as ProvidedPostgres["roles"], auditorPassword };
 }
 
 /** Every integration test file, repository-relative. */
@@ -125,10 +169,11 @@ function integrationTestFiles(): string[] {
 }
 
 export default async function setup(project: TestProject): Promise<() => void> {
-  const provided = await startTestDatabase({
+  const { auditor, ...provided } = await startTestDatabase({
     migrationsDir: join(REPOSITORY, "infrastructure", "postgres", "migrations"),
     files: integrationTestFiles(),
   });
   project.provide("postgres", provided);
+  project.provide("postgresAuditor", auditor);
   return stopAllPostgres;
 }
