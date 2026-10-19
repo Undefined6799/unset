@@ -2237,6 +2237,8 @@ Where: `interfaces/pds-admin/{server.mjs, verify-envelope.mjs, jcs.mjs, log.mjs,
   `deployment/compose.dev.yaml` service `pds-admin` (internal network only) and `web`'s `PDS_ADMIN_URL` wiring are
   **P2.09d**
 Size: ~330 source lines (pds-admin ~260, signer ~70), ~380 test lines
+Timing: built before staging opens beyond the tailnet or a second operator exists, whichever is first; it retires
+the first-invite one-off (P1.36g; book edit 2026-10-19-staging-path-steps, "Item 8").
 
 Goal: A dependency-free internal service that alone holds the PDS admin password and creates one-use invite codes,
 accepting only an Ed25519-signed, single-use, short-lived envelope from `web`'s key for the verb `invite.issue`.
