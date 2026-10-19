@@ -14,6 +14,7 @@ import { createServer } from "@unset/shared-http";
 import { createLogger } from "@unset/shared-log";
 import { afterAll, beforeAll, expect, inject, test } from "vitest";
 import { sessionClearCookie } from "../../../interfaces/http/session-cookie.ts";
+import { asAuditor } from "../setup/pg.setup.ts";
 
 // Loaded by path, as query-budget does for compose: a static import would pull the server into this project.
 
@@ -26,6 +27,14 @@ const webPool = createPool({
   connectTimeoutMs: 5000,
 });
 afterAll(() => webPool.end());
+// Reads audit.chain only, to count it (architecture 04:51Z); never handed to the server under test.
+const auditorPool = asAuditor(inject("postgresAuditor"), database);
+afterAll(() => auditorPool.end());
+const chainRows = async () =>
+  withClient(auditorPool, null, async (client) => {
+    const { rows } = await client.query<{ n: number }>("SELECT count(*)::int AS n FROM audit.chain");
+    return rows[0]?.n;
+  });
 
 const LIMITS: SessionLimits = { idleS: 604_800, absoluteS: 2_592_000, touchIntervalS: 300 };
 const did = (text: string): Did => {
@@ -252,14 +261,23 @@ test("logout.no_sign_in_records", async () => {
   const owner = newDid();
   await tokenSets.set(owner, { authMethod: { method: "private_key_jwt", kid: "A" } });
   const only = await open(owner);
+  const chainBefore = await chainRows();
   expect((await post("/logout", only.cookieValue, "")).headers.get("location")).toBe("/signed-out");
   // The repeat finds no session, the idempotent path, which writes nothing at all.
   expect((await post("/logout", only.cookieValue, "")).headers.get("location")).toBe("/signed-out");
+  // Book phase-2.md:1717: the logout path leaves audit.chain unchanged, counted as the real auditor role.
+  expect(await chainRows()).toBe(chainBefore);
+  expect(revoked).toEqual([{ did: owner, hadToken: true }]);
   // The kit's access lines (`http.request`) carry a route class and status, never the DID; checked below with the rest.
   expect(lines.map((line) => line.event).filter((event) => event !== "http.request")).toEqual([
     "auth.logout_this_browser",
   ]);
   expect(JSON.stringify(lines)).not.toContain(owner);
+});
+
+test("logout.server_pool_is_not_the_auditor", async () => {
+  // The composed server reads and writes through webPool, which logs in as web; the auditor pool only counts.
+  expect(await sql<{ who: string }>("SELECT current_user AS who")).toEqual([{ who: "web" }]);
 });
 
 test("logout.last_browser_revokes", async () => {

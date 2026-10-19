@@ -8,7 +8,7 @@ import { createPool, withClient } from "@unset/infrastructure-postgres";
 import { afterAll, describe, expect, inject, test } from "vitest";
 import { failAfterCleanup } from "../../support/docker.ts";
 import { ownContainers, STOP_ALL_MS, stopAllPostgres } from "../../support/postgres.ts";
-import { startTestDatabase } from "./pg.setup.ts";
+import { asAuditor, startTestDatabase } from "./pg.setup.ts";
 
 const REPOSITORY = join(import.meta.dirname, "..", "..", "..");
 // Only matters if teardown_after_failure fails: it never leaves a container running past this file.
@@ -61,6 +61,30 @@ describe("integration postgres setup", () => {
         "SELECT current_user AS who, r.rolsuper FROM pg_roles r WHERE r.rolname = current_user",
       );
       expect(row).toEqual({ who: name, rolsuper: false });
+    }
+  });
+
+  test("auditor_is_opt_in_and_reads_the_chain_only", async () => {
+    // Architecture 2026-10-19 04:51Z (P2.08g item 6): the real auditor role, reached only through asAuditor(), so a
+    // test can count audit.chain. It is never one of the provided process roles, and migration 0009's grants hold:
+    // SELECT on audit.chain and nothing else.
+    expect(Object.keys(provided.roles)).not.toContain("auditor");
+    const auditor = asAuditor(inject("postgresAuditor"), database);
+    const run = (text: string) => withClient(auditor, null, (client) => client.query(text));
+    try {
+      expect((await run("SELECT current_user AS who")).rows[0]).toEqual({ who: "auditor" });
+      expect((await run("SELECT count(*)::int AS n FROM audit.chain")).rows[0]?.n).toBeTypeOf("number");
+      for (const statement of [
+        "INSERT INTO audit.chain (lane) VALUES ('sec')",
+        "UPDATE audit.chain SET writer = 'web'",
+        "DELETE FROM audit.chain",
+        "SELECT 1 FROM app.session LIMIT 1",
+        "SELECT 1 FROM app.oauth_session LIMIT 1",
+      ]) {
+        await expect(run(statement), statement).rejects.toThrow(/permission denied/);
+      }
+    } finally {
+      await auditor.end();
     }
   });
 
