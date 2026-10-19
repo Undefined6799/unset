@@ -50,11 +50,15 @@ tester rather than a shared password, and the handle hosts `*.staging.unset.im` 
 login on 2026-10-19 at 02:56:58Z ("Keep password" on the card "Keep the Pangolin password on staging, or
 open it with invites only?"); opening staging without it would be P1.33p's public opening, pulled forward.
 Architecture ruled on names and certificates on 2026-10-19 at 02:35Z, on 2026-10-19 at 03:24Z added that
-staging tests only accounts on its own PDS, and on 2026-10-19 at 03:35Z, 03:40Z, 04:00Z, 04:05Z and 04:10Z
-ruled on Pangolin, the tester handles, the remaining CAA records and the DNS the staging names need.
-Sign-in by an account hosted on another PDS is out of scope on staging until P1.33p opens a read path,
-because the lexicon authority's record is read from this PDS, which sits behind the Pangolin login with no
-bypass; opening that path is its own step, with its own ruling and Alex's word.
+staging tests only accounts on its own PDS, on 2026-10-19 at 03:35Z, 03:40Z, 04:00Z, 04:05Z and 04:10Z
+ruled on Pangolin, the tester handles, the remaining CAA records and the DNS the staging names need, and on
+2026-10-19 at 05:15Z ruled that the own-PDS rule is enforced in the app.
+Until P1.33p, the app signs in only accounts on our own PDS, and checks this in code: before authorize, the
+account's PDS must be our own issuer exactly, or the app refuses and sends nothing to the outside server;
+at the callback, the issuer and the account's PDS must still match. The check applies in every environment
+with no switch, and is a product step beside P1.36i that lands before staging opens. The Pangolin login is
+a second layer, not the boundary. Opening sign-in to outside accounts is P1.33p, with its own ruling and
+Alex's word.
 
 - The edge's own certificates for the `staging.unset.*` names are Let's Encrypt with the DNS-01
   challenge, validated through a delegated zone: `_acme-challenge.staging.unset.*` is a CNAME into a
@@ -173,8 +177,9 @@ unchanged. This record supersedes ADR 0020.
   record, so the logs reveal nothing new.
 - The Pangolin host is inside the staging trust boundary: it sees decrypted session cookies and OAuth
   codes, so no production data or production account ever touches staging. Its conditions are Alex's,
-  on the runbook: a patched Pangolin at 1.22.0 or later with share links off, MFA on its admin login, one
-  Pangolin login per tester rather than a shared password, host-only cookies on the resource name
+  on the runbook: a patched Pangolin at 1.24.0 or later (the first release whose rules match HTTP
+  methods) with share links off, MFA on its admin login, one Pangolin login per tester rather than a
+  shared password, host-only cookies on the resource name
   (never `Domain=unset.sh`), forwarded headers set by Pangolin alone and trusted by the edge only from
   Newt's fixed address, short retention and a RoPA line for its access logs, and testers told it is a
   test system. Our own gates stay: invites, the email and onboarding gates, our OAuth session, the CSRF
