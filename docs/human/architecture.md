@@ -29,6 +29,27 @@ so a fault or a compromise in one does not reach the others. `pds-admin` and `ch
 hold the admin credentials, import nothing but their own folder, Node built-ins and
 `shared/admin-envelope/`.
 
+## PDS presentation boundary (ADR 0027)
+
+The approved PDS customization is a build-only `apps/pds/` presentation package, not another running app or
+account server. It consumes generic `shared/ui` and its declared UI runtime, with no app/domain/infrastructure/PDS
+SDK imports, data hooks or authentication logic. The exact upstream frontend owns routing, guards, hydration,
+validation, actions, translations and account state; its reviewed presentation patches live in `deployment/pds/`.
+Shared UI remains independent of upstream router/auth types; generic extensions follow design-sheet registration.
+
+Only the resolved installed `@atproto/oauth-provider-ui/dist` directory and manifest may differ from the pinned
+official image. All other contents, modes, paths, symlinks and runtime image configuration remain equal. Provider
+asset-serving/CSP source, dependencies, backend APIs, auth/session/data semantics and app scopes stay unchanged.
+The optional licensed-font solution is limited to fixed same-origin static delivery and the corresponding HTML
+`font-src` adjustment at the existing edge; real-browser feasibility and separate security review precede rollout.
+
+Test-only ephemeral PDS/PLC/mail fixtures may operate without public registrations, real mail or changes to the
+operated local/dev topology. They do not replace P2.24's manual dev SMTP checks or P5.12's production recheck.
+P2.24's subdivisions allocate boundary/image/CI checks before implementation, with checks, product and edge work
+separated under SE-6. These checks are planned, not implemented by this docs record; current admission checks
+remain in force. [ADR 0027](decisions/0027-pds-frontend-distribution.md) defines the exact contract, font gate and
+same-backend-version rollback. ADR 0019 still governs merges and Alex's reserved gates.
+
 ## Architecture rules and how each is checked
 
 *Checked* means CI fails when the rule is broken. *Planned* names the step that builds the check; until it merges,
