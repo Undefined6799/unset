@@ -92,7 +92,8 @@ recheck; before P1.36v they can sign in, and this bound does not hold for them (
 a PDS call per request. `tests/integration/http/email-recheck.test.ts` pins our side only (it stubs the OAuth
 client, so no real PDS revokes anything), and `config.test.ts#email_recheck_capped_at_900` pins the cap. Nothing in the
 repository pins the PDS side; it rests on @atproto/pds 0.5.37 (dist/context.js:276, stateful access tokens) and
-@atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row: `end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
+@atproto/oauth-client 0.8.9 (oauth-session.js:73-82, session-getter.js:139-168). There is no audit row:
+`end_sessions_for_did` writes none and the audit lanes hold no sign-in action.
 
 **Onboarding (P2.12).** `routes/welcome.ts`: age, then terms, then a chat placeholder, then `/did` or `/verify-email`.
 An under-age answer sets `blocked_underage`, writes `age_gate.blocked`, revokes the grant and ends sessions. The
