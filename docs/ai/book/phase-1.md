@@ -6658,7 +6658,9 @@ Slice 1, product tests only, lane Phase 2; book edit 2026-10-19-alex-cards-and-e
 7. **M4.** The signed-out and log cases run on `compose(CONFIG, web)` with its log captured, not the stand-in `open`
    at :56-59. The verifier's plant G1 must be red: if the real gate's signed-out branch answers differently when the
    DID has an account (app-gate.ts:66), for example in `set-cookie`, the test fails. The whole shape is compared:
-   status, every header name and value, and the body (this folds into item 2).
+   status, every header name and value, and the body (this folds into item 2). Two DID paths redirect to different
+   `next` values, so `Location` is compared after normalizing the requested path, and each path's own redirect is
+   asserted separately (Codex on #1037).
 If 6261eb4 applies cleanly to main, the lane cherry-picks it onto a new branch from main. If item 1 needs the scrub to
 pass, P1.25t merges first. The step never merges red, and never skips or weakens the assertion.
 
