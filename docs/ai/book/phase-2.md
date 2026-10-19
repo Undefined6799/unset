@@ -110,7 +110,7 @@ and this table is the only place to change.
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
 Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08h, P2.11,
-P2.11a–P2.11c, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once
+P2.11a–P2.11d, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once
 their own dependencies merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice
 1"). The rest of this file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built
 after slice 2 and the i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build
@@ -128,7 +128,7 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08h, P2.11, P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
+(P2.01–P2.08, P2.08b–P2.08h, P2.11, P2.11a–P2.11d, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
 user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they
 say "catalog key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and
 Playwright tests run English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in
@@ -168,6 +168,7 @@ flowchart TD
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
   P211a --> P211b[P2.11b auth_dead counter]; P211a --> P211c[P2.11c auth_dead bound reworded]
+  P211a --> P211d[P2.11d cached recheck capped]; P211c --> P211d
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
   P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]; P212a --> P212c[P2.12c welcome axe gaps]
@@ -2039,8 +2040,27 @@ Slice 1, issue #1057, product comment plus a docs rider (`interfaces/http/compos
 architecture's #1051 M1 ruling".
 **What:** wording only, with no behaviour change. "Signed out within 15 minutes" becomes "on our own PDS, within
 `EMAIL_RECHECK_S` (at most 900 s)". For any other PDS, the bound is "token life plus `EMAIL_RECHECK_S`, unresolved
-until P1.33p". The PR body says no behaviour changes. P1.33p carries the forced-refresh prerequisite.
+until P1.33p". The PR body says no behaviour changes. P1.33p carries the forced-refresh prerequisite. The note and
+config comment use architecture's 04:29Z wording, with the last sentence as amended at 04:31Z (book edit
+2026-10-19-auth-dead-gate).
 Done when check is green.
+
+### P2.11d — Cap a cached recheck during PDS outages
+Tags: [SEC]            Depends on: P2.11a, P2.11c
+Slice 1, issue #1068, product, lane Phase 1. Book edit 2026-10-19-auth-dead-gate, "Step-book mapping of
+architecture's #1065 ruling". A tightening, so it needs no card or typed line. If the lane finds a trusted-base path,
+it splits that part out.
+- A cached email-recheck confirmation is used for at most 4 × `EMAIL_RECHECK_S` (3,600 s at the 900 s cap). The cap is
+  computed from the config value, never hardcoded.
+- After the cap, while the recheck keeps failing as `transient`, every page that needs the confirmation shows the
+  PDS-unavailable page. The session row is kept, and nothing ends: a PDS outage never signs anyone out.
+- A recheck that succeeds after the cap restores normal pages. auth_dead still ends sessions as P2.11a says.
+- Reds: (1) a recheck failing past the cap shows the unavailable page, and the session row is intact; (2) a success
+  after the cap restores normal pages; (3) a transient failure inside the cap still serves the cached result.
+Threats: a PDS kept unreachable stretches a revoked grant's window without limit. The cap bounds what is served, and
+the fail-closed side is the unavailable page, never a sign-out.
+ASVS 5.0: the PR names its rows, at least the session-termination row.
+Done when the reds are shown and check is green.
 
 ### P2.15 — Legal paperwork part 2
 Tags: (none; content needs Alex's approval through the PR and two inputs, see checklist)            Depends on: P1.25, P1.37            Plan: §6 "Legal paperwork", "Privacy notice", "Invite-country rule", "Canadian law"; §5.3 interstitial; §5.8 fingerprints

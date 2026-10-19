@@ -79,7 +79,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g,
   P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022;
   retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h, P2.11,
-  P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z
+  P2.11a–P2.11d, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z
   (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus).
   P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and test-helper follow-ups, start only
   after P2.13a's scenario passes locally. Fixes for holes already on main are exempt. Built PRs still get verified and
@@ -15051,10 +15051,11 @@ It gates the first 80/443 forward.
 after P1.35x every `0x40.space` dev value fails, so this step's configuration and probe use ADR 0025's
 `staging.unset.sh` (app) and `staging.unset.ac` (PDS), and keep its existing gate. Book text only; no new step.
 
-**Prerequisite before other PDSes sign in (book edit 2026-10-19-auth-dead-gate, P2.11c's book lines):** before any
-PDS other than ours can sign in, the email recheck forces a token refresh, so a revoked grant fails at the refresh
-(`invalid_grant` leads to `authDead`). The test runs against a provider with stateless tokens. Without it, this step
-doesn't open. No forced refresh is needed today: on our own PDS it adds a call and closes nothing. The verify-email
+**Prerequisites before other PDSes sign in (book edit 2026-10-19-auth-dead-gate, architecture 03:51Z, wording
+confirmed at 04:29Z):** "Before any non-own PDS can sign in, the email recheck forces a token refresh, so a revoked
+grant fails at the refresh (invalid_grant leads to authDead). The test runs against a stateless-token provider.
+Otherwise, P1.33p doesn't open." No forced refresh is needed today: on our own PDS it adds a call and closes nothing.
+This step also revisits ASVS V7.4.3 for other PDSes (asvs-5-l2.md). The verify-email
 link also uses the user's recorded issuer, as P2.08b does (verify-email.ts:76 and VerifyEmail.tsx:34 link our PDS
 for every user, which is correct while P1.36v limits sign-in to our own PDS; book edit 2026-10-19-five-step-audit,
 architecture 04:23Z).
