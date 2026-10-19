@@ -206,6 +206,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     ...browserLogout({
       pool: oauth.pool,
       sessions,
+      idleS: cfg.SESSION_IDLE_S,
       // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
       revoke: (did) => oauth.client.revoke(did),
     }),

@@ -6,9 +6,21 @@ import type { Did } from "@unset/domains-identity";
 import { type Pool, withClient, withTransaction } from "@unset/infrastructure-postgres";
 import type { Session, SessionDb, SessionStore } from "@unset/infrastructure-session";
 
-/** How many of `did`'s sessions remain. `count(*)::int` is a number (node-pg 8.23, oid 23). */
-export async function remainingSessions(db: SessionDb, did: Did): Promise<number> {
-  const { rows } = await db.query<{ n: number }>("SELECT count(*)::int AS n FROM app.session WHERE did = $1", [did]);
+/**
+ * How many of `did`'s sessions can still sign a browser in (P2.08c). A row past its idle or absolute expiry is not
+ * one, nor is a row whose DID has no stored token set: the store reads both as signed out (infrastructure/session/
+ * store.ts, `lookup`'s `expired` and `has_token_set`). No sweep deletes them until the jobs process exists, so counting
+ * them would keep the grant after the last real browser signs out (readiness review 2026-10-19, S2). The conditions
+ * repeat the store's, because that folder is trusted base; the integration test pins both boundaries.
+ * `count(*)::int` is a number (node-pg 8.23, oid 23).
+ */
+export async function remainingSessions(db: SessionDb, did: Did, idleS: number): Promise<number> {
+  const { rows } = await db.query<{ n: number }>(
+    "SELECT count(*)::int AS n FROM app.session s WHERE s.did = $1 " +
+      "AND now() <= s.absolute_expires_at AND now() <= s.last_seen_at + make_interval(secs => $2) " +
+      "AND EXISTS (SELECT 1 FROM app.oauth_session o WHERE o.did = s.did)",
+    [did, idleS],
+  );
   const n = rows[0]?.n;
   if (typeof n !== "number" || !Number.isInteger(n) || n < 0) throw new Error("session count missing");
   return n;
@@ -17,6 +29,8 @@ export async function remainingSessions(db: SessionDb, did: Did): Promise<number
 export function browserLogout(options: {
   readonly pool: Pool;
   readonly sessions: SessionStore;
+  /** The store's idle lifetime in seconds (SessionLimits.idleS), so a stale row is not counted as a browser. */
+  readonly idleS: number;
   /** `@atproto/oauth-client` 0.8.9 `OAuthClient.revoke` (dist/oauth-client.js). Deletes the stored set in a `finally`. */
   readonly revoke: (did: Did) => Promise<void>;
 }): {
@@ -24,12 +38,12 @@ export function browserLogout(options: {
   revokeGrant: (did: Did) => Promise<void>;
   deleteTokenSet: (did: Did, deadline: AbortSignal) => Promise<void>;
 } {
-  const { pool, sessions, revoke } = options;
+  const { pool, sessions, idleS, revoke } = options;
   return {
     destroySession: (session, deadline) =>
       withTransaction(pool, deadline, async (tx) => {
         await sessions.destroy(tx, session.idHash);
-        return remainingSessions(tx, session.did);
+        return remainingSessions(tx, session.did, idleS);
       }),
     revokeGrant: (did) => revoke(did),
     deleteTokenSet: (did, deadline) =>
