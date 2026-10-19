@@ -278,7 +278,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Every "local" ruling lives in the deploy layer, keyed on preflight's own profile (`--env local|dev|prod`, deployment/preflight/checks/types.ts `Env`). No `UNSET_ENV=local` value is added: it would touch every allowlist and duplicate what preflight already enforces.
 - Enforced by: a local-only key list in preflight, which refuses those keys under dev and prod. P1.36k (#1021) creates it, with `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` as its first entries; until it merges, nothing enforces the rule. Verifier review for runtime `UNSET_ENV === "dev"` checks.
 - Source: architecture ruling 2026-10-19 03:45Z (book edit 2026-10-19-p125c-as-built, last section).
-- Status: NEW — a tightening, not yet enforced. Today several runtime gates still accept a local-only behaviour whenever `UNSET_ENV === "dev"` (the sites P1.36k lists, among them shared/http/config.ts:25-27 for plain-http origins); P1.36k is what makes `dev` mean staging there. TEST_ROUTES already boots under `test` only.
+- Status: NEW — a tightening, not yet enforced. Today six runtime lines key on `UNSET_ENV === "dev"` (oauth-client.ts:128, netGuard.ts:18, shared/http/config.ts:27 and :90, csp/headers.ts:25, schema.ts:183), five of them behind opt-in keys; P1.36k and P1.36l close them in preflight. TEST_ROUTES already boots under `test` only.
 - Priority: P1
 
 ## 7. Testing

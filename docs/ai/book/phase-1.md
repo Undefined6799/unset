@@ -6524,7 +6524,8 @@ in prod. Book edit 2026-10-19-five-step-audit.
 Done when these tests pass, red first, and check is green: `test_routes_refused_in_prod`, `unavailable_retry_after`,
 and `server_error_request_id` and `server_error_fallback_static` on `/__test/throw`.
 
-As built (#1011; book edit 2026-10-19-p125c-as-built, architecture 03:00Z and 03:45Z): four departures, accepted.
+As built (as ruled; lands in #1011, open at 51f4656; the merge SHA is added once it merges; book edit
+2026-10-19-p125c-as-built, architecture 03:00Z, 03:45Z and 05:10Z): four departures, accepted.
   1. The paths are `/test-routes/{throw,unavailable,app}`: the kit's trusted `SEGMENT` template refuses a leading
      underscore (shared/http/routes.ts:65-66), and widening it would loosen a check. The `/test-routes/` prefix is
      reserved: no product route may use it, and with `TEST_ROUTES` off each path answers byte for byte like an unknown
@@ -6539,6 +6540,9 @@ As built (#1011; book edit 2026-10-19-p125c-as-built, architecture 03:00Z and 03
   Runtime `UNSET_ENV` has no `local` value (shared/config/schema.ts:170) and compose.local.yaml runs `dev`, so the
   ruled "local and test" reduces to `test` alone, which is stricter and accepted. Runtime code never treats `dev` as
   local; a local-only runtime behaviour needs a local-only key that preflight refuses under `--env dev` and `prod`.
+  compose.ts imports the test routes only after the `UNSET_ENV === "test"` and `TEST_ROUTES` check passes, with no
+  static import left. Red (05:10Z S2): under prod and under dev, with `TEST_ROUTES` set, startup still exits 78 and the
+  test-routes module is never loaded. The file may still sit in the image's source tree, never loaded outside test.
   Open note for the server kit's next step: the kit's `AppError` path sends no `Retry-After`, so every 503 it renders
   gains `Retry-After` and `no-store` there.
 
@@ -6551,11 +6555,12 @@ Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
 1. Ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
    asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
 2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
-3. **PrefsForms** (Alex tapped "Settings + footer" at 02:59:37Z on "Where should the theme and language settings live
-   in the app?"; architecture 03:55Z; book edit 2026-10-19-alex-cards-and-edge-dev-mode):
+3. **PrefsForms** (Alex tapped "Settings + footer" at 2026-10-19 02:59:37Z on "Where should the theme and language
+   settings live in the app?"; architecture 03:55Z; book edit 2026-10-19-alex-cards-and-edge-dev-mode):
    - The canonical place is a "Language and theme" section in Settings. That section, its test
-     `settings_prefs_section` and its design-sheet entry are P2.13c's, because P2.13c builds the SettingsShell after
-     this step (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes from Codex on #1037").
+     `settings_prefs_section` and its design-sheet entry are P2.13c's (issue #992, booked in the next batch), because
+     P2.13c builds the SettingsShell after this step (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes
+     from Codex on #1037").
    - The footer form stays on default-shell pages (sign-in, verify-email, legal), where signed-out visitors need it.
    - Nothing goes in the Navigation panel.
    - Both are zero-JS form POSTs that set the prefs cookie, same-origin, behind the CSRF and Origin gates, and they
@@ -6611,7 +6616,7 @@ As built: #1017 (merged as e284029); its two Codex hardenings are P1.25n.
 ### P1.25n — Harden the DID route privacy tests
 Tags: [SEC]            Depends on: P1.25m
 Slice 1, product tests only, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode. P1.25m merged in #1017
-(3271762) without Phase 2's two Codex hardenings (local commit 6261eb4, tests only). Issue #1026.
+(e284029) without Phase 2's two Codex hardenings (local commit 6261eb4, tests only). Issue #1026.
 
 **What:**
 1. The log-privacy test also feeds percent-encoded DIDs and asserts that no decoded or encoded form reaches the log.
@@ -6634,6 +6639,10 @@ browser checks the #423 body left unverified (the APG combobox pattern, a hidden
 booked. The tabs keyboard and axe tests check the
 default mode against its built form (links in natural tab order with aria-current, no tab roles) and eager mode
 against the ARIA tabs pattern.
+
+Any harness that turns `TEST_ROUTES` on runs its server as `UNSET_ENV=test`, or startup exits 78 by design. No harness
+relaxes the gate. tests/e2e/fixtures/servers.ts:54 runs as dev today, so the P1.26 harness that needs test routes
+changes that server to test (book edit 2026-10-19-p125c-as-built, "Step-book mapping of 05:10Z").
 
 **Where:** `tests/e2e/{playwright.config.ts, pages.ts, a11y.spec.ts, nojs.spec.ts, csp.spec.ts, headers.spec.ts}`;
 `tests/e2e/fixtures/servers.ts`; `.pa11yci.json`; `lighthouserc.json`; `.github/workflows/e2e.yml`;
@@ -8862,8 +8871,9 @@ and 04:35Z. Issue #1030.
 **What:**
 - The PDS's temp blobs at `/tmp/pds/blobs` get a tmpfs of their own: `size=20m,mode=0700`, owned by the PDS user
   (uid and gid 1000). That is 4 (the fixed concurrency, named once as a constant) times the pinned upload limit, and
-  never larger; a test ties the two, so the size changes with the limit. Any other `/tmp` tmpfs the PDS keeps is
-  capped too (today one uncapped `/tmp` at mode 1777, compose.dev.yaml:97-98, and the same in compose.local).
+  never larger; `pds_blob_tmpfs_is_four_times_the_limit` ties the two, so the size changes with the limit. Any other
+  `/tmp` tmpfs the PDS keeps is capped too (today one uncapped `/tmp` at mode 1777, compose.dev.yaml:97-98, and the same
+  in compose.local).
 - `PDS_BLOB_UPLOAD_LIMIT` becomes one exact value in the env map, 5242880 (5 MiB). The floor check that it is at least
   `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays.
 - Preflight checks both under local and dev.
@@ -15122,10 +15132,10 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
 2026-10-12-p133p-public-opening, from architecture's amendment 4 of 2026-10-12-refocus-local-signin-rulings and
 2026-10-12-p133-p133a-tailnet-gates):**
-- This step runs on Alex's home server, tailnet only until P1.33p opens it. It moves the same compose stack used for
-  local sign-in there, right after P2.13a's scenario passes locally and its Depends merge: the pulled-forward signing
-  steps (P1.27s, P2.26e, P2.26b, P2.26c, P2.26d) and the PDS-exception gate (P1.33e, P1.33d). The paused P1.34f, P1.34r
-  (#735) and P1.34l (#754) resume first (refocus order, section 8).
+- This step runs on Alex's home server, reached through his Pangolin with a password until P1.33p opens it. It moves the
+  same compose stack used for local sign-in there, right after P2.13a's scenario passes locally and its Depends merge:
+  the pulled-forward signing steps (P1.27s, P2.26e, P2.26b, P2.26c, P2.26d) and the PDS-exception gate (P1.33e, P1.33d).
+  The paused P1.34f, P1.34r (#735) and P1.34l (#754) resume first (refocus order, section 8).
 - Alex's hands-on items, added to the checklist: install Docker (the native Engine on Linux, not Docker Desktop,
   P1.34s), install Tailscale, and open a Remote Control session there for the agent.
 - First check: check the dev stack with read-only calls only (describeServer, health), no account and no probe
@@ -15143,8 +15153,10 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   architecture's 2026-10-19 ruling (b) (book edit 2026-10-19-staging-tailnet-rulings):
   the names are ADR 0025's `staging.unset.*`, with Let's Encrypt DNS-01 through a delegated validation zone (P1.36d,
   P1.36e, P1.36b, P1.36c), never `int.unset.sh` or the dev root. `staging.unset.sh` and `staging.unset.ac` are
-  reached through Alex's Pangolin behind one SSO login (Alex, 02:39:57Z and 02:50:36Z; architecture 03:35Z and 04:00Z),
-  with public DNS pointing at Pangolin; Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
+  reached through Alex's Pangolin behind one Pangolin user login per tester (Alex, 2026-10-19 02:39:57Z; his "Keep
+  password" tap at 02:56:58Z on "Keep the Pangolin password on staging, or open it with invites only?"; architecture
+  03:35Z, 04:00Z and 05:15Z). Only the two `.sh` sign-in files skip the login, GET and HEAD only; nothing on `.ac` does.
+  Public DNS points at Pangolin, and Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
   through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture 04:05Z, S4).
 - P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
   (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
