@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
+import { safeReturnPath } from "@unset/shared-http";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
@@ -92,6 +93,73 @@ describe("POST /prefs/theme", () => {
       const response = await send({ body: `theme=dark&return=${encodeURIComponent(target)}` });
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/");
+    }
+  });
+
+  // P2.13d: the sign-in pages are the one closed exception to the kit's denylist. Only `next` and `handle` come back,
+  // each re-checked; the query is rebuilt from those two names, never copied.
+  const returnTo = async (target: string) =>
+    (await send({ body: `theme=dark&return=${encodeURIComponent(target)}` })).headers.get("location");
+
+  test("prefs_return_sign_in_keeps_next_and_handle", async () => {
+    const response = await send({
+      body: `theme=dark&return=${encodeURIComponent("/login?next=%2Fme&handle=alice.example.com")}`,
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("set-cookie")).toBe(`${THEME_COOKIE}=dark; ${YEAR}`);
+    expect(response.headers.get("location")).toBe("/login?next=%2Fme&handle=alice.example.com");
+    expect(await returnTo("/login/continue?handle=%40Alice.Example.com")).toBe(
+      "/login/continue?handle=alice.example.com",
+    );
+    expect(await returnTo(`/login?handle=did%3Aplc%3A${"a".repeat(24)}`)).toBe(
+      `/login?handle=did%3Aplc%3A${"a".repeat(24)}`,
+    );
+    expect(await returnTo("/login")).toBe("/login");
+  });
+
+  test("prefs_return_sign_in_drops_offsite_next", async () => {
+    for (const next of ["https://evil.example", "//evil.example", "/logout", "/\\evil.example"]) {
+      expect(await returnTo(`/login?${new URLSearchParams({ next })}`), next).toBe("/login");
+    }
+    // A repeated next is not one value.
+    expect(await returnTo("/login?next=%2Fme&next=%2Fyou")).toBe("/login");
+  });
+
+  test("prefs_return_sign_in_drops_bad_handle", async () => {
+    for (const handle of ["<script>", "alice", "alice.test", "a\u0000.example.com", "did:plc:short"]) {
+      expect(await returnTo(`/login/continue?${new URLSearchParams({ handle })}`), handle).toBe("/login/continue");
+    }
+  });
+
+  test("prefs_return_sign_in_drops_other_params", async () => {
+    expect(await returnTo("/login?next=%2Fme&extra=1")).toBe("/login?next=%2Fme");
+    expect(await returnTo("/login?error=login.failed&prompt=login")).toBe("/login");
+  });
+
+  test("prefs_return_other_login_paths_fall_back", async () => {
+    for (const target of [
+      "/login/other",
+      "/loginx",
+      "/LOGIN",
+      "/%6cogin",
+      "/login/",
+      "/login.",
+      "/login;x",
+      "/login#frag",
+      "/login?next=%2Fme#frag",
+      "//login",
+      "/login//continue",
+      "/logout",
+      "/oauth/callback",
+    ]) {
+      expect(await returnTo(target), target).toBe("/");
+    }
+  });
+
+  // The exception is the prefs route's own: every other target still goes through the kit's returnPath unchanged.
+  test("prefs_return_non_login_unchanged", async () => {
+    for (const target of ["/signed-out", "/settings?tab=1&x=2", "/a#b", "/did%3Aplc%3Ax"]) {
+      expect(await returnTo(target), target).toBe(safeReturnPath(target));
     }
   });
 

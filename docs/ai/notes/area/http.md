@@ -21,7 +21,7 @@ all six servers are built from.
 the manifest), `routes/home.ts` and `routes/legal.ts` (P1.25 slots; P2.15 fills `/legal/terms`, `/legal/privacy`
 and `/legal/domains`, group `public` so the shell's styles load, zero JS, `noindex` with `X-Robots-Tag`) and
 `routes/security-txt.ts` (`/.well-known/security.txt`, group `static`), `routes/prefs.ts` (the theme form), `prefs/theme.ts` (theme
-cookie, applied on the server) and `web/` (reads Vite's manifest once at startup and renders pages through apps/web).
+cookie, applied on the server), `prefs/return-to.ts` (the theme form's return target; P2.13d's sign-in exception) and `web/` (reads Vite's manifest once at startup and renders pages through apps/web).
 Route files are `.ts`, not `.tsx`: plain Node runs this server and cannot read JSX, so pages come from `screens`.
 The home, account and Settings routes pass `shell.navigation` through `PageSpec`: active destination and, on
 `/<DID>`, the verified handle for an avatar initial. Session-backed pages also pass their DID `accountPath`;
