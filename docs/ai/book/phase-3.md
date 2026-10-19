@@ -1640,6 +1640,9 @@ Edge cases and failures:
   - Account with an invalid handle → `/@<did>` renders; `/@<did>` never redirects to a handle that is not verified.
 
 Done when (tests):
+  - `feed_menu_has_settings`: a feed page renders no PrefsForms, and its Header menu has a plain `Settings` NavItem to
+    /settings, serialized, with no kit change and working with JS off. Whichever of P3.12 and P4.21 ships a feed route
+    first owns it, and the other inherits it (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:30Z).
   - `zero-js` (no `<script`, no `on*=`, no `javascript:`; ≤30 KB gzipped); `images-only-media-origin`.
   - `csp-on-every-status` (200, 301, 304, 404, 405, 503).
   - `state-unavailable-404` (unknown actor, the four inactive states and a private profile seen anonymously or by

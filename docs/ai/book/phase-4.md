@@ -3192,6 +3192,9 @@ Threats: the timeline: our index merged with Bluesky content fetched through the
     `following_cursor_tamper_400`).
 
 Done when (tests):
+  - `feed_menu_has_settings`: a feed page renders no PrefsForms, and its Header menu has a plain `Settings` NavItem to
+    /settings, serialized, with no kit change and working with JS off. Whichever of P3.12 and P4.21 ships a feed route
+    first owns it, and the other inherits it (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture 04:30Z).
   - `following_merge_window`: Bluesky page spanning 10:00–09:00 and our videos at 10:30, 09:30, 08:30 → 10:30 and 09:30 emitted, 08:30 next page.
   - `following_bsky_timeout_shows_ours_with_notice`; `following_bsky_rate_limited_same`; `following_auth_lost_notice_session_kept`.
   - `following_scope_missing_notice`: 403 with `ScopeMissing` → notice and `bDone`.

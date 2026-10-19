@@ -3102,7 +3102,7 @@ Round 1 findings (F1–F26), the editor-note dispositions, the citation table an
 | F7 | Synapse and MAS store User-Agent | Accepted (provisional, plan issue P5): the edge overwrites `User-Agent` with `unset-chat` on all three hosts; tests and exit line 11 extended; Element `last_seen_ip` residual | P6.02a, P6.20, P6.18 |
 | F8 | P2.14 and P1.07 drift | Accepted. F8.1: P2.14 `claims` extension (routed to phase-2); for `chat-auth` the nonce is the interaction uid (the separate interaction check is gone); `chat-admin` uses an `X-Unset-Nonce` header. F8.2: `app.chat_seed` table, `moduleAccounts.link` only on success. F8.3: bearer-token evidence upload with credential-less CORS; "P6.06a stops" and the old note 7 removed. One change: `web` calls `whoami` on the public chat host through `guardedFetch` (fixed host, one path) rather than joining `chat_internal`, so `web` gets no network path to Synapse's admin API | P6.03, P6.04, P6.05, P6.14a, P6.02a |
 | F9 | Reset under MAS needs the `m.oauth` approval | Accepted: `withOAuthApproval` (open MAS URL only if its origin is MAS's; one retry; `reset_not_approved`); step 3's dead end replaced by the same flow | P6.08 |
-| F10 | Deactivation leaves the link, media and async jobs | Accepted with one change to (a′): app "sign out" uses `logout_browser_only` (F3), and if MAS fixes the back-channel action per provider, "sign out everywhere" cannot also use `logout_all`; so P6.04a uses a `chat-admin` `end_sessions` verb unless P6.01 shows one provider can do both. Lock/unlock, deactivate → poll → media delete by `admin`'s service account → link delete → chat-auth purge → mapping delete; `app.chat_erasure` job | P6.04a, P6.15 |
+| F10 | Deactivation leaves the link, media and async jobs | Accepted with one change to (a′): app "sign out" uses `logout_browser_only` (F3), and if MAS fixes the back-channel action per provider, "sign out everywhere" cannot also use `logout_all`; so P6.04a uses a `chat-admin` `end_sessions` verb unless P6.01 shows one provider can do both. Lock/unlock, deactivate → poll → media delete by `admin`'s service account → link delete → chat-auth purge → mapping delete; `app.chat_erasure` job. "Sign out everywhere" was dropped 2026-10-19 (Alex, 02:34:31Z); see P6.04a | P6.04a, P6.15 |
 | F11 | Plaintext media escapes the fingerprint rule | Accepted: `check_media_file_for_spam` refuses media signatures; client retries once with a new key on a chance match. One signature dropped from the review's idea of "audio": a bare MPEG frame sync (12 bits) would refuse about one ciphertext in 4,096; only `ID3`-tagged MP3 is matched. Fingerprinting in this phase goes through the P2.16 check stage (fake until Phase 5) | P6.10a, P6.13, P6.14a |
 | F12 | Evidence fingerprints say TMK+PDQF | Partly accepted: TMK+PDQF removed, but **PDQ only**, not "PDQ + MD5": the later Arachnid facts (editor to-do, r1-phase-2-part2 F5) say Arachnid takes PDQ only. The stage decides what it computes | P6.14a |
 | F13 | Evidence binds to the sender's upload, not the event | Accepted: status `verified_sender_media`, moderator wording, RoPA wording, Synapse media `sha256` also compared | P6.14a, P6.15 |
@@ -3248,14 +3248,14 @@ The plan's 03:02Z revision already folds some of these; the status column says w
     `on_backchannel_logout` to every token (`M:crates/handlers/src/upstream_oauth2/backchannel_logout.rs:247-313`);
     `sub` and `sid` only select the upstream sessions (`:233-243`), and the filter is per provider (`:233`), so neither
     one provider nor a second provider can give "browser only" for app sign-out and "everything" for sign-out
-    everywhere. Applied: the provider stays `logout_browser_only`; "sign out everywhere", takedown and erasure use the
-    `chat-admin` `end_sessions` verb, now specified (list and finish user, OAuth 2.0 and compatibility sessions through
-    the admin API, `M:crates/handlers/src/admin/v1/mod.rs:56-93,192-199`; finishing an OAuth 2.0 session syncs the
-    device to Synapse, `oauth2_sessions/finish.rs:57`). The endpoint path is now cited
-    (`M:crates/router/src/endpoints.rs:795-814`; public `human` resource, so the edge deny is load-bearing). Found on
-    the way: MAS logs the DID (`sub`) and `sid` at info for each back-channel logout (`backchannel_logout.rs:245`);
-    P6.02 lowers that log target to `warn` and tests it. Synapse's introspection cache (2 minutes,
-    `S:synapse/api/auth/mas.py:140-146`) is now cited in P6.04a.
+    everywhere. Applied: the provider stays `logout_browser_only`; "sign out everywhere" (dropped 2026-10-19, Alex,
+    02:34:31Z; see P6.04a), takedown and erasure use the `chat-admin` `end_sessions` verb, now specified (list and
+    finish user, OAuth 2.0 and compatibility sessions through the admin API,
+    `M:crates/handlers/src/admin/v1/mod.rs:56-93,192-199`; finishing an OAuth 2.0 session syncs the device to Synapse,
+    `oauth2_sessions/finish.rs:57`). The endpoint path is now cited (`M:crates/router/src/endpoints.rs:795-814`; public
+    `human` resource, so the edge deny is load-bearing). Found on the way: MAS logs the DID (`sub`) and `sid` at info
+    for each back-channel logout (`backchannel_logout.rs:245`); P6.02 lowers that log target to `warn` and tests it.
+    Synapse's introspection cache (2 minutes, `S:synapse/api/auth/mas.py:140-146`) is now cited in P6.04a.
 14. **`check_event_allowed` is experimental** (P6.10a). **Fixed in the editor pass, kept as the callback.** There is no
     stable alternative that does the job: it is the only callback that sees every local event, including membership
     and redactions (`S:synapse/handlers/message.py:1435-1452`), gets the room state, and can replace an event (the

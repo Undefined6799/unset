@@ -5753,8 +5753,9 @@ enhanced by an island.
   retry button that keeps the link).
 - Feed layout rules the kit fixes for P3.12 and P4.21/P4.22 (sheet v44): the feed list has the ARIA `feed` role
   (`role="feed"`, each item an `article` with `aria-posinset`/`aria-setsize`, `aria-busy` while loading); the island
-  keeps the current cursor in the URL with `history.replaceState`; **feed pages have no footer**, and the footer links
-  (including `PrefsForms`) move into the `Header` menu on those pages. `Pagination` (P1.24) is never used for a feed.
+  keeps the current cursor in the URL with `history.replaceState`; **feed pages have no footer**. The footer links move
+  into the `Header` menu on feed pages, and `PrefsForms` is reached through Settings (architecture's 04:30Z ruling on
+  #1066). `Pagination` (P1.24) is never used for a feed.
 - Inventory updated: all 23 at `status: "built"`.
 
 **Algorithm:**
@@ -6430,8 +6431,9 @@ converts both in the i18n slice); P1.22 document attributes and preference forms
   apple-touch PNG from the sheet; the SVG favicon later), `<meta name="robots" content="noindex">` when `noindex`;
   body with a skip link (SkipLink, approved by Alex 18:21Z, sheet v39), `Header`, `<main id="main">`, `Footer` whose
   slot holds `LanguageLinks` on public pages and `PrefsForms` on app pages (P1.22). `AppShell` takes `feed?: true`: a
-  feed page renders **no footer**, and the footer's links and slot move into the `Header` menu (sheet v44; used by
-  P3.12 and P4.21/P4.22).
+  feed page renders **no footer**; the footer's links move into the `Header` menu, and a plain `Settings` NavItem to
+  /settings replaces the slot (PrefsForms lives on Settings, Alex 02:59:37Z; sheet v44; used by P3.12 and
+  P4.21/P4.22).
 - Route groups in Phase 1: `/`, `/terms`, `/privacy` and every error page are **public** (no cookie read, no `Vary:
   Cookie`). The three pages register with the kit's `group: "public"` (P1.25k, #445): no `script-src`, `img-src`
   the assets path only. Error pages render through the kit's hook, so they are anonymous by construction: the hook
