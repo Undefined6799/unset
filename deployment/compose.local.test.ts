@@ -243,7 +243,11 @@ function pinDrift(s: Service, environment: Record<string, string>, envFiles: str
   return same(s.envFiles, envFiles) ? problems : [...problems, `${s.name}: env_file is not as pinned`];
 }
 
-/** The closed list of words that make a key secret-bearing, each matched as a whole `_`-separated word, in any case. */
+/**
+ * The closed list of words that make a key secret-bearing, each matched as a whole word of the key, in any case. A key
+ * splits into words on `_`, `-` and `.`, and at each lower-to-upper boundary (P1.35v; book edit 2026-10-15-verify-903-
+ * info-items, clause (a)), so `Db.apiToken`, `db-password` and `dbPassword` all hold a listed word.
+ */
 const SECRET_WORDS = new Set([
   "PASSWORD",
   "PASSWD",
@@ -280,13 +284,16 @@ const SECRETS_DIR = "/run/secrets/";
 function secretRefusal(key: string, value: string | null): string | null {
   const masked = value?.replaceAll(BRACED, HOLE) ?? "";
   const userinfo = [value ?? "", masked].some((text) => [...text.matchAll(USERINFO)].length > 0);
-  if (!userinfo && !key.split("_").some((word) => SECRET_WORDS.has(word.toUpperCase()))) return null;
+  if (!userinfo && !keyWords(key).some((word) => SECRET_WORDS.has(word.toUpperCase()))) return null;
   const accepted =
     value !== null &&
     !value.includes(HOLE) &&
     (secretFile(key, value) || REQUIRED_REFERENCE.test(value) || referencedPassword(value, masked));
   return accepted ? null : `${key} carries a secret other than as a /run/secrets file or a required reference`;
 }
+
+/** The words of a key: split on `_`, `-` and `.`, then before each upper-case letter that follows a lower-case one. */
+const keyWords = (key: string): string[] => key.replaceAll(/([a-z])([A-Z])/g, "$1_$2").split(/[_.-]/);
 
 /** A `*_FILE` key whose literal value names a file under /run/secrets/, with no `.`, `..` or empty segment. */
 const secretFile = (key: string, value: string): boolean =>
@@ -644,7 +651,7 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
 
   test("secret_bearing_values_only_as_files_or_required_references", () => {
     // Architecture 12:40Z (the record's section "Architecture on verify-910-a686fe0 S3"): the three accepted forms, and
-    // keys outside the predicate. A key is secret-bearing by whole `_`-separated words, never by substring.
+    // keys outside the predicate. A key is secret-bearing by whole words, never by substring.
     const accepted: [string, string][] = [
       ["POSTGRES_PASSWORD_FILE", "/run/secrets/pg_superuser_password"],
       ["PG_PASSWORD_FILE", "/run/secrets/migrate_pg_password"],
