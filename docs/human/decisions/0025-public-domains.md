@@ -54,9 +54,10 @@ staging tests only accounts on its own PDS, on 2026-10-19 at 03:35Z, 03:40Z, 04:
 ruled on Pangolin, the tester handles, the remaining CAA records and the DNS the staging names need, and on
 2026-10-19 at 05:15Z ruled that the own-PDS rule is enforced in the app.
 Until P1.33p, the app signs in only accounts on our own PDS, and checks this in code: before authorize, the
-account's PDS must be our own issuer exactly, or the app refuses and sends nothing to the outside server;
-at the callback, the issuer and the account's PDS must still match. The check applies in every environment
-with no switch, and is a product step beside P1.36i that lands before staging opens. The Pangolin login is
+issuer of the account's PDS must equal our own issuer exactly, or the app refuses (as it does when the
+account does not resolve) and sends nothing to the outside server; at the callback, the issuer and the
+account's PDS must still match exactly, or no session is stored. The check applies in every environment
+with no switch, and is step P1.36v, beside P1.36i, which lands before staging opens. The Pangolin login is
 a second layer, not the boundary. Opening sign-in to outside accounts is P1.33p, with its own ruling and
 Alex's word.
 
