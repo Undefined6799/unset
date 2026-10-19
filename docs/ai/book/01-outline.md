@@ -1448,7 +1448,7 @@ Arachnid application, and the Phase 1 exit.
 | P2.26d | Drop the edge dual spelling from the lock test (pulled forward, Q3 B) | [SEC] | P2.26c | `phase-2.md` |
 | P1.33d | Clear the PDS scan exceptions (check, SE-6; after the re-pin) | [SEC] [ALEX] (typed line) | P1.33c | `phase-1.md` |
 | P1.34 | `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex) | [ALEX] [SEC] [PERMANENT] | P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t, P1.34f, P1.34p, P1.34w, P1.34s, P1.33a, P1.36b, P1.36c, P1.36i, P1.36j, P1.33d, P1.33e, P2.26b, P2.26c, P2.26d | `phase-1.md` |
-| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34 | `phase-1.md` |
+| P1.33p | Open the home server to the public internet (Alex) | [ALEX] [SEC] | P1.33, P1.33a, P1.34, P1.36u, P1.36d, P1.36n | `phase-1.md` |
 | P1.35q | Lexicon monitor workflow and script (check part of P1.35; SE-6 `q`) | [SEC] | P1.18 | `phase-1.md` |
 | P1.35 | Lexicon authority on the dev PDS; schemas and permission set published under MIT (Alex) | [ALEX] [PERMANENT] [SEC] | P1.35q, P1.31 (its approved PR), P1.31g, P1.34, P1.33p, P1.33a, P0.12, P0.13 (licence ADR), P1.18 | `phase-1.md` |
 | P1.27v | Renovate managers for the image locks (check class if pr-shape classes `renovate.json` a check path) | [SEC] | P1.27 | `phase-1.md` |
@@ -1491,6 +1491,9 @@ flowchart TD
   P2_26d --> P1_34
   P1_34 --> P1_33p
   P1_33a --> P1_33p
+  P1_36u --> P1_33p
+  P1_36d --> P1_33p
+  P1_36n --> P1_33p
   P1_33p --> P1_35
   P1_33a --> P1_35
   P1_33p --> P1_38
@@ -1895,6 +1898,7 @@ Depth: **detail by risk; P5.00 refines** (contract parts in full, algorithms a r
 | P5.07g | `web` grants on the legal-hold buffer definers, for P5.07b (SE-6) | [SEC] [MOD] | P5.00, P4.07 | `phase-5.md` |
 | P5.07b | Real fingerprint check: Arachnid Shield spike and client, image transmission buffer, image legal hold | [SPIKE] [SEC] [MOD] | P5.07g, P5.02, P2.16, P2.16b, P1.14a, P1.18b, P3.16c, P4.03, P4.06, P4.07, P1.37a (approved) | `phase-5.md` |
 | P5.02a | Production PDS on `unset.ac` and lexicon authority migration | [ALEX] [SEC] | P5.02, P1.35, P5.07b (decision 23) | `phase-5.md` |
+| P5.02b | Expose production directly, if Alex chooses | [ALEX] [SEC] | P5.02, P5.02a | `phase-5.md` |
 | P5.03 | Deploy by verified digest (grows P2.26a) | [SEC] | P5.02, P5.02a, P1.30, P1.30s, P1.30t, P1.30u, P2.26a | `phase-5.md` |
 | P5.08 | Admin v1.1: statements of reasons and notice-form handling | [SEC] [MOD] | P4.13, P5.07 | `phase-5.md` |
 | P5.08a | Blob and record takedown: the bytes stop everywhere we serve them | [SEC] [MOD] | P5.08 | `phase-5.md` |
@@ -1923,6 +1927,7 @@ flowchart TD
   P5_07b["P5.07b Real fingerprint check"]
   P5_07g["P5.07g web grants on the legal-hold buffe"]
   P5_02a["P5.02a Production PDS on unset.ac and"]
+  P5_02b["P5.02b Direct production exposure, if chosen"]
   P5_03["P5.03 Deploy by verified digest"]
   P5_08["P5.08 Admin v1.1"]
   P5_08a["P5.08a Blob and record takedown"]
@@ -1946,6 +1951,8 @@ flowchart TD
   P5_02 --> P5_07b
   P5_07b --> P5_02a
   P5_02a --> P5_03
+  P5_02 --> P5_02b
+  P5_02a --> P5_02b
   P5_07 --> P5_08
   P5_08 --> P5_08a
   P5_08 --> P5_08b
@@ -2227,7 +2234,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25a, P1.37i, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25a, P1.37i, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.35u, P1.36b, P1.36e, P1.36j, P1.36n, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.02b, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 

@@ -750,6 +750,9 @@ flowchart LR
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
   P1_34 --> P1_33p
+  P1_36u --> P1_33p
+  P1_36d --> P1_33p
+  P1_36n --> P1_33p
   P1_33p --> P1_35
   P1_33a --> P1_35
   P1_33p --> P1_38
@@ -15194,7 +15197,7 @@ proved he can recover it from the console.
 
 ### P1.33p — Open the home server to the public internet (Alex)
 
-**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34 · **Plan:** §5.7; decision 20
+**Tags:** [ALEX] [SEC] · **Depends on:** P1.33, P1.33a, P1.34, P1.36u, P1.36d, P1.36n · **Plan:** §5.7; decision 20
 
 Slice 2, issue #757, kind/feature, lane Phase 1; book edit 2026-10-12-p133p-public-opening, from architecture's
 2026-10-12-p133-p133a-tailnet-gates. Like P1.33: Alex's hands-on steps, plus any check parts P1.33q already carries.
@@ -15207,14 +15210,22 @@ after P1.35x every `0x40.space` dev value fails, so this step's configuration an
 **Prerequisites before other PDSes sign in (book edit 2026-10-19-auth-dead-gate, architecture 03:51Z, wording
 confirmed at 04:29Z):** "Before any non-own PDS can sign in, the email recheck forces a token refresh, so a revoked
 grant fails at the refresh (invalid_grant leads to authDead). The test runs against a stateless-token provider.
-Otherwise, P1.33p doesn't open." No forced refresh is needed today: on our own PDS it adds a call and closes nothing.
-This step also revisits ASVS V7.4.3 for other PDSes (asvs-5-l2.md). The verify-email
-link also uses the user's recorded issuer, as P2.08b does (verify-email.ts:76 and VerifyEmail.tsx:34 link our PDS
-for every user, which is correct while P1.36v limits sign-in to our own PDS; book edit 2026-10-19-five-step-audit,
-architecture 04:23Z).
+Otherwise, P1.33p doesn't open." Red: `recheck_refuses_revoked_foreign_grant`, a revoked foreign-PDS grant whose
+access token is still valid is refused at the next recheck (the forced refresh returns invalid_grant, which leads to
+authDead), against a stateless-token provider (book edit 2026-10-19-auth-dead-gate, 07:05Z). No forced refresh is needed
+today: on our own PDS it adds a call and closes nothing. This step also revisits ASVS V7.4.3 for other PDSes
+(asvs-5-l2.md). The verify-email link also uses the user's recorded issuer, as P2.08b does (verify-email.ts:76 and
+VerifyEmail.tsx:34 link our PDS for every user, which is correct while P1.36v limits sign-in to our own PDS; book edit
+2026-10-19-five-step-audit, architecture 04:23Z).
 
-**What (moved out of P1.33):** the 80/443 forwards and the accept rule; ip-echo and the echo assertion; V5; the
-CGNAT and DDNS branches. Alex's router and DNS actions are as P1.33 lists them.
+**Staging opening (architecture 07:10Z, word for word; book edit 2026-10-19-codex-1063-batch66):**
+- No inbound router forwards, no DDNS, and no public ports on the edge host.
+- Public DNS for staging.unset.sh and staging.unset.ac is A/AAAA to Pangolin's public address, plus CAA per ADR 0025.
+- The edge's certificates come by DNS-01 (P1.36d, ADR 0028).
+- The only inbound path is Pangolin through Newt.
+- The dev-preflight resolution check (P1.36u) passes before opening.
+The 80/443 forwards, DDNS, TLS-ALPN and CGNAT text moved verbatim to P5.02b, which applies only if production is
+exposed directly.
 
 **Moved from P1.34** (book edits 2026-10-13-batch-47-after-771 and 2026-10-13-batch-46-contradictions, G-1:
 P1.34 is tailnet only, so its public items live here; P1.33p depends on P1.34 and not the other way round). The rule
@@ -15227,12 +15238,8 @@ Alex's steps (P1.34's former steps 5, 6 and 9):
  6. CAA on staging.unset.sh and staging.unset.ac: 0 issue "letsencrypt.org" (optionally with
     accounturi=<Caddy's ACME account URI>, RFC 8657, once Caddy has registered). The edge is pinned to Let's
     Encrypt (P1.28).
- 9. Public address: if the ISP address is static → A records for staging.unset.sh and staging.unset.ac. If
-    dynamic → the DDNS updater (deployment/ddns) with an API token scoped to those two records only; if the DNS
-    provider cannot scope a token to them → STOP and choose with the agent (another provider for those records,
-    or a static address).
-    _lexicon.unset.sh and _atproto.lexicon.unset.sh are never editable by that token; only Alex edits them.
-    No AAAA record unless IPv6 was probed in P1.33.
+ 9. Public DNS: A/AAAA records for staging.unset.sh and staging.unset.ac to Pangolin's public address (the
+    staging opening above). _lexicon.unset.sh and _atproto.lexicon.unset.sh stay Alex's to edit.
 ```
 
 Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
@@ -15246,13 +15253,10 @@ Agent verifies afterwards (P1.34's former V2, V3, V4 and V7):
   in CI, and the PDS never gets a Pangolin exemption (architecture 04:33Z; book edit 2026-10-19-codex-1063-batch66).
 - V7: probe green for 24 h before P1.35 starts; the hairpin check passed (P1.29a's edge aliases).
 
-Edge case (moved from P1.34): Address changes while DDNS lags → the probe fails; the authorization servers' cached
-copies cover logins.
-
 **Moved from P1.34, public gates** (book edit 2026-10-13-batch-47-after-771, Amendment 1, finding 5): P1.34's Done-when
 is the private names and dev-root certificates, the read-only dev-stack check (describeServer, health) and the C-checks;
 every public gate and its evidence lives here.
-- The edge obtains its Let's Encrypt certificate (TLS-ALPN-01 on 443 works even if the ISP blocks inbound 80).
+- The edge obtains its Let's Encrypt certificate by DNS-01 (P1.36d, ADR 0028).
 - `dev-public.env`: as P1.29 (invite-only, no crawlers, `LOG_ENABLED=false`, PDS rate limits off with edge limits on, no
   bypass key or IPs), public edge ports. Mail: real SMTP from the start (no Mailpit, book edit 2026-10-07-no-mailpit);
   the provider is set up before P1.34 — Notes, SMTP provider.
@@ -15288,11 +15292,6 @@ every public gate and its evidence lives here.
   2026-10-12-p133-p133a-tailnet-gates). It does not depend on P5.02, so no cycle forms; P1.35 and P1.38 keep their
   dependency on it.
 - Edge cases:
-  - Homelab has no public IPv4 (CGNAT) → stop; options for Alex: a small VPS running only the edge with a tunnel to
-    the homelab (then the client-address question of P1b-A1 moves to the VPS, and P1.28's `trusted_proxies` is
-    revisited), or bringing P5.02a forward. IPv6-only is not enough (some resolvers and authorization servers lack
-    IPv6).
-  - ISP blocks inbound 443 → as CGNAT. Blocks only 80 → fine (TLS-ALPN-01).
   - Probe repo's schedule stops (GitHub disables schedules in repos without activity for 60 days) → the weekly gap
     report notices; the runbook says to re-enable it.
 - Done when (tests): `dev_public_env_matches_policy` (reuses P1.30's checks); `probe_checks_present` (outside: the
