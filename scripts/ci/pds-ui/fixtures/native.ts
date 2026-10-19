@@ -1,5 +1,6 @@
 // Test-only native tar/OCI/artifact builders. No extraction or container execution.
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { pack } from "tar-stream";
 export const sha = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
 export type Item = {
@@ -26,7 +27,9 @@ export async function image(
   layers: Buffer[],
   runtime = { Env: ["NODE_ENV=production"], Cmd: ["node", "index.ts"] },
   indexed = false,
+  gzipLayers: number[] = [],
 ) {
+  const storedLayers = layers.map((layer, i) => (gzipLayers.includes(i) ? gzipSync(layer) : layer));
   const configuration = Buffer.from(
     JSON.stringify({
       os: "linux",
@@ -45,7 +48,14 @@ export async function image(
       schemaVersion: 2,
       mediaType: "application/vnd.oci.image.manifest.v1+json",
       config: descriptor(configuration, "application/vnd.oci.image.config.v1+json"),
-      layers: layers.map((l) => descriptor(l, "application/vnd.oci.image.layer.v1.tar")),
+      layers: storedLayers.map((layer, i) =>
+        descriptor(
+          layer,
+          gzipLayers.includes(i)
+            ? "application/vnd.oci.image.layer.v1.tar+gzip"
+            : "application/vnd.oci.image.layer.v1.tar",
+        ),
+      ),
     }),
   );
   const nested = Buffer.from(
@@ -68,7 +78,7 @@ export async function image(
       ),
     ],
   });
-  const blobs = [configuration, manifest, ...(indexed ? [nested] : []), ...layers];
+  const blobs = [configuration, manifest, ...(indexed ? [nested] : []), ...storedLayers];
   return {
     digest: `sha256:${sha(indexed ? nested : manifest)}`,
     bytes: await tar([

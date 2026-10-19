@@ -2,7 +2,6 @@
 // is permissive, so validate physical framing/extensions before it resolves path/linkpath.
 import { createHash } from "node:crypto";
 import { posix } from "node:path";
-import { gunzipSync } from "node:zlib";
 import { extract, type Header } from "tar-stream";
 
 export const sha256 = (bytes: Buffer | string): string => createHash("sha256").update(bytes).digest("hex");
@@ -117,10 +116,9 @@ function entryPath(header: Header): string {
   requireThat(header.devmajor === 0 && header.devminor === 0, "unexpected device metadata");
   return path;
 }
-export async function archive(compressed: Buffer, sourceComment?: string): Promise<Map<string, Entry>> {
-  requireThat(compressed.length <= MAX_BYTES, "archive exceeds limit");
-  const bytes =
-    compressed[0] === 31 && compressed[1] === 139 ? gunzipSync(compressed, { maxOutputLength: MAX_BYTES }) : compressed;
+// Raw tar only: callers must decode their declared outer format exactly once.
+export async function archive(bytes: Buffer, sourceComment?: string): Promise<Map<string, Entry>> {
+  requireThat(bytes.length <= MAX_BYTES, "archive exceeds limit");
   framing(bytes, sourceComment);
   const parser = extract();
   const result = new Map<string, Entry>();

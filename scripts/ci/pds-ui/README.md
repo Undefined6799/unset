@@ -27,7 +27,12 @@ and checksum validation. Its pinned `extract.js` and `headers.js` silently consu
 permissive PAX records. A narrow framing/PAX validator therefore runs first; it is not a general archive reader.
 Supported entries are regular files, directories, symlinks and hardlinks, with unique path/linkpath/time PAX records.
 Only the exact first codeload global `comment=<locked revision>` record is permitted for the source archive;
-image global/GNU headers are refused. Limits: 512 MiB per input/uncompressed archive and expanded image, 200,000
+image global/GNU headers are refused. Tar parsing consumes raw bytes only: the source boundary decodes at most
+one gzip wrapper, while OCI layers are decoded exactly once according to their media type and the same bytes are
+hashed and parsed. Mislabeled or nested gzip fails. Source links must resolve within the exact source root;
+absolute symlinks, unresolved targets/cycles, non-file hardlink referents, and link/non-directory ancestors in any
+archive order fail. Link resolution follows symlinks before interpreting subsequent `..` and is bounded to 64 hops.
+Limits: 512 MiB per input/uncompressed archive and expanded image, 200,000
 entries per archive, 128 image layers, 4 MiB per PAX record block; artifact directory limits are 128 MiB, 10,000
 files and 32 directory levels. Larger/unsupported inputs fail for review.
 
