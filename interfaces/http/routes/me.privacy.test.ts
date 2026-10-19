@@ -82,18 +82,27 @@ describe("DID account privacy", () => {
   test("did_route_logs_no_did", async () => {
     const signedIn = accountServer();
     const signedOut = accountServer(true);
-    const paths = [`/${OWNER}`, `/${FOREIGN}`, "/me", "/did", "/did:web:example.com", `/${OWNER}?x=${OWNER}`];
+    // Percent-escapes are case-insensitive (RFC 3986 2.1), so a client may send the DID's colons in either case.
+    const encoded = (did: string, hex: string) => did.replaceAll(":", hex);
+    const paths = [
+      `/${OWNER}`,
+      `/${FOREIGN}`,
+      "/me",
+      "/did",
+      "/did:web:example.com",
+      `/${OWNER}?x=${OWNER}`,
+      `/${encoded(OWNER, "%3a")}`,
+      `/${encoded(OWNER, "%3A")}`,
+      `/did%3aplc:${"a".repeat(24)}`,
+      `/${encoded(FOREIGN, "%3a")}`,
+    ];
     for (const path of paths) {
       await get(signedIn.server, path, "__Host-sid=x");
       await get(signedOut.server, path);
     }
     const lines = [...signedIn.lines, ...signedOut.lines];
     expect(lines.some((line) => line.includes('"event":"http.request"'))).toBe(true);
-    for (const line of lines) {
-      expect(line).not.toContain("did:plc:");
-      expect(line).not.toContain("did:web:");
-      expect(line).not.toContain("did%3A");
-    }
+    for (const line of lines) expect(line).not.toMatch(/did(?::|%3a)(?:plc|web)/i);
   });
 
   test("did_route_referrer_same_origin", async () => {
@@ -127,9 +136,14 @@ describe("DID account privacy", () => {
     const other = await get(server, `/${FOREIGN}`);
     expect(own.status).toBe(303);
     expect(other.status).toBe(303);
-    const names = (response: Response) => [...response.headers.keys()].sort();
-    expect(names(other)).toEqual(names(own));
+    // Only the return path names the DID; every other header value and the body must match byte for byte.
+    expect(own.headers.get("location")).toBe(`/login?${new URLSearchParams({ next: `/${OWNER}` })}`);
     expect(other.headers.get("location")).toBe(`/login?${new URLSearchParams({ next: `/${FOREIGN}` })}`);
+    const shape = async (response: Response) => ({
+      headers: [...response.headers].filter(([name]) => name !== "date" && name !== "location"),
+      body: await response.text(),
+    });
+    expect(await shape(other)).toEqual(await shape(own));
     expect(resolved).toEqual([]);
   });
 
