@@ -9101,8 +9101,11 @@ and their tests), lane the third thread, beside P1.36i. A staging go-live blocke
 1. **Before authorize:** resolve the handle or DID to its PDS, with the bidirectional check. The PDS's
    authorization-server issuer must exactly equal the configured own issuer. Otherwise refuse with
    `login.account_elsewhere`, without sending any request to the outside server. A resolution failure also refuses.
-2. **At the callback:** the token response's `iss`, and its `sub`'s PDS, must still match exactly. Otherwise refuse
-   and store no session.
+2. **At the callback:** the callback session's verified issuer (`session.serverMetadata.issuer`, returned at
+   infrastructure/pds/oauth/sign-in.ts:156) must still equal the own issuer exactly. The library has already checked
+   the response's `iss` against the stored state and the token's `sub` against that issuer (sign-in.ts:7-9;
+   @atproto/oauth-client 0.8.9, oauth-client.js:155-223). The token response carries no `iss`. Otherwise refuse and
+   store no session.
 3. **Config:** the own issuer is required config, derived from `PDS_HOST`. A test PDS configures it under test. It
    applies in every env, and there is no switch to turn it off.
 4. **What stays:** the scope fallback (sign-in.ts:70-77). It is unrelated.

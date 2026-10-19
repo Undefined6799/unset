@@ -2494,7 +2494,7 @@ ASVS 5.0: the PR names its rows, at least the open-redirect and input-validation
 Done when the reds and the green are shown and check is green.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
-Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.13c, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d, every slice-1 step (phase-1.md Slice 1 list)            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
+Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.13c, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d, every other slice-1 step (phase-1.md Slice 1 list, this exit excluded)            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
 Where: `tests/e2e/slice-1.spec.ts` (Playwright on a production build against the `local` stack),
   `docs/human/features/sign-in.md`, `docs/ai/slices/slice-1-review.md`
 Size: ~120 test lines, ~150 lines of documentation
@@ -2502,7 +2502,8 @@ Size: ~120 test lines, ~150 lines of documentation
 Goal: prove the first slice works end to end, check its architecture against the boundary rules, write down what
 was learned, and fix problems before any other slice is built (guideline §12).
 
-Inputs: every slice-1 step merged (`01-outline.md`, "Slice 1"); P1.29's `local` env (`PDS_HOSTNAME=pds.unset.localhost`,
+Inputs: every other slice-1 step merged (`01-outline.md`, "Slice 1"); P1.29's `local` env
+(`PDS_HOSTNAME=pds.unset.localhost`,
   never reachable from outside) with two fixed test accounts, `alice.unset.im` and `bob.unset.im`, made once by hand
   (ADR 0023; Alex, 2026-10-17, B). This step does not create an account and does not name passwords, DIDs or mailbox
   addresses. Password, DID, and email live only on the PDS, the same place as any other user's. The app does not keep
