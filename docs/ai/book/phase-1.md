@@ -75,15 +75,15 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
   P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
   P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
-  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u,
-  P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g,
-  P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022;
-  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h, P2.11,
-  P2.11a–P2.11d, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z
-  (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus).
-  P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and test-helper follow-ups, start only
-  after P2.13a's scenario passes locally. Fixes for holes already on main are exempt. Built PRs still get verified and
-  may merge, and a lane may finish a fix it already started on an open PR.
+  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m,
+  P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
+  P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR
+  0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h, P2.11,
+  P2.11a–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the slice exit P2.13a. Order from
+  2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit
+  2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and
+  test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are exempt.
+  Built PRs still get verified and may merge, and a lane may finish a fix it already started on an open PR.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -682,8 +682,10 @@ flowchart LR
   P1_36k["P1.36k dev-only runtime keys refused outside local"]
   P1_36l["P1.36l zero commit refused under dev"]
   P1_27s --> P1_36l
-  P1_36p["P1.36p PDS temp blob tmpfs capped"]
+  P1_36p["P1.36p PDS /tmp capped, blob limits pinned"]
   P1_36h --> P1_36p
+  P1_37g["P1.37g PDS temp blob sweep checked"]
+  P1_36p --> P1_37g
   P1_36q["P1.36q exact secret set in pds.env"]
   P1_36g --> P1_36q
   P1_36r["P1.36r checkout-built migrate refused under dev"]
@@ -9041,29 +9043,44 @@ snippet reaching prod or local. Answered by the per-profile snippet map and the 
 
 ---
 
-### P1.36p — Cap the PDS temp blob tmpfs
+### P1.36p — Cap the PDS /tmp and pin blob limits
 Tags: [SEC]            Depends on: P1.36h
 Slice 1, product (`deployment/compose.dev.yaml`, `deployment/compose.local.yaml`, `deployment/preflight/`), lane the
-third thread, a staging go-live blocker; book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's section
-labelled 04:20Z (N2a) and 04:35Z. Issue #1030.
+third thread, a staging go-live blocker. Issue #1030. Book edit 2026-10-19-alex-cards-and-edge-dev-mode, "P1.36p
+(#1030) restated after architecture 04:53Z", which replaces the earlier What and its numbers.
+
+In @atproto/pds 0.5.37, temporary blobs go to `<PDS_BLOBSTORE_DISK_LOCATION>/tempt` on the pdsdata volume
+(dist/disk-blobstore.js:15-16, config.js:71-76), and to /tmp only if `PDS_BLOBSTORE_DISK_TMP_LOCATION` is set.
 
 **What:**
-- The PDS's temp blobs at `/tmp/pds/blobs` get a tmpfs of their own: `size=20m,mode=0700`, owned by the PDS user
-  (uid and gid 1000). That is 4 (the fixed concurrency, named once as a constant) times the pinned upload limit, and
-  never larger; `pds_blob_tmpfs_is_four_times_the_limit` ties the two, so the size changes with the limit. Any other
-  `/tmp` tmpfs the PDS keeps is capped too (today one uncapped `/tmp` at mode 1777, compose.dev.yaml:97-98, and the same
-  in compose.local).
-- `PDS_BLOB_UPLOAD_LIMIT` becomes one exact value in the env map, 5242880 (5 MiB). The floor check that it is at least
-  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays. Phase 4's 60 MB video master is above this pin, so the Phase 4
-  step that sets `VIDEO_MASTER_MAX_BYTES` moves the limit, the tmpfs size and their tie test together (P4.02; book edit
-  2026-10-19-alex-cards-and-edge-dev-mode, 04:35Z).
-- Preflight checks both under local and dev.
-- Reds: the blobs tmpfs without `size=`; a `size=` above the cap; a mode other than 0700; a missing or different
-  upload limit.
+- The PDS's /tmp tmpfs is capped at `size=20m`, and its mode stays 1777. There is no blob tmpfs. TMPFS_TARGETS keeps
+  its two entries.
+- `PDS_BLOB_UPLOAD_LIMIT=5242880` is pinned exactly in the env map. The floor check that it is at least
+  `VIDEO_MASTER_MAX_BYTES` (settings.ts:131-133) stays, and P4.02 moves the pin when it sets the video master size.
+- `PDS_BLOBSTORE_DISK_TMP_LOCATION` is pinned absent.
+- Preflight checks the two exact values under local and dev.
+- Reds: (1) setting `PDS_BLOBSTORE_DISK_TMP_LOCATION` fails; (2) any `PDS_BLOB_UPLOAD_LIMIT` other than 5242880
+  fails; (3) a /tmp size other than 20m fails.
 
-Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): memory exhaustion from
-concurrent large uploads by invited accounts. Answered by the capped tmpfs and the pinned limit, both checked by
-preflight.
+Threats: temporary blobs moved to RAM or another path unreviewed (red 1); an upload limit raised silently (red 2).
+Uploads that are never committed pile up on disk, bounded by the volume and watched by the existing `disk` alert
+class. P1.37g follows up.
+Done when the reds are shown and check is green.
+
+### P1.37g — Check whether the PDS sweeps temporary blobs
+Tags: [SEC]            Depends on: P1.36p
+Slice 1, issue #1080, research only (no code), lane the third thread. It is not a go-live blocker, because the `disk`
+alert covers the risk until it lands. Book edit 2026-10-19-alex-cards-and-edge-dev-mode, "P1.36p (#1030) restated
+after architecture 04:53Z".
+- Read @atproto/pds at the pinned version, and say whether it sweeps uncommitted blobs from `tempt`, when, and at what
+  age, citing file:line in the pinned dist.
+- Write the answer as a note (docs/ai/notes, or a record in unset-plan) with a `code:` anchor to the pin. It names the
+  version it read, and is re-checked whenever the PDS pin changes.
+- If it sweeps, the step closes with the note. If it doesn't, the lane brings a sweep design to architecture. It never
+  adds a cron that deletes inside the PDS's data unreviewed.
+Threats: uncommitted temporary blobs filling the pdsdata volume. Answered for now by the `disk` alert; the note says
+whether the PDS bounds them itself.
+Done when the note cites the pinned source, and, if there is no sweep, architecture has the design question.
 
 ---
 

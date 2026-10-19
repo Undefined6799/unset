@@ -110,11 +110,11 @@ and this table is the only place to change.
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
 Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08h, P2.11,
-P2.11a–P2.11d, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once
-their own dependencies merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice
-1"). The rest of this file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built
-after slice 2 and the i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build
-order, except those four (book edit 2026-10-14-verify-834-fixes, S5).
+P2.11a–P2.11e, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c, P2.13d and the slice exit **P2.13a**, in that order,
+once their own dependencies merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`,
+"Slice 1"). The rest of this file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is
+built after slice 2 and the i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in
+build order, except those four (book edit 2026-10-14-verify-834-fixes, S5).
 Pulled forward after P2.13a and before P1.34 (Alex, "Set up now", 2026-10-14T20:45:26Z; book edit
 2026-10-13-verify-819-fixes, Q3 and the keyless mapping): P1.27s, then P2.26e, P2.26b, P2.26c and P2.26d, so the
 home-server stack runs only signed, mirrored images.
@@ -128,9 +128,9 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08h, P2.11, P2.11a–P2.11d, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
-user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they
-say "catalog key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and
+(P2.01–P2.08, P2.08b–P2.08h, P2.11, P2.11a–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d, P2.13a) keep
+their user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where
+they say "catalog key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and
 Playwright tests run English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in
 the i18n slice (P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`,
 "Slices") converts every module first and adds French to these tests; no French page ships before it. The Phase 2 exit
@@ -168,11 +168,12 @@ flowchart TD
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
   P211a --> P211b[P2.11b auth_dead counter]; P211a --> P211c[P2.11c auth_dead bound reworded]
-  P211a --> P211d[P2.11d cached recheck capped]; P211c --> P211d
+  P211a --> P211d[P2.11d cached recheck capped]; P211c --> P211d; P211c --> P211e[P2.11e revoke bound wording]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
   P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]; P212a --> P212c[P2.12c welcome axe gaps]
   P213 --> P213c[P2.13c settings shell, links]; P208b --> P213c
+  P125f[P1.25f feed mode, footer prefs] --> P213d[P2.13d sign-in theme keeps next]
   P213 --> P213a[P2.13a slice 1 exit]; P213c --> P213a; P208 --> P213a; P212 --> P213a
   P115 --> P212; P137 --> P215; P213a --> P226; P138[P1.38 Phase 1 exit] --> P226
   P116 --> P214[P2.14 identity seam]; P203 --> P214
@@ -2072,6 +2073,10 @@ until P1.33p". The PR body says no behaviour changes. P1.33p carries the forced-
 config comment use architecture's 04:29Z wording, with the last sentence as amended at 04:31Z (book edit
 2026-10-19-auth-dead-gate).
 Done when check is green.
+As built: #1065 merged at a5d0b94 (04:38:02Z) with the pre-04:29Z wording; P2.11e corrects config.ts and http.md on
+main. The ruled wording (04:29Z) leaves out the step's "token life plus EMAIL_RECHECK_S" formula for other PDSes. That
+window stays unresolved until P1.33p's forced refresh, and P1.36v keeps other PDSes from signing in until then (book
+edit 2026-10-19-auth-dead-gate, verify-1065 N7).
 
 ### P2.11d — Cap a cached recheck during PDS outages
 Tags: [SEC]            Depends on: P2.11a, P2.11c
@@ -2080,15 +2085,42 @@ architecture's #1065 ruling". A tightening, so it needs no card or typed line. I
 it splits that part out.
 - A cached email-recheck confirmation is used for at most 4 × `EMAIL_RECHECK_S` (3,600 s at the 900 s cap). The cap is
   computed from the config value, never hardcoded.
-- After the cap, while the recheck keeps failing as `transient`, every page that needs the confirmation shows the
-  PDS-unavailable page. The session row is kept, and nothing ends: a PDS outage never signs anyone out.
+- After the cap, on every `transient` outcome of the recheck, every page that needs the confirmation shows the
+  PDS-unavailable page. That covers 429s, and 401s while a token set is still stored (pds-call.ts:126, :142, :148-152
+  and :154), not only an unreachable PDS. The session row is kept, and nothing ends: a PDS outage never signs anyone
+  out. `auth_dead`, `scope_missing` and `rejected` keep their P2.11a handling (verify-1065 N6).
 - A recheck that succeeds after the cap restores normal pages. auth_dead still ends sessions as P2.11a says.
 - Reds: (1) a recheck failing past the cap shows the unavailable page, and the session row is intact; (2) a success
-  after the cap restores normal pages; (3) a transient failure inside the cap still serves the cached result.
+  after the cap restores normal pages; (3) a transient failure inside the cap still serves the cached result; (4) a
+  429 past the cap, and (5) a 401 with a stored token set past the cap, each show the unavailable page with the
+  session row intact.
+- **Item 4 (verify-1065 M1):** the test comments at config.test.ts:66-67 and
+  tests/integration/http/email-recheck.test.ts:3-4 state the 900 s bound with no transient caveat. Both are reworded
+  to the 04:29Z ruling: at most 900 s while rechecks succeed, and while the PDS can't be reached, the cached result is
+  kept, up to this step's cap. Comment-only, in the same PR (book edit 2026-10-19-auth-dead-gate, 04:38Z).
 Threats: a PDS kept unreachable stretches a revoked grant's window without limit. The cap bounds what is served, and
 the fail-closed side is the unavailable page, never a sign-out.
 ASVS 5.0: the PR names its rows, at least the session-termination row.
 Done when the reds are shown and check is green.
+
+### P2.11e — Correct the revoke-bound wording on main
+Tags: [SEC]            Depends on: P2.11c
+Slice 1, issue #1077, comment and notes only (`interfaces/http/config.ts`, `docs/ai/notes/area/http.md`), with no
+behaviour change, lane Phase 1. Book edit 2026-10-19-auth-dead-gate, "P2.11e and P2.11c's As built". It needs no card
+or typed line. #1065 merged before the corrected wording was pushed, so main overclaims at config.ts:65-68 and
+http.md:81-87: no transient caveat, and it implies that foreign sign-in is closed.
+1. Both places use architecture's 04:29Z wording, with its final sentence replaced by the 04:31Z version, word for
+   word.
+2. **verify-1065 N1:** config.ts:65-66 loses the "so 900 … is the maximum" non-sequitur. The 900 cap's reason is the
+   revocation window, and the comment says so in that order.
+3. **verify-1065 N3:** http.md:86-87 says what the tests actually pin. email-recheck.test.ts:66-75 stubs the client,
+   and nothing pins the PDS-side chain, so the note names it as unpinned and cites the source chain (N2: pds 0.5.37
+   dist/context.js:276; oauth-client 0.8.9 oauth-session.js:73-82 and session-getter.js:139-168).
+Threats: a comment that overclaims a security bound leads a later change to rely on it. The text claims only what main
+does.
+Overlap: P2.11d item 4 covers the two test comments; this step covers config.ts and http.md. Whichever lands second
+merges main first.
+Done when the PR quotes both rulings and check is green. Red evidence is n/a, because it is wording only.
 
 ### P2.15 — Legal paperwork part 2
 Tags: (none; content needs Alex's approval through the PR and two inputs, see checklist)            Depends on: P1.25, P1.37            Plan: §6 "Legal paperwork", "Privacy notice", "Invite-country rule", "Canadian law"; §5.3 interstitial; §5.8 fingerprints
@@ -2408,14 +2440,15 @@ Tags: (none)            Depends on: P2.13, P2.08b (for the issuer link)
 Slice 1, issue #992, product, lane Phase 2. **It comes first for staging.** Book edit 2026-10-19-five-step-audit, with
 the drop of the confirmation test (2026-10-19-drop-sign-out-everywhere, "Knock-on effects").
 **What:**
-1. Add `SettingsShell({active, children})` with Profile, Privacy, Invites, Account (`PdsAccountLink`) and Language
-   and theme. The "Language and theme" section is P1.25f's PrefsForms moved here (Alex's "Settings + footer",
-   02:59:37Z): a zero-JS form POST that sets the prefs cookie behind the CSRF and Origin gates, with its design-sheet
-   entry approved by Alex first. P1.25f keeps the footer form (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
-   "Order fixes from Codex on #1037").
+1. Add `SettingsShell({active, children})` with Profile, Account (`PdsAccountLink`) and Language and theme. It
+   writes no link to a route that is not on main: P2.22 adds Privacy and P2.10 adds Invites, each with a test that the
+   link resolves (book edit 2026-10-19-codex-1063-batch66, Codex 4). The "Language and theme" section is P1.25f's
+   PrefsForms moved here (Alex's "Settings + footer", 02:59:37Z): a zero-JS form POST that sets the prefs cookie behind
+   the CSRF and Origin gates, with its design-sheet entry approved by Alex first. P1.25f keeps the footer form (book
+   edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order fixes from Codex on #1037").
 2. `/settings` answers with a 303 to `/settings/profile`, and the query string is kept.
 3. The account page gains:
-   - the Edit profile, Privacy and Invites links;
+   - the Edit profile link (Privacy and Invites come with P2.22 and P2.10);
    - "Your account on {host}" through `PdsAccountLink` with the recorded issuer (from P2.08b), not one built by hand
      from `PDS_HOSTNAME` (Me.tsx:19);
    - the `Avatar` initials fallback;
@@ -2433,6 +2466,32 @@ Done when these tests pass and check is green:
   issuer's origin) and that element's text node (architecture 02:25Z);
 - the account page in the P1.26 axe matrix in both themes. Today `tests/e2e/pages.ts:65-67` lists it as not a
   document. English only until the i18n slice.
+
+### P2.13d — Keep next and handle after a sign-in theme change
+Tags: [SEC]            Depends on: P1.25f
+Slice 1, issue #1076, product (`interfaces/http`), lane Phase 2. Book edit
+2026-10-19-adr-status-check-and-signin-theme, from architecture's 04:50Z ruling on verify-1066-89624f3 M2. It touches
+no trusted-base or check path, and shared/http's returnPath and DENIED_TARGETS stay unchanged; if the lane finds a
+trusted path, it stops and tells the step book. It needs no card or typed line.
+**What:** the prefs route's POST gets its own closed exception.
+- The target is exactly `/login` or `/login/continue`, compared as strings on the path.
+- The query is rebuilt from `next` only, re-validated by safeReturnPath and dropped if invalid, and from `handle`
+  only, kept if it passes the existing handle syntax check and dropped otherwise.
+- Every other parameter is dropped, and every other /login-prefixed path falls back to `/`.
+- Every non-login target still goes through returnPath unchanged.
+Reds: (1) `/login?next=https://evil.example` returns `/login` with no next; (2) `/login/continue?handle=<script>` drops
+the handle; (3) `/login/other` and `/loginx` fall back to `/`; (4) `/login?next=/me&extra=1` keeps next and drops
+extra; (5) a target with a fragment or a double slash falls back.
+Green: the theme is applied, and the visitor lands back on the sign-in page with their valid next and handle.
+Threats:
+- An open redirect through the theme form's return target. Only two exact paths are accepted, and next goes back
+  through safeReturnPath.
+- A reflected script via handle. The handle syntax check drops it, and the output stays escaped.
+- Parameter smuggling into the sign-in flow. The query is rebuilt from two names, never copied.
+- A loosened shared guard. returnPath and DENIED_TARGETS are untouched, and a test asserts they are unchanged for
+  non-login targets.
+ASVS 5.0: the PR names its rows, at least the open-redirect and input-validation rows.
+Done when the reds and the green are shown and check is green.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
 Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.13c, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
@@ -2899,6 +2958,9 @@ Threats: member invites and the public `/join` page that shows a code.
     `signup.rate_limited`).
 
 Done when (tests):
+  - `settings.invites_link_resolves`: the settings shell and the account page gain the Invites link with this step's
+    route, and it answers 200 for a signed-in owner (P2.13c writes no link to a route not on main; book edit
+    2026-10-19-codex-1063-batch66, Codex 4).
   - `invite.issue_ok`: fake `issueInvite` ok → row inserted, code not stored in plaintext (DB scan), redirect `ok`.
   - `invite.country_ack`: rule on, no ack → error code; rule off, no ack → issued.
   - `invite.mapping`: quota/closed/denied/unavailable → matching codes; denied writes one `invite.denied` audit row
@@ -4090,6 +4152,8 @@ Threats: the switches that make a member's data public or private on their PDS.
     (`machine.lock_not_held_during_pds_calls`, `machine.batch_bounds`).
 
 Done when (tests):
+  - `settings.privacy_link_resolves`: the settings shell and the account page gain the Privacy link to
+    `/settings/privacy`, and it answers 200 for a signed-in owner (book edit 2026-10-19-codex-1063-batch66, Codex 4).
   - The account page shows the real profile state, and a failed draft or privacy read answers 503 (P2.13's "when
     present" item; book edit 2026-10-19-five-step-audit).
   (with a fake `CategoryPublisher`; P2.23 brings its own tests)

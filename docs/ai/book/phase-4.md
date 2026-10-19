@@ -562,7 +562,7 @@ Size: ~120 source lines (JSON + limits), ~120 test lines
 **Edge cases and failures:**
 - A field named `caption` (the post text) is confused with `captions` (the WebVTT track) → the docs table and the field descriptions say which is which; the i18n labels are "Description" and "Captions (subtitles)".
 - `VIDEO_MASTER_MAX_BYTES` above the PDS blob limit → the preflight fails the deploy; the lexicon constant is the single source.
-- The 60 MB master is above P1.36p's pinned `PDS_BLOB_UPLOAD_LIMIT` (5242880), so this step moves that pin, the PDS temp-blob tmpfs size (4 x the limit) and their tie test together (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's section labelled 04:35Z).
+- The 60 MB master is above P1.36p's pinned `PDS_BLOB_UPLOAD_LIMIT` (5242880), so this step moves that pin (book edit 2026-10-19-alex-cards-and-edge-dev-mode, architecture's section labelled 04:35Z).
 - P4.01 not answered → the three plan records still ship; only the matrix docs table waits.
 
 **Done when (tests):**
