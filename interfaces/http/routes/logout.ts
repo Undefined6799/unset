@@ -126,13 +126,14 @@ export function logoutRoutes(deps: LogoutDeps): Route[] {
       handler: async ({ request, deadline }) => {
         const session = await deps.readSession(request, deadline);
         if (session === null) return finish("/signed-out", null);
+        // Read before anything is destroyed: the last browser's revoke deletes the token set that records it, and an
+        // overlapping second POST for the same session must carry the same issuer, not find it already gone.
+        const issuer = await recordedIssuer(session.did);
         // A failed delete is a retryable 503 (book P2.08 step 3), and the cookie stays so the retry finds it.
         const remaining = await deps.destroySession(session, deadline).catch((cause: unknown) => {
           throw new AppError("logout.failed", { cause });
         });
         deps.log.info("auth.logout_this_browser");
-        // Read before the revoke below, which deletes the token set that records it.
-        const issuer = await recordedIssuer(session.did);
         // Last browser: revoke outside the transaction. The count saw this delete. No unconfirmed notice (F13).
         if (remaining === 0) await revokeOrDrop(session.did, deadline);
         return finish("/signed-out", issuer);

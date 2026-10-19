@@ -255,7 +255,10 @@ test("logout.no_sign_in_records", async () => {
   expect((await post("/logout", only.cookieValue, "")).headers.get("location")).toBe("/signed-out");
   // The repeat finds no session, the idempotent path, which writes nothing at all.
   expect((await post("/logout", only.cookieValue, "")).headers.get("location")).toBe("/signed-out");
-  expect(lines.map((line) => line.event)).toEqual(["auth.logout_this_browser"]);
+  // The kit's access lines (`http.request`) carry a route class and status, never the DID; checked below with the rest.
+  expect(lines.map((line) => line.event).filter((event) => event !== "http.request")).toEqual([
+    "auth.logout_this_browser",
+  ]);
   expect(JSON.stringify(lines)).not.toContain(owner);
 });
 

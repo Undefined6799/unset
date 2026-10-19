@@ -25,15 +25,14 @@ export type MeDeps = {
 
 export function meRoutes(deps: MeDeps): Route[] {
   /** P2.08b: the account link follows the recorded issuer. An unreadable record drops the link, never the page. */
-  async function recordedIssuer(did: Did): Promise<string | null> {
-    try {
-      const issuer = await deps.issuerOf(did);
-      return issuer === null ? null : issuerOrigin(issuer);
-    } catch (cause: unknown) {
-      deps.log.warn("auth.account_issuer_unknown", { kind: cause instanceof Error ? cause.name : "Error" });
-      return null;
-    }
-  }
+  const recordedIssuer = (did: Did): Promise<string | null> =>
+    deps.issuerOf(did).then(
+      (issuer) => (issuer === null ? null : issuerOrigin(issuer)),
+      (cause: unknown) => {
+        deps.log.warn("auth.account_issuer_unknown", { kind: cause instanceof Error ? cause.name : "Error" });
+        return null;
+      },
+    );
 
   return [
     ...["/did", "/me"].map((path) =>
