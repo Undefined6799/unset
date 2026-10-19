@@ -2032,7 +2032,8 @@ With "sign out everywhere" dropped (P2.08), this is the only way a PDS-side revo
   03:51Z; P2.11c carries the wording).
 - No audit row: session ends are never audited (P1.15; book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order
   fixes from Codex on #1037"; auth-dead-gate, architecture's section labelled 06:15Z). The operational trace is
-  P3.20c's `sessions_ended_auth_dead` counter, with no identity data (P2.11b retired, architecture 07:08Z).
+  P3.20c's `auth_dead_dids_ended` and `auth_dead_sessions_ended` counters, with no identity data (P2.11b retired,
+  architecture 07:08Z).
 - Phase 6 adds the chat end here (P6.04a): the same transaction that runs `destroyAllForDid(tx, did, "auth_dead")`
   inserts one DA-2 outbox job to end every chat session of the DID, for `auth_dead` only (book edit
   2026-10-19-codex-1063-batch66, Codex 3; architecture 07:08Z, Codex item 4 on #1081).
@@ -2056,9 +2057,9 @@ As built: #1051, merged as a839ce6.
 
 ### P2.11b — Count sessions ended on a revoked grant
 Tags: [SEC]            Depends on: P2.11a
-Retired 2026-10-19: moved to P3.20c (architecture 07:08Z). Issue #1052 stays open for P3.20c. The counter
-`sessions_ended_auth_dead` is reported through P3.20c's `ops.report()`, with no identity data. The step leaves the
-slice 1 list and is not reused.
+Retired 2026-10-19: moved to P3.20c (architecture 07:08Z). Issue #1052 stays open for P3.20c. The counters
+`auth_dead_dids_ended` and `auth_dead_sessions_ended` are reported through P3.20c's `ops.report()`, with no identity
+data. The step leaves the slice 1 list and is not reused.
 
 ### P2.11c — Reword the auth_dead sign-out bound
 Tags: [SEC]            Depends on: P2.11a

@@ -2788,14 +2788,15 @@ Outputs (contract):
   - `ops.metric(name PK, value double precision, reported_at, source_role)`; definer `ops.report(name, value)`
     with the name-to-role mapping written as a fixed `CASE` inside the function (no mapping table): `indexer` →
     `tap_lag_seconds_relay`, `tap_lag_seconds_own`, `ingest_dead_letters`, `track_queue_depth`,
-    `account_jobs_overdue`; `web` → `sessions_active`, `sessions_ended_auth_dead`; `media` → `media_cid_mismatch`;
-    `auditor` → `audit_chain_ok_*`, `audit_head_*`. A string value is impossible (numeric column). These per-service
-    health signals sit beside `metrics_daily` by Alex's decision 35 D9 (2026-10-04; decision 17 clarified): never per
-    user (no DID, IP or handle in a name or value), and `ops.metric` has a row in the retention table (latest value
-    only, overwritten; P5.09) and a line in the RoPA (P1.36, P5.12).
-  - `sessions_ended_auth_dead` (moved from the retired P2.11b, architecture 07:08Z; issue #1052): P2.11a's
-    `auth_dead` path reports the DIDs whose sessions were ended and the sessions ended. No identity data, no audit
-    row (P1.15); a transient failure raises nothing.
+    `account_jobs_overdue`; `web` → `sessions_active`, `auth_dead_dids_ended`, `auth_dead_sessions_ended`; `media` →
+    `media_cid_mismatch`; `auditor` → `audit_chain_ok_*`, `audit_head_*`. A string value is impossible (numeric column).
+    These per-service health signals sit beside `metrics_daily` by Alex's decision 35 D9 (2026-10-04; decision 17
+    clarified): never per user (no DID, IP or handle in a name or value), and `ops.metric` has a row in the retention
+    table (latest value only, overwritten; P5.09) and a line in the RoPA (P1.36, P5.12).
+  - `auth_dead_dids_ended` and `auth_dead_sessions_ended` (moved from the retired P2.11b, architecture 07:08Z; two
+    fixed names, architecture 19:32Z, real UTC; issue #1052): P2.11a's `auth_dead` path reports the DIDs whose
+    sessions it ended and the sessions it ended. Counts only, with no DID, IP or label value; no audit row (P1.15); a
+    transient failure raises nothing.
   - `open_hosted_blocks` for the digest: the count of `age_gate.blocked` audit rows with reason `age_gate_hosted`
     that have no matching succeeded `deactivate` or `takedown` outcome in `pds-admin`'s log. "Handled" is derived,
     never set by hand; until P3.16 lands, every such row stays open (Codex item 5 on #1081, architecture 07:08Z).
@@ -2833,8 +2834,9 @@ Edge cases and failures: `ops.report` for a name the role does not own → raise
 outside switch alerts (P3-B2).
 
 Done when (tests):
-  - `ops-report-name-ownership`; `ops-numeric-only`; `ops_auth_dead_counter_once` (one revoke raises
-    `sessions_ended_auth_dead` once, writes no audit row; a transient failure raises nothing);
+  - `ops-report-name-ownership`; `ops-numeric-only`; `ops_auth_dead_counters` (one revoked DID with 3 sessions
+    moves `auth_dead_dids_ended` by 1 and `auth_dead_sessions_ended` by 3, and writes no audit row; a transient
+    failure raises nothing);
     `digest_counts_open_hosted_blocks`; `digest_clears_handled_block`; `digest_ignores_non_matching_outcome` (an
     outcome for another target leaves the count unchanged); `alert-outbox-class-ownership`;
     `alert-outbox-delivered-once`.
