@@ -45,16 +45,26 @@ throwaway stack stays on `.localhost`. It is not this system.
 The development system runs on Alex's homelab and is reachable on the tailnet only, with invites still
 required. Alex chose "Tailnet only" on 2026-10-19 at 02:05:05Z on the card "Choose who can reach
 staging on your homelab during live tests". Architecture ruled on its names and certificates on
-2026-10-19 at 02:35Z:
+2026-10-19 at 02:35Z, and on 2026-10-19 at 03:24Z added that staging tests only accounts on its own PDS.
+Sign-in by an account hosted on another PDS is out of scope on tailnet staging until P1.33p opens it, because
+the lexicon authority's record is read from this PDS and no public read path to it exists; opening one is its
+own step, with its own ruling and Alex's word, since it changes "tailnet only".
 
 - TLS for the `staging.unset.*` names is Let's Encrypt with the DNS-01 challenge, validated through a
   delegated zone: `_acme-challenge.staging.unset.*` is a CNAME into a dedicated validation zone, and the
   edge's DNS token can write only that zone, never the product zones. The local development root is not
   used for these names.
 - The tailnet's split DNS serves the staging names, answering with the homelab's tailnet addresses.
-- Public DNS holds only the `_acme-challenge` CNAMEs for these names, plus the record of the
-  client-metadata host if Alex agrees to the split-horizon arrangement for the PDS's metadata fetch.
-  That is a separate card, after P1.33z's probe, and is not decided by this record.
+- Public DNS holds, for these names, only the `_acme-challenge` CNAMEs and the CAA records below, plus
+  the record of the client-metadata host if Alex agrees to the split-horizon arrangement for the PDS's
+  metadata fetch. That is a separate card, after P1.33z's probe, and is not decided by this record.
+- CAA lookup climbs to the closest parent record (RFC 8659), and `unset.ac` stays parked at
+  `CAA 0 issue ";"` until P5.02a, so each staging name carries its own CAA: `staging.unset.sh` and
+  `staging.unset.ac` carry `CAA 0 issue "letsencrypt.org; validationmethods=dns-01"` and
+  `CAA 0 issuewild ";"`; `staging.unset.im` carries the same `issue` record plus
+  `CAA 0 issuewild "letsencrypt.org; validationmethods=dns-01"` for `*.staging.unset.im`, the only staging
+  wildcard. Each record gains `accounturi=` once Alex has created the ACME account (RFC 8657). The parked
+  apex records are unchanged.
 
 The Matrix `server_name` is `unset.cc`. An MXID reads `@localpart:unset.cc`. Chat is served at
 `unset.cc`. There is no delegation from `unset.sh` and no `chat.unset.sh` host.
@@ -119,10 +129,10 @@ unchanged. This record supersedes ADR 0020.
   host and the development hosts until that book is revised.
 - The staging names appear in Certificate Transparency logs. They are already public in this
   record, so the logs reveal nothing new.
-- Let's Encrypt stays the only issuer. DNS-01 is permitted for the dev profile only; production keeps
-  its current challenges. The edge gains exactly one DNS provider module, built and pinned like the
-  other images. Widening C18 to accept DNS-01 under dev is a trusted-base step with Alex's typed line
-  (P1.36e), and the zone-scoped DNS token is a file secret mounted only into the edge (P1.36c).
+- Let's Encrypt stays the only issuer. C18 accepts DNS-01 for the dev profile first (P1.36e);
+  production's handle wildcard `*.unset.im` uses the same delegated-zone pattern when Phase 5 builds it,
+  each with its own typed line. The edge gains exactly one DNS provider module, built and pinned like
+  the other images, and the zone-scoped DNS token is a file secret mounted only into the edge (P1.36c).
 
 ## Compliance
 `shared/config/permanent.test.ts` pins `MATRIX_SERVER_NAME` and `PERMISSION_SET_NSID` to the rows
