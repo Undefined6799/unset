@@ -42,6 +42,20 @@ of one public domain, not a fifth registration. Alex named it on 2026-10-16 22:5
 The development PDS mints `<user>.staging.unset.im` and does not mint `.unset.im`. The local
 throwaway stack stays on `.localhost`. It is not this system.
 
+The development system runs on Alex's homelab and is reachable on the tailnet only, with invites still
+required. Alex chose "Tailnet only" on 2026-10-19 at 02:05:05Z on the card "Choose who can reach
+staging on your homelab during live tests". Architecture ruled on its names and certificates on
+2026-10-19 at 02:35Z:
+
+- TLS for the `staging.unset.*` names is Let's Encrypt with the DNS-01 challenge, validated through a
+  delegated zone: `_acme-challenge.staging.unset.*` is a CNAME into a dedicated validation zone, and the
+  edge's DNS token can write only that zone, never the product zones. The local development root is not
+  used for these names.
+- The tailnet's split DNS serves the staging names, answering with the homelab's tailnet addresses.
+- Public DNS holds only the `_acme-challenge` CNAMEs for these names, plus the record of the
+  client-metadata host if Alex agrees to the split-horizon arrangement for the PDS's metadata fetch.
+  That is a separate card, after P1.33z's probe, and is not decided by this record.
+
 The Matrix `server_name` is `unset.cc`. An MXID reads `@localpart:unset.cc`. Chat is served at
 `unset.cc`. There is no delegation from `unset.sh` and no `chat.unset.sh` host.
 
@@ -68,6 +82,11 @@ unchanged. This record supersedes ADR 0020.
   `staging.unset.*`.
 - Register a separate domain for development. Rejected: development is a label under the four
   public domains.
+- Issue the staging certificates from the local development root. Rejected: that root is
+  name-constrained to `.localhost` (P1.35p), so it cannot issue for `staging.unset.*`, and a second
+  root installed on testers' devices is a far larger trust grant than a public certificate.
+- Resolve the staging names in public DNS to the homelab. Rejected: the system is tailnet only, so
+  public DNS carries only what certificate validation needs.
 
 ## Consequences
 - Phase 6 reads `MATRIX_SERVER_NAME` for every production MXID. A later change, after an account
@@ -98,6 +117,12 @@ unchanged. This record supersedes ADR 0020.
   prototype host `0x40.space` needs the retirement report stays as it is.
 - The step book still spells the old hosts. This record wins for the handle domain, the chat
   host and the development hosts until that book is revised.
+- The staging names appear in Certificate Transparency logs. They are already public in this
+  record, so the logs reveal nothing new.
+- Let's Encrypt stays the only issuer. DNS-01 is permitted for the dev profile only; production keeps
+  its current challenges. The edge gains exactly one DNS provider module, built and pinned like the
+  other images. Widening C18 to accept DNS-01 under dev is a trusted-base step with Alex's typed line
+  (P1.36e), and the zone-scoped DNS token is a file secret mounted only into the edge (P1.36c).
 
 ## Compliance
 `shared/config/permanent.test.ts` pins `MATRIX_SERVER_NAME` and `PERMISSION_SET_NSID` to the rows
