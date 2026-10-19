@@ -2672,10 +2672,10 @@ Done when the P0.09c probe classifies P4.07g's `retention` EXECUTE grants as `tr
 Where, as built: the probe test `scripts/guards/grant-isolation.test.ts`, which #867 added under the directive's rules 3
 and 4 and the Done-when (book edit 2026-10-14-verify-867-notes, N3).
 
-Under ADR 0022 the definers live in `migrations-trusted/`, trusted by path; the trusted-functions list is the second
-lock, refusing the same names in the product `migrations/` stream, so a product migration cannot shadow or redefine a
-trusted function even though migrator lacks the owner role (book edit 2026-10-14-verify-867-notes, "Architecture's
-answer").
+Under the guarded-schemas ADR (numbered when it opens) the definers live in `migrations-trusted/`, trusted by path; the
+trusted-functions list is the second lock, refusing the same names in the product `migrations/` stream, so a product
+migration cannot shadow or redefine a trusted function even though migrator lacks the owner role (book edit
+2026-10-14-verify-867-notes, "Architecture's answer").
 
 ---
 
@@ -2715,9 +2715,10 @@ Also (verify-867-649c77a N1; book edit 2026-10-14-verify-867-notes): the probe a
 (`core.*`, `core.close_*`, `*close_expired_hold`). This step adds one `arrayContaining` assertion on the exact names. It
 is a tightening in `scripts/guards`, which this step already touches, and the typed line below covers it.
 
-This book text lags #826 on purpose: the guarded-schemas rewrite enters the book only after the plan thread's ADR 0022
-docs PR merges, which waits on Alex's typed line "yes guarded schemas ADR docs/ai/PLAN.md docs/human/decisions" (book
-edit 2026-10-14-guarded-schemas-steps; book edit 2026-10-14-verify-857-fixes, S4). Until then the body above stands.
+This book text lags #826 on purpose: the guarded-schemas rewrite enters the book only after the plan thread's
+guarded-schemas ADR (numbered when it opens) docs PR merges, which waits on Alex's typed line "yes guarded schemas ADR
+docs/ai/PLAN.md docs/human/decisions" (book edit 2026-10-14-guarded-schemas-steps; book edit
+2026-10-14-verify-857-fixes, S4). Until then the body above stands.
 
 Lane: Phase 2, which handles check paths, like P0.09w and P0.09x. It needs Alex's typed line "yes P0.09y
 .github/CODEOWNERS scripts/guards scripts/workspace" (book edit 2026-10-14-verify-843-notes). It replaces both earlier

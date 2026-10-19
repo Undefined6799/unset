@@ -73,11 +73,11 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f, P1.33o, P1.33j,
   P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y, P1.35a, P1.35f,
   P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.35t, P1.33z, P1.35w, P1.36f, P1.35y,
-  P1.35z, P1.35x, P1.36d, P1.36e, P1.36b, P1.36c, P1.36g, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s,
-  P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b,
-  P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built).
-  Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b, P2.08c, P2.08d, P2.11, P2.15, P2.12, P2.12a, P2.13,
-  P2.13c and the slice exit P2.13a.
+  P1.35z, P1.35x, P1.36d, P1.36e, P1.36b, P1.36c, P1.36g, P1.36i, P1.36j, P1.36k, P1.36l, P1.33n, P1.34t, P1.33m,
+  P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f,
+  P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR
+  0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b, P2.08c, P2.08d, P2.11,
+  P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c and the slice exit P2.13a.
   Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book
   edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard
   and test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are
@@ -653,6 +653,12 @@ flowchart LR
   P1_36c["P1.36c dev edge DNS token and app site wired"]
   P1_36b --> P1_36c
   P1_36g["P1.36g dev mail and first-invite runbook"]
+  P1_36i["P1.36i dev edge aliases and public paths"]
+  P1_36b --> P1_36i
+  P1_36j["P1.36j dev edge trusts only Newt"]
+  P1_36b --> P1_36j
+  P1_36k["P1.36k dev-only runtime keys refused outside local"]
+  P1_36l["P1.36l zero commit refused under dev"]
   P1_35b["P1.35b host-pin security review owner"]
   P1_35c["P1.35c depcruise rows and export checks pinned"]
   P1_35e["P1.35e built image scanned, not a rebuild"]
@@ -6526,7 +6532,9 @@ Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
 1. Ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
    asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
 2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
-3. The app-page footer slot holds `PrefsForms`. LanguageLinks stays with P1.22b.
+3. Held for Alex's card on PrefsForms placement (architecture 03:55Z recommends a "Language and theme" section in
+   Settings, with the footer form kept on default-shell pages); the step book updates this item on his answer.
+   LanguageLinks stays with P1.22b. The favicons in item 1 wait on Alex's files; nothing is drawn by hand.
 4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
    Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
    Each has a test.
@@ -6709,8 +6717,8 @@ reduced default below and the push, sign and attest work is **P1.27s**:
   `images_skip_only_without_dockerfile`, `mirror_list_digest_only` (`scripts/ci/image-workflows.test.ts`);
   `trivyignore_expiry_enforced` (`scripts/ci/trivyignore.ts`, 90-day expiry); `scripts/docs/change-shape-config.test.ts`
   gains `images` unless that also waits for P1.27r. `tlog_upload_never_disabled` (it replaces
-  `no_tlog_upload_flag_present`; superseded by ADR 0023, keyless) and the sign job's `workflow_permissions_minimal`
-  move to P1.27s.
+  `no_tlog_upload_flag_present`; superseded by the keyless signing ADR (written by P1.27s; numbered when it opens)) and
+  the sign job's `workflow_permissions_minimal` move to P1.27s.
 - Until P1.27s lands nothing is published to GHCR, so no unsigned image exists anywhere a deploy could pull it (fail
   closed). P1.30's preflight and P2.26a deploy only images `verify-images` accepts.
 - If Actions minutes run short once the Dockerfile lands, the fix is change detection inside the job, so the required
@@ -6814,8 +6822,8 @@ managers for the lock files. The repeatable procedure:
 **Tags:** [SEC] · **Depends on:** P1.27q, P1.04, P0.07 · **Plan:** §2 rule 23, §6.1 SLSA row ("`cosign verify` and `gh attestation verify` in the deploy preflight"), §8 Phase 0 ("images signed with cosign plus SLSA provenance"), §7 (CI); review 04-infra
 
 **Where:** `deployment/images/node-app.Dockerfile`; `.dockerignore`; `.github/workflows/{images.yml, mirror.yml}`;
-`deployment/images.lock.json`; `deployment/mirror.list.json`; `deployment/cosign.pub` (superseded by ADR 0023,
-keyless: no `cosign.pub` exists); `.trivyignore.yaml`; `.hadolint.yaml`;
+`deployment/images.lock.json`; `deployment/mirror.list.json`; `deployment/cosign.pub` (superseded by the keyless signing
+ADR, written by P1.27s and numbered when it opens: no `cosign.pub` exists); `.trivyignore.yaml`; `.hadolint.yaml`;
 `scripts/ci/verify-images.ts` (lands in P1.27q); `docs/human/decisions/NNNN-image-signing-private-repo.md`; `.github/required-checks.json` (appends the
 image build and scan jobs, with P0.07's Alex tail; phase-0 note 1). This is the repository's first job with a secret
 (the `signing` environment below), so it follows P0.07's environment rule; Alex creates the environment.
@@ -6826,11 +6834,11 @@ image build and scan jobs, with P0.07's Alex tail; phase-0 note 1). This is the 
 was scanned, carries an SBOM and SLSA provenance, and is signed with our key without publishing anything about
 the private repository.
 
-**Superseded by ADR 0023 (keyless signing; written by P1.27s, accepted when Alex merges it).** Alex tapped "Keyless" at
-2026-10-14T21:16:36Z on the card "Sign our images with GitHub's identity (keyless), or with a key you keep?" (book edit
-2026-10-13-verify-819-fixes). The key-pair text below (the signing design, `cosign.pub`, the key custody,
-`--tlog-upload=false`, `--insecure-ignore-tlog`, Alex's key checklist and the `no_tlog_upload` tests) is history;
-P1.27s, P2.26e and P2.26b carry the keyless design.
+**Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens; accepted when Alex merges it).**
+Alex tapped "Keyless" at 2026-10-14T21:16:36Z on the card "Sign our images with GitHub's identity (keyless), or with a
+key you keep?" (book edit 2026-10-13-verify-819-fixes). The key-pair text below (the signing design, `cosign.pub`, the
+key custody, `--tlog-upload=false`, `--insecure-ignore-tlog`, Alex's key checklist and the `no_tlog_upload` tests) is
+history; P1.27s, P2.26e and P2.26b carry the keyless design.
 
 **Signing design (provisional — Alex question P1b-A3; recommendation (a)):** while the repo is private, sign with
 **cosign using a key pair and no transparency log**. Why not the alternatives:
@@ -8385,8 +8393,8 @@ classifications still hold, and check is green.
 Tags: [SEC] check [ALEX] (typed line)            Depends on: P1.34d
 Slice 1, issue #983, check paths (`.github/workflows/`, `scripts/ci/`), SE-6 alone (no product, no trusted base),
 kind/ci, lane the third thread. P1.33z depends on it. Book edit 2026-10-19-p135t-local-stack-ci-job, with
-architecture's 02:15Z ruling on D1-D5 and its 02:45Z ruling on the probe gate, both folded in below. Needs Alex's typed
-line: "yes P1.35t .github/workflows/local-stack.yml scripts/ci".
+architecture's 02:15Z ruling on D1-D5 and its 02:45Z ruling on the probe gate, both folded in below. Alex's go is his
+"ok for 1.35t then" (2026-10-19 02:13:45Z; book edit 2026-10-19-p135t-local-stack-ci-job, last section).
 
 Threats (SE-1; the PR expands this to one screen and updates the ASVS 5.0 rows): a CI job that holds generated secrets
 and runs containers on pull-request code. Answered by: no repository secret, read-only token, generated values never
@@ -8526,7 +8534,9 @@ accepts `APP_HOST` only as ADR 0025's accepted app name, one exact string (not a
 (P1.34z's); if that allowlist lives in `deployment/preflight/`, P1.36c adds the two entries there. Prod stays refused
 until a ruling of its own. Local is unchanged. The PDS-site rules apply to the app site, its TLS is P1.36e's, and the
 edge-only PDS neighbour rule (P1.34d option C) applies under dev unchanged. Reds: any other host under dev, any other
-upstream under dev, and either one under prod.
+upstream under dev, and either one under prod. Alex's Pangolin reaches the edge through Newt with SNI
+`staging.unset.sh`: Newt connects to the edge's existing loopback bind, and no new port is published (book edit
+2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling").
 
 ---
 
@@ -8579,6 +8589,77 @@ so nothing is needed from Alex for the step itself.
 
 Done when, red first: dev with no mail URL fails, a literal SMTP password fails, and (if narrowed) Mailpit under dev
 fails. Check is green.
+
+---
+
+### P1.36i — Pin the dev edge aliases and public paths
+Tags: [SEC]            Depends on: P1.36b
+Slice 1, issue #1018, product (`deployment/compose.dev.yaml`, `deployment/preflight/`, the app's route tests), lane the
+third thread; book edit 2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling" and the
+03:58Z `.ac` mapping. A tightening, so nothing is needed from Alex.
+
+**What:**
+1. Under dev, the edge's network aliases are exactly the PDS host alias. `APP_HOST` is dropped, so the PDS resolves
+   the app name through public DNS (to Alex's Pangolin). Local keeps both aliases. The app still reaches the PDS
+   inside the network, and `NETGUARD_INTERNAL_HOSTS` stays exactly the PDS host (compose.dev.yaml:196).
+2. The P1.34d option C preflight check gains a dev branch: the edge carries exactly the PDS host alias. Under dev,
+   one more alias, or a missing one, fails. Local is unchanged.
+3. A repo test pins that the app serves `/oauth-client-metadata.json` and the client's `jwks_uri` path exactly as
+   oauth-client.ts:133-148 builds them. Those are the two paths Alex's Pangolin rules let past the password (Alex
+   tapped "Allow both" at 2026-10-19 02:44:55Z on "Let two public sign-in files on staging.unset.sh skip the Pangolin
+   password?"). The test also checks that nothing else under them answers without a session. The Pangolin rules
+   themselves are Alex's runbook, not repo code.
+
+Done when the reds pass (an extra dev alias, a missing dev alias, a third public path) and check is green.
+
+---
+
+### P1.36j — Trust only Newt's address at the dev edge
+Tags: [SEC] trusted [ALEX] (typed line)            Depends on: P1.36b
+Slice 1, issue #1019, trusted base (`deployment/edge/`), lane the third thread; book edit
+2026-10-19-staging-tailnet-rulings, "Step-book mapping of the 03:35Z Pangolin ruling". Caddyfile:36 says today "No
+trusted_proxies: nothing sits in front of the edge". Trusting a proxy accepts its forwarded header, so this is a
+loosening. **It needs Alex's typed line:** "yes P1.36j deployment/edge/Caddyfile dev trusted proxy Newt only". It covers
+`staging.unset.ac` too, since both names reach the same edge through Newt.
+
+**What:**
+- Under dev, the edge trusts exactly Newt's fixed source address as its proxy, and takes the client IP from the
+  forwarded header only on that hop.
+- Prod and local stay with no trusted proxy.
+- The app's trust settings, edge to web, stay as they are.
+- Reds: a spoofed X-Forwarded-For from any other source never becomes the client IP the app sees; a second address, a
+  range, or a wildcard in the trusted list fails the reader; per-IP limits key on the real client address.
+
+The Traefik side (no `forwardedHeaders.insecure`, no trusted IPs) is Alex's runbook.
+
+---
+
+### P1.36k — Refuse dev-only runtime keys outside local
+Tags: [SEC]            Depends on: —
+Slice 1, issue #1021, product (`deployment/preflight/` and its tests only; no runtime or trusted-base change), lane the
+third thread; book edit 2026-10-19-p125c-as-built, "Step-book mapping of architecture's 03:50Z sites". A tightening
+(SE-7b).
+
+**What:**
+- `OAUTH_ALLOW_HTTP`, `NETGUARD_ALLOW_LOOPBACK` and `DEV_VITE_ORIGIN` join P1.35r's local-only map, so preflight
+  refuses each one under `--env dev` and `--env prod`.
+- Under dev and prod, every origin-valued key must be `https`.
+- Sites today: oauth-client.ts:128; netGuard.ts:18; shared/http/config.ts:27; config.ts:90; csp/headers.ts:25.
+
+Done when one red per key under dev and under prod passes, an http origin under dev fails, local is unchanged, and
+check is green.
+
+---
+
+### P1.36l — Refuse the zero commit under dev
+Tags: [SEC]            Depends on: P1.27s
+Slice 1, issue #1022, product (`deployment/preflight/`, `deployment/compose.dev.yaml`), lane the third thread; book
+edit 2026-10-19-p125c-as-built, "Step-book mapping of architecture's 03:50Z sites". A tightening.
+
+**What:** under dev, preflight refuses the zero `UNSET_COMMIT` (schema.ts:183). compose.dev.yaml (:62, :176) takes the
+signed image's commit instead of the zero value.
+
+Done when the zero commit under dev fails, the signed commit passes, and check is green.
 
 ---
 
@@ -10381,9 +10462,9 @@ signature from our exact workflow is refused):
   - Removed: `deployment/cosign.pub`, `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`, the KMS option and Alex's key-generation
     item. Alex's setup is only the `signing` environment (branch rule and reviewer), which the agent checks with a
     read-only GitHub API GET.
-  - ADR 0023 records the answer with its question, option and time, and the attestation-availability finding for
-    public repositories, and says that moving back to a key needs a new ADR.
-  - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
+  - The keyless signing ADR (written by P1.27s; numbered when it opens) records the answer with its question, option and
+    time, and the attestation-availability finding for public repositories, and says that moving back to a key needs a
+  new ADR. - cosign is pinned by version and checksum in CI (P2.26b pins it in the preflight).
   - One digest: publish scans, signs and attests the one digest it pushes (book edit
     2026-10-15-verify-863-866-followups, "N7 ruled"; P1.35e does the same for the PR check).
   - The trusted-root fetch: `sigstore-root.yml` has `permissions: contents: read`, no secrets and no environment. It
@@ -11347,8 +11428,8 @@ Checks (C1–C12 in P1.30; C13–C24 in P1.30s, except C17 in P1.30t and C18 in 
 |---|---|
 | C1 | `name:` present and equals `unset-<env>` |
 | C2 | every `image:` is `<our registry>/…@sha256:…` and present in `images.lock.json` with the same digest |
-| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
-| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by ADR 0023 (written by P1.27s; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
+| C3 | every first-party digest verifies with `cosign verify --key deployment/cosign.pub` and has SLSA provenance naming this repo, `main` and `images.yml` (`verify-images`); `gh attestation verify` too if the P1.27 ADR enabled it. Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with publish-images.yml's exact identity and the committed trusted root (P2.26b) |
+| C4 | every upstream (mirrored) digest verifies with `cosign verify --key deployment/cosign.pub` (our mirror signature). Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens; accepted when Alex merges it), from Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?": keyless, with mirror.yml's exact identity and the committed trusted root (P2.26b) |
 | C5 | lock digests are multi-arch index digests (not a per-platform manifest); its registry lookup has a 30 s network timeout (as built, #435) |
 | C6 | PDS env: `PDS_RECOVERY_DID_KEY` present and a valid `did:key` (secp256k1 or P-256) |
 | C7 | PDS env: `PDS_INVITE_REQUIRED=true`; `PDS_CRAWLERS` empty in dev; admin password length ≥ 32; `PDS_RATE_LIMITS_ENABLED` present and exactly `false` (per-IP limits off: the PDS sees one address, the edge's, for everyone; global resolution 1; unset fails too, so a changed upstream default cannot turn them on silently) |
@@ -14799,7 +14880,10 @@ home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-ho
   2026-10-13-local-plc; book edit 2026-10-13-local-plc-a4-steps).
   For staging this is replaced by architecture's 2026-10-19 ruling (b) (book edit 2026-10-19-staging-tailnet-rulings):
   the names are ADR 0025's `staging.unset.*`, with Let's Encrypt DNS-01 through a delegated validation zone (P1.36d,
-  P1.36e, P1.36b, P1.36c), never `int.unset.sh` or the dev root.
+  P1.36e, P1.36b, P1.36c), never `int.unset.sh` or the dev root. `staging.unset.sh` and `staging.unset.ac` are
+  reached through Alex's Pangolin behind one SSO login (Alex, 02:39:57Z and 02:50:36Z; architecture 03:35Z and 04:00Z),
+  with public DNS pointing at Pangolin; Newt carries them to our edge (P1.36b, P1.36i, P1.36j). Tester handles resolve
+  through a public `_atproto.<handle>` TXT record per tester, added through Alex's runbook (architecture 04:05Z, S4).
 - P1.33a's part A report comes before this move: under `--env dev`, C21 applies whatever the hostname
   (architecture's Amendment 6 of 2026-10-13-local-plc, Q1, and Amendment 7, Q1); the `0x40.space` hostname belongs to
   the public opening (P1.33p).
@@ -15430,8 +15514,8 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
 - **P1b-A3 — image signing while the repo is private** (P1.27, P1.30). (a) cosign with a key pair,
   `--tlog-upload=false`, key in a protected environment or KMS, upstream images mirrored into private GHCR and
   signed. **Recommended (provisional, default).** (b) GitHub Enterprise Cloud and GitHub attestations. (c) Keyless
-  cosign to public Rekor, publishing the repo's identity. Superseded by ADR 0023: keyless (c), since the repository
-  is public.
+  cosign to public Rekor, publishing the repo's identity. Superseded by the keyless signing ADR (written by P1.27s;
+  numbered when it opens): keyless (c), since the repository is public.
 - **P1b-A4 — offline keys for the authority** (P1.35). (a) Two offline keys at the top of `rotationKeys`, the primary
   at creation with `--recovery-key`, the backup added by an operation the primary signs. **Recommended
   (provisional).** (b) One offline key. **Answered by Alex 2026-10-03 11:48Z: (a) two keys** (P0.12 rows K1 and K1b;
@@ -15462,7 +15546,7 @@ question labels are namespaced per part: `P1a-` (P1.01–P1.19) and `P1b-` (P1.2
     logging is on; §6's "the PDS log level is set likewise" is not enough. A choice is needed (P1b-A1). [34, F2]
 23. §6.1 and §8 Phase 0 require cosign; private-repo GitHub attestations may need Enterprise Cloud (unverified).
     Proposed: cosign key pair without a transparency log until the repo is public (P1b-A3). [19, F4] Superseded by
-    ADR 0023: keyless.
+    the keyless signing ADR (written by P1.27s; numbered when it opens): keyless.
 24. §10's risk "permission set unresolvable → nobody can log in" overstates it: authorization servers keep the
     last good copy. Updating a set changes every existing grant at the next refresh; the plan should name that
     as the evolution path for new collections, behind an Alex gate. [27, F8]
@@ -15540,7 +15624,7 @@ part or a choice was made among the reviewer's options, the reason is given.
 | F1 | Fixed | P1.22, P1.25, P1.26, P1.24a; Note 16 | `resolvePrefs(group, req)`: public pages read no pref cookie, `Vary: Accept-Language` only, `?lang` override, language links; app pages keep the cookies with `Vary: Cookie` and `private, no-store`; `color-scheme` meta matches; tests from the review added. P3.12 fix sent to the editor. |
 | F2 | Fixed (P1b-A1 default) | P1.28, P1.29, P1.30 (C12), P1.34, P1.36; P1b-A1 | Edge strips `X-Forwarded-For`/`X-Real-IP`/`Forwarded`; per-client limits at the edge in memory (one plugin); `LOG_ENABLED=false` with a debug runbook; `device` table test; RoPA row. |
 | F3 | Fixed | P1.29, P1.30 (C7, C8) | Bypass list empty in Phase 1, never the edge; any `/` refused; `PDS_RATE_LIMITS_ENABLED=true` and no bypass key checked. |
-| F4 | Fixed (P1b-A3 default) | P1.27, P1.30 (C3, C4); P1b-A3 | cosign key pair with `--tlog-upload=false`, key in a protected environment or KMS, verification with `--key`; GitHub attestations only in addition if available; lock PR opened with a GitHub App token (or committed by Alex); GHCR read token named. Superseded by ADR 0023: keyless. |
+| F4 | Fixed (P1b-A3 default) | P1.27, P1.30 (C3, C4); P1b-A3 | cosign key pair with `--tlog-upload=false`, key in a protected environment or KMS, verification with `--key`; GitHub attestations only in addition if available; lock PR opened with a GitHub App token (or committed by Alex); GHCR read token named. Superseded by the keyless signing ADR (written by P1.27s; numbered when it opens): keyless. |
 | F5 | Fixed | P1.35, P1.34 probe, P1.28 | `goat account create --recovery-key`; local handle first, then `update-handle`; `_lexicon` TXT before `lex publish`, never `--skip-dns-check`; `sync.getRecord` with proof / `LexResolver` everywhere; exactly one `did=` line; the "offline key unavailable" case corrected. |
 | F6 | Fixed | P1.34, P1.35, P1.29; Notes 12, 15, 17 | Only Alex holds the dev PDS admin password and host shell; Alex issues the authority invite; `dev-seed` refuses once the authority is hosted; P2.25 and P3.16 changes noted; 2FA on the account with its mail caveat (real SMTP, no Mailpit). |
 | F7 | Fixed (P1b-A2 default) | P1.34, P1.35; P1b-A2 | 99.5 % replaced by durability and integrity requirements; best-effort 15-min probe outside private minutes (default a public probe-only repo; the reviewer's "free external uptime service" option was not made the default because it adds a third party for no gain over a public repo); gaps counted separately. |

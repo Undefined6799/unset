@@ -110,8 +110,8 @@ and this table is the only place to change.
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
 Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b, P2.08c, P2.08d, P2.11, P2.15,
-P2.12, P2.12a, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies merge, ahead of
-the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
+P2.12, P2.12a, P2.12b, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies merge,
+ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
 i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
 four (book edit 2026-10-14-verify-834-fixes, S5).
@@ -128,15 +128,16 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08d, P2.11, P2.15, P2.12, P2.12a, P2.13, P2.13c, P2.13a) keep their user-facing English text in
-one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog key", "catalogs"
-or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run English only.
-P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice (P1.19's PR,
-approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts every module
-first and adds French to these tests; no French page ships before it. The Phase 2 exit (P2.26) still checks both
-languages, since it comes after it. Every step after P2.13a uses the catalogs and `t()` directly. Dependency changes:
-P2.04 takes P1.31 instead of P1.35; P2.12 lists P1.15 (its age-gate block writes one audit row); P2.15 lists P1.37 (its
-incident-response page); P2.26 lists P2.13a and P1.38. 
+(P2.01–P2.08, P2.08b–P2.08d, P2.11, P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c, P2.13a) keep their user-facing English
+text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog key",
+"catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
+English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
+(P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts
+every module first and adds French to these tests; no French page ships before it. The Phase 2 exit (P2.26) still checks
+both languages, since it comes after it. Every step after P2.13a uses the catalogs and `t()` directly. Dependency
+changes: P2.04 takes P1.31 instead of P1.35; P2.12 lists P1.15 (its age-gate block writes one audit row); P2.15 lists
+P1.37 (its incident-response page); P2.26 lists P2.13a and P1.38.
+
 ## Step dependency diagram
 
 Solid arrows are dependencies as this file states them after round 2 (several differ from the outline; see Notes E1,
@@ -166,7 +167,8 @@ flowchart TD
   P206 --> P211[P2.11 email gate]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
-  P212 --> P212a[P2.12a one-time notice, axe]; P213 --> P213c[P2.13c settings shell, links]; P208b --> P213c
+  P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]
+  P213 --> P213c[P2.13c settings shell, links]; P208b --> P213c
   P213 --> P213a[P2.13a slice 1 exit]; P208 --> P213a; P212 --> P213a
   P115 --> P212; P137 --> P215; P213a --> P226; P138[P1.38 Phase 1 exit] --> P226
   P116 --> P214[P2.14 identity seam]; P203 --> P214
@@ -2039,26 +2041,37 @@ Reuse (provisional — for reuse review):
     legal gates; nothing to salvage for age or terms.
 Not in this step: the real chat step (P6.17); COPPA "credible under-13 report deletes the account" (moderator action,
   P3.20 runbook); age assurance for Australia (not built; the invite-country rule covers it).
-As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The one-time privacy notice
-  and the real axe run are P2.12a. Until P3.16d raises `alert.notify` for a hosted block, the interim signal is the
-  warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The account page moved from `/me` to
-  `/<DID>` (D-5, #975); `/me` and `/did` answer 303 to it.
+As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The real axe run is P2.12a;
+  the one-time privacy notice is P2.12b, held for Alex's card. Until P3.16d raises `alert.notify` for a hosted block,
+  the interim signal is the warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The
+  account page moved from `/me` to `/<DID>` (D-5, #975); `/me` and `/did` answer 303 to it.
 Diagram: none.
 
-### P2.12a — Make the privacy notice one-time and run axe
+### P2.12a — Run axe on the welcome screens
 Tags: (none)            Depends on: P2.12
-Slice 1, issue #993, product, lane Phase 2. Book edit 2026-10-19-five-step-audit.
-**What:**
-1. After a privacy-version bump, the banner shows once and then not again, as the book says. Today it shows until the
-   next terms acceptance (gates.ts:68-71). Re-acceptance stays not forced. The test `terms.privacy_bump_notice_only`
-   asserts that the second request has no banner.
-2. The four welcome screens join the P1.26 axe matrix in both themes, and `welcome.axe` runs axe for real (today it
-   checks structure only, welcome.test.ts:484-560). English only until the i18n slice.
+Slice 1, issue #993, product, lane Phase 2. Book edit 2026-10-19-five-step-audit (item 2 only since architecture's
+03:55Z split; item 1 is P2.12b).
+**What:** the four welcome screens join the P1.26 axe matrix in both themes, and `welcome.axe` runs axe for real
+(today it checks structure only, welcome.test.ts:484-560). English only until the i18n slice.
 
-Done when the tests pass, red first for item 1, and check is green.
+Done when the tests pass and check is green.
 
-If the lane finds that showing the banner until acceptance was a deliberate choice, it stops and tells the step book,
-and architecture rules on it.
+### P2.12b — Show the privacy notice once
+Tags: (none)            Depends on: P2.12
+Slice 1, issue to be opened by the board, product, lane Phase 2. **Held for Alex's card**; it opens only after his
+answer. Book edit 2026-10-19-five-step-audit, architecture 03:55Z and the step-book mapping at 03:56Z.
+**What** (architecture's limits): writing `privacy_version` on render stays refused (gates.ts:66-70), because a GET
+must not record an acceptance nobody made. The options on the card:
+- (A) A dismiss button, recommended: a POST behind the session, CSRF and Origin gates records a separate
+  `privacy_notice_seen_version` integer on the account, never `privacy_version`. The banner shows until dismissed or
+  until the next terms acceptance. The new field needs a purpose (accountability that the changed notice was shown), a
+  lawful basis (legal obligation or legitimate interest), erasure with the account, export, a RoPA line and a
+  migration. No GET writes anything.
+- (B) Keep the banner until the next terms acceptance. Then this step records that in P2.12's As built line, amends
+  `terms.privacy_bump_notice_only`, and adds only the test that the second request still shows the banner.
+
+Done when, for (A), `terms.privacy_bump_notice_only` passes red first (no banner after the dismiss POST) and check is
+green.
 
 ### P2.13 — `/me` and the settings shell
 Tags: (none)            Depends on: P2.06, P1.25            Plan: §5.4 (owner sees drafts); §2 rules 9, 12; §4 "Shell + UI kit"
@@ -4266,8 +4279,9 @@ Tags: [SEC] trusted            Depends on: P1.27s
 Pulled forward (Q3 B), issue #844, trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
 edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. It exists because of
 Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you
-keep?" (ADR 0023, written by P1.27s; accepted when Alex merges it). Order: right after
-P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
+keep?" (the keyless signing ADR, written by P1.27s, numbered when it opens and accepted when Alex merges it). Order:
+right after P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads
+the file.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
 - a swapped or forged trusted root letting any signature pass: the file is trusted base, and the PR shows the TUF
@@ -4303,9 +4317,9 @@ Where:
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
 - the first `deployment/images.lock.json`, every entry with `"verify": "cosign-keyless"`; there is no `cosign.pub`
-  (ADR 0023, written by P1.27s and accepted when Alex merges it, from Alex's "Keyless", 2026-10-14T21:16:36Z, on
-  "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book edit 2026-10-13-verify-819-fixes,
-  the keyless mapping);
+  (the keyless signing ADR, written by P1.27s, numbered when it opens and accepted when Alex merges it, from Alex's
+  "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book
+  edit 2026-10-13-verify-819-fixes, the keyless mapping);
 - the preflight (`deployment/preflight/checks/images.ts`, `types.ts`): `cosignKeyPath` becomes the trusted-root path
   (`deployment/sigstore/trusted_root.json`, P2.26e), and C3 and C4 verify keyless, offline, with the identity per
   workflow (P1.27s);

@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 331 steps: 302 from `phase-1.md`, 29 from `phase-2.md` (including the
+Depth: **build-ready**. 336 steps: 306 from `phase-1.md`, 30 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -458,6 +458,10 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.36b | Serve the app site on the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36e, P1.35x, P1.35y | `phase-1.md` |
 | P1.36c | Wire the dev edge's DNS token and app site | [SEC] | P1.36b | `phase-1.md` |
 | P1.36g | Fix dev mail and the first-invite runbook | [SEC] | — | `phase-1.md` |
+| P1.36i | Pin the dev edge aliases and public paths | [SEC] | P1.36b | `phase-1.md` |
+| P1.36j | Trust only Newt's address at the dev edge (trusted) | [SEC] trusted [ALEX] (typed line) | P1.36b | `phase-1.md` |
+| P1.36k | Refuse dev-only runtime keys outside local | [SEC] | — | `phase-1.md` |
+| P1.36l | Refuse the zero commit under dev | [SEC] | P1.27s | `phase-1.md` |
 | P1.33n | Drop the directory form from the site reader (trusted base) | [SEC] | P1.33y, P1.34q | `phase-1.md` |
 | P1.27m | Local edge TLS snippet for the local stack (trusted base) | [SEC] [ALEX] (card answered 16:44:52Z) | — | `phase-1.md` |
 | P1.27l | Let local-only stacks pass C2 to C5 unsigned | [SEC] [ALEX] (card answered 16:44:52Z) | P1.30y, P1.30a, P1.29, P1.27m, P1.34a | `phase-1.md` |
@@ -514,7 +518,8 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.15 | Legal paperwork part 2 | — (content approved by Alex through the PR) | P1.25, P1.37 | `phase-2.md` |
 | P2.12 | Onboarding: age, terms, chat placeholder | [SEC] | P2.06, P2.11, P2.15, P1.15, P2.04s | `phase-2.md` |
-| P2.12a | Make the privacy notice one-time and run axe | — | P2.12 | `phase-2.md` |
+| P2.12a | Run axe on the welcome screens | — | P2.12 | `phase-2.md` |
+| P2.12b | Show the privacy notice once (held for Alex's card) | — | P2.12 | `phase-2.md` |
 | P2.13 | `/me` and the settings shell | — | P2.06, P1.25 | `phase-2.md` |
 | P2.13c | Add the settings shell and account page links | — | P2.13, P2.08b | `phase-2.md` |
 | P2.13a | Slice 1 exit: sign in and see your own profile, architecture review, `docs/human/features/sign-in.md` (added, decision 34; ADR 0026 mechanism 2) | [STOP] (next slice after Alex reads the review) | P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d | `phase-2.md` |
@@ -821,7 +826,8 @@ flowchart TD
   P2_15["P2.15 Legal paperwork part 2"]
   P2_12["P2.12 Onboarding"]
   P2_13["P2.13 /me and the settings shell"]
-  P2_12a["P2.12a One-time privacy notice and axe"]
+  P2_12a["P2.12a Welcome screens axe"]
+  P2_12b["P2.12b Privacy notice once"]
   P2_13c["P2.13c Settings shell and account links"]
   P2_13a["P2.13a Slice 1 exit"]
   P1_01 --> P1_02
@@ -1030,6 +1036,7 @@ flowchart TD
   P2_08 --> P2_08c
   P2_08 --> P2_08d
   P2_12 --> P2_12a
+  P2_12 --> P2_12b
   P2_13 --> P2_13c
   P2_08b --> P2_13c
   P2_12 --> P2_13a
@@ -1152,6 +1159,13 @@ flowchart TD
   P1_36c["P1.36c Dev edge DNS token and app site wired"]
   P1_36b --> P1_36c
   P1_36g["P1.36g Dev mail and first-invite runbook"]
+  P1_36i["P1.36i Dev edge aliases and public paths"]
+  P1_36b --> P1_36i
+  P1_36j["P1.36j Dev edge trusts only Newt"]
+  P1_36b --> P1_36j
+  P1_36k["P1.36k Dev-only runtime keys refused outside local"]
+  P1_36l["P1.36l Zero commit refused under dev"]
+  P1_27s --> P1_36l
   P1_34a --> P1_34o
   P1_34o --> P1_34q
   P1_34q --> P1_34d
@@ -2111,7 +2125,7 @@ Taken from the Tags column.
 
 | Kind | Steps |
 |---|---|
-| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.36b, P1.36e, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
+| Alex acts by hand (`[ALEX]`, including tails) | P0.01, P0.03, P0.07, P0.07a, P0.08, P0.09b, P0.09c, P0.09m, P0.09n, P0.09r, P0.09t, P0.09w, P0.09x, P0.09y, P0.09z, P0.10, P0.11, P0.12, P0.14, P0.15, P0.15a, P0.16, P0.16a, P1.15q, P1.15x, P1.23g, P1.23h, P1.23v, P1.23w, P1.25o, P1.27l, P1.27m, P1.27p, P1.27r, P1.27s, P1.28a, P1.28v, P1.29a, P1.29v, P1.29w, P1.29y, P1.30l, P1.30o, P1.30r, P1.30u, P1.31, P1.31d, P1.33, P1.33a, P1.33b, P1.33c, P1.33d, P1.33f, P1.33i, P1.33m, P1.33o, P1.33p, P1.33s, P1.33u, P1.33v, P1.34, P1.34m, P1.35, P1.35b, P1.35c, P1.35e, P1.35j, P1.35k, P1.35s, P1.35t, P1.35y, P1.35z, P1.36b, P1.36e, P1.36j, P1.37, P1.37a, P2.24, P2.25, P3.18, P3.18a, P3.22, P4.02, P4.10, P4.15, P4.22a, P5.01, P5.02a, P5.05, P5.06, P5.11, P5.12, P6.15, L.01, L.05, L.06 |
 | Alex decides; build stops (`[STOP]`, including "STOP on …") | P1.31, P1.32, P2.13a, P3.00, P4.00, P4.01, P5.00, P5.01, P5.13, P6.06, L.00, L.03a, L.06 |
 | Spikes that can rewrite later steps (`[SPIKE]`, and steps that behave as one) | P1.20, P2.24, P3.01, P4.09a (step 0), P4.15, P5.07, P5.07b, P6.00, P6.01 |
 
@@ -2133,10 +2147,11 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.35j (#885):** a typed line, "yes P1.35j shared/http test handles reserved domains".
 - **P1.35k (#891):** a typed line, "yes P1.35k infrastructure/net-guard test hosts reserved names".
 - **P1.35s (#914):** a typed line, "yes P1.35s infrastructure/net-guard carried IPv4 fixtures".
-- **P1.35t (#983):** a typed line, "yes P1.35t .github/workflows/local-stack.yml scripts/ci".
+- **P1.35t (#983):** Alex's go, "ok for 1.35t then" (2026-10-19 02:13:45Z).
 - **P1.36e (#1002):** a typed line, "yes P1.36e deployment/edge/caddyfile.ts deployment/edge/snippets/tls.caddy C18
   DNS-01 dev only".
 - **P1.36b (#999):** a typed line, "yes P1.36b deployment/edge/caddyfile.ts dev app site APP_HOST APP_UPSTREAM".
+- **P1.36j (#1019):** a typed line, "yes P1.36j deployment/edge/Caddyfile dev trusted proxy Newt only".
 - **P1.35y (#996) and P1.35z (#997):** Alex's yes to accept ADR 0025 and ADR 0026, quoted with its time.
 - **P0.09y (#826):** a typed line, "yes P0.09y .github/CODEOWNERS scripts/guards scripts/workspace", for the
   `scripts/guards/`, CODEOWNERS and `scripts/workspace/` check paths; P4.07 waits on it.
@@ -2148,11 +2163,11 @@ Open steps that wait on Alex, and what he gives (book edit 2026-10-12-batch-28-s
 - **P1.27s (#184):** a typed line, "yes P1.27s packages: write .github/workflows/publish-images.yml
   .github/workflows/mirror.yml .github/workflows/sigstore-root.yml scripts/guards/workflows.ts scripts/ci
   .github/CODEOWNERS deployment/sigstore" (it replaces the earlier line), and the `signing` environment (branch rule
-  and reviewer). Signing is keyless (ADR 0023, written by P1.27s and accepted when Alex merges it; Alex's "Keyless",
-  2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?"), so there is
-  no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping after architecture's answers").
-- **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml .github/workflows/images.yml
-  .github/workflows/mirror.yml scripts/ci".
+  and reviewer). Signing is keyless (the keyless signing ADR, written by P1.27s, numbered when it opens and accepted
+  when Alex merges it; Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or
+  with a key you keep?"), so there is no key to generate (book edit 2026-10-13-verify-819-fixes, "Step-book mapping
+after architecture's answers"). - **P1.33c (#831):** a typed line, "yes PDS exceptions .github/trivyignore.pds.yaml
+  .github/workflows/images.yml .github/workflows/mirror.yml scripts/ci".
 - **P1.33d (#832):** a typed line when built, for example "yes P1.33d .github/trivyignore.pds.yaml scripts/ci".
 - **P1.33v (#849):** a typed line, "yes P1.33v .github/workflows/mirror.yml .github/workflows/images.yml scripts/ci trivy
   allow rules".
