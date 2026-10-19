@@ -82,7 +82,9 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    so turning them on would make one bucket that anyone could exhaust. On the public PDS, `createSession`, the
    OAuth sign-in and token endpoints and password reset are limited only by the edge's zones
    (`deployment/edge/snippets/ratelimit.caddy`: `session`, `session_day`, `oauth_signin`, `oauth_token`, `signup`,
-   `reset`, `sync`), keyed per client as Decision 3 says.
+   `reset`, `sync`, and the `global` zone, which has no matcher so every PDS route has a zone, `:9-10`), keyed per
+   client as Decision 3 says; the existing red `edge_ratelimit_matches_limits` keeps the zones equal to
+   `limits.json`. Architecture ruled this at 23:33Z, correcting its 23:22Z "PDS and edge rate limits".
 5. **Federation and what testers are told.** `PDS_CRAWLERS` stays empty, so the PDS itself requests no crawl, but
    anyone can send `requestCrawl` for `staging.unset.ac` to a public relay, and a relay that finds the PDS may
    subscribe to its firehose; the public `com.atproto.sync.listRepos` lists every tester's DID; a tester's DID,
@@ -116,9 +118,14 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
 
 ## Compliance
 - Reds listed in Decisions 2, 3 and 4 land with the steps named in Consequences before staging opens.
-- The live deploy checks of 0030 keep running; a third check confirms, from outside, that `staging.unset.ac`
-  answers `describeServer` without a login, that `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic`
-  request get the edge's deny, and that the edge presents no certificate of its own.
+- The live deploy checks of 0030 keep running on `staging.unset.sh`; 0030's login-demand probes never applied to
+  `staging.unset.ac` and now cannot, since the resource has no login (Codex on #1127, finding 4319934630). A third
+  check confirms, from outside, that `staging.unset.ac` answers `describeServer` without a login, that
+  `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic` request get the edge's deny, and that the edge
+  presents no certificate of its own. On the first deploy and after every Pangolin update the same check also
+  reads a real resource-session response from `staging.unset.sh` and asserts that `Set-Cookie` carries `Domain`
+  equal to exactly that host, never `unset.sh`, since 0030 Decision 3 derived the exact-domain guarantee from the
+  1.24.0 source only (Codex on #1127, finding 4319934639).
 - ADR 0025 and ADR 0030 change nothing, not even their status lines; this record departs from two clauses of 0025
   and from 0030's no-bypass sentence, its certificate sentence (0030:78-79) and its rejected plain-HTTP alternative
   (0030:130-132), for dev only. The C18 change needs Alex's own typed line, separate from this record's.
