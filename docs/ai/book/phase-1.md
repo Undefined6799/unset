@@ -61,28 +61,28 @@ later slices (guideline §12). This file is in build order; step ids did not cha
 
 - **Slice 1** (this file, in order): P1.01–P1.14, P1.15x, P1.15q, P1.15m, P1.15d, P1.15g, P1.15, P1.15s (book edit
   2026-10-07-p115s-chain-tests, slice line 12:05Z), P1.15b, P1.15c, P1.16, P1.17e, P1.17, P1.17r, P1.23h, P1.18, P1.18a,
-  P1.20–P1.25, P1.25c, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.26, P1.27, P1.27d, P1.28q, P1.28d, P1.28v,
-  P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n, P1.30q,
-  P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g, P1.30r,
-  P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f, P1.29g,
-  P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g, P1.30w,
-  P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x, P1.27z,
-  P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f, P1.11i,
-  P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v, P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f, P1.34p,
-  P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c, P1.34a,
-  P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h, P1.33f,
-  P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x, P1.33y,
-  P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t, P1.33z,
-  P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g, P1.36i,
-  P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y,
-  P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s,
-  P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids,
-  never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08f, P2.11, P2.11a, P2.15, P2.12,
-  P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'):
-  the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening
-  steps not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario passes
-  locally. Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may finish
-  a fix it already started on an open PR.
+  P1.20–P1.25, P1.25c, P1.25a, P1.25f, P1.25g, P1.25y, P1.25m, P1.25n, P1.25t, P1.26, P1.27, P1.27d, P1.28q, P1.28d,
+  P1.28v, P1.28w, P1.28u, P1.28c, P1.28t, P1.28x, P1.28, P1.28a, P1.28b, P1.28h, P1.28i, P1.28s, P1.28j, P1.28r, P1.28n,
+  P1.30q, P1.30p, P1.30, P1.30s, P1.30t, P1.28e, P1.28f, P1.28l, P1.28g, P1.28k, P1.28m, P1.28p, P1.28z, P1.30c, P1.23g,
+  P1.30r, P1.30e, P1.30f, P1.30u, P1.30n, P1.29k, P1.29x, P1.29r, P1.29e, P1.28o, P1.28y, P1.29n, P1.29m, P1.29f,
+  P1.29g, P1.29p, P1.29j, P1.29w, P1.29v, P1.29b, P1.29c, P1.29z, P1.29o, P1.27e, P1.29l, P1.29u, P1.30h, P1.30g,
+  P1.30w, P1.30k, P1.30m, P1.30v, P1.30j, P1.30z, P1.30d, P1.30a, P1.27k, P1.27t, P1.27h, P1.27g, P1.27i, P1.27x,
+  P1.27z, P1.01g, P1.30x, P1.30y, P1.27y, P1.30o, P1.27f, P1.27a, P1.27u, P1.27w, P1.27n, P1.27j, P1.11c, P1.11f,
+  P1.11i, P1.11r, P1.11s, P1.11n, P1.11k, P1.33s, P1.33u, P1.33v, P1.33c, P1.35b, P1.35c, P1.35e, P1.33e, P1.34f,
+  P1.34p, P1.34w, P1.34s, P1.34e, P1.34x, P1.34r, P1.34l, P1.27p, P1.30l, P1.29y, P1.29d, P1.29, P1.27o, P1.27m, P1.34c,
+  P1.34a, P1.34b, P1.27l, P1.29a, P1.34m, P1.34n, P1.34k, P1.34o, P1.34q, P1.33t, P1.29h, P1.29i, P1.33i, P1.33h,
+  P1.33f, P1.33o, P1.33j, P1.33k, P1.33l, P1.33r, P1.32b, P1.32c, P1.35h, P1.35i, P1.35j, P1.35k, P1.33w, P1.33x,
+  P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
+  P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
+  P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.33n, P1.34t, P1.33m, P1.34u,
+  P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g,
+  P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are dropped (ADR 0022;
+  retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08f, P2.11, P2.11a, P2.15,
+  P2.12, P2.12a–P2.12c, P2.13, P2.13c and the slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and
+  refocus'): the sign-in path goes first (refocus order, book edit 2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34
+  hardening steps not on that path, and the paused guard and test-helper follow-ups, start only after P2.13a's scenario
+  passes locally. Fixes for holes already on main are exempt. Built PRs still get verified and may merge, and a lane may
+  finish a fix it already started on an open PR.
   **English only** (Alex, 2026-10-04 12:58Z, "English first", against the recommendation): each feature keeps its
   user-facing English text in one `messages.ts` beside its screens (plain exported constants, or a small function of its
   parameters returning a string; no catalog, no `t()`); error codes' English text sits in `shared/errors/messages.ts`.
@@ -423,7 +423,9 @@ flowchart LR
   P1_25 --> P1_26
   P1_25c["P1.25c test routes, prod refusal, 503"]
   P1_25 --> P1_25c
-  P1_25f["P1.25f favicons, feed mode, footer prefs"]
+  P1_25a["P1.25a PNG favicons ALEX"]
+  P1_25 --> P1_25a
+  P1_25f["P1.25f feed mode, footer prefs"]
   P1_25 --> P1_25f
   P1_25g["P1.25g disabled select focus, kit tests"]
   P1_25 --> P1_25g
@@ -727,6 +729,10 @@ flowchart LR
   P1_30u --> P1_34
   P1_33 --> P1_34
   P1_33a --> P1_34
+  P1_36b --> P1_34
+  P1_36c --> P1_34
+  P1_36i --> P1_34
+  P1_36j --> P1_34
   P1_33 -.-> P1_33a
   P1_33a -.-> P1_33p
   P1_34 --> P1_33p
@@ -6555,12 +6561,23 @@ As built (as ruled; lands in #1011, open at 51f4656; the merge SHA is added once
 
 ---
 
-### P1.25f — Add favicons, feed mode and footer prefs
+### P1.25a — Ship the PNG favicons
+Tags: [ALEX] (his favicon files)            Depends on: P1.25
+Slice 1, issue #1058, product, lane Phase 2. Split out of P1.25f because it can't finish without Alex's
+files (book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section). It starts when Alex supplies the 32 px and
+180 px PNGs; nothing is drawn by hand.
+**What:** ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
+asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
+
+Done when the test passes and check is green.
+
+---
+
+### P1.25f — Add feed mode and footer prefs
 Tags: (none)            Depends on: P1.25
-Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit.
+Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit. The favicons are P1.25a.
 **What:**
-1. Ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
-   asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
+1. (moved to P1.25a)
 2. Add an `AppShell` `feed?: true` prop, with `shell_feed_no_footer`.
 3. **PrefsForms** (Alex tapped "Settings + footer" at 2026-10-19 02:59:37Z on "Where should the theme and language
    settings live in the app?"; architecture 03:55Z; book edit 2026-10-19-alex-cards-and-edge-dev-mode):
@@ -6576,7 +6593,6 @@ Slice 1, issue #990, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
    - LanguageLinks stays with P1.22b.
    - Tests: `default_shell_footer_prefs`, and `prefs_post_csrf_origin`, which rides whichever of this step and P2.13c
      lands first.
-   Item 1 still waits for Alex's favicon files; nothing is drawn by hand.
 4. D-2's two conditions (architecture 02:25Z): with JavaScript disabled, the Navigation popover opens, closes on
    Escape and returns focus; the default shell keeps its `<details>` menu for pages without the Navigation variant.
    Each has a test.
@@ -15230,7 +15246,7 @@ Done when `pds_ignorefile_empty` passes on the re-pinned image and check is gree
 
 ### P1.34 — `unset.ac` registered; dev PDS made fit to host the lexicon authority (Alex)
 
-**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
+**Tags:** [ALEX] [SEC] [PERMANENT] · **Depends on:** P1.30, P1.30s, P1.30t, P1.30u, P1.33, P0.12, P0.11, P1.29t (book edit 2026-10-07-p129-split), P1.34f, P1.34p, P1.34w, P1.34s, P1.33a (architecture's Amendment 7 of 2026-10-13-local-plc, Q1), P1.36b, P1.36c, P1.36i, P1.36j (the edge through Pangolin; book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section), P1.33d, P1.33e (the PDS scan exceptions are cleared and dev refuses while any remain; book edit 2026-10-13-pds-0.4.5037-findings), P2.26b, P2.26c, P2.26d (signed, mirrored images before the home move; P2.26d is the strict cleanup after P2.26c; book edit 2026-10-13-verify-819-fixes, Q3) · **Plan:** §5.2, §5.3, §5.7, §8 Phase 1, §10 (risks); decision 20
 
 **Target (Alex tapped "After sign-in" (recommended) at 2026-10-12T23:12:34Z on "Move the dev stack and PDS to your
 home server now, or after sign-in works locally?"; book edits 2026-10-12-p134-home-server-target and
