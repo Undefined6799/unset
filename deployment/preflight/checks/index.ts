@@ -1,11 +1,12 @@
 // The checks, in the order they run (P1.30: C1 to C12; P1.30s: C13 to C24 but C17 and C18; P1.30t: C17; P1.30u: C18;
-// P1.30x: C25; P1.30y: C26 and C27; P1.34t: C28; P1.27l: L1 and L2 under --env local).
+// P1.30x: C25; P1.30y: C26 and C27; P1.34t: C28; P1.36k: C29; P1.27l: L1 and L2 under --env local).
 import { c26, c27 } from "./build.ts";
 import { c25 } from "./capabilities.ts";
 import { c18 } from "./edge.ts";
 import { c21, c24 } from "./host.ts";
 import { c2, c3, c4, c5 } from "./images.ts";
 import { l1, l2 } from "./local.ts";
+import { c29 } from "./local-only-keys.ts";
 import { c17 } from "./networks.ts";
 import { c6, c7, c8, c11, c12, c28 } from "./pds.ts";
 import { c9 } from "./secrets.ts";
@@ -42,6 +43,7 @@ export const CHECKS: readonly Check[] = [
   c26,
   c27,
   c28,
+  c29,
 ];
 
 /** The guards that run only under `--env local`, after the others (P1.27l). */
