@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 358 steps: 321 from `phase-1.md`, 37 from `phase-2.md` (including the
+Depth: **build-ready**. 359 steps: 321 from `phase-1.md`, 38 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -533,6 +533,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08e | Pin the session count to the store | [SEC] | P2.08c, P2.08d | `phase-2.md` |
 | P2.08f | Mark sign out everywhere unused in session | trusted | P2.08d | `phase-2.md` |
 | P2.08g | Unit-test the last-browser revoke failure | [SEC] | P2.08e, P2.08b | `phase-2.md` |
+| P2.08h | Bound the issuer read and narrow its carrier | [SEC] | P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
 | P2.11b | Count sessions ended on a revoked grant | [SEC] | P2.11a | `phase-2.md` |
@@ -847,6 +848,7 @@ flowchart TD
   P2_08e["P2.08e Session count pinned to the store"]
   P2_08f["P2.08f user_signout_all marked unused"]
   P2_08g["P2.08g Revoke failure unit test"]
+  P2_08h["P2.08h Issuer read bounded, carrier narrowed"]
   P2_11["P2.11 Email-verify gate"]
   P2_11a["P2.11a Revoked grant ends sessions"]
   P2_11b["P2.11b auth_dead counter"]
@@ -1082,6 +1084,7 @@ flowchart TD
   P2_08d --> P2_08f
   P2_08e --> P2_08g
   P2_08b --> P2_08g
+  P2_08b --> P2_08h
   P2_12 --> P2_12a
   P2_12 --> P2_12b
   P2_12a --> P2_12c

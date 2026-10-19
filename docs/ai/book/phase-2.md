@@ -109,7 +109,7 @@ and this table is the only place to change.
 ## Slices (decision 34, editor pass 2026-10-04)
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
-Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08g, P2.11,
+Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b–P2.08h, P2.11,
 P2.11a–P2.11c, P2.15, P2.12, P2.12a, P2.12b, P2.12c, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once
 their own dependencies merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice
 1"). The rest of this file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built
@@ -128,7 +128,7 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.08b–P2.08g, P2.11, P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
+(P2.01–P2.08, P2.08b–P2.08h, P2.11, P2.11a–P2.11c, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13a) keep their
 user-facing English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they
 say "catalog key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and
 Playwright tests run English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in
@@ -163,7 +163,7 @@ flowchart TD
   P206 --> P208[P2.08 logout]
   P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
   P208c --> P208e[P2.08e count pinned to store]; P208d --> P208e; P208d --> P208f[P2.08f signout_all marked unused]
-  P208e --> P208g[P2.08g revoke failure unit test]; P208b --> P208g
+  P208e --> P208g[P2.08g revoke failure unit test]; P208b --> P208g; P208b --> P208h[P2.08h issuer read bounded]
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
   P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
@@ -1858,10 +1858,44 @@ Slice 1, issue #1061, product test (`interfaces/http/routes/logout.test.ts`), la
 2026-10-19-five-step-audit, last section (architecture's #1056 M3 ruling). It can't ride P2.08f, which is trusted
 base and comment-only, because a test takes the class of its folder (SE-6). It builds after #1054 (P2.08b) merges,
 because #1054 rewrites the same harness.
-**What:** the test adopts the verifier's probe (`unset-plan/verify/verify-1056-7a10fd1-revoke-probe.test.ts.txt`)
-for the revoke-failure branch at routes/logout.ts:77-81: when the revoke fails, the token set is still deleted.
-Red: removing `deleteTokenSet` turns it red as a unit test, with no Docker.
-Done when that red is shown and check is green.
+**What** (items 2 to 6 from verify-1054-c0747e1, architecture 04:23Z; book edit 2026-10-19-five-step-audit,
+"Step-book mapping of architecture's verify-1054-c0747e1 ruling"). Every red kills its named mutant from the verify
+report, and the PR lists the mutant number next to each red.
+1. The test adopts the verifier's probe (`unset-plan/verify/verify-1056-7a10fd1-revoke-probe.test.ts.txt`) for the
+   revoke-failure branch at routes/logout.ts:77-81: when the revoke fails, the token set is still deleted. Red:
+   removing `deleteTokenSet` turns it red as a unit test, with no Docker.
+2. **M1, mutant 14:** the issuer is read before the destroy (routes/logout.ts:128-138). Moving the read after the
+   destroy turns a test red. A double-clicked Sign out still ends at the fallback link.
+3. **M2, mutant 13:** the account page refuses a recorded issuer with a port (me.ts:30). Using
+   `new URL(issuer).origin` there turns it red.
+4. **M3, mutant 11:** "ours" on the account page is an exact string match (me.ts:77). A suffix lookalike is not ours,
+   and a suffix match turns it red.
+5. **N2, mutant 16:** the origin normalisation at routes/logout.ts:105-110 covers case, the default port, a trailing
+   slash and a path. Writing the raw issuer turns it red.
+6. **M4:** `logout.no_sign_in_records` also counts `audit.chain`, per P2.08's test list.
+Done when all six reds are shown and check is green.
+
+### P2.08h — Bound the issuer read and narrow its carrier
+Tags: [SEC]            Depends on: P2.08b
+Slice 1, issue #1067, product, lane Phase 1. Book edit 2026-10-19-five-step-audit, "Step-book mapping of
+architecture's verify-1054-c0747e1 ruling". A tightening, so it needs no card or typed line. It touches no trusted-base
+or check path (infrastructure/postgres/oauthStores.ts is not trusted base); if the lane finds one, it splits that part
+out. It may build beside P2.08g, but whichever lands second merges main first.
+1. **M5:** the oauthStores wrapper passes `GetOptions.signal` through (oauthStores.ts:80-85).
+   - Sign-out's issuer read gets its own short deadline, a named constant well below PG_CONNECT_TIMEOUT_MS.
+   - On timeout or error, sign-out takes the link-less path and still destroys the session. It never waits on the
+     read.
+   - **Red:** a stalled read still signs out within the deadline, with the fallback link, and the session row is gone.
+2. **N1:** the issuer carrier (sign-in-state.ts:104-112) accepts only an https origin whose host is a DNS name.
+   - Refused: an IPv4 literal, an IPv6 literal, `localhost`, `*.localhost`, a trailing dot, and any port other than
+     the default.
+   - Anything refused is dropped, and the page falls back. Only an exact match with our own issuer ever shows a link.
+   - **Reds:** one per refused form.
+Threats: a slow or hung store holds sign-out open (M5); a hostile or odd issuer string reaches a page link (N1). Both
+fail closed, to sign-out without a link.
+ASVS 5.0: the PR names its rows, at least the session-termination row and the URL-validation or output-encoding row
+that apply.
+Done when every red is shown and check is green.
 
 ### P2.11 — Email-verify gate
 Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"
