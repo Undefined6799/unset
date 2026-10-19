@@ -6566,9 +6566,11 @@ As built (as ruled; lands in #1011, open at 51f4656; the merge SHA is added once
 
 ### P1.25a — Ship the PNG favicons
 Tags: [ALEX] (his favicon files)            Depends on: P1.25
-Slice 1, issue #1058, product, lane Phase 2. Split out of P1.25f because it can't finish without Alex's
-files (book edit 2026-10-19-alex-cards-and-edge-dev-mode, last section). It starts when Alex supplies the 32 px and
-180 px PNGs; nothing is drawn by hand.
+Slice 1, issue #1058, product, lane Phase 2. Split out of P1.25f because it needs Alex's files (book edit
+2026-10-19-alex-cards-and-edge-dev-mode, last two sections). The wait is met: files from the design artifact (Alex,
+2026-10-19 03:00:41Z), `unset-favicon-32.png` and `unset-apple-touch-icon.png`. The PR body quotes his message with
+its time, and his merge confirms the files. Nothing is drawn by hand (head.tsx:4); if the PR's files differ from the
+design artifact's, the lane stops.
 **What:** ship the 32 px PNG favicon and the 180 px apple-touch PNG. `shell_head_contents` asserts both links; today it
 asserts none (AppShell.test.tsx:104-105). Only the SVG favicon stays deferred, as the book says.
 
