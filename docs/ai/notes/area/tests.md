@@ -42,7 +42,10 @@ renders with no session and no island (P2.12). `/welcome`, `/welcome/age`,
 `/legal/domains` is a public document. `/.well-known/security.txt` is text, not a page.
 Lighthouse launches Chrome with `--no-sandbox` (`collect.settings.chromeFlags` in
 `@lhci/cli` 0.15.1):
-ubuntu-24.04's AppArmor refuses the browser's user namespace.
+ubuntu-24.04's AppArmor refuses the browser's user namespace. P1.37j also turns off `SpareRendererForSitePerProcess`:
+our COOP header moves the page into a spare renderer made before tracing began, and Lighthouse then stops with
+NO_NAVSTART. Chrome keeps only the last `--disable-features`, so the flag repeats chrome-launcher 1.2.2's default list;
+`lighthouserc.test.ts` pins it.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's
