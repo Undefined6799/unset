@@ -3,6 +3,7 @@ import { ECDH, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { parse } from "yaml";
 import {
   CLIENT_ID,
   generate,
@@ -101,6 +102,21 @@ describe("red stack (item 4)", () => {
     expect(settings(red).filter((line) => /unset-dev-trust|NODE_EXTRA_CA_CERTS/.test(line))).toEqual([]);
     expect(settings(COMPOSE).filter((line) => /unset-dev-trust|NODE_EXTRA_CA_CERTS/.test(line))).toHaveLength(4);
     expect(COMPOSE.split("\n").length - red.split("\n").length).toBe(4);
+  });
+
+  test("red_stack_is_valid_compose_with_every_other_setting_kept", () => {
+    const red = parse(redCompose(COMPOSE)) as { services: Record<string, Record<string, unknown>> };
+    const real = parse(COMPOSE) as { services: Record<string, Record<string, unknown>> };
+    const trust = (v: unknown) => v !== "../../unset-dev-trust:/etc/unset-dev-trust:ro";
+    for (const [name, service] of Object.entries(real.services)) {
+      const changed = red.services[name] as Record<string, unknown>;
+      const volumes = service.volumes as unknown[] | undefined;
+      if (volumes !== undefined) expect(changed.volumes, name).toEqual(volumes.filter(trust));
+      const { NODE_EXTRA_CA_CERTS: _, ...environment } = (service.environment ?? {}) as Record<string, unknown>;
+      if (service.environment !== undefined) expect(changed.environment, name).toEqual(environment);
+      expect({ ...changed, volumes: 0, environment: 0 }, name).toEqual({ ...service, volumes: 0, environment: 0 });
+    }
+    expect(Object.keys(red.services)).toEqual(Object.keys(real.services));
   });
 
   test("red_stack_refuses_a_drifted_file", () => {

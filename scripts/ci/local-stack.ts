@@ -189,7 +189,11 @@ export function redCompose(text: string): string {
     if (lines.filter((l) => l === line).length !== 2)
       throw new Error("compose.local.yaml no longer has the trust lines");
   }
-  return lines.filter((l) => l !== TRUST_MOUNT && l !== TRUST_ENV).join("\n");
+  // web's trust mount is its only volume; Compose refuses a bare `volumes:` (null), so the emptied list is written `[]`.
+  return lines
+    .filter((l) => l !== TRUST_MOUNT && l !== TRUST_ENV)
+    .join("\n")
+    .replace(/^ {4}volumes:\n(?! {6}- )/gm, "    volumes: []\n");
 }
 
 type PsRow = { Service?: unknown; State?: unknown; Health?: unknown; ExitCode?: unknown };
