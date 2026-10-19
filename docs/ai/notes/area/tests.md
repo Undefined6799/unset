@@ -70,7 +70,10 @@ ubuntu-24.04's AppArmor refuses the browser's user namespace.
   `@atproto/oauth-client` 0.8.9 `clientMetadataSchema` (same import as `tests/e2e/oauth-origin.test.ts`). The live
   client_id GET and OAuth as Alice or Bob are P1.33z.
 - `integration/setup/pg.setup.ts`: one container per run, real migrations once, one cloned database per test file.
-  Tests connect as the real process roles, never as migrator or the superuser (TE-2).
+  Tests connect as the real process roles, never as migrator or the superuser (TE-2). One opt-in exception
+  (architecture 2026-10-19 04:51Z): `asAuditor()` from `setup/pg.setup.ts` logs in as the real auditor role,
+  provided under its own key `postgresAuditor`, so a test can count `audit.chain`; it is never handed to a server
+  under test.
 - `integration/postgres/`: migrations, grants, pool, role passwords, schemas, DID columns.
 - `integration/query-budget.test.ts`: every route in every `routes.manifest.json` needs a fixture in
   `query-budget/fixtures/<interface>.json`, and stays under the statement budget. Keep `path` equal to the manifest

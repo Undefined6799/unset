@@ -29,6 +29,8 @@ type World = {
   remaining?: number;
   /** The issuer OAuth recorded for the DID; a throw stands for an unreadable token set. */
   issuer?: string | null | Error;
+  /** The last browser's revocation fails at the PDS (P2.08g). */
+  revokeFails?: boolean;
 };
 
 function setup(world: World = {}) {
@@ -44,6 +46,7 @@ function setup(world: World = {}) {
   const deps: LogoutDeps = {
     readSession: async () => (world.session === undefined ? SESSION : world.session),
     destroySession: async (session) => {
+      calls.push("destroy");
       if (world.destroyFails) throw new Error("db down");
       destroyed.push(session);
       // Another browser still holds a session, so this path must not revoke the shared grant.
@@ -58,9 +61,11 @@ function setup(world: World = {}) {
     revokeGrant: async () => {
       calls.push("revoke");
       if (world.remaining !== 0) throw new Error("revoke is not this test");
+      if (world.revokeFails) throw new Error("RevokeDown");
     },
     deleteTokenSet: async () => {
-      throw new Error("token delete is not this test");
+      calls.push("deleteTokenSet");
+      if (!world.revokeFails) throw new Error("token delete is not this test");
     },
     page: (page) =>
       pageResponse(
@@ -153,12 +158,47 @@ describe("POST /logout", () => {
     expect(await response.text()).toContain("Could not sign you out, try again.");
   });
 
-  test("logout_reads_the_issuer_before_revoking", async () => {
-    // The last browser's revoke deletes the token set, which is where the issuer is recorded.
+  test("logout_reads_the_issuer_before_destroying", async () => {
+    // The last browser's revoke deletes the token set, which is where the issuer is recorded, and an overlapping
+    // second POST must find it before either destroy runs (P2.08g, verify-1054 mutant 14).
     const { send, calls } = setup({ remaining: 0 });
     const response = await send("/logout");
     expect(response.headers.getSetCookie()).toEqual(carries(OUR_ISSUER));
-    expect(calls).toEqual(["issuerOf", "revoke"]);
+    expect(calls).toEqual(["issuerOf", "destroy", "revoke"]);
+  });
+
+  test("logout_double_click_ends_at_the_fallback_link", async () => {
+    // The second POST of a double click finds no session, so nobody's issuer is known: it clears the carrier and
+    // the signed-out page links our PDS. Safe, if less helpful (architecture 04:15Z item 1; verify-1054 M1).
+    const first = await setup({ issuer: FOREIGN_ISSUER }).send("/logout");
+    expect(first.headers.getSetCookie()).toEqual(carries(FOREIGN_ISSUER));
+    const second = await setup({ session: null, issuer: FOREIGN_ISSUER }).send("/logout");
+    expect(second.headers.getSetCookie()).toEqual([...SIGNED_OUT, CLEAR_ISSUER]);
+    const html = await (await setup({ session: null }).send("/signed-out", { method: "GET" })).text();
+    expect(html).toContain('href="https://pds.unset.test/account"');
+    expect(html).not.toContain("pds.example");
+  });
+
+  test("logout_carries_the_normalised_origin", async () => {
+    // The library allows an issuer with a path (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js); only its
+    // origin is carried, lower-cased and without the default port (P2.08g, verify-1054 mutant 16).
+    for (const issuer of ["HTTPS://PDS.Example:443/oauth", "https://pds.example/"]) {
+      const response = await setup({ issuer }).send("/logout");
+      expect(response.headers.getSetCookie(), issuer).toEqual(carries(FOREIGN_ISSUER));
+    }
+  });
+
+  test("logout.last_browser_revoke_fails", async () => {
+    // routes/logout.ts revokeOrDrop: when the PDS refuses the revocation, the stored set is still deleted, so no
+    // grant remains on our side (P2.08g, adopted from verify-1056's scratch probe).
+    const { send, calls, lines } = setup({ remaining: 0, revokeFails: true });
+    const response = await send("/logout");
+    expect(response.headers.get("location")).toBe("/signed-out");
+    expect(calls).toEqual(["issuerOf", "destroy", "revoke", "deleteTokenSet"]);
+    expect(lines.filter((line) => line.event === "oauth.revoke_failed")).toEqual([
+      expect.objectContaining({ kind: "Error" }),
+    ]);
+    expect(JSON.stringify(lines)).not.toContain(DID);
   });
 
   test("logout_with_an_unreadable_issuer_still_signs_out", async () => {
