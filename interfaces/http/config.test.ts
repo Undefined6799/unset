@@ -1,7 +1,7 @@
 // P2.03x: the session timeouts the store (P2.03) reads, with the defaults of plan section 5.3 and their bounds.
 import { defineConfig, loadConfig } from "@unset/shared-config";
 import { describe, expect, test } from "vitest";
-import { config, sessionConfig } from "./config.ts";
+import { config, loginConfig, sessionConfig } from "./config.ts";
 
 const load = (env: Record<string, string>) =>
   loadConfig(defineConfig({ ...sessionConfig }), env, { onUnknownKeys: () => undefined });
@@ -53,5 +53,24 @@ describe("session config", () => {
       { key: "SESSION_TOUCH_INTERVAL_S", reason: "invalid" },
     ]);
     expect(load({ SESSION_IDLE_S: "2592000" }).SESSION_IDLE_S).toBe(2_592_000);
+  });
+});
+
+describe("email recheck", () => {
+  const recheck = (env: Record<string, string>) =>
+    loadConfig(defineConfig({ EMAIL_RECHECK_S: loginConfig.EMAIL_RECHECK_S }), env, {
+      onUnknownKeys: () => undefined,
+    });
+
+  test("email_recheck_capped_at_900", () => {
+    // P2.11a: the recheck is how long another browser keeps rendering after the grant is revoked at the PDS, so its
+    // maximum is the revocation window: 15 minutes.
+    expect(recheck({}).EMAIL_RECHECK_S).toBe(900);
+    expect(recheck({ EMAIL_RECHECK_S: "900" }).EMAIL_RECHECK_S).toBe(900);
+    for (const value of ["901", "86400"]) {
+      expect(() => recheck({ EMAIL_RECHECK_S: value }), value).toThrow(
+        expect.objectContaining({ problems: [{ key: "EMAIL_RECHECK_S", reason: "invalid" }] }),
+      );
+    }
   });
 });
