@@ -79,7 +79,7 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a, P1.31d, P1.31, P1.31c,
   P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex 23:08Z). P1.34v and P1.34z are
   dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and P2.02 merged), P2.08b–P2.08h,
-  P2.11, P2.11a–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the slice exit P2.13a. Order from
+  P2.11, P2.11a, P2.11c–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the slice exit P2.13a. Order from
   2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus order, book edit
   2026-10-12-batch-44-refocus). P1.27, P1.30 and P1.34 hardening steps not on that path, and the paused guard and
   test-helper follow-ups, start only after P2.13a's scenario passes locally. Fixes for holes already on main are exempt.
@@ -443,7 +443,7 @@ flowchart LR
   P1_25t["P1.25t encoded DIDs redacted in log scrub"]
   P1_37f["P1.37f DID route privacy, real accounts"]
   P1_25n --> P1_37f
-  P1_37h["P1.37h DID methods with digits scrubbed"]
+  P1_37h["P1.37h DID scrub widened"]
   P1_25t --> P1_37h
   P1_37j["P1.37j Lighthouse NO_NAVSTART cause"]
   P1_04 --> P1_27
@@ -6767,20 +6767,29 @@ Done when the reds fail on main first, the mutants that drop each separator form
 check is green.
 As built: #1070 (merged as c5d979a).
 
-### P1.37h — Scrub DIDs whose method has digits
+### P1.37h — Widen the DID scrub: digits, no word boundary
 Tags: [SEC]            Depends on: P1.25t
 Slice 1, issue #1083, product (`shared/log/`), lane Phase 2. Book edit 2026-10-19-verify-1017-scrub-and-gate, last
 section, from Codex P2 on #1070. shared/log is not in CODEOWNERS' trusted section; if the lane finds otherwise, it
 splits that part out. A tightening, so it needs no card or typed line. W3C did-core gives `method-name =
 1*method-char` with `method-char = %x61-7A / DIGIT` (https://www.w3.org/TR/did-core/#did-syntax), but
-shared/log/scrub.ts:16 matches the method as `[a-z]+`, so `did:v1:alice` passes the last log layer.
-- shared/log/scrub.ts:16: the method part becomes `[a-z0-9]+`. The rest of the pattern is unchanged.
+shared/log/scrub.ts:16 matches the method as `[a-z]+`, so `did:v1:alice` passes the last log layer. Its leading `\b`
+also misses a DID glued to a word character or an escape (`user_did:plc:…`, `%2Fdid%3Aplc%3A…`). Restated by
+architecture 07:11Z (real UTC), option 2.
+- shared/log/scrub.ts:16 becomes exactly `/did(?::|%3a|%253a)[a-z0-9]+(?::|%3a|%253a)[a-z0-9._:%-]+/gi`: digits in
+  the method, and no word boundary.
 - Red: `logger_scrubs_encoded_dids` gains numeric-method cases, plain and encoded once and twice (`did:v1:alice`,
-  `did%3Av1%3Aalice`, `did%253Av1%253Aalice`). A mutant that drops `0-9` turns them red.
+  `did%3Av1%3Aalice`, `did%253Av1%253Aalice`), and four boundary cases: `/login?next=%2Fdid%3Aplc%3A…` (the Location
+  app-gate.ts:68 builds), `%22did:plc:…`, `%20did:plc:…` and `user_did:plc:…`.
+- Pinned rows: `candid:camera:roll` redacts to `can[redacted]`, an accepted over-redaction; `didn't` and a `did:`
+  with no method stay unredacted.
+- Mutants: one drops `0-9`, one restores `\b`; each turns a red case green.
+- The PR notes that the pattern has no nested quantifier over a shared character, so matching stays linear and there
+  is no ReDoS hazard.
 Threats: a DID with a digit in its method reaches the logs unscrubbed (SE-7). The scrub covers the full did-core method
 grammar.
 ASVS 5.0: V16.2.5.
-Done when the red and the mutant are shown and check is green.
+Done when the reds and both mutants are shown and check is green.
 
 ---
 
@@ -6797,7 +6806,7 @@ follow-up". P1.25n merged as #1053. P1.25t stays its own step, in any order. Iss
    project.
 2. **M2.** The log check decodes each line repeatedly, up to 3 rounds. A malformed escape counts as a match, and
    `did:` matches case-insensitively on both the raw and the decoded line. Add the fully encoded, `%253A` and
-   mixed-case paths.
+   mixed-case paths, plus `/%64%69%64%3A…` and `did%3Ap%6Cc%3A…` (architecture 07:11Z).
 3. **N1.** The fixture manifest uses one style, so the referrerpolicy check sees the head's links.
 4. **N2.** The wording at me.privacy.test.ts:173 and :186 is trimmed to what the tests prove.
 Threats: the DID route answering differently, or leaking the DID in logs, depending on whether an account exists (an
@@ -9213,10 +9222,11 @@ five-name text; C19 requires PDS_MODERATION_EMAIL_SMTP_URL, deployment/preflight
 - Delivery follows the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z
   sections). Preflight reads names only, and never prints a value.
 - Reds: (1) a seventh key; (2) either SMTP URL missing under dev; (3) either SMTP URL present under local; (4) a from
-  address placed in pds.env.
+  address placed in pds.env; (5) under `--env local` a six-key pds.env fails; (6) under `--env dev` a four-key one
+  fails. One pds.env per host (Codex item 7 on #1081, architecture 07:08Z; the runbook says "one env per host").
 - It builds after P1.36g, so the set is known when it lands.
 
-Done when the four reds are shown and check is green.
+Done when the six reds are shown and check is green.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an unreviewed setting, or a
 secret, slipped into the PDS env. Answered by an exact key set.

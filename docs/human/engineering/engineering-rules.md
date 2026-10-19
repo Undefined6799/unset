@@ -256,6 +256,7 @@ The rules that matter most for the first slice (sign in, see your own profile). 
 - Source: SRE — ch. 6, ch. 12; DevOps Handbook — ch. 14 (Create Telemetry to Enable Seeing and Solving Problems).
 - Status: PARTLY — Plan §6 logging, P1.04 `request_log_uses_template`. NEW: the enforced schema.
 - Amended 2026-10-06 (P1.11e): `version` is a non-negative safe integer (anything else is dropped); `sqlstate` is kept only when it matches `^[0-9A-Z]{5}$`, else written as `[sqlstate]`. Neither can carry a DID, handle, IP or token. A new field needs an architecture ruling and a line here. String fields other than `route` and `reqId` are fixed words by shape, so a handle, DID, email, IP or URL cannot pass (P1.03w, ruling 2026-10-06). Amended 2026-10-06 (P1.23e): `island` is an island id from the server's own island registry, matching `^[a-z][a-z0-9-]{0,40}$`, else written as `[island]`; it is never taken from a request.
+- Amended 2026-10-19 (architecture 07:11Z, real UTC): any step that logs a field which can carry a raw URL, path, query or header value decodes it, up to 3 percent-decoding rounds, before the scrub runs, in that step, with a red for an encoded DID in that field. The product scrub itself does not decode.
 - Priority: P1
 
 **SE-7a. No fixture, sample or test value may be a real person's identifier, or plausibly be one.**

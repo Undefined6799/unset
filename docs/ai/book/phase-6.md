@@ -113,7 +113,7 @@ examples below stands for an opaque id).
 | P2.01/P2.02 | `resolveHandle(handle) → did`, `verifyHandle(did) → { handle, verified }` |
 | P2.03 | `getSession(req) → { did, sid } \| null` |
 | P2.08 | `POST /logout` as written ("sign out everywhere" dropped 2026-10-19); **no sign-out hook exists**. P6.16 adds one call to `chat.endSessions(did, { kind: "this_browser", appSessionRef })` after the session row is destroyed (routed to the editor as a P2.08 change) |
-| P2.11a | `auth_dead` at the recheck ends every session of the DID through `destroyAllForDid`. P6.04a adds one call to `chat.endSessions(did, { kind: "everywhere" })` after that commits, for `auth_dead` only (routed to the editor as a P2.11a change); it is the only caller of the everywhere kind |
+| P2.11a | `auth_dead` at the recheck ends every session of the DID through `destroyAllForDid`. P6.04a adds one DA-2 outbox job, inserted in the same transaction as `destroyAllForDid`, that ends every chat session through `chat.endSessions(did, { kind: "everywhere" })`, for `auth_dead` only (routed to the editor as a P2.11a change; architecture 07:08Z); it is the only caller of the everywhere kind |
 | P2.12 | onboarding state machine with a `chat` placeholder step: `onboarding.current(did)`, `onboarding.advance(did, step)`, hook `onTermsAccepted(did, tx)` |
 | P2.14 | As written (`phase-2.md` P2.14): `mintModuleAssertion(did, moduleId, nonce)`, 60 s TTL, no custom claims; `verifyModuleAssertion(token, { audience, expectedNonce, keys, consumeJti, now })`; `app.module_account(module, did, account_ref, created_at)` with `moduleAccounts.link(tx, module, did, ref)`, `byDid`, `byRef`. **Phase 6 needs the extension in F8.1** (routed to phase-2's writer): `mintModuleAssertion(did, moduleId, { nonce, claims })` with a reserved-claim check (no `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `nonce` override) and a per-module TTL from `MODULES` (≤120 s); `verifyModuleAssertion` returns the claims. Modules `chat-auth` and `chat-admin` are two entries in the fixed `MODULES` list in `web`'s composition root (decision 25) |
 | P2.16 | the fingerprint-check stage: `fingerprintGate.check(did, luma)` (image entry) and `fingerprintGate.checkHashes(freezeDid: Did | null, hashes)` (positional and first, so no caller can leave it out; `null` freezes no one) (for callers that hashed with P2.16b themselves, such as P6.14a), both `→ { kind: "clear", hashes, checkedBy } \| { kind: "blocked" } \| { kind: "unavailable" }` (never "match"; there is no other check path) over the `FingerprintCheck` interface (`check(hashes, { timeoutMs })`; PDQ computed locally, P2.16b). Its fake runs until **P5.07b** adds the real Arachnid client; production refuses to boot without the real check (Alex 02:58Z, decision 23). PDQ only: no MD5, no TMK; classifications hyphenated (`harmful-abusive-material`, `no-known-match`) |
@@ -2863,8 +2863,13 @@ Algorithm (full detail: suspension, erasure and session ending):
      architecture 05:01Z, book edit 2026-10-19-drop-sign-out-everywhere). A grant revoked at the PDS: `auth_dead` only
      (P2.11a), within 15 minutes on our own PDS, at the next recheck, never immediately (P2.11a's 900 s recheck cap),
      ends every chat session of the DID, chat devices included, through `endSessions { kind: "everywhere" }` and
-     `chat-admin` `end_sessions`. It uses P2.11a's exhaustive switch: `transient`, `scope_missing` and `rejected` never
-     end chat sessions, with one red each.
+     `chat-admin` `end_sessions`. It goes through the DA-2 outbox, never a call after commit: the same transaction that
+     runs `destroyAllForDid(tx, did, "auth_dead")` inserts one job row to end every chat session of the DID.
+     `chat-admin` works it idempotently with backoff; a dead letter raises `dead_letters`. `/api/chat/me`'s 401 at the
+     recheck is a second layer (architecture 07:08Z, Codex item 4 on #1081). Reds:
+     `auth_dead_chat_job_survives_chat_down`, `auth_dead_chat_job_idempotent`, `auth_dead_chat_job_rolls_back` (the
+     job row is gone when the session transaction rolls back). It uses P2.11a's exhaustive switch: `transient`,
+     `scope_missing` and `rejected` never end chat sessions, with one red each.
 Edge cases and failures:
   - Chat stack down during erasure → job waits; the core erasure completes; `eraseDid`'s report lists "chat pending".
   - The MXID localpart stays reserved in MAS after deactivation (no reuse); a new account never gets it.
@@ -3191,8 +3196,8 @@ The plan's 03:02Z revision already folds some of these; the status column says w
    root gains `chat-auth` and `chat-admin` (decision 25).
    The handoff transport stays the module's choice (P6.03 posts a form; P2.14's own handoff route is unchanged).
 2. **P2.08** (phase-2): one call to `chat.endSessions(did, { kind: "this_browser", appSessionRef })` after the session
-   row is destroyed. `chat.endSessions(did, { kind: "everywhere" })` comes from P2.11a's `auth_dead` path, not P2.08
-   (P6-A2 settled; "sign out everywhere" dropped 2026-10-19).
+   row is destroyed. `chat.endSessions(did, { kind: "everywhere" })` comes from P2.11a's `auth_dead` path through a DA-2
+   outbox job, not P2.08 (P6-A2 settled; "sign out everywhere" dropped 2026-10-19).
 3. **P2.16** (phase-2): the fingerprint-check stage (`fingerprintGate.check` / `checkHashes`, result `clear | blocked |
    unavailable`, over `FingerprintCheck`) as assumed in the
    interfaces table; video evidence needs the stage's frame path (Phase 4). **P1.16** gains the purpose `chat.openid`

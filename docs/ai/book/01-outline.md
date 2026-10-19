@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 369 steps: 328 from `phase-1.md`, 41 from `phase-2.md` (including the
+Depth: **build-ready**. 368 steps: 328 from `phase-1.md`, 40 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -299,7 +299,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25m | Pin the DID account route's privacy | [SEC] | P1.25 | `phase-1.md` |
 | P1.25n | Harden the DID route privacy tests | [SEC] | P1.25m | `phase-1.md` |
 | P1.25t | Redact percent-encoded DIDs in the log scrub | [SEC] | — | `phase-1.md` |
-| P1.37h | Scrub DIDs whose method has digits | [SEC] | P1.25t | `phase-1.md` |
+| P1.37h | Widen the DID scrub: digits, no word boundary | [SEC] | P1.25t | `phase-1.md` |
 | P1.37f | Test DID route privacy against real accounts | [SEC] | P1.25n | `phase-1.md` |
 | P1.37j | Find why Lighthouse fails with NO_NAVSTART | (none; root cause, then Alex's typed line for the fix) | — | `phase-1.md` |
 | P1.26 | Accessibility and browser test harness | — | P1.25, P1.24c | `phase-1.md` |
@@ -543,7 +543,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.08h | Bound the issuer read and narrow its carrier | [SEC] | P2.08b | `phase-2.md` |
 | P2.11 | Email-verify gate (ADR 0026 local exception) | [SEC] | P2.06, P2.07, P1.29h | `phase-2.md` |
 | P2.11a | End sessions on a revoked grant at recheck | [SEC] | P2.11 | `phase-2.md` |
-| P2.11b | Count sessions ended on a revoked grant | [SEC] | P2.11a | `phase-2.md` |
+| P2.11b | ~~Count sessions ended on a revoked grant~~ **Retired** (moved to P3.20c, architecture 07:08Z) | [SEC] | P2.11a | `phase-2.md` |
 | P2.11c | Reword the auth_dead sign-out bound | [SEC] | P2.11a | `phase-2.md` |
 | P2.11d | Cap a cached recheck during PDS outages | [SEC] | P2.11a, P2.11c | `phase-2.md` |
 | P2.11e | Correct the revoke-bound wording on main | [SEC] | P2.11c | `phase-2.md` |
@@ -861,7 +861,7 @@ flowchart TD
   P2_08h["P2.08h Issuer read bounded, carrier narrowed"]
   P2_11["P2.11 Email-verify gate"]
   P2_11a["P2.11a Revoked grant ends sessions"]
-  P2_11b["P2.11b auth_dead counter"]
+  P2_11b["P2.11b RETIRED to P3.20c"]
   P2_11c["P2.11c auth_dead bound reworded"]
   P2_11d["P2.11d Cached recheck capped"]
   P2_11e["P2.11e Revoke bound wording"]
@@ -1000,7 +1000,7 @@ flowchart TD
   P1_25t["P1.25t Encoded DIDs redacted in log scrub"]
   P1_37f["P1.37f DID route privacy, real accounts"]
   P1_25n --> P1_37f
-  P1_37h["P1.37h DID methods with digits scrubbed"]
+  P1_37h["P1.37h DID scrub widened"]
   P1_25t --> P1_37h
   P1_37j["P1.37j Lighthouse NO_NAVSTART cause"]
   P1_04 --> P1_27
