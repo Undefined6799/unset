@@ -1,8 +1,8 @@
 // The test-only pages (P1.25c; step book record 2026-10-19-five-step-audit, P1.25c). compose.ts mounts them only when
-// TEST_ROUTES is on, and the config refuses that in prod (config.ts), so production routing never holds them. They give
+// TEST_ROUTES is on, and the config allows that only in test (config.ts), so no deployed routing holds them. They give
 // the browser harness and the route tests a real 500, a real 503 and a real app-group page through the kit.
 // The book names them `/__test/*`; the kit's path template refuses a leading underscore (shared/http/routes.ts
-// SEGMENT, a trusted file), so they live under `/test-routes/`.
+// SEGMENT, a trusted file), so they live under `/test-routes/`, a prefix no product route may use.
 import { defineRoute, type ErrorPage, type Route } from "@unset/shared-http";
 import type { PageSpec } from "../web/page.ts";
 import type { WebRender } from "../web/render-entry.ts";

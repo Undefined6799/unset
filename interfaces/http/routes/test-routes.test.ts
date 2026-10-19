@@ -42,18 +42,31 @@ describe("test routes", () => {
   test("test_routes_refused_in_prod", () => {
     // Production names other keys it lacks here (net-guard hosts, a real commit); only TEST_ROUTES is this rule's.
     const refused = (extra: Record<string, string>) => problems(extra).some((p) => p.key === "TEST_ROUTES");
-    expect(problems({ UNSET_ENV: "prod", TEST_ROUTES: "true" })).toContainEqual({
-      key: "TEST_ROUTES",
-      reason: "invalid",
-    });
-    expect(refused({ UNSET_ENV: "prod" })).toBe(false);
-    expect(refused({ UNSET_ENV: "prod", TEST_ROUTES: "false" })).toBe(false);
-    for (const unsetEnv of ["dev", "test"]) expect(refused({ UNSET_ENV: unsetEnv, TEST_ROUTES: "true" })).toBe(false);
+    // Allowed only in test: dev, which staging runs as, refuses it like prod.
+    for (const unsetEnv of ["prod", "dev"]) {
+      expect(problems({ UNSET_ENV: unsetEnv, TEST_ROUTES: "true" }), unsetEnv).toContainEqual({
+        key: "TEST_ROUTES",
+        reason: "invalid",
+      });
+      expect(refused({ UNSET_ENV: unsetEnv }), unsetEnv).toBe(false);
+      expect(refused({ UNSET_ENV: unsetEnv, TEST_ROUTES: "false" }), unsetEnv).toBe(false);
+    }
+    expect(refused({ UNSET_ENV: "test", TEST_ROUTES: "true" })).toBe(false);
   });
 
   test("test_routes_absent_by_default", async () => {
     const { server } = await compose(loadConfig(config, env()), web);
-    for (const path of Object.values(TEST_PATHS)) expect((await get(server, path)).status, path).toBe(404);
+    // With the key off, a test path reads exactly like a path that was never a route.
+    const shape = async (response: Response) => ({
+      status: response.status,
+      headers: [...response.headers].filter(([name]) => name !== "date"),
+      body: await response.text(),
+    });
+    // The prefix is reserved for these pages: no product route uses it.
+    expect(server.routeTable().filter((route) => route.path.startsWith("/test-routes/"))).toEqual([]);
+    const unknown = await shape(await get(server, "/no-such-page/x"));
+    expect(unknown.status).toBe(404);
+    for (const path of Object.values(TEST_PATHS)) expect(await shape(await get(server, path)), path).toEqual(unknown);
   });
 
   test("unavailable_retry_after", async () => {

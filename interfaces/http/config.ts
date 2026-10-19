@@ -98,13 +98,14 @@ export const legalConfig = {
 };
 
 /**
- * The test-only pages (P1.25c, routes/test-routes.ts). Off by default; in prod the config refuses it, so the process
- * exits at start (`config.invalid` with key TEST_ROUTES, exit 78) and production routing never holds them.
+ * The test-only pages (P1.25c, routes/test-routes.ts). Off by default and allowed only where UNSET_ENV is test: dev
+ * (which staging runs as) and prod refuse it, so the process exits at start (`config.invalid` with key TEST_ROUTES,
+ * exit 78) and no deployed routing holds them.
  */
 export const testRoutesConfig = {
   TEST_ROUTES: withRule(
     bool({ default: false }),
-    (config) => config.TEST_ROUTES !== true || config.UNSET_ENV !== "prod",
+    (config) => config.TEST_ROUTES !== true || config.UNSET_ENV === "test",
   ),
 };
 
