@@ -2794,12 +2794,14 @@ Outputs (contract):
     clarified): never per user (no DID, IP or handle in a name or value), and `ops.metric` has a row in the retention
     table (latest value only, overwritten; P5.09) and a line in the RoPA (P1.36, P5.12).
   - `auth_dead_dids_ended` and `auth_dead_sessions_ended` (moved from the retired P2.11b, architecture 07:08Z; two
-    fixed names, architecture 19:32Z, real UTC; issue #1052): P2.11a's `auth_dead` path reports the DIDs whose
-    sessions it ended and the sessions it ended. Counts only, with no DID, IP or label value; no audit row (P1.15); a
-    transient failure raises nothing.
+    fixed names, architecture 19:32Z, real UTC; issue #1052): counters, not latest values. P2.11a's `auth_dead` path
+    adds the DIDs and the sessions it ended to `ops.counter(name PK, value bigint)` with `value = value + $n`, in the
+    transaction that enqueues the end (architecture 20:09Z). Counts only, with no DID, IP or label value; no audit row
+    (P1.15); a transient failure raises nothing.
   - `open_hosted_blocks` for the digest: the count of `age_gate.blocked` audit rows with reason `age_gate_hosted`
-    that have no matching succeeded `deactivate` or `takedown` outcome in `pds-admin`'s log. "Handled" is derived,
-    never set by hand; until P3.16 lands, every such row stays open (Codex item 5 on #1081, architecture 07:08Z).
+    that have no resolution row in our own audit table, written by the admin action through the app. "Handled" is
+    derived, never set by hand, and never read from `pds-admin`'s log (architecture 20:09Z); until P3.16 lands, every
+    such row stays open (Codex item 5 on #1081, architecture 07:08Z).
   - `adm.canary(id, code_sha256, sent_at, confirmed_at NULL)`: the mail canary (F3).
   - **Alert outbox, `alert.send(class)`** (editor pass, phase-5 note 10): a process with no mail path (`indexer`,
     `auditor`, and later `retention` and `backup`) never sends an alert itself. `alert.send(class)` calls the
@@ -2836,9 +2838,9 @@ outside switch alerts (P3-B2).
 Done when (tests):
   - `ops-report-name-ownership`; `ops-numeric-only`; `ops_auth_dead_counters` (one revoked DID with 3 sessions
     moves `auth_dead_dids_ended` by 1 and `auth_dead_sessions_ended` by 3, and writes no audit row; a transient
-    failure raises nothing);
-    `digest_counts_open_hosted_blocks`; `digest_clears_handled_block`; `digest_ignores_non_matching_outcome` (an
-    outcome for another target leaves the count unchanged); `alert-outbox-class-ownership`;
+    failure raises nothing); `ops_auth_dead_counters_concurrent` (two concurrent ends add up exactly);
+    `digest_counts_open_hosted_blocks`; `digest_clears_handled_block`; `digest_ignores_non_matching_outcome` (a
+    resolution row for another block leaves the count unchanged); `alert-outbox-class-ownership`;
     `alert-outbox-delivered-once`.
   - `monitor-alerts-each-threshold` (fake clock, one per class); `monitor-csam-report-alert`.
   - `csam-emergency-delivered-same-cycle`: a `csam_emergency` outbox row is delivered in the monitor cycle that sees

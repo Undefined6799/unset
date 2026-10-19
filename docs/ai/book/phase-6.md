@@ -49,7 +49,7 @@ type ChatAccountStatus = "none" | "pending" | "ready" | "unavailable";
 interface Chat {
   requestAccount(tx: Tx, did: Did): Promise<void>;           // P6.05: called by onboarding's terms step
   accountStatus(did: Did): Promise<ChatAccountStatus>;        // P6.17, /me card
-  endSessions(did: Did, scope: { kind: "this_browser"; appSessionRef: string } | { kind: "everywhere" }): Promise<void>; // P6.16, P6.04a
+  enqueueEndSessions(tx: Tx, did: Did, scope: { kind: "this_browser"; appSessionRef: string } | { kind: "everywhere" }): Promise<void>; // P6.16, P6.04a: a DA-2 outbox row in tx
   setSuspended(did: Did, suspended: boolean): Promise<void>;  // P6.04a
   erase(did: Did): Promise<"done" | "pending">;               // P6.04a, the `hooks.chat` entry of eraseDid's `eraseHooks` (P3.07)
 }
@@ -58,7 +58,8 @@ interface Chat {
   clients, the `/api/chat/*` routes and the handoff page, whose caller is the chat origin and which therefore speak
   MXIDs). It is wired once in `web`'s composition root (principle 7); no registry, no plugin (principle 3).
 - Every method is a durable job or a single row write: a chat outage never fails a core request or transaction
-  (principle 17). `endSessions`, `setSuspended` and `erase` enqueue and return.
+  (principle 17). `enqueueEndSessions` inserts its row in the caller's transaction; `setSuspended` and `erase` enqueue
+  and return.
 - Inside the chat client the same split holds: screens use `apps/chat/core/` types (`Conversation`,
   `Person { address, handle? }`, `Message`, `Request`, `Device`, `CryptoState`); only `apps/chat/matrix/`
   imports `matrix-js-sdk`, so an SDK upgrade stays local.
@@ -112,8 +113,8 @@ examples below stands for an opaque id).
 | P1.32 | ADR value `matrix.server_name` (config key `MATRIX_SERVER_NAME`) |
 | P2.01/P2.02 | `resolveHandle(handle) → did`, `verifyHandle(did) → { handle, verified }` |
 | P2.03 | `getSession(req) → { did, sid } \| null` |
-| P2.08 | `POST /logout` as written ("sign out everywhere" dropped 2026-10-19); **no sign-out hook exists**. P6.16 adds one call to `chat.endSessions(did, { kind: "this_browser", appSessionRef })` after the session row is destroyed (routed to the editor as a P2.08 change) |
-| P2.11a | `auth_dead` at the recheck ends every session of the DID through `destroyAllForDid`. P6.04a adds one DA-2 outbox job, inserted in the same transaction as `destroyAllForDid`, that ends every chat session through `chat.endSessions(did, { kind: "everywhere" })`, for `auth_dead` only (routed to the editor as a P2.11a change; architecture 07:08Z); it is the only caller of the everywhere kind |
+| P2.08 | `POST /logout` as written ("sign out everywhere" dropped 2026-10-19); **no sign-out hook exists**. P6.16 adds one call to `chat.enqueueEndSessions(tx, did, { kind: "this_browser", appSessionRef })` in the transaction that destroys the session row (routed to the editor as a P2.08 change) |
+| P2.11a | `auth_dead` at the recheck ends every session of the DID through `destroyAllForDid`. P6.04a adds one DA-2 outbox job, inserted in the same transaction as `destroyAllForDid`, that ends every chat session through `chat.enqueueEndSessions(tx, did, { kind: "everywhere" })`, for `auth_dead` only (routed to the editor as a P2.11a change; architecture 07:08Z); it is the only caller of the everywhere kind |
 | P2.12 | onboarding state machine with a `chat` placeholder step: `onboarding.current(did)`, `onboarding.advance(did, step)`, hook `onTermsAccepted(did, tx)` |
 | P2.14 | As written (`phase-2.md` P2.14): `mintModuleAssertion(did, moduleId, nonce)`, 60 s TTL, no custom claims; `verifyModuleAssertion(token, { audience, expectedNonce, keys, consumeJti, now })`; `app.module_account(module, did, account_ref, created_at)` with `moduleAccounts.link(tx, module, did, ref)`, `byDid`, `byRef`. **Phase 6 needs the extension in F8.1** (routed to phase-2's writer): `mintModuleAssertion(did, moduleId, { nonce, claims })` with a reserved-claim check (no `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `nonce` override) and a per-module TTL from `MODULES` (≤120 s); `verifyModuleAssertion` returns the claims. Modules `chat-auth` and `chat-admin` are two entries in the fixed `MODULES` list in `web`'s composition root (decision 25) |
 | P2.16 | the fingerprint-check stage: `fingerprintGate.check(did, luma)` (image entry) and `fingerprintGate.checkHashes(freezeDid: Did | null, hashes)` (positional and first, so no caller can leave it out; `null` freezes no one) (for callers that hashed with P2.16b themselves, such as P6.14a), both `→ { kind: "clear", hashes, checkedBy } \| { kind: "blocked" } \| { kind: "unavailable" }` (never "match"; there is no other check path) over the `FingerprintCheck` interface (`check(hashes, { timeoutMs })`; PDQ computed locally, P2.16b). Its fake runs until **P5.07b** adds the real Arachnid client; production refuses to boot without the real check (Alex 02:58Z, decision 23). PDQ only: no MD5, no TMK; classifications hyphenated (`harmful-abusive-material`, `no-known-match`) |
@@ -217,9 +218,10 @@ Algorithm (full detail: it gates the whole phase):
   1. For each row of "Interfaces this phase assumes", find the real symbol in the merged code. Same semantics, other
      name → note the rename. Different semantics → a contract change.
   2. Check specifically, because round 1 found drift here: P2.14's `claims` extension and `MODULES` entries for
-     `chat-auth` and `chat-admin`; P2.08's sign-out path (where P6.16 calls `chat.endSessions`); P2.16's fingerprint-check
-     names and whether the real Arachnid client is live (P5.07b); P4.07/P5.07b's image legal-hold entry point; P3.07's erasure-report shape; P3.15's `app.report`
-     columns and categories; P4.18's follow reader; P5.02's network names; P5.10's edge limiter; P1.13's registry API.
+     `chat-auth` and `chat-admin`; P2.08's sign-out path (where P6.16 calls `chat.enqueueEndSessions`); P2.16's
+     fingerprint-check names and whether the real Arachnid client is live (P5.07b); P4.07/P5.07b's image legal-hold
+     entry point; P3.07's erasure-report shape; P3.15's `app.report` columns and categories; P4.18's follow reader;
+     P5.02's network names; P5.10's edge limiter; P1.13's registry API.
   3. For each step whose Algorithm is marked "reviewed hypothesis", compare it with the code it will sit beside and
      rewrite it where the surrounding code makes another shape simpler (principles 9, 12, 18). Record each rewrite.
   4. Read the answers to P6-A1–P6-A8. An answer that differs from the default taken in this file → the affected steps are
@@ -2693,10 +2695,11 @@ Inputs: P6.07 session record and device pointer; P6.06 store names and tab lock;
 Outputs:
   - Client: `signOutThisDevice() → Result<void, "partial_wipe">`; `suspendChat(reason: "app_signed_out" |
     "app_account_changed")`; `allDevicesUrl() → string` (`action=org.matrix.devices_list`, else the bare account URI).
-  - `MatrixChat.endSessions(did, { kind: "this_browser", appSessionRef })`: enqueues job `chat_backchannel_logout`.
-  - P2.08 change (routed to the editor): after `sessions.destroy` commits, `POST /logout` calls
-    `chat.endSessions(s.did, { kind: "this_browser", appSessionRef: base64url(sha256("chat-session-ref:" + s.idHash)) })`.
-    It never waits on chat.
+  - `MatrixChat.enqueueEndSessions(tx, did, { kind: "this_browser", appSessionRef })`: inserts job
+    `chat_backchannel_logout` in tx.
+  - P2.08 change (routed to the editor): in the transaction of `sessions.destroy`, `POST /logout` calls
+    `chat.enqueueEndSessions(tx, s.did, { kind: "this_browser", appSessionRef: base64url(sha256("chat-session-ref:" +
+    s.idHash)) })`. It never waits on chat; a rolled-back destroy leaves no job row.
   - chat-auth `POST /internal/backchannel-logout` on `chat_admin_net`, header `X-Unset-Nonce`, body `{ assertion }`
     (module `chat-auth`, `claims: { verb: "logout", app_session_ref }`) → 200 `{ ended: n }` | 401 | 400 | 502.
 Algorithm (back-channel logout; full detail: session boundary):
@@ -2861,8 +2864,11 @@ Algorithm (full detail: suspension, erasure and session ending):
      Any step failing 24 times → alert and a held case in `admin`; the core erasure has already completed.
   4. No app action ends every chat session except a freeze, takedown, erasure or a revoked grant (auth_dead, P2.11a;
      architecture 05:01Z, book edit 2026-10-19-drop-sign-out-everywhere). A grant revoked at the PDS: `auth_dead` only
-     (P2.11a), within 15 minutes on our own PDS, at the next recheck, never immediately (P2.11a's 900 s recheck cap),
-     ends every chat session of the DID, chat devices included, through `endSessions { kind: "everywhere" }` and
+     (P2.11a), within 15 minutes on our own PDS at the next recheck that reaches it, never immediately. P2.11f carries
+     the bound: its sweep rechecks every DID with a live chat seed against our own PDS at most 5 minutes apart,
+     bypassing the email-recheck cache, and the outbox is worked within 2 minutes, so about 7 minutes at worst
+     (architecture 20:09Z). `/api/chat/me` keeps the cached recheck; it is a liveness path, not the bound. It
+     ends every chat session of the DID, chat devices included, through `enqueueEndSessions { kind: "everywhere" }` and
      `chat-admin` `end_sessions`. It goes through the DA-2 outbox, never a call after commit: the same transaction that
      runs `destroyAllForDid(tx, did, "auth_dead")` inserts one job row to end every chat session of the DID.
      `chat-admin` works it idempotently with backoff; a dead letter raises `dead_letters`. `/api/chat/me`'s 401 at the
@@ -3205,8 +3211,8 @@ The plan's 03:02Z revision already folds some of these; the status column says w
    per-module TTL (≤120 s); `verifyModuleAssertion` returns the claims; the fixed `MODULES` list in `web`'s composition
    root gains `chat-auth` and `chat-admin` (decision 25).
    The handoff transport stays the module's choice (P6.03 posts a form; P2.14's own handoff route is unchanged).
-2. **P2.08** (phase-2): one call to `chat.endSessions(did, { kind: "this_browser", appSessionRef })` after the session
-   row is destroyed. `chat.endSessions(did, { kind: "everywhere" })` comes from P2.11a's `auth_dead` path through a DA-2
+2. **P2.08** (phase-2): one call to `chat.enqueueEndSessions(tx, did, { kind: "this_browser", appSessionRef })` in the
+   transaction that destroys the session row. The `everywhere` kind comes from P2.11a's `auth_dead` path through a DA-2
    outbox job, not P2.08 (P6-A2 settled; "sign out everywhere" dropped 2026-10-19).
 3. **P2.16** (phase-2): the fingerprint-check stage (`fingerprintGate.check` / `checkHashes`, result `clear | blocked |
    unavailable`, over `FingerprintCheck`) as assumed in the

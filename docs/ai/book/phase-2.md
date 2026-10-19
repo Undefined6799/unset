@@ -1665,9 +1665,9 @@ Outputs:
   - **No audit rows** (plan §6 "no user sign-in records"): counters only, as log events with no DID:
     `auth.logout_this_browser`.
   - Chat hook points (built by P6.16, not here; Phase 2 has no chat and no sign-out hook): after the session row is
-    destroyed in step 3 of `POST /logout`, P6.16 adds one call `chat.endSessions(s.did, {kind: 'this_browser',
-    appSessionRef: base64url(sha256('chat-session-ref:' + s.idHash))})`. It only enqueues a job and never blocks or
-    fails the sign-out (phase-6, principle 17).
+    destroyed in step 3 of `POST /logout`, P6.16 adds one call `chat.enqueueEndSessions(tx, s.did, {kind:
+    'this_browser', appSessionRef: base64url(sha256('chat-session-ref:' + s.idHash))})` in that transaction. It only
+    inserts a job row and never blocks or fails the sign-out (phase-6, principle 17).
 
 Algorithm (`POST /logout`):
   1. CSRF gate passed. `s = sessions.read(ctx)`.
@@ -2310,9 +2310,10 @@ As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built a
   button", 02:58:35Z). A hosted block writes `age_gate.blocked` with reason `age_gate_hosted`. Its alert is P3.16d's
   class `age_gate_hosted_block` (architecture's section labelled 06:15Z; book edit 2026-10-19-five-step-audit,
   "Hosted-block alert contract"): payload the audit row id only, one alert at the block, `open_hosted_blocks` as a
-  count in the daily digest, and "handled" derived from pds-admin's log of a succeeded deactivate or takedown on the
-  same target, so the count stays open until P3.16. Until P3.16d, the interim signal is the warning log line
-  `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The account page moved from `/me` to `/<DID>` (D-5,
+  count in the daily digest, and "handled" derived from the block's resolution row in our own audit table, written by
+  the admin action through the app (architecture 20:09Z), so the count stays open until P3.16. Until P3.16d, the interim
+  signal is the warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The account page moved
+  from `/me` to `/<DID>` (D-5,
   #975); `/me` and `/did` answer 303 to it.
 Diagram: none.
 
@@ -5121,8 +5122,8 @@ Changes made, with the request that caused each:
   out everywhere" dropped, P2.08).
 - **P2.04**: `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
   fallback rule is stated (phase-1-part2 note 14; the retry itself stays in P2.05).
-- **P2.08** documents P6.16's this-browser `chat.endSessions` call (phase-6 item 2); it builds no hook now. P6.04a
-  adds the everywhere call to P2.11a's `auth_dead` path.
+- **P2.08** documents P6.16's this-browser `chat.enqueueEndSessions` call (phase-6 item 2); it builds no hook now.
+  P6.04a adds the everywhere call to P2.11a's `auth_dead` path.
 - **P2.09**: the key file is a Phase 2 stand-in retired by P3.16 in favour of the roster's `service_keys` (phase-3
   Notes); `web` reaches `pds-admin` through a named internal policy `pds-admin`.
 - **P2.10**: test accounts on the shared dev PDS come from invites after P1.35, `invite.e2e` runs on a throwaway stack
