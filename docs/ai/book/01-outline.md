@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 360 steps: 321 from `phase-1.md`, 39 from `phase-2.md` (including the
+Depth: **build-ready**. 361 steps: 322 from `phase-1.md`, 39 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -290,6 +290,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.25u | CODEOWNERS drops the island runtime's old paths | check | P1.25e | `phase-1.md` |
 | P1.25 | App shell and error pages | — | P1.24, P1.24k, P1.08, P1.25k, P1.25h, P1.25p | `phase-1.md` |
 | P1.25c | Add test routes, prod refusal and the 503 page | [SEC] | P1.25 | `phase-1.md` |
+| P1.25z | Pin the test-routes gate when the key is off | [SEC] | P1.25c | `phase-1.md` |
 | P1.25a | Ship the PNG favicons | [ALEX] (his favicon files) | P1.25 | `phase-1.md` |
 | P1.25f | Add feed mode and footer prefs | — | P1.25 | `phase-1.md` |
 | P1.25g | Fix disabled select focus and add two kit tests | — | P1.25 | `phase-1.md` |
@@ -526,7 +527,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P2.05 | Login | [SEC] | P2.04, P1.09 | `phase-2.md` |
 | P2.06 | Callback | [SEC] | P2.05, P2.03, P2.02, P2.02x, P1.07, P1.16, P2.04s | `phase-2.md` |
 | P2.07 | Resilience: one wrapper for PDS calls | [SEC] | P2.04, P2.04s | `phase-2.md` |
-| P2.08 | Logout ("sign out everywhere" dropped 2026-10-19) | [SEC] | P2.06, P2.04s | `phase-2.md` |
+| P2.08 | Logout | [SEC] | P2.06, P2.04s | `phase-2.md` |
 | P2.08b | Sign out with the recorded issuer | [SEC] | P2.08 | `phase-2.md` |
 | P2.08c | Count only live sessions at sign-out | [SEC] | P2.08 | `phase-2.md` |
 | P2.08d | Remove sign out everywhere | [SEC] | P2.08 | `phase-2.md` |
@@ -970,6 +971,8 @@ flowchart TD
   P1_25 --> P1_26
   P1_25c["P1.25c Test routes, prod refusal, 503"]
   P1_25 --> P1_25c
+  P1_25z["P1.25z Test-routes gate pinned, key off"]
+  P1_25c --> P1_25z
   P1_25a["P1.25a PNG favicons"]
   P1_25 --> P1_25a
   P1_25f["P1.25f Feed mode, footer prefs"]

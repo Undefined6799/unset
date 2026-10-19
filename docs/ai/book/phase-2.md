@@ -781,7 +781,8 @@ Outputs:
     `scripts/guards/grant-parse.test.ts:320-322`) with the contract P3.06 states: owned by `migrator`,
     `SECURITY DEFINER`, `SET search_path = pg_catalog, app`; deletes the DID's `app.session` rows; deletes its
     `app.oauth_session` row unless `why = 'deactivated'`; `why` CHECKed against one closed enum shared with P3.06:
-    Phase 2 uses `user_signout_all` (P2.08), `underage` (P2.12) and `auth_dead` (P2.07); P3.06 uses the account-state
+    Phase 2 uses `underage` (P2.12) and `auth_dead` (P2.07, P2.11a), and `user_signout_all` is unused since 2026-10-19
+    (P2.08f); P3.06 uses the account-state
     and moderation values. EXECUTE to `web` here; P3.06 grants it to `indexer` and `admin`. Because the function also
     deletes the token set, a caller that must revoke the grant at the authorization server calls `client.revoke`
     **before** it. P2.04s adds `sessions.destroyAllForDid(tx, did, why: EndSessionsReason)` as its thin wrapper.
@@ -1692,7 +1693,7 @@ Edge cases and failures:
 Threats: ending sessions and revoking the OAuth grant.
   - T Logout CSRF or a link that signs the member out → POST only, CSRF gate (`logout.get_405`, `logout.csrf`).
   - E A grant that outlives the last browser's sign-out → revoke, and the stored set deleted even when revoke fails
-    (`logout.last_browser_revokes`).
+    (`logout.last_browser_revokes`, and `logout.last_browser_revoke_fails` for the failure, P2.08e item 7).
   - S Silent re-login on a shared computer → next login carries `prompt=login` (`logout.next_login_prompt`).
   - R Sign-out events kept as identity records → none (`logout.no_sign_in_records`).
 
@@ -1715,7 +1716,8 @@ Reuse (provisional — for reuse review):
     here the issuer verified by OAuth replaces the allowlist.
 Not in this step: ending PDS browser sessions (the user does it at the PDS); chat logout (P6.16); account-state-driven
   session ends (P3.06).
-As built: #939 used the id P2.08 for this-browser logout only. The remainder is P2.08a (one letter, commit-msg guard).
+As built: #939 used the id P2.08 for this-browser logout only. The remainder is P2.08a (one letter, commit-msg guard);
+  P2.08a has no heading of its own, so the steps the records hang on it (P2.08b to P2.08d) depend on P2.08.
   The session count is the SELECT in `interfaces/http/logout-sessions.ts`, not a new store method, because
   `infrastructure/session` is trusted base (SE-6) and cannot share a PR with the routes. The catalog key is `error=`
   (plan §2 rule 15, `withErrorParam`), where this step wrote `e=`. P2.08a also built the "sign out everywhere" half;
@@ -1737,7 +1739,8 @@ by 2026-10-19-drop-sign-out-everywhere (architecture 03:20Z and 03:27Z).
    (PdsAccountLink.tsx:27).
 3. A failed logout shows "Could not sign you out, try again" on its 503, not the generic text (messages.ts:20).
 
-4. **Carrier (architecture 04:15Z).** `__Host-signed_out_issuer` (HttpOnly) carries the issuer origin to
+4. **Carrier (architecture's section labelled 04:15Z).** `__Host-signed_out_issuer` (`Secure`, `HttpOnly`,
+   `SameSite=Strict`, `Path=/`, `Max-Age=600`; the 06:10Z (c) ruling) carries the issuer origin to
    `/signed-out`. GET /signed-out clears it in the same response that reads it, so a reload shows our PDS link.
 5. The value must re-parse as exactly an https origin: no path, query, fragment, userinfo or non-default port.
    Anything else falls back to our PDS link. The host shown comes from the parsed origin, through the escaping
@@ -1753,6 +1756,7 @@ Done when these tests pass, red first for item 1, and check is green:
   assertion from `logout.everywhere`, which P2.08d removes; whichever of the two PRs lands second carries it;
 - `logout.next_login_prompt`, which runs a real logout before `POST /login`, instead of faking the cookie;
 - a foreign-issuer fixture (a reserved name, SE-7a) whose account link points at that issuer's origin.
+As built: #1054 (merged as c8937e5). Its verify follow-ups are P2.08g items 2 to 6 and P2.08h.
 
 ### P2.08c — Count only live sessions at sign-out
 Tags: [SEC]            Depends on: P2.08
@@ -1774,7 +1778,8 @@ Threats:
 - D: a live browser loses its grant early. Answered by the same predicate pinned to the store
   (`logout.remaining_sessions_match_the_store`, P2.08e).
 As built: #1009 (merged as 54046ca). The red was behavioural (`logout.test.ts:295`, `:298` and `:305` fail on main),
-not a typecheck failure, and only a scratch query showed it; P2.08e shows it in CI (verify-1009-4001214, M1).
+not a typecheck failure, and only a scratch query showed it; P2.08e shows it by local mutation
+(2026-10-19-p208e-mutation-reds).
 
 ### P2.08d — Remove sign out everywhere
 Tags: [SEC]            Depends on: P2.08
@@ -1820,26 +1825,28 @@ Book edit 2026-10-19-five-step-audit, "verify-1009-4001214 follow-ups" and "veri
    order.
 5. **N1.** `logout-sessions.ts:2` describes the store predicate, not "the book's SELECT", and wraps at the lint
    width; so does compose.ts:9.
-6. **Red first in CI (TE-5).** A commit restores the unfiltered `SELECT count(*) ... WHERE did = $1`, check fails on
-   the new tests, and the next commit restores the filter. The PR cites that run.
+6. **Red first (TE-5), under the departure below.** Restoring the unfiltered `SELECT count(*) ... WHERE did = $1` fails
+   the new tests, shown by local mutation, never a pushed commit.
 7. **verify-1020 M1.** `logout.last_browser_revoke_fails`: deleting the `deleteTokenSet` call (routes/logout.ts:77-81)
-   turns it red, and the item 6 run shows that too. The unused `mode: "keep"` (logout.test.ts:62, :123) is used by
+   turns it red, shown the same way. The unused `mode: "keep"` (logout.test.ts:62, :123) is used by
    this test or removed.
 8. **verify-1020 N2 to N4.** The Me.tsx:1-3 header drops the confirm box, and logger.ts:70 names both
    `oauth.revoke_failed` sources, including welcome.ts:186.
 9. The ASVS V7.4.1 row (asvs-5-l2.md) also cites `logout.remaining_sessions_match_the_store`,
-   `logout.last_browser_revoke_fails` and `logout.last_browser_counts_past_the_touch_interval`.
+   `logout.last_browser_revoke_fails` and `logout.last_browser_counts_past_the_touch_interval` (verify-1056-7a10fd1
+   N6; the step book pinned all three at 04:14Z).
 Departure (book edit 2026-10-19-five-step-audit, "Departure: P2.08e item 6, red by local mutation"): the lane's
 harness refused the weakening commits of items 6 and 7, so their red is the verifier applying both mutations locally
 (the unfiltered count in logout-sessions.ts, and `deleteTokenSet` removed at logout.ts:77-81) and naming the tests
-that fail under each. The verify report cites it and the PR body points to the report. The reds were shown against
+that fail under each. The reds were shown against
 real Postgres (16.14, with the repo's own bootstrap and migrations) and recorded in
 `unset-plan/book-edits/2026-10-19-p208e-mutation-reds.md`; CI's postgres:18 run on the head covers the version gap.
-The by-reading fallback was not used, and it is never a general rule for SQL controls (architecture's #1056 M2
-ruling, 04:09Z).
+The run matched exactly: the unfiltered count gave 4 reds, and removing `deleteTokenSet` gave 1, with the baseline 10 of
+10 green (step book, 04:13Z). The by-reading fallback was not used, and it is never a general rule for SQL controls
+(architecture's #1056 M2 ruling, 04:09Z). The PR body cites the record and the CI run.
 Threats: a live browser losing its grant early, or a grant outliving the last live browser, through drift from the
 store's rule. Answered by the same-instant store pin and the shared limits object.
-Done when the tests pass, the CI red is cited, and check is green.
+Done when the tests pass, the departure's local reds are cited, and check is green.
 
 ### P2.08f — Mark sign out everywhere unused in session
 Tags: trusted            Depends on: P2.08d
@@ -2003,7 +2010,10 @@ everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our 
   PDS the bound is token life plus `EMAIL_RECHECK_S`, unresolved until P1.33p (architecture's #1051 M1 ruling,
   03:51Z; P2.11c carries the wording).
 - No audit row: session ends are never audited (P1.15; book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order
-  fixes from Codex on #1037"). The operational trace is P2.11b's counter, with no identity data.
+  fixes from Codex on #1037"; auth-dead-gate, architecture's section labelled 06:15Z). The operational trace is
+  P2.11b's counter, with no identity data.
+- Phase 6 adds the chat call here (P6.04a): after `destroyAllForDid` commits, `chat.endSessions(did, { kind:
+  "everywhere" })`, for `auth_dead` only (book edit 2026-10-19-codex-1063-batch66, Codex 3).
 
 Done when these pass, each red first, and check is green:
 1. a revoked grant at the recheck gives a 303 to `/login` with the cookie cleared, no session row left for the DID,
@@ -2191,9 +2201,9 @@ Algorithm:
         else done.
      b. No in-app deactivation (P2.04: no `account:status` scope; decision 3 puts account actions on the PDS page; P2-A1,
         provisional). If the account is hosted on our PDS (issuer == `PDS_ISSUER`), the audit row from 4a carries
-        `reason: 'age_gate_hosted'` and an operator alert `age_gate.hosted_block` (no DID in the alert, the audit row id
-        only) asks an operator to deactivate the account through `pds-admin` (P3.16, hardware-key touch; until P3.16 the
-        runbook uses the PDS admin CLI on the host). The app block is the real gate meanwhile.
+        `reason: 'age_gate_hosted'` and an operator alert of class `age_gate_hosted_block` (P3.16d; no DID in the alert,
+        the audit row id only) asks an operator to deactivate the account through `pds-admin` (P3.16, hardware-key
+        touch; until P3.16 the runbook uses the PDS admin CLI on the host). The app block is the real gate meanwhile.
      c. `client.revoke(did)` with a 10 s timeout, **before** step d, because `app.end_sessions_for_did` deletes the
         stored token set the revocation needs (errors logged as `oauth.revoke_failed`).
      d. In a tx: `sessions.destroyAllForDid(tx, did, 'underage')` (every session and the token-set row). DB error →
@@ -2246,11 +2256,14 @@ Reuse (provisional — for reuse review):
 Not in this step: the real chat step (P6.17); COPPA "credible under-13 report deletes the account" (moderator action,
   P3.20 runbook); age assurance for Australia (not built; the invite-country rule covers it).
 As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The real axe run is P2.12a.
-  The banner shows until it is dismissed or until the next terms acceptance (P2.12b, Alex's "Dismiss button",
-  02:58:35Z). A hosted block writes `age_gate.blocked` with reason `age_gate_hosted`. No `alert.notify` class covers it
-  yet (its contract waits on architecture), so the interim signal is the warning log line `age_gate.hosted_block`
-  (interfaces/http/routes/welcome.ts:182). The account page moved from `/me` to `/<DID>` (D-5, #975); `/me` and `/did`
-  answer 303 to it.
+  The banner shows until the next terms acceptance, and once P2.12b merges, until it is dismissed (Alex's "Dismiss
+  button", 02:58:35Z). A hosted block writes `age_gate.blocked` with reason `age_gate_hosted`. Its alert is P3.16d's
+  class `age_gate_hosted_block` (architecture's section labelled 06:15Z; book edit 2026-10-19-five-step-audit,
+  "Hosted-block alert contract"): payload the audit row id only, one alert at the block, `open_hosted_blocks` as a
+  count in the daily digest, and "handled" derived from pds-admin's log of a succeeded deactivate or takedown on the
+  same target, so the count stays open until P3.16. Until P3.16d, the interim signal is the warning log line
+  `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The account page moved from `/me` to `/<DID>` (D-5,
+  #975); `/me` and `/did` answer 303 to it.
 Diagram: none.
 
 ### P2.12a — Run axe on the welcome screens
@@ -2263,42 +2276,25 @@ Slice 1, issue #993, product, lane Phase 2. Book edit 2026-10-19-five-step-audit
 Done when the tests pass and check is green.
 As built: #1033 (merged as 380d8ee).
 
-### P2.12c — Close the welcome axe gaps
-Tags: (none)            Depends on: P2.12a
-Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit
-2026-10-19-five-step-audit, "verify-1033-5293c78 follow-ups". Issue: the board opens it.
-**What:**
-1. **M2.** The welcome cases (a11y.spec.ts:76-91) run the matrix's console and CSP checks (:57, :61-63) and its four
-   once-per-page checks. Red: an inline-style CSP violation on a welcome fixture.
-2. **N1.** The error banners (welcome.ts:235, :289-291) get axe cases in both themes.
-3. **N3.** tests.md:29-30 names the repo path, not a path that exists only in the agent container.
-4. **M1, held for architecture.** axe's "needs review" (`incomplete`) results are checked neither here (:83-84) nor
-   in the P1.26 matrix (:59-60), so three cases stay green: duplicated ids on the age screen's labelled fields, a
-   plain duplicated id (that rule is outside the tag set), and Continue text in its fill's colour
-   (Button.module.css:7). Architecture rules whether `incomplete` fails (all, or a listed set) and whether the
-   duplicate-id rule joins the tag set. The ruling applies to the matrix and the welcome cases together; a product
-   fix it needs (the Button colour or the ids) joins this step.
-Done when items 1 to 3 pass with their reds, and check is green. Item 4 lands with the ruling, or becomes its own step
-if the ruling widens it.
-
 ### P2.12b — Show the privacy notice once
 Tags: [SEC]            Depends on: P2.12
-Slice 1, product, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode (architecture 03:55Z and 04:35Z).
-Issue: the board opens it. Alex tapped "Dismiss button" at 02:58:35Z on "Let people dismiss the privacy-update banner,
-saving that they saw it?" (option A); the PR body quotes the question, the option and the time.
+Slice 1, product, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode (architecture's section labelled
+03:55Z and 04:35Z). Issue #1025. Alex tapped "Dismiss button" at 02:58:35Z on "Let people dismiss the privacy-update
+banner, saving that they saw it?" (option A); the PR body quotes the question, the option and the time.
 
 **What:**
 1. **Dismiss.** The banner gets a dismiss button, a plain form POST (zero JS), behind the session, CSRF and Origin
    gates.
 2. **The record.** The POST records the shown privacy version in a new column,
    `app.account.privacy_notice_seen_version`: a seen-record, never an acceptance, and never `privacy_version`. Its type
-   matches `privacy_version`, which is `text` (0015_app_account.sql:13; architecture 04:35Z).
+   matches `privacy_version`, which is `text` (0015_app_account.sql:13; architecture's section labelled 04:35Z).
 3. **When the banner shows.** While the current privacy version is newer than both `privacy_version` and
    `privacy_notice_seen_version`, so it disappears on dismiss or at the next terms acceptance, whichever comes first.
    Re-acceptance stays not forced.
 4. **No GET writes.** Writing `privacy_version` on render stays refused (gates.ts:66-70).
-5. **The migration.** A new numbered migration adds the column, with a column-level `GRANT UPDATE` to the app role
-   only (as 0015:24 does), and the grant-matrix entry. Both are parsed paths and ride with product as #972 did; if a
+5. **The migration.** A new numbered migration adds the column, with a column-level `GRANT SELECT, UPDATE` on that one
+   column to the app role only (0015 grants per column, so the banner can't read it otherwise; architecture 04:33Z),
+   and the grant-matrix entry `["SELECT", "UPDATE"]`. Both are parsed paths and ride with product as #972 did; if a
    parsed check refuses, the lane stops and tells the step book.
 6. **Data duties:** purpose, accountability that the changed notice was shown; lawful basis, legal obligation or
    legitimate interest; erasure rides the `app.account` row (erasure-registry.json, "app.account.did"), with a test
@@ -2315,6 +2311,25 @@ recorded without a person's action, or forged across sites. Answered by POST onl
 and no GET writes.
 
 Done when the tests pass and check is green.
+
+### P2.12c — Close the welcome axe gaps
+Tags: (none)            Depends on: P2.12a
+Slice 1, tests and docs (`tests/e2e/a11y.spec.ts`, the welcome fixtures, `tests.md`), lane Phase 2. Book edit
+2026-10-19-five-step-audit, "verify-1033-5293c78 follow-ups". Issue #1049.
+**What:**
+1. **M2.** The welcome cases (a11y.spec.ts:76-91) run the matrix's console and CSP checks (:57, :61-63) and its four
+   once-per-page checks. Red: an inline-style CSP violation on a welcome fixture.
+2. **N1.** The error banners (welcome.ts:235, :289-291) get axe cases in both themes.
+3. **N3.** tests.md:29-30 names the repo path, not a path that exists only in the agent container.
+4. **M1** (architecture's section labelled 05:50Z, a tightening; one helper shared by the P1.26 matrix and the
+   welcome cases, so they can't drift):
+   - (a) every axe `incomplete` result fails, except entries on a closed allowlist (rule id, exact selector, page,
+     substitute check); an entry that matches nothing also fails. The only entry is `color-contrast` on the Button
+     and the header link (fill on `::before`); its substitute computes the WCAG ratio of the text colour against the
+     `::before` background in both schemes and requires at least 4.5:1. Red: the Button.module.css:7 mutant.
+   - (b) every cell asserts that each DOM `id` is unique. The deprecated `duplicate-id` and `duplicate-id-active`
+     (axe-core 4.13.0) are not used; `duplicate-id-aria` stays in the tag set. Reds: both Age.tsx mutants.
+Done when every red fails first and passes at the head, and check is green.
 
 ### P2.13 — `/me` and the settings shell
 Tags: (none)            Depends on: P2.06, P1.25            Plan: §5.4 (owner sees drafts); §2 rules 9, 12; §4 "Shell + UI kit"
@@ -5023,7 +5038,8 @@ Changes made, with the request that caused each:
   out everywhere" dropped, P2.08).
 - **P2.04**: `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
   fallback rule is stated (phase-1-part2 note 14; the retry itself stays in P2.05).
-- **P2.08** documents P6.16's two `chat.endSessions` calls (phase-6 item 2); it builds no hook now.
+- **P2.08** documents P6.16's this-browser `chat.endSessions` call (phase-6 item 2); it builds no hook now. P6.04a
+  adds the everywhere call to P2.11a's `auth_dead` path.
 - **P2.09**: the key file is a Phase 2 stand-in retired by P3.16 in favour of the roster's `service_keys` (phase-3
   Notes); `web` reaches `pds-admin` through a named internal policy `pds-admin`.
 - **P2.10**: test accounts on the shared dev PDS come from invites after P1.35, `invite.e2e` runs on a throwaway stack

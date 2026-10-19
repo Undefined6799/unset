@@ -2071,11 +2071,11 @@ Outputs (contract):
   - Alerts: closed class list `{tap_lag, dead_letters, attempted_without_outcome, chain_mismatch, cert_expiring,
     reconcile_mismatch, report_csam, disk, admin_denied, roster_changed, revoke_changed, audit_write_failed,
     limit_hit, credential_clone_suspected, roster_fork, login_new_device, deletion_not_confirmed, reaper_mass,
-    mail_canary_overdue, pdsadmin_unmatched, csam_emergency}`; caps enforced **here**: 6 per class per hour, 30 per
-    hour in total; overflow is counted into the next digest. **`csam_emergency`** (P4.07's suspected-abuse emergency
-    path, Alex answer 30c) is the highest class and is **exempt from both caps**: it is always sent at once, never
-    suppressed and never digest-only, and does not count toward the 30-per-hour total. Its payload carries no DID,
-    handle, text or hash (only the hold reference).
+    mail_canary_overdue, pdsadmin_unmatched, csam_emergency, age_gate_hosted_block}`; caps enforced **here**: 6 per
+    class per hour, 30 per hour in total; overflow is counted into the next digest. **`csam_emergency`** (P4.07's
+    suspected-abuse emergency path, Alex answer 30c) is the highest class and is **exempt from both caps**: it is always
+    sent at once, never suppressed and never digest-only, and does not count toward the 30-per-hour total. Its payload
+    carries no DID, handle, text or hash (only the hold reference).
   - `digest.send` args (fixed schema): `{heads: [{lane, seq, row_hash}], roster_serial, roster_sha256, counts:
     {accounts_new, reports_opened, actions}, suppressed_alerts, canary_code}`; `pds-admin` adds its own log head.
   - **Mail preflight (F3, plan issue PI-6):** the deploy preflight (P1.30, production P5.02a) fails unless
