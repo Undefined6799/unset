@@ -17,7 +17,7 @@ Publish; Unpublish removes every record we wrote.
 
 1. Sign-up through `/join?invite=` → PDS `prompt=create` → callback → onboarding → verified email works end to end on the
    development stack, with an invite issued through `pds-admin`.
-2. Login, logout and "sign out everywhere" work; a DPoP-nonce 401 or a PDS 5xx never logs the user out.
+2. Login and logout work; a DPoP-nonce 401 or a PDS 5xx never logs the user out.
 3. Draft edits (profile fields, sections with reorder and delete, avatar and cover) never write to the repo:
    `com.atproto.repo.listRecords` for every `sh.unset.*` collection returns nothing while unpublished.
 4. Publish writes `sh.unset.profile` and the sections in one `applyWrites`; Unpublish deletes them in one `applyWrites`;
@@ -91,14 +91,14 @@ and this table is the only place to change.
 | `/login/continue` | GET | `app` | P2.05 |
 | `/oauth/callback` | GET | `app` | P2.06 |
 | `/login-failed` | GET | `app` | P2.05/P2.06 |
-| `/logout`, `/logout/everywhere` | POST | `app` | P2.08 |
+| `/logout` | POST | `app` | P2.08 |
 | `/signed-out` | GET | `app` | P2.08 |
 | `/invite`, `/invite/hide` | GET, POST / POST | `app` | P2.10 |
 | `/join` | GET | `app` | P2.10 |
 | `/signup` | POST | `app` | P2.10 |
 | `/verify-email` | GET | `app` | P2.11 |
 | `/welcome`, `/welcome/age`, `/welcome/terms`, `/welcome/chat` | GET, POST | `app` | P2.12 |
-| `/me`, `/settings` (shell) | GET | `app` | P2.13 |
+| `/<DID>` (`/me` and `/did` 303 to it), `/settings` (shell) | GET | `app` | P2.13, P2.13c |
 | `/module-handoff` | GET, POST | `app` | P2.14 |
 | `/legal/terms`, `/legal/privacy`, `/legal/domains`, `/.well-known/security.txt` | GET | `static` | P2.15 |
 | `/settings/profile`, `/settings/profile/*`, `/settings/sections*` | GET, POST | `app` | P2.21 |
@@ -109,9 +109,9 @@ and this table is the only place to change.
 ## Slices (decision 34, editor pass 2026-10-04)
 
 Phase 2's first steps belong to **slice 1, "sign in with an atproto account and see your own profile"** (plan §8
-Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.11, P2.15, P2.12, P2.13 and the
-slice exit **P2.13a**, in that order, once their own dependencies merge, ahead of the paused Phase 1 hardening steps
-(refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
+Phase 1, guideline §12), which is built before the rest of Phase 1: P2.01–P2.08, P2.08b, P2.08c, P2.08d, P2.11, P2.11a,
+P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c and the slice exit **P2.13a**, in that order, once their own dependencies
+merge, ahead of the paused Phase 1 hardening steps (refocus, 2026-10-12; `01-outline.md`, "Slice 1"). The rest of this
 file (P2.09, P2.10, P2.14, P2.16b–P2.26a, except P2.26b–P2.26e, pulled forward below) is built after slice 2 and the
 i18n slice (the rest of Phase 1, ending at P1.38). Step ids did not change; the file is in build order, except those
 four (book edit 2026-10-14-verify-834-fixes, S5).
@@ -128,14 +128,15 @@ The Q3 B pull-forward of P2.26b–P2.26e is not an early build under this rule. 
 2026-10-14-verify-834-fixes, N5).
 
 **English first (Alex, 2026-10-04 12:58Z, against the recommendation).** Slice 1 is English only. Its Phase 2 steps
-(P2.01–P2.08, P2.11, P2.15, P2.12, P2.13, P2.13a) keep their user-facing English text in one `messages.ts` per feature
-(plain exported constants, no catalog machinery); where they say "catalog key", "catalogs" or "EN/FR", read "the
-feature's messages module" and "English", and their axe and Playwright tests run English only. P2.15 writes only the
-`.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice (P1.19's PR, approved by Alex like all
-legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts every module first and adds French to these
-tests; no French page ships before it. The Phase 2 exit (P2.26) still checks both languages, since it comes after it.
-Every step after P2.13a uses the catalogs and `t()` directly. Dependency changes: P2.04 takes P1.31 instead of P1.35; P2.12 lists P1.15 (its
-age-gate block writes one audit row); P2.15 lists P1.37 (its incident-response page); P2.26 lists P2.13a and P1.38.
+(P2.01–P2.08, P2.08b–P2.08d, P2.11, P2.11a, P2.15, P2.12, P2.12a, P2.12b, P2.13, P2.13c, P2.13a) keep their user-facing
+English text in one `messages.ts` per feature (plain exported constants, no catalog machinery); where they say "catalog
+key", "catalogs" or "EN/FR", read "the feature's messages module" and "English", and their axe and Playwright tests run
+English only. P2.15 writes only the `.en.md` legal documents in slice 1; the `.fr.md` files land in the i18n slice
+(P1.19's PR, approved by Alex like all legal text). The i18n slice (P1.19, P1.22b; `phase-1.md`, "Slices") converts
+every module first and adds French to these tests; no French page ships before it. The Phase 2 exit (P2.26) still checks
+both languages, since it comes after it. Every step after P2.13a uses the catalogs and `t()` directly. Dependency
+changes: P2.04 takes P1.31 instead of P1.35; P2.12 lists P1.15 (its age-gate block writes one audit row); P2.15 lists
+P1.37 (its incident-response page); P2.26 lists P2.13a and P1.38.
 
 ## Step dependency diagram
 
@@ -160,11 +161,14 @@ flowchart TD
   P204 --> P204s[P2.04s session prelude]; P203 --> P204s
   P204s --> P206; P204s --> P207; P204s --> P208; P204s --> P212
   P206 --> P208[P2.08 logout]
+  P208 --> P208b[P2.08b recorded issuer]; P208 --> P208c[P2.08c live sessions]; P208 --> P208d[P2.08d drop everywhere]
   P127[P1.27 images] --> P209[P2.09 pds-admin min]; P129[P1.29t dev stack tested] --> P209; P134 --> P209
   P209 --> P210[P2.10 invites /join]; P205 --> P210
-  P206 --> P211[P2.11 email gate]
+  P206 --> P211[P2.11 email gate]; P211 --> P211a[P2.11a revoked grant ends sessions]
   P206 --> P212[P2.12 onboarding]; P215 --> P212
   P206 --> P213[P2.13 /me shell]; P125 --> P213
+  P212 --> P212a[P2.12a welcome axe]; P212 --> P212b[P2.12b privacy notice once]
+  P213 --> P213c[P2.13c settings shell, links]; P208b --> P213c
   P213 --> P213a[P2.13a slice 1 exit]; P208 --> P213a; P212 --> P213a
   P115 --> P212; P137 --> P215; P213a --> P226; P138[P1.38 Phase 1 exit] --> P226
   P116 --> P214[P2.14 identity seam]; P203 --> P214
@@ -314,7 +318,7 @@ stateDiagram-v2
   Active --> Expired: idle > 7 d or age > 30 d (checked on read)
   Expired --> NoSession: row deleted, cookie cleared
   Active --> NoSession: POST /logout (this row)
-  Active --> NoSession: sign out everywhere / under-age / account inactive (P3.06) → destroyAllForDid(tx)
+  Active --> NoSession: under-age / account inactive (P3.06) → destroyAllForDid(tx)
   Active --> NoSession: token set gone (has_token_set false on read) → row deleted
   Active --> Active: transient PDS error, or a 401 while the token set is still stored (kept, never dropped)
   Active --> Active: another browser logs in for the same DID (library replaces the set, no logout)
@@ -1628,21 +1632,23 @@ Reuse (provisional — for reuse review):
 Not in this step: specific PDS operations (each step owns its own); the email gate (P2.11); Bluesky feed proxying (P4.21).
 Diagram: none.
 
-### P2.08 — Logout and "sign out everywhere"
+### P2.08 — Logout
 Tags: [SEC]            Depends on: P2.06, P2.04s            Plan: §5.3 "Logout"; §2 rule 4; §4 dropped "cross-host logout ticket"
 Where: `interfaces/http/routes/logout.ts`, `apps/web/screens/SignedOut.tsx`, `apps/web/components/PdsAccountLink.tsx` (shared with P2.11, P2.13)
 Size: ~120 source lines, ~180 test lines
+Dropped: "sign out everywhere" (Alex, 2026-10-19 02:34:31Z: "let's drop the feature of 987, feels like the session and
+  auth are mostly handled by the pds itself"; book edit 2026-10-19-drop-sign-out-everywhere). P2.08d removes what was
+  built of it. `destroyAllForDid` (P2.04s) stays: auth_dead (P2.11a) and the age gate (P2.12) still end every session
+  of a DID with it.
 
-Goal: "Sign out" ends this browser's session; "Sign out everywhere" ends every app session of the DID and revokes the
-OAuth grant; both point the user to their PDS account page to end PDS browser sessions.
+Goal: "Sign out" ends this browser's session, revokes the OAuth grant when it was the DID's last browser, and points
+the user to their PDS account page to end PDS browser sessions.
 
-Inputs: P2.03 `sessions.destroy`; P2.04s `sessions.destroyAllForDid`; P2.04 client; P2.01 `resolveDid`;
+Inputs: P2.03 `sessions.destroy`; P2.04 client; P2.01 `resolveDid`;
   config `PDS_ISSUER`.
 Outputs:
-  - `POST /logout` → 303 `/signed-out`. `POST /logout/everywhere` (field `confirm=yes` required, the checkbox on P2.13's
-    form) → 303 `/signed-out?scope=everywhere` (or with `&e=logout.revoke_unconfirmed`); without `confirm=yes` → 303
-    back with `?e=logout.confirm_required`.
-  - `GET /logout`, `GET /logout/everywhere` → 405 (no state change on GET).
+  - `POST /logout` → 303 `/signed-out`.
+  - `GET /logout` → 405 (no state change on GET).
   - `GET /signed-out` page: confirmation sentence; the interstitial sentence and a link to the PDS account page
     (`PdsAccountLink`); "Sign in again" link.
   - `PdsAccountLink({issuer})`: for `issuer == PDS_ISSUER` → `new URL('/account', PDS_ISSUER)` with the sentence "You are
@@ -1651,12 +1657,11 @@ Outputs:
     without that sentence. The href always
     passes `safeHref` and is built from the issuer recorded by the OAuth library, never from a DID document field.
   - **No audit rows** (plan §6 "no user sign-in records"): counters only, as log events with no DID:
-    `auth.logout_this_browser`, `auth.logout_everywhere`, `auth.revoke_unconfirmed`.
+    `auth.logout_this_browser`.
   - Chat hook points (built by P6.16, not here; Phase 2 has no chat and no sign-out hook): after the session row is
     destroyed in step 3 of `POST /logout`, P6.16 adds one call `chat.endSessions(s.did, {kind: 'this_browser',
-    appSessionRef: base64url(sha256('chat-session-ref:' + s.idHash))})`; after step 4 of `POST /logout/everywhere`,
-    one call `chat.endSessions(s.did, {kind: 'everywhere'})`. Each only enqueues a job and never blocks or fails the
-    sign-out (phase-6, principle 17).
+    appSessionRef: base64url(sha256('chat-session-ref:' + s.idHash))})`. It only enqueues a job and never blocks or
+    fails the sign-out (phase-6, principle 17).
 
 Algorithm (`POST /logout`):
   1. CSRF gate passed. `s = sessions.read(ctx)`.
@@ -1671,51 +1676,26 @@ Algorithm (`POST /logout`):
      (plan §5.3 library constraint). A login racing in between is harmless: it stores a fresh set after the revoke.
   5. Clear `__Host-sid`; set `__Host-signed_out=1`; 303 `/signed-out`.
 
-Algorithm (`POST /logout/everywhere`):
-  1. CSRF gate passed. `s = sessions.read(ctx)`; null → as step 2 above. `form.confirm != 'yes'` → 303
-     `/settings?e=logout.confirm_required`, nothing changed.
-  2. Remember `issuer` from the stored OAuth session (`client.restore(did, false)` metadata, read without refreshing) if
-     available; else `PDS_ISSUER` when the DID's PDS is ours, else null.
-  3. Revoke first, because step 4's `app.end_sessions_for_did` also deletes the stored token set and the revocation needs
-     it: `client.revoke(s.did)` (the library calls the AS revocation endpoint, then deletes the stored token set) with a
-     10 s timeout:
-     - success → `revoked = true`.
-     - any error → `revoked = false`; log `oauth.revoke_failed` (class name). Step 4 deletes the stored set anyway, so no
-       token remains on our side.
-  4. In a tx: `n = sessions.destroyAllForDid(tx, s.did, 'user_signout_all')` (sessions and token-set row). DB error →
-     503 page. The grant may already be revoked; the remaining sessions then end at their next read through
-     `has_token_set` (the library deleted the set), so a retry is harmless. After commit, count `auth.logout_everywhere`.
-  5. Clear `__Host-sid`; set `__Host-signed_out=1`; 303 `/signed-out?scope=everywhere` plus `&e=logout.revoke_unconfirmed`
-     when `revoked == false`. The page then says the grant could not be confirmed revoked and links to the account
-     page's "Connected apps".
-
 Edge cases and failures:
   - Logout with an expired session → treated as signed out (step 2).
   - Cross-site POST (`Sec-Fetch-Site: cross-site`) → CSRF gate 403; nothing deleted (logout CSRF is denied too).
   - Revocation endpoint down → local token set still deleted; the user is told; next login gets `prompt=login`.
-  - Sign out everywhere from browser A while B is mid-request → B's next `sessions.read` finds no row → signed out.
   - A user whose PDS is not ours → link goes to their issuer origin; no "our sign-in server" sentence.
   - Last browser signs out while the AS is unreachable → stored set deleted locally anyway; log `oauth.revoke_failed`.
   - Two quick POSTs → second finds no session → idempotent 303.
-  - DB down after a successful revoke in "everywhere" → 503; the sessions end on their next read (no token set).
 
 Threats: ending sessions and revoking the OAuth grant.
   - T Logout CSRF or a link that signs the member out → POST only, CSRF gate (`logout.get_405`, `logout.csrf`).
-  - E A grant that outlives "sign out everywhere" → revoke first, token-set row deleted even when revoke fails
-    (`logout.everywhere`, `logout.everywhere_revoke_fails`).
+  - E A grant that outlives the last browser's sign-out → revoke, and the stored set deleted even when revoke fails
+    (`logout.last_browser_revokes`).
   - S Silent re-login on a shared computer → next login carries `prompt=login` (`logout.next_login_prompt`).
   - R Sign-out events kept as identity records → none (`logout.no_sign_in_records`).
 
 Done when (tests):
   - `logout.this_browser`: two sessions for one DID; POST from session 1 → row 1 gone, row 2 kept; token set kept (store spy); signed_out cookie set.
   - `logout.last_browser_revokes`: one session; POST → `revoke` spy called once; token store row gone.
-  - `logout.everywhere_requires_confirm`: POST without `confirm=yes` → `logout.confirm_required`; sessions intact.
-  - `logout.everywhere`: three sessions → all gone; `revoke` spy called once, **before** the token-set row is deleted
-    (call order); no audit row; one `auth.logout_everywhere` log line without a DID.
-  - `logout.everywhere_revoke_fails`: revoke throws → token store row deleted anyway (by the definer); redirect carries
-    `logout.revoke_unconfirmed`.
-  - `logout.no_sign_in_records`: both logout paths → `audit.chain` unchanged.
-  - `logout.get_405`: GET on both paths → 405, nothing deleted.
+  - `logout.no_sign_in_records`: logout → `audit.chain` unchanged.
+  - `logout.get_405`: GET `/logout` → 405, nothing deleted.
   - `logout.csrf`: cross-site POST → 403, sessions intact.
   - `logout.no_session_idempotent`: POST without cookie → 303 `/signed-out`.
   - `logout.db_error`: DB throws → 503, session cookie still present.
@@ -1733,8 +1713,68 @@ Not in this step: ending PDS browser sessions (the user does it at the PDS); cha
 As built: #939 used the id P2.08 for this-browser logout only. The remainder is P2.08a (one letter, commit-msg guard).
   The session count is the SELECT in `interfaces/http/logout-sessions.ts`, not a new store method, because
   `infrastructure/session` is trusted base (SE-6) and cannot share a PR with the routes. The catalog key is `error=`
-  (plan §2 rule 15, `withErrorParam`), where this step wrote `e=`.
+  (plan §2 rule 15, `withErrorParam`), where this step wrote `e=`. P2.08a also built the "sign out everywhere" half;
+  P2.08d removes it (book edit 2026-10-19-drop-sign-out-everywhere).
 Diagram: see "State diagram: app session lifecycle".
+
+### P2.08b — Sign out with the recorded issuer
+Tags: [SEC]            Depends on: P2.08
+Slice 1, issue #988, product, lane Phase 1 (the P2.08 lane). Book edit 2026-10-19-five-step-audit; item 1 rephrased
+by 2026-10-19-drop-sign-out-everywhere (architecture 03:20Z and 03:27Z).
+**What:**
+1. The account link on `/signed-out` and the account page: `logout.ts` reads the issuer that OAuth recorded at
+   sign-in and passes it to `/signed-out`. `PdsAccountLink` then links the user's own issuer origin, so a user on
+   another PDS no longer gets our `/account` (P2.08's edge case "A user whose PDS is not ours"). The host is never
+   taken from a DID document. `pdsHost` comes from the recorded issuer, not from `PDS_HOSTNAME` (compose.ts:214). The
+   existing `issuerOf` reader (compose.ts:298-302) is the starting point.
+2. The interstitial sentence becomes a catalog key with the book's wording, "You are going to {pdsHost}…"
+   (PdsAccountLink.tsx:27).
+3. A failed logout shows "Could not sign you out, try again" on its 503, not the generic text (messages.ts:20).
+
+Done when these tests pass, red first for item 1, and check is green:
+- `logout.no_sign_in_records`, which also asserts that no audit row is written;
+- `logout.next_login_prompt`, which runs a real logout before `POST /login`, instead of faking the cookie;
+- a foreign-issuer fixture (a reserved name, SE-7a) whose account link points at that issuer's origin.
+
+### P2.08c — Count only live sessions at sign-out
+Tags: [SEC]            Depends on: P2.08
+Slice 1, issue #994, product (`interfaces/http/`), lane Phase 1, after P2.08b or before it if staging needs it first.
+Book edit 2026-10-19-five-step-audit, "P2.08c" (the readiness review's S2).
+**What:** `remainingSessions` (interfaces/http/logout-sessions.ts:11) counts only rows the session store would still
+accept: not past `absolute_expires_at` and not idle past `SESSION_IDLE_S`, the same two conditions as
+infrastructure/session/store.ts:157 and its sweep at :198. A row with no stored token set counts for nothing either,
+as store.ts:139 treats it. The idle limit comes from the same config the store gets, never a second constant.
+infrastructure/session is trusted base, so this step does not export the predicate from there (SE-6). It repeats the
+two conditions, and a test pins them to the store's behaviour at both boundaries.
+Done when, red first: with one live session and one idle-expired session for the same DID, signing out of the live
+one revokes the grant. The same holds for an absolute-expired row. A row one second inside either limit still counts.
+Check is green. Sweeps of the session, oauth_state and single_use tables stay with the jobs process; they are not
+part of this step.
+As built: #1009 (merged as 54046ca).
+
+### P2.08d — Remove sign out everywhere
+Tags: [SEC]            Depends on: P2.08
+Slice 1, issue #1014, product only. It touches no trusted-base or check path; if the lane finds one, it splits that
+part out. Lane Phase 1 (the sign-out lane). Book edit 2026-10-19-drop-sign-out-everywhere, from Alex's 02:34:31Z
+message quoted in P2.08; the PR body quotes it with its time. It loosens no check, so no typed line is needed.
+**What:** delete the everywhere form, route, copy and tests:
+- `apps/web`: the form in Me.tsx, the everywhere state in SignedOut.tsx, and their cases in screens.test.tsx;
+- `interfaces/http`: logout.ts (the route and `scope=everywhere`), logout-sessions.ts (`destroyAllSessions`),
+  routes.manifest.json and logout.test.ts;
+- `shared/errors`: the `logout.confirm_required` catalog entry and its message;
+- `shared/log`: the `auth.logout_everywhere` event;
+- `tests/integration`: the http/logout everywhere tests and the query-budget fixture entry.
+
+`destroyAllForDid` (P2.04s, trusted base) stays: auth_dead (P2.11a) and the age gate (P2.12) still use it. The
+`user_signout_all` reason and migration 0014 stay too, with a comment marking the reason unused since 2026-10-19; the
+next trusted step that already touches the reason list retires it, and no migration is made only for that. This
+browser's sign-out, including the last-browser revoke (P2.08a, and P2.08c's live-session count), is unchanged.
+
+Done when:
+- `POST /logout/everywhere`, and `POST /logout` with `scope=everywhere`, both answer as unknown routes;
+- no code or catalog reference to the removed names remains, checked by grep in the PR;
+- this-browser logout tests stay green;
+- check is green.
 
 ### P2.11 — Email-verify gate
 Tags: [SEC]            Depends on: P2.06, P2.07, P1.29h            Plan: §2 rules 3, 4; §5.3 "Email-verify gate"
@@ -1819,6 +1859,34 @@ Not in this step: showing the email publicly (P2.21/P2.23 use the verified email
   the local exception's product code (ADR 0026; a later PR implements `requireVerified`).
 Diagram: none.
 
+### P2.11a — End sessions on a revoked grant at recheck
+Tags: [SEC]            Depends on: P2.11
+Slice 1, issue #1010, product (`interfaces/http/`), lane Phase 1 (it holds the sign-out steps P2.08b and P2.08c); book
+edit 2026-10-19-auth-dead-gate (architecture 02:35Z, 03:20Z and 03:27Z). A tightening, so nothing is needed from Alex.
+It carries the letter P2.11a because `refreshEmail` and `openApp` are P2.11's confirmed-email gate. With "sign out
+everywhere" dropped (P2.08), this is the only way a PDS-side revoke reaches our other browsers.
+
+**What:**
+- `refreshEmail` returns a distinct `"ended"` for `auth_dead`, never "unconfirmed" (today interfaces/http/compose.ts:
+  253-256). `openApp` answers 303 to `/login?error=login.session_ended` with the clear-cookie header, the target
+  `respondToPdsFailure` already uses for `auth_dead` (pds-call.ts:232-234). The switch stays exhaustive.
+- Every session of the DID ends, as today (pds-call.ts:104-110, compose.ts:218-220): one OAuth token set per DID, so a
+  dead grant is dead for every browser.
+- `scope_missing` keeps `/verify-email` with `login.scope_insufficient`; `rejected` stays "unconfirmed" (fails
+  closed); `transient` never ends a session.
+- No per-request PDS call. The bound (`EMAIL_RECHECK_S` or the next PDS call, whichever is first) goes into the
+  security notes, pinned by a test. `EMAIL_RECHECK_S`'s config maximum drops from 86,400 to 900
+  (interfaces/http/config.ts:55), which caps the window at 15 minutes.
+- An audit event (DID and IP only) is added only if `destroyAllForDid` with "auth_dead" writes none today.
+
+Done when these pass, each red first, and check is green:
+1. a revoked grant at the recheck gives a 303 to `/login` with the cookie cleared, no session row left for the DID,
+   and the token set gone;
+2. a second browser's next request goes to `/login`;
+3. `transient` changes no session and shows the PDS-unavailable page;
+4. `scope_missing` still goes to `/verify-email`;
+5. the bound test pins 900, and a config red shows 901 is refused.
+
 ### P2.15 — Legal paperwork part 2
 Tags: (none; content needs Alex's approval through the PR and two inputs, see checklist)            Depends on: P1.25, P1.37            Plan: §6 "Legal paperwork", "Privacy notice", "Invite-country rule", "Canadian law"; §5.3 interstitial; §5.8 fingerprints
 Where: `apps/web/legal/{terms.en.md, terms.fr.md, privacy.en.md, privacy.fr.md, domains.en.md, domains.fr.md}` rendered by
@@ -1894,6 +1962,11 @@ Done when (tests):
 Reuse (provisional — for reuse review):
   - `docs/compliance/*` in the prototype (RoPA, standards map) → LESSON: content inputs only; the plan says the RoPA is
     rewritten (P5.12) and ASVS chapters there are stale (plan §6.1).
+As built (book edit 2026-10-19-five-step-audit): complete for slice 1 (English). Departures, explained in code comments:
+  the `public` route group instead of `static` (the CSP), the ADR 0025 domain names, and the media domain left unnamed.
+  `legal.axe` is covered by the P1.26 matrix (tests/e2e/pages.ts:42-44, a11y.spec.ts:48). The French half lands in the
+  i18n slice (P1.19). The contact values in interfaces/http/legal-placeholders.ts:4-6, `SECURITY_CONTACT` and the
+  operator's legal name are placeholder tokens: before staging is public they need real values or Alex's explicit word.
 Not in this step: the final RoPA and lawyer hour (P5.12); the public notice form (P3.15); `PDS_*_URL` settings (Alex, P2.24).
 Diagram: none.
 
@@ -1934,8 +2007,8 @@ Algorithm:
      - `age < MIN_AGE` → go to step 4.
   2. `POST /welcome/terms` (CSRF): checkbox missing → `welcome.terms_required`; rule on and country box missing →
      `welcome.country_required`; else set the three columns and `onboarding = 'chat'` (if it was `'terms'`, or stays `'done'`
-     when this is a re-acceptance after a version change); 303 `/welcome/chat` or the `next` stored in the form after `safeReturnPath` (invalid → `/me`).
-  3. `POST /welcome/chat` → `onboarding = 'done'`; 303 `/verify-email` if not confirmed, else `/me`.
+     when this is a re-acceptance after a version change); 303 `/welcome/chat` or the `next` stored in the form after `safeReturnPath` (invalid → `/<DID>`).
+  3. `POST /welcome/chat` → `onboarding = 'done'`; 303 `/verify-email` if not confirmed, else `/<DID>`.
   4. Under age (block first, then revoke, then end sessions; the block is what every later request checks):
      a. In a tx: `UPDATE app.account SET onboarding = 'blocked_underage'`; `appendAudit(tx, {action: 'age_gate.blocked',
         outcome: 'succeeded', actorDid: did, target: did, reason: hosted ? 'age_gate_hosted' : null})` (the action is in
@@ -1997,7 +2070,56 @@ Reuse (provisional — for reuse review):
     legal gates; nothing to salvage for age or terms.
 Not in this step: the real chat step (P6.17); COPPA "credible under-13 report deletes the account" (moderator action,
   P3.20 runbook); age assurance for Australia (not built; the invite-country rule covers it).
+As built (book edit 2026-10-19-five-step-audit): the chat placeholder is built and tested. The real axe run is P2.12a.
+  The banner shows until it is dismissed or until the next terms acceptance (P2.12b, Alex's "Dismiss button",
+  02:58:35Z). Until P3.16d raises `alert.notify` for a hosted block,
+  the interim signal is the warning log line `age_gate.hosted_block` (interfaces/http/routes/welcome.ts:182). The
+  account page moved from `/me` to `/<DID>` (D-5, #975); `/me` and `/did` answer 303 to it.
 Diagram: none.
+
+### P2.12a — Run axe on the welcome screens
+Tags: (none)            Depends on: P2.12
+Slice 1, issue #993, product, lane Phase 2. Book edit 2026-10-19-five-step-audit (item 2 only since architecture's
+03:55Z split; item 1 is P2.12b).
+**What:** the four welcome screens join the P1.26 axe matrix in both themes, and `welcome.axe` runs axe for real
+(today it checks structure only, welcome.test.ts:484-560). English only until the i18n slice.
+
+Done when the tests pass and check is green.
+
+### P2.12b — Show the privacy notice once
+Tags: [SEC]            Depends on: P2.12
+Slice 1, product, lane Phase 2; book edit 2026-10-19-alex-cards-and-edge-dev-mode (architecture 03:55Z and 04:35Z).
+Issue: the board opens it. Alex tapped "Dismiss button" at 02:58:35Z on "Let people dismiss the privacy-update banner,
+saving that they saw it?" (option A); the PR body quotes the question, the option and the time.
+
+**What:**
+1. **Dismiss.** The banner gets a dismiss button, a plain form POST (zero JS), behind the session, CSRF and Origin
+   gates.
+2. **The record.** The POST records the shown privacy version in a new column,
+   `app.account.privacy_notice_seen_version`: a seen-record, never an acceptance, and never `privacy_version`. Its type
+   matches `privacy_version`, which is `text` (0015_app_account.sql:13; architecture 04:35Z).
+3. **When the banner shows.** While the current privacy version is newer than both `privacy_version` and
+   `privacy_notice_seen_version`, so it disappears on dismiss or at the next terms acceptance, whichever comes first.
+   Re-acceptance stays not forced.
+4. **No GET writes.** Writing `privacy_version` on render stays refused (gates.ts:66-70).
+5. **The migration.** A new numbered migration adds the column, with a column-level `GRANT UPDATE` to the app role
+   only (as 0015:24 does), and the grant-matrix entry. Both are parsed paths and ride with product as #972 did; if a
+   parsed check refuses, the lane stops and tells the step book.
+6. **Data duties:** purpose, accountability that the changed notice was shown; lawful basis, legal obligation or
+   legitimate interest; erasure rides the `app.account` row (erasure-registry.json, "app.account.did"), with a test
+   that the column is gone and a registry reason naming it; export rides P4.26's row list; one RoPA line through the
+   step book (if main has no RoPA file yet, the PR says so and the line is booked for P2.15's records).
+
+Tests, red first: `terms.privacy_notice_dismiss` (after a POST, the next GET has no banner, and `privacy_version` is
+unchanged); a dismiss without CSRF or with a foreign Origin is refused and writes nothing;
+`terms.privacy_bump_notice_until_dismissed` (the banner shows on repeat GETs until dismissed); a GET never writes the
+column; erasure removes it.
+
+Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): a privacy acknowledgement
+recorded without a person's action, or forged across sites. Answered by POST only behind the CSRF and Origin gates,
+and no GET writes.
+
+Done when the tests pass and check is green.
 
 ### P2.13 — `/me` and the settings shell
 Tags: (none)            Depends on: P2.06, P1.25            Plan: §5.4 (owner sees drafts); §2 rules 9, 12; §4 "Shell + UI kit"
@@ -2010,10 +2132,12 @@ Inputs: P2.11/P2.12 gates; P2.02 `verifyHandle`; P2.08 `PdsAccountLink`; P1.25 `
   later steps' read functions when present (P2.18 `drafts.getProfile`, P2.22 `privacy.state`, P2.19 `mintDraftUrl`);
   until they land, the page shows neutral placeholders (the components accept `undefined`).
 Outputs:
-  - `GET /me`: avatar (draft avatar through a signed media URL when it exists, else the `Avatar` initials fallback),
-    display name from the draft (or the handle), `displayHandle(verifyHandle(did))` plus the DID in mono, profile state
-    ("Private" / "Public" / "Public — unpublished changes"), links: Edit profile, Privacy, Invites, Your account on {pdsHost}
-    (`PdsAccountLink`), Sign out (POST form), Sign out everywhere (POST form with a confirmation checkbox named `confirm`, value `yes`, which P2.08 requires).
+  - `GET /<DID>`, the owner's account page (`/me` and `/did` answer 303 to it; D-5, #975, accepted by architecture
+    2026-10-19 02:25Z; P1.25m pins its privacy): avatar (draft avatar through a signed media URL when it exists, else
+    the `Avatar` initials fallback), display name from the draft (or the handle), `displayHandle(verifyHandle(did))`
+    plus the DID in mono, profile state ("Private" / "Public" / "Public — unpublished changes"), links: Edit profile,
+    Privacy, Invites, Your account on {pdsHost} (`PdsAccountLink`), Sign out (POST form). The "Sign out everywhere" form
+    and its `confirm` checkbox are dropped (P2.08).
   - `SettingsShell({active, children})`: nav with Profile (`/settings/profile`), Privacy (`/settings/privacy`), Invites
     (`/invite`), Account (PDS link), Language and theme (P1.22 forms). `/settings` → 303 `/settings/profile`.
   - Every response: `Cache-Control: private, no-store`, `Vary: Cookie`.
@@ -2029,15 +2153,16 @@ Algorithm:
 Edge cases and failures:
   - Handle `unavailable` → `handle.invalid` shown next to the DID with the hint "We couldn't check your handle just now".
   - No draft yet → "Set up your profile" call to action linking to `/settings/profile`.
-  - Signed-out visitor → `/login?next=/me`.
+  - Signed-out visitor → `/login?next=` the requested path (`/did` or `/<DID>`).
 
 Done when (tests):
   - `me.renders_owner_data`: seeded draft and private state → name, handle, "Private", links present; HTML contains no
-    PDS host and no `getBlob` (string scan).
+    `getBlob` string anywhere, and the PDS host only in the one `PdsAccountLink` href (the recorded issuer's origin)
+    and that element's text node (string scan; architecture 2026-10-19 02:25Z).
   - `me.avatar_signed_url`: draft avatar → `img src` on the media origin with `exp` and `sig` params.
   - `me.no_cache`: headers `private, no-store` and `Vary: Cookie`.
   - `me.handle_unavailable`: resolver unavailable → `handle.invalid` + DID.
-  - `me.guards`: no session → login redirect with `next=/me`; not onboarded → `/welcome`.
+  - `me.guards`: no session → login redirect with `next=` the requested path; not onboarded → `/welcome`.
   - `settings.redirect`: `/settings` → `/settings/profile`.
   - `me.axe`: both themes × EN/FR, zero violations.
 
@@ -2045,7 +2170,37 @@ Reuse (provisional — for reuse review):
   - `app/src/app/me/page.tsx`, `app/src/components/me-view.tsx` → LESSON: layout and copy ideas; REJECT the avatar path
     (`app/src/lib/profile-media.ts:2-13` builds a raw PDS `getBlob` URL, plan §2 rule 9 defect).
 Not in this step: the profile editor (P2.21); privacy switch actions (P2.22); export link (P4.26).
+As built (#975 and earlier; book edit 2026-10-19-five-step-audit): the page is at `/<DID>` (D-5). The settings shell,
+  `/settings`, the account page's links, the `Avatar` fallback, the state placeholder and the copy catalog are P2.13c.
+  The draft avatar and name ride P2.18 and P2.19, and the real state rides P2.22.
 Diagram: none.
+
+### P2.13c — Add the settings shell and account page links
+Tags: (none)            Depends on: P2.13, P2.08b (for the issuer link)
+Slice 1, issue #992, product, lane Phase 2. **It comes first for staging.** Book edit 2026-10-19-five-step-audit, with
+the drop of the confirmation test (2026-10-19-drop-sign-out-everywhere, "Knock-on effects").
+**What:**
+1. Add `SettingsShell({active, children})` with Profile, Privacy, Invites, Account (`PdsAccountLink`) and Language
+   and theme.
+2. `/settings` answers with a 303 to `/settings/profile`, and the query string is kept.
+3. The account page gains:
+   - the Edit profile, Privacy and Invites links;
+   - "Your account on {host}" through `PdsAccountLink` with the recorded issuer (from P2.08b), not one built by hand
+     from `PDS_HOSTNAME` (Me.tsx:19);
+   - the `Avatar` initials fallback;
+   - a neutral profile-state placeholder;
+   - the "Set up your profile" call to action linking to `/settings/profile` (P2.13a step 2 expects it).
+4. The copy moves to a catalog (`messages.ts`).
+5. The gate's redirects send `private, no-store` and `Vary: Cookie` (app-gate.ts:50-54).
+
+Done when these tests pass and check is green:
+- `settings.redirect`;
+- `me.guards`: not onboarded goes to `/welcome`, on the DID account page itself;
+- `me.renders_owner_data`, as far as the placeholders go: the links and the state placeholder are present; the HTML
+  scan finds no `getBlob` string anywhere, and the PDS host only in the one `PdsAccountLink` href (the recorded
+  issuer's origin) and that element's text node (architecture 02:25Z);
+- the account page in the P1.26 axe matrix in both themes. Today `tests/e2e/pages.ts:65-67` lists it as not a
+  document. English only until the i18n slice.
 
 ### P2.13a — Slice 1 exit: sign in with an atproto account and see your own profile (added, decision 34)
 Tags: [STOP] (slice 2 starts only after Alex has read the architecture review and merged this PR)            Depends on: P2.13, P2.08, P2.12, P1.26, P1.29t, P1.30, P1.30s, P1.30t, P1.30u, P2.01a, P2.01m, P1.34d            Plan: §8 Phase 1 "First slice" (decision 34, amendment A4); guideline §4, §12
@@ -2063,8 +2218,9 @@ Inputs: every slice-1 step merged (`01-outline.md`, "Slice 1"); P1.29's `local` 
   a parallel store for them and does not put them in the repository or a special sibling secrets file. Their emails
   are not confirmed. Agents sign in through the real PDS login, like a member. Mechanism 2 (ADR 0026):
   `requireVerified` treats only these two as verified, and only on the local stack, so the browser scenario can use
-  `/me` without in-browser email confirmation. Production refuses to boot if that handle list is set. Real users still
-  hit P2.11: unconfirmed email cannot use `/me`. Email confirmation stays in the product for account recovery and as a
+  the account page (`/<DID>`) without in-browser email confirmation. Production refuses to boot if that handle list
+  is set. Real users still hit P2.11: unconfirmed email cannot use the account page. Email confirmation stays in the
+  product for account recovery and as a
   second factor; this step does not invent a 2FA design and does not rewrite P2.11 as optional. Fail closed: no admin
   bypass, no forged membership, no "lock down later" path. This step does not implement `requireVerified`. The
   email-token reader still refuses every stack (ADR 0023); P1.26's Playwright and axe harness; P0.05's
@@ -2087,11 +2243,12 @@ Algorithm:
      B).
   2. Run the already-booked scenario on that account: `/login` → handle → the local PDS's sign-in page → consent (the
      fallback scope set is expected until P1.35 publishes the permission set; P2.05 logs `oauth.scope_fallback_used`) →
-     `/oauth/callback` → onboarding (age, terms) → `/me` shows the verified handle and the DID in mono and the
-     "Set up your profile" placeholder → Sign out → `/me` redirects to `/login?next=/me`. Skip in-browser email
-     confirmation on these two accounts only. Do not call the email-token reader and do not create an account. Their
-     emails are not confirmed. P2.11 still gates every other account; this step does not rewrite it as optional and
-     stays [STOP]. Mechanism 2 (ADR 0026) is the local exception; this step does not implement it.
+     `/oauth/callback` → onboarding (age, terms) → `/<DID>` (reached through `/me`'s 303) shows the verified handle and
+     the DID in mono and the "Set up your profile" placeholder → Sign out → `/me` redirects to `/login?next=/me`, and
+     `/<DID>` to `/login?next=/<DID>`. Skip in-browser email confirmation on these two accounts only. Do not call the
+     email-token reader and do not create an account. Their emails are not confirmed. P2.11 still gates every other
+     account; this step does not rewrite it as optional and stays [STOP]. Mechanism 2 (ADR 0026) is the local exception;
+     this step does not implement it.
   3. Assert on the way: every response carries the P1.08 CSP and security headers; session cookies are `__Host-`
      cookies with no `Domain=`; the OAuth state, session and token rows are sealed (`types.sealed`); no IP address or
      user agent is written (P0.06 `ip-columns` and a log scan of the run); the sign-in writes no audit row (only the
@@ -3165,6 +3322,8 @@ Threats: per-DID drafts in Postgres and the private object store.
   - I Draft data surviving erasure → objects removed with the rows (`erase-removes-draft-objects`).
 
 Done when (tests):
+  - The account page shows the draft avatar and name (P2.13's "when present" items), with P2.13's
+    `me.avatar_signed_url` test (book edit 2026-10-19-five-step-audit).
   - `drafts.save_and_read`, `drafts.conflict`, `drafts.limits`: as before (two fields round-trip; stale `rev` →
     `conflict`; 65-grapheme name, `javascript:` website, 13 stats → each code, nothing stored).
   - `drafts.clear_field_removes_key`: saving an empty bio → `doc` has no `bio` key.
@@ -3275,6 +3434,8 @@ Threats: a cookie-less public service that serves private draft images to whoeve
     (`media.no_cookies_read`, `config.draft_keys_distinct`).
 
 Done when (tests):
+  - The account page shows the draft avatar and name (P2.13's "when present" items), with P2.13's
+    `me.avatar_signed_url` test (book edit 2026-10-19-five-step-audit).
   - `signedUrl.roundtrip`: mint in `web` code, verify in `media` code → 200 with exact headers (snapshot).
   - `signedUrl.tamper` (table): change each of purpose, objectKey, exp, kid, sig → 404.
   - `signedUrl.purpose_bound`: a MAC computed for purpose `x` served under `draft-preview` → 404.
@@ -3697,6 +3858,8 @@ Threats: the switches that make a member's data public or private on their PDS.
     (`machine.lock_not_held_during_pds_calls`, `machine.batch_bounds`).
 
 Done when (tests):
+  - The account page shows the real profile state, and a failed draft or privacy read answers 503 (P2.13's "when
+    present" item; book edit 2026-10-19-five-step-audit).
   (with a fake `CategoryPublisher`; P2.23 brings its own tests)
   - `machine.private_to_public`: ack given → one job, `done`, base `public`, `first_publish_ack_at` set.
   - `machine.ack_required_first_time_only`: no ack first time → refused; second publish after an unpublish → no ack needed.
@@ -4130,8 +4293,8 @@ Algorithm (the exit spec, in order; each numbered block is one Playwright test w
      the editor still shows the draft.
   6. `exit.resilience`: during an editor session, restart the dev PDS container → the next page shows the "not answering"
      notice and the session survives; after the PDS returns, the page works without signing in again.
-  7. `exit.logout_everywhere`: two browser contexts signed in → "Sign out everywhere" in one → the other is signed out on
-     its next request; the next login sends `prompt=login`.
+  7. `exit.logout`: two browser contexts signed in → "Sign out" in one → the other stays signed in; signing out the
+     other too revokes the grant, and the next login sends `prompt=login` ("sign out everywhere" dropped, P2.08).
   8. `exit.fingerprint_fail_closed`: an avatar whose hash is in the fake's `unavailable` list is refused with
      `image.check_unavailable` and nothing is stored; one whose hash is in its `match` list is refused with
      `image.cannot_use`, the account's uploads are frozen, and nothing is stored; a production-config boot with the
@@ -4164,8 +4327,9 @@ Tags: [SEC] trusted            Depends on: P1.27s
 Pulled forward (Q3 B), issue #844, trusted base (`deployment/sigstore/`), kind/build, lane the third thread; book
 edit 2026-10-13-verify-819-fixes, architecture's answer to Q2 and the step-book mapping after it. It exists because of
 Alex's "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you
-keep?" (ADR 0023, written by P1.27s; accepted when Alex merges it). Order: right after
-P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads the file.
+keep?" (the keyless signing ADR, written by P1.27s, numbered when it opens and accepted when Alex merges it). Order:
+right after P1.27s, which puts `/deployment/sigstore/` in CODEOWNERS' last section, and before P2.26b, which only reads
+the file.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the matching ASVS 5.0 rows):
 - a swapped or forged trusted root letting any signature pass: the file is trusted base, and the PR shows the TUF
@@ -4201,9 +4365,9 @@ Where:
   mirror host into `ref`;
 - `deployment/images/images.test.ts`;
 - the first `deployment/images.lock.json`, every entry with `"verify": "cosign-keyless"`; there is no `cosign.pub`
-  (ADR 0023, written by P1.27s and accepted when Alex merges it, from Alex's "Keyless", 2026-10-14T21:16:36Z, on
-  "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book edit 2026-10-13-verify-819-fixes,
-  the keyless mapping);
+  (the keyless signing ADR, written by P1.27s, numbered when it opens and accepted when Alex merges it, from Alex's
+  "Keyless", 2026-10-14T21:16:36Z, on "Sign our images with GitHub's identity (keyless), or with a key you keep?"; book
+  edit 2026-10-13-verify-819-fixes, the keyless mapping);
 - the preflight (`deployment/preflight/checks/images.ts`, `types.ts`): `cosignKeyPath` becomes the trusted-root path
   (`deployment/sigstore/trusted_root.json`, P2.26e), and C3 and C4 verify keyless, offline, with the identity per
   workflow (P1.27s);
