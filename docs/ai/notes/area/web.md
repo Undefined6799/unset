@@ -28,9 +28,10 @@ and every error page) gives no island run at all: no renderer, so each kit Islan
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
 login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). P1.25f added
-`AppShell`'s `feed` (no Footer; the legal links join the Header nav) and `PrefsForms` in the Footer: page.ts passes
-it on app pages only, with the page's path (never the query) through `safeReturnPath`. P2.13d lets the two sign-in
-pages return to themselves: `interfaces/http/prefs/return-to.ts` rebuilds their query from a re-checked `next` and
+`AppShell`'s `feed` (no Footer; the legal links join the Header nav), which routes reach through
+`ShellOptions.feed` and `PageSpec.shell.feed`, and `PrefsForms` in the Footer: page.ts passes it on app pages only,
+with the page's path (never the query) through `safeReturnPath`. P2.13d lets the two sign-in pages return to
+themselves: `interfaces/http/prefs/return-to.ts` rebuilds their query from a re-checked `next` and
 `handle` only, and the kit's denylist is unchanged. P1.25a added the 32 px favicon and
 180 px apple-touch PNGs: the styles entry imports them `?url&no-inline`, so they are manifest files of
 `src/styles.ts`, and build.ts requires both. The Settings "Language and theme" section is P2.13c's; the SVG favicon

@@ -152,7 +152,8 @@ test("default_shell_footer_prefs", async () => {
     );
     expect(elements(tampered.document, "b")).toHaveLength(0);
   }
-  // Legal pages are public: the theme follows the system there, so no form (phase-1.md:4927-4930).
+  // Legal pages are public: the theme follows the system there, so no form (phase-1.md, P1.22: "Public pages show
+  // no theme control").
   expect((await page({ group: "public", path: "/legal/terms" })).forms).toHaveLength(0);
   expect((await page({ group: "app", navigation: true })).forms).toHaveLength(0);
   // A feed page reaches feed mode through pageResponse: no footer, so no form.
