@@ -125,7 +125,7 @@ describe("GET /:did", () => {
     const html = await (await setup({ issuer: "https://pds.example" }).get()).text();
     expect(html).toContain('href="https://pds.example/"');
     expect(html).toContain("your sign-in server (pds.example)");
-    expect(html).not.toContain("pds.unset.test");
+    expect(html).not.toContain('href="https://pds.unset.test');
   });
 
   test("me_with_an_unreadable_issuer_still_renders", async () => {
@@ -133,7 +133,7 @@ describe("GET /:did", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain(`<code>${DID}</code>`);
-    expect(html).not.toContain("pds.unset.test");
+    expect(html).not.toContain('href="https://pds.unset.test');
   });
 
   test("me_handle_unavailable", async () => {

@@ -25,6 +25,14 @@ const TARGET_COOKIE = "__Host-login_target";
 const TARGET_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
 const TARGET_TTL_S = 120;
 const SIGNED_OUT_TTL_S = 2_592_000;
+/**
+ * P2.08b: the issuer origin recorded at sign-in, for the signed-out page's account link. The last browser's sign-out
+ * deletes the token set that records it, so POST /logout carries it in this cookie: Strict, because only our own 303
+ * leads to /signed-out, and short-lived. Never a query parameter, which any site could link with another origin.
+ */
+const ISSUER_COOKIE = "__Host-signed_out_issuer";
+const ISSUER_ATTRIBUTES = "Path=/; Secure; HttpOnly; SameSite=Strict";
+const ISSUER_TTL_S = 600;
 
 export function appStateOf(state: AppState): string {
   const { nonce, expectedDid, next } = state;
@@ -67,6 +75,34 @@ export function targetFromCookies(header: string | null): string | null {
   return Buffer.from(encoded, "base64url").toString("utf8");
 }
 export const signedOutFrom = (header: string | null): boolean => cookieValue(header, SIGNED_OUT_COOKIE) === "1";
+
+/** The cookie carrying `origin`, which the caller has already checked with `issuerOrigin`. */
+export const issuerCookie = (origin: string): string =>
+  `${ISSUER_COOKIE}=${Buffer.from(origin).toString("base64url")}; ${ISSUER_ATTRIBUTES}; Max-Age=${ISSUER_TTL_S}`;
+export const clearIssuerCookie = (): string => `${ISSUER_COOKIE}=; ${ISSUER_ATTRIBUTES}; Max-Age=0`;
+/** The carried issuer origin, or null when the cookie is missing, doubled, not base64url or not a bare https origin. */
+export function issuerFromCookies(header: string | null): string | null {
+  const encoded = cookieValue(header, ISSUER_COOKIE);
+  if (encoded === null || !/^[A-Za-z0-9_-]+$/.test(encoded)) return null;
+  const carried = Buffer.from(encoded, "base64url").toString("utf8");
+  // We only ever write a bare origin, so anything else was not written by us.
+  return issuerOrigin(carried) === carried ? carried : null;
+}
+
+/**
+ * The https origin of a recorded issuer, or null for another scheme or one with a user or password. The library
+ * already refuses a query, fragment or trailing slash (@atproto/oauth-types 0.7.7 oauth-issuer-identifier.js); the
+ * account link uses only the origin (book P2.08 `PdsAccountLink`: "<issuer origin>/").
+ */
+export function issuerOrigin(issuer: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(issuer);
+  } catch {
+    return null;
+  }
+  return url.protocol === "https:" && url.username === "" && url.password === "" ? url.origin : null;
+}
 
 /** The value of the cookie `name` when exactly one is sent: two mean a confused or planted jar, and neither counts. */
 export function cookieValue(header: string | null, name: string): string | null {

@@ -108,7 +108,7 @@ describe("signed-out screen", () => {
     const own = html(screens.signedOut({ issuer: "https://pds.test", ours: true }));
     expect(own).toContain("https://pds.test/account");
     expect(own).toContain("You are going to pds.test, our sign-in server; it is the only place you type your password");
-    expect(own).toContain(">Your account on pds.test</a>");
+    expect(own).toContain(">Your account on pds.test<svg");
     const foreign = html(screens.signedOut({ issuer: "https://pds.example", ours: false }));
     expect(tags(foreign, "a").map((a) => a.href)).toEqual(["https://pds.example/", "/login"]);
     expect(foreign).toContain("your sign-in server (pds.example)");
@@ -137,7 +137,7 @@ describe("me screen", () => {
     expect(page).not.toContain('name="confirm"');
     expect(page).not.toContain("Sign out everywhere");
     expect(tags(page, "a").map((a) => a.href)).toEqual(["https://pds.example/account"]);
-    expect(page).toContain(">Your account on pds.example</a>");
+    expect(page).toContain(">Your account on pds.example<svg");
     expect(page).not.toContain("could not check your handle");
     expect(page).not.toContain("<script");
   });

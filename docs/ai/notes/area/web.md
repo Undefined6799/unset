@@ -17,7 +17,8 @@ checked: 2026-10-19
 **What it owns.** The screens of unset.sh: the document (`src/document.tsx`) with its head (`src/shell/head.tsx`),
 the app shell (`src/shell/AppShell.tsx`, P1.25), the error page (`src/errors/ErrorPage.tsx`), the screens under
 `src/screens/` (P1.25: `Home`, `Legal`; P2.15: `src/legal/` parses the build-inlined English markdown once;
-P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink`;
+P2.05: `Login`, `LoginContinue`; P2.08: `SignedOut`, `PdsAccountLink` (P2.08b: the recorded issuer, its copy in
+`screens/messages.ts`, also on `Me`);
 P2.11: `VerifyEmail`; P2.12: `welcome/` (`Age`, `Terms`, `ChatLater`, `UnderAge`, `PrivacyNotice`) and a placeholder
 `SettingsProfile`; P2.13: `Me`, with this browser's sign-out form and the privacy banner), and the islands runtime under
 `src/islands/runtime/`. UI only: no product rules, no database, no config or file reads.

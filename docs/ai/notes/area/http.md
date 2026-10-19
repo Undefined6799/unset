@@ -62,7 +62,11 @@ throws. "Sign out everywhere" was removed (P2.08d; Alex, 2026-10-19), so POST /l
 delete). It counts only live rows (P2.08c): not past the absolute or idle limit, and only while the DID has a token
 set, repeating the store's `lookup` conditions, because no sweep runs before the jobs process and a stale row would
 keep the grant. `infrastructure/session` stays untouched:
-it is trusted base, so a store method cannot share this PR. GET /signed-out points at the PDS account page.
+it is trusted base, so a store method cannot share this PR. GET /signed-out points at the sign-in server recorded at
+sign-in (P2.08b): POST /logout reads the token set's `iss` (compose's `issuerOf`) before the last browser's revoke
+deletes it, and carries its origin in `__Host-signed_out_issuer` (Strict, 600 s), never in the query; a missing or
+bad cookie falls back to our PDS. The account page reads the same `issuerOf` directly. A failed delete is the 503
+`logout.failed`.
 
 **Email confirmation (P2.11).** `routes/verify-email.ts` reads `emailConfirmed` through `pdsSessionInfo` and never
 sends mail. A missing email field or `scope_missing` shows the re-consent form (`prompt=consent`, same DID). The

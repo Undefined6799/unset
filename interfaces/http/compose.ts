@@ -219,9 +219,10 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
       // @atproto/oauth-client 0.8.9 OAuthClient.revoke: calls the revocation endpoint, then deletes the stored set.
       revoke: (did) => oauth.client.revoke(did),
     }),
+    issuerOf,
     page,
     screens: render.screens,
-    pdsHost: cfg.PDS_HOSTNAME,
+    pdsIssuer,
     log,
   });
   const pds = createPdsCall({
@@ -323,7 +324,9 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     verifyHandle: (did, signal) => handles.verifyHandle(did, { signal }),
     page,
     screens: render.screens,
-    pdsHost: cfg.PDS_HOSTNAME,
+    issuerOf,
+    pdsIssuer,
+    log,
   });
   const routes = [
     ...homeRoutes({ page, screens: render.screens }),
