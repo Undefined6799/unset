@@ -144,13 +144,16 @@ export function localMail(env: SecretMap, ...names: string[]): Outcome {
  * display name, quoted local part, domain literal or list. Stricter than the RFC, which a from address needs no more of.
  */
 const ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
-const LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?";
+/** A DNS label of at most 63 characters (RFC 1035 section 2.3.4). */
+const LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
+/** RFC 5321 section 4.5.3.1.3: a path holds at most 256 octets, so an address at most 254. */
+const MAX_ADDRESS = 254;
 const ADDR_SPEC = new RegExp(`^${ATOM}(?:\\.${ATOM})*@${LABEL}(?:\\.${LABEL})+$`);
 
 /** Why a from address is not usable, naming the key only, or null. */
 export function fromAddressProblem(raw: string | undefined, name: string): string | null {
   if (raw === undefined || raw === "") return `${name} missing`;
-  return ADDR_SPEC.test(raw) ? null : `${name} is not an email address`;
+  return raw.length <= MAX_ADDRESS && ADDR_SPEC.test(raw) ? null : `${name} is not an email address`;
 }
 
 export const c11: Check = {
@@ -200,9 +203,14 @@ const PRINTABLE = /^PDS_[A-Z0-9_]+$/;
  */
 export const c30: Check = {
   id: "C30",
-  run: ({ env: stage, envFileNames }) => {
+  run: ({ env: stage, envFileNames, compose }) => {
     const names = envFileNames.get("pds");
     if (names === undefined) return fail("no pds service");
+    // Compose's environment wins over env_file, so a name of the set written there would shadow pds.env's value.
+    const inCompose = compose.services
+      .find((s) => s.name === "pds")
+      ?.environment.find(([name]) => [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL].includes(name));
+    if (inCompose !== undefined) return fail(`${inCompose[0]} is set in the pds service's environment, not pds.env`);
     const expected = stage === "local" ? PDS_ENV_SECRETS : [...PDS_ENV_SECRETS, ...PDS_ENV_MAIL];
     const label = (name: string) => (PRINTABLE.test(name) ? name : "a name");
     const repeated = names.find((name, i) => names.indexOf(name) !== i);

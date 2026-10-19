@@ -1279,6 +1279,12 @@ describe("preflight", () => {
     expect(await expectOnly("C30", { pdsEnvFile: "PDS_JWT_SECRET=again\n" })).toBe(
       "FAIL C30 PDS_JWT_SECRET is repeated in the pds env file",
     );
+    // Codex on #1129: compose's environment wins over env_file, so none of the set may be written there.
+    for (const name of [...PDS_ENV_FILE_NAMES]) {
+      const compose = COMPOSE.replace("      PDS_HOSTNAME:", `      ${name}: shadow\n      PDS_HOSTNAME:`);
+      const line = (await check({ compose })).lines.find((l) => l.startsWith("FAIL C30"));
+      expect(line, name).toBe(`FAIL C30 ${name} is set in the pds service's environment, not pds.env`);
+    }
     const dev = (unset: Record<string, null>) => ({ compose: DEV, pdsEnv: { ...DEV_ENV, ...unset } });
     expect(await expectWithC30("C11", dev({ PDS_EMAIL_SMTP_URL: null }), "dev")).toBe(
       "FAIL C11 PDS_EMAIL_SMTP_URL missing",
@@ -1303,6 +1309,8 @@ describe("preflight", () => {
         "a@",
         "a b@example.test",
         "a@example",
+        `a@${"b".repeat(64)}.test`,
+        `${"a".repeat(64)}@${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(60)}.test`,
         "a@@example.test",
         "Name <a@example.test>",
         "a@example.test,b@example.test",
@@ -1314,7 +1322,7 @@ describe("preflight", () => {
           bad === "" ? `FAIL ${id} ${key} missing` : `FAIL ${id} ${key} is not an email address`,
         );
       }
-      for (const good of ["noreply@staging.unset.sh", "a.b+c@mail.example.test"]) {
+      for (const good of ["noreply@staging.unset.sh", "a.b+c@mail.example.test", `a@${"b".repeat(63)}.test`]) {
         expect(failed((await check({ pdsEnv: { [key]: good } })).lines), good).toEqual([]);
       }
     }
