@@ -10,7 +10,7 @@ importance: high
 related: ["[[config]]"]
 replaced_by: null
 tags: [pitfall, config, http, tests]
-checked: 2026-10-16
+checked: 2026-10-19
 ---
 # A new required config key breaks six tests at once
 
@@ -31,5 +31,9 @@ the web image with `deployment/images/web.test.env`. Since P2.04i it also makes 
 throwaway Postgres, and sets the keys that describe them; P2.04c could not go green without that. A new required
 `secretFile` key, or a boot check that needs another service before `listen`, needs a line in that step too, and the
 step is a checks PR that must land first. A plain required key goes in `web.test.env` with the PR that adds it.
+
+**Plain-env secrets load only under test.** Since P1.37l a `secret` field (not `secretFile`) in plain env is refused
+with `forbidden_in_env` unless `UNSET_ENV` is exactly `test`; dev refuses it like prod, because staging runs dev. A
+fixed test env that sets one must say `test`.
 
 **Repair.** Easy; it only costs an extra PR and a wait for the merge.

@@ -78,15 +78,23 @@ describe("loadConfig", () => {
 
   test("secret_min_bytes", () => {
     const schema = defineConfig({ S: secret({ minBytes: 32 }) });
-    expect(problems(() => loadConfig(schema, { UNSET_ENV: "dev", S: "short" }, quiet))).toEqual([
+    expect(problems(() => loadConfig(schema, { UNSET_ENV: "test", S: "short" }, quiet))).toEqual([
       { key: "S", reason: "invalid" },
     ]);
-    expect(loadConfig(schema, { UNSET_ENV: "dev", S: SECRET_32 }, quiet).S.reveal()).toBe(SECRET_32);
+    expect(loadConfig(schema, { UNSET_ENV: "test", S: SECRET_32 }, quiet).S.reveal()).toBe(SECRET_32);
   });
 
   test("secret_in_env_forbidden_in_prod", () => {
     const schema = defineConfig({ S: secret({ minBytes: 32 }) });
     expect(problems(() => loadConfig(schema, { UNSET_ENV: "prod", S: SECRET_32 }, quiet))).toEqual([
+      { key: "S", reason: "forbidden_in_env" },
+    ]);
+  });
+
+  test("secret_in_env_forbidden_in_dev", () => {
+    // Staging runs dev, so dev never relaxes the plain-env refusal (P1.37l).
+    const schema = defineConfig({ S: secret({ minBytes: 32 }) });
+    expect(problems(() => loadConfig(schema, { UNSET_ENV: "dev", S: SECRET_32 }, quiet))).toEqual([
       { key: "S", reason: "forbidden_in_env" },
     ]);
   });
@@ -164,9 +172,18 @@ describe("loadConfig", () => {
 
   test("unrecognised_env_counts_as_prod_for_secrets", () => {
     const schema = defineConfig({ S: secret({ minBytes: 1 }) });
-    expect(problems(() => loadConfig(schema, { UNSET_ENV: "prod ", S: "x" }, quiet))).toEqual([
-      { key: "S", reason: "forbidden_in_env" },
-    ]);
+    // Only the exact string "test" relaxes: missing, padded, other case or a longer name all count as prod.
+    for (const env of [
+      {},
+      { UNSET_ENV: "prod " },
+      { UNSET_ENV: " test" },
+      { UNSET_ENV: "TEST" },
+      { UNSET_ENV: "testing" },
+    ]) {
+      expect(problems(() => loadConfig(schema, { ...env, S: "x" }, quiet))).toEqual([
+        { key: "S", reason: "forbidden_in_env" },
+      ]);
+    }
   });
 
   test("file_suffix_known_only_for_secret_files", () => {
@@ -228,7 +245,7 @@ describe("bootOrExit", () => {
   };
 
   test("boot_exit_code", () => {
-    const run = boot({ UNSET_ENV: "dev", TOKEN: "leaky-short-token" });
+    const run = boot({ UNSET_ENV: "test", TOKEN: "leaky-short-token" });
     expect(run.status).toBe(78);
     expect(run.stdout).toBe("");
     const lines = run.stderr
@@ -243,7 +260,7 @@ describe("bootOrExit", () => {
   });
 
   test("boot_succeeds", () => {
-    const run = boot({ UNSET_ENV: "dev", NEEDED: "x", TOKEN: SECRET_32 });
+    const run = boot({ UNSET_ENV: "test", NEEDED: "x", TOKEN: SECRET_32 });
     expect(run.status, run.stderr).toBe(0);
     expect(run.stdout).toBe("booted");
   });
