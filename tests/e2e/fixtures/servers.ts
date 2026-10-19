@@ -107,6 +107,7 @@ async function serveProd(): Promise<void> {
     },
     dir: join(ROOT, "infrastructure/postgres/migrations"),
     root: ROOT,
+    checkQueryFiles: true,
     log: createLogger({ service: "e2e-migrate", commit: "c".repeat(40), env: "dev" }),
     retryDelaysMs: [],
   });

@@ -10,7 +10,7 @@ importance: high
 related: ["[[tests]]", "[[postgres]]"]
 replaced_by: null
 tags: [pitfall, tests, postgres]
-checked: 2026-10-17
+checked: 2026-10-19
 ---
 # Postgres tests need Docker and never skip
 

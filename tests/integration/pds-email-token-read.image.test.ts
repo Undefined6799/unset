@@ -5,7 +5,7 @@
 // connection over a read-only mount cannot create the -shm file a cleanly closed WAL database lacks, so SQLite answers
 // SQLITE_CANTOPEN and the reader prints only its fixed reason.
 import { randomBytes } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -26,10 +26,9 @@ const TOKEN = "ABCDE-23456";
 
 // The container's uid 1000 reads what this process wrote, as the PDS's own uid would.
 const dir = mkdtempSync(join(tmpdir(), "pds-token-reader-"));
-const data = join(dir, "pds");
-mkdirSync(data);
+// The volume root is the PDS's data directory (P1.36h), so the database sits at the top of the mount.
+const data = dir;
 chmodSync(dir, 0o755);
-chmodSync(data, 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 /** A WAL account database with one pending confirm_email token, open for writing as the running PDS holds it. */

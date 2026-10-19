@@ -46,6 +46,7 @@ function setup(user = "migrator", password = migratorPassword) {
     connection: { host: "127.0.0.1", port: postgres.port, database, user, password, ssl: false },
     dir,
     root: dir,
+    checkQueryFiles: true,
     log,
     retryDelaysMs: [],
   };
@@ -78,6 +79,7 @@ describe("migrate", () => {
       ...t.options,
       dir: join(repository, "infrastructure", "postgres", "migrations"),
       root: repository,
+      checkQueryFiles: true,
     };
     const first = await migrate(options);
     expect(first.ok && first.applied[0]).toBe(1);

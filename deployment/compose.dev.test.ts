@@ -178,12 +178,12 @@ describe("compose.dev.yaml (P1.29)", () => {
     ]);
     // Amendment 2, B1: the token on its stdout reaches no log driver.
     expect(reader.logging).toBe("none");
-    // The PDS keeps its database at /home/node/pds/account.sqlite, so the reader finds it at /data/pds.
+    // The PDS keeps its database at /home/node/account.sqlite, the volume root, so the reader finds it at /data.
     expect(service(local(), "pds").mounts).toContainEqual(
       expect.objectContaining({ type: "volume", source: "pdsdata", target: "/home/node" }),
     );
     expect(readFileSync(join(DEPLOYMENT, "..", "tests/support/pds-email-token-read.ts"), "utf8")).toContain(
-      'const ACCOUNT_DB = "/data/pds/account.sqlite";',
+      'const ACCOUNT_DB = "/data/account.sqlite";',
     );
   });
 
@@ -509,8 +509,8 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
       PDS_HOSTNAME: "${PDS_HOSTNAME}",
       PDS_SERVICE_HANDLE_DOMAINS: "${PDS_SERVICE_HANDLE_DOMAINS}",
       PDS_PORT: "3000",
-      PDS_DATA_DIRECTORY: "/home/node/pds",
-      PDS_BLOBSTORE_DISK_LOCATION: "/home/node/pds/blocks",
+      PDS_DATA_DIRECTORY: "/home/node",
+      PDS_BLOBSTORE_DISK_LOCATION: "/home/node/blocks",
       PDS_DID_PLC_URL: "https://plc.directory",
       PDS_INVITE_REQUIRED: "true",
       PDS_CRAWLERS: "",
@@ -583,10 +583,11 @@ describe("compose.dev.yaml, the PDS and the edge (P1.29a)", () => {
     const pds = service(dev(), "pds");
     expect(pds.hardening.user).toBe("1000:1000");
     expect(pds.mounts).toEqual([{ type: "volume", source: "pdsdata", target: "/home/node", readOnly: false }]);
+    // The data directory is the volume root itself: better-sqlite3 opens a file but never creates its directory, and
+    // only the mount point exists in a fresh volume (the first CI start of the stack crashed on /home/node/pds).
     const env = envOf(pds);
-    for (const name of ["PDS_DATA_DIRECTORY", "PDS_BLOBSTORE_DISK_LOCATION"]) {
-      expect(env.get(name)?.startsWith("/home/node/"), name).toBe(true);
-    }
+    expect(env.get("PDS_DATA_DIRECTORY")).toBe("/home/node");
+    expect(env.get("PDS_BLOBSTORE_DISK_LOCATION")?.startsWith("/home/node/")).toBe(true);
   });
 
   test("no_pds_disable_or_dev_mode_variable", () => {

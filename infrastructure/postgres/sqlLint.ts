@@ -8,6 +8,12 @@ export type Phase = "expand" | "contract";
 /** One refused construct: the 1-based line it starts on and a fixed rule word. */
 export type LintProblem = { readonly line: number; readonly rule: string };
 
+/**
+ * Where an index's `-- query:` file is looked up. Repository callers check it against the checkout; the migrate
+ * image's CLI passes `checkQueryFiles: false`, since the image holds only infrastructure/postgres (P1.36h).
+ */
+export type QueryFiles = { readonly root: string; readonly checkQueryFiles: boolean };
+
 /** What an expand migration may not do: each breaks code from the previous release that still runs during a deploy. */
 const EXPAND_FORBIDDEN: readonly { rule: string; pattern: RegExp }[] = [
   { rule: "drop", pattern: /\bDROP\s+(?:TABLE|COLUMN|SCHEMA)\b/gi },
@@ -48,11 +54,12 @@ const lineAt = (sql: string, offset: number): number => sql.slice(0, offset).spl
 
 /**
  * Refused constructs, in line order. Expand files may only add; every file's `CREATE INDEX` carries `-- query:` and
- * `-- why:` on the two lines just above it, and `query:` names a file under `root` (`path` or `path:symbol`).
+ * `-- why:` on the two lines just above it, and, when `checkQueryFiles` is set, `query:` names a file under `root`
+ * (`path` or `path:symbol`).
  */
-export function lintMigration(sql: string, phase: Phase, root: string): LintProblem[] {
+export function lintMigration(sql: string, phase: Phase, queryFiles: QueryFiles): LintProblem[] {
   const code = withoutComments(sql);
-  const problems: LintProblem[] = [...indexProblems(sql, code, root)];
+  const problems: LintProblem[] = [...indexProblems(sql, code, queryFiles)];
   if (phase === "expand") problems.push(...expandProblems(code));
   return problems.sort((a, b) => a.line - b.line);
 }
@@ -75,12 +82,13 @@ function expandProblems(code: string): LintProblem[] {
   return problems;
 }
 
-function indexProblems(sql: string, code: string, root: string): LintProblem[] {
+function indexProblems(sql: string, code: string, { root, checkQueryFiles }: QueryFiles): LintProblem[] {
   const lines = sql.split("\n");
   return [...code.matchAll(CREATE_INDEX)].flatMap((m) => {
     const line = lineAt(code, m.index);
     const query = QUERY_LINE.exec(lines[line - 3] ?? "");
     if (!query || !WHY_LINE.test(lines[line - 2] ?? "")) return [{ line, rule: "index_comment" }];
+    if (!checkQueryFiles) return [];
     const file = (query[1] ?? "").split(":")[0] ?? "";
     const inside = file !== "" && !file.startsWith("/") && !file.split("/").includes("..");
     return inside && existsSync(join(root, file)) ? [] : [{ line, rule: "index_query_file" }];
