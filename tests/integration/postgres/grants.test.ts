@@ -79,6 +79,7 @@ async function migrated(database: string, dir = MIGRATIONS): Promise<Pool> {
     },
     dir,
     root: REPOSITORY,
+    checkQueryFiles: true,
     log: createLogger({ service: "migrate", commit: "0".repeat(40), env: "test", write: () => undefined }),
     retryDelaysMs: [],
   });

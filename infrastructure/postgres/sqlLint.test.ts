@@ -9,8 +9,9 @@ const root = mkdtempSync(join(tmpdir(), "unset-sqllint-"));
 mkdirSync(join(root, "domains", "x"), { recursive: true });
 writeFileSync(join(root, "domains", "x", "repo.ts"), "export {};\n");
 
-const expand = (sql: string) => lintMigration(`-- phase: expand\n${sql}`, "expand", root);
-const contract = (sql: string) => lintMigration(`-- phase: contract\n${sql}`, "contract", root);
+const repo = { root, checkQueryFiles: true } as const;
+const expand = (sql: string) => lintMigration(`-- phase: expand\n${sql}`, "expand", repo);
+const contract = (sql: string) => lintMigration(`-- phase: contract\n${sql}`, "contract", repo);
 
 describe("expand lint", () => {
   test("expand_lint_refuses_breaking_changes", () => {
@@ -97,5 +98,17 @@ describe("index comment rule", () => {
     expect(index("domains/x/missing.ts")).toEqual([{ line: 4, rule: "index_query_file" }]);
     expect(index("../outside.ts")).toEqual([{ line: 4, rule: "index_query_file" }]);
     expect(index("/etc/passwd")).toEqual([{ line: 4, rule: "index_query_file" }]);
+  });
+
+  test("image_mode_checks_the_comments_but_not_the_query_file", () => {
+    // P1.36h: the migrate image holds no source beyond infrastructure/postgres, so its CLI lints without the file
+    // lookup, which the repository callers keep (the record's last section, architecture 02:55Z).
+    const image = { root, checkQueryFiles: false } as const;
+    const lint = (sql: string) => lintMigration(`-- phase: contract\n${sql}`, "contract", image);
+    expect(lint("-- query: domains/x/missing.ts\n-- why: speed\nCREATE INDEX x_idx ON x (y);")).toEqual([]);
+    expect(lint("-- why: speed\nCREATE INDEX x_idx ON x (y);")).toEqual([{ line: 3, rule: "index_comment" }]);
+    expect(lint("-- query: domains/x/missing.ts\nCREATE INDEX x_idx ON x (y);")).toEqual([
+      { line: 3, rule: "index_comment" },
+    ]);
   });
 });

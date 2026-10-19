@@ -21,6 +21,16 @@ export const migrateConfig = defineConfig({
   ...postgresFields,
 });
 
+/**
+ * The migrations and how they are linted. The image holds only infrastructure/postgres, so an index's `-- query:` file
+ * is not looked up here; the repository's tests do that on every change (P1.36h, migrate-cli.test.ts).
+ */
+export const MIGRATIONS = {
+  dir: join(import.meta.dirname, "migrations"),
+  root: join(import.meta.dirname, "..", ".."),
+  checkQueryFiles: false,
+} as const;
+
 /** One line naming the step, the fixed reason, and the migration file and line or the roster role; never a secret. */
 function describe(result: Exclude<MigrateServiceResult, { ok: true }>): string {
   if (result.step === "passwords") {
@@ -36,8 +46,7 @@ if (import.meta.main) {
   const log = createLogger({ service: "migrate", commit: cfg.UNSET_COMMIT, env: cfg.UNSET_ENV });
   const result = await migrateThenSyncPasswords({
     connection: connectionOf(cfg),
-    dir: join(import.meta.dirname, "migrations"),
-    root: join(import.meta.dirname, "..", ".."),
+    ...MIGRATIONS,
     log,
     secretsDir: ROLE_PASSWORDS_DIR,
   });
