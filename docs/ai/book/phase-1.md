@@ -10786,9 +10786,9 @@ Where: check paths only, kind/build: `.github/workflows/publish-images.yml`, the
   decides which signatures count). Also `.github/workflows/sigstore-root.yml`, a manual-only (`workflow_dispatch`)
   workflow, with its workflow tests (architecture on verify-842-e4f6e94 S5, mapped in the last section of book edit
   2026-10-13-verify-819-fixes). The keyless signing ADR, `docs/human/decisions/<next free
-  number>-image-signing-keyless.md` (numbered when it opens; 0021 to 0026 are taken, and the guarded-schemas ADR takes
-  its own number), rides as docs, with the ADR 0001 log entry decision 35 D8 requires (verify-842-e4f6e94 S3). No
-  product file rides with it.
+  number>-image-signing-keyless.md` (numbered when it opens; 0021 to 0027 are taken and P1.36m reserves 0028, and the
+  guarded-schemas ADR takes its own number), rides as docs, with the ADR 0001 log entry decision 35 D8 requires
+  (verify-842-e4f6e94 S3). No product file rides with it.
 PLAN.md gate (verify-842-e4f6e94 S4): the plan thread's PLAN.md edit (:528, :626, text in book edit
   2026-10-13-verify-819-fixes, "Architecture on Alex's keyless answer") is a docs PR. Until it merges, PLAN.md and the
   book disagree, and the plan wins: P1.27s is not built before it merges.

@@ -27,8 +27,8 @@ and every error page) gives no island run at all: no renderer, so each kit Islan
 Header menu stays a plain `<details>`), and no script. With `shell` the page renders inside AppShell: skip link,
 Header, `<main id="main">` with a danger Callout for a checked `?error=` code, Footer. The screens built before P1.25
 login, continue, signed-out, verify-email and `/<DID>` render inside the shell (one `<main id="main">`). `feed`,
-`PrefsForms` and the favicons are P1.25f (#963's "P1.25j" was that remainder; the booked
-P1.25j means something else). Text is in `src/shell/messages.ts`.
+the footer PrefsForms and the favicons are P1.25f (#963's "P1.25j" was that remainder; the booked
+P1.25j means something else); the Settings "Language and theme" section is P2.13c's. Text is in `src/shell/messages.ts`.
 
 **Core navigation.** `shell.navigation` selects the approved core chrome for `/`, `/<DID>` and `/settings/profile`:
 brand-only Header, shared Navigation and a main region with room for the fixed rail/bottom bar. Home has only a
