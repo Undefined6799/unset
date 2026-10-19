@@ -98,9 +98,10 @@ test("shell_navigation_uses_only_the_route_supplied_identity", async () => {
 test("default_shell_footer_prefs", async () => {
   type Spec = { group: "app" | "public"; cookie?: string; navigation?: true; feed?: true; path?: string };
   const page = async (spec: Spec) => {
+    const path = spec.path ?? "/signed-out";
     const response = pageResponse(deps("test"), {
       group: spec.group,
-      request: new Request(`https://unset.test${spec.path ?? "/signed-out"}?return=%2Fevil&theme=light`, {
+      request: new Request(`https://unset.test${path}${path.includes("?") ? "&" : "?"}return=%2Fevil&theme=light`, {
         headers: spec.cookie === undefined ? {} : { cookie: spec.cookie },
       }),
       title: "Sign in",
@@ -122,9 +123,21 @@ test("default_shell_footer_prefs", async () => {
   expect(elements(form, "input", { type: "hidden", name: "return", value: "/signed-out" })).toHaveLength(1);
   expect(elements(form, "input", { type: "hidden" })).toHaveLength(1);
   expect(elements(form, "button", { type: "submit" })).toHaveLength(1);
-  // The kit refuses /login as a return target (shared/http/returnPath.ts DENIED_TARGETS), so the form goes home.
-  const login = await page({ group: "app", path: "/login" });
-  expect(elements(login.forms[0], "input", { type: "hidden", name: "return", value: "/" })).toHaveLength(1);
+  // The sign-in pages return to themselves (P2.13d): the query is rebuilt from a re-checked next and handle only, so
+  // the page's `return` and `theme` parameters, a foreign next and a bad handle never reach the form.
+  const signIn = async (path: string) => {
+    const { document, forms } = await page({ group: "app", path });
+    expect(elements(document, "b")).toHaveLength(0);
+    return elements(forms[0], "input", { type: "hidden", name: "return" }).map(
+      (input) => input.attrs?.find((attribute) => attribute.name === "value")?.value,
+    );
+  };
+  expect(await signIn("/login")).toEqual(["/login"]);
+  expect(await signIn("/login/continue")).toEqual(["/login/continue"]);
+  expect(await signIn("/login?next=%2Fme&handle=alice.example.com&extra=1")).toEqual([
+    "/login?next=%2Fme&handle=alice.example.com",
+  ]);
+  expect(await signIn("/login?next=https%3A%2F%2Fevil.example&handle=%3Cb%3E")).toEqual(["/login"]);
   const system = await page({ group: "app" });
   expect(elements(system.forms[0], "input", { value: "system", checked: "" })).toHaveLength(1);
   // A tampered or repeated theme cookie reads as system, and only enum values reach the form.
@@ -139,7 +152,8 @@ test("default_shell_footer_prefs", async () => {
     );
     expect(elements(tampered.document, "b")).toHaveLength(0);
   }
-  // Legal pages are public: the theme follows the system there, so no form (phase-1.md:4886-4889).
+  // Legal pages are public: the theme follows the system there, so no form (phase-1.md, P1.22: "Public pages show
+  // no theme control").
   expect((await page({ group: "public", path: "/legal/terms" })).forms).toHaveLength(0);
   expect((await page({ group: "app", navigation: true })).forms).toHaveLength(0);
   // A feed page reaches feed mode through pageResponse: no footer, so no form.

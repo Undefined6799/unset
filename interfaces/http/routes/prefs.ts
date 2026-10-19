@@ -1,8 +1,10 @@
 // POST /prefs/theme (P1.22; plan §2 rule 4, §5.1): a plain form sets the theme with no client script. The kit has
 // already checked the method, the media type, the 2 KB body limit and the CSRF gate (P1.04, P1.06, P1.07) before this
 // handler reads anything. No session is needed in Phase 1 (there is none yet); the cookie is only read on app pages.
+// The return target is checked by themeReturnTo (P2.13d), which also lets the sign-in pages return to themselves.
 import { AppError } from "@unset/shared-errors";
-import { defineRoute, type Route, safeReturnPath } from "@unset/shared-http";
+import { defineRoute, type Route } from "@unset/shared-http";
+import { themeReturnTo } from "../prefs/return-to.ts";
 import { parseTheme, themeCookie } from "../prefs/theme.ts";
 
 const FORM = "application/x-www-form-urlencoded";
@@ -29,7 +31,7 @@ export const prefsRoutes = (): Route[] => [
       const theme = parseTheme(single(form, "theme"));
       // Thrown, so the kit renders the error through the web server's error page (P1.25k), not its own fixed page.
       if (theme === null) throw new AppError("prefs.invalid");
-      const location = safeReturnPath(single(form, "return")) ?? "/";
+      const location = themeReturnTo(single(form, "return"));
       return new Response(null, {
         status: 303,
         headers: { location, "cache-control": "no-store", "set-cookie": themeCookie(theme) },

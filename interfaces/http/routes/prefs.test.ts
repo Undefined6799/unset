@@ -7,11 +7,16 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as web from "@unset/apps-web";
 import { loadConfig } from "@unset/shared-config";
+import { safeReturnPath } from "@unset/shared-http";
+import { createLogger } from "@unset/shared-log";
+import { parse } from "parse5";
 import { afterAll, describe, expect, test } from "vitest";
 import { compose } from "../compose.ts";
 import { config } from "../config.ts";
 import { THEME_COOKIE } from "../prefs/theme.ts";
 import { webTestEnv } from "../test-env.ts";
+import { elements } from "../web/fixtures/html.ts";
+import { pageResponse } from "../web/page.ts";
 
 const ORIGIN = "https://unset.test";
 const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
@@ -92,6 +97,128 @@ describe("POST /prefs/theme", () => {
       const response = await send({ body: `theme=dark&return=${encodeURIComponent(target)}` });
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toBe("/");
+    }
+  });
+
+  // P2.13d: the sign-in pages are the one closed exception to the kit's denylist. Only `next` and `handle` come back,
+  // each re-checked; the query is rebuilt from those two names, never copied.
+  const returnTo = async (target: string) =>
+    (await send({ body: `theme=dark&return=${encodeURIComponent(target)}` })).headers.get("location");
+
+  test("prefs_return_sign_in_keeps_next_and_handle", async () => {
+    const response = await send({
+      body: `theme=dark&return=${encodeURIComponent("/login?next=%2Fme&handle=alice.example.com")}`,
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("set-cookie")).toBe(`${THEME_COOKIE}=dark; ${YEAR}`);
+    expect(response.headers.get("location")).toBe("/login?next=%2Fme&handle=alice.example.com");
+    expect(await returnTo("/login/continue?handle=%40Alice.Example.com")).toBe(
+      "/login/continue?handle=alice.example.com",
+    );
+    expect(await returnTo(`/login?handle=did%3Aplc%3A${"a".repeat(24)}`)).toBe(
+      `/login?handle=did%3Aplc%3A${"a".repeat(24)}`,
+    );
+    expect(await returnTo("/login")).toBe("/login");
+  });
+
+  test("prefs_return_sign_in_drops_offsite_next", async () => {
+    for (const next of ["https://evil.example", "//evil.example", "/logout", "/\\evil.example"]) {
+      expect(await returnTo(`/login?${new URLSearchParams({ next })}`), next).toBe("/login");
+    }
+    // A repeated next is not one value.
+    expect(await returnTo("/login?next=%2Fme&next=%2Fyou")).toBe("/login");
+  });
+
+  test("prefs_return_sign_in_drops_bad_handle", async () => {
+    for (const handle of ["<script>", "alice", "alice.test", "a\u0000.example.com", "did:plc:short"]) {
+      expect(await returnTo(`/login/continue?${new URLSearchParams({ handle })}`), handle).toBe("/login/continue");
+    }
+  });
+
+  test("prefs_return_sign_in_drops_other_params", async () => {
+    expect(await returnTo("/login?next=%2Fme&extra=1")).toBe("/login?next=%2Fme");
+    expect(await returnTo("/login?error=login.failed&prompt=login")).toBe("/login");
+  });
+
+  test("prefs_return_other_login_paths_fall_back", async () => {
+    for (const target of [
+      "/login/other",
+      "/loginx",
+      "/./loginx",
+      "/a/../loginx",
+      "/LOGIN",
+      "/%6cogin",
+      "/login/",
+      "/login.",
+      "/login;x",
+      "/login#frag",
+      "/login?next=%2Fme#frag",
+      "//login",
+      "/login//continue",
+      "/logout",
+      "/oauth/callback",
+    ]) {
+      expect(await returnTo(target), target).toBe("/");
+    }
+  });
+
+  // P2.13d's round trip (architecture 20:36Z, Codex item 5): the footer form a sign-in page renders, posted back as a
+  // browser would, lands on that page with its checked next and handle; the server re-checks whatever it is sent.
+  test("prefs_sign_in_round_trip_keeps_next_and_handle", async () => {
+    const rendered = async (path: string): Promise<string | undefined> => {
+      const response = pageResponse(
+        {
+          build: {
+            manifest: {
+              boot: "assets/boot.js",
+              styles: [],
+              fonts: [],
+              icons: { favicon: "assets/icon.png", appleTouch: "assets/touch.png" },
+              islands: new Map(),
+            },
+            files: new Map(),
+          },
+          render: web.renderPage,
+          assetsOrigin: ORIGIN,
+          env: "test",
+          log: createLogger({ service: "http", commit: "c".repeat(40), env: "test", write: () => undefined }),
+        },
+        {
+          group: "app",
+          request: new Request(`${ORIGIN}${path}`),
+          title: "Sign in",
+          body: null,
+          islands: "off",
+          shell: {},
+        },
+      );
+      const forms = elements(parse(await response.text()), "form", { method: "post", action: "/prefs/theme" });
+      const input = elements(forms[0], "input", { type: "hidden", name: "return" })[0];
+      return input?.attrs?.find((attribute) => attribute.name === "value")?.value;
+    };
+    const submit = async (path: string) => {
+      const value = await rendered(path);
+      const response = await send({ body: new URLSearchParams({ theme: "light", return: value ?? "" }).toString() });
+      return { value, location: response.headers.get("location") };
+    };
+    expect(await submit("/login?next=/me&handle=alice.unset.im&x=1")).toEqual({
+      value: "/login?next=%2Fme&handle=alice.unset.im",
+      location: "/login?next=%2Fme&handle=alice.unset.im",
+    });
+    // An invalid next is dropped when the page renders and again when a forged return reaches the server.
+    expect(await submit("/login/continue?next=https://evil.example&handle=alice.unset.im")).toEqual({
+      value: "/login/continue?handle=alice.unset.im",
+      location: "/login/continue?handle=alice.unset.im",
+    });
+    expect(await returnTo("/login?next=https%3A%2F%2Fevil.example&handle=alice.unset.im")).toBe(
+      "/login?handle=alice.unset.im",
+    );
+  });
+
+  // The exception is the prefs route's own: every other target still goes through the kit's returnPath unchanged.
+  test("prefs_return_non_login_unchanged", async () => {
+    for (const target of ["/signed-out", "/settings?tab=1&x=2", "/a#b", "/did%3Aplc%3Ax"]) {
+      expect(await returnTo(target), target).toBe(safeReturnPath(target));
     }
   });
 

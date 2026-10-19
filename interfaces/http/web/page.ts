@@ -4,14 +4,16 @@
 // P1.25: a page may ask for the app shell, which shows a checked `?error=` code; and the kit's error-page hook renders
 // every error page through the same shell, anonymously and with no script.
 // P1.25f: an app page gets the footer's theme form (only the default shell has a footer), preset to the page's theme
-// and returning to the page's path. Only the path goes back, never the query, so no request text is echoed into it.
+// and returning to the page's path. Only the path goes back, never the query, so no request text is echoed into it;
+// P2.13d: on the two sign-in pages a rebuilt, re-checked next and handle go back too (prefs/return-to.ts).
 // A feed page asks for `feed`, which drops the footer.
 import type { ShellOptions } from "@unset/apps-web";
 import { ERROR_MESSAGES, readErrorParam } from "@unset/shared-errors";
-import { type ErrorPage, type RouteGroup, safeReturnPath } from "@unset/shared-http";
+import type { ErrorPage, RouteGroup } from "@unset/shared-http";
 import type { IslandDefinition } from "@unset/shared-islands";
 import type { Logger } from "@unset/shared-log";
 import type { ReactNode } from "react";
+import { pageReturnTo } from "../prefs/return-to.ts";
 import { documentPrefs } from "../prefs/theme.ts";
 import type { WebBuild } from "./build.ts";
 import type { WebRender } from "./render-entry.ts";
@@ -55,7 +57,7 @@ export function pageResponse(deps: PageDeps, page: PageSpec): Response {
   const url = new URL(page.request.url);
   const footerPrefs =
     page.group === "app"
-      ? { theme: prefs.htmlAttrs["data-theme"] ?? ("system" as const), returnTo: safeReturnPath(url.pathname) ?? "/" }
+      ? { theme: prefs.htmlAttrs["data-theme"] ?? ("system" as const), returnTo: pageReturnTo(url) }
       : undefined;
   const shell = page.shell && {
     error: readErrorParam(url.searchParams),
