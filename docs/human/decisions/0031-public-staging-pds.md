@@ -45,7 +45,12 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
    CNAMEs of 0025:65-71 are not created for staging, and the CAA records on both staging names drop the edge's
    `dns-01` issuer line (a tightening); Pangolin's `http-01` line stays as 0025 lists it. ADR 0028 and the
    validation-domain ruling of 21:52Z apply to production, where `*.unset.im` still needs DNS-01; that question
-   returns before Phase 5. P1.36e, P1.36o and the DNS provider steps move to production.
+   returns before Phase 5. P1.36e, P1.36o and the DNS provider steps move to production. ADR 0029's dev media
+   site `staging.unset.site` (0029:117-122, P1.38c) depended on P1.36e's certificate; that site is out of this
+   milestone (Alex, 2026-10-19: pictures and media deferred, and the "Four domains only" decision drops
+   `unset.site`), and 0029 is being rewritten for the four domains. Any dev media site that returns takes this
+   record's plain-`http` shape behind Pangolin or comes back to architecture for a ruling; no dev certificate work
+   is kept for it.
 3. **In-stack hop through Pangolin.** Under dev the compose file drops the PDS-host alias on the edge, symmetrical
    with the app-host alias it already drops (0025:81-83), so web resolves `staging.unset.ac` through public DNS to
    Pangolin and reaches the PDS through Pangolin, Newt and the edge. net-guard loses its one internal-host
@@ -121,8 +126,11 @@ unchanged: `unset.ac` stays behind whatever ADR 0028 and the Phase 5 records dec
 - The live deploy checks of 0030 keep running on `staging.unset.sh`; 0030's login-demand probes never applied to
   `staging.unset.ac` and now cannot, since the resource has no login (Codex on #1127, finding 4319934630). A third
   check confirms, from outside, that `staging.unset.ac` answers `describeServer` without a login, that
-  `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic` request get the edge's deny, and that the edge
-  presents no certificate of its own. On the first deploy and after every Pangolin update the same check also
+  `/xrpc/com.atproto.sync.getBlob` and an `Authorization: Basic` request get the edge's deny. That the edge
+  presents no certificate and has no `:443` listener cannot be seen from outside, where TLS ends at Pangolin, so
+  that assertion runs on the host: preflight C18 under dev reads the edge configuration (Decision 2), and the
+  deploy check connects from the `newt_edge` network and asserts plain `http` on the bound address and a refused
+  `:443`. On the first deploy and after every Pangolin update the same check also
   reads a real resource-session response from `staging.unset.sh` and asserts that `Set-Cookie` carries `Domain`
   equal to exactly that host, never `unset.sh`, since 0030 Decision 3 derived the exact-domain guarantee from the
   1.24.0 source only (Codex on #1127, finding 4319934639).
