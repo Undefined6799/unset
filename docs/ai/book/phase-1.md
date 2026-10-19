@@ -76,8 +76,8 @@ later slices (guideline §12). This file is in build order; step ids did not cha
   P1.33y, P1.35a, P1.35f, P1.35g, P1.33g, P1.35m, P1.35n, P1.35o, P1.34d, P1.35p, P1.35r, P1.35l, P1.36h, P1.35t,
   P1.33z, P1.35w, P1.36f, P1.35y, P1.35z, P1.35x, P1.36m, P1.36n, P1.36d, P1.36e, P1.36o, P1.36b, P1.36c, P1.36g,
   P1.36i, P1.36j, P1.36k, P1.36l, P1.36p, P1.37g, P1.36q, P1.36r, P1.35u, P1.35v, P1.36t, P1.36u, P1.36v, P1.37k,
-  P1.37l, P1.37m, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32, P1.32a,
-  P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
+  P1.37l, P1.37m, P1.37n, P1.33n, P1.34t, P1.33m, P1.34u, P1.34y, P1.33b, P1.29s, P1.29t, P1.34g, P1.34i, P1.34j, P1.32,
+  P1.32a, P1.31d, P1.31, P1.31c, P1.31e, P1.31f, P1.31g, P1.35s, P1.37, P1.37b, P1.36 (pulled forward from slice 2, Alex
   23:08Z). P1.34v and P1.34z are dropped (ADR 0022; retired ids, never built). Then phase-2's P2.01–P2.08 (P2.01 and
   P2.02 merged), P2.08b–P2.08h, P2.11, P2.11a, P2.11c–P2.11e, P2.15, P2.12, P2.12a–P2.12c, P2.13, P2.13c, P2.13d and the
   slice exit P2.13a. Order from 2026-10-12T22:22:27Z (Alex, 'Unblock and refocus'): the sign-in path goes first (refocus
@@ -703,6 +703,8 @@ flowchart LR
   P1_37k["P1.37k failing key and service named"]
   P1_37l["P1.37l plain-env secrets refused under dev"]
   P1_37m["P1.37m C29 tests on every service"]
+  P1_37n["P1.37n build keys refused under dev and prod"]
+  P1_36r --> P1_37n
   P1_36k --> P1_37k
   P1_36k --> P1_37m
   P1_35b["P1.35b host-pin security review owner"]
@@ -9157,6 +9159,23 @@ Done when each test is red against a planted case, the header is fixed, and chec
 
 ---
 
+### P1.37n — Refuse build keys under dev and prod
+Tags: [SEC]            Depends on: P1.36r
+Slice 1, issue #1092, product (`deployment/preflight/`), lane the third thread after #1079, a staging go-live blocker.
+Book edit 2026-10-19-staging-tailnet-rulings, "P1.37n (#1092)" (architecture 07:24Z, real UTC, on verify-1079 M1). A
+tightening, so it needs no card or typed line.
+1. **C2:** under dev and prod, any service with a `build:` key fails, even when it also has a locked-digest `image:`.
+   Local keeps its current rule (checks/images.ts:107).
+2. **dev:up:** stack.ts:149 drops `--build` under dev and keeps it under local.
+- Reds: (1) under dev, image with a locked digest plus build fails C2, and the run exits non-zero; (2) under prod, the
+  same; (3) under dev, build only fails; (4) under local, image plus build is still refused, unchanged; (5) dev:up
+  under dev runs `up -d` with no `--build`. Green: under local, dev:up keeps `--build`.
+Threats: a digest pin that doesn't hold, because the bytes come from the checkout and not the registry. It fails
+closed under dev and prod.
+G1 is unchanged and waits on P1.27s and P2.26b. Done when the reds and the green are shown and check is green.
+
+---
+
 ### P1.36m — Draft ADR 0028 for the edge DNS module
 Tags: [SEC]            Depends on: —
 Slice 1, docs only (`docs/human/decisions/0028-edge-dns-01-provider-module.md`, Status: Proposed), lane the plan
@@ -9288,10 +9307,11 @@ Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-
 2026-10-19-alex-cards-and-edge-dev-mode, architecture's section labelled 04:20Z (N5). Issue #1032.
 
 **What:** main already refuses this: under dev, C2 fails any service with no digest image (images.ts:24-37), and
-compose.dev.yaml's migrate is a `build:` (:50-53), so dev preflight refuses the whole stack until P1.27s publishes
-signed images (compose.dev.yaml:4-6). This step pins that with a named red, `c2_dev_migrate_built_from_checkout_fails`,
-and a comment in C2 saying migrate gets no dev exception. Local's unsigned path for migrate stays unchanged. When
-P2.26b switches compose.dev.yaml's migrate to its digest (after P1.27s publishes the images), this red stays.
+compose.dev.yaml's migrate is a `build:` (:50-53), so dev preflight refuses the whole stack until P2.26b moves it to
+a digest, after P1.27s publishes signed images (compose.dev.yaml:4-6). This step pins that with a named red,
+`c2_dev_migrate_built_from_checkout_fails`, and a comment in C2 saying migrate gets no dev exception. Local's unsigned
+path for migrate stays unchanged. When P2.26b switches compose.dev.yaml's migrate to its digest (after P1.27s publishes
+the images), this red stays.
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): schema changes with migration
 privileges run from an unsigned operator build. Answered by signed digests only under dev.

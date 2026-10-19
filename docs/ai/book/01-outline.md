@@ -178,7 +178,7 @@ flowchart TD
 
 ## Slice 1 — Sign in with an atproto account and see your own profile (decision 34)
 
-Depth: **build-ready**. 371 steps: 331 from `phase-1.md`, 40 from `phase-2.md` (including the
+Depth: **build-ready**. 372 steps: 332 from `phase-1.md`, 40 from `phase-2.md` (including the
 added exit step P2.13a). **English only** (Alex, 2026-10-04 12:58Z): P1.19 moved to the "i18n slice" below; slice-1 screens
 keep their English text in one `messages.ts` per feature. Built first after Phase 0 (plan §8 Phase 1 "First slice", guideline §12): `apps/web →
 interfaces/http → domains/identity → infrastructure/pds →` the `local` development PDS (P1.29a). The reasons each
@@ -480,6 +480,7 @@ are in `phase-1.md`, "Slices". Slice 2 starts only after P2.13a is merged.
 | P1.37k | Name the failing key and service in preflight | [SEC] | P1.36k | `phase-1.md` |
 | P1.37l | Refuse plain-env secrets under dev | [SEC] | — | `phase-1.md` |
 | P1.37m | Widen the C29 tests to every service and file | [SEC] | P1.36k | `phase-1.md` |
+| P1.37n | Refuse build keys under dev and prod | [SEC] | P1.36r | `phase-1.md` |
 | P1.36m | Draft ADR 0028 for the edge DNS module | [SEC] | — | `phase-1.md` |
 | P1.36n | Accept ADR 0028 | [ALEX] | P1.36m | `phase-1.md` |
 | P1.36o | Mount the edge dev snippet and map it in C18 | [SEC] | P1.36e | `phase-1.md` |
@@ -1269,6 +1270,8 @@ flowchart TD
   P1_37k["P1.37k Failing key and service named"]
   P1_37l["P1.37l Plain-env secrets refused under dev"]
   P1_37m["P1.37m C29 tests on every service"]
+  P1_37n["P1.37n Build keys refused under dev and prod"]
+  P1_36r --> P1_37n
   P1_36k --> P1_37k
   P1_36k --> P1_37m
   P1_34a --> P1_34o
