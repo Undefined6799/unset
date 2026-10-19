@@ -30,7 +30,10 @@ public home remains anonymous and uses the `/did` self-profile shortcut. These a
 script; compose passes it to `createServer`. A route that fails throws `AppError` so its page goes through the hook.
 `routes/test-routes.ts` (P1.25c) holds the test-only pages under `/test-routes/` (a 500, a 503 with `Retry-After: 30`
 and an app-group page); compose mounts them only when `TEST_ROUTES` is on, and the config allows that only when `UNSET_ENV` is `test` (dev,
-which staging runs as, refuses it); with the key off the prefix answers like any unknown path. The
+which staging runs as, refuses it); with the key off the prefix answers like any unknown path. compose imports
+the module first, before the web build loads, so `main.test.ts` proves a key-off start never loads it at that
+import, build or not (P1.25z). A load placed later in compose is caught only when apps/web's server build exists:
+without it the key-off start stops at `loadWebRender`, and the test accepts either stop point. The
 book's `/__test/` paths fail the kit's path template, which refuses a leading underscore. `limits.ts` holds its
 rate-limit policies; a feature step adds its policy in the same PR as its route.
 

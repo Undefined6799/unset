@@ -143,6 +143,9 @@ async function composeOAuth(cfg: WebConfig, log: Logger) {
 
 const DEFAULT_WEB_BUILD = fileURLToPath(new URL("../../apps/web/dist/client/", import.meta.url));
 export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services> {
+  // P1.25c: the test-only pages load only when TEST_ROUTES is on, which the config allows only under test. First, so a
+  // start that gets past the config has already passed this point (main.test.ts).
+  const testRoutes = cfg.TEST_ROUTES ? (await import("./routes/test-routes.ts")).testRoutes : undefined;
   const log = createLogger({ service: cfg.UNSET_SERVICE, commit: cfg.UNSET_COMMIT, env: cfg.UNSET_ENV });
   const render = web ?? (await loadWebRender());
   const build = loadWebBuild(cfg.WEB_BUILD_DIR === "" ? DEFAULT_WEB_BUILD : cfg.WEB_BUILD_DIR, render.islandName);
@@ -312,9 +315,7 @@ export async function compose(cfg: WebConfig, web?: WebRender): Promise<Services
     log,
   });
   const errorPage = errorPageHook(deps, render.screens);
-  const testPages = cfg.TEST_ROUTES
-    ? (await import("./routes/test-routes.ts")).testRoutes({ page, screens: render.screens, errorPage })
-    : [];
+  const testPages = testRoutes ? testRoutes({ page, screens: render.screens, errorPage }) : [];
   const routes = [
     ...homeRoutes({ page, screens: render.screens }),
     ...legalRoutes({

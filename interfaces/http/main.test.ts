@@ -64,16 +64,20 @@ registerHooks({ load(url, context, next) {
 const SECRETS = mkdtempSync(join(tmpdir(), "web-secrets-"));
 afterAll(() => rmSync(SECRETS, { recursive: true, force: true }));
 
-/** Starts the production entry with TEST_ROUTES on under `unsetEnv`; returns its exit status and stderr. */
-function startWithTestRoutes(unsetEnv: string) {
+/** Starts the production entry under `unsetEnv` with `extra` keys; returns its exit status and stderr. */
+function startWithTestRoutes(unsetEnv: string, extra: Record<string, string> = { TEST_ROUTES: "true" }) {
   const env = webTestEnv(SECRETS, {
     PUBLIC_ORIGIN: "https://unset.test",
     WEB_BUILD_DIR: join(REPOSITORY, "interfaces/http/web/testdata/"),
+    // Nothing listens here, so a start that gets through compose stops at the database at once (db.busy).
+    PG_HOST: "127.0.0.1",
+    PG_PORT: "1",
+    ...(unsetEnv === "prod" ? { NETGUARD_INTERNAL_HOSTS: "postgres" } : {}),
   });
   const run = spawnSync(
     process.execPath,
     [`--import=data:text/javascript,${encodeURIComponent(TEST_ROUTES_HOOK)}`, join(REPOSITORY, ENTRY)],
-    { env: { ...env, UNSET_ENV: unsetEnv, TEST_ROUTES: "true" }, encoding: "utf8", timeout: 20_000 },
+    { env: { ...env, UNSET_ENV: unsetEnv, ...extra }, encoding: "utf8", timeout: 20_000 },
   );
   return { status: run.status, stderr: run.stderr };
 }
@@ -84,6 +88,15 @@ test("startup_outside_test_never_loads_test_routes", () => {
     expect(stderr, unsetEnv).toContain('{"event":"config.invalid","key":"TEST_ROUTES","reason":"invalid"}');
     expect(stderr, unsetEnv).not.toContain("test-routes loaded");
     expect(status, unsetEnv).toBe(78);
+    // With the key off the start gets past the config and past compose's gated import (its first line), still
+    // without the module, and exits 1 at one of two known places. Where depends on whether apps/web's server build
+    // exists: without it (CI's state when npm test starts) the start stops at loadWebRender, so a load placed later
+    // in compose is caught only when another test has written the build first; with it, at the database.
+    const off = startWithTestRoutes(unsetEnv, {});
+    expect(off.stderr, unsetEnv).not.toContain("config.invalid");
+    expect(off.stderr, unsetEnv).not.toContain("test-routes loaded");
+    expect(off.stderr, unsetEnv).toMatch(/AppError: db\.busy|@unset\/apps-web\/server did not load/);
+    expect(off.status, unsetEnv).toBe(1);
   }
   const control = startWithTestRoutes("test");
   expect(control.stderr).toContain("test-routes loaded");
