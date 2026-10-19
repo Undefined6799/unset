@@ -191,16 +191,18 @@ unchanged. This record supersedes ADR 0020.
   Newt's fixed address, short retention and a RoPA line for its access logs, and testers told it is a
   test system. Our own gates stay: invites, the email and onboarding gates, our OAuth session, the CSRF
   and Origin gates, owner-only `/<DID>`, no published PDS port.
-- Amends ADR 0018's rate-limit key (0018:71) under the dev profile only. Behind Pangolin every
-  connection reaches the edge from Newt's fixed address, so a socket-address key would give all testers
-  one shared quota in every zone, and one tester could throttle staging. Under dev the edge trusts
-  exactly Newt's address as its proxy, strictly, keys its rate-limit zones by the client address taken
-  from that forwarded header, and falls back to Newt's address when no header arrives, which fails
-  closed to the shared quota. The edge still removes `X-Forwarded-For` and `Forwarded` before the PDS
-  and web see the request, and web's own trust settings are unchanged. Production and local keep the
-  socket-address key, since nothing sits in front of their edge. The code is P1.36j, on Alex's typed
-  line; its reds are separate quotas for two clients behind Newt, a spoofed header from any other
-  address ignored, and no forwarded header at web.
+- Amends ADR 0018's rate-limit key (0018:71) under the dev profile only. This refines ADR 0018 and
+  does not supersede it: ADR 0018 itself is not edited, and Alex's acceptance of this record is his
+  decision on the amendment, with no separate record. Behind Pangolin every connection reaches the edge
+  from Newt's fixed address, so a socket-address key would give all testers one shared quota in every
+  zone, and one tester could throttle staging. Under dev the edge trusts exactly Newt's address as its
+  proxy, strictly, keys its rate-limit zones by the client address taken from that forwarded header, and
+  falls back to Newt's address when no header arrives, which fails closed to the shared quota; a
+  connection from any other address keys on its own socket address. The edge still removes
+  `X-Forwarded-For` and `Forwarded` before the PDS and web see the request, and web's own trust
+  settings are unchanged. Production and local keep the socket-address key, since nothing sits in front
+  of their edge. The code is P1.36j, on Alex's typed line; its reds are separate quotas for two clients
+  behind Newt, a spoofed header from any other address ignored, and no forwarded header at web.
 - Let's Encrypt stays the only issuer of our own certificates. C18 accepts DNS-01 for the dev profile
   first (P1.36e, a trusted-base step); production's handle wildcard `*.unset.im` and its internal
   admin host (PLAN.md:440) use the same delegated-zone pattern when Phase 5 builds them, each with
