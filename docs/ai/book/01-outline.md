@@ -1978,7 +1978,7 @@ Depth: **detail by risk; P6.00 refines** (contract parts in full, algorithms a r
 | P6.15g | `admin` read grant on the chat mapping (SE-6) | [SEC] [CHAT] | P6.00, P2.14 | `phase-6.md` |
 | P6.15 | `admin` polls Synapse event and user reports into its queue | [SEC] [MOD] [CHAT] [ALEX] | P6.15g, P6.14a, P6.02a, P3.20, P3.19 | `phase-6.md` |
 | P6.16 | Full logout, revoke, and back-channel logout from the app | [SEC] [CHAT] | P6.07, P6.03, P6.05, P2.08 | `phase-6.md` |
-| P6.04a | Chat accounts on suspension, takedown and erasure | [SEC] [CHAT] | P6.04, P6.05, P6.16, P6.15, P3.06, P3.07 | `phase-6.md` |
+| P6.04a | Chat accounts on suspension, takedown, erasure and revoked grants | [SEC] [CHAT] | P6.04, P6.05, P6.16, P6.15, P3.06, P3.07, P2.11a | `phase-6.md` |
 | P6.17 | Onboarding chat step wired into signup | [CHAT] | P6.08, P6.05, P2.12, P6.07 | `phase-6.md` |
 | P6.19 | Restore drill re-run with Matrix databases, media and signing keys | [SEC] | P6.17, P5.05, P5.04, P5.06 | `phase-6.md` |
 | P6.20 | Phase 6 exit | [CHAT] | P6.13, P6.14a, P6.15, P6.16, P6.17, P6.09a, P6.19, P6.04a | `phase-6.md` |
@@ -2041,6 +2041,7 @@ flowchart TD
   P6_07 --> P6_16
   P6_15 --> P6_04a
   P6_16 --> P6_04a
+  P2_11a --> P6_04a
   P6_08 --> P6_17
   P6_17 --> P6_19
   P6_09a --> P6_20

@@ -325,7 +325,7 @@ stateDiagram-v2
   Active --> NoSession: token set gone (has_token_set false on read) → row deleted
   Active --> Active: transient PDS error, or a 401 while the token set is still stored (kept, never dropped)
   Active --> Active: another browser logs in for the same DID (library replaces the set, no logout)
-  Active --> NoSession: auth_dead from pdsCall (token set gone) → destroyAllForDid
+  Active --> NoSession: auth_dead from pdsCall or P2.11a recheck (PDS revoke, within 15 min) → destroyAllForDid
 ```
 
 ---
@@ -1022,8 +1022,8 @@ Algorithm:
        hook on **every** successful callback (it revokes the previous set first, `oauth-client.ts:445-451`, and fires it
        even when no set existed, `session-getter.ts:70-79`) and on `signOut()`. Ending sessions here would sign a user
        out of every other browser at each login (review r1-part1 F1). App sessions end through P2.04s's
-       `has_token_set` probe instead, and the explicit paths keep their own `destroyAllForDid`: sign out everywhere
-       (P2.08), the under-16 block (P2.12), P3.06, and P2.07's `auth_dead`.
+       `has_token_set` probe instead, and the explicit paths keep their own `destroyAllForDid`: `auth_dead`
+       (P2.07, and P2.11a's recheck), the under-16 block (P2.12) and P3.06.
   8. `grantCovers(granted, REQUIRED_GRANT)`: parse `granted` with the pinned `@atproto/oauth-scopes` parser; if it contains
      `include:<PERMISSION_SET_NSID>`, treat it as granting the set's expansion (the spike in P2.06's tests records which
      form the dev PDS returns: the `include:` token or its expansion; both are handled). For each requirement check that
@@ -1154,14 +1154,14 @@ Algorithm:
      state) and this delete commit together.
 
 Edge cases and failures:
-  - The token set was deleted (library refresh failure, sign out everywhere, erasure) → `has_token_set` false →
+  - The token set was deleted (library refresh failure, `auth_dead` (P2.11a), erasure) → `has_token_set` false →
     row deleted, null. The callback's own revoke-then-store window (milliseconds) can sign out a request from another
     browser that lands inside it; accepted (rare).
   - `destroyAllForDid` called outside a transaction → type error at compile time (`tx` is required).
 
 Threats: the session that outlives the grant behind it.
   - E A session outliving its token set → the probe ends it (`session.no_token_set_ends`).
-  - E "Sign out everywhere" missing a path → one definer with a closed reason list, and TypeScript's list cannot
+  - E An end-every-session path missing → one definer with a closed reason list, and TypeScript's list cannot
     drift from it (`session.end_sessions_single_sql`, `session.reasons_match_check`).
   - E The definer ends the wrong rows or takes any reason → real-Postgres SQL tests on the function
     (`end_sessions.*`).
@@ -4473,7 +4473,9 @@ Algorithm (the exit spec, in order; each numbered block is one Playwright test w
   6. `exit.resilience`: during an editor session, restart the dev PDS container → the next page shows the "not answering"
      notice and the session survives; after the PDS returns, the page works without signing in again.
   7. `exit.logout`: two browser contexts signed in → "Sign out" in one → the other stays signed in; signing out the
-     other too revokes the grant, and the next login sends `prompt=login` ("sign out everywhere" dropped, P2.08).
+     other too revokes the grant, and the next login sends `prompt=login` ("sign out everywhere" dropped, P2.08). A
+     grant revoked at the PDS signs the other browser out within 15 minutes (P2.11a's 900 s recheck cap) while the PDS
+     is reachable; P2.11a's own test 2 covers it, so the exit adds no test for it.
   8. `exit.fingerprint_fail_closed`: an avatar whose hash is in the fake's `unavailable` list is refused with
      `image.check_unavailable` and nothing is stored; one whose hash is in its `match` list is refused with
      `image.cannot_use`, the account's uploads are frozen, and nothing is stored; a production-config boot with the
@@ -4997,8 +4999,8 @@ Changes made, with the request that caused each:
   compares scopes expanded from the published set (phase-1-part2 note 14). Dependency P1.15 → P1.07.
 - **P2.03**: the session touch runs on its own connection outside the read-only GET transaction (phase-1-part1).
 - **P2.04s** calls `app.end_sessions_for_did` (phase-3 Notes) through `sessions.destroyAllForDid(tx, did, why)`.
-  Because the function also deletes the token set, P2.08 "everywhere" and P2.12's under-age path revoke **before**
-  ending sessions.
+  Because the function also deletes the token set, P2.12's under-age path revokes **before** ending sessions ("sign
+  out everywhere" dropped, P2.08).
 - **P2.04**: `guardedFetch(atproto)` replaces `libraryFetch`/`own-pds` (P1.18a, resolution 4); the `invalid_scope` →
   fallback rule is stated (phase-1-part2 note 14; the retry itself stays in P2.05).
 - **P2.08** documents P6.16's two `chat.endSessions` calls (phase-6 item 2); it builds no hook now.
