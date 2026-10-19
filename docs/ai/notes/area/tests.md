@@ -3,8 +3,8 @@ id: tests
 type: area
 status: current
 areas: ["[[tests]]"]
-summary: "Hub for tests/: integration tests against real Postgres, and the one helper that starts it."
-code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts]
+summary: "Hub for tests/: Postgres integration tests and the browser accessibility harness."
+code: [tests/support/postgres.ts, tests/support/docker.ts, tests/support/image-build.ts, tests/integration/setup/pg.setup.ts, tests/e2e, scripts/test/assert-tests-ran.ts, .github/workflows/e2e.yml]
 sources: []
 importance: normal
 related: ["[[postgres]]", "[[postgres-tests-need-docker]]", "[[git-hooks-export-git-dir]]"]
@@ -14,8 +14,29 @@ checked: 2026-10-18
 ---
 # tests
 
-**What it owns.** Integration tests (`tests/integration/`) and, later, end-to-end tests (`tests/e2e/`, Playwright).
+**What it owns.** Integration tests (`tests/integration/`) and the browser harness (`tests/e2e/`, Playwright).
 Unit tests sit beside the file they test, not here.
+
+**Browser harness (P1.26).** Two processes serve the production web build: the real server, and a fixture
+server whose pages are not in the route manifest. The real server's `PUBLIC_ORIGIN` is
+`https://unset.test:8080` because `@atproto/oauth-client` 0.8.9 rejects an `http` or IP client id; browsers
+still open `http://127.0.0.1:8080`, and `ASSETS_BASE` stays on that listener. The kit showcase is not in
+that build (Node cannot load its TSX), so the fixture server loads it with Vite's `ssrLoadModule` and the
+production stylesheet. The toast fixture's `Island` is the production server build, the same module the
+render loader imports, so it shares that build's `IslandRunContext`.
+`scripts/test/assert-tests-ran.ts` reads Playwright's JSON report (the checks list already
+covers `scripts/test/`). pa11y-ci 5.0.0 and `@lhci/cli` 0.15.1 are installed in the `e2e` job
+only; their trees fail `npm audit --audit-level=high`, so they are not in the lockfile. pa11y
+caps axe "needs review" to a warning and ignores two HTML_CodeSniffer false positives: the
+mark link, whose name is an SVG `aria-label`, and contrast on a button whose fill is
+`::before`. Lighthouse's upload target is `filesystem`. P2.13 put `/login` and
+`/signed-out` in the app shell, so those two load the header island. `/welcome/blocked`
+renders with no session and no island (P2.12). `/welcome`, `/welcome/age`,
+`/welcome/terms`, `/welcome/chat` and `/settings/profile` redirect to sign-in.
+`/legal/domains` is a public document. `/.well-known/security.txt` is text, not a page.
+Lighthouse launches Chrome with `--no-sandbox` (`collect.settings.chromeFlags` in
+`@lhci/cli` 0.15.1):
+ubuntu-24.04's AppArmor refuses the browser's user namespace.
 
 **Files.**
 - `support/postgres.ts`: the one way tests run Postgres, started with `docker run`: the upstream image the lock's

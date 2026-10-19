@@ -2,7 +2,8 @@
 // requestEmailConfirmation and confirmEmail, reading the token with the `pds-token-reader` service, and only on the
 // local stack (architecture record 2026-10-13-p129h-local-token-reader, points 3 and 4 and Amendment 1). Docker,
 // openssl and the PDS are stand-ins here; the running stack is P1.29t's.
-import type { Stats } from "node:fs";
+import { readFileSync, type Stats } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import type { Call, Ran } from "../support/docker.ts";
 import {
@@ -585,6 +586,21 @@ describe("tests/support/pds-email-token.ts", () => {
     const { NODE_OPTIONS: _, ...noOptions } = local().pdsEnv;
     const bare = await attempt({ ...local(), pdsEnv: noOptions });
     expect(bare.error).toBeNull();
+  });
+
+  test("email_token_reader_still_refuses_every_stack", async () => {
+    // ADR 0023 / P1.29s: both compose files pin the public PLC, so the reader refuses even a local-shaped stack.
+    // Nothing in this step calls the reader. The PLC check is after docker inspect of the PDS env.
+    for (const file of ["compose.local.yaml", "compose.dev.yaml"]) {
+      const yaml = readFileSync(join(import.meta.dirname, "../../deployment", file), "utf8");
+      expect(/^ {6}PDS_DID_PLC_URL: (\S+)$/m.exec(yaml)?.[1], file).toBe("https://plc.directory");
+    }
+    const result = await attempt({
+      ...local(),
+      pdsEnv: { ...local().pdsEnv, PDS_DID_PLC_URL: "https://plc.directory" },
+    });
+    expect(result.error).toEqual(new Error("PDS_DID_PLC_URL names a host outside the local stack"));
+    expect(result.commands.some((c) => c.includes("pds-token-reader"))).toBe(false);
   });
 
   test("email_token_reader_runs_on_the_local_stack_only", async () => {

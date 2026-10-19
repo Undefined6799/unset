@@ -20,6 +20,7 @@ type Config = {
   ZERO_DEP_ALLOWLIST: string[];
   RENDER_ENTRIES: { http: string; admin: string };
   RENDER_BUILD_IMPORT: { from: string; module: string };
+  E2E_SERVER_BUILD: { from: string; module: string };
   LEXICON_SCRIPT_BUILTINS: string[];
 };
 export const config: Config = createRequire(import.meta.url)(CONFIG_PATH);

@@ -197,7 +197,7 @@ function localOnlyNetworkDrift(local: Compose): string[] {
 /**
  * The environment and env_file of each local-only service, exactly as compose.local.yaml writes them (P1.35r I-2): a
  * literal, or a `${VAR}` reference kept as text and never resolved, so no secret enters this table. The reader has
- * neither (compose.local.yaml: "No network, no env, no secret"); P1.34v adds plc's pin and P1.29s seed's.
+ * neither (compose.local.yaml: "No network, no env, no secret"). P1.34v and P1.29s add no plc or seed pin (ADR 0022/0023).
  */
 const LOCAL_ONLY_PINS: ReadonlyMap<string, { environment: Record<string, string>; envFiles: string[] }> = new Map([
   [TOKEN_READER, { environment: {}, envFiles: [] }],
@@ -579,6 +579,12 @@ describe("compose.local.yaml against compose.dev.yaml (P1.34d item 11)", () => {
 describe("local-only services' environment and env_file (P1.35r I-2)", () => {
   const dev = parse("compose.dev.yaml");
   const local = parse("compose.local.yaml");
+
+  test("no_seed_service_in_compose", () => {
+    // P1.29s / ADR 0023: no compose seed service. Accounts are made once by hand.
+    expect(dev.services.map((s) => s.name)).not.toContain("seed");
+    expect(local.services.map((s) => s.name)).not.toContain("seed");
+  });
   const reader = (edit: (s: Service) => Service): Compose => editService(local, TOKEN_READER, edit);
   const readerService = local.services.find((s) => s.name === TOKEN_READER) as Service;
   const SECRET = "carries a secret other than as a /run/secrets file or a required reference";
@@ -617,8 +623,8 @@ describe("local-only services' environment and env_file (P1.35r I-2)", () => {
     },
     {
       name: "a local-only service with no pin",
-      local: { ...local, services: [...local.services, { ...readerService, name: "seed" }] },
-      problem: "seed has no environment and env_file pin",
+      local: { ...local, services: [...local.services, { ...readerService, name: "plc" }] },
+      problem: "plc has no environment and env_file pin",
     },
     {
       name: "a pin whose service is gone",

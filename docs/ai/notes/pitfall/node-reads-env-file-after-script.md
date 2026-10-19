@@ -4,13 +4,13 @@ type: pitfall
 status: current
 areas: ["[[deployment]]"]
 summary: "Node reads --env-file anywhere before a literal --, even after the script name, and runs the file's NODE_OPTIONS."
-code: [deployment/preflight/inputs.ts, deployment/preflight/regular-file.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts, deployment/preflight/served-leaf.ts]
+code: [deployment/preflight/inputs.ts, deployment/preflight/regular-file.ts, deployment/preflight/cli.test.ts, deployment/preflight/stack.ts, deployment/preflight/served-leaf.ts, scripts/dev-precheck.ts]
 sources: [unset-plan/book-edits/2026-10-12-preflight-compose-inputs.md]
 importance: high
 related: ["[[deployment]]"]
 replaced_by: null
 tags: [pitfall, deployment]
-checked: 2026-10-17
+checked: 2026-10-18
 ---
 **What happens.** `node script.ts --env-file deploy.env` does not hand `--env-file` to the script alone. Node v26.10.0
 scans every argv entry up to a literal `--` for the `--env-file` family (src/node_dotenv.cc:21-66), loads the file and
@@ -26,7 +26,7 @@ and `HOME`.
 `node <script> -- <args>`; an env file a CLI judges may not hold `NODE_OPTIONS`.
 `deployment/preflight/cli.test.ts` enforces all three for the preflight, whose flags are `CLI_OPTIONS` in
 `deployment/preflight/inputs.ts` (moved out of `index.ts` by P1.27j).
-`deployment/preflight/stack.ts` (P1.27w), the one way to start the dev stack, calls the preflight in that form and also
+`deployment/preflight/stack.ts` (P1.27w), the one way to start the dev stack, calls the precheck in that form and also
 sets an empty `NODE_OPTIONS` for both children; `stack.test.ts` spawns the hook case with only `PATH` and `HOME`. The
 wrapper takes the same `node stack.ts -- up …` form, stripping one leading `--` and refusing any other.
 
@@ -52,3 +52,5 @@ unchanged and gives C18 the same reader for the dev root copies; no flag, argv f
 the rules above still hold.
 Re-checked at P1.01a, which spells `stack.ts`'s host-pin import as `@unset/shared-host-pin`; no flag, argv form or
 child environment changed, and the rules above still hold.
+Re-checked at P1.29s: `up` runs `scripts/dev-precheck.ts` as the first child, same `node … --` form; its `CLI_OPTIONS`
+are env, compose, interpolation-env, none of which Node reads, and it then runs the preflight the same way.

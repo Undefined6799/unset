@@ -62,9 +62,10 @@ keeps every other host account out:
 | `web_oauth_client_keys` | `65532:65532` | web | the OAuth client's private signing keys |
 
 Keep nothing else in this folder. The preflight does not check that yet: C9 judges the mounted secrets only and never
-lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). The dev seed
-(P1.29s) writes `.seeded.json`, the seeded test accounts' handles, DIDs and passwords, to `unset-dev-env/` instead,
-mode `0600` and owned by you (Amendment 7 of the bind-ancestors record). Nothing in a container reads it.
+lists the folder, so a stray file here passes (P1.34l (#754) adds that listing). There is no `.seeded.json` and no
+per-run account file (P1.29s, ADR 0023): Alice and Bob are made once by hand on the PDS. Password, DID, and email live
+only there. Whoever runs the stack types the PDS password from memory or from this folder, never from the app
+(`docs/ai/notes/how-to/alice-bob-pds-password.md`, ADR 0026).
 
 Each password is at least 16 bytes (`PG_PASSWORD` and the role files are read as `secretFile({ minBytes: 16 })`).
 
