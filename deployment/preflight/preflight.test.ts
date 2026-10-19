@@ -331,6 +331,34 @@ describe("preflight", () => {
     }
   });
 
+  test("c2_dev_migrate_built_from_checkout_fails", async () => {
+    // P1.36r (architecture 2026-10-19 04:20Z): migrate runs schema changes with migration privileges, so under dev it
+    // is signed and digest-pinned like every other image. A build from the checkout, as compose.dev.yaml has until
+    // P1.27s, fails C2 under dev and prod alike; only --env local takes the unsigned path.
+    const migrate = [
+      "  migrate:",
+      "    build:",
+      "      context: ..",
+      "      dockerfile: deployment/images/migrate.Dockerfile",
+      '    user: "65532:65532"',
+      "    networks: [db]",
+    ].join("\n");
+    for (const env of ["dev", "prod"] as const) {
+      const compose = (env === "dev" ? DEV : COMPOSE)
+        .replace("secrets:\n  db_password:", `${migrate}\n$&`)
+        .replace("  back: {}", "$&\n  db: {}");
+      const stack: Stack = {
+        compose,
+        ...(env === "dev" ? { pdsEnv: DEV_ENV } : {}),
+        networks: { ...TABLE, db: { internal: false, members: ["migrate"] } },
+        files: { "deployment/images/migrate.Dockerfile": "FROM scratch\n" },
+      };
+      expect(await expectOnly("C2", stack, env), env).toBe(
+        "FAIL C2 migrate image is not ghcr.io/undefined6799/... by digest",
+      );
+    }
+  });
+
   test("missing_input_fails_check_not_run", async () => {
     const result = await check({ lock: null });
     expect(result.lines.find((l) => l.startsWith("FAIL C2"))).toMatch(/^FAIL C2 input missing: .*images\.lock\.json$/);

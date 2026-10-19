@@ -21,7 +21,11 @@ const INDEX_TYPES = [
   "application/vnd.docker.distribution.manifest.list.v2+json",
 ];
 
-/** C2: every service image is ours by digest and the lock lists that digest. */
+/**
+ * C2: every service image is ours by digest and the lock lists that digest. Under dev that includes migrate, which
+ * changes the schema with migration privileges: it gets no exception for a build from the checkout, and it is signed
+ * and digest-pinned like every other image (P1.36r; architecture 2026-10-19 04:20Z). Only --env local builds it.
+ */
 export const c2: Check = {
   id: "C2",
   run: (inputs) => {
