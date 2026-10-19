@@ -312,7 +312,7 @@ Rules for the handle domain:
 
 **Logout:**
 - "Sign out" ends this browser's session.
-- "Sign out everywhere" revokes the OAuth grant and deletes all of the DID's sessions. PDS browser sessions are ended by the user at `https://<pds>/account`, which the page links to.
+- There is no "Sign out everywhere" (Alex, 2026-10-19 02:34:31Z: "let's drop the feature of 987, feels like the session and auth are mostly handled by the pds itself"; P2.08d removes it). A user ends other sessions and connected apps at `https://<pds>/account`, which the signed-out page and the account page link to. Ending every session for a DID stays an internal action (`destroyAllForDid`), used when a grant is found revoked (P2.11a) and by the age gate (P2.12), never offered as a button.
 - The next login after a logout sends `prompt=login`.
 - No cross-host ticket: the prototype's ticket was only accepted by `account-manager`, which is going away.
 
@@ -807,7 +807,7 @@ Small PRs to a protected `main` (the decision 40 ruleset, applied 2026-10-06; AD
 
 **Blockers fixed:**
 - **The like scope was missing.** A permission set can't contain `app.bsky.*`.
-- **"Sign out everywhere" relied on a ticket only `account-manager` accepted.**
+- **"Sign out everywhere" relied on a ticket only `account-manager` accepted.** The feature itself was dropped on 2026-10-19 (§5.3, Logout).
 - **Handles were on the app's own domain.** The plan now uses a separate handle domain, reserved labels, delegated ACME, CAA, DNSSEC and HSTS.
 - **"Unpublish" and federation were undefined.** The plan now has publish/unpublish semantics, federation as question Q2b, and a publish notice.
 
