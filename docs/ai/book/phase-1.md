@@ -8736,8 +8736,9 @@ so nothing is needed from Alex for the step itself.
    (smtps or requireTLS). The SMTP password follows the 12:40Z predicate: exactly one `${NAME:?message}`, or the whole
    URL comes from a `/run/secrets/` file. If nothing uses Mailpit under dev, C11's Mailpit acceptance narrows to local
    only. ADR 0026's exception stays local-only.
-2. **The pds.env template and runbook** list the SMTP keys, the recovery key and its did:key, and the first account,
-   with no values and nothing that looks like a real key.
+2. **The pds.env template and runbook** list the SMTP URL key, the recovery key and its did:key, and the first
+   account, with no values and nothing that looks like a real key. pds.env holds only secret-bearing keys; non-secret
+   SMTP settings, such as the from address, go in compose.dev.yaml's environment (architecture 06:15Z).
 3. **The first invite** is a runbook one-off that Alex runs and Claude never does, under the ruling's four conditions:
    it runs with `docker compose exec` inside the PDS container, against its own loopback port, with no port published
    and the edge still answering 404 for createInviteCode; the password is read from the file inside the container,
@@ -8988,14 +8989,13 @@ Slice 1, product (`deployment/preflight/`), lane the third thread, a staging go-
 
 **What:**
 - Preflight reads the key set of `pds.env` and requires exactly the four names in `deployment/env/pds.example.env`
-  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY) plus the SMTP key names
-  P1.36g adds to that template, with the same exact-map
-  pattern as P1.35r's env table. Delivery follows the secret-bearing predicate (book edit
-  2026-10-15-verify-903-info-items, 12:40Z and 13:05Z sections).
+  (PDS_JWT_SECRET, PDS_ADMIN_PASSWORD, PDS_PLC_ROTATION_KEY_K and PDS_RECOVERY_DID_KEY) plus the SMTP URL key that
+  P1.36g adds: five names, all secret-bearing, with the same exact-map pattern as P1.35r's env table. Delivery follows
+  the secret-bearing predicate (book edit 2026-10-15-verify-903-info-items, 12:40Z and 13:05Z sections).
 - Preflight reads names only, and never prints a value.
-- Reds: a fifth key; a missing key; a duplicate key.
-- It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode, "Order
-  fixes from Codex on #1037"). If architecture moves the SMTP values out of pds.env, the set is the four names again.
+- Reds: a sixth key (for example a non-secret SMTP setting); a missing key; a duplicate key.
+- It builds after P1.36g, so the set is known when it lands (book edit 2026-10-19-alex-cards-and-edge-dev-mode,
+  architecture 06:15Z).
 
 Threats (SE-1; the builder's PR expands this to one screen and updates the ASVS 5.0 rows): an unreviewed setting, or a
 secret, slipped into the PDS env. Answered by an exact key set.
