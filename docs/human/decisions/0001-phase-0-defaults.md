@@ -480,4 +480,6 @@ legal paperwork) and remove one process (the account app) while adding three (`a
   files moves to our edge (`405` with `Allow: GET, HEAD`; Pangolin keeps the path check with ACCEPT rules); the
   last hop is host-local with Newt inside the stack under three host conditions; the login cookie is a Domain
   cookie on the resource name, a stated loosening of 0025:190; and four org-wide or global Pangolin logging
-  settings replace the per-resource ones 0025 assumed. 0025 is not edited. P1.37v (#1115) unblocks.
+  settings add to the short retention 0025:192 asked for. At acceptance the two doubled-slash probes
+  (`/oauth//jwks.json`, `//oauth-client-metadata.json`) were added to Decision 1's no-login group, a
+  tightening. 0025 is not edited. P1.37v (#1115) unblocks.
